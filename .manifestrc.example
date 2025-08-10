@@ -1,0 +1,108 @@
+{
+  "versionStrategy": "semantic",
+  "autoCommit": true,
+  "autoTag": true,
+  "changelog": true,
+  "ci": {
+    "platform": "github",
+    "autoDeploy": true,
+    "webhooks": {
+      "enabled": true,
+      "secret": "your-webhook-secret"
+    }
+  },
+  "install": {
+    "platform": "auto",
+    "containerType": "docker",
+    "outputDir": "./scripts"
+  },
+  "manifest": {
+    "formats": ["package.json", "pyproject.toml", "Cargo.toml", "go.mod"],
+    "autoDetect": true,
+    "generateUniversal": true
+  },
+  "version": {
+    "semantic": {
+      "enabled": true,
+      "prerelease": false,
+      "build": false
+    },
+    "date": {
+      "enabled": false,
+      "format": "YYYY.MM.DD"
+    },
+    "commit": {
+      "enabled": false,
+      "prefix": "v"
+    },
+    "custom": {
+      "enabled": false,
+      "pattern": "v{major}.{minor}.{patch}-{build}"
+    }
+  },
+  "git": {
+    "autoCommit": true,
+    "autoTag": true,
+    "autoPush": true,
+    "commitMessage": "chore: bump version to {version}",
+    "tagMessage": "Release {version}"
+  },
+  "changelog": {
+    "enabled": true,
+    "format": "markdown",
+    "includeCommits": true,
+    "includeIssues": true,
+    "includePullRequests": true,
+    "template": "default"
+  },
+  "notifications": {
+    "slack": {
+      "enabled": false,
+      "webhook": "your-slack-webhook-url",
+      "channel": "#releases"
+    },
+    "email": {
+      "enabled": false,
+      "smtp": {
+        "host": "smtp.example.com",
+        "port": 587,
+        "secure": false
+      },
+      "from": "manifest@example.com",
+      "to": ["team@example.com"]
+    }
+  },
+  "security": {
+    "rateLimit": {
+      "enabled": true,
+      "windowMs": 900000,
+      "max": 100
+    },
+    "authentication": {
+      "enabled": false,
+      "type": "jwt",
+      "secret": "your-jwt-secret"
+    }
+  },
+  "logging": {
+    "level": "info",
+    "format": "json",
+    "output": "stdout",
+    "file": {
+      "enabled": false,
+      "path": "./logs/manifest.log",
+      "maxSize": "10m",
+      "maxFiles": 5
+    }
+  },
+  "monitoring": {
+    "healthCheck": {
+      "enabled": true,
+      "interval": 30000
+    },
+    "metrics": {
+      "enabled": true,
+      "collector": "prometheus"
+    }
+  }
+}

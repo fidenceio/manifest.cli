@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  manifest:
+    build: .
+    container_name: manifest-service
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - LOG_LEVEL=info
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - MANIFEST_SECRET=${MANIFEST_SECRET}
+      - DATABASE_URL=${DATABASE_URL}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./temp:/app/temp
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${HOME}/.ssh:/root/.ssh:ro
+      - ${HOME}/.gitconfig:/root/.gitconfig:ro
+    networks:
+      - manifest-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  manifest-redis:
+    image: redis:7-alpine
+    container_name: manifest-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - manifest-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  manifest-postgres:
+    image: postgres:15-alpine
+    container_name: manifest-postgres
+    environment:
+      - POSTGRES_DB=manifest
+      - POSTGRES_USER=manifest_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-manifest_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - manifest-network
+    restart: unless-stopped
+
+networks:
+  manifest-network:
+    driver: bridge
+
+volumes:
+  redis_data:
+  postgres_data:
