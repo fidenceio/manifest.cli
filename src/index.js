@@ -5,25 +5,19 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const dotenv = require('dotenv');
-const { logger } = require('./utils/logger');
-const { errorHandler } = require('./middleware/errorHandler');
-const { rateLimiter } = require('./middleware/rateLimiter');
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(helmet());
 app.use(cors());
-app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
+app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Rate limiting
-app.use(rateLimiter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -35,21 +29,14 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API Routes
-app.use('/api/v1/version', require('./routes/version'));
-app.use('/api/v1/documentation', require('./routes/documentation'));
-app.use('/api/v1/git', require('./routes/git'));
-app.use('/api/v1/github', require('./routes/github'));
-app.use('/api/v1/updates', require('./routes/updates'));
-app.use('/api/v1/repositories', require('./routes/repositories'));
-app.use('/api/v1/manifest', require('./routes/manifest'));
-app.use('/api/v1/heartbeat', require('./routes/heartbeat'));
-app.use('/api/v1/plugins', require('./routes/plugins'));
-// LLM Agent functionality moved to Manifest Cloud service
-// app.use('/api/v1/llm-agent', require('./routes/llmAgent'));
-
-// Error handling
-app.use(errorHandler);
+// Basic API endpoint for testing
+app.get('/api/v1/test', (req, res) => {
+  res.status(200).json({
+    message: 'Manifest Cloud service is running',
+    timestamp: new Date().toISOString(),
+    service: 'manifest-cloud'
+  });
+});
 
 // 404 handler
 app.use('*', (req, res) => {
@@ -62,20 +49,19 @@ app.use('*', (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  logger.info(`🚀 Manifest service started on port ${PORT}`);
-  logger.info(`📚 API Documentation available at http://localhost:${PORT}/api/v1/documentation`);
-  logger.info(`🏥 Health check available at http://localhost:${PORT}/health`);
-  logger.info(`🤖 LLM Agent capabilities moved to Manifest Cloud service`);
+  console.log(`🚀 Manifest Cloud service started on port ${PORT}`);
+  console.log(`🏥 Health check available at http://localhost:${PORT}/health`);
+  console.log(`🧪 Test endpoint available at http://localhost:${PORT}/api/v1/test`);
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
-  logger.info('SIGTERM received, shutting down gracefully');
+  console.log('SIGTERM received, shutting down gracefully');
   process.exit(0);
 });
 
 process.on('SIGINT', () => {
-  logger.info('SIGINT received, shutting down gracefully');
+  console.log('SIGINT received, shutting down gracefully');
   process.exit(0);
 });
 

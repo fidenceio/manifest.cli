@@ -1,66 +1,97 @@
 version: '3.8'
 
 services:
-  manifest:
-    build: .
-    container_name: manifest-service
+  manifest-cloud:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: manifest-cloud
     ports:
-      - "3000:3000"
+      - "3001:3001"
     environment:
       - NODE_ENV=production
-      - PORT=3000
-      - LOG_LEVEL=info
-      - GITHUB_TOKEN=${GITHUB_TOKEN}
-      - MANIFEST_SECRET=${MANIFEST_SECRET}
-      - DATABASE_URL=${DATABASE_URL}
+      - PORT=3001
+      - MANIFEST_SECRET=${MANIFEST_SECRET:-your-secret-key-here}
+      - CORS_ORIGIN=*
+      - CORS_METHODS=GET,POST,PUT,DELETE
+      - CORS_CREDENTIALS=true
+      - RATE_LIMIT_WINDOW_MS=900000
+      - RATE_LIMIT_MAX_REQUESTS=100
+      - ENABLE_REPOSITORY_API=true
+      - ENABLE_SECURITY_HEADERS=true
+      - ENABLE_RATE_LIMITING=true
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
-      - ./temp:/app/temp
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ${HOME}/.ssh:/root/.ssh:ro
-      - ${HOME}/.gitconfig:/root/.gitconfig:ro
-    networks:
-      - manifest-network
+      - ~/.ssh:/root/.ssh:ro
+      - ~/.gitconfig:/root/.gitconfig:ro
+    depends_on:
+      - redis
+      - postgres
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
-  manifest-redis:
+  redis:
     image: redis:7-alpine
-    container_name: manifest-redis
+    container_name: manifest-cloud-redis
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
       - redis_data:/data
-    networks:
-      - manifest-network
     restart: unless-stopped
     command: redis-server --appendonly yes
 
-  manifest-postgres:
+  postgres:
     image: postgres:15-alpine
-    container_name: manifest-postgres
-    environment:
-      - POSTGRES_DB=manifest
-      - POSTGRES_USER=manifest_user
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-manifest_password}
+    container_name: manifest-cloud-postgres
     ports:
-      - "5432:5432"
+      - "5433:5432"
+    environment:
+      - POSTGRES_DB=manifest_cloud
+      - POSTGRES_USER=manifest_user
+      - POSTGRES_PASSWORD=manifest_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    networks:
-      - manifest-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U manifest_user -d manifest_cloud"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-networks:
-  manifest-network:
-    driver: bridge
+  test-client:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: manifest-cloud-test-client
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./examples:/app/examples
+      - ./tests:/app/tests
+      - ~/.ssh:/root/.ssh:ro
+      - ~/.gitconfig:/root/.gitconfig:ro
+    depends_on:
+      - manifest-cloud
+    environment:
+      - MANIFEST_API_URL=http://manifest-cloud:3001
+      - MANIFEST_API_KEY=${MANIFEST_API_KEY:-test-api-key}
+    command: npm test
+    restart: "no"
 
 volumes:
   redis_data:
   postgres_data:
+  data:
+  logs:
+  examples:
+  tests:
+
+networks:
+  default:
+    name: manifest-cloud-network
