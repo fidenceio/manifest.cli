@@ -83,23 +83,55 @@ increment_version() {
     local repo_path="$1"
     local repo_name="$2"
     
-    print_status "Incrementing version for $repo_name using Manifest..."
+    print_status "Incrementing version for $repo_name..."
     
     cd "$repo_path"
     
-    # Use Manifest CLI to bump version
-    if command_exists npm; then
-        print_status "Using Manifest CLI to bump version..."
-        npm run manifest bump . --type "$INCREMENT_TYPE" --auto
-    else
-        print_warning "npm not found, using direct Manifest service call..."
-        # Fallback to direct service call
-        curl -X POST "http://localhost:3000/api/v1/manifest/$(pwd)/version/bump" \
-            -H "Content-Type: application/json" \
-            -d "{\"incrementType\": \"$INCREMENT_TYPE\", \"auto\": true}"
+    # Check if package.json exists
+    if [ ! -f "package.json" ]; then
+        print_warning "No package.json found in $repo_name, skipping version increment"
+        return 0
     fi
     
-    print_success "Version incremented for $repo_name"
+    # Get current version
+    local current_version=$(node -p "require('./package.json').version")
+    print_status "Current version: $current_version"
+    
+    # Parse version components
+    local major=$(echo "$current_version" | cut -d. -f1)
+    local minor=$(echo "$current_version" | cut -d. -f2)
+    local patch=$(echo "$current_version" | cut -d. -f3)
+    
+    # Increment based on type
+    local new_version=""
+    case "$INCREMENT_TYPE" in
+        patch)
+            patch=$((patch + 1))
+            new_version="$major.$minor.$patch"
+            ;;
+        minor)
+            minor=$((minor + 1))
+            patch=0
+            new_version="$major.$minor.$patch"
+            ;;
+        major)
+            major=$((major + 1))
+            minor=0
+            patch=0
+            new_version="$major.$minor.$patch"
+            ;;
+    esac
+    
+    print_status "New version: $new_version"
+    
+    # Update package.json
+    node -e "
+        const pkg = require('./package.json');
+        pkg.version = '$new_version';
+        require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n');
+    "
+    
+    print_success "Version incremented from $current_version to $new_version in $repo_name"
 }
 
 # Function to update documentation
