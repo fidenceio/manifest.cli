@@ -1,148 +1,193 @@
-# Manifest Local CLI
+# Manifest Local - Complete Local Development System
 
-A powerful command-line tool for automating Git workflows, version management, and documentation generation. The Manifest CLI streamlines your development process with intelligent versioning, automated commits, and seamless integration with Manifest Cloud for enhanced features.
+A comprehensive local development system that combines a powerful CLI with a full-featured local service for automated Git workflows, version management, documentation generation, and continuous monitoring. Manifest Local runs entirely on your machine, providing enterprise-grade automation without external dependencies.
 
-## 🚀 Features
+## 🚀 What Manifest Local Provides
 
-### Core Git Operations
+### 🖥️ **Command Line Interface (CLI)**
 - **Automated Version Management**: Bump versions with semantic versioning (patch, minor, major)
-- **Smart Commit Handling**: Auto-commit changes with intelligent messages
-- **Tag Management**: Automatic Git tagging with version numbers
-- **Multi-Remote Support**: Push to all configured remotes automatically
+- **Smart Git Operations**: Auto-commit, tag, and push with conflict resolution
+- **Documentation Generation**: Create release notes, changelogs, and README updates
+- **Health Diagnostics**: Built-in troubleshooting and system health checks
 
-### Documentation Generation
-- **Release Notes**: Generate comprehensive release documentation
-- **Changelog Creation**: Build detailed changelogs from commit history
-- **README Updates**: Keep documentation in sync with versions
-- **VERSION File Management**: Maintain a simple VERSION file alongside package.json
+### 🏗️ **Local Manifest Service**
+- **Express.js Service**: Runs on localhost:3001 with full API endpoints
+- **Database Integration**: PostgreSQL for persistent data storage
+- **Caching Layer**: Redis for performance optimization
+- **Container Orchestration**: Docker Compose for easy deployment
 
-### Advanced Workflows
-- **One-Command Automation**: `manifest go` for complete version bump → commit → tag → push workflow
-- **Version Reversion**: Safely revert to previous versions with interactive selection
-- **Conflict Resolution**: Automatic handling of common Git conflicts and sync issues
-- **Health Diagnostics**: Built-in troubleshooting with `manifest diagnose`
+### 🔄 **Automated Workflows**
+- **Heartbeat Monitoring**: Continuous repository health checking
+- **Update Detection**: Automatic dependency and security update detection
+- **CI/CD Integration**: Seamless integration with existing CI/CD pipelines
+- **Plugin System**: Extensible architecture for custom functionality
 
-### Optional Cloud Integration
-- **Commit Analysis**: AI-powered commit analysis and recommendations
-- **Intelligent Changelogs**: Generate rich changelogs using Manifest Cloud
-- **Version Recommendations**: Get smart suggestions for version increments
-- **API Change Detection**: Automatically detect breaking changes
+### 📊 **Monitoring & Intelligence**
+- **Real-time Health Checks**: Repository status monitoring
+- **Security Scanning**: Vulnerability detection and reporting
+- **Performance Metrics**: Service health and performance tracking
+- **Notification System**: Webhook, email, and Slack integration
 
-## 📦 Installation
+## 🎯 Quick Start
 
-### Quick Install (Recommended)
+### 1. **Install the Complete System**
 
 ```bash
 # Clone the repository
 git clone https://github.com/fidenceio/manifest.local.git
 cd manifest.local
 
-# Install the CLI
+# Install CLI and start local service
 ./install-local-cli.sh
+docker-compose up -d
 ```
 
-The CLI will be installed to `~/.local/bin/manifest` and added to your PATH.
-
-### Manual Installation
+### 2. **Use the CLI for Development**
 
 ```bash
-# Create installation directory
-mkdir -p ~/.manifest-local
-cd ~/.manifest-local
+# Automated workflow (recommended)
+manifest go major    # Complete version bump → commit → tag → push
 
-# Copy source files
-cp -r /path/to/manifest.local/src ./
-cp /path/to/manifest.local/package.json ./
-cp /path/to/manifest.local/README.md ./
-
-# Install dependencies
-npm install
-
-# Create executable
-mkdir -p ~/.local/bin
-cat > ~/.local/bin/manifest << 'EOF'
-#!/bin/bash
-cd ~/.manifest-local
-node src/cli/manifest-cli.js "$@"
-EOF
-chmod +x ~/.local/bin/manifest
-```
-
-## 🎯 Quick Start
-
-### 1. Basic Version Management
-
-```bash
-# Check current version
-cat VERSION
-
-# Bump patch version (1.0.0 → 1.0.1)
-manifest version patch
-
-# Bump minor version (1.0.0 → 1.1.0)
-manifest version minor
-
-# Bump major version (1.0.0 → 2.0.0)
-manifest version major
-```
-
-### 2. Automated Workflow
-
-```bash
-# Complete automated process (recommended)
-manifest go major    # Major version bump
-manifest go minor    # Minor version bump
-manifest go patch    # Patch version bump
-manifest go          # Auto-detect increment type
-```
-
-### 3. Documentation Generation
-
-```bash
-# Generate release notes and changelog
+# Generate documentation
 manifest docs
 
-# Create custom commit
-manifest commit "Add new feature X"
+# Check system health
+manifest diagnose
+```
 
-# Revert to previous version
-manifest revert
+### 3. **Access the Local Service**
+
+```bash
+# Service health check
+curl http://localhost:3001/health
+
+# API endpoints available at
+curl http://localhost:3001/api/v1/
+```
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Manifest Local System                    │
+├─────────────────────────────────────────────────────────────┤
+│  🖥️  CLI Interface     🏗️  Local Service     📊  Monitoring  │
+│  • manifest go         • Express.js API     • Heartbeat     │
+│  • manifest docs       • PostgreSQL DB      • Update Check  │
+│  • manifest diagnose   • Redis Cache        • Health Check  │
+│  • manifest revert     • Docker Containers  • Notifications │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                    ┌─────────────────┐
+                    │   Your Repos    │
+                    │ • Git Ops       │
+                    │ • Version Mgmt  │
+                    │ • Documentation │
+                    └─────────────────┘
+```
+
+## 📦 Installation Options
+
+### **Option 1: Complete System (Recommended)**
+
+```bash
+# Install CLI and start all services
+./install-local-cli.sh
+docker-compose up -d
+
+# Verify installation
+manifest diagnose
+curl http://localhost:3001/health
+```
+
+### **Option 2: CLI Only**
+
+```bash
+# Install just the CLI
+./install-local-cli.sh
+
+# Use basic functionality without local service
+manifest version patch
+manifest docs
+```
+
+### **Option 3: Service Only**
+
+```bash
+# Start just the local service
+docker-compose up -d manifest-cloud redis postgres
+
+# Access via HTTP API
+curl http://localhost:3001/api/v1/
+```
+
+## 🔧 Configuration
+
+### **Environment Setup**
+
+Create `.env` file for service configuration:
+
+```bash
+# Service Configuration
+PORT=3001
+NODE_ENV=production
+MANIFEST_SECRET=your-secret-key-here
+
+# Database
+POSTGRES_DB=manifest_cloud
+POSTGRES_USER=manifest_user
+POSTGRES_PASSWORD=manifest_password
+
+# Redis
+REDIS_URL=redis://localhost:6380
+
+# Features
+ENABLE_HEARTBEAT=true
+ENABLE_UPDATE_CHECKER=true
+ENABLE_PLUGIN_SYSTEM=true
+ENABLE_CICD_INTEGRATION=true
+```
+
+### **CLI Configuration**
+
+Create `~/.manifest-local/.env` for CLI options:
+
+```bash
+# Optional: Manifest Cloud integration
+MANIFEST_CLOUD_URL=http://localhost:3001
+MANIFEST_CLOUD_API_KEY=your-api-key-here
+
+# CLI preferences
+MANIFEST_AUTO_COMMIT=true
+MANIFEST_AUTO_PUSH=true
+MANIFEST_NOTIFICATION_EMAIL=your@email.com
 ```
 
 ## 📚 Command Reference
 
-### Core Commands
+### **Core CLI Commands**
 
-#### `manifest go [type]`
-The main command for automated workflows. Automatically handles version bumping, committing, tagging, and pushing.
+#### `manifest go [type]` - Complete Workflow
+The main command for automated development workflows.
 
 ```bash
-manifest go major     # Increment major version
-manifest go minor     # Increment minor version
-manifest go patch     # Increment patch version
-manifest go revision  # Increment revision version
+manifest go major     # Major version bump with full automation
+manifest go minor     # Minor version bump with full automation
+manifest go patch     # Patch version bump with full automation
 manifest go           # Auto-detect increment type
 ```
 
-**What it does:**
-1. Checks for uncommitted changes
-2. Analyzes commits (if cloud service configured)
-3. Bumps version according to type
-4. Updates VERSION file and package.json
-5. Commits changes
-6. Creates Git tag
-7. Pushes to all remotes
+**What happens automatically:**
+1. ✅ Checks for uncommitted changes
+2. 🔍 Analyzes commits (if service configured)
+3. 📈 Bumps version according to type
+4. 📄 Updates VERSION file and package.json
+5. 💾 Commits changes with intelligent messages
+6. 🏷️ Creates Git tag
+7. 🚀 Pushes to all remotes with conflict resolution
 
-#### `manifest version [type]`
-Simple version bumping without the full workflow.
-
-```bash
-manifest version patch  # 1.0.0 → 1.0.1
-manifest version minor  # 1.0.0 → 1.1.0
-manifest version major  # 1.0.0 → 2.0.0
-```
-
-#### `manifest docs`
+#### `manifest docs` - Documentation Generation
 Generate comprehensive documentation for the current version.
 
 **Creates:**
@@ -150,7 +195,7 @@ Generate comprehensive documentation for the current version.
 - `docs/CHANGELOG_vX.Y.Z.md` - Detailed changelog
 - Updates `README.md` with changelog section
 
-#### `manifest revert`
+#### `manifest revert` - Version Reversion
 Interactive version reversion with safety confirmations.
 
 ```bash
@@ -160,23 +205,7 @@ manifest revert
 # Commits changes and creates tag
 ```
 
-#### `manifest push [type]`
-Legacy command for version bumping and pushing.
-
-```bash
-manifest push patch   # Bump patch version and push
-manifest push minor   # Bump minor version and push
-manifest push major   # Bump major version and push
-```
-
-#### `manifest commit <message>`
-Create a commit with a custom message.
-
-```bash
-manifest commit "Add new authentication feature"
-```
-
-#### `manifest diagnose`
+#### `manifest diagnose` - System Health Check
 Comprehensive health check and troubleshooting.
 
 **Checks:**
@@ -184,64 +213,68 @@ Comprehensive health check and troubleshooting.
 - Remote configuration
 - SSH authentication
 - VERSION file consistency
-- Cloud service configuration
+- Local service health
 - Provides actionable solutions
 
-### Utility Commands
-
-#### `manifest analyze`
-Analyze commits using Manifest Cloud service (requires configuration).
-
-#### `manifest changelog`
-Generate changelog using Manifest Cloud service (requires configuration).
-
-#### `manifest help`
-Show help information.
-
-## 🔧 Configuration
-
-### Environment Variables
-
-Create `~/.manifest-local/.env` for cloud integration:
+### **Utility Commands**
 
 ```bash
-# Manifest Cloud Service
-MANIFEST_CLOUD_URL=http://localhost:3001
-MANIFEST_CLOUD_API_KEY=your-api-key-here
+manifest version [type]    # Simple version bumping
+manifest push [type]       # Legacy version bump and push
+manifest commit <message>  # Create custom commit
+manifest analyze           # Analyze commits (requires service)
+manifest changelog         # Generate changelog (requires service)
+manifest help              # Show help information
 ```
 
-### Git Configuration
+## 🏗️ Local Service Features
 
-The CLI automatically uses your existing Git configuration:
+### **API Endpoints**
 
-```bash
-# Ensure SSH keys are configured
-ssh-add ~/.ssh/id_rsa
+#### **Health & Status**
+- `GET /health` - Service health check
+- `GET /api/v1/status` - Detailed service status
+- `GET /api/v1/version` - Service version information
 
-# Configure Git user
-git config --global user.name "Your Name"
-git config --global user.email "your.email@example.com"
-```
+#### **Repository Management**
+- `POST /api/v1/repository/:path/heartbeat/start` - Start monitoring
+- `POST /api/v1/repository/:path/heartbeat/stop` - Stop monitoring
+- `GET /api/v1/repository/:path/status` - Repository health status
+- `POST /api/v1/repository/:path/update-check` - Check for updates
 
-## 🏗️ Project Structure
+#### **Plugin System**
+- `POST /api/v1/plugins/register` - Register custom plugin
+- `GET /api/v1/plugins/list` - List available plugins
+- `POST /api/v1/plugins/:id/execute` - Execute plugin
 
-```
-~/.manifest-local/
-├── src/
-│   ├── cli/
-│   │   └── manifest-cli.js    # Main CLI logic
-│   └── client/
-│       └── manifestCloudClient.js  # Cloud service client
-├── examples/
-│   └── test-manifest-cloud-client.js
-├── package.json
-├── .env                        # Cloud service configuration
-└── README.md
-```
+#### **CI/CD Integration**
+- `POST /api/v1/cicd/trigger` - Trigger CI/CD pipeline
+- `GET /api/v1/cicd/status` - Pipeline status
+- `POST /api/v1/cicd/webhook` - Webhook endpoint
+
+### **Service Components**
+
+#### **Heartbeat Service**
+- Continuous repository monitoring
+- Configurable check intervals (default: 5 minutes)
+- Automatic health status tracking
+- Notification system integration
+
+#### **Update Checker**
+- Dependency update detection (npm, Python, Docker)
+- Security vulnerability scanning
+- Git repository status monitoring
+- Automated update recommendations
+
+#### **Plugin Manager**
+- Extensible plugin architecture
+- Custom manifest format detection
+- Version strategy customization
+- CI/CD platform integration
 
 ## 🔄 Workflow Examples
 
-### Standard Release Process
+### **Standard Release Process**
 
 ```bash
 # 1. Generate documentation
@@ -250,96 +283,93 @@ manifest docs
 # 2. Commit documentation
 manifest commit "Add documentation for v2.1.0"
 
-# 3. Automated release
+# 3. Automated release with local service
 manifest go minor
 
-# Result: Version bumped, committed, tagged, and pushed
+# Result: Version bumped, committed, tagged, pushed, and monitored
 ```
 
-### Hotfix Process
+### **Continuous Monitoring Setup**
 
 ```bash
-# Quick patch release
-manifest go patch
+# Start heartbeat monitoring via API
+curl -X POST http://localhost:3001/api/v1/repository/$(pwd)/heartbeat/start \
+  -H "Content-Type: application/json" \
+  -d '{"interval": "5m", "notifications": [{"type": "webhook", "url": "..."}]}'
 
-# Result: 2.1.0 → 2.1.1, committed, tagged, and pushed
+# Check status
+curl http://localhost:3001/api/v1/repository/$(pwd)/status
 ```
 
-### Major Version Release
+### **Plugin Integration**
 
 ```bash
-# Major version with full workflow
-manifest go major
+# Register custom plugin
+curl -X POST http://localhost:3001/api/v1/plugins/register \
+  -H "Content-Type: application/json" \
+  -d '{"name": "custom-format", "pluginType": "manifest-format", ...}'
 
-# Result: 2.1.1 → 3.0.0, committed, tagged, and pushed
+# Execute plugin
+curl -X POST http://localhost:3001/api/v1/plugins/custom-format/execute
 ```
 
 ## 🚨 Troubleshooting
 
-### Common Issues
+### **Service Issues**
 
-#### "Not in a git repository"
 ```bash
-# Initialize git repository
-git init
-git remote add origin <your-repo-url>
+# Check service status
+docker-compose ps
+
+# View service logs
+docker-compose logs manifest-cloud
+
+# Restart services
+docker-compose restart
 ```
 
-#### "Permission denied (publickey)"
-```bash
-# Check SSH key
-ssh-add ~/.ssh/id_rsa
-ssh -T git@github.com
-```
-
-#### "Remote is ahead, cannot fast-forward"
-```bash
-# Use diagnose to check status
-manifest diagnose
-
-# Manually sync if needed
-git pull origin main --rebase
-```
-
-#### VERSION file out of sync
-```bash
-# Regenerate VERSION file
-manifest version patch
-```
-
-### Getting Help
+### **CLI Issues**
 
 ```bash
 # Comprehensive health check
 manifest diagnose
 
-# Show help
-manifest help
+# Check service connectivity
+curl http://localhost:3001/health
 
-# Check git status
-git status
+# Verify installation
+ls -la ~/.manifest-local/
 ```
 
-## 🔗 Manifest Cloud Integration
+### **Common Solutions**
 
-The Manifest CLI can optionally integrate with Manifest Cloud for enhanced features:
+```bash
+# Service won't start
+docker-compose down && docker-compose up -d
 
-### Benefits
-- **AI-Powered Analysis**: Intelligent commit analysis and recommendations
-- **Rich Documentation**: Generate detailed changelogs with context
-- **Version Intelligence**: Get smart suggestions for version increments
-- **API Change Detection**: Automatically identify breaking changes
+# CLI not found
+export PATH="$HOME/.local/bin:$PATH"
 
-### Setup
-1. Configure environment variables in `~/.manifest-local/.env`
-2. Use `manifest analyze` and `manifest changelog` commands
-3. Enhanced `manifest go` workflow with intelligent recommendations
+# Database connection issues
+docker-compose restart postgres
+```
 
-### Fallback Behavior
-If Manifest Cloud is not configured or unavailable, the CLI gracefully falls back to basic functionality:
-- Basic changelog generation from Git history
-- Standard version incrementing
-- Full Git workflow automation
+## 🔗 Integration Options
+
+### **Local-Only Mode**
+- CLI functionality without external services
+- Basic version management and Git operations
+- Documentation generation from local Git history
+
+### **Local Service Mode**
+- Full API endpoints for automation
+- Heartbeat monitoring and update checking
+- Plugin system and CI/CD integration
+
+### **Hybrid Mode**
+- Local service for core functionality
+- Optional Manifest Cloud integration for enhanced features
+- Best of both worlds: local control + cloud intelligence
 
 ## 🤝 Contributing
 
@@ -356,6 +386,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🆘 Support
 
 - **Documentation**: [docs/](docs/)
+- **Enhanced Features**: [ENHANCED_FEATURES.md](ENHANCED_FEATURES.md)
+- **Deployment Guide**: [DEPLOYMENT.md](DEPLOYMENT.md)
 - **Issues**: [GitHub Issues](https://github.com/fidenceio/manifest.local/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/fidenceio/manifest.local/discussions)
 
@@ -365,6 +397,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📋 Changelog
 
+### [v3.0.1] - 2025-08-11
+- **Documentation**: Complete README rewrite to reflect full system capabilities
+- **Architecture**: Clarified CLI + Local Service + Monitoring architecture
+- **Installation**: Added multiple installation options (Complete, CLI-only, Service-only)
+- **Features**: Documented heartbeat monitoring, update checking, and plugin system
+
 ### [v3.0.0] - 2025-08-11
 - **Major Release**: Complete CLI rewrite with enhanced automation
 - **New Commands**: `manifest go`, `manifest docs`, `manifest diagnose`
@@ -373,10 +411,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Cloud Integration**: Optional Manifest Cloud service integration
 - **Documentation**: Comprehensive documentation generation
 
-### [v2.0.2] - 2025-08-11
-- Added VERSION file management
-- Enhanced conflict resolution in push operations
-- Added comprehensive diagnostics command
-- Improved error handling and user feedback
-
-See [CHANGELOG_v3.0.0.md](docs/CHANGELOG_v3.0.0.md) for full details.
+See [CHANGELOG_v3.0.1.md](docs/CHANGELOG_v3.0.1.md) for full details.
