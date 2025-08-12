@@ -109,6 +109,35 @@ manifest docs
 manifest ntp
 ```
 
+## 🖥️ OS Compatibility
+
+The CLI automatically detects your operating system and applies optimizations:
+
+### **macOS (Darwin)**
+- ✅ Native `date -r` timestamp support
+- ✅ Homebrew `timeout` and `sntp` commands
+- ✅ Optimized for macOS performance
+
+### **Linux (GNU/Linux)**
+- ✅ Native `date -d` timestamp support
+- ✅ Standard `timeout` command support
+- ✅ Optimized for Linux systems
+
+### **Cross-Platform Features**
+- 🔍 **Automatic OS Detection** - No manual configuration needed
+- ⚡ **Command Fallbacks** - Graceful degradation if commands unavailable
+- 🎯 **Performance Optimization** - OS-specific timeout and date handling
+- 📱 **Universal Compatibility** - Works on any Unix-like system
+
+### **OS Detection Commands**
+```bash
+# Check OS compatibility
+source src/cli/modules/manifest-ntp.sh && display_os_info
+
+# View NTP configuration with OS info
+manifest ntp-config
+```
+
 ## 🔍 Troubleshooting
 
 ### Common Issues
@@ -144,6 +173,7 @@ manifest docs
 
 ### Major Improvements
 - 🚀 **Complete NTP Module Refactor v2.0** - Simple, highly accurate timestamp service
+- 🖥️ **Full OS Awareness** - Automatic detection and optimization for Linux, macOS, and Unix
 - ⚡ **Performance Boost** - Reduced timeout from 5s to 3s, faster fallback
 - 🎯 **Better Accuracy** - Improved NTP offset calculation and validation
 - 🔧 **Simplified Code** - Cleaner, more maintainable NTP implementation
