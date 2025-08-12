@@ -4,16 +4,16 @@
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `6.5.2` |
-| **Release Date** | `2025-08-11 22:42:01 CDT` |
-| **Git Tag** | `v6.5.2` |
-| **Commit Hash** | `03e54a5` |
+| **Current Version** | `6.5.3` |
+| **Release Date** | `2025-08-11 22:43:33 CDT` |
+| **Git Tag** | `v6.5.3` |
+| **Commit Hash** | `be5dcad` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-08-11 22:42:01 CDT` |
+| **Last Updated** | `2025-08-11 22:43:33 CDT` |
 
 ### 📚 Documentation Files
-- **Release Notes**: [docs/RELEASE_v6.5.2.md](docs/RELEASE_v6.5.2.md)
-- **Changelog**: [docs/CHANGELOG_v6.5.2.md](docs/CHANGELOG_v6.5.2.md)
+- **Release Notes**: [docs/RELEASE_v6.5.3.md](docs/RELEASE_v6.5.3.md)
+- **Changelog**: [docs/CHANGELOG_v6.5.3.md](docs/CHANGELOG_v6.5.3.md)
 - **Package Info**: [package.json](package.json)
 
 ---
@@ -468,16 +468,16 @@ See [docs/CHANGELOG_v6.1.0.md](docs/CHANGELOG_v6.1.0.md) for detailed changes.
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `6.5.2` |
-| **Release Date** | `2025-08-11 22:42:01 CDT` |
-| **Git Tag** | `v6.5.2` |
-| **Commit Hash** | `03e54a5` |
+| **Current Version** | `6.5.3` |
+| **Release Date** | `2025-08-11 22:43:33 CDT` |
+| **Git Tag** | `v6.5.3` |
+| **Commit Hash** | `be5dcad` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-08-11 22:42:01 CDT` |
+| **Last Updated** | `2025-08-11 22:43:33 CDT` |
 
 ### 📚 Documentation Files
-- **Release Notes**: [docs/RELEASE_v6.5.2.md](docs/RELEASE_v6.5.2.md)
-- **Changelog**: [docs/CHANGELOG_v6.5.2.md](docs/CHANGELOG_v6.5.2.md)
+- **Release Notes**: [docs/RELEASE_v6.5.3.md](docs/RELEASE_v6.5.3.md)
+- **Changelog**: [docs/CHANGELOG_v6.5.3.md](docs/CHANGELOG_v6.5.3.md)
 - **Package Info**: [package.json](package.json)
 
 ---

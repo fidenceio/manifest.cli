@@ -1,6 +1,6 @@
 {
   "name": "manifest",
-  "version": "6.5.2",
+  "version": "6.5.3",
   "description": "Universal App Store Service - Containerized, modular service for managing applications across all ecosystems with version management, CI/CD integration, and installation automation",
   "main": "src/index.js",
   "scripts": {
