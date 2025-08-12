@@ -17,7 +17,8 @@
     "push": "./push.sh",
     "push:patch": "./push.sh patch",
     "push:minor": "./push.sh minor",
-    "push:major": "./push.sh major"
+    "push:major": "./push.sh major",
+    "install:cli": "./install-local-cli.sh"
   },
   "keywords": [
     "manifest",
