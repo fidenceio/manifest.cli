@@ -112,6 +112,16 @@ manifest version patch
 manifest docs
 ```
 
+### **Option 4: Homebrew Installation**
+
+```bash
+# Install via Homebrew (recommended for users)
+brew install fidenceio/manifest.local/manifest
+
+# Or install from local formula
+brew install homebrew/manifest.rb
+```
+
 ### **Option 3: Service Only**
 
 ```bash
@@ -123,6 +133,26 @@ curl http://localhost:3001/api/v1/
 ```
 
 ## 🔧 Configuration
+
+### **Homebrew Installation**
+
+For easy installation via Homebrew:
+
+```bash
+# Install from GitHub
+brew install fidenceio/manifest.local/manifest
+
+# Or install from local formula
+brew install homebrew/manifest.rb
+```
+
+The Homebrew formula automatically:
+- Installs CLI to `/opt/homebrew/bin/manifest`
+- Creates configuration directories
+- Sets up user environment
+- Provides post-install instructions
+
+See `homebrew/README.md` for detailed Homebrew setup information.
 
 ### **Environment Setup**
 
