@@ -123,3 +123,13 @@ MIT License - see [LICENSE](LICENSE) file for details.
 | **NTP Server** | `system` |
 | **NTP Offset** | `0.000000 seconds` |
 | **Uncertainty** | `±0.000000 seconds` |
+
+## 📋 Version Information
+
+| Field | Value |
+|-------|-------|
+| **Current Version** | `7.1.0` |
+| **Last Updated** | `2025-08-12 19:17:17 UTC` |
+| **NTP Server** | `system` |
+| **NTP Offset** | `0.000000 seconds` |
+| **Uncertainty** | `±0.000000 seconds` |
