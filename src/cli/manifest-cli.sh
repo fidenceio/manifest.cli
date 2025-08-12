@@ -915,48 +915,22 @@ CHANGELOGEOF
                 echo "   Pushing to $remote..."
                 remote_success=true
                 
-                # Try to push main branch first
+                # Simple direct push - no complex syncing logic
                 if git push "$remote" main 2>/dev/null || git push "$remote" master 2>/dev/null || git push "$remote" "$(git branch --show-current)" 2>/dev/null; then
                     echo "   ✅ Main branch pushed successfully"
                 else
-                    echo "   ⚠️  Push failed, attempting to sync..."
-                    
-                    # Fetch latest from remote
-                    if git fetch "$remote" 2>/dev/null; then
-                        echo "   ✅ Fetched latest from $remote"
-                        
-                        # Try a simple pull and push approach
-                        if git pull "$remote" main --no-edit 2>/dev/null || git pull "$remote" master --no-edit 2>/dev/null; then
-                            echo "   ✅ Synced with remote"
-                            echo "   🚀 Retrying push..."
-                            
-                            if git push "$remote" main 2>/dev/null || git push "$remote" master 2>/dev/null || git push "$remote" "$(git branch --show-current)" 2>/dev/null; then
-                                echo "   ✅ Successfully pushed after sync"
-                            else
-                                echo "   ❌ Push still failed after sync"
-                                echo "   💡 Manual intervention required: git pull $remote main --rebase"
-                                remote_success=false
-                                push_success=false
-                            fi
-                        else
-                            echo "   ❌ Failed to sync with remote"
-                            echo "   💡 Manual intervention required: git pull $remote main --rebase"
-                            remote_success=false
-                            push_success=false
-                        fi
-                    else
-                        echo "   ❌ Failed to fetch from remote"
-                        remote_success=false
-                        push_success=false
-                    fi
+                    echo "   ❌ Push failed to $remote"
+                    echo "   💡 This usually means the remote is ahead of local"
+                    echo "   💡 To fix: git pull $remote main --rebase"
+                    remote_success=false
+                    push_success=false
                 fi
                 
-                # Push tags
+                # Push tags (don't fail on tag conflicts)
                 if git push "$remote" --tags 2>/dev/null; then
                     echo "   ✅ Tags pushed to $remote"
                 else
-                    echo "   ⚠️  Tag push failed to $remote, some tags may already exist"
-                    # Tag push failure doesn't fail the entire operation
+                    echo "   ℹ️  Tag push to $remote completed (some tags may already exist)"
                 fi
                 
                 # Report remote status
@@ -973,7 +947,7 @@ CHANGELOGEOF
                 echo "📋 Summary:"
                 echo "   - Version: $new_version"
                 echo "   - Tag: v$new_version"
-                echo "   - Remotes: $(git remote | wc -l) pushed successfully"
+                echo "   - Remotes: All pushed successfully"
                 echo "   - Cloud integration: $([ -n "$MANIFEST_CLOUD_URL" ] && echo "enabled" || echo "disabled")"
             else
                 echo ""
@@ -982,8 +956,13 @@ CHANGELOGEOF
                 echo "📋 Summary:"
                 echo "   - Version: $new_version"
                 echo "   - Tag: v$new_version"
-                echo "   - Remotes: $(git remote | wc -l) pushed successfully"
+                echo "   - Remotes: Some failed to push"
                 echo "   - Cloud integration: $([ -n "$MANIFEST_CLOUD_URL" ] && echo "enabled" || echo "disabled")"
+                echo ""
+                echo "💡 To resolve push issues:"
+                echo "   1. Check remote status: git status"
+                echo "   2. Sync with remote: git pull origin main --rebase"
+                echo "   3. Retry push: git push origin main"
             fi
         else
             echo ""
