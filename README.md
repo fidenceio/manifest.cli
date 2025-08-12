@@ -1,49 +1,24 @@
 # Manifest - Automated Versioning and Documentation
 
 
+
 ## 📋 Version Information
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `6.5.4` |
-| **Release Date** | `2025-08-11 22:46:39 CDT` |
-| **Git Tag** | `v6.5.4` |
-| **Commit Hash** | `f160b11` |
+| **Current Version** | `6.5.5` |
+| **Release Date** | `2025-08-11 22:47:13 CDT` |
+| **Git Tag** | `v6.5.5` |
+| **Commit Hash** | `6095817` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-08-11 22:46:39 CDT` |
+| **Last Updated** | `2025-08-11 22:47:13 CDT` |
 
 ### 📚 Documentation Files
-- **Release Notes**: [docs/RELEASE_v6.5.4.md](docs/RELEASE_v6.5.4.md)
-- **Changelog**: [docs/CHANGELOG_v6.5.4.md](docs/CHANGELOG_v6.5.4.md)
+- **Release Notes**: [docs/RELEASE_v6.5.5.md](docs/RELEASE_v6.5.5.md)
+- **Changelog**: [docs/CHANGELOG_v6.5.5.md](docs/CHANGELOG_v6.5.5.md)
 - **Package Info**: [package.json](package.json)
 
 ---
-
-### 🖥️ **Command Line Interface (CLI)**
-- **Automated Version Management**: Bump versions with semantic versioning (patch, minor, major)
-- **Smart Git Operations**: Auto-commit, tag, and push with conflict resolution
-- **Documentation Generation**: Create release notes, changelogs, and README updates
-- **Health Diagnostics**: Built-in troubleshooting and system health checks
-
-### 🏗️ **Local Manifest Service**
-- **Express.js Service**: Runs on localhost:3001 with full API endpoints
-- **Database Integration**: PostgreSQL for persistent data storage
-- **Caching Layer**: Redis for performance optimization
-- **Container Orchestration**: Docker Compose for easy deployment
-
-### 🔄 **Automated Workflows**
-- **Heartbeat Monitoring**: Continuous repository health checking
-- **Update Detection**: Automatic dependency and security update detection
-- **CI/CD Integration**: Seamless integration with existing CI/CD pipelines
-- **Plugin System**: Extensible architecture for custom functionality
-
-### 📊 **Monitoring & Intelligence**
-- **Real-time Health Checks**: Repository status monitoring
-- **Security Scanning**: Vulnerability detection and reporting
-- **Performance Metrics**: Service health and performance tracking
-- **Notification System**: Webhook, email, and Slack integration
-
-## 🎯 Quick Start
 
 ### 1. **Install the Complete System**
 
