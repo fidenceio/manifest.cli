@@ -1,82 +1,50 @@
 {
-  "name": "manifest",
+  "name": "manifest-local",
   "version": "6.5.6",
-  "description": "Universal App Store Service - Containerized, modular service for managing applications across all ecosystems with version management, CI/CD integration, and installation automation",
-  "main": "src/index.js",
+  "description": "Manifest Local CLI - Comprehensive Git operations and versioning automation tool with NTP timestamp verification",
+  "main": "src/cli/manifest-cli.sh",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
-    "test": "jest",
-    "lint": "eslint src/",
-    "build": "tsc",
-    "clean": "rm -rf dist/",
-    "docker:build": "docker build -t manifest .",
-    "docker:run": "docker run -p 3000:3000 manifest",
-    "cli": "node src/cli/manifest-cli.js",
-    "manifest": "node src/cli/manifest-cli.js",
-    "push": "./push.sh",
-    "push:patch": "./push.sh patch",
-    "push:minor": "./push.sh minor",
-    "push:major": "./push.sh major",
-    "install:cli": "./install-local-cli.sh"
+    "start": "echo 'Use: manifest help'",
+    "dev": "echo 'Use: manifest help'",
+    "test": "manifest go test",
+    "lint": "echo 'Shell script - no linting needed'",
+    "build": "echo 'Shell script - no build needed'",
+    "clean": "rm -rf temp_readme.md",
+    "docker:build": "docker build -t manifest-local .",
+    "docker:run": "docker run -it manifest-local",
+    "cli": "./src/cli/manifest-cli.sh",
+    "manifest": "./src/cli/manifest-cli.sh",
+    "install:cli": "./install-cli.sh"
   },
   "keywords": [
     "manifest",
+    "cli",
     "versioning",
     "documentation",
     "git",
     "github",
-    "universal",
-    "app-store",
-    "cicd",
-    "containerization",
-    "deployment",
     "automation",
-    "multi-platform",
-    "multi-ecosystem"
+    "ntp",
+    "timestamp",
+    "deployment",
+    "cicd"
   ],
-  "author": "Kanizsa Team",
+  "author": "Fidenceio Team",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "helmet": "^7.1.0",
-    "morgan": "^1.10.0",
-    "winston": "^3.11.0",
-    "dotenv": "^16.3.1",
-    "axios": "^1.6.2",
-    "simple-git": "^3.20.0",
-    "semver": "^7.5.4",
-    "yaml": "^2.3.4",
-    "js-yaml": "^4.1.0",
-    "marked": "^9.1.6",
-    "gray-matter": "^4.0.3",
-    "chalk": "^5.3.0",
-    "commander": "^11.1.0",
-    "inquirer": "^9.2.12",
-    "ora": "^7.0.1",
-    "boxen": "^7.1.1",
-    "update-notifier": "^6.0.2",
-    "node-cron": "^3.0.3",
-    "express-rate-limit": "^7.1.5"
+    "dotenv": "^16.3.1"
   },
-  "devDependencies": {
-    "nodemon": "^3.0.2",
-    "jest": "^29.7.0",
-    "eslint": "^8.55.0",
-    "@types/node": "^20.10.4",
-    "typescript": "^5.3.3"
-  },
+  "devDependencies": {},
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/kanizsa/manifest.git"
+    "url": "https://github.com/fidenceio/manifest.local.git"
   },
   "bugs": {
-    "url": "https://github.com/kanizsa/manifest/issues"
+    "url": "https://github.com/fidenceio/manifest.local/issues"
   },
-  "homepage": "https://github.com/kanizsa/manifest#readme"
+  "homepage": "https://github.com/fidenceio/manifest.local#readme"
 }

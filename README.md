@@ -1,18 +1,17 @@
-# Manifest - Automated Versioning and Documentation
+# Manifest Local CLI
 
-
-
+**Comprehensive Git operations and versioning automation tool with trusted NTP timestamp verification**
 
 ## 📋 Version Information
 
 | Property | Value |
 |----------|-------|
 | **Current Version** | `6.5.6` |
-| **Release Date** | `` |
+| **Release Date** | `2025-08-12 04:18:35 UTC` |
 | **Git Tag** | `v6.5.6` |
-| **Commit Hash** | `9c599d4` |
+| **Commit Hash** | `7ac8620` |
 | **Branch** | `main` |
-| **Last Updated** | `` |
+| **Last Updated** | `2025-08-12 04:18:35 UTC` |
 | **NTP Server** | `system (127.0.0.1)` |
 | **NTP Offset** | `0.000000 seconds` |
 | **Uncertainty** | `±0.000000 seconds` |
@@ -24,346 +23,171 @@
 
 ---
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Manifest Local System                    │
-├─────────────────────────────────────────────────────────────┤
-│  🖥️  CLI Interface     🏗️  Local Service     📊  Monitoring  │
-│  • manifest go         • Express.js API     • Heartbeat     │
-│  • manifest docs       • PostgreSQL DB      • Update Check  │
-│  • manifest diagnose   • Redis Cache        • Health Check  │
-│  • manifest revert     • Docker Containers  • Notifications │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-                    ┌─────────────────┐
-                    │   Your Repos    │
-                    │ • Git Ops       │
-                    │ • Version Mgmt  │
-                    │ • Documentation │
-                    └─────────────────┘
-```
+## 🚀 Overview
 
-## 📦 Installation Options
+Manifest Local CLI is a powerful command-line tool that automates Git operations, version management, and documentation generation. It provides trusted NTP timestamps for all operations, ensuring accurate audit trails and compliance requirements.
 
-### **Option 1: Complete System (Recommended)**
+## ✨ Key Features
+
+- **🕐 Trusted NTP Timestamps**: Automatic timestamp verification from multiple NTP servers
+- **🚀 Complete Workflow Automation**: Single command handles sync, docs, version, commit, push, and metadata
+- **📚 Smart Documentation**: Auto-generates RELEASE notes, CHANGELOG, and README updates
+- **🌐 Repository Integration**: Automatic metadata updates for GitHub/GitLab repositories
+- **🧪 Enhanced Testing**: Comprehensive test modes for validation and debugging
+- **📊 Version Management**: Semantic versioning with patch, minor, and major increments
+
+## 🛠️ Installation
+
+### Quick Install
 
 ```bash
-# Install CLI and start all services
-./install-cli.sh
-docker-compose up -d
+# Clone the repository
+git clone https://github.com/fidenceio/manifest.local.git
+cd manifest.local
+
+# Install the CLI
+bash install-cli.sh
 
 # Verify installation
-manifest diagnose
-curl http://localhost:3001/health
+manifest help
 ```
 
-### **Option 2: CLI Only**
+### Manual Installation
 
 ```bash
-# Install just the CLI
-./install-cli.sh
+# Make the CLI executable
+chmod +x src/cli/manifest-cli.sh
 
-# Use basic functionality without local service
-manifest version patch
+# Create symlink (optional)
+sudo ln -s $(pwd)/src/cli/manifest-cli.sh /usr/local/bin/manifest
+```
+
+## 📖 Usage
+
+### Basic Commands
+
+```bash
+# Get help
+manifest help
+
+# Get trusted NTP timestamp
+manifest ntp
+
+# Complete automated workflow
+manifest go [patch|minor|major]
+
+# Test mode (no changes)
+manifest go test
+
+# Enhanced testing
+manifest go test versions    # Test version increments
+manifest go test all         # Comprehensive testing
+```
+
+### Complete Workflow
+
+The `manifest go` command performs a complete automated workflow:
+
+```bash
+manifest go patch    # Increment patch version (6.5.6 → 6.5.7)
+manifest go minor    # Increment minor version (6.5.6 → 6.6.0)
+manifest go major    # Increment major version (6.5.6 → 7.0.0)
+```
+
+**Workflow Steps:**
+1. 🔄 **Sync** with remote repository
+2. 📚 **Generate** documentation (RELEASE, CHANGELOG, README)
+3. 📦 **Bump** version number
+4. 💾 **Commit** all changes with NTP timestamps
+5. 🏷️ **Create** git tag
+6. 🚀 **Push** to all remotes
+7. 🏷️ **Update** repository metadata
+
+### Individual Commands
+
+```bash
+# Sync with remote
+manifest sync
+
+# Generate documentation
 manifest docs
-```
 
-### **Option 4: Homebrew Installation**
+# Update repository metadata
+manifest docs metadata
 
-```bash
-# Install via Homebrew (recommended for users)
-brew install fidenceio/manifest.local/manifest
+# Version management
+manifest version [patch|minor|major]
 
-# Or install from local formula
-brew install homebrew/manifest.rb
-```
-
-### **Option 3: Service Only**
-
-```bash
-# Start just the local service
-docker-compose up -d manifest-cloud redis postgres
-
-# Access via HTTP API
-curl http://localhost:3001/api/v1/
+# Diagnostics
+manifest diagnose
 ```
 
 ## 🔧 Configuration
 
-### **Homebrew Installation**
+### Environment Variables
 
-For easy installation via Homebrew:
-
-```bash
-# Install from GitHub
-brew install fidenceio/manifest.local/manifest
-
-# Or install from local formula
-brew install homebrew/manifest.rb
-```
-
-The Homebrew formula automatically:
-- Installs CLI to `/opt/homebrew/bin/manifest`
-- Creates configuration directories
-- Sets up user environment
-- Provides post-install instructions
-
-See `homebrew/README.md` for detailed Homebrew setup information.
-
-### **Environment Setup**
-
-Create `.env` file for service configuration:
+Create a `.env` file in your project root:
 
 ```bash
-# Service Configuration
-PORT=3001
-NODE_ENV=production
-MANIFEST_SECRET=your-secret-key-here
-
-# Database
-POSTGRES_DB=manifest_cloud
-POSTGRES_USER=manifest_user
-POSTGRES_PASSWORD=manifest_password
-
-# Redis
-REDIS_URL=redis://localhost:6380
-
-# Features
-ENABLE_HEARTBEAT=true
-ENABLE_UPDATE_CHECKER=true
-ENABLE_PLUGIN_SYSTEM=true
-ENABLE_CICD_INTEGRATION=true
+# Optional: Manifest Cloud service
+MANIFEST_CLOUD_URL=https://your-cloud-service.com
+MANIFEST_CLOUD_API_KEY=your-api-key
 ```
 
-### **CLI Configuration**
+### Repository Setup
 
-Create `~/.manifest-local/.env` for CLI options:
+The CLI automatically detects your repository provider (GitHub, GitLab) and installs the appropriate CLI tools:
+
+- **GitHub**: Installs `gh` CLI for repository metadata updates
+- **GitLab**: Installs `glab` CLI for repository metadata updates
+
+## 🧪 Testing
+
+### Test Modes
 
 ```bash
-# Optional: Manifest Cloud integration
-MANIFEST_CLOUD_URL=http://localhost:3001
-MANIFEST_CLOUD_API_KEY=your-api-key-here
+# Basic test (no changes)
+manifest go test
 
-# CLI preferences
-MANIFEST_AUTO_COMMIT=true
-MANIFEST_AUTO_PUSH=true
-MANIFEST_NOTIFICATION_EMAIL=your@email.com
+# Test version increments
+manifest go test versions
+
+# Comprehensive testing
+manifest go test all
 ```
 
-## 📚 Command Reference
+### What Tests Cover
 
-### **Core CLI Commands**
+- **Version Increments**: patch, minor, major scenarios
+- **Environment Validation**: configuration, dependencies, security
+- **Workflow Steps**: sync, docs, version, commit, push, metadata
 
-#### `manifest go [type]` - Complete Workflow
-The main command for automated development workflows.
+## 🕐 NTP Timestamp Verification
 
-```bash
-manifest go major     # Major version bump with full automation
-manifest go minor     # Minor version bump with full automation
-manifest go patch     # Patch version bump with full automation
-manifest go           # Auto-detect increment type
+Every manifest operation includes trusted NTP timestamps:
+
+- **Multiple NTP Servers**: time.apple.com, time.google.com, pool.ntp.org, time.nist.gov
+- **Fallback Handling**: Gracefully falls back to system time if NTP unavailable
+- **Audit Trail**: Complete timestamp information in all generated files and commits
+- **Compliance**: Meets requirements for timestamp verification and audit trails
+
+## 📁 Project Structure
+
 ```
-
-**What happens automatically:**
-1. ✅ Checks for uncommitted changes
-2. 🔍 Analyzes commits (if service configured)
-3. 📈 Bumps version according to type
-4. 📄 Updates VERSION file and package.json
-5. 💾 Commits changes with intelligent messages
-6. 🏷️ Creates Git tag
-7. 🚀 Pushes to all remotes with conflict resolution
-
-#### `manifest docs` - Documentation Generation
-Generate comprehensive documentation for the current version.
-
-**Creates:**
-- `docs/RELEASE_vX.Y.Z.md` - Release notes
-- `docs/CHANGELOG_vX.Y.Z.md` - Detailed changelog
-- Updates `README.md` with changelog section
-
-#### `manifest revert` - Version Reversion
-Interactive version reversion with safety confirmations.
-
-```bash
-manifest revert
-# Shows available versions and prompts for selection
-# Updates VERSION file, package.json, and README.md
-# Commits changes and creates tag
+manifest.local/
+├── src/cli/           # CLI implementation
+├── docs/              # Generated documentation
+├── install-cli.sh     # Installation script
+├── package.json       # Project configuration
+└── README.md          # This file
 ```
-
-#### `manifest diagnose` - System Health Check
-Comprehensive health check and troubleshooting.
-
-**Checks:**
-- Git repository status
-- Remote configuration
-- SSH authentication
-- VERSION file consistency
-- Local service health
-- Provides actionable solutions
-
-### **Utility Commands**
-
-```bash
-manifest version [type]    # Simple version bumping
-manifest push [type]       # Legacy version bump and push
-manifest commit <message>  # Create custom commit
-manifest analyze           # Analyze commits (requires service)
-manifest changelog         # Generate changelog (requires service)
-manifest help              # Show help information
-```
-
-## 🏗️ Local Service Features
-
-### **API Endpoints**
-
-#### **Health & Status**
-- `GET /health` - Service health check
-- `GET /api/v1/status` - Detailed service status
-- `GET /api/v1/version` - Service version information
-
-#### **Repository Management**
-- `POST /api/v1/repository/:path/heartbeat/start` - Start monitoring
-- `POST /api/v1/repository/:path/heartbeat/stop` - Stop monitoring
-- `GET /api/v1/repository/:path/status` - Repository health status
-- `POST /api/v1/repository/:path/update-check` - Check for updates
-
-#### **Plugin System**
-- `POST /api/v1/plugins/register` - Register custom plugin
-- `GET /api/v1/plugins/list` - List available plugins
-- `POST /api/v1/plugins/:id/execute` - Execute plugin
-
-#### **CI/CD Integration**
-- `POST /api/v1/cicd/trigger` - Trigger CI/CD pipeline
-- `GET /api/v1/cicd/status` - Pipeline status
-- `POST /api/v1/cicd/webhook` - Webhook endpoint
-
-### **Service Components**
-
-#### **Heartbeat Service**
-- Continuous repository monitoring
-- Configurable check intervals (default: 5 minutes)
-- Automatic health status tracking
-- Notification system integration
-
-#### **Update Checker**
-- Dependency update detection (npm, Python, Docker)
-- Security vulnerability scanning
-- Git repository status monitoring
-- Automated update recommendations
-
-#### **Plugin Manager**
-- Extensible plugin architecture
-- Custom manifest format detection
-- Version strategy customization
-- CI/CD platform integration
-
-## 🔄 Workflow Examples
-
-### **Standard Release Process**
-
-```bash
-# 1. Generate documentation
-manifest docs
-
-# 2. Commit documentation
-manifest commit "Add documentation for v2.1.0"
-
-# 3. Automated release with local service
-manifest go minor
-
-# Result: Version bumped, committed, tagged, pushed, and monitored
-```
-
-### **Continuous Monitoring Setup**
-
-```bash
-# Start heartbeat monitoring via API
-curl -X POST http://localhost:3001/api/v1/repository/$(pwd)/heartbeat/start \
-  -H "Content-Type: application/json" \
-  -d '{"interval": "5m", "notifications": [{"type": "webhook", "url": "..."}]}'
-
-# Check status
-curl http://localhost:3001/api/v1/repository/$(pwd)/status
-```
-
-### **Plugin Integration**
-
-```bash
-# Register custom plugin
-curl -X POST http://localhost:3001/api/v1/plugins/register \
-  -H "Content-Type: application/json" \
-  -d '{"name": "custom-format", "pluginType": "manifest-format", ...}'
-
-# Execute plugin
-curl -X POST http://localhost:3001/api/v1/plugins/custom-format/execute
-```
-
-## 🚨 Troubleshooting
-
-### **Service Issues**
-
-```bash
-# Check service status
-docker-compose ps
-
-# View service logs
-docker-compose logs manifest-cloud
-
-# Restart services
-docker-compose restart
-```
-
-### **CLI Issues**
-
-```bash
-# Comprehensive health check
-manifest diagnose
-
-# Check service connectivity
-curl http://localhost:3001/health
-
-# Verify installation
-ls -la ~/.manifest-local/
-```
-
-### **Common Solutions**
-
-```bash
-# Service won't start
-docker-compose down && docker-compose up -d
-
-# CLI not found
-export PATH="$HOME/.local/bin:$PATH"
-
-# Database connection issues
-docker-compose restart postgres
-```
-
-## 🔗 Integration Options
-
-### **Local-Only Mode**
-- CLI functionality without external services
-- Basic version management and Git operations
-- Documentation generation from local Git history
-
-### **Local Service Mode**
-- Full API endpoints for automation
-- Heartbeat monitoring and update checking
-- Plugin system and CI/CD integration
-
-### **Hybrid Mode**
-- Local service for core functionality
-- Optional Manifest Cloud integration for enhanced features
-- Best of both worlds: local control + cloud intelligence
 
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
+3. Make your changes
+4. Test thoroughly
 5. Submit a pull request
 
 ## 📄 License
@@ -372,51 +196,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🆘 Support
 
-- **Documentation**: [docs/](docs/)
-- **Enhanced Features**: [ENHANCED_FEATURES.md](ENHANCED_FEATURES.md)
-- **Deployment Guide**: [DEPLOYMENT.md](DEPLOYMENT.md)
-- **Issues**: [GitHub Issues](https://github.com/fidenceio/manifest.local/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/fidenceio/manifest.local/discussions)
+- **Documentation**: Check the generated docs in the `docs/` directory
+- **Issues**: Report bugs and feature requests on GitHub
+- **CLI Help**: Run `manifest help` for command documentation
 
 ---
 
-**Built with ❤️ by the Fidence.io team**
-
-## 📋 Changelog
-
-### [v3.0.1] - 2025-08-11
-- **Documentation**: Complete README rewrite to reflect full system capabilities
-- **Architecture**: Clarified CLI + Local Service + Monitoring architecture
-- **Installation**: Added multiple installation options (Complete, CLI-only, Service-only)
-- **Features**: Documented heartbeat monitoring, update checking, and plugin system
-
-### [v3.0.0] - 2025-08-11
-- **Major Release**: Complete CLI rewrite with enhanced automation
-- **New Commands**: `manifest go`, `manifest docs`, `manifest diagnose`
-- **VERSION File**: Automatic VERSION file management
-- **Conflict Resolution**: Automatic handling of common Git conflicts
-- **Cloud Integration**: Optional Manifest Cloud service integration
-- **Documentation**: Comprehensive documentation generation
-
-See [CHANGELOG_v3.0.1.md](docs/CHANGELOG_v3.0.1.md) for full details.
-
-## Changelog
-See [docs/CHANGELOG_v6.1.0.md](docs/CHANGELOG_v6.1.0.md) for detailed changes.
-
-## 📋 Version Information
-
-| Property | Value |
-|----------|-------|
-| **Current Version** | `6.5.3` |
-| **Release Date** | `2025-08-11 22:43:33 CDT` |
-| **Git Tag** | `v6.5.3` |
-| **Commit Hash** | `be5dcad` |
-| **Branch** | `main` |
-| **Last Updated** | `2025-08-11 22:43:33 CDT` |
-
-### 📚 Documentation Files
-- **Release Notes**: [docs/RELEASE_v6.5.3.md](docs/RELEASE_v6.5.3.md)
-- **Changelog**: [docs/CHANGELOG_v6.5.3.md](docs/CHANGELOG_v6.5.3.md)
-- **Package Info**: [package.json](package.json)
-
----
+**Built with ❤️ by the Fidenceio Team**
