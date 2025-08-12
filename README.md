@@ -38,7 +38,7 @@ git clone https://github.com/fidenceio/manifest.local.git
 cd manifest.local
 
 # Install CLI and start local service
-./install-local-cli.sh
+./install-cli.sh
 docker-compose up -d
 ```
 
@@ -93,7 +93,7 @@ curl http://localhost:3001/api/v1/
 
 ```bash
 # Install CLI and start all services
-./install-local-cli.sh
+./install-cli.sh
 docker-compose up -d
 
 # Verify installation
@@ -105,7 +105,7 @@ curl http://localhost:3001/health
 
 ```bash
 # Install just the CLI
-./install-local-cli.sh
+./install-cli.sh
 
 # Use basic functionality without local service
 manifest version patch

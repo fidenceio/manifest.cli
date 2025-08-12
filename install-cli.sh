@@ -95,23 +95,8 @@ success "Default configuration created"
 
 # Create Manifest Local CLI
 log "Creating Manifest Local CLI..."
-cat > "$BIN_DIR/manifest" << 'CLIEOF'
-#!/bin/bash
-
-# Manifest Local CLI
-# Local development tool for Git operations and cloud service integration
-
-set -e
-
-SCRIPT_DIR="$HOME/.manifest-local"
-cd "$SCRIPT_DIR"
-
-# Load environment variables
-if [ -f ".env" ]; then
-    export $(cat .env | grep -v '^#' | xargs)
-fi
-
-case "$1" in
+cp "$SCRIPT_DIR/src/cli/manifest-cli.sh" "$BIN_DIR/manifest"
+chmod +x "$BIN_DIR/manifest"
     "push")
         echo "Version bump, commit, and push changes..."
         if [ -z "$2" ]; then
@@ -420,6 +405,8 @@ case "$1" in
         
         # Parse version increment type
         increment_type="patch"  # Default to patch
+        test_mode=false
+        
         if [ -n "$2" ]; then
             case "$2" in
                 -patch|--patch|patch) increment_type="patch";;
@@ -430,18 +417,21 @@ case "$1" in
                 -m|m) increment_type="minor";;
                 -M|M) increment_type="major";;
                 -r|r) increment_type="patch";;  # Alias for patch
+                test) test_mode=true; increment_type="patch";;
                 *)
-                    echo "Usage: manifest go [patch|minor|major|revision]"
+                    echo "Usage: manifest go [patch|minor|major|revision|test]"
                     echo "  patch     - Increment patch version (1.0.0 -> 1.0.1)"
                     echo "  minor     - Increment minor version (1.0.0 -> 1.1.0)"
                     echo "  major     - Increment major version (1.0.0 -> 2.0.0)"
                     echo "  revision  - Alias for patch (1.0.0 -> 1.0.1)"
+                    echo "  test      - Show what would happen without executing"
                     echo ""
                     echo "Examples:"
                     echo "  manifest go        # Default: patch increment"
                     echo "  manifest go patch  # Explicit patch increment"
                     echo "  manifest go minor  # Minor version bump"
                     echo "  manifest go major  # Major version bump"
+                    echo "  manifest go test   # Test mode - show what would happen"
                     echo "  manifest go -m     # Short form for minor"
                     exit 1
                     ;;
@@ -449,6 +439,9 @@ case "$1" in
         fi
         
         echo "📋 Version increment type: $increment_type"
+        if [ "$test_mode" = true ]; then
+            echo "🧪 TEST MODE: No changes will be made"
+        fi
         echo ""
         
         # Check if we're in a git repository
@@ -459,10 +452,14 @@ case "$1" in
         
         # Check git status
         if ! git diff-index --quiet HEAD --; then
-            echo "📝 Uncommitted changes detected. Committing first..."
-            git add .
-            git commit -m "Auto-commit before Manifest process"
-            echo "✅ Changes committed"
+            if [ "$test_mode" = true ]; then
+                echo "📝 Uncommitted changes detected. Would commit first in real mode."
+            else
+                echo "📝 Uncommitted changes detected. Committing first..."
+                git add .
+                git commit -m "Auto-commit before Manifest process"
+                echo "✅ Changes committed"
+            fi
         else
             echo "✅ No uncommitted changes"
         fi
@@ -470,26 +467,30 @@ case "$1" in
         # Analyze commits using cloud service
         if [ -n "$MANIFEST_CLOUD_URL" ]; then
             echo ""
-            echo "🧠 Analyzing commits using Manifest Cloud service..."
-            node -e "
-            const { ManifestCloudClient } = require('./src/client/manifestCloudClient');
-            const client = new ManifestCloudClient({
-                baseURL: '$MANIFEST_CLOUD_URL',
-                apiKey: '$MANIFEST_CLOUD_API_KEY'
-            });
-            
-            client.analyzeCommits(process.cwd(), { limit: 20 })
-                .then(result => {
-                    console.log('📊 Analysis complete:');
-                    console.log('   - Total commits analyzed:', result.commits?.length || 0);
-                    console.log('   - Analysis depth:', result.metadata?.analysisDepth || 'unknown');
-                    console.log('   - Operation ID:', result.metadata?.operationId || 'unknown');
-                })
-                .catch(error => {
-                    console.log('⚠️  Analysis failed:', error.message);
-                    console.log('   Continuing with version bump...');
+            if [ "$test_mode" = true ]; then
+                echo "🧠 Would analyze commits using Manifest Cloud service in real mode..."
+            else
+                echo "🧠 Analyzing commits using Manifest Cloud service..."
+                node -e "
+                const { ManifestCloudClient } = require('./src/client/manifestCloudClient');
+                const client = new ManifestCloudClient({
+                    baseURL: '$MANIFEST_CLOUD_URL',
+                    apiKey: '$MANIFEST_CLOUD_API_KEY'
                 });
-            "
+                
+                client.analyzeCommits(process.cwd(), { limit: 20 })
+                    .then(result => {
+                        console.log('📊 Analysis complete:');
+                        console.log('   - Total commits analyzed:', result.commits?.length || 0);
+                        console.log('   - Analysis depth:', result.metadata?.analysisDepth || 'unknown');
+                        console.log('   - Operation ID:', result.metadata?.operationId || 'unknown');
+                    })
+                    .catch(error => {
+                        console.log('⚠️  Analysis failed:', error.message);
+                        console.log('   Continuing with version bump...');
+                    });
+                "
+            fi
         else
             echo "⚠️  Manifest Cloud service not configured, skipping analysis"
         fi
@@ -497,16 +498,19 @@ case "$1" in
         # Get version recommendation
         if [ -n "$MANIFEST_CLOUD_URL" ]; then
             echo ""
-            echo "🎯 Getting version recommendation..."
-            node -e "
-            const { ManifestCloudClient } = require('./src/client/manifestCloudClient');
-            const client = new ManifestCloudClient({
-                baseURL: '$MANIFEST_CLOUD_URL',
-                apiKey: '$MANIFEST_CLOUD_API_KEY'
-            });
-            
-            client.getVersionRecommendation(process.cwd(), { strategy: 'semantic' })
-                .then(result => {
+            if [ "$test_mode" = true ]; then
+                echo "🎯 Would get version recommendation in real mode..."
+            else
+                echo "🎯 Getting version recommendation..."
+                node -e "
+                const { ManifestCloudClient } = require('./src/client/manifestCloudClient');
+                const client = new ManifestCloudClient({
+                    baseURL: '$MANIFEST_CLOUD_URL',
+                    apiKey: '$MANIFEST_CLOUD_API_KEY'
+                });
+                
+                client.getVersionRecommendation(process.cwd(), { strategy: 'semantic' })
+                    .then(result => {
                     console.log('💡 Version recommendation:', result.recommendedVersion || 'patch');
                     console.log('   - Reason:', result.reason || 'Based on commit analysis');
                     console.log('   - Confidence:', result.confidence || 'medium');
@@ -553,16 +557,22 @@ case "$1" in
             
             echo "   New version: $new_version"
             
-            # Update package.json
-            node -e "const pkg = require('./package.json'); pkg.version = '$new_version'; require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n');"
-            
-            # Update README.md if it exists
-            if [ -f "README.md" ]; then
-                sed -i.bak "s/version.*$new_version/version: $new_version/" README.md 2>/dev/null || true
-                rm -f README.md.bak 2>/dev/null || true
+            if [ "$test_mode" = true ]; then
+                echo "   🧪 TEST MODE: Would update package.json to $new_version"
+                echo "   🧪 TEST MODE: Would update README.md if it exists"
+                echo "✅ Version bump simulation complete: $new_version"
+            else
+                # Update package.json
+                node -e "const pkg = require('./package.json'); pkg.version = '$new_version'; require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n');"
+                
+                # Update README.md if it exists
+                if [ -f "README.md" ]; then
+                    sed -i.bak "s/version.*$new_version/version: $new_version/" README.md 2>/dev/null || true
+                    rm -f README.md.bak 2>/dev/null || true
+                fi
+                
+                echo "✅ Version bumped to $new_version"
             fi
-            
-            echo "✅ Version bumped to $new_version"
         else
             echo "⚠️  No package.json found, skipping version bump"
         fi
@@ -626,6 +636,110 @@ case "$1" in
         echo "   - Remotes: $(git remote | wc -l) pushed"
         echo "   - Cloud integration: $([ -n "$MANIFEST_CLOUD_URL" ] && echo "enabled" || echo "disabled")"
         ;;
+    "uninstall")
+        echo "🗑️  Uninstalling Manifest CLI..."
+        echo ""
+        
+        # Check if we're running from the installed location
+        if [[ "$SCRIPT_DIR" == *"/.manifest-local" ]]; then
+            echo "✅ Running from installed location, proceeding with uninstall..."
+        else
+            echo "⚠️  Not running from installed location. This command should be run after installation."
+            exit 1
+        fi
+        
+        # Remove the CLI executable
+        if [ -f "$HOME/.local/bin/manifest" ]; then
+            rm -f "$HOME/.local/bin/manifest"
+            echo "✅ Removed CLI executable: $HOME/.local/bin/manifest"
+        else
+            echo "⚠️  CLI executable not found at: $HOME/.local/bin/manifest"
+        fi
+        
+        # Remove the installation directory
+        if [ -d "$SCRIPT_DIR" ]; then
+            rm -rf "$SCRIPT_DIR"
+            echo "✅ Removed installation directory: $SCRIPT_DIR"
+        else
+            echo "⚠️  Installation directory not found: $SCRIPT_DIR"
+        fi
+        
+        # Remove from PATH if it exists
+        if [ -d "$HOME/.local/bin" ] && [ -z "$(ls -A "$HOME/.local/bin")" ]; then
+            rmdir "$HOME/.local/bin"
+            echo "✅ Removed empty .local/bin directory"
+        fi
+        
+        echo ""
+        echo "🎉 Manifest CLI uninstalled successfully!"
+        echo ""
+        echo "💡 Note: You may need to restart your terminal or run 'hash -r' to clear command cache"
+        ;;
+    "selfupdate")
+        echo "🔄 Self-updating Manifest CLI..."
+        echo ""
+        
+        # Check if we're running from the installed location
+        if [[ "$SCRIPT_DIR" == *"/.manifest-local" ]]; then
+            echo "✅ Running from installed location, proceeding with self-update..."
+        else
+            echo "⚠️  Not running from installed location. This command should be run after installation."
+            exit 1
+        fi
+        
+        # Get the current version
+        if [ -f "$SCRIPT_DIR/package.json" ]; then
+            current_version=$(node -p "require('$SCRIPT_DIR/package.json').version")
+            echo "📋 Current version: $current_version"
+        else
+            echo "⚠️  Could not determine current version"
+            current_version="unknown"
+        fi
+        
+        # Check if we're in a git repository (the source repo)
+        if git rev-parse --git-dir > /dev/null 2>&1; then
+            echo "📁 Running from source repository, updating from local changes..."
+            
+            # Check for uncommitted changes
+            if ! git diff-index --quiet HEAD --; then
+                echo "📝 Uncommitted changes detected. Please commit or stash them first."
+                exit 1
+            fi
+            
+            # Pull latest changes
+            if git pull origin main 2>/dev/null || git pull origin master 2>/dev/null; then
+                echo "✅ Pulled latest changes from remote"
+            else
+                echo "⚠️  Failed to pull from remote, continuing with local changes"
+            fi
+            
+            # Reinstall the CLI
+            echo "🔄 Reinstalling CLI with latest changes..."
+            if [ -f "install-local-cli.sh" ]; then
+                bash install-local-cli.sh
+                echo "✅ CLI reinstalled successfully"
+            else
+                echo "❌ install-local-cli.sh not found in current directory"
+                exit 1
+            fi
+        else
+            echo "📁 Not running from source repository"
+            echo "💡 To update, please run this command from the fidenceio.manifest.local repository"
+            exit 1
+        fi
+        
+        # Show new version
+        if [ -f "$SCRIPT_DIR/package.json" ]; then
+            new_version=$(node -p "require('$SCRIPT_DIR/package.json').version")
+            if [ "$new_version" != "$current_version" ]; then
+                echo ""
+                echo "🎉 Updated from version $current_version to $new_version!"
+            else
+                echo ""
+                echo "✅ CLI is up to date (version $new_version)"
+            fi
+        fi
+        ;;
     "help"|*)
         echo "Manifest Local CLI"
         echo ""
@@ -633,14 +747,18 @@ case "$1" in
         echo ""
         echo "Commands:"
         echo "  go        - 🚀 Automated Manifest process (recommended)"
-        echo "    go [patch|minor|major|revision]  # Specify version increment"
-        echo "    go -p|-m|-M|-r                   # Short form options"
+        echo "    go [patch|minor|major|revision|test]  # Specify version increment or test mode"
+        echo "    go -p|-m|-M|-r                        # Short form options"
         echo "  revert    - 🔄 Revert to previous version"
         echo "  push      - Version bump, commit, and push changes"
         echo "  commit    - Commit changes with custom message"
         echo "  version   - Bump version (patch/minor/major)"
         echo "  analyze   - Analyze commits using cloud service"
         echo "  changelog - Generate changelog using cloud service"
+        echo "  docs      - 📚 Create documentation and release notes"
+        echo "  diagnose  - 🔍 Diagnose and fix common issues"
+        echo "  uninstall - 🗑️  Remove Manifest CLI from system"
+        echo "  selfupdate- 🔄 Update CLI to latest version"
         echo "  help      - Show this help"
         echo ""
         echo "This CLI provides local Git operations and integrates with"
