@@ -4,16 +4,16 @@
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `6.5.0` |
-| **Release Date** | `2025-08-11 22:26:00 CDT` |
-| **Git Tag** | `v6.5.0` |
-| **Commit Hash** | `387a0e1` |
+| **Current Version** | `6.3.1` |
+| **Release Date** | `2025-08-11 22:16:33 CDT` |
+| **Git Tag** | `v6.3.1` |
+| **Commit Hash** | `994e1a0` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-08-11 22:26:00 CDT` |
+| **Last Updated** | `2025-08-11 22:16:33 CDT` |
 
 ### 📚 Documentation Files
-- **Release Notes**: [docs/RELEASE_v6.5.0.md](docs/RELEASE_v6.5.0.md)
-- **Changelog**: [docs/CHANGELOG_v6.5.0.md](docs/CHANGELOG_v6.5.0.md)
+- **Release Notes**: [docs/RELEASE_v6.3.1.md](docs/RELEASE_v6.3.1.md)
+- **Changelog**: [docs/CHANGELOG_v6.3.1.md](docs/CHANGELOG_v6.3.1.md)
 - **Package Info**: [package.json](package.json)
 
 ---
@@ -469,15 +469,13 @@ See [docs/CHANGELOG_v6.1.0.md](docs/CHANGELOG_v6.1.0.md) for detailed changes.
 | Property | Value |
 |----------|-------|
 | **Current Version** | `6.5.0` |
-| **Release Date** | `2025-08-11 22:26:00 CDT` |
+| **Release Date** | `2025-08-11 22:26:18 CDT` |
 | **Git Tag** | `v6.5.0` |
-| **Commit Hash** | `387a0e1` |
+| **Commit Hash** | `c816aad` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-08-11 22:26:00 CDT` |
+| **Last Updated** | `2025-08-11 22:26:18 CDT` |
 
 ### 📚 Documentation Files
 - **Release Notes**: [docs/RELEASE_v6.5.0.md](docs/RELEASE_v6.5.0.md)
 - **Changelog**: [docs/CHANGELOG_v6.5.0.md](docs/CHANGELOG_v6.5.0.md)
 - **Package Info**: [package.json](package.json)
-
----

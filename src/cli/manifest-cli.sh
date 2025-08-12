@@ -1298,15 +1298,22 @@ CHANGELOGEOF
                     # Find the line numbers for the version info section
                     start_line=$(grep -n "## 📋 Version Information" README.md | cut -d: -f1)
                     
+                    # Debug: show what we found
+                    echo "   🔍 Found version info section at line: $start_line"
+                    
                     # Find the next section after version info (look for next ## heading)
                     end_line=$(grep -n "^## " README.md | awk -v start="$start_line" '$1 > start {print $1; exit}')
                     
                     # If no next section found, use the end of file
                     if [ -z "$end_line" ]; then
                         end_line=$(wc -l < README.md)
+                        echo "   🔍 No next section found, using end of file: $end_line"
+                    else
+                        echo "   🔍 Found next section at line: $end_line"
                     fi
                     
-                    if [ -n "$start_line" ] && [ -n "$end_line" ] && [ "$start_line" -lt "$end_line" ]; then
+                    # Validate that we have valid line numbers
+                    if [ -n "$start_line" ] && [ -n "$end_line" ] && [ "$start_line" -gt 0 ] && [ "$end_line" -gt 0 ] && [ "$start_line" -lt "$end_line" ]; then
                         # Copy content before version info section
                         head -n $((start_line - 1)) README.md > "$temp_readme"
                         
@@ -1339,25 +1346,34 @@ VERSIONINFO
                         mv "$temp_readme" README.md
                         echo "   ✅ README.md version information updated"
                     else
-                        echo "   ⚠️  Could not locate version info section boundaries, appending new section"
-                        # Fallback: append new section at the end
-                        echo "" >> README.md
-                        echo "## 📋 Version Information" >> README.md
-                        echo "" >> README.md
-                        echo "| Property | Value |" >> README.md
-                        echo "|----------|-------|" >> README.md
-                        echo "| **Current Version** | \`$new_version\` |" >> README.md
-                        echo "| **Release Date** | \`$(date +"%Y-%m-%d %H:%M:%S %Z")\` |" >> README.md
-                        echo "| **Git Tag** | \`v$new_version\` |" >> README.md
-                        echo "| **Commit Hash** | \`$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")\` |" >> README.md
-                        echo "| **Branch** | \`$(git branch --show-current 2>/dev/null || echo "unknown")\` |" >> README.md
-                        echo "| **Last Updated** | \`$(date +"%Y-%m-%d %H:%M:%S %Z")\` |" >> README.md
-                        echo "" >> README.md
-                        echo "### 📚 Documentation Files" >> README.md
-                        echo "- **Release Notes**: [docs/RELEASE_v$new_version.md](docs/RELEASE_v$new_version.md)" >> README.md
-                        echo "- **Changelog**: [docs/CHANGELOG_v$new_version.md](docs/CHANGELOG_v$new_version.md)" >> README.md
-                        echo "- **Package Info**: [package.json](package.json)" >> README.md
-                        echo "   ✅ README.md version information appended"
+                        echo "   ⚠️  Could not locate version info section boundaries, using fallback method"
+                        
+                        # Fallback: use sed to replace the entire version info section
+                        temp_readme="temp_readme.md"
+                        
+                        # Create a new README with updated version info
+                        sed '/## 📋 Version Information/,/^---$/c\
+## 📋 Version Information\
+\
+| Property | Value |\
+|----------|-------|\
+| **Current Version** | `'"$new_version"'` |\
+| **Release Date** | `'"$(date +"%Y-%m-%d %H:%M:%S %Z")"'` |\
+| **Git Tag** | `v'"$new_version"'` |\
+| **Commit Hash** | `'"$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")"'` |\
+| **Branch** | `'"$(git branch --show-current 2>/dev/null || echo "unknown")"'` |\
+| **Last Updated** | `'"$(date +"%Y-%m-%d %H:%M:%S %Z")"'` |\
+\
+### 📚 Documentation Files\
+- **Release Notes**: [docs/RELEASE_v'"$new_version"'.md](docs/RELEASE_v'"$new_version"'.md)\
+- **Changelog**: [docs/CHANGELOG_v'"$new_version"'.md](docs/CHANGELOG_v'"$new_version"'.md)\
+- **Package Info**: [package.json](package.json)\
+\
+---' README.md > "$temp_readme"
+                        
+                        # Replace the original README with the updated version
+                        mv "$temp_readme" README.md
+                        echo "   ✅ README.md version information updated using fallback method"
                     fi
                 else
                     echo "   📝 Adding new version information section..."
