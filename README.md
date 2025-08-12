@@ -85,6 +85,12 @@ manifest.cli/
 - **`manifest test versions`** - Test version increment logic
 - **`manifest test all`** - Comprehensive system testing
 
+### Timestamp Commands
+
+- **`manifest ntp`** - Get trusted NTP timestamp with offset and uncertainty
+- **`manifest ntp-config`** - Display NTP configuration and servers
+- **`manifest ntp`** - Quick timestamp for manifest operations
+
 ## 🧪 Testing
 
 ```bash
@@ -129,12 +135,19 @@ manifest docs
 - **v6.6.0** - Initial CLI implementation
 - **v6.5.7** - Project foundation and CLI focus
 
-## 🔄 Recent Changes (v7.1.0)
+## 🔄 Recent Changes (v8.0.0)
 
 ### Breaking Changes
 - **`manifest go test`** → **`manifest test`** (test commands are now main arguments)
 - **`manifest go test versions`** → **`manifest test versions`**
 - **`manifest go test all`** → **`manifest test all`**
+
+### Major Improvements
+- 🚀 **Complete NTP Module Refactor v2.0** - Simple, highly accurate timestamp service
+- ⚡ **Performance Boost** - Reduced timeout from 5s to 3s, faster fallback
+- 🎯 **Better Accuracy** - Improved NTP offset calculation and validation
+- 🔧 **Simplified Code** - Cleaner, more maintainable NTP implementation
+- 📱 **Cross-Platform** - Enhanced compatibility across Linux, macOS, and Unix systems
 
 ### Legacy Issue Resolution
 - ✅ Removed nested test commands from `go` workflow
