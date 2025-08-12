@@ -85,7 +85,7 @@ get_ntp_timestamp() {
         echo "   🔄 External NTP servers unavailable, trying localhost fallback..."
         echo "   🔍 Querying localhost..."
         
-        local localhost_result=$(sntp "127.0.0.1" 2>/dev/null)
+        local localhost_result=$(timeout "$timeout" sntp "127.0.0.1" 2>/dev/null)
         if [ $? -eq 0 ] && [ -n "$localhost_result" ]; then
             if [[ "$localhost_result" =~ ^([+-][0-9]+\.[0-9]+)[[:space:]]+[+/-][[:space:]]+([0-9]+\.[0-9]+)[[:space:]]+([^[:space:]]+)[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) ]]; then
                 offset="${BASH_REMATCH[1]}"
