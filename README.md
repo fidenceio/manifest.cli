@@ -2,28 +2,27 @@
 
 **Comprehensive Git operations and versioning automation tool with trusted NTP timestamp verification**
 
+
 ## 📋 Version Information
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `6.5.6` |
-| **Release Date** | `2025-08-12 04:18:35 UTC` |
-| **Git Tag** | `v6.5.6` |
-| **Commit Hash** | `7ac8620` |
+| **Current Version** | `6.5.7` |
+| **Release Date** | `2025-08-12 14:21:09 UTC` |
+| **Git Tag** | `v6.5.7` |
+| **Commit Hash** | `00f666f` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-08-12 04:18:35 UTC` |
+| **Last Updated** | `2025-08-12 14:21:09 UTC` |
 | **NTP Server** | `system (127.0.0.1)` |
 | **NTP Offset** | `0.000000 seconds` |
 | **Uncertainty** | `±0.000000 seconds` |
 
 ### 📚 Documentation Files
-- **Release Notes**: [docs/RELEASE_v6.5.6.md](docs/RELEASE_v6.5.6.md)
-- **Changelog**: [docs/CHANGELOG_v6.5.6.md](docs/CHANGELOG_v6.5.6.md)
+- **Release Notes**: [docs/RELEASE_v6.5.7.md](docs/RELEASE_v6.5.7.md)
+- **Changelog**: [docs/CHANGELOG_v6.5.7.md](docs/CHANGELOG_v6.5.7.md)
 - **Package Info**: [package.json](package.json)
 
 ---
-
-## 🚀 Overview
 
 Manifest Local CLI is a powerful command-line tool that automates Git operations, version management, and documentation generation. It provides trusted NTP timestamps for all operations, ensuring accurate audit trails and compliance requirements.
 
@@ -89,7 +88,7 @@ manifest go test all         # Comprehensive testing
 The `manifest go` command performs a complete automated workflow:
 
 ```bash
-manifest go patch    # Increment patch version (6.5.6 → 6.5.7)
+manifest go patch    # Increment patch version: 6.5.7)
 manifest go minor    # Increment minor version (6.5.6 → 6.6.0)
 manifest go major    # Increment major version (6.5.6 → 7.0.0)
 ```
