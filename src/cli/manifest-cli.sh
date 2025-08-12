@@ -1378,14 +1378,110 @@ CHANGELOGEOF
             # Update README.md if it exists
             if [ -f "README.md" ]; then
                 echo "   📝 Updating README.md..."
-                # Add a changelog section if it doesn't exist
-                if ! grep -q "## Changelog" README.md; then
-                    echo "" >> README.md
-                    echo "## Changelog" >> README.md
-                    echo "" >> README.md
-                    echo "See [docs/CHANGELOG_v$new_version.md](docs/CHANGELOG_v$new_version.md) for detailed changes." >> README.md
+                
+                # Check if version info section already exists
+                if grep -q "## 📋 Version Information" README.md; then
+                    echo "   🔄 Updating existing version information..."
+                    
+                    # Create a temporary file for the updated README
+                    temp_readme="temp_readme.md"
+                    
+                    # Find the line numbers for the version info section
+                    start_line=$(grep -n "## 📋 Version Information" README.md | cut -d: -f1)
+                    end_line=$(grep -n "^---" README.md | awk -v start="$start_line" '$1 > start {print $1; exit}')
+                    
+                    if [ -n "$start_line" ] && [ -n "$end_line" ]; then
+                        # Copy content before version info section
+                        head -n $((start_line - 1)) README.md > "$temp_readme"
+                        
+                        # Add updated version information section
+                        cat >> "$temp_readme" << VERSIONINFO
+
+## 📋 Version Information
+
+| Property | Value |
+|----------|-------|
+| **Current Version** | \`$new_version\` |
+| **Release Date** | \`$(date +"%Y-%m-%d %H:%M:%S %Z")\` |
+| **Git Tag** | \`v$new_version\` |
+| **Commit Hash** | \`$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")\` |
+| **Branch** | \`$(git branch --show-current 2>/dev/null || echo "unknown")\` |
+| **Last Updated** | \`$(date +"%Y-%m-%d %H:%M:%S %Z")\` |
+
+### 📚 Documentation Files
+- **Release Notes**: [docs/RELEASE_v$new_version.md](docs/RELEASE_v$new_version.md)
+- **Changelog**: [docs/CHANGELOG_v$new_version.md](docs/CHANGELOG_v$new_version.md)
+- **Package Info**: [package.json](package.json)
+
+---
+VERSIONINFO
+                        
+                        # Copy content after version info section
+                        tail -n +$((end_line + 1)) README.md >> "$temp_readme"
+                        
+                        # Replace the original README with the updated version
+                        mv "$temp_readme" README.md
+                        echo "   ✅ README.md version information updated"
+                    else
+                        echo "   ⚠️  Could not locate version info section boundaries, appending new section"
+                        # Fallback: append new section at the end
+                        echo "" >> README.md
+                        echo "## 📋 Version Information" >> README.md
+                        echo "" >> README.md
+                        echo "| Property | Value |" >> README.md
+                        echo "|----------|-------|" >> README.md
+                        echo "| **Current Version** | \`$new_version\` |" >> README.md
+                        echo "| **Release Date** | \`$(date +"%Y-%m-%d %H:%M:%S %Z")\` |" >> README.md
+                        echo "| **Git Tag** | \`v$new_version\` |" >> README.md
+                        echo "| **Commit Hash** | \`$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")\` |" >> README.md
+                        echo "| **Branch** | \`$(git branch --show-current 2>/dev/null || echo "unknown")\` |" >> README.md
+                        echo "| **Last Updated** | \`$(date +"%Y-%m-%d %H:%M:%S %Z")\` |" >> README.md
+                        echo "" >> README.md
+                        echo "### 📚 Documentation Files" >> README.md
+                        echo "- **Release Notes**: [docs/RELEASE_v$new_version.md](docs/RELEASE_v$new_version.md)" >> README.md
+                        echo "- **Changelog**: [docs/CHANGELOG_v$new_version.md](docs/CHANGELOG_v$new_version.md)" >> README.md
+                        echo "- **Package Info**: [package.json](package.json)" >> README.md
+                        echo "   ✅ README.md version information appended"
+                    fi
+                else
+                    echo "   📝 Adding new version information section..."
+                    
+                    # Create a comprehensive version info section below the title
+                    temp_readme="temp_readme.md"
+                    
+                    # Read the first line (title) and add version info below it
+                    head -n 1 README.md > "$temp_readme"
+                    
+                    # Add comprehensive version information section
+                    cat >> "$temp_readme" << VERSIONINFO
+
+## 📋 Version Information
+
+| Property | Value |
+|----------|-------|
+| **Current Version** | \`$new_version\` |
+| **Release Date** | \`$(date +"%Y-%m-%d %H:%M:%S %Z")\` |
+| **Git Tag** | \`v$new_version\` |
+| **Commit Hash** | \`$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")\` |
+| **Branch** | \`$(git branch --show-current 2>/dev/null || echo "unknown")\` |
+| **Last Updated** | \`$(date +"%Y-%m-%d %H:%M:%S %Z")\` |
+
+### 📚 Documentation Files
+- **Release Notes**: [docs/RELEASE_v$new_version.md](docs/RELEASE_v$new_version.md)
+- **Changelog**: [docs/CHANGELOG_v$new_version.md](docs/CHANGELOG_v$new_version.md)
+- **Package Info**: [package.json](package.json)
+
+---
+VERSIONINFO
+                    
+                    # Add the rest of the README content (skip the title line)
+                    tail -n +2 README.md >> "$temp_readme"
+                    
+                    # Replace the original README with the enhanced version
+                    mv "$temp_readme" README.md
+                    
+                    echo "   ✅ README.md enhanced with version information"
                 fi
-                echo "   ✅ README.md updated"
             fi
             
             echo "✅ Documentation generated successfully"
