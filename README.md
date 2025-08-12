@@ -1,26 +1,23 @@
 # Manifest - Automated Versioning and Documentation
 
+
 ## 📋 Version Information
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `6.5.3` |
-| **Release Date** | `2025-08-11 22:43:33 CDT` |
-| **Git Tag** | `v6.5.3` |
-| **Commit Hash** | `be5dcad` |
+| **Current Version** | `6.5.4` |
+| **Release Date** | `2025-08-11 22:46:39 CDT` |
+| **Git Tag** | `v6.5.4` |
+| **Commit Hash** | `f160b11` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-08-11 22:43:33 CDT` |
+| **Last Updated** | `2025-08-11 22:46:39 CDT` |
 
 ### 📚 Documentation Files
-- **Release Notes**: [docs/RELEASE_v6.5.3.md](docs/RELEASE_v6.5.3.md)
-- **Changelog**: [docs/CHANGELOG_v6.5.3.md](docs/CHANGELOG_v6.5.3.md)
+- **Release Notes**: [docs/RELEASE_v6.5.4.md](docs/RELEASE_v6.5.4.md)
+- **Changelog**: [docs/CHANGELOG_v6.5.4.md](docs/CHANGELOG_v6.5.4.md)
 - **Package Info**: [package.json](package.json)
 
 ---
-
-A comprehensive local development system that combines a powerful CLI with a full-featured local service for automated Git workflows, version management, documentation generation, and continuous monitoring. Manifest Local runs entirely on your machine, providing enterprise-grade automation without external dependencies.
-
-## 🚀 What Manifest Local Provides
 
 ### 🖥️ **Command Line Interface (CLI)**
 - **Automated Version Management**: Bump versions with semantic versioning (patch, minor, major)
