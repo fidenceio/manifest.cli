@@ -3,37 +3,27 @@
 A powerful command-line interface tool for managing manifest files, versioning, and repository operations with trusted NTP timestamp verification.
 
 
+
 ## 📋 Version Information
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `6.6.0` |
-| **Release Date** | `2025-08-12 15:55:18 UTC` |
-| **Git Tag** | `v6.6.0` |
-| **Commit Hash** | `7e1b280` |
+| **Current Version** | `6.6.1` |
+| **Release Date** | `2025-08-12 16:03:44 UTC` |
+| **Git Tag** | `v6.6.1` |
+| **Commit Hash** | `ef36a11` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-08-12 15:55:18 UTC` |
+| **Last Updated** | `2025-08-12 16:03:44 UTC` |
 | **NTP Server** | `system (127.0.0.1)` |
 | **NTP Offset** | `0.000000 seconds` |
 | **Uncertainty** | `±0.000000 seconds` |
 
 ### 📚 Documentation Files
-- **Release Notes**: [docs/RELEASE_v6.6.0.md](docs/RELEASE_v6.6.0.md)
-- **Changelog**: [docs/CHANGELOG_v6.6.0.md](docs/CHANGELOG_v6.6.0.md)
+- **Release Notes**: [docs/RELEASE_v6.6.1.md](docs/RELEASE_v6.6.1.md)
+- **Changelog**: [docs/CHANGELOG_v6.6.1.md](docs/CHANGELOG_v6.6.1.md)
 - **Package Info**: [package.json](package.json)
 
 ---
-
-- 🕐 **Trusted NTP Timestamps** - All operations verified with multiple NTP servers
-- 🔄 **Automated Versioning** - Patch, minor, major, and revision increments
-- 📚 **Documentation Generation** - Automatic RELEASE and CHANGELOG creation
-- 🌐 **Repository Sync** - Seamless remote synchronization
-- 🏷️ **Git Operations** - Automated commit, tag, and push workflows
-- 📊 **Metadata Updates** - Repository description, topics, and homepage management
-- 🧪 **Testing Modes** - Comprehensive testing scenarios without execution
-- 🚀 **One-Command Workflow** - Complete automation with `manifest go`
-
-## 🚀 Quick Start
 
 ### Installation
 
