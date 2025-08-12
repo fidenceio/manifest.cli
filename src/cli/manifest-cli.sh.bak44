@@ -11,7 +11,7 @@ SCRIPT_DIR="$HOME/.manifest-local"
 
 # Load environment variables
 if [ -f ".env" ]; then
-    export $(cat .env | grep -v '#' | xargs)
+    export $(cat .env | grep -v '^#' | xargs)
 fi
 
 # NTP Configuration - can be overridden by environment variables
@@ -45,7 +45,7 @@ get_ntp_timestamp() {
         if [ $? -eq 0 ] && [ -n "$ntp_result" ]; then
             # Parse NTP response: +offset +/- uncertainty server ip
             # Example: +0.045356 +/- 0.021686 time.apple.com 17.253.6.45
-            if [[ "$ntp_result" =~ ([+-][0-9]+\.[0-9]+)[[:space:]]+[+/-][[:space:]]+([0-9]+\.[0-9]+)[[:space:]]+([^[:space:]]+)[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) ]]; then
+            if [[ "$ntp_result" =~ ^([+-][0-9]+\.[0-9]+)[[:space:]]+[+/-][[:space:]]+([0-9]+\.[0-9]+)[[:space:]]+([^[:space:]]+)[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) ]]; then
                 offset="${BASH_REMATCH[1]}"
                 uncertainty="${BASH_REMATCH[2]}"
                 server_name="${BASH_REMATCH[3]}"
@@ -87,7 +87,7 @@ get_ntp_timestamp() {
         
         local localhost_result=$(sntp "127.0.0.1" 2>/dev/null)
         if [ $? -eq 0 ] && [ -n "$localhost_result" ]; then
-            if [[ "$localhost_result" =~ ([+-][0-9]+\.[0-9]+)[[:space:]]+[+/-][[:space:]]+([0-9]+\.[0-9]+)[[:space:]]+([^[:space:]]+)[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) ]]; then
+            if [[ "$localhost_result" =~ ^([+-][0-9]+\.[0-9]+)[[:space:]]+[+/-][[:space:]]+([0-9]+\.[0-9]+)[[:space:]]+([^[:space:]]+)[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) ]]; then
                 offset="${BASH_REMATCH[1]}"
                 uncertainty="${BASH_REMATCH[2]}"
                 server_name="localhost"
@@ -494,7 +494,7 @@ case "$1" in
         fi
         
         # Validate selection
-        if ! [[ "$selection" =~ [0-9]+$ ]] || [ "$selection" -lt 1 ] || [ "$selection" -gt ${#available_versions[@]} ]; then
+        if ! [[ "$selection" =~ ^[0-9]+$ ]] || [ "$selection" -lt 1 ] || [ "$selection" -gt ${#available_versions[@]} ]; then
             echo "❌ Invalid selection. Please choose a number between 1 and ${#available_versions[@]}"
             exit 1
         fi
@@ -520,7 +520,7 @@ case "$1" in
         echo ""
         read -p "Are you sure you want to revert to version $previous_version? (y/N): " confirm
         
-        if [[ ! "$confirm" =~ [Yy]$ ]]; then
+        if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
             echo "❌ Revert cancelled by user"
             exit 0
         fi
@@ -842,7 +842,7 @@ case "$1" in
                 
                 # Get description from README.md first line
                 if [ -f "README.md" ]; then
-                    description=$(head -n 1 README.md | sed 's/# //' | sed 's/^## //' | sed 's/^### //')
+                    description=$(head -n 1 README.md | sed 's/^# //' | sed 's/^## //' | sed 's/^### //')
                     if [ -n "$description" ]; then
                         echo "   Description: $description"
                     fi
@@ -1212,7 +1212,7 @@ CHANGELOGEOF
                 git diff --name-status HEAD
                 echo ""
                 read -p "Commit these changes before proceeding? (y/N): " commit_confirm
-                if [[ "$commit_confirm" =~ [Yy]$ ]]; then
+                if [[ "$commit_confirm" =~ ^[Yy]$ ]]; then
                     echo "💾 Committing changes..."
                     git add .
                     git commit -m "Auto-commit before Manifest process [NTP: $(format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')]"
@@ -1454,7 +1454,7 @@ CHANGELOGEOF
             if [ "$interactive_mode" = true ] && [ "$test_mode" = false ]; then
                 echo ""
                 read -p "🔄 Confirm version bump from $current_version to $new_version? (y/N): " version_confirm
-                if [[ ! "$version_confirm" =~ [Yy]$ ]]; then
+                if [[ ! "$version_confirm" =~ ^[Yy]$ ]]; then
                     echo "❌ Version bump cancelled by user"
                     exit 0
                 fi
@@ -1614,11 +1614,11 @@ CHANGELOGEOF
                     while IFS=: read -r line_num line_content; do
                         # Extract just the line number (remove any trailing content)
                         line_num=$(echo "$line_num" | cut -d: -f1)
-                        if [ "$line_num" -gt "$start_line" ] && [[ "$line_content" =~ ##[[:space:]] ]]; then
+                        if [ "$line_num" -gt "$start_line" ] && [[ "$line_content" =~ ^##[[:space:]] ]]; then
                             end_line="$line_num"
                             break
                         fi
-                    done < <(grep -n "## " README.md)
+                    done < <(grep -n "^## " README.md)
                     
                     # If no next section found, use the end of file
                     if [ -z "$end_line" ]; then
@@ -1702,7 +1702,7 @@ VERSIONINFO
                         
                         # Add the rest of the content, but skip any existing version info sections
                         # Start from line 2 (after title) and filter out version info sections
-                        tail -n +2 README.md | grep -v "## 📋 Version Information" | grep -v "| Property | Value |" | grep -v "|----------|-------|" | grep -v "| \*\*Current Version\*\* |" | grep -v "| \*\*Release Date\*\* |" | grep -v "| \*\*Git Tag\*\* |" | grep -v "| \*\*Commit Hash\*\* |" | grep -v "| \*\*Branch\*\* |" | grep -v "| \*\*Last Updated\*\* |" | grep -v "### 📚 Documentation Files" | grep -v "docs/RELEASE_v" | grep -v "docs/CHANGELOG_v" | grep -v "package.json" | grep -v "---$" >> "$temp_readme"
+                        tail -n +2 README.md | grep -v "## 📋 Version Information" | grep -v "| Property | Value |" | grep -v "|----------|-------|" | grep -v "| \*\*Current Version\*\* |" | grep -v "| \*\*Release Date\*\* |" | grep -v "| \*\*Git Tag\*\* |" | grep -v "| \*\*Commit Hash\*\* |" | grep -v "| \*\*Branch\*\* |" | grep -v "| \*\*Last Updated\*\* |" | grep -v "### 📚 Documentation Files" | grep -v "docs/RELEASE_v" | grep -v "docs/CHANGELOG_v" | grep -v "package.json" | grep -v "^---$" >> "$temp_readme"
                         
                         # Replace the original README with the updated version
                         mv "$temp_readme" README.md
@@ -1792,10 +1792,10 @@ VERSIONINFO
             if [ "$interactive_mode" = true ]; then
                 echo "💾 Ready to commit version changes..."
                 echo "   Files to be committed:"
-                git diff --name-only --cached 2>/dev/null || git status --porcelain | grep '[AM]' | cut -c4-
+                git diff --name-only --cached 2>/dev/null || git status --porcelain | grep '^[AM]' | cut -c4-
                 echo ""
                 read -p "🔄 Commit version changes with message 'Bump version to $new_version'? (y/N): " commit_confirm
-                if [[ ! "$commit_confirm" =~ [Yy]$ ]]; then
+                if [[ ! "$commit_confirm" =~ ^[Yy]$ ]]; then
                     echo "❌ Commit cancelled by user"
                     exit 0
                 fi
@@ -1815,7 +1815,7 @@ VERSIONINFO
             if [ "$interactive_mode" = true ]; then
                 echo "🏷️  Ready to create git tag..."
                 read -p "🔄 Create tag 'v$new_version' with message 'Release version $new_version'? (y/N): " tag_confirm
-                if [[ ! "$tag_confirm" =~ [Yy]$ ]]; then
+                if [[ ! "$tag_confirm" =~ ^[Yy]$ ]]; then
                     echo "❌ Tag creation cancelled by user"
                     exit 0
                 fi
@@ -1844,7 +1844,7 @@ VERSIONINFO
                 done
                 echo ""
                 read -p "🔄 Push version $new_version and tag v$new_version to all remotes? (y/N): " push_confirm
-                if [[ ! "$push_confirm" =~ [Yy]$ ]]; then
+                if [[ ! "$push_confirm" =~ ^[Yy]$ ]]; then
                     echo "❌ Push cancelled by user"
                     exit 0
                 fi
@@ -1939,7 +1939,7 @@ VERSIONINFO
                                 
                                 # Get description from README.md first line
                                 if [ -f "README.md" ]; then
-                                    description=$(head -n 1 README.md | sed 's/# //' | sed 's/^## //' | sed 's/^### //')
+                                    description=$(head -n 1 README.md | sed 's/^# //' | sed 's/^## //' | sed 's/^### //')
                                 fi
                                 
                                 # Get topics from package.json keywords
