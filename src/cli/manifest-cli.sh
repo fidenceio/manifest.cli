@@ -1297,9 +1297,16 @@ CHANGELOGEOF
                     
                     # Find the line numbers for the version info section
                     start_line=$(grep -n "## 📋 Version Information" README.md | cut -d: -f1)
-                    end_line=$(grep -n "^---" README.md | awk -v start="$start_line" '$1 > start {print $1; exit}')
                     
-                    if [ -n "$start_line" ] && [ -n "$end_line" ]; then
+                    # Find the next section after version info (look for next ## heading)
+                    end_line=$(grep -n "^## " README.md | awk -v start="$start_line" '$1 > start {print $1; exit}')
+                    
+                    # If no next section found, use the end of file
+                    if [ -z "$end_line" ]; then
+                        end_line=$(wc -l < README.md)
+                    fi
+                    
+                    if [ -n "$start_line" ] && [ -n "$end_line" ] && [ "$start_line" -lt "$end_line" ]; then
                         # Copy content before version info section
                         head -n $((start_line - 1)) README.md > "$temp_readme"
                         
