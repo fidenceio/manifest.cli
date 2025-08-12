@@ -14,7 +14,7 @@ brew install fidenceio/manifest.local/manifest
 
 ### **Formula Structure**
 ```
-Formula/
+homebrew/
 ├── manifest.rb              # Homebrew formula
 ├── package.json             # Minimal dependencies
 ├── brew-release.sh          # Release automation script
@@ -49,8 +49,8 @@ git push origin v3.0.3
 ### **2. Run Release Script**
 
 ```bash
-# Navigate to Formula directory
-cd Formula
+# Navigate to homebrew directory
+cd homebrew
 
 # Run the release script
 ./brew-release.sh
@@ -68,7 +68,7 @@ The script will:
 
 ```bash
 # Commit updated formula
-git add Formula/manifest.rb
+git add homebrew/manifest.rb
 git commit -m "Update Homebrew formula for v3.0.3"
 git push origin main
 
@@ -103,7 +103,7 @@ git push origin main
 
 ```bash
 # Test formula installation
-brew install --build-from-source Formula/manifest.rb
+brew install --build-from-source homebrew/manifest.rb
 
 # Test CLI functionality
 manifest --help
@@ -145,10 +145,10 @@ git commit -m "Update Homebrew dependencies"
 ./brew-release.sh
 
 # Test changes
-brew install --build-from-source Formula/manifest.rb
+brew install --build-from-source homebrew/manifest.rb
 
 # Commit and push
-git add Formula/
+git add homebrew/
 git commit -m "Update Homebrew formula"
 git push origin main
 ```
@@ -166,7 +166,7 @@ brew doctor
 brew update
 
 # Check formula syntax
-brew audit --strict Formula/manifest.rb
+brew audit --strict homebrew/manifest.rb
 ```
 
 #### **CLI Won't Run**
@@ -197,14 +197,14 @@ brew install node git
 
 ```bash
 # Verbose installation
-brew install -v Formula/manifest.rb
+brew install -v homebrew/manifest.rb
 
 # Check logs
 brew log manifest
 
 # Uninstall and reinstall
 brew uninstall manifest
-brew install Formula/manifest.rb
+brew install homebrew/manifest.rb
 ```
 
 ## 📚 User Installation
@@ -223,7 +223,7 @@ manifest --help
 
 ```bash
 # Install from local formula
-brew install Formula/manifest.rb
+brew install homebrew/manifest.rb
 
 # Test functionality
 manifest diagnose

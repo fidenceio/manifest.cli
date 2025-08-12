@@ -18,7 +18,7 @@ manifest --help
 
 ```bash
 # Install from the formula file
-brew install Formula/manifest.rb
+brew install homebrew/manifest.rb
 
 # Or install from GitHub
 brew install fidenceio/manifest.local/manifest

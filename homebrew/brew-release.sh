@@ -14,7 +14,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 REPO_NAME="fidenceio/manifest.local"
-FORMULA_DIR="Formula"
+FORMULA_DIR="homebrew"
 VERSION=$(node -p "require('../package.json').version")
 TARBALL_NAME="manifest-${VERSION}.tar.gz"
 RELEASE_URL="https://github.com/${REPO_NAME}/archive/refs/tags/v${VERSION}.tar.gz"
