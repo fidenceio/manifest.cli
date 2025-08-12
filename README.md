@@ -1,4 +1,4 @@
-# Manifest Local - Complete Local Development System
+# Manifest - Automated Versioning and Documentation
 
 A comprehensive local development system that combines a powerful CLI with a full-featured local service for automated Git workflows, version management, documentation generation, and continuous monitoring. Manifest Local runs entirely on your machine, providing enterprise-grade automation without external dependencies.
 
