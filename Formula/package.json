@@ -1,0 +1,49 @@
+{
+  "name": "manifest-cli",
+  "version": "3.0.2",
+  "description": "Complete local development system for Git workflows, version management, and documentation generation",
+  "main": "src/cli/manifest-standalone.js",
+  "bin": {
+    "manifest": "src/cli/manifest-standalone.js"
+  },
+  "scripts": {
+    "test": "node src/cli/manifest-standalone.js --help"
+  },
+  "keywords": [
+    "manifest",
+    "cli",
+    "git",
+    "version",
+    "documentation",
+    "automation",
+    "workflow"
+  ],
+  "author": "Fidence.io",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fidenceio/manifest.local.git"
+  },
+  "bugs": {
+    "url": "https://github.com/fidenceio/manifest.local/issues"
+  },
+  "homepage": "https://github.com/fidenceio/manifest.local#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "commander": "^11.1.0",
+    "chalk": "^5.3.0",
+    "inquirer": "^9.2.12",
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {},
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ]
+}
