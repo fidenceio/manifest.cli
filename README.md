@@ -4,65 +4,27 @@ A powerful command-line interface tool for managing manifest files, versioning, 
 
 
 
+
 ## 📋 Version Information
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `6.6.1` |
-| **Release Date** | `2025-08-12 16:03:44 UTC` |
-| **Git Tag** | `v6.6.1` |
-| **Commit Hash** | `ef36a11` |
+| **Current Version** | `6.6.2` |
+| **Release Date** | `2025-08-12 16:44:15 UTC` |
+| **Git Tag** | `v6.6.2` |
+| **Commit Hash** | `76a7ad4` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-08-12 16:03:44 UTC` |
+| **Last Updated** | `2025-08-12 16:44:15 UTC` |
 | **NTP Server** | `system (127.0.0.1)` |
 | **NTP Offset** | `0.000000 seconds` |
 | **Uncertainty** | `±0.000000 seconds` |
 
 ### 📚 Documentation Files
-- **Release Notes**: [docs/RELEASE_v6.6.1.md](docs/RELEASE_v6.6.1.md)
-- **Changelog**: [docs/CHANGELOG_v6.6.1.md](docs/CHANGELOG_v6.6.1.md)
+- **Release Notes**: [docs/RELEASE_v6.6.2.md](docs/RELEASE_v6.6.2.md)
+- **Changelog**: [docs/CHANGELOG_v6.6.2.md](docs/CHANGELOG_v6.6.2.md)
 - **Package Info**: [package.json](package.json)
 
 ---
-
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/fidenceio/manifest.cli.git
-cd manifest.cli
-
-# Install CLI locally
-./install-cli.sh
-
-# Verify installation
-manifest --help
-```
-
-### Basic Usage
-
-```bash
-# Complete workflow (recommended)
-manifest go
-
-# Specific version increments
-manifest go patch    # 6.5.7 → 6.5.8
-manifest go minor    # 6.5.7 → 6.6.0
-manifest go major    # 6.5.7 → 7.0.0
-manifest go revision # 6.5.7 → 6.5.7.1
-
-# Testing modes
-manifest go test
-manifest go test versions
-manifest go test all
-
-# Individual operations
-manifest sync
-manifest docs
-manifest ntp
-```
-
-## 📚 Documentation
 
 - **[RELEASE_v6.5.7.md](docs/RELEASE_v6.5.7.md)** - Current release notes
 - **[CHANGELOG_v6.5.7.md](docs/CHANGELOG_v6.5.7.md)** - Detailed change history
