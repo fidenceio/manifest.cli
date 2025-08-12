@@ -9,8 +9,8 @@ generate_release_notes() {
     
     echo "📝 Generating RELEASE_v$version.md..."
     
-    # Create release notes file with proper variable expansion
-    cat > "docs/RELEASE_v$version.md" << EOF_INNER
+    # Create release notes file
+    cat > "docs/RELEASE_v$version.md" << 'EOF_INNER'
 # Release v$version
 
 **Release Date:** $timestamp  
@@ -93,8 +93,8 @@ generate_changelog() {
     # Get recent commits for changelog
     local recent_commits=$(git log --oneline -20)
     
-    # Create changelog file with proper variable expansion
-    cat > "docs/CHANGELOG_v$version.md" << EOF_INNER
+    # Create changelog file
+    cat > "docs/CHANGELOG_v$version.md" << 'EOF_INNER'
 # Changelog v$version
 
 **Release Date:** $timestamp  
@@ -126,9 +126,9 @@ $recent_commits
 
 ## 🔍 Technical Details
 
-- **Release Date:** $timestamp
-- **Version:** $version
-- **Generated:** $(date -u +%Y-%m-%d\ %H:%M:%S\ UTC)
+- **NTP Server:** $MANIFEST_NTP_SERVER ($MANIFEST_NTP_SERVER_IP)
+- **NTP Offset:** $MANIFEST_NTP_OFFSET seconds
+- **Uncertainty:** ±$MANIFEST_NTP_UNCERTAINTY seconds
 
 ---
 
@@ -158,8 +158,9 @@ update_readme_version() {
     echo "|-------|-------|" >> README.md
     echo "| **Current Version** | \`$version\` |" >> README.md
     echo "| **Last Updated** | \`$timestamp\` |" >> README.md
-    echo "| **Generated** | \`$(date -u +%Y-%m-%d\ %H:%M:%S\ UTC)\` |" >> README.md
-    echo "| **CLI Version** | \`$(cat VERSION 2>/dev/null || echo 'Unknown')\` |" >> README.md
+    echo "| **NTP Server** | \`$MANIFEST_NTP_SERVER\` |" >> README.md
+    echo "| **NTP Offset** | \`$MANIFEST_NTP_OFFSET seconds\` |" >> README.md
+    echo "| **Uncertainty** | \`±$MANIFEST_NTP_UNCERTAINTY seconds\` |" >> README.md
     
     echo "   ✅ README.md version information updated"
 }

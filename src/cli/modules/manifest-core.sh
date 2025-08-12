@@ -13,7 +13,6 @@ source "$SCRIPT_DIR/manifest-docs.sh"
 manifest_go() {
     local increment_type="$1"
     local interactive="$2"
-    local test_mode="$3"
     
     echo "🚀 Starting automated Manifest process..."
     echo ""
@@ -236,7 +235,6 @@ main() {
         "go")
             local increment_type=""
             local interactive=false
-            local test_mode=false
             
             # Parse arguments
             while [[ $# -gt 0 ]]; do
@@ -244,16 +242,6 @@ main() {
                     "patch"|"minor"|"major"|"revision")
                         increment_type="$1"
                         shift
-                        ;;
-                    "test")
-                        test_mode=true
-                        shift
-                        local test_type="$1"
-                        if [ -n "$test_type" ]; then
-                            shift
-                        fi
-                        manifest_test "$test_type"
-                        return 0
                         ;;
                     "-i"|"--interactive")
                         interactive=true
@@ -277,13 +265,13 @@ main() {
                         ;;
                     *)
                         echo "❌ Unknown option: $1"
-                        echo "Usage: manifest go [patch|minor|major|revision|test] [-i|--interactive]"
+                        echo "Usage: manifest go [patch|minor|major|revision] [-i|--interactive]"
                         return 1
                         ;;
                 esac
             done
             
-            manifest_go "$increment_type" "$interactive" "$test_mode"
+            manifest_go "$increment_type" "$interactive"
             ;;
         "sync")
             sync_repository
@@ -319,6 +307,8 @@ main() {
                 *)
                     echo "📚 Documentation commands:"
                     echo "   docs metadata  - Update repository metadata"
+    echo "  test        - 🧪 Test CLI functionality and workflows"
+
                     ;;
             esac
             ;;
@@ -341,8 +331,8 @@ display_help() {
     echo "  ntp         - 🕐 Get trusted NTP timestamp for manifest operations"
     echo "  ntp-config  - ⚙️  Show and configure NTP settings"
     echo "  go          - 🚀 Complete automated Manifest workflow (recommended)"
-    echo "    go [patch|minor|major|revision|test] [-i]  # Complete workflow: sync, docs, version, commit, push, metadata"
-    echo "    go test [versions|all]                     # Test mode with version testing or comprehensive testing"
+    echo "    go [patch|minor|major|revision] [-i]       # Complete workflow: sync, docs, version, commit, push, metadata"
+
     echo "    go -p|-m|-M|-r [-i]                        # Short form options with interactive mode"
     echo "  sync        - 🔄 Sync local repo with remote (pull latest changes)"
     echo "  revert      - 🔄 Revert to previous version"
@@ -351,15 +341,17 @@ display_help() {
     echo "  version     - Bump version (patch/minor/major)"
     echo "  docs        - 📚 Create documentation and release notes"
     echo "    docs metadata  - ��️  Update repository metadata (description, topics, etc.)"
+    echo "  test        - 🧪 Test CLI functionality and workflows"
+
     echo "  help        - Show this help"
     echo ""
     echo "This CLI provides comprehensive Git operations and version management."
     echo ""
     echo "The 'go' command performs a complete workflow: sync → docs → version → commit → push → metadata"
     echo ""
-    echo "Enhanced testing options:"
-    echo "  • test              - Basic test mode (no changes)"
-    echo "  • test versions     - Test across different version increment types (patch, minor, major)"
-    echo "  • test all          - Comprehensive testing of all scenarios and version types"
+    echo "For testing and verification:"
+    echo "  • manifest test              - Basic functionality test"
+    echo "  • manifest test versions     - Test version increment logic"
+    echo "  • manifest test all          - Comprehensive system testing"
 }
 source "$SCRIPT_DIR/manifest-test.sh"

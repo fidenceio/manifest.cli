@@ -10,20 +10,17 @@ A powerful command-line interface tool for managing manifest files, versioning, 
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `6.6.3` |
-| **Release Date** | `2025-08-12 17:18:35 UTC` |
-| **Git Tag** | `v6.6.3` |
-| **Commit Hash** | `f286c79` |
+| **Current Version** | `7.1.0` |
+| **Release Date** | `2025-08-12 14:54:00 UTC` |
+| **Git Tag** | `v7.1.0` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-08-12 17:18:35 UTC` |
-| **NTP Server** | `system (127.0.0.1)` |
-| **NTP Offset** | `0.000000 seconds` |
-| **Uncertainty** | `±0.000000 seconds` |
+| **Last Updated** | `2025-08-12 14:54:00 UTC` |
+| **CLI Version** | `7.1.0` |
 
 ### 📚 Documentation Files
-- **Release Notes**: [docs/RELEASE_v6.6.3.md](docs/RELEASE_v6.6.3.md)
-- **Changelog**: [docs/CHANGELOG_v6.6.3.md](docs/CHANGELOG_v6.6.3.md)
 - **Package Info**: [package.json](package.json)
+- **CLI Source**: [src/cli/](src/cli/)
+- **Install Script**: [install-cli.sh](install-cli.sh)
 
 ---
 
@@ -44,21 +41,61 @@ export MANIFEST_NTP_TIMEOUT=5
 ```
 manifest.cli/
 ├── src/cli/
-│   └── manifest-cli.sh      # Main CLI implementation
+│   ├── manifest-cli.sh      # Main CLI entry point
+│   ├── manifest-cli-wrapper.sh  # CLI wrapper for installation
+│   └── modules/             # CLI modules
+│       ├── manifest-core.sh     # Core workflow orchestration
+│       ├── manifest-docs.sh     # Documentation generation
+│       ├── manifest-git.sh      # Git operations
+│       ├── manifest-ntp.sh      # NTP timestamp handling
+│       ├── manifest-os.sh       # OS compatibility
+│       └── manifest-test.sh     # Testing functionality
 ├── docs/                    # Generated documentation
 ├── install-cli.sh          # Installation script
 ├── package.json            # Project configuration
 └── README.md               # This file
 ```
 
+## 📚 CLI Command Reference
+
+### Core Commands
+
+| Command | Description | Usage |
+|---------|-------------|-------|
+| `go` | Complete automated workflow | `manifest go [patch\|minor\|major\|revision] [-i]` |
+| `test` | Test CLI functionality | `manifest test [versions\|all]` |
+| `ntp` | Get trusted NTP timestamp | `manifest ntp` |
+| `sync` | Sync with remote repository | `manifest sync` |
+| `docs` | Generate documentation | `manifest docs [metadata]` |
+| `version` | Bump version | `manifest version [patch\|minor\|major]` |
+| `commit` | Commit changes | `manifest commit "message"` |
+| `push` | Push changes to remote | `manifest push [patch\|minor\|major]` |
+
+### Workflow Commands
+
+- **`manifest go`** - Complete workflow: sync → docs → version → commit → push → metadata
+- **`manifest go patch`** - Increment patch version (e.g., 7.1.0 → 7.1.1)
+- **`manifest go minor`** - Increment minor version (e.g., 7.1.0 → 7.2.0)
+- **`manifest go major`** - Increment major version (e.g., 7.1.0 → 8.0.0)
+- **`manifest go revision`** - Increment revision (e.g., 7.1.0 → 7.1.0.1)
+
+### Testing Commands
+
+- **`manifest test`** - Basic functionality test
+- **`manifest test versions`** - Test version increment logic
+- **`manifest test all`** - Comprehensive system testing
+
 ## 🧪 Testing
 
 ```bash
+# Test basic functionality
+manifest test
+
 # Test version increments
-manifest go test versions
+manifest test versions
 
 # Test complete workflow
-manifest go test all
+manifest test all
 
 # Test individual components
 manifest sync
@@ -77,27 +114,42 @@ manifest ntp
 ### Getting Help
 
 ```bash
-manifest --help
-manifest go --help
-manifest docs --help
+manifest help
+manifest test
+manifest docs
 ```
 
 ## 📈 Version History
 
-- **v6.5.7** - Complete project cleanup and CLI focus
-- **v6.5.6** - NTP timestamp integration
-- **v6.5.5** - Enhanced testing and documentation
-- **v6.5.4** - Repository metadata automation
-- **v6.5.3** - Comprehensive workflow automation
-- **v6.5.2** - Initial CLI implementation
-- **v6.5.1** - Project foundation
+- **v7.1.0** - **MAJOR REFACTOR**: Test commands moved to main arguments, legacy `go test` removed
+- **v7.0.0** - Complete CLI architecture overhaul with modular design
+- **v6.6.3** - Enhanced testing and documentation
+- **v6.6.2** - Repository metadata automation
+- **v6.6.1** - Comprehensive workflow automation
+- **v6.6.0** - Initial CLI implementation
+- **v6.5.7** - Project foundation and CLI focus
+
+## 🔄 Recent Changes (v7.1.0)
+
+### Breaking Changes
+- **`manifest go test`** → **`manifest test`** (test commands are now main arguments)
+- **`manifest go test versions`** → **`manifest test versions`**
+- **`manifest go test all`** → **`manifest test all`**
+
+### Legacy Issue Resolution
+- ✅ Removed nested test commands from `go` workflow
+- ✅ Test commands now properly documented as main arguments
+- ✅ Updated help text and documentation
+- ✅ Fixed emoji display issues
+- ✅ Updated install script to remove legacy references
+- ✅ Comprehensive README documentation update
 
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Test with `manifest go test`
+4. Test with `manifest test`
 5. Submit a pull request
 
 ## 📄 License

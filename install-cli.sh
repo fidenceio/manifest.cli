@@ -44,7 +44,7 @@ mkdir -p "$LOCAL_BIN"
 
 # Copy CLI script
 print_status "📁 Copying CLI script..."
-cp "src/cli/manifest-cli.sh" "$LOCAL_BIN/manifest"
+cp "src/cli/manifest-cli-wrapper.sh" "$LOCAL_BIN/manifest"
 chmod +x "$LOCAL_BIN/manifest"
 
 # Copy essential project files
@@ -116,14 +116,14 @@ if command -v manifest >/dev/null 2>&1; then
     print_success "🎉 Installation complete! You can now use:"
     echo "  manifest --help          # Show help"
     echo "  manifest go              # Run complete workflow"
-    echo "  manifest go test         # Test mode"
+    echo "  manifest test            # Test functionality"
     echo "  manifest ntp             # Get NTP timestamp"
     echo "  manifest sync            # Sync with remote"
     
     echo
     print_status "💡 Next steps:"
     echo "  1. Configure your Git credentials if not already set"
-    echo "  2. Run 'manifest go test' to verify everything works"
+    echo "  2. Run 'manifest test' to verify everything works"
     echo "  3. Check the generated documentation in the docs/ folder"
     
 else
