@@ -1,50 +1,52 @@
 {
-  "name": "manifest-local",
+  "name": "manifest-cli",
   "version": "6.5.7",
-  "description": "Manifest Local CLI - Comprehensive Git operations and versioning automation tool with NTP timestamp verification",
+  "description": "A powerful CLI tool for managing manifest files, versioning, and repository operations with NTP timestamp verification",
   "main": "src/cli/manifest-cli.sh",
+  "bin": {
+    "manifest": "src/cli/manifest-cli.sh"
+  },
   "scripts": {
-    "start": "echo 'Use: manifest help'",
-    "dev": "echo 'Use: manifest help'",
     "test": "manifest go test",
-    "lint": "echo 'Shell script - no linting needed'",
-    "build": "echo 'Shell script - no build needed'",
-    "clean": "rm -rf temp_readme.md",
-    "docker:build": "docker build -t manifest-local .",
-    "docker:run": "docker run -it manifest-local",
-    "cli": "./src/cli/manifest-cli.sh",
-    "manifest": "./src/cli/manifest-cli.sh",
-    "install:cli": "./install-cli.sh"
+    "version": "manifest go",
+    "patch": "manifest go patch",
+    "minor": "manifest go minor",
+    "major": "manifest go major",
+    "revision": "manifest go revision",
+    "sync": "manifest sync",
+    "docs": "manifest docs",
+    "ntp": "manifest ntp"
   },
   "keywords": [
-    "manifest",
     "cli",
+    "manifest",
     "versioning",
-    "documentation",
     "git",
-    "github",
     "automation",
     "ntp",
     "timestamp",
-    "deployment",
-    "cicd"
+    "repository",
+    "deployment"
   ],
-  "author": "Fidenceio Team",
+  "author": "Fidence.io",
   "license": "MIT",
-  "dependencies": {
-    "dotenv": "^16.3.1"
-  },
-  "devDependencies": {},
-  "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=9.0.0"
-  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/fidenceio/manifest.local.git"
+    "url": "git+https://github.com/fidenceio/manifest.cli.git"
   },
   "bugs": {
-    "url": "https://github.com/fidenceio/manifest.local/issues"
+    "url": "https://github.com/fidenceio/manifest.cli/issues"
   },
-  "homepage": "https://github.com/fidenceio/manifest.local#readme"
+  "homepage": "https://github.com/fidenceio/manifest.cli#readme",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ]
 }

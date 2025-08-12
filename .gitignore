@@ -1,4 +1,4 @@
-# Manifest Local CLI - Git Ignore
+# Manifest CLI - Git Ignore File
 
 # Dependencies
 node_modules/
@@ -9,13 +9,21 @@ yarn-error.log*
 # Environment files
 .env
 .env.local
-.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# CLI installation
+~/.manifest-cli/
+~/.local/bin/manifest
 
 # Temporary files
-temp_readme.md
+temp_*
 *.tmp
 *.temp
-*.bak
+*.swp
+*.swo
+*~
 
 # OS generated files
 .DS_Store
@@ -29,16 +37,15 @@ Thumbs.db
 # IDE files
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
+*.sublime-project
+*.sublime-workspace
 
 # Logs
-logs
+logs/
 *.log
 
 # Runtime data
-pids
+pids/
 *.pid
 *.seed
 *.pid.lock
@@ -96,6 +103,7 @@ jspm_packages/
 # TernJS port file
 .tern-port
 
-# Manifest Local specific
-.manifest-local/
-.manifest-cloud/
+# Manifest CLI specific
+manifest-cloud/
+*.manifest-cloud
+temp_readme.md

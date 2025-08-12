@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Manifest Local CLI Installer
-# Installs the Manifest CLI for local development
+# Manifest CLI Installation Script
+# This script installs the Manifest CLI tool locally
 
 set -e
 
@@ -12,147 +12,124 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Functions
-log() {
-    echo -e "${BLUE}[$(date +%H:%M:%S)]${NC} $1"
+# Function to print colored output
+print_status() {
+    echo -e "${BLUE}[INFO]${NC} $1"
 }
 
-success() {
-    echo -e "${GREEN}✓${NC} $1"
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
-warning() {
-    echo -e "${YELLOW}⚠${NC} $1"
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
-error() {
-    echo -e "${RED}✗${NC} $1"
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-INSTALL_DIR="$HOME/.manifest-local"
-BIN_DIR="$HOME/.local/bin"
-
-echo "=========================================="
-echo "   Manifest Local CLI Installer"
-echo "=========================================="
-echo ""
-
-# Check prerequisites
-log "Checking prerequisites..."
-
-# Check Node.js
-if command -v node >/dev/null 2>&1; then
-    success "Node.js is available"
-else
-    error "Node.js is required but not installed"
-    echo "Please install Node.js from https://nodejs.org/"
+# Check if we're in the right directory
+if [ ! -f "src/cli/manifest-cli.sh" ]; then
+    print_error "This script must be run from the manifest.cli project root directory"
+    print_error "Please navigate to the project root and try again"
     exit 1
 fi
 
-# Check Git
-if command -v git >/dev/null 2>&1; then
-    success "Git is available"
+print_status "🚀 Installing Manifest CLI..."
+
+# Create local bin directory if it doesn't exist
+LOCAL_BIN="$HOME/.local/bin"
+mkdir -p "$LOCAL_BIN"
+
+# Copy CLI script
+print_status "📁 Copying CLI script..."
+cp "src/cli/manifest-cli.sh" "$LOCAL_BIN/manifest"
+chmod +x "$LOCAL_BIN/manifest"
+
+# Copy essential project files
+print_status "📦 Copying project files..."
+PROJECT_DIR="$HOME/.manifest-cli"
+mkdir -p "$PROJECT_DIR"
+
+# Copy only the essential files for CLI operation
+cp -r "src" "$PROJECT_DIR/"
+cp "package.json" "$PROJECT_DIR/"
+cp "README.md" "$PROJECT_DIR/"
+cp "VERSION" "$PROJECT_DIR/"
+cp ".gitignore" "$PROJECT_DIR/"
+
+# Create default .env configuration
+print_status "⚙️  Creating default configuration..."
+cat > "$PROJECT_DIR/.env" << 'EOF'
+# Manifest CLI Configuration
+# This file contains environment-specific settings
+
+# NTP Configuration (optional)
+# MANIFEST_NTP_SERVERS="time.apple.com,time.google.com,pool.ntp.org,time.nist.gov"
+# MANIFEST_NTP_TIMEOUT=5
+
+# Repository Configuration (auto-detected)
+# MANIFEST_REPO_PROVIDER=github
+# MANIFEST_REPO_OWNER=fidenceio
+# MANIFEST_REPO_NAME=manifest.cli
+
+# Git Configuration (uses system defaults)
+# MANIFEST_GIT_USER_NAME="Your Name"
+# MANIFEST_GIT_USER_EMAIL="your.email@example.com"
+
+# Optional: Manifest Cloud Service (if using)
+# MANIFEST_CLOUD_URL=https://your-cloud-service.com
+# MANIFEST_CLOUD_API_KEY=your-api-key
+EOF
+
+print_success "✅ Configuration file created: $PROJECT_DIR/.env"
+
+# Check if PATH includes local bin
+if [[ ":$PATH:" != *":$LOCAL_BIN:"* ]]; then
+    print_warning "⚠️  $LOCAL_BIN is not in your PATH"
+    print_status "Adding to PATH for current session..."
+    export PATH="$LOCAL_BIN:$PATH"
+    
+    print_warning "⚠️  To make this permanent, add this line to your shell profile:"
+    echo "export PATH=\"$LOCAL_BIN:\$PATH\""
+    
+    # Try to detect shell and suggest the right file
+    if [ -n "$ZSH_VERSION" ]; then
+        print_status "For zsh, add to: ~/.zshrc"
+    elif [ -n "$BASH_VERSION" ]; then
+        print_status "For bash, add to: ~/.bashrc or ~/.bash_profile"
+    fi
 else
-    error "Git is required but not installed"
-    echo "Please install Git from https://git-scm.com/"
+    print_success "✅ $LOCAL_BIN is already in your PATH"
+fi
+
+# Verify installation
+print_status "🔍 Verifying installation..."
+if command -v manifest >/dev/null 2>&1; then
+    print_success "✅ Manifest CLI installed successfully!"
+    print_status "📋 CLI Version: $(manifest --version 2>/dev/null || echo 'Version info not available')"
+    print_status "📍 Location: $(which manifest)"
+    print_status "🏠 Project directory: $PROJECT_DIR"
+    
+    echo
+    print_success "🎉 Installation complete! You can now use:"
+    echo "  manifest --help          # Show help"
+    echo "  manifest go              # Run complete workflow"
+    echo "  manifest go test         # Test mode"
+    echo "  manifest ntp             # Get NTP timestamp"
+    echo "  manifest sync            # Sync with remote"
+    
+    echo
+    print_status "💡 Next steps:"
+    echo "  1. Configure your Git credentials if not already set"
+    echo "  2. Run 'manifest go test' to verify everything works"
+    echo "  3. Check the generated documentation in the docs/ folder"
+    
+else
+    print_error "❌ Installation failed - manifest command not found"
+    print_error "Please check the installation and try again"
     exit 1
 fi
 
-# Create installation directory
-log "Creating installation directory..."
-if [ ! -d "$INSTALL_DIR" ]; then
-mkdir -p "$INSTALL_DIR"
-success "Installation directory created: $INSTALL_DIR"
-else
-    success "Installation directory already exists: $INSTALL_DIR"
-fi
-
-# Copy project files
-log "Copying project files..."
-cp -r "$SCRIPT_DIR/src" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/package.json" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/README.md" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/VERSION" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/.gitignore" "$INSTALL_DIR/"
-success "Project files copied"
-
-# Install Node.js dependencies
-log "Installing Node.js dependencies..."
-cd "$INSTALL_DIR"
-npm install --production
-success "Node.js dependencies installed"
-
-# Create default configuration
-log "Creating default configuration..."
-if [ ! -f ".env" ]; then
-    echo "# Manifest Local Configuration" > .env
-    echo "# Optional: Manifest Cloud service integration" >> .env
-    echo "# MANIFEST_CLOUD_URL=https://your-cloud-service.com" >> .env
-    echo "# MANIFEST_CLOUD_API_KEY=your-api-key" >> .env
-    success "Default configuration created"
-else
-    success "Configuration already exists"
-fi
-
-# Create bin directory if it doesn't exist
-if [ ! -d "$BIN_DIR" ]; then
-    mkdir -p "$BIN_DIR"
-fi
-
-# Create Manifest Local CLI
-log "Creating Manifest Local CLI..."
-cp "$INSTALL_DIR/src/cli/manifest-cli.sh" "$BIN_DIR/manifest"
-chmod +x "$BIN_DIR/manifest"
-success "Manifest Local CLI created: $BIN_DIR/manifest"
-
-# Add to PATH if not already there
-if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
-    log "Adding $BIN_DIR to PATH..."
-    echo "export PATH=\"\$PATH:$BIN_DIR\"" >> "$HOME/.zshrc"
-    echo "export PATH=\"\$PATH:$BIN_DIR\"" >> "$HOME/.bashrc"
-    warning "Please restart your terminal or run 'source ~/.zshrc' to use the CLI"
-fi
-
-echo ""
-log "Installation completed successfully!"
-echo ""
-
-# Verification
-log "Verifying installation..."
-if [ -f "$BIN_DIR/manifest" ]; then
-    success "Manifest Local CLI is accessible"
-else
-    error "Manifest Local CLI installation failed"
-    exit 1
-fi
-
-if [ -f "$INSTALL_DIR/package.json" ]; then
-    success "Project files are ready"
-else
-    error "Project files are missing"
-    exit 1
-fi
-
-echo ""
-echo "=========================================="
-echo "   Installation Summary"
-echo "=========================================="
-echo "Installation Directory: $INSTALL_DIR"
-echo "CLI Location: $BIN_DIR/manifest"
-echo "Configuration: $INSTALL_DIR/.env"
-echo ""
-
-echo "Next steps:"
-echo "1. Configure your cloud service URL in $INSTALL_DIR/.env"
-echo "2. Use manifest CLI for Git operations: manifest help"
-echo "3. Integrate with Manifest Cloud service for LLM features"
-echo ""
-
-echo -e "${GREEN}Installation completed! 🎉${NC}"
-echo ""
-echo "For help, run: manifest help"
-echo ""
-echo "Note: This CLI is for local development and Git operations."
-echo "It integrates with the Manifest Cloud service for LLM capabilities."
+print_status "🚀 Happy manifesting!"
