@@ -154,6 +154,64 @@ case "$1" in
             exit 1
         fi
         ;;
+    "sync")
+        echo "🔄 Syncing local repository with remote..."
+        echo ""
+        
+        # Check if we're in a git repository
+        if ! git rev-parse --git-dir > /dev/null 2>&1; then
+            echo "❌ Error: Not in a git repository"
+            exit 1
+        fi
+        
+        # Check for uncommitted changes
+        if ! git diff-index --quiet HEAD --; then
+            echo "⚠️  Uncommitted changes detected. Please commit or stash them before syncing."
+            echo "   💡 To commit: git add . && git commit -m 'your message'"
+            echo "   💡 To stash: git stash"
+            exit 1
+        fi
+        
+        # Check remotes
+        if [ -z "$(git remote)" ]; then
+            echo "❌ No remotes configured. Cannot sync."
+            exit 1
+        fi
+        
+        echo "📡 Checking remote status..."
+        for remote in $(git remote); do
+            echo "   Remote: $remote ($(git remote get-url "$remote"))"
+            
+            # Fetch latest from remote
+            if git fetch "$remote" 2>/dev/null; then
+                echo "   ✅ Fetched latest from $remote"
+                
+                # Check if we're behind remote
+                behind_count=$(git rev-list HEAD.."$remote/main" --count 2>/dev/null || echo "0")
+                if [ "$behind_count" -gt 0 ]; then
+                    echo "   📥 Local is $behind_count commits behind remote"
+                    
+                    # Pull with rebase to avoid merge commits
+                    if git pull "$remote" main --rebase 2>/dev/null; then
+                        echo "   ✅ Successfully synced with $remote"
+                    else
+                        echo "   ❌ Failed to sync with $remote"
+                        echo "   💡 Manual intervention may be required"
+                    fi
+                else
+                    echo "   ✅ Local is up to date with $remote"
+                fi
+            else
+                echo "   ❌ Failed to fetch from $remote"
+            fi
+            echo ""
+        done
+        
+        echo "🎉 Sync completed!"
+        echo ""
+        echo "💡 Current status:"
+        git status --short
+        ;;
     "commit")
         echo "Committing changes with intelligent message..."
         if [ -z "$2" ]; then
@@ -960,9 +1018,9 @@ CHANGELOGEOF
                 echo "   - Cloud integration: $([ -n "$MANIFEST_CLOUD_URL" ] && echo "enabled" || echo "disabled")"
                 echo ""
                 echo "💡 To resolve push issues:"
-                echo "   1. Check remote status: git status"
-                echo "   2. Sync with remote: git pull origin main --rebase"
-                echo "   3. Retry push: git push origin main"
+                echo "   1. Sync with remote: manifest sync"
+                echo "   2. Retry push: manifest go $increment_type"
+                echo "   Or manually: git pull origin main --rebase && git push origin main"
             fi
         else
             echo ""
@@ -1231,6 +1289,7 @@ CHANGELOGEOF
         echo "  go        - 🚀 Automated Manifest process (recommended)"
         echo "    go [patch|minor|major|revision|test] [-i]  # Specify version increment, test mode, or interactive"
         echo "    go -p|-m|-M|-r [-i]                        # Short form options with interactive mode"
+        echo "  sync      - 🔄 Sync local repo with remote (pull latest changes)"
         echo "  revert    - 🔄 Revert to previous version"
         echo "  push      - Version bump, commit, and push changes"
         echo "  commit    - Commit changes with custom message"
