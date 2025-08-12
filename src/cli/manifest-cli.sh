@@ -1409,7 +1409,14 @@ CHANGELOGEOF
                     echo "   🔍 Found version info section at line: $start_line"
                     
                     # Find the next section after version info (look for next ## heading)
-                    end_line=$(grep -n "^## " README.md | awk -v start="$start_line" '$1 > start {print $1; exit}')
+                    # Use a simpler approach to avoid awk issues
+                    end_line=""
+                    while IFS=: read -r line_num line_content; do
+                        if [ "$line_num" -gt "$start_line" ] && [[ "$line_content" =~ ^##[[:space:]] ]]; then
+                            end_line="$line_num"
+                            break
+                        fi
+                    done < <(grep -n "^## " README.md)
                     
                     # If no next section found, use the end of file
                     if [ -z "$end_line" ]; then
