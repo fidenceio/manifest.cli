@@ -14,7 +14,111 @@ if [ -f ".env" ]; then
     export $(cat .env | grep -v '^#' | xargs)
 fi
 
+# NTP timestamp function for trusted time verification
+get_ntp_timestamp() {
+    local ntp_servers=("time.apple.com" "time.google.com" "pool.ntp.org" "time.nist.gov")
+    local timestamp=""
+    local offset=""
+    local uncertainty=""
+    
+    echo "🕐 Getting trusted NTP timestamp..."
+    
+    for server in "${ntp_servers[@]}"; do
+        echo "   🔍 Querying $server..."
+        local ntp_result=$(sntp -S "$server" 2>/dev/null)
+        
+        if [ $? -eq 0 ] && [ -n "$ntp_result" ]; then
+            # Parse NTP response: +offset +/- uncertainty server ip
+            # Example: +0.045356 +/- 0.021686 time.apple.com 17.253.6.45
+            if [[ "$ntp_result" =~ ^([+-][0-9]+\.[0-9]+)[[:space:]]+[+/-][[:space:]]+([0-9]+\.[0-9]+)[[:space:]]+([^[:space:]]+)[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+) ]]; then
+                offset="${BASH_REMATCH[1]}"
+                uncertainty="${BASH_REMATCH[2]}"
+                server_name="${BASH_REMATCH[3]}"
+                server_ip="${BASH_REMATCH[4]}"
+                
+                # Calculate trusted timestamp
+                local current_time=$(date -u +%s)
+                local ntp_offset_seconds=$(echo "$offset" | sed 's/+//' | sed 's/-//')
+                local ntp_offset_sign=$(echo "$offset" | cut -c1)
+                
+                if [ "$ntp_offset_sign" = "+" ]; then
+                    timestamp=$((current_time + ntp_offset_seconds))
+                else
+                    timestamp=$((current_time - ntp_offset_seconds))
+                fi
+                
+                echo "   ✅ NTP timestamp obtained from $server_name ($server_ip)"
+                echo "   📊 Offset: $offset seconds, Uncertainty: ±$uncertainty seconds"
+                # Use date command compatible with both Linux and macOS
+                if date -d "@$timestamp" >/dev/null 2>&1; then
+                    # Linux date command
+                    echo "   🕐 Trusted timestamp: $(date -u -d "@$timestamp" '+%Y-%m-%d %H:%M:%S UTC')"
+                else
+                    # macOS date command
+                    echo "   🕐 Trusted timestamp: $(date -u -r "$timestamp" '+%Y-%m-%d %H:%M:%S UTC')"
+                fi
+                break
+            fi
+        else
+            echo "   ⚠️  Failed to query $server"
+        fi
+    done
+    
+    # Fallback to system time if NTP fails
+    if [ -z "$timestamp" ]; then
+        echo "   ⚠️  NTP timestamp unavailable, using system time"
+        timestamp=$(date -u +%s)
+        offset="0.000000"
+        uncertainty="0.000000"
+        server_name="system"
+        server_ip="127.0.0.1"
+    fi
+    
+    # Export timestamp variables for use in other functions
+    export MANIFEST_NTP_TIMESTAMP="$timestamp"
+    export MANIFEST_NTP_OFFSET="$offset"
+    export MANIFEST_NTP_UNCERTAINTY="$uncertainty"
+    export MANIFEST_NTP_SERVER="$server_name"
+    export MANIFEST_NTP_SERVER_IP="$server_ip"
+    
+    echo "   🎯 NTP timestamp ready for manifest operations"
+    echo ""
+}
+
+# Helper function for cross-platform date formatting from Unix timestamp
+format_timestamp() {
+    local timestamp="$1"
+    local format="$2"
+    
+    if date -d "@$timestamp" >/dev/null 2>&1; then
+        # Linux date command
+        date -u -d "@$timestamp" "$format"
+    else
+        # macOS date command
+        date -u -r "$timestamp" "$format"
+    fi
+}
+
+# Function to display NTP timestamp info
+display_ntp_info() {
+    if [ -n "$MANIFEST_NTP_TIMESTAMP" ]; then
+        local formatted_timestamp=$(format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+        echo "🕐 **Trusted NTP Timestamp**: $formatted_timestamp"
+        echo "   📊 **NTP Offset**: $MANIFEST_NTP_OFFSET seconds"
+        echo "   🎯 **Uncertainty**: ±$MANIFEST_NTP_UNCERTAINTY seconds"
+        echo "   🌐 **NTP Server**: $MANIFEST_NTP_SERVER ($MANIFEST_NTP_SERVER_IP)"
+        echo ""
+    fi
+}
+
 case "$1" in
+    "ntp")
+        echo "🕐 Manifest NTP Timestamp Service"
+        echo "=================================="
+        get_ntp_timestamp
+        display_ntp_info
+        echo "💡 Use this timestamp for trusted manifest operations"
+        ;;
     "push")
         echo "Version bump, commit, and push changes..."
         if [ -z "$2" ]; then
@@ -73,7 +177,7 @@ case "$1" in
         
         # Commit version changes
         git add .
-        git commit -m "Bump version to $new_version"
+        git commit -m "Bump version to $new_version [NTP: $(date -u -d "@$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')]"
         
         # Create tag (handle conflicts gracefully)
         if git tag -a "v$new_version" -m "Release version $new_version" 2>/dev/null; then
@@ -933,6 +1037,9 @@ CHANGELOGEOF
         echo "🚀 Starting automated Manifest process..."
         echo ""
         
+        # Get trusted NTP timestamp for this operation
+        get_ntp_timestamp
+        
         # Parse version increment type and flags
         increment_type="patch"  # Default to patch
         test_mode=false
@@ -1030,7 +1137,7 @@ CHANGELOGEOF
                 if [[ "$commit_confirm" =~ ^[Yy]$ ]]; then
                     echo "💾 Committing changes..."
                     git add .
-                    git commit -m "Auto-commit before Manifest process"
+                    git commit -m "Auto-commit before Manifest process [NTP: $(date -u -d "@$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')]"
                     echo "✅ Changes committed"
                 else
                     echo "❌ Process cancelled by user"
@@ -1039,7 +1146,7 @@ CHANGELOGEOF
             else
                 echo "📝 Uncommitted changes detected. Committing first..."
                 git add .
-                git commit -m "Auto-commit before Manifest process"
+                git commit -m "Auto-commit before Manifest process [NTP: $(date -u -d "@$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')]"
                 echo "✅ Changes committed"
             fi
         else
@@ -1341,6 +1448,13 @@ None
 
 ## Contributors
 Generated by Manifest CLI
+
+## Timestamp Information
+- **Release Date**: $(date -u -d "@$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+- **NTP Server**: $MANIFEST_NTP_SERVER ($MANIFEST_NTP_SERVER_IP)
+- **NTP Offset**: $MANIFEST_NTP_OFFSET seconds
+- **Uncertainty**: ±$MANIFEST_NTP_UNCERTAINTY seconds
+- **Trusted Timestamp**: $(date -u -d "@$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
 RELEASEEOF
             echo "   ✅ RELEASE_v$new_version.md created"
             
@@ -1368,7 +1482,7 @@ RELEASEEOF
 ### Security
 - Security improvements
 
-## [$new_version] - $(date +%Y-%m-%d)
+## [$new_version] - $(date -u -d "@$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d')
 ### Added
 - Version bump to $new_version
 - Documentation updates
@@ -1388,6 +1502,13 @@ RELEASEEOF
 
 ### Security
 - N/A
+
+## Timestamp Information
+- **Release Date**: $(date -u -d "@$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+- **NTP Server**: $MANIFEST_NTP_SERVER ($MANIFEST_NTP_SERVER_IP)
+- **NTP Offset**: $MANIFEST_NTP_UNCERTAINTY seconds
+- **Uncertainty**: ±$MANIFEST_NTP_UNCERTAINTY seconds
+- **Trusted Timestamp**: $(date -u -d "@$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
 CHANGELOGEOF
             echo "   ✅ CHANGELOG_v$new_version.md created"
             
@@ -1444,11 +1565,14 @@ CHANGELOGEOF
 | Property | Value |
 |----------|-------|
 | **Current Version** | \`$new_version\` |
-| **Release Date** | \`$(date +"%Y-%m-%d %H:%M:%S %Z")\` |
+| **Release Date** | \`$(date -u -d "@$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')\` |
 | **Git Tag** | \`v$new_version\` |
 | **Commit Hash** | \`$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")\` |
 | **Branch** | \`$(git branch --show-current 2>/dev/null || echo "unknown")\` |
-| **Last Updated** | \`$(date +"%Y-%m-%d %H:%M:%S %Z")\` |
+| **Last Updated** | \`$(date -u -d "@$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')\` |
+| **NTP Server** | \`$MANIFEST_NTP_SERVER ($MANIFEST_NTP_SERVER_IP)\` |
+| **NTP Offset** | \`$MANIFEST_NTP_OFFSET seconds\` |
+| **Uncertainty** | \`±$MANIFEST_NTP_UNCERTAINTY seconds\` |
 
 ### 📚 Documentation Files
 - **Release Notes**: [docs/RELEASE_v$new_version.md](docs/RELEASE_v$new_version.md)
@@ -1481,11 +1605,14 @@ VERSIONINFO
 | Property | Value |
 |----------|-------|
 | **Current Version** | \`$new_version\` |
-| **Release Date** | \`$(date +"%Y-%m-%d %H:%M:%S %Z")\` |
+| **Release Date** | \`$(date -u -d "@$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')\` |
 | **Git Tag** | \`v$new_version\` |
 | **Commit Hash** | \`$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")\` |
 | **Branch** | \`$(git branch --show-current 2>/dev/null || echo "unknown")\` |
-| **Last Updated** | \`$(date +"%Y-%m-%d %H:%M:%S %Z")\` |
+| **Last Updated** | \`$(date -u -d "@$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %Z')\` |
+| **NTP Server** | \`$MANIFEST_NTP_SERVER ($MANIFEST_NTP_SERVER_IP)\` |
+| **NTP Offset** | \`$MANIFEST_NTP_TIMESTAMP seconds\` |
+| **Uncertainty** | \`±$MANIFEST_NTP_UNCERTAINTY seconds\` |
 
 ### 📚 Documentation Files
 - **Release Notes**: [docs/RELEASE_v$new_version.md](docs/RELEASE_v$new_version.md)
@@ -1520,11 +1647,14 @@ VERSIONINFO
 | Property | Value |
 |----------|-------|
 | **Current Version** | \`$new_version\` |
-| **Release Date** | \`$(date +"%Y-%m-%d %H:%M:%S %Z")\` |
+| **Release Date** | \`$(date -u -d "@$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')\` |
 | **Git Tag** | \`v$new_version\` |
 | **Commit Hash** | \`$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")\` |
 | **Branch** | \`$(git branch --show-current 2>/dev/null || echo "unknown")\` |
-| **Last Updated** | \`$(date +"%Y-%m-%d %H:%M:%S %Z")\` |
+| **Last Updated** | \`$(date -u -d "@$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')\` |
+| **NTP Server** | \`$MANIFEST_NTP_SERVER ($MANIFEST_NTP_SERVER_IP)\` |
+| **NTP Offset** | \`$MANIFEST_NTP_OFFSET seconds\` |
+| **Uncertainty** | \`±$MANIFEST_NTP_UNCERTAINTY seconds\` |
 
 ### 📚 Documentation Files
 - **Release Notes**: [docs/RELEASE_v$new_version.md](docs/RELEASE_v$new_version.md)
@@ -1684,6 +1814,10 @@ VERSIONINFO
                 echo "   - Tag: v$new_version"
                 echo "   - Remotes: All pushed successfully"
                 echo "   - Cloud integration: $([ -n "$MANIFEST_CLOUD_URL" ] && echo "enabled" || echo "disabled")"
+                echo "   - NTP Timestamp: $(date -u -d "@$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')"
+                echo "   - NTP Server: $MANIFEST_NTP_SERVER ($MANIFEST_NTP_SERVER_IP)"
+                echo "   - NTP Offset: $MANIFEST_NTP_OFFSET seconds"
+                echo "   - Uncertainty: ±$MANIFEST_NTP_UNCERTAINTY seconds"
                 
                 # Update repository metadata if push was successful
                 echo ""
@@ -2053,6 +2187,7 @@ VERSIONINFO
         echo "Usage: manifest <command>"
         echo ""
         echo "Commands:"
+        echo "  ntp       - 🕐 Get trusted NTP timestamp for manifest operations"
         echo "  go        - 🚀 Complete automated Manifest workflow (recommended)"
         echo "    go [patch|minor|major|revision|test] [-i]  # Complete workflow: sync, docs, version, commit, push, metadata"
         echo "    go test [versions|all]                     # Test mode with version testing or comprehensive testing"
