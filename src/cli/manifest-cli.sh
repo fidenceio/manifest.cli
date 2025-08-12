@@ -1412,6 +1412,8 @@ CHANGELOGEOF
                     # Use a simpler approach to avoid awk issues
                     end_line=""
                     while IFS=: read -r line_num line_content; do
+                        # Extract just the line number (remove any trailing content)
+                        line_num=$(echo "$line_num" | cut -d: -f1)
                         if [ "$line_num" -gt "$start_line" ] && [[ "$line_content" =~ ^##[[:space:]] ]]; then
                             end_line="$line_num"
                             break
