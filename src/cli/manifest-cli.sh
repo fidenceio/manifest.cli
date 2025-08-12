@@ -6,7 +6,8 @@
 set -e
 
 SCRIPT_DIR="$HOME/.manifest-local"
-cd "$SCRIPT_DIR"
+# Don't change directory - stay in the current working directory
+# cd "$SCRIPT_DIR"
 
 # Load environment variables
 if [ -f ".env" ]; then
@@ -300,9 +301,6 @@ case "$1" in
         echo "   - Previous version: $previous_version"
         echo "   - Tag: v$previous_version"
         echo "   - Remotes: $(git remote | wc -l) pushed"
-        else
-            echo "⚠️  No package.json found, cannot revert version"
-        fi
         ;;
     "version")
         echo "Bumping version..."
@@ -593,12 +591,15 @@ CHANGELOGEOF
         echo "🚀 Starting automated Manifest process..."
         echo ""
         
-        # Parse version increment type
+        # Parse version increment type and flags
         increment_type="patch"  # Default to patch
         test_mode=false
+        interactive_mode=false
         
-        if [ -n "$2" ]; then
-            case "$2" in
+        # Parse arguments
+        shift  # Remove "go" from arguments
+        for arg in "$@"; do
+            case "$arg" in
                 -patch|--patch|patch) increment_type="patch";;
                 -minor|--minor|minor) increment_type="minor";;
                 -major|--major|major) increment_type="major";;
@@ -608,29 +609,42 @@ CHANGELOGEOF
                 -M|M) increment_type="major";;
                 -r|r) increment_type="patch";;  # Alias for patch
                 test) test_mode=true; increment_type="patch";;
+                -i|--interactive) interactive_mode=true;;
                 *)
-                    echo "Usage: manifest go [patch|minor|major|revision|test]"
-                    echo "  patch     - Increment patch version (1.0.0 -> 1.0.1)"
-                    echo "  minor     - Increment minor version (1.0.0 -> 1.1.0)"
-                    echo "  major     - Increment major version (1.0.0 -> 2.0.0)"
-                    echo "  revision  - Alias for patch (1.0.0 -> 1.0.1)"
-                    echo "  test      - Show what would happen without executing"
-                    echo ""
-                    echo "Examples:"
-                    echo "  manifest go        # Default: patch increment"
-                    echo "  manifest go patch  # Explicit patch increment"
-                    echo "  manifest go minor  # Minor version bump"
-                    echo "  manifest go major  # Major version bump"
-                    echo "  manifest go test   # Test mode - show what would happen"
-                    echo "  manifest go -m     # Short form for minor"
-                    exit 1
+                    if [[ "$arg" != -* ]]; then
+                        # Non-flag argument, treat as increment type
+                        case "$arg" in
+                            patch|minor|major|revision) increment_type="$arg";;
+                            *) 
+                                echo "Usage: manifest go [patch|minor|major|revision|test] [-i|--interactive]"
+                                echo "  patch        - Increment patch version (1.0.0 -> 1.0.1)"
+                                echo "  minor        - Increment minor version (1.0.0 -> 1.1.0)"
+                                echo "  major        - Increment major version (1.0.0 -> 2.0.0)"
+                                echo "  revision     - Alias for patch (1.0.0 -> 1.0.1)"
+                                echo "  test         - Show what would happen without executing"
+                                echo "  -i, --interactive - Interactive mode (confirm each step)"
+                                echo ""
+                                echo "Examples:"
+                                echo "  manifest go                    # Default: patch increment"
+                                echo "  manifest go patch             # Explicit patch increment"
+                                echo "  manifest go minor -i          # Minor version bump with interactive mode"
+                                echo "  manifest go major --interactive # Major version bump with interactive mode"
+                                echo "  manifest go test              # Test mode - show what would happen"
+                                echo "  manifest go -m -i             # Short form for minor with interactive mode"
+                                exit 1
+                                ;;
+                        esac
+                    fi
                     ;;
             esac
-        fi
+        done
         
         echo "📋 Version increment type: $increment_type"
         if [ "$test_mode" = true ]; then
             echo "🧪 TEST MODE: No changes will be made"
+        fi
+        if [ "$interactive_mode" = true ]; then
+            echo "🔄 INTERACTIVE MODE: Each step will be confirmed"
         fi
         echo ""
         
@@ -644,6 +658,21 @@ CHANGELOGEOF
         if ! git diff-index --quiet HEAD --; then
             if [ "$test_mode" = true ]; then
                 echo "📝 Uncommitted changes detected. Would commit first in real mode."
+            elif [ "$interactive_mode" = true ]; then
+                echo "📝 Uncommitted changes detected."
+                echo "Changes to be committed:"
+                git diff --name-status HEAD
+                echo ""
+                read -p "Commit these changes before proceeding? (y/N): " commit_confirm
+                if [[ "$commit_confirm" =~ ^[Yy]$ ]]; then
+                    echo "💾 Committing changes..."
+                    git add .
+                    git commit -m "Auto-commit before Manifest process"
+                    echo "✅ Changes committed"
+                else
+                    echo "❌ Process cancelled by user"
+                    exit 0
+                fi
             else
                 echo "📝 Uncommitted changes detected. Committing first..."
                 git add .
@@ -748,6 +777,17 @@ CHANGELOGEOF
             
             echo "   New version: $new_version"
             
+            # Interactive confirmation for version bump
+            if [ "$interactive_mode" = true ] && [ "$test_mode" = false ]; then
+                echo ""
+                read -p "🔄 Confirm version bump from $current_version to $new_version? (y/N): " version_confirm
+                if [[ ! "$version_confirm" =~ ^[Yy]$ ]]; then
+                    echo "❌ Version bump cancelled by user"
+                    exit 0
+                fi
+                echo "✅ Version bump confirmed"
+            fi
+            
             if [ "$test_mode" = true ]; then
                 echo "   🧪 TEST MODE: Would update package.json to $new_version"
                 echo "   🧪 TEST MODE: Would update README.md if it exists"
@@ -806,23 +846,70 @@ CHANGELOGEOF
         # Commit version changes
         if [ "$test_mode" = false ]; then
             echo ""
-            echo "💾 Committing version changes..."
-            git add .
-            git commit -m "Bump version to $new_version"
-            echo "✅ Version changes committed"
+            if [ "$interactive_mode" = true ]; then
+                echo "💾 Ready to commit version changes..."
+                echo "   Files to be committed:"
+                git diff --name-only --cached 2>/dev/null || git status --porcelain | grep '^[AM]' | cut -c4-
+                echo ""
+                read -p "🔄 Commit version changes with message 'Bump version to $new_version'? (y/N): " commit_confirm
+                if [[ ! "$commit_confirm" =~ ^[Yy]$ ]]; then
+                    echo "❌ Commit cancelled by user"
+                    exit 0
+                fi
+                echo "💾 Committing version changes..."
+                git add .
+                git commit -m "Bump version to $new_version"
+                echo "✅ Version changes committed"
+            else
+                echo "💾 Committing version changes..."
+                git add .
+                git commit -m "Bump version to $new_version"
+                echo "✅ Version changes committed"
+            fi
             
             # Create tag (handle conflicts gracefully)
             echo ""
-            echo "🏷️  Creating git tag..."
-            if git tag -a "v$new_version" -m "Release version $new_version" 2>/dev/null; then
-                echo "✅ Tag v$new_version created"
+            if [ "$interactive_mode" = true ]; then
+                echo "🏷️  Ready to create git tag..."
+                read -p "🔄 Create tag 'v$new_version' with message 'Release version $new_version'? (y/N): " tag_confirm
+                if [[ ! "$tag_confirm" =~ ^[Yy]$ ]]; then
+                    echo "❌ Tag creation cancelled by user"
+                    exit 0
+                fi
+                echo "🏷️  Creating git tag..."
+                if git tag -a "v$new_version" -m "Release version $new_version" 2>/dev/null; then
+                    echo "✅ Tag v$new_version created"
+                else
+                    echo "⚠️  Tag v$new_version already exists, skipping tag creation"
+                fi
             else
-                echo "⚠️  Tag v$new_version already exists, skipping tag creation"
+                echo "🏷️  Creating git tag..."
+                if git tag -a "v$new_version" -m "Release version $new_version" 2>/dev/null; then
+                    echo "✅ Tag v$new_version created"
+                else
+                    echo "⚠️  Tag v$new_version already exists, skipping tag creation"
+                fi
             fi
             
             # Simple and reliable push logic
             echo ""
-            echo "🚀 Pushing to all remotes..."
+            if [ "$interactive_mode" = true ]; then
+                echo "🚀 Ready to push to remotes..."
+                echo "   Remotes to push to:"
+                for remote in $(git remote); do
+                    echo "   - $remote: $(git remote get-url "$remote")"
+                done
+                echo ""
+                read -p "🔄 Push version $new_version and tag v$new_version to all remotes? (y/N): " push_confirm
+                if [[ ! "$push_confirm" =~ ^[Yy]$ ]]; then
+                    echo "❌ Push cancelled by user"
+                    exit 0
+                fi
+                echo "🚀 Pushing to all remotes..."
+            else
+                echo "🚀 Pushing to all remotes..."
+            fi
+            
             push_success=true
             for remote in $(git remote); do
                 echo "   Pushing to $remote..."
@@ -923,32 +1010,173 @@ CHANGELOGEOF
             exit 1
         fi
         
+        # Show what will be removed (based on install script)
+        echo "📋 Files and directories that will be removed:"
+        echo "   - CLI executable: $HOME/.local/bin/manifest"
+        echo "   - Installation directory: $SCRIPT_DIR"
+        echo "   - All project files (src/, examples/, package.json, etc.)"
+        echo "   - Node.js dependencies (node_modules/)"
+        echo "   - Configuration files (.env, .manifestrc.example)"
+        echo "   - Documentation files (README.md, *.md)"
+        echo "   - Docker files (Dockerfile*, docker-compose.yml)"
+        echo ""
+        
+        # Safety check: ensure we're not trying to remove the script while it's running
+        if [ "$0" = "$HOME/.local/bin/manifest" ]; then
+            echo "⚠️  Safety check: This script is currently running from the CLI location"
+            echo "   The uninstall will complete, but you may need to restart your terminal"
+            echo "   or run 'hash -r' to clear the command cache"
+        fi
+        
+        # Track what was actually removed
+        cli_removed=false
+        dir_removed=false
+        bin_dir_removed=false
+        
         # Remove the CLI executable
         if [ -f "$HOME/.local/bin/manifest" ]; then
-            rm -f "$HOME/.local/bin/manifest"
-            echo "✅ Removed CLI executable: $HOME/.local/bin/manifest"
+            echo "🗑️  Removing CLI executable: $HOME/.local/bin/manifest"
+            if rm -f "$HOME/.local/bin/manifest" 2>/dev/null; then
+                echo "✅ CLI executable removed successfully"
+                cli_removed=true
+            else
+                echo "❌ Failed to remove CLI executable"
+            fi
         else
-            echo "⚠️  CLI executable not found at: $HOME/.local/bin/manifest"
+            echo "ℹ️  CLI executable not found at: $HOME/.local/bin/manifest"
         fi
         
         # Remove the installation directory
         if [ -d "$SCRIPT_DIR" ]; then
-            rm -rf "$SCRIPT_DIR"
-            echo "✅ Removed installation directory: $SCRIPT_DIR"
+            echo "🗑️  Removing installation directory: $SCRIPT_DIR"
+            if rm -rf "$SCRIPT_DIR" 2>/dev/null; then
+                echo "✅ Installation directory removed successfully"
+                dir_removed=true
+            else
+                echo "❌ Failed to remove installation directory"
+            fi
         else
-            echo "⚠️  Installation directory not found: $SCRIPT_DIR"
+            echo "ℹ️  Installation directory not found at: $SCRIPT_DIR"
         fi
         
-        # Remove from PATH if it exists
-        if [ -d "$HOME/.local/bin" ] && [ -z "$(ls -A "$HOME/.local/bin")" ]; then
-            rmdir "$HOME/.local/bin"
-            echo "✅ Removed empty .local/bin directory"
+        # Remove empty .local/bin directory if it exists and is empty
+        if [ -d "$HOME/.local/bin" ]; then
+            if [ -z "$(ls -A "$HOME/.local/bin" 2>/dev/null)" ]; then
+                echo "🗑️  Removing empty .local/bin directory"
+                if rmdir "$HOME/.local/bin" 2>/dev/null; then
+                    echo "✅ Empty .local/bin directory removed"
+                    bin_dir_removed=true
+                else
+                    echo "❌ Failed to remove empty .local/bin directory"
+                fi
+            else
+                echo "ℹ️  .local/bin directory not empty, leaving in place"
+            fi
+        else
+            echo "ℹ️  .local/bin directory not found"
         fi
         
+        # Verify uninstallation - comprehensive file-by-file check
         echo ""
-        echo "🎉 Manifest CLI uninstalled successfully!"
+        echo "🔍 Verifying uninstallation (comprehensive check)..."
+        verification_passed=true
+        files_remaining=()
+        
+        # Check CLI executable
+        if [ -f "$HOME/.local/bin/manifest" ]; then
+            echo "❌ CLI executable still exists at: $HOME/.local/bin/manifest"
+            verification_passed=false
+            files_remaining+=("CLI executable")
+        fi
+        
+        # Check main installation directory
+        if [ -d "$SCRIPT_DIR" ]; then
+            echo "❌ Main installation directory still exists at: $SCRIPT_DIR"
+            verification_passed=false
+            files_remaining+=("Main installation directory")
+        fi
+        
+        # Check for any remaining files in the installation location
+        if [ -d "$SCRIPT_DIR" ]; then
+            echo "🔍 Checking for remaining files in installation directory..."
+            remaining_files=$(find "$SCRIPT_DIR" -type f -o -type d 2>/dev/null | head -20)
+            if [ -n "$remaining_files" ]; then
+                echo "⚠️  Found remaining files/directories:"
+                echo "$remaining_files" | while read -r file; do
+                    echo "   - $file"
+                done
+                verification_passed=false
+                files_remaining+=("Remaining files in installation directory")
+            fi
+        fi
+        
+        # Check for any remaining CLI-related files in .local/bin
+        if [ -d "$HOME/.local/bin" ]; then
+            echo "🔍 Checking for remaining CLI files in .local/bin..."
+            cli_files=$(find "$HOME/.local/bin" -name "*manifest*" 2>/dev/null)
+            if [ -n "$cli_files" ]; then
+                echo "⚠️  Found remaining manifest-related files:"
+                echo "$cli_files" | while read -r file; do
+                    echo "   - $file"
+                done
+                verification_passed=false
+                files_remaining+=("Remaining CLI files in .local/bin")
+            fi
+        fi
+        
+        # Check for any remaining configuration files
+        if [ -f "$HOME/.manifestrc" ]; then
+            echo "⚠️  Global configuration file still exists: $HOME/.manifestrc"
+            files_remaining+=("Global configuration file")
+        fi
+        
+        # Check for any remaining environment files
+        if [ -f "$HOME/.env" ]; then
+            echo "⚠️  Global environment file still exists: $HOME/.env"
+            files_remaining+=("Global environment file")
+        fi
+        
+        # Check for any remaining shell configuration additions
+        if [ -f "$HOME/.zshrc" ] && grep -q "manifest-local" "$HOME/.zshrc" 2>/dev/null; then
+            echo "⚠️  PATH modification still exists in ~/.zshrc"
+            files_remaining+=("PATH modification in .zshrc")
+        fi
+        
+        if [ -f "$HOME/.bashrc" ] && grep -q "manifest-local" "$HOME/.bashrc" 2>/dev/null; then
+            echo "⚠️  PATH modification still exists in ~/.bashrc"
+            files_remaining+=("PATH modification in .bashrc")
+        fi
+        
+        # Summary of verification
+        if [ "$verification_passed" = true ] && [ ${#files_remaining[@]} -eq 0 ]; then
+            echo "✅ Comprehensive verification passed - all files removed successfully"
+        else
+            echo "⚠️  Verification found remaining items:"
+            for item in "${files_remaining[@]}"; do
+                echo "   - $item"
+            done
+        fi
+        
+        # Summary
+        echo ""
+        if [ "$cli_removed" = true ] || [ "$dir_removed" = true ]; then
+            echo "🎉 Manifest CLI uninstallation completed!"
+            if [ "$cli_removed" = true ]; then
+                echo "   - CLI executable: Removed"
+            fi
+            if [ "$dir_removed" = true ]; then
+                echo "   - Installation directory: Removed"
+            fi
+            if [ "$bin_dir_removed" = true ]; then
+                echo "   - Empty .local/bin directory: Removed"
+            fi
+        else
+            echo "ℹ️  No files were removed (they may not have existed)"
+        fi
+        
         echo ""
         echo "💡 Note: You may need to restart your terminal or run 'hash -r' to clear command cache"
+        echo "💡 To reinstall, run: bash install-cli.sh from the source repository"
         ;;
     "selfupdate")
         echo "🔄 Self-updating Manifest CLI..."
@@ -1022,8 +1250,8 @@ CHANGELOGEOF
         echo ""
         echo "Commands:"
         echo "  go        - 🚀 Automated Manifest process (recommended)"
-        echo "    go [patch|minor|major|revision|test]  # Specify version increment or test mode"
-        echo "    go -p|-m|-M|-r                        # Short form options"
+        echo "    go [patch|minor|major|revision|test] [-i]  # Specify version increment, test mode, or interactive"
+        echo "    go -p|-m|-M|-r [-i]                        # Short form options with interactive mode"
         echo "  revert    - 🔄 Revert to previous version"
         echo "  push      - Version bump, commit, and push changes"
         echo "  commit    - Commit changes with custom message"
