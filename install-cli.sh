@@ -72,18 +72,10 @@ fi
 # Copy project files
 log "Copying project files..."
 cp -r "$SCRIPT_DIR/src" "$INSTALL_DIR/"
-cp -r "$SCRIPT_DIR/examples" "$INSTALL_DIR/"
 cp "$SCRIPT_DIR/package.json" "$INSTALL_DIR/"
 cp "$SCRIPT_DIR/README.md" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/Dockerfile" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/Dockerfile.test" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/docker-compose.yml" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/install-client.sh" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/push.sh" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/ENHANCED_FEATURES.md" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/DEPLOYMENT.md" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/.manifestrc.example" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/env.example" "$INSTALL_DIR/"
+cp "$SCRIPT_DIR/VERSION" "$INSTALL_DIR/"
+cp "$SCRIPT_DIR/.gitignore" "$INSTALL_DIR/"
 success "Project files copied"
 
 # Install Node.js dependencies
@@ -95,8 +87,11 @@ success "Node.js dependencies installed"
 # Create default configuration
 log "Creating default configuration..."
 if [ ! -f ".env" ]; then
-    cp env.example .env 2>/dev/null || echo "# Manifest Local Configuration" > .env
-success "Default configuration created"
+    echo "# Manifest Local Configuration" > .env
+    echo "# Optional: Manifest Cloud service integration" >> .env
+    echo "# MANIFEST_CLOUD_URL=https://your-cloud-service.com" >> .env
+    echo "# MANIFEST_CLOUD_API_KEY=your-api-key" >> .env
+    success "Default configuration created"
 else
     success "Configuration already exists"
 fi
