@@ -425,3 +425,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Built with ❤️ by the Fidence.io team**
+
+## Changelog
+
+### [v2.0.0] - 2025-08-11
+
+
+See [CHANGELOG_v2.0.0.md](docs/CHANGELOG_v2.0.0.md) for full details.
