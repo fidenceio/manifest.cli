@@ -463,3 +463,19 @@ See [CHANGELOG_v3.0.1.md](docs/CHANGELOG_v3.0.1.md) for full details.
 
 ## Changelog
 See [docs/CHANGELOG_v6.1.0.md](docs/CHANGELOG_v6.1.0.md) for detailed changes.
+
+## 📋 Version Information
+
+| Property | Value |
+|----------|-------|
+| **Current Version** | `6.5.0` |
+| **Release Date** | `2025-08-11 22:26:18 CDT` |
+| **Git Tag** | `v6.5.0` |
+| **Commit Hash** | `c816aad` |
+| **Branch** | `main` |
+| **Last Updated** | `2025-08-11 22:26:18 CDT` |
+
+### 📚 Documentation Files
+- **Release Notes**: [docs/RELEASE_v6.5.0.md](docs/RELEASE_v6.5.0.md)
+- **Changelog**: [docs/CHANGELOG_v6.5.0.md](docs/CHANGELOG_v6.5.0.md)
+- **Package Info**: [package.json](package.json)
