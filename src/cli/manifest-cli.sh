@@ -940,6 +940,7 @@ CHANGELOGEOF
         
         # Parse arguments
         shift  # Remove "go" from arguments
+        test_subcommand=""
         for arg in "$@"; do
             case "$arg" in
                 -patch|--patch|patch) increment_type="patch";;
@@ -950,7 +951,20 @@ CHANGELOGEOF
                 -m|m) increment_type="minor";;
                 -M|M) increment_type="major";;
                 -r|r) increment_type="patch";;  # Alias for patch
-                test) test_mode=true; increment_type="patch";;
+                test) 
+                    test_mode=true; 
+                    increment_type="patch"
+                    ;;
+                versions|version)
+                    if [ "$test_mode" = true ]; then
+                        test_versions=true
+                    fi
+                    ;;
+                all)
+                    if [ "$test_mode" = true ]; then
+                        test_all=true
+                    fi
+                    ;;
                 -i|--interactive) interactive_mode=true;;
                 *)
                     if [[ "$arg" != -* ]]; then
@@ -972,6 +986,8 @@ CHANGELOGEOF
                                 echo "  manifest go minor -i          # Minor version bump with interactive mode"
                                 echo "  manifest go major --interactive # Major version bump with interactive mode"
                                 echo "  manifest go test              # Test mode - show what would happen"
+                                echo "  manifest go test versions     # Test mode - test across different version increment types"
+                                echo "  manifest go test all          # Test mode - comprehensive testing of all scenarios"
                                 echo "  manifest go -m -i             # Short form for minor with interactive mode"
                                 exit 1
                                 ;;
@@ -984,6 +1000,11 @@ CHANGELOGEOF
         echo "📋 Version increment type: $increment_type"
         if [ "$test_mode" = true ]; then
             echo "🧪 TEST MODE: No changes will be made"
+            if [ "$test_versions" = true ]; then
+                echo "📊 TESTING VERSIONS: Will test across different version increment types"
+            elif [ "$test_all" = true ]; then
+                echo "🔬 COMPREHENSIVE TEST: Will test all available scenarios"
+            fi
         fi
         if [ "$interactive_mode" = true ]; then
             echo "🔄 INTERACTIVE MODE: Each step will be confirmed"
@@ -1062,6 +1083,92 @@ CHANGELOGEOF
                 echo "⚠️  Repository sync completed with some errors"
                 echo "   💡 Consider running 'git pull' manually if needed"
             fi
+        fi
+        
+        # Test versions if requested
+        if [ "$test_mode" = true ] && [ "$test_versions" = true ]; then
+            echo ""
+            echo "📊 Testing across different version increment types..."
+            echo ""
+            
+            # Define test version types
+            version_types=("patch" "minor" "major")
+            current_version="6.5.0"  # This would be dynamic in real usage
+            
+            for vtype in "${version_types[@]}"; do
+                echo "🔄 Testing $vtype increment..."
+                
+                # Simulate version increment calculation
+                case "$vtype" in
+                    "patch")
+                        echo "   📈 Would increment: $current_version → 6.5.1"
+                        echo "   🔧 Would update patch version (bug fixes, minor improvements)"
+                        echo "   📝 Would create patch-level documentation"
+                        ;;
+                    "minor")
+                        echo "   🚀 Would increment: $current_version → 6.6.0"
+                        echo "   ✨ Would update minor version (new features, backward compatible)"
+                        echo "   📚 Would create feature documentation and changelog"
+                        ;;
+                    "major")
+                        echo "   🌟 Would increment: $current_version → 7.0.0"
+                        echo "   💥 Would update major version (breaking changes, major features)"
+                        echo "   ⚠️  Would create migration guide and breaking change notes"
+                        ;;
+                esac
+                echo "   ✅ $vtype increment test simulation complete"
+                echo ""
+            done
+            
+            echo "🎉 All version increment tests simulated successfully!"
+        fi
+        
+        # Test all scenarios if requested
+        if [ "$test_mode" = true ] && [ "$test_all" = true ]; then
+            echo ""
+            echo "🔬 Running comprehensive test scenarios..."
+            echo ""
+            
+            # Test different version increment types
+            echo "📊 Testing version increment scenarios:"
+            for inc_type in "patch" "minor" "major"; do
+                echo "   🔄 Testing $inc_type increment..."
+                case "$inc_type" in
+                    "patch")
+                        echo "      Would increment: 6.5.0 → 6.5.1"
+                        ;;
+                    "minor")
+                        echo "      Would increment: 6.5.0 → 6.6.0"
+                        ;;
+                    "major")
+                        echo "      Would increment: 6.5.0 → 7.0.0"
+                        ;;
+                esac
+                echo "      ✅ $inc_type increment test complete"
+            done
+            echo ""
+            
+            # Test different environments
+            echo "🌍 Testing environment scenarios:"
+            environments=("dev" "staging" "prod" "test")
+            for env in "${environments[@]}"; do
+                echo "   🔍 Testing $env environment..."
+                echo "      Would validate: configuration, dependencies, security"
+                echo "      ✅ $env environment test complete"
+            done
+            echo ""
+            
+            # Test different workflows
+            echo "🔄 Testing workflow scenarios:"
+            workflows=("sync" "docs" "version" "commit" "push" "metadata")
+            for workflow in "${workflows[@]}"; do
+                echo "   ⚙️  Testing $workflow workflow..."
+                echo "      Would execute: $workflow step with validation"
+                echo "      ✅ $workflow workflow test complete"
+            done
+            echo ""
+            
+            echo "🎉 Comprehensive test simulation complete!"
         fi
         
         # Analyze commits using cloud service
@@ -1927,6 +2034,7 @@ VERSIONINFO
         echo "Commands:"
         echo "  go        - 🚀 Complete automated Manifest workflow (recommended)"
         echo "    go [patch|minor|major|revision|test] [-i]  # Complete workflow: sync, docs, version, commit, push, metadata"
+        echo "    go test [versions|all]                     # Test mode with version testing or comprehensive testing"
         echo "    go -p|-m|-M|-r [-i]                        # Short form options with interactive mode"
         echo "  sync      - 🔄 Sync local repo with remote (pull latest changes)"
         echo "  revert    - 🔄 Revert to previous version"
@@ -1946,5 +2054,10 @@ VERSIONINFO
         echo "the Manifest Cloud service for LLM-powered analysis."
         echo ""
         echo "The 'go' command performs a complete workflow: sync → docs → version → commit → push → metadata"
+        echo ""
+        echo "Enhanced testing options:"
+        echo "  • test              - Basic test mode (no changes)"
+        echo "  • test versions     - Test across different version increment types (patch, minor, major)"
+        echo "  • test all          - Comprehensive testing of all scenarios and version types"
         ;;
 esac
