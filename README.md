@@ -113,3 +113,13 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ---
 
 **Built with ❤️ by [Fidence.io](https://fidence.io)**
+
+## 📋 Version Information
+
+| Field | Value |
+|-------|-------|
+| **Current Version** | `7.0.0` |
+| **Last Updated** | `2025-08-12 19:02:11 UTC` |
+| **NTP Server** | `system` |
+| **NTP Offset** | `0.000000 seconds` |
+| **Uncertainty** | `±0.000000 seconds` |
