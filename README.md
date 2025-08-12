@@ -1,411 +1,348 @@
-# Manifest Cloud - LLM Agent Service
+# Manifest Local CLI
 
-A comprehensive cloud service for managing manifest files, LLM agents, and repository operations with advanced security and testing capabilities.
+A powerful command-line tool for automating Git workflows, version management, and documentation generation. The Manifest CLI streamlines your development process with intelligent versioning, automated commits, and seamless integration with Manifest Cloud for enhanced features.
 
 ## 🚀 Features
 
-### Core Services
-- **LLM Agent Management**: Create, configure, and manage AI agents
-- **Repository Management**: GitHub CLI integration for repository metadata
-- **Manifest Processing**: Advanced manifest file analysis and updates
-- **API Gateway**: RESTful API with authentication and rate limiting
+### Core Git Operations
+- **Automated Version Management**: Bump versions with semantic versioning (patch, minor, major)
+- **Smart Commit Handling**: Auto-commit changes with intelligent messages
+- **Tag Management**: Automatic Git tagging with version numbers
+- **Multi-Remote Support**: Push to all configured remotes automatically
 
-### Security & Testing
-- **Comprehensive Security Testing**: Authentication, authorization, input validation
-- **Package Security**: Vulnerability scanning, outdated dependency detection
-- **Core Functionality Testing**: Version management, documentation updates
-- **Container-First Testing**: No host dependencies, fully containerized
+### Documentation Generation
+- **Release Notes**: Generate comprehensive release documentation
+- **Changelog Creation**: Build detailed changelogs from commit history
+- **README Updates**: Keep documentation in sync with versions
+- **VERSION File Management**: Maintain a simple VERSION file alongside package.json
 
-### Repository Operations
-- **Metadata Management**: Update descriptions, topics, homepage URLs
-- **Release Management**: Create and manage GitHub releases
-- **Content Access**: Commits, issues, pull requests, statistics
-- **SSH Authentication**: Secure GitHub operations
+### Advanced Workflows
+- **One-Command Automation**: `manifest go` for complete version bump → commit → tag → push workflow
+- **Version Reversion**: Safely revert to previous versions with interactive selection
+- **Conflict Resolution**: Automatic handling of common Git conflicts and sync issues
+- **Health Diagnostics**: Built-in troubleshooting with `manifest diagnose`
 
-## 🏗️ Architecture
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Client Tools  │    │  Manifest Cloud │    │   GitHub CLI    │
-│                 │    │     Service     │    │                 │
-│ • Test Runner   │◄──►│ • API Gateway   │◄──►│ • Repository    │
-│ • CLI Client    │    │ • LLM Agents    │    │ • Metadata      │
-│ • Installer     │    │ • Security      │    │ • Releases      │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-```
+### Optional Cloud Integration
+- **Commit Analysis**: AI-powered commit analysis and recommendations
+- **Intelligent Changelogs**: Generate rich changelogs using Manifest Cloud
+- **Version Recommendations**: Get smart suggestions for version increments
+- **API Change Detection**: Automatically detect breaking changes
 
 ## 📦 Installation
 
-### Quick Start (Recommended)
+### Quick Install (Recommended)
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/fidenceio/manifest.cloud.git
-   cd manifest.cloud
-   ```
+```bash
+# Clone the repository
+git clone https://github.com/fidenceio/manifest.local.git
+cd manifest.local
 
-2. **Install the client**:
-   ```bash
-   ./install-client.sh
-   ```
+# Install the CLI
+./install-local-cli.sh
+```
 
-3. **Start services**:
-   ```bash
-   manifest-cloud start
-   ```
-
-4. **Run tests**:
-   ```bash
-   manifest-cloud test
-   ```
+The CLI will be installed to `~/.local/bin/manifest` and added to your PATH.
 
 ### Manual Installation
 
-1. **Install dependencies**:
-   ```bash
-   npm install
-   ```
-
-2. **Configure environment**:
-   ```bash
-   cp env.example .env
-   # Edit .env with your configuration
-   ```
-
-3. **Start with Docker**:
-   ```bash
-   docker-compose up -d
-   ```
-
-## 🧪 Testing Suite
-
-### Comprehensive Testing Infrastructure
-
-The testing suite provides three main test categories:
-
-#### 1. Security Tests (`tests/security-test.js`)
-- **Authentication**: API key validation, missing/invalid keys
-- **Authorization**: Access control, permission checks
-- **Input Validation**: Malformed JSON, missing fields, injection attempts
-- **Security Headers**: Helmet, CORS, rate limiting
-- **Container Security**: Non-root user, limited capabilities
-
-#### 2. Package Security Tests (`tests/package-security-test.js`)
-- **Vulnerability Scanning**: npm audit, critical/high vulnerabilities
-- **Dependency Management**: Outdated packages, version pinning
-- **Container Packages**: Alpine package updates, security patches
-- **GitHub CLI**: Installation verification, functionality checks
-
-#### 3. Core Functionality Tests (`tests/core-functionality-test.js`)
-- **Service Health**: Endpoint availability, service status
-- **Repository Operations**: Info, stats, commits, releases
-- **Metadata Updates**: Descriptions, topics, homepage URLs
-- **Error Handling**: Invalid requests, missing fields
-- **Container Tools**: Git, SSH, configuration verification
-
-### Running Tests
-
-#### All Tests
 ```bash
-manifest-cloud test
-# or
-node tests/run-all-tests.js
+# Create installation directory
+mkdir -p ~/.manifest-local
+cd ~/.manifest-local
+
+# Copy source files
+cp -r /path/to/manifest.local/src ./
+cp /path/to/manifest.local/package.json ./
+cp /path/to/manifest.local/README.md ./
+
+# Install dependencies
+npm install
+
+# Create executable
+mkdir -p ~/.local/bin
+cat > ~/.local/bin/manifest << 'EOF'
+#!/bin/bash
+cd ~/.manifest-local
+node src/cli/manifest-cli.js "$@"
+EOF
+chmod +x ~/.local/bin/manifest
 ```
 
-#### Individual Test Suites
-```bash
-# Security tests only
-manifest-cloud test-security
-node tests/security-test.js
+## 🎯 Quick Start
 
-# Package security tests only
-manifest-cloud test-packages
-node tests/package-security-test.js
-
-# Core functionality tests only
-manifest-cloud test-functionality
-node tests/core-functionality-test.js
-```
-
-#### Test Results
-```
-🧪 Running All Test Suites
-
-📋 Security Tests:
-✅ Authentication Tests - PASSED
-✅ Authorization Tests - PASSED
-✅ Input Validation Tests - PASSED
-✅ Security Headers Tests - PASSED
-
-🐳 Container Security Tests:
-✅ Non-Root User Test - PASSED
-✅ Container Capabilities Test - PASSED
-✅ Container Mounts Test - PASSED
-
-📊 Test Report
-📈 Overall Results:
-   Total Tests: 15
-   Passed: 15 ✅
-   Failed: 0 ❌
-   Success Rate: 100.0%
-
-🎉 All tests passed! The system is secure and fully functional.
-```
-
-## 🔧 Client Tools
-
-### Manifest Cloud CLI
-
-The `manifest-cloud` command provides easy access to all functionality:
+### 1. Basic Version Management
 
 ```bash
-# Service management
-manifest-cloud start          # Start services
-manifest-cloud stop           # Stop services
-manifest-cloud status         # Show service status
-manifest-cloud logs           # View service logs
+# Check current version
+cat VERSION
 
-# Testing
-manifest-cloud test           # Run all tests
-manifest-cloud test-security  # Security tests only
-manifest-cloud test-packages  # Package security tests only
-manifest-cloud test-functionality # Core functionality tests only
+# Bump patch version (1.0.0 → 1.0.1)
+manifest version patch
 
-# Help
-manifest-cloud help           # Show help
-manifest-cloud --help         # Show help
+# Bump minor version (1.0.0 → 1.1.0)
+manifest version minor
+
+# Bump major version (1.0.0 → 2.0.0)
+manifest version major
 ```
 
-### Installation Directory
+### 2. Automated Workflow
 
-The client installs to `~/.manifest-cloud/` with the following structure:
-
-```
-~/.manifest-cloud/
-├── src/                     # Source code
-├── tests/                   # Test suites
-├── examples/                # Example scripts
-├── docker-compose.yml       # Service orchestration
-├── Dockerfile               # Main service container
-├── Dockerfile.test          # Test client container
-├── package.json             # Dependencies
-├── .env                     # Configuration
-├── data/                    # Persistent data
-├── logs/                    # Service logs
-└── temp/                    # Temporary files
-```
-
-## 🐳 Docker Services
-
-### Service Architecture
-
-```yaml
-services:
-  manifest-cloud:           # Main service (port 3001)
-  manifest-cloud-redis:     # Redis cache (port 6380)
-  manifest-cloud-postgres:  # PostgreSQL database (port 5433)
-  test-client:              # Testing container
-```
-
-### Container Features
-
-- **Base Image**: `node:20-alpine` for security and size
-- **Non-Root User**: Security best practices
-- **Health Checks**: Automatic health monitoring
-- **Volume Mounts**: SSH keys, git config, persistent data
-- **Network Isolation**: Dedicated bridge network
-
-## 🔐 Security Features
-
-### Authentication & Authorization
-- **API Key Authentication**: Bearer token validation
-- **Rate Limiting**: Configurable request limits
-- **CORS Protection**: Configurable cross-origin policies
-- **Input Validation**: Comprehensive request validation
-
-### Container Security
-- **Non-Root Execution**: Limited user privileges
-- **Minimal Base Image**: Alpine Linux with essential packages only
-- **Health Monitoring**: Automatic health checks and restarts
-- **Network Isolation**: Dedicated Docker networks
-
-### Package Security
-- **Vulnerability Scanning**: Regular npm audit checks
-- **Dependency Pinning**: Specific version requirements
-- **Security Updates**: Automated Alpine package updates
-- **Malicious Package Detection**: Known bad package filtering
-
-## 📚 API Reference
-
-### Repository Management
-
-#### Get Repository Information
-```http
-GET /api/v1/repository/{owner}/{repo}
-Authorization: Bearer {api-key}
-```
-
-#### Update Repository Description
-```http
-PUT /api/v1/repository/{owner}/{repo}/description
-Authorization: Bearer {api-key}
-Content-Type: application/json
-
-{
-  "description": "Updated repository description"
-}
-```
-
-#### Add Repository Topics
-```http
-POST /api/v1/repository/{owner}/{repo}/topics
-Authorization: Bearer {api-key}
-Content-Type: application/json
-
-{
-  "topics": ["automation", "ci-cd", "devops"]
-}
-```
-
-#### Create Release
-```http
-POST /api/v1/repository/{owner}/{repo}/releases
-Authorization: Bearer {api-key}
-Content-Type: application/json
-
-{
-  "tagName": "v1.0.0",
-  "title": "Release v1.0.0",
-  "body": "Release notes here",
-  "draft": false,
-  "prerelease": false
-}
-```
-
-### Health & Status
-
-#### Service Health
-```http
-GET /health
-```
-
-#### Service Information
-```http
-GET /
-```
-
-## 🚀 Getting Started
-
-### 1. Prerequisites
-- Docker and Docker Compose
-- Node.js 18+ and npm
-- Git
-- SSH keys configured for GitHub
-
-### 2. Quick Test
 ```bash
-# Install client
-./install-client.sh
-
-# Start services
-manifest-cloud start
-
-# Run comprehensive tests
-manifest-cloud test
-
-# Check status
-manifest-cloud status
+# Complete automated process (recommended)
+manifest go major    # Major version bump
+manifest go minor    # Minor version bump
+manifest go patch    # Patch version bump
+manifest go          # Auto-detect increment type
 ```
 
-### 3. Configuration
-Edit `~/.manifest-cloud/.env`:
+### 3. Documentation Generation
+
 ```bash
-# API Configuration
-MANIFEST_SECRET=your-secret-key-here
-MANIFEST_API_KEY=your-api-key-here
+# Generate release notes and changelog
+manifest docs
 
-# Service Configuration
-PORT=3001
-LOG_LEVEL=info
+# Create custom commit
+manifest commit "Add new feature X"
 
-# Feature Flags
-ENABLE_COMMIT_ANALYSIS=true
-ENABLE_API_CHANGE_DETECTION=true
-ENABLE_VERSION_RECOMMENDATIONS=true
+# Revert to previous version
+manifest revert
 ```
 
-## 🔍 Troubleshooting
+## 📚 Command Reference
+
+### Core Commands
+
+#### `manifest go [type]`
+The main command for automated workflows. Automatically handles version bumping, committing, tagging, and pushing.
+
+```bash
+manifest go major     # Increment major version
+manifest go minor     # Increment minor version
+manifest go patch     # Increment patch version
+manifest go revision  # Increment revision version
+manifest go           # Auto-detect increment type
+```
+
+**What it does:**
+1. Checks for uncommitted changes
+2. Analyzes commits (if cloud service configured)
+3. Bumps version according to type
+4. Updates VERSION file and package.json
+5. Commits changes
+6. Creates Git tag
+7. Pushes to all remotes
+
+#### `manifest version [type]`
+Simple version bumping without the full workflow.
+
+```bash
+manifest version patch  # 1.0.0 → 1.0.1
+manifest version minor  # 1.0.0 → 1.1.0
+manifest version major  # 1.0.0 → 2.0.0
+```
+
+#### `manifest docs`
+Generate comprehensive documentation for the current version.
+
+**Creates:**
+- `docs/RELEASE_vX.Y.Z.md` - Release notes
+- `docs/CHANGELOG_vX.Y.Z.md` - Detailed changelog
+- Updates `README.md` with changelog section
+
+#### `manifest revert`
+Interactive version reversion with safety confirmations.
+
+```bash
+manifest revert
+# Shows available versions and prompts for selection
+# Updates VERSION file, package.json, and README.md
+# Commits changes and creates tag
+```
+
+#### `manifest push [type]`
+Legacy command for version bumping and pushing.
+
+```bash
+manifest push patch   # Bump patch version and push
+manifest push minor   # Bump minor version and push
+manifest push major   # Bump major version and push
+```
+
+#### `manifest commit <message>`
+Create a commit with a custom message.
+
+```bash
+manifest commit "Add new authentication feature"
+```
+
+#### `manifest diagnose`
+Comprehensive health check and troubleshooting.
+
+**Checks:**
+- Git repository status
+- Remote configuration
+- SSH authentication
+- VERSION file consistency
+- Cloud service configuration
+- Provides actionable solutions
+
+### Utility Commands
+
+#### `manifest analyze`
+Analyze commits using Manifest Cloud service (requires configuration).
+
+#### `manifest changelog`
+Generate changelog using Manifest Cloud service (requires configuration).
+
+#### `manifest help`
+Show help information.
+
+## 🔧 Configuration
+
+### Environment Variables
+
+Create `~/.manifest-local/.env` for cloud integration:
+
+```bash
+# Manifest Cloud Service
+MANIFEST_CLOUD_URL=http://localhost:3001
+MANIFEST_CLOUD_API_KEY=your-api-key-here
+```
+
+### Git Configuration
+
+The CLI automatically uses your existing Git configuration:
+
+```bash
+# Ensure SSH keys are configured
+ssh-add ~/.ssh/id_rsa
+
+# Configure Git user
+git config --global user.name "Your Name"
+git config --global user.email "your.email@example.com"
+```
+
+## 🏗️ Project Structure
+
+```
+~/.manifest-local/
+├── src/
+│   ├── cli/
+│   │   └── manifest-cli.js    # Main CLI logic
+│   └── client/
+│       └── manifestCloudClient.js  # Cloud service client
+├── examples/
+│   └── test-manifest-cloud-client.js
+├── package.json
+├── .env                        # Cloud service configuration
+└── README.md
+```
+
+## 🔄 Workflow Examples
+
+### Standard Release Process
+
+```bash
+# 1. Generate documentation
+manifest docs
+
+# 2. Commit documentation
+manifest commit "Add documentation for v2.1.0"
+
+# 3. Automated release
+manifest go minor
+
+# Result: Version bumped, committed, tagged, and pushed
+```
+
+### Hotfix Process
+
+```bash
+# Quick patch release
+manifest go patch
+
+# Result: 2.1.0 → 2.1.1, committed, tagged, and pushed
+```
+
+### Major Version Release
+
+```bash
+# Major version with full workflow
+manifest go major
+
+# Result: 2.1.1 → 3.0.0, committed, tagged, and pushed
+```
+
+## 🚨 Troubleshooting
 
 ### Common Issues
 
-#### Services Won't Start
+#### "Not in a git repository"
 ```bash
-# Check Docker status
-docker ps -a
-
-# View logs
-manifest-cloud logs
-
-# Check configuration
-cat ~/.manifest-cloud/.env
+# Initialize git repository
+git init
+git remote add origin <your-repo-url>
 ```
 
-#### Tests Fail
+#### "Permission denied (publickey)"
 ```bash
-# Check service health
-curl http://localhost:3001/health
-
-# Run individual test suites
-manifest-cloud test-security
-manifest-cloud test-packages
-manifest-cloud test-functionality
+# Check SSH key
+ssh-add ~/.ssh/id_rsa
+ssh -T git@github.com
 ```
 
-#### GitHub CLI Issues
+#### "Remote is ahead, cannot fast-forward"
 ```bash
-# Check SSH keys
-docker exec manifest-cloud-service ls -la /root/.ssh
+# Use diagnose to check status
+manifest diagnose
 
-# Test GitHub connection
-docker exec manifest-cloud-service gh auth status
+# Manually sync if needed
+git pull origin main --rebase
 ```
 
-### Logs and Debugging
+#### VERSION file out of sync
 ```bash
-# Service logs
-manifest-cloud logs
-
-# Container logs
-docker logs manifest-cloud-service
-
-# Test output
-manifest-cloud test 2>&1 | tee test-output.log
+# Regenerate VERSION file
+manifest version patch
 ```
 
-## 📈 Monitoring
+### Getting Help
 
-### Health Checks
-- **Service Health**: `/health` endpoint
-- **Container Health**: Docker health checks
-- **Database Health**: PostgreSQL connection monitoring
-- **Cache Health**: Redis connection monitoring
+```bash
+# Comprehensive health check
+manifest diagnose
 
-### Metrics
-- **Request Counts**: API endpoint usage
-- **Response Times**: Performance monitoring
-- **Error Rates**: Failure tracking
-- **Resource Usage**: Container resource monitoring
+# Show help
+manifest help
 
-## 🔮 Future Enhancements
+# Check git status
+git status
+```
 
-### Planned Features
-- **Advanced Analytics**: Commit analysis and trend detection
-- **Automated Updates**: Smart dependency updates
-- **CI/CD Integration**: GitHub Actions and GitLab CI
-- **Multi-Repository Support**: Batch operations across repos
-- **Web Dashboard**: Visual management interface
+## 🔗 Manifest Cloud Integration
 
-### Contributing
+The Manifest CLI can optionally integrate with Manifest Cloud for enhanced features:
+
+### Benefits
+- **AI-Powered Analysis**: Intelligent commit analysis and recommendations
+- **Rich Documentation**: Generate detailed changelogs with context
+- **Version Intelligence**: Get smart suggestions for version increments
+- **API Change Detection**: Automatically identify breaking changes
+
+### Setup
+1. Configure environment variables in `~/.manifest-local/.env`
+2. Use `manifest analyze` and `manifest changelog` commands
+3. Enhanced `manifest go` workflow with intelligent recommendations
+
+### Fallback Behavior
+If Manifest Cloud is not configured or unavailable, the CLI gracefully falls back to basic functionality:
+- Basic changelog generation from Git history
+- Standard version incrementing
+- Full Git workflow automation
+
+## 🤝 Contributing
+
 1. Fork the repository
 2. Create a feature branch
 3. Add tests for new functionality
@@ -419,16 +356,27 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🆘 Support
 
 - **Documentation**: [docs/](docs/)
-- **Issues**: [GitHub Issues](https://github.com/fidenceio/manifest.cloud/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/fidenceio/manifest.cloud/discussions)
+- **Issues**: [GitHub Issues](https://github.com/fidenceio/manifest.local/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/fidenceio/manifest.local/discussions)
 
 ---
 
 **Built with ❤️ by the Fidence.io team**
 
-## Changelog
+## 📋 Changelog
+
+### [v3.0.0] - 2025-08-11
+- **Major Release**: Complete CLI rewrite with enhanced automation
+- **New Commands**: `manifest go`, `manifest docs`, `manifest diagnose`
+- **VERSION File**: Automatic VERSION file management
+- **Conflict Resolution**: Automatic handling of common Git conflicts
+- **Cloud Integration**: Optional Manifest Cloud service integration
+- **Documentation**: Comprehensive documentation generation
 
 ### [v2.0.2] - 2025-08-11
+- Added VERSION file management
+- Enhanced conflict resolution in push operations
+- Added comprehensive diagnostics command
+- Improved error handling and user feedback
 
-
-See [CHANGELOG_v2.0.2.md](docs/CHANGELOG_v2.0.2.md) for full details.
+See [CHANGELOG_v3.0.0.md](docs/CHANGELOG_v3.0.0.md) for full details.
