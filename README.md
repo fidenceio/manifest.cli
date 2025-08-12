@@ -2,23 +2,27 @@
 
 A powerful command-line interface tool for managing manifest files, versioning, and repository operations with trusted NTP timestamp verification.
 
+
 ## 📋 Version Information
 
-| **Version** | **6.5.7** |
-|-------------|------------|
-| **Date** | 2025-08-12 |
-| **Git Tag** | `v6.5.7` |
-| **Commit Hash** | `b9fcd78` |
+| Property | Value |
+|----------|-------|
+| **Current Version** | `6.6.0` |
+| **Release Date** | `2025-08-12 15:55:18 UTC` |
+| **Git Tag** | `v6.6.0` |
+| **Commit Hash** | `7e1b280` |
 | **Branch** | `main` |
-| **Last Updated** | 2025-08-12 14:21:09 UTC |
-| **NTP Timestamp** | 2025-08-12 14:21:09 UTC |
-| **NTP Server** | system (127.0.0.1) |
-| **NTP Offset** | 0.000000 seconds |
-| **Uncertainty** | ±0.000000 seconds |
+| **Last Updated** | `2025-08-12 15:55:18 UTC` |
+| **NTP Server** | `system (127.0.0.1)` |
+| **NTP Offset** | `0.000000 seconds` |
+| **Uncertainty** | `±0.000000 seconds` |
 
-📚 **Documentation**: [RELEASE_v6.5.7.md](docs/RELEASE_v6.5.7.md) | [CHANGELOG_v6.5.7.md](docs/CHANGELOG_v6.5.7.md)
+### 📚 Documentation Files
+- **Release Notes**: [docs/RELEASE_v6.6.0.md](docs/RELEASE_v6.6.0.md)
+- **Changelog**: [docs/CHANGELOG_v6.6.0.md](docs/CHANGELOG_v6.6.0.md)
+- **Package Info**: [package.json](package.json)
 
-## ✨ Features
+---
 
 - 🕐 **Trusted NTP Timestamps** - All operations verified with multiple NTP servers
 - 🔄 **Automated Versioning** - Patch, minor, major, and revision increments
