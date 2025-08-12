@@ -5,31 +5,27 @@ A powerful command-line interface tool for managing manifest files, versioning, 
 
 
 
+
 ## 📋 Version Information
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `6.6.2` |
-| **Release Date** | `2025-08-12 16:44:15 UTC` |
-| **Git Tag** | `v6.6.2` |
-| **Commit Hash** | `76a7ad4` |
+| **Current Version** | `6.6.3` |
+| **Release Date** | `2025-08-12 17:18:35 UTC` |
+| **Git Tag** | `v6.6.3` |
+| **Commit Hash** | `f286c79` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-08-12 16:44:15 UTC` |
+| **Last Updated** | `2025-08-12 17:18:35 UTC` |
 | **NTP Server** | `system (127.0.0.1)` |
 | **NTP Offset** | `0.000000 seconds` |
 | **Uncertainty** | `±0.000000 seconds` |
 
 ### 📚 Documentation Files
-- **Release Notes**: [docs/RELEASE_v6.6.2.md](docs/RELEASE_v6.6.2.md)
-- **Changelog**: [docs/CHANGELOG_v6.6.2.md](docs/CHANGELOG_v6.6.2.md)
+- **Release Notes**: [docs/RELEASE_v6.6.3.md](docs/RELEASE_v6.6.3.md)
+- **Changelog**: [docs/CHANGELOG_v6.6.3.md](docs/CHANGELOG_v6.6.3.md)
 - **Package Info**: [package.json](package.json)
 
 ---
-
-- **[RELEASE_v6.5.7.md](docs/RELEASE_v6.5.7.md)** - Current release notes
-- **[CHANGELOG_v6.5.7.md](docs/CHANGELOG_v6.5.7.md)** - Detailed change history
-
-## 🔧 Configuration
 
 The CLI automatically detects your repository provider (GitHub, GitLab, Bitbucket) and installs the necessary CLI tools locally.
 
