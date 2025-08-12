@@ -98,6 +98,7 @@ manifest_go() {
     echo "   - NTP Server: $MANIFEST_NTP_SERVER ($MANIFEST_NTP_SERVER_IP)"
     echo "   - NTP Offset: $MANIFEST_NTP_OFFSET seconds"
     echo "   - Uncertainty: ±$MANIFEST_NTP_UNCERTAINTY seconds"
+    echo "   - Method: $MANIFEST_NTP_METHOD"
 }
 
 # Test mode function

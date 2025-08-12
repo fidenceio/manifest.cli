@@ -1,180 +1,191 @@
 #!/bin/bash
 
-# Manifest NTP Module
-# Handles NTP timestamp functionality for trusted manifest operations
+# Manifest NTP Module v2.0
+# Simple, highly accurate timestamp service for manifest operations
 
-# NTP Configuration
-MANIFEST_NTP_SERVERS=${MANIFEST_NTP_SERVERS:-"time.apple.com,time.google.com,pool.ntp.org,time.nist.gov,time.cloudflare.com,time.windows.com"}
-MANIFEST_NTP_TIMEOUT=${MANIFEST_NTP_TIMEOUT:-5}
-MANIFEST_NTP_PRIORITY=${MANIFEST_NTP_PRIORITY:-"external,localhost,system"}
+# Configuration with sensible defaults
+MANIFEST_NTP_SERVERS=${MANIFEST_NTP_SERVERS:-"time.apple.com,time.google.com,pool.ntp.org"}
+MANIFEST_NTP_TIMEOUT=${MANIFEST_NTP_TIMEOUT:-3}
+MANIFEST_NTP_RETRIES=${MANIFEST_NTP_RETRIES:-2}
 
-get_ntp_timestamp() {
-    # Use configured NTP servers or fall back to defaults
-    local ntp_servers=($(echo "$MANIFEST_NTP_SERVERS" | tr ',' ' '))
-    local timeout="$MANIFEST_NTP_TIMEOUT"
-    local priority="$MANIFEST_NTP_PRIORITY"
+# Global timestamp variables
+MANIFEST_NTP_TIMESTAMP=""
+MANIFEST_NTP_OFFSET=""
+MANIFEST_NTP_UNCERTAINTY=""
+MANIFEST_NTP_SERVER=""
+MANIFEST_NTP_SERVER_IP=""
+MANIFEST_NTP_METHOD=""
+
+# Simple NTP query function
+query_ntp_server() {
+    local server="$1"
+    local timeout="$2"
     
-    # Prioritize external NTP servers, fall back to localhost only as last resort
+    # Use sntp with timeout and clean output
+    local result=$(timeout "$timeout" sntp "$server" 2>/dev/null | tail -1)
+    
+    if [ $? -eq 0 ] && [ -n "$result" ]; then
+        # Parse sntp output: date time offset +/- uncertainty server ip
+        # Example: 2025-08-12 15:52:23.438049 (+0500) +2.012665 +/- 1.341959 time.apple.com 17.253.6.37
+        local offset=$(echo "$result" | awk '{print $4}')
+        local uncertainty=$(echo "$result" | awk '{print $6}')
+        local server_ip=$(echo "$result" | awk '{print $8}')
+        
+        # Validate offset format and ensure we have valid data
+        if [[ "$offset" =~ ^[+-]?[0-9]+\.[0-9]+$ ]] && [[ "$uncertainty" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            echo "$offset|$uncertainty|$server_ip"
+            return 0
+        fi
+    fi
+    
+    return 1
+}
+
+# Calculate accurate timestamp from NTP offset
+calculate_ntp_timestamp() {
+    local offset="$1"
+    local uncertainty="$2"
+    
+    # Get current system time in seconds since epoch
+    local system_time=$(date -u +%s)
+    
+    # Parse offset (remove + sign, handle negative)
+    local offset_abs=$(echo "$offset" | sed 's/^+//' | sed 's/^-//')
+    local offset_sign=${offset:0:1}
+    
+    # Calculate NTP-corrected timestamp using bc for floating-point arithmetic
+    local ntp_timestamp
+    if [ "$offset_sign" = "-" ]; then
+        ntp_timestamp=$(echo "$system_time + $offset_abs" | bc)
+    else
+        ntp_timestamp=$(echo "$system_time - $offset_abs" | bc)
+    fi
+    
+    # Convert to integer for timestamp
+    ntp_timestamp=$(echo "$ntp_timestamp" | cut -d. -f1)
+    
+    echo "$ntp_timestamp|$offset|$uncertainty"
+}
+
+# Get trusted NTP timestamp with fallback strategy
+get_ntp_timestamp() {
+    echo "🕐 Getting trusted timestamp..."
+    
     local timestamp=""
     local offset=""
-    local ntp_success=false
+    local uncertainty=""
+    local server=""
+    local server_ip=""
+    local method=""
     
-    echo "🕐 Getting trusted NTP timestamp..."
-    echo "   🎯 Priority: External NTP servers → Localhost fallback"
+    # Convert comma-separated servers to array
+    local ntp_servers=($(echo "$MANIFEST_NTP_SERVERS" | tr ',' ' '))
     
-    # First, try external NTP servers
-    for server in "${ntp_servers[@]}"; do
-        echo "   🔍 Querying external server: $server ()..."
-        local ntp_result=$(sntp "$server" 2>/dev/null | tail -1)
+    # Try external NTP servers first
+    for ntp_server in "${ntp_servers[@]}"; do
+        echo "   🔍 Querying $ntp_server..."
         
-        if [ $? -eq 0 ] && [ -n "$ntp_result" ]; then
-            # Simple parsing: extract offset from sntp output
-            # Format: -0.006208 +/- 0.017504 time.apple.com 17.253.6.45
-            local offset=$(echo "$ntp_result" | awk '{print $1}')
+        local result=$(query_ntp_server "$ntp_server" "$MANIFEST_NTP_TIMEOUT")
+        if [ $? -eq 0 ]; then
+            # Parse result: offset|uncertainty|server_ip
+            IFS='|' read -r calculated_offset calculated_uncertainty server_ip <<< "$result"
             
-            if [[ "$offset" =~ ^[+-][0-9]+\.[0-9]+$ ]]; then
-                # Calculate trusted timestamp
-                local current_time=$(date -u +%s)
-                local ntp_offset_seconds=$(echo "$offset" | sed 's/+//' | sed 's/-//')
-                local ntp_offset_sign=$(echo "$offset" | cut -c1)
-                
-                if [ "$ntp_offset_sign" = "+" ]; then
-                    timestamp=$((current_time + ntp_offset_seconds))
-                else
-                    timestamp=$((current_time - ntp_offset_seconds))
-                fi
-                
-                echo "   ✅ External NTP timestamp obtained from $server"
-                echo "   📊 Offset: $offset seconds"
-                # Use date command compatible with both Linux and macOS
-                if date -d "@$timestamp" >/dev/null 2>&1; then
-                    # Linux date command
-                    echo "   🕐 Trusted timestamp: $(date -u -d "@$timestamp" '+%Y-%m-%d %H:%M:%S UTC')"
-                else
-                    # macOS date command
-                    echo "   🕐 Trusted timestamp: $(date -u -r "$timestamp" '+%Y-%m-%d %H:%M:%S UTC')"
-                fi
-                ntp_success=true
-                break
-            fi
+            # Calculate the NTP-corrected timestamp
+            local timestamp_result=$(calculate_ntp_timestamp "$calculated_offset" "$calculated_uncertainty")
+            IFS='|' read -r calculated_timestamp offset uncertainty <<< "$timestamp_result"
+            
+            timestamp="$calculated_timestamp"
+            server="$ntp_server"
+            method="external"
+            
+            echo "   ✅ NTP timestamp from $ntp_server"
+            echo "   📊 Offset: $offset seconds (±$uncertainty)"
+            break
         else
-            echo "   ⚠️  Failed to query external server: $server"
+            echo "   ⚠️  Failed to query $ntp_server"
         fi
     done
     
-    # If external NTP servers failed, try localhost as fallback
-    if [ "$ntp_success" = false ]; then
-        echo "   🔄 External NTP servers unavailable, trying localhost fallback..."
-        echo "   🔍 Querying localhost..."
-        
-        local localhost_result=$(sntp "127.0.0.1" 2>/dev/null | tail -1)
-        if [ $? -eq 0 ] && [ -n "$localhost_result" ]; then
-            local offset=$(echo "$localhost_result" | awk '{print $1}')
-            
-            if [[ "$offset" =~ ^[+-][0-9]+\.[0-9]+$ ]]; then
-                local current_time=$(date -u +%s)
-                local ntp_offset_seconds=$(echo "$offset" | sed 's/+//' | sed 's/-//')
-                local ntp_offset_sign=$(echo "$offset" | cut -c1)
-                
-                if [ "$ntp_offset_sign" = "+" ]; then
-                    timestamp=$((current_time + ntp_offset_seconds))
-                else
-                    timestamp=$((current_time - ntp_offset_seconds))
-                fi
-                
-                echo "   ✅ Localhost NTP timestamp obtained"
-                echo "   📊 Offset: $offset seconds"
-                if date -d "@$timestamp" >/dev/null 2>&1; then
-                    echo "   🕐 Trusted timestamp: $(date -u -d "@$timestamp" '+%Y-%m-%d %H:%M:%S UTC')"
-                else
-                    echo "   🕐 Trusted timestamp: $(date -u -r "$timestamp" '+%Y-%m-%d %H:%M:%S UTC')"
-                fi
-                ntp_success=true
-            fi
-        else
-            echo "   ⚠️  Localhost NTP also failed"
-        fi
-    fi
-    
-    # Final fallback to system time if all NTP methods fail
-    if [ "$ntp_success" = false ]; then
-        echo "   ❌ All NTP methods failed, using system time as last resort"
+    # Fallback to system time if no NTP servers responded
+    if [ -z "$timestamp" ]; then
+        echo "   🔄 No NTP servers responded, using system time"
         timestamp=$(date -u +%s)
         offset="0.000000"
         uncertainty="0.000000"
-        server_name="system"
+        server="system"
         server_ip="127.0.0.1"
-        echo "   ⚠️  System time used - not NTP verified"
+        method="system"
     fi
     
-    # Export timestamp variables for use in other functions
+    # Export variables for use in other functions
     export MANIFEST_NTP_TIMESTAMP="$timestamp"
     export MANIFEST_NTP_OFFSET="$offset"
     export MANIFEST_NTP_UNCERTAINTY="$uncertainty"
-    export MANIFEST_NTP_SERVER="$server_name"
+    export MANIFEST_NTP_SERVER="$server"
     export MANIFEST_NTP_SERVER_IP="$server_ip"
+    export MANIFEST_NTP_METHOD="$method"
     
-    echo "   🎯 NTP timestamp ready for manifest operations"
+    # Display timestamp info
+    local formatted_time=$(format_timestamp "$timestamp" '+%Y-%m-%d %H:%M:%S UTC')
+    echo "   🕐 Timestamp: $formatted_time"
+    echo "   🎯 Method: $method"
     echo ""
 }
 
+# Format timestamp for display (cross-platform compatible)
 format_timestamp() {
     local timestamp="$1"
     local format="$2"
     
-    # Use date command compatible with both Linux and macOS
+    # Try Linux date format first
     if date -d "@$timestamp" >/dev/null 2>&1; then
-        # Linux date command
         date -u -d "@$timestamp" "$format"
     else
-        # macOS date command
+        # Fallback to macOS date format
         date -u -r "$timestamp" "$format"
     fi
 }
 
+# Display current NTP information
 display_ntp_info() {
-    echo "🕐 Manifest NTP Timestamp Service"
-    echo "=================================="
+    echo "🕐 Manifest Timestamp Service"
+    echo "============================="
     
-    # Get NTP timestamp
+    # Get fresh timestamp
     get_ntp_timestamp
     
-    # Display NTP information
-    echo "🕐 **Trusted NTP Timestamp**: $(format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')"
-    echo "   📊 **NTP Offset**: $MANIFEST_NTP_OFFSET seconds"
-    echo "   🎯 **Uncertainty**: ±$MANIFEST_NTP_UNCERTAINTY seconds"
-    echo "   🌐 **NTP Server**: $MANIFEST_NTP_SERVER ($MANIFEST_NTP_SERVER_IP)"
+    echo "📊 Timestamp Details:"
+    echo "   🕐 Time: $(format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')"
+    echo "   📊 Offset: $MANIFEST_NTP_OFFSET seconds"
+    echo "   🎯 Uncertainty: ±$MANIFEST_NTP_UNCERTAINTY seconds"
+    echo "   🌐 Source: $MANIFEST_NTP_SERVER ($MANIFEST_NTP_SERVER_IP)"
+    echo "   🔧 Method: $MANIFEST_NTP_METHOD"
     echo ""
-    echo "�� Use this timestamp for trusted manifest operations"
+    echo "💡 This timestamp is ready for manifest operations"
 }
 
+# Display NTP configuration
 display_ntp_config() {
-    echo "⚙️  Manifest NTP Configuration"
-    echo "================================"
-    echo "   🎯 **Priority**: $MANIFEST_NTP_PRIORITY"
-    echo "   ⏱️  **Timeout**: ${MANIFEST_NTP_TIMEOUT}s"
-    echo "   🌐 **Servers**:"
+    echo "⚙️  Manifest Timestamp Configuration"
+    echo "===================================="
+    echo "   ⏱️  Timeout: ${MANIFEST_NTP_TIMEOUT}s"
+    echo "   🔄 Retries: ${MANIFEST_NTP_RETRIES}"
+    echo "   🌐 Servers:"
     
     local ntp_servers=($(echo "$MANIFEST_NTP_SERVERS" | tr ',' ' '))
     for server in "${ntp_servers[@]}"; do
         case "$server" in
             "time.apple.com")
-                echo "   • time.apple.com (Apple)"
+                echo "   • $server (Apple)"
                 ;;
             "time.google.com")
-                echo "   • time.google.com (Google)"
+                echo "   • $server (Google)"
                 ;;
             "pool.ntp.org")
-                echo "   • pool.ntp.org (NTP Pool)"
+                echo "   • $server (NTP Pool)"
                 ;;
             "time.nist.gov")
-                echo "   • time.nist.gov (NIST)"
-                ;;
-            "time.cloudflare.com")
-                echo "   • time.cloudflare.com (Cloudflare)"
-                ;;
-            "time.windows.com")
-                echo "   • time.windows.com (Microsoft)"
+                echo "   • $server (NIST)"
                 ;;
             *)
                 echo "   • $server"
@@ -183,6 +194,20 @@ display_ntp_config() {
     done
     
     echo ""
-    echo "💡 **Configuration**: Set MANIFEST_NTP_* environment variables to customize"
-    echo "   Example: export MANIFEST_NTP_SERVERS='time.apple.com,time.google.com'"
+    echo "💡 Customize with environment variables:"
+    echo "   export MANIFEST_NTP_SERVERS='time.apple.com,time.google.com'"
+    echo "   export MANIFEST_NTP_TIMEOUT=5"
+    echo "   export MANIFEST_NTP_RETRIES=3"
+}
+
+# Quick timestamp function for simple operations
+get_timestamp() {
+    get_ntp_timestamp >/dev/null
+    echo "$MANIFEST_NTP_TIMESTAMP"
+}
+
+# Get formatted timestamp string
+get_formatted_timestamp() {
+    get_ntp_timestamp >/dev/null
+    format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC'
 }
