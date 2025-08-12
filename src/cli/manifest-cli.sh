@@ -1403,7 +1403,8 @@ CHANGELOGEOF
                     temp_readme="temp_readme.md"
                     
                     # Find the line numbers for the version info section
-                    start_line=$(grep -n "## 📋 Version Information" README.md | cut -d: -f1)
+                    # Get the first occurrence (should be the one we want to update)
+                    start_line=$(grep -n "## 📋 Version Information" README.md | head -1 | cut -d: -f1)
                     
                     # Debug: show what we found
                     echo "   🔍 Found version info section at line: $start_line"
@@ -1430,6 +1431,8 @@ CHANGELOGEOF
                     
                     # Validate that we have valid line numbers
                     if [ -n "$start_line" ] && [ -n "$end_line" ] && [ "$start_line" -gt 0 ] && [ "$end_line" -gt 0 ] && [ "$start_line" -lt "$end_line" ]; then
+                        echo "   🔧 Attempting to update existing version info section..."
+                        
                         # Copy content before version info section
                         head -n $((start_line - 1)) README.md > "$temp_readme"
                         
@@ -1462,34 +1465,43 @@ VERSIONINFO
                         mv "$temp_readme" README.md
                         echo "   ✅ README.md version information updated"
                     else
-                        echo "   ⚠️  Could not locate version info section boundaries, using fallback method"
+                        echo "   ⚠️  Could not locate version info section boundaries, using robust fallback method"
                         
-                        # Fallback: use sed to replace the entire version info section
+                        # Robust fallback: completely rebuild the README to avoid duplicates
                         temp_readme="temp_readme.md"
                         
-                        # Create a new README with updated version info
-                        sed '/## 📋 Version Information/,/^---$/c\
-## 📋 Version Information\
-\
-| Property | Value |\
-|----------|-------|\
-| **Current Version** | `'"$new_version"'` |\
-| **Release Date** | `'"$(date +"%Y-%m-%d %H:%M:%S %Z")"'` |\
-| **Git Tag** | `v'"$new_version"'` |\
-| **Commit Hash** | `'"$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")"'` |\
-| **Branch** | `'"$(git branch --show-current 2>/dev/null || echo "unknown")"'` |\
-| **Last Updated** | `'"$(date +"%Y-%m-%d %H:%M:%S %Z")"'` |\
-\
-### 📚 Documentation Files\
-- **Release Notes**: [docs/RELEASE_v'"$new_version"'.md](docs/RELEASE_v'"$new_version"'.md)\
-- **Changelog**: [docs/CHANGELOG_v'"$new_version"'.md](docs/CHANGELOG_v'"$new_version"'.md)\
-- **Package Info**: [package.json](package.json)\
-\
----' README.md > "$temp_readme"
+                        # Get the title line
+                        head -n 1 README.md > "$temp_readme"
+                        
+                        # Add the new version info section
+                        cat >> "$temp_readme" << VERSIONINFO
+
+## 📋 Version Information
+
+| Property | Value |
+|----------|-------|
+| **Current Version** | \`$new_version\` |
+| **Release Date** | \`$(date +"%Y-%m-%d %H:%M:%S %Z")\` |
+| **Git Tag** | \`v$new_version\` |
+| **Commit Hash** | \`$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")\` |
+| **Branch** | \`$(git branch --show-current 2>/dev/null || echo "unknown")\` |
+| **Last Updated** | \`$(date +"%Y-%m-%d %H:%M:%S %Z")\` |
+
+### 📚 Documentation Files
+- **Release Notes**: [docs/RELEASE_v$new_version.md](docs/RELEASE_v$new_version.md)
+- **Changelog**: [docs/CHANGELOG_v$new_version.md](docs/CHANGELOG_v$new_version.md)
+- **Package Info**: [package.json](package.json)
+
+---
+VERSIONINFO
+                        
+                        # Add the rest of the content, but skip any existing version info sections
+                        # Start from line 2 (after title) and filter out version info sections
+                        tail -n +2 README.md | grep -v "## 📋 Version Information" | grep -v "| Property | Value |" | grep -v "|----------|-------|" | grep -v "| \*\*Current Version\*\* |" | grep -v "| \*\*Release Date\*\* |" | grep -v "| \*\*Git Tag\*\* |" | grep -v "| \*\*Commit Hash\*\* |" | grep -v "| \*\*Branch\*\* |" | grep -v "| \*\*Last Updated\*\* |" | grep -v "### 📚 Documentation Files" | grep -v "docs/RELEASE_v" | grep -v "docs/CHANGELOG_v" | grep -v "package.json" | grep -v "^---$" >> "$temp_readme"
                         
                         # Replace the original README with the updated version
                         mv "$temp_readme" README.md
-                        echo "   ✅ README.md version information updated using fallback method"
+                        echo "   ✅ README.md completely rebuilt to avoid duplicates"
                     fi
                 else
                     echo "   📝 Adding new version information section..."
