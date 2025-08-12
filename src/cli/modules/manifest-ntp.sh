@@ -3,6 +3,18 @@
 # Manifest NTP Module v2.0
 # Simple, highly accurate timestamp service for manifest operations
 
+# OS Detection
+MANIFEST_OS=""
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    MANIFEST_OS="macos"
+elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    MANIFEST_OS="linux"
+elif [[ "$OSTYPE" == "freebsd"* ]]; then
+    MANIFEST_OS="freebsd"
+else
+    MANIFEST_OS="unknown"
+fi
+
 # Configuration with sensible defaults
 MANIFEST_NTP_SERVERS=${MANIFEST_NTP_SERVERS:-"time.apple.com,time.google.com,pool.ntp.org"}
 MANIFEST_NTP_TIMEOUT=${MANIFEST_NTP_TIMEOUT:-3}
@@ -16,13 +28,51 @@ MANIFEST_NTP_SERVER=""
 MANIFEST_NTP_SERVER_IP=""
 MANIFEST_NTP_METHOD=""
 
+# OS-aware timeout function
+run_with_timeout() {
+    local timeout="$1"
+    shift
+    local command_args=("$@")
+    
+    case "$MANIFEST_OS" in
+        "macos")
+            # macOS: use gtimeout if available, otherwise fallback
+            if command -v gtimeout >/dev/null 2>&1; then
+                gtimeout "$timeout" "${command_args[@]}"
+            elif command -v timeout >/dev/null 2>&1; then
+                timeout "$timeout" "${command_args[@]}"
+            else
+                # Fallback: run command without timeout
+                "${command_args[@]}"
+            fi
+            ;;
+        "linux")
+            # Linux: use timeout command
+            if command -v timeout >/dev/null 2>&1; then
+                timeout "$timeout" "${command_args[@]}"
+            else
+                # Fallback: run command without timeout
+                "${command_args[@]}"
+            fi
+            ;;
+        *)
+            # Other systems: try timeout, fallback to no timeout
+            if command -v timeout >/dev/null 2>&1; then
+                timeout "$timeout" "${command_args[@]}"
+            else
+                "${command_args[@]}"
+            fi
+            ;;
+    esac
+}
+
 # Simple NTP query function
 query_ntp_server() {
     local server="$1"
     local timeout="$2"
     
-    # Use sntp with timeout and clean output
-    local result=$(timeout "$timeout" sntp "$server" 2>/dev/null | tail -1)
+    # Use OS-aware timeout with sntp
+    local result=$(run_with_timeout "$timeout" sntp "$server" 2>/dev/null | tail -1)
     
     if [ $? -eq 0 ] && [ -n "$result" ]; then
         # Parse sntp output: date time offset +/- uncertainty server ip
@@ -137,13 +187,37 @@ format_timestamp() {
     local timestamp="$1"
     local format="$2"
     
-    # Try Linux date format first
-    if date -d "@$timestamp" >/dev/null 2>&1; then
-        date -u -d "@$timestamp" "$format"
-    else
-        # Fallback to macOS date format
-        date -u -r "$timestamp" "$format"
-    fi
+    case "$MANIFEST_OS" in
+        "macos")
+            # macOS: use -r flag for timestamp
+            if date -r "$timestamp" >/dev/null 2>&1; then
+                date -u -r "$timestamp" "$format"
+            else
+                # Fallback: try Linux format
+                date -u -d "@$timestamp" "$format" 2>/dev/null || date -u "$format"
+            fi
+            ;;
+        "linux")
+            # Linux: use -d flag for timestamp
+            if date -d "@$timestamp" >/dev/null 2>&1; then
+                date -u -d "@$timestamp" "$format"
+            else
+                # Fallback: try macOS format
+                date -u -r "$timestamp" "$format" 2>/dev/null || date -u "$format"
+            fi
+            ;;
+        *)
+            # Other systems: try both formats
+            if date -d "@$timestamp" >/dev/null 2>&1; then
+                date -u -d "@$timestamp" "$format"
+            elif date -r "$timestamp" >/dev/null 2>&1; then
+                date -u -r "$timestamp" "$format"
+            else
+                # Final fallback: current time
+                date -u "$format"
+            fi
+            ;;
+    esac
 }
 
 # Display current NTP information
@@ -168,6 +242,7 @@ display_ntp_info() {
 display_ntp_config() {
     echo "⚙️  Manifest Timestamp Configuration"
     echo "===================================="
+    echo "   🖥️  OS: $MANIFEST_OS"
     echo "   ⏱️  Timeout: ${MANIFEST_NTP_TIMEOUT}s"
     echo "   🔄 Retries: ${MANIFEST_NTP_RETRIES}"
     echo "   🌐 Servers:"
@@ -210,4 +285,48 @@ get_timestamp() {
 get_formatted_timestamp() {
     get_ntp_timestamp >/dev/null
     format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC'
+}
+
+# Display OS compatibility information
+display_os_info() {
+    echo "🖥️  Manifest OS Compatibility"
+    echo "============================="
+    echo "   🖥️  Detected OS: $MANIFEST_OS"
+    echo "   📱  OSTYPE: $OSTYPE"
+    
+    echo ""
+    echo "🔧 Command Availability:"
+    
+    # Check timeout command
+    if command -v timeout >/dev/null 2>&1; then
+        echo "   ✅ timeout: $(which timeout)"
+    elif command -v gtimeout >/dev/null 2>&1; then
+        echo "   ✅ gtimeout: $(which gtimeout)"
+    else
+        echo "   ⚠️  timeout: Not available (will run without timeout)"
+    fi
+    
+    # Check sntp command
+    if command -v sntp >/dev/null 2>&1; then
+        echo "   ✅ sntp: $(which sntp)"
+    else
+        echo "   ❌ sntp: Not available (NTP functionality limited)"
+    fi
+    
+    # Check date command compatibility
+    echo "   📅 date command:"
+    if date -d "@$(date +%s)" >/dev/null 2>&1; then
+        echo "      ✅ Linux format (-d) supported"
+    else
+        echo "      ❌ Linux format (-d) not supported"
+    fi
+    
+    if date -r "$(date +%s)" >/dev/null 2>&1; then
+        echo "      ✅ macOS format (-r) supported"
+    else
+        echo "      ❌ macOS format (-r) not supported"
+    fi
+    
+    echo ""
+    echo "💡 OS-specific optimizations applied automatically"
 }
