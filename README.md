@@ -428,7 +428,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
-### [v2.0.0] - 2025-08-11
+### [v2.0.2] - 2025-08-11
 
 
-See [CHANGELOG_v2.0.0.md](docs/CHANGELOG_v2.0.0.md) for full details.
+See [CHANGELOG_v2.0.2.md](docs/CHANGELOG_v2.0.2.md) for full details.
