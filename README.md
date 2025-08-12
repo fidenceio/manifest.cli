@@ -442,3 +442,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Documentation**: Comprehensive documentation generation
 
 See [CHANGELOG_v3.0.1.md](docs/CHANGELOG_v3.0.1.md) for full details.
+
+## Changelog
+See [docs/CHANGELOG_v6.1.0.md](docs/CHANGELOG_v6.1.0.md) for detailed changes.

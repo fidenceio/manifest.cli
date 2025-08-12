@@ -584,33 +584,279 @@ case "$1" in
         "
         ;;
     "docs")
-        echo "📚 Creating documentation and release notes..."
-        echo ""
-        
         # Check if we're in a git repository
         if ! git rev-parse --git-dir > /dev/null 2>&1; then
             echo "❌ Error: Not in a git repository"
             exit 1
         fi
         
-        # Get current version
-        if [ -f "package.json" ]; then
-            current_version=$(node -p "require('./package.json').version")
-            echo "📋 Current version: $current_version"
+        # Check for subcommand
+        if [ -n "$2" ] && [ "$2" = "metadata" ]; then
+            echo "🏷️  Updating repository metadata..."
+            echo ""
+            
+            # Check for remotes
+            if [ -z "$(git remote)" ]; then
+                echo "❌ No remotes configured. Cannot update metadata."
+                echo "   💡 Add a remote: git remote add origin <repository-url>"
+                exit 1
+            fi
+            
+            # Detect repository provider and install appropriate CLI
+            echo "🔍 Detecting repository provider..."
+            provider=""
+            remote_url=""
+            
+            for remote in $(git remote); do
+                remote_url=$(git remote get-url "$remote")
+                if [[ "$remote_url" == *"github.com"* ]]; then
+                    provider="github"
+                    break
+                elif [[ "$remote_url" == *"gitlab.com"* ]]; then
+                    provider="gitlab"
+                    break
+                elif [[ "$remote_url" == *"bitbucket.org"* ]]; then
+                    provider="bitbucket"
+                    break
+                fi
+            done
+            
+            if [ -z "$provider" ]; then
+                echo "❌ Could not detect repository provider from remote URLs"
+                echo "   💡 Supported providers: GitHub, GitLab, Bitbucket"
+                echo "   💡 Current remotes:"
+                for remote in $(git remote); do
+                    echo "      - $remote: $(git remote get-url "$remote")"
+                done
+                exit 1
+            fi
+            
+            echo "✅ Detected provider: $provider"
+            echo "   Remote: $remote_url"
+            echo ""
+            
+            # Install appropriate CLI tool if not present
+            case "$provider" in
+                "github")
+                    if ! command -v gh >/dev/null 2>&1; then
+                        echo "📦 Installing GitHub CLI (gh)..."
+                        if command -v brew >/dev/null 2>&1; then
+                            if brew install gh 2>/dev/null; then
+                                echo "✅ GitHub CLI installed successfully"
+                            else
+                                echo "❌ Failed to install GitHub CLI via Homebrew"
+                                echo "   💡 Please install manually: https://cli.github.com/"
+                                exit 1
+                            fi
+                        elif command -v apt-get >/dev/null 2>&1; then
+                            echo "📦 Installing via apt-get..."
+                            if curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg 2>/dev/null && \
+                               echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && \
+                               sudo apt-get update 2>/dev/null && sudo apt-get install gh -y 2>/dev/null; then
+                                echo "✅ GitHub CLI installed successfully"
+                            else
+                                echo "❌ Failed to install GitHub CLI via apt-get"
+                                echo "   💡 Please install manually: https://cli.github.com/"
+                                exit 1
+                            fi
+                        else
+                            echo "❌ Could not install GitHub CLI automatically"
+                            echo "   💡 Please install manually: https://cli.github.com/"
+                            exit 1
+                        fi
+                    else
+                        echo "✅ GitHub CLI (gh) already installed"
+                    fi
+                    
+                    # Authenticate with GitHub if needed
+                    if ! gh auth status >/dev/null 2>&1; then
+                        echo "🔑 Authenticating with GitHub..."
+                        echo "   💡 This will open a browser for authentication"
+                        if gh auth login; then
+                            echo "✅ GitHub authentication successful"
+                        else
+                            echo "❌ GitHub authentication failed"
+                            echo "   💡 Please authenticate manually: gh auth login"
+                            exit 1
+                        fi
+                    else
+                        echo "✅ GitHub authentication verified"
+                    fi
+                    ;;
+                "gitlab")
+                    if ! command -v glab >/dev/null 2>&1; then
+                        echo "📦 Installing GitLab CLI (glab)..."
+                        if command -v brew >/dev/null 2>&1; then
+                            if brew install glab 2>/dev/null; then
+                                echo "✅ GitLab CLI installed successfully"
+                            else
+                                echo "❌ Failed to install GitLab CLI via Homebrew"
+                                echo "   💡 Please install manually: https://gitlab.com/gitlab-org/cli"
+                                exit 1
+                            fi
+                        else
+                            echo "❌ Could not install GitLab CLI automatically"
+                            echo "   💡 Please install manually: https://gitlab.com/gitlab-org/cli"
+                            exit 1
+                        fi
+                    else
+                        echo "✅ GitLab CLI (glab) already installed"
+                    fi
+                    ;;
+                "bitbucket")
+                    echo "ℹ️  Bitbucket CLI support coming soon"
+                    echo "   💡 For now, please update metadata manually"
+                    exit 0
+                    ;;
+            esac
+            
+            echo ""
+            echo "📝 Updating repository metadata..."
+            
+            # Extract repository information
+            repo_owner=""
+            repo_name=""
+            
+            if [[ "$provider" == "github" ]]; then
+                # Parse GitHub URL: git@github.com:owner/repo.git or https://github.com/owner/repo.git
+                if [[ "$remote_url" == git@* ]]; then
+                    repo_path=$(echo "$remote_url" | sed 's/git@github.com://' | sed 's/\.git$//')
+                else
+                    repo_path=$(echo "$remote_url" | sed 's/https:\/\/github.com\///' | sed 's/\.git$//')
+                fi
+                
+                if [ -z "$repo_path" ] || [[ "$repo_path" != *"/"* ]]; then
+                    echo "❌ Could not parse repository path from remote URL"
+                    echo "   💡 Remote URL: $remote_url"
+                    echo "   💡 Expected format: git@github.com:owner/repo.git or https://github.com/owner/repo.git"
+                    exit 1
+                fi
+                
+                repo_owner=$(echo "$repo_path" | cut -d'/' -f1)
+                repo_name=$(echo "$repo_path" | cut -d'/' -f2)
+                
+                if [ -z "$repo_owner" ] || [ -z "$repo_name" ]; then
+                    echo "❌ Could not extract owner and repository name"
+                    echo "   💡 Parsed path: $repo_path"
+                    exit 1
+                fi
+                
+                echo "   Repository: $repo_owner/$repo_name"
+                
+                # Read metadata from local files
+                description=""
+                topics=""
+                homepage=""
+                license=""
+                
+                # Get description from README.md first line
+                if [ -f "README.md" ]; then
+                    description=$(head -n 1 README.md | sed 's/^# //' | sed 's/^## //' | sed 's/^### //')
+                    if [ -n "$description" ]; then
+                        echo "   Description: $description"
+                    fi
+                else
+                    echo "   ⚠️  No README.md found, skipping description update"
+                fi
+                
+                # Get topics from package.json keywords
+                if [ -f "package.json" ]; then
+                    topics=$(node -p "require('./package.json').keywords?.join(', ') || ''" 2>/dev/null || echo "")
+                    if [ -n "$topics" ]; then
+                        echo "   Topics: $topics"
+                    fi
+                else
+                    echo "   ⚠️  No package.json found, skipping topics update"
+                fi
+                
+                # Get homepage from package.json
+                if [ -f "package.json" ]; then
+                    homepage=$(node -p "require('./package.json').homepage || ''" 2>/dev/null || echo "")
+                    if [ -n "$homepage" ]; then
+                        echo "   Homepage: $homepage"
+                    fi
+                else
+                    echo "   ⚠️  No package.json found, skipping homepage update"
+                fi
+                
+                # Get license from package.json
+                if [ -f "package.json" ]; then
+                    license=$(node -p "require('./package.json').license || ''" 2>/dev/null || echo "")
+                    if [ -n "$license" ]; then
+                        echo "   License: $license"
+                    fi
+                else
+                    echo "   ⚠️  No package.json found, skipping license update"
+                fi
+                
+                # Update repository metadata
+                echo ""
+                echo "🔄 Updating GitHub repository metadata..."
+                update_success=true
+                
+                if [ -n "$description" ]; then
+                    if gh repo edit "$repo_owner/$repo_name" --description "$description" 2>/dev/null; then
+                        echo "   ✅ Description updated"
+                    else
+                        echo "   ❌ Description update failed"
+                        update_success=false
+                    fi
+                fi
+                
+                if [ -n "$topics" ]; then
+                    if gh repo edit "$repo_owner/$repo_name" --add-topic "$topics" 2>/dev/null; then
+                        echo "   ✅ Topics updated"
+                    else
+                        echo "   ⚠️  Topics update failed (this is common due to API limitations)"
+                    fi
+                fi
+                
+                if [ -n "$homepage" ]; then
+                    if gh repo edit "$repo_owner/$repo_name" --homepage "$homepage" 2>/dev/null; then
+                        echo "   ✅ Homepage updated"
+                    else
+                        echo "   ❌ Homepage update failed"
+                        update_success=false
+                    fi
+                fi
+                
+                if [ -n "$license" ]; then
+                    echo "   ℹ️  License update requires manual intervention"
+                    echo "   💡 Update license at: https://github.com/$repo_owner/$repo_name/settings"
+                fi
+                
+                echo ""
+                if [ "$update_success" = true ]; then
+                    echo "🎉 Repository metadata updated successfully!"
+                    echo "   💡 View changes at: https://github.com/$repo_owner/$repo_name"
+                else
+                    echo "⚠️  Repository metadata update completed with some errors"
+                    echo "   💡 Check the output above for details"
+                fi
+            fi
         else
-            echo "❌ No package.json found, cannot determine version"
-            exit 1
-        fi
-        
-        # Create docs directory if it doesn't exist
-        if [ ! -d "docs" ]; then
-            mkdir -p docs
-            echo "📁 Created docs directory"
-        fi
-        
-        # Generate RELEASE file
-        echo "📝 Generating RELEASE_v$current_version.md..."
-        cat > "docs/RELEASE_v$current_version.md" << RELEASEEOF
+            # Default docs behavior - create documentation files
+            echo "📚 Creating documentation and release notes..."
+            echo ""
+            
+            # Get current version
+            if [ -f "package.json" ]; then
+                current_version=$(node -p "require('./package.json').version")
+                echo "📋 Current version: $current_version"
+            else
+                echo "❌ No package.json found, cannot determine version"
+                exit 1
+            fi
+            
+            # Create docs directory if it doesn't exist
+            if [ ! -d "docs" ]; then
+                mkdir -p docs
+                echo "📁 Created docs directory"
+            fi
+            
+            # Generate RELEASE file
+            echo "📝 Generating RELEASE_v$current_version.md..."
+            cat > "docs/RELEASE_v$current_version.md" << RELEASEEOF
 # Release v$current_version
 
 ## Overview
@@ -637,11 +883,11 @@ None
 ## Contributors
 Generated by Manifest CLI
 RELEASEEOF
-        echo "✅ RELEASE_v$current_version.md created"
-        
-        # Generate CHANGELOG file
-        echo "📝 Generating CHANGELOG_v$current_version.md..."
-        cat > "docs/CHANGELOG_v$current_version.md" << CHANGELOGEOF
+            echo "✅ RELEASE_v$current_version.md created"
+            
+            # Generate CHANGELOG file
+            echo "📝 Generating CHANGELOG_v$current_version.md..."
+            cat > "docs/CHANGELOG_v$current_version.md" << CHANGELOGEOF
 # Changelog v$current_version
 
 ## [Unreleased]
@@ -685,27 +931,30 @@ RELEASEEOF
 ### Security
 - N/A
 CHANGELOGEOF
-        echo "✅ CHANGELOG_v$current_version.md created"
-        
-        # Update README.md if it exists
-        if [ -f "README.md" ]; then
-            echo "📝 Updating README.md..."
-            # Add a changelog section if it doesn't exist
-            if ! grep -q "## Changelog" README.md; then
-                echo "" >> README.md
-                echo "## Changelog" >> README.md
-                echo "" >> README.md
-                echo "See [docs/CHANGELOG_v$current_version.md](docs/CHANGELOG_v$current_version.md) for detailed changes." >> README.md
+            echo "✅ CHANGELOG_v$current_version.md created"
+            
+            # Update README.md if it exists
+            if [ -f "README.md" ]; then
+                echo "📝 Updating README.md..."
+                # Add a changelog section if it doesn't exist
+                if ! grep -q "## Changelog" README.md; then
+                    echo "" >> README.md
+                    echo "## Changelog" >> README.md
+                    echo ""
+                    echo "See [docs/CHANGELOG_v$current_version.md](docs/CHANGELOG_v$current_version.md) for detailed changes." >> README.md
+                fi
+                echo "✅ README.md updated"
             fi
-            echo "✅ README.md updated"
+            
+            echo ""
+            echo "🎉 Documentation generated successfully!"
+            echo "📁 Files created:"
+            echo "   - docs/RELEASE_v$current_version.md"
+            echo "   - docs/CHANGELOG_v$current_version.md"
+            echo "   - README.md updated (if it exists)"
+            echo ""
+            echo "💡 To update repository metadata, run: manifest docs metadata"
         fi
-        
-        echo ""
-        echo "🎉 Documentation generated successfully!"
-        echo "📁 Files created:"
-        echo "   - docs/RELEASE_v$current_version.md"
-        echo "   - docs/CHANGELOG_v$current_version.md"
-        echo "   - README.md updated (if it exists)"
         ;;
     "diagnose")
         echo "🔍 Diagnosing common Manifest issues..."
@@ -1133,6 +1382,15 @@ CHANGELOGEOF
                 echo "   - Tag: v$new_version"
                 echo "   - Remotes: All pushed successfully"
                 echo "   - Cloud integration: $([ -n "$MANIFEST_CLOUD_URL" ] && echo "enabled" || echo "disabled")"
+                
+                # Update repository metadata if push was successful
+                echo ""
+                echo "🏷️  Updating repository metadata..."
+                if command -v gh >/dev/null 2>&1 || command -v glab >/dev/null 2>&1; then
+                    echo "   💡 Run 'manifest docs metadata' to update repository description, topics, etc."
+                else
+                    echo "   💡 Install repository CLI tools and run 'manifest docs metadata' for automatic updates"
+                fi
             else
                 echo ""
                 echo "❌ Manifest process completed with errors!"
@@ -1423,6 +1681,7 @@ CHANGELOGEOF
         echo "  analyze   - Analyze commits using cloud service"
         echo "  changelog - Generate changelog using cloud service"
         echo "  docs      - 📚 Create documentation and release notes"
+        echo "    docs metadata  - 🏷️  Update repository metadata (description, topics, etc.)"
         echo "  diagnose  - 🔍 Diagnose and fix common issues"
         echo "  uninstall - 🗑️  Remove Manifest CLI from system"
         echo "  selfupdate- 🔄 Update CLI to latest version"
