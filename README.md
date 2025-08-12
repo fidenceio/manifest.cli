@@ -2,60 +2,27 @@
 
 
 
+
 ## 📋 Version Information
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `6.5.5` |
-| **Release Date** | `2025-08-11 22:47:13 CDT` |
-| **Git Tag** | `v6.5.5` |
-| **Commit Hash** | `6095817` |
+| **Current Version** | `6.5.6` |
+| **Release Date** | `` |
+| **Git Tag** | `v6.5.6` |
+| **Commit Hash** | `9c599d4` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-08-11 22:47:13 CDT` |
+| **Last Updated** | `` |
+| **NTP Server** | `system (127.0.0.1)` |
+| **NTP Offset** | `0.000000 seconds` |
+| **Uncertainty** | `±0.000000 seconds` |
 
 ### 📚 Documentation Files
-- **Release Notes**: [docs/RELEASE_v6.5.5.md](docs/RELEASE_v6.5.5.md)
-- **Changelog**: [docs/CHANGELOG_v6.5.5.md](docs/CHANGELOG_v6.5.5.md)
+- **Release Notes**: [docs/RELEASE_v6.5.6.md](docs/RELEASE_v6.5.6.md)
+- **Changelog**: [docs/CHANGELOG_v6.5.6.md](docs/CHANGELOG_v6.5.6.md)
 - **Package Info**: [package.json](package.json)
 
 ---
-
-### 1. **Install the Complete System**
-
-```bash
-# Clone the repository
-git clone https://github.com/fidenceio/manifest.local.git
-cd manifest.local
-
-# Install CLI and start local service
-./install-cli.sh
-docker-compose up -d
-```
-
-### 2. **Use the CLI for Development**
-
-```bash
-# Automated workflow (recommended)
-manifest go major    # Complete version bump → commit → tag → push
-
-# Generate documentation
-manifest docs
-
-# Check system health
-manifest diagnose
-```
-
-### 3. **Access the Local Service**
-
-```bash
-# Service health check
-curl http://localhost:3001/health
-
-# API endpoints available at
-curl http://localhost:3001/api/v1/
-```
-
-## 🏗️ Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
