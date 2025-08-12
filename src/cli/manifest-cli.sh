@@ -201,121 +201,30 @@ case "$1" in
             echo "🔗 Processing remote: $remote"
             echo "   URL: $(git remote get-url "$remote")"
             
-            # Test SSH connectivity (if using SSH)
-            if [[ "$(git remote get-url "$remote")" == git@* ]]; then
-                echo "   🔑 Testing SSH connection..."
-                if timeout 10 ssh -o ConnectTimeout=5 -o BatchMode=yes -T git@github.com 2>/dev/null | grep -q "successfully authenticated"; then
-                    echo "   ✅ SSH connection successful"
-                else
-                    echo "   ⚠️  SSH connection test failed (continuing anyway)"
-                fi
+            # Simple and reliable approach: use git pull directly
+            echo "   📥 Syncing with $remote..."
+            
+            # Try to pull from the remote using common branch names
+            if git pull "$remote" "$current_branch" 2>/dev/null || \
+               git pull "$remote" main 2>/dev/null || \
+               git pull "$remote" master 2>/dev/null; then
+                echo "   ✅ Successfully synced with $remote"
+                remotes_successful=$((remotes_successful + 1))
+            else
+                echo "   ❌ Failed to sync with $remote"
+                echo "   💡 This usually means the remote is ahead of local"
+                echo "   💡 To fix: git pull $remote $current_branch"
+                remote_success=false
+                remotes_failed=$((remotes_failed + 1))
             fi
             
-            # Fetch latest from remote with timeout and retry
-            echo "   📥 Fetching latest from $remote..."
-            fetch_attempts=0
-            max_fetch_attempts=3
-            fetch_success=false
-            
-            while [ $fetch_attempts -lt $max_fetch_attempts ] && [ "$fetch_success" = false ]; do
-                fetch_attempts=$((fetch_attempts + 1))
-                
-                if [ $fetch_attempts -gt 1 ]; then
-                    echo "   🔄 Fetch attempt $fetch_attempts of $max_fetch_attempts..."
-                    sleep 2
-                fi
-                
-                if timeout 30 git fetch "$remote" 2>/dev/null; then
-                    echo "   ✅ Fetched latest from $remote"
-                    fetch_success=true
-                else
-                    if [ $fetch_attempts -eq $max_fetch_attempts ]; then
-                        echo "   ❌ Failed to fetch from $remote after $max_fetch_attempts attempts"
-                        echo "   💡 Possible issues:"
-                        echo "      - Network connectivity problems"
-                        echo "      - Authentication issues (SSH key, access rights)"
-                        echo "      - Remote repository unavailable"
-                        echo "      - Firewall/proxy blocking connection"
-                        remote_success=false
-                        remotes_failed=$((remotes_failed + 1))
-                    else
-                        echo "   ⚠️  Fetch attempt $fetch_attempts failed, retrying..."
-                    fi
-                fi
-            done
-            
-            # Only proceed if fetch was successful
-            if [ "$fetch_success" = true ]; then
-                # Detect remote branch name (try common names)
-                remote_branch=""
-                for branch_name in "$current_branch" "main" "master" "develop"; do
-                    if git ls-remote --heads "$remote" "$branch_name" | grep -q "$branch_name"; then
-                        remote_branch="$branch_name"
-                        break
-                    fi
-                done
-                
-                if [ -z "$remote_branch" ]; then
-                    echo "   ❌ Could not determine remote branch name"
-                    echo "   💡 Available remote branches:"
-                    git ls-remote --heads "$remote" | cut -f2 | sed 's/refs\/heads\///' | while read -r branch; do
-                        echo "      - $branch"
-                    done
-                    remote_success=false
-                    remotes_failed=$((remotes_failed + 1))
-                else
-                    echo "   🌿 Remote branch: $remote_branch"
-                    
-                    # Check if we're behind remote
-                    behind_count=$(git rev-list HEAD.."$remote/$remote_branch" --count 2>/dev/null || echo "0")
-                    ahead_count=$(git rev-list "$remote/$remote_branch"..HEAD --count 2>/dev/null || echo "0")
-                    
-                    if [ "$behind_count" -gt 0 ]; then
-                        echo "   📥 Local is $behind_count commits behind remote"
-                        
-                        if [ "$ahead_count" -gt 0 ]; then
-                            echo "   📤 Local is $ahead_count commits ahead of remote"
-                            echo "   ⚠️  Divergent history detected"
-                            echo "   💡 Consider: git pull $remote $remote_branch --rebase"
-                        fi
-                        
-                        # Pull with rebase to avoid merge commits
-                        echo "   🔄 Syncing with remote..."
-                        if timeout 60 git pull "$remote" "$remote_branch" --rebase 2>/dev/null; then
-                            echo "   ✅ Successfully synced with $remote"
-                            remotes_successful=$((remotes_successful + 1))
-                        else
-                            echo "   ❌ Failed to sync with $remote"
-                            echo "   💡 Manual intervention required:"
-                            echo "      - Check for conflicts: git status"
-                            echo "      - Abort rebase: git rebase --abort"
-                            echo "      - Try merge instead: git pull $remote $remote_branch --no-rebase"
-                            remote_success=false
-                            remotes_failed=$((remotes_failed + 1))
-                        fi
-                    elif [ "$ahead_count" -gt 0 ]; then
-                        echo "   📤 Local is $ahead_count commits ahead of remote"
-                        echo "   ✅ Local is up to date with $remote (ahead)"
-                        remotes_successful=$((remotes_successful + 1))
-                    else
-                        echo "   ✅ Local is up to date with $remote"
-                        remotes_successful=$((remotes_successful + 1))
-                    fi
-                fi
-            fi
-            
-            # Report remote status
+            # Update overall sync status
             if [ "$remote_success" = false ]; then
                 sync_success=false
-                echo "   ❌ Failed to process $remote"
-            else
-                echo "   ✅ Successfully processed $remote"
             fi
-            
-            echo ""
         done
         
-        # Summary report
+        echo ""
         echo "📊 Sync Summary:"
         echo "   - Remotes processed: $remotes_processed"
         echo "   - Successful: $remotes_successful"
@@ -326,14 +235,14 @@ case "$1" in
             echo "🎉 Sync completed successfully!"
         else
             echo "⚠️  Sync completed with errors"
-            echo ""
-            echo "💡 Troubleshooting tips:"
-            echo "   - Check network connectivity"
-            echo "   - Verify SSH keys and authentication"
-            echo "   - Check remote repository access"
-            echo "   - Review git status for conflicts"
         fi
         
+        echo ""
+        echo "💡 Troubleshooting tips:"
+        echo "   - Check network connectivity"
+        echo "   - Verify SSH keys and authentication"
+        echo "   - Check remote repository access"
+        echo "   - Review git status for conflicts"
         echo ""
         echo "💡 Current status:"
         git status --short
