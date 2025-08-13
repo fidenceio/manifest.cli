@@ -94,9 +94,9 @@ manifest_go() {
     echo "   - Version: $new_version"
     echo "   - Tag: v$new_version"
     echo "   - Remotes: All pushed successfully"
-    echo "   - NTP Timestamp: $timestamp"
-    echo "   - NTP Server: $MANIFEST_NTP_SERVER ($MANIFEST_NTP_SERVER_IP)"
-    echo "   - NTP Offset: $MANIFEST_NTP_OFFSET seconds"
+    echo "   - Timestamp: $timestamp"
+    echo "   - Source: $MANIFEST_NTP_SERVER ($MANIFEST_NTP_SERVER_IP)"
+    echo "   - Offset: $MANIFEST_NTP_OFFSET seconds"
     echo "   - Uncertainty: ±$MANIFEST_NTP_UNCERTAINTY seconds"
     echo "   - Method: $MANIFEST_NTP_METHOD"
 }
@@ -308,8 +308,6 @@ main() {
                 *)
                     echo "📚 Documentation commands:"
                     echo "   docs metadata  - Update repository metadata"
-    echo "  test        - 🧪 Test CLI functionality and workflows"
-
                     ;;
             esac
             ;;
@@ -329,8 +327,8 @@ display_help() {
     echo "Usage: manifest <command>"
     echo ""
     echo "Commands:"
-    echo "  ntp         - 🕐 Get trusted NTP timestamp for manifest operations"
-    echo "  ntp-config  - ⚙️  Show and configure NTP settings"
+    echo "  ntp         - 🕐 Get trusted timestamp for manifest operations"
+    echo "  ntp-config  - ⚙️  Show and configure timestamp settings"
     echo "  go          - 🚀 Complete automated Manifest workflow (recommended)"
     echo "    go [patch|minor|major|revision] [-i]       # Complete workflow: sync, docs, version, commit, push, metadata"
 
@@ -341,7 +339,7 @@ display_help() {
     echo "  commit      - Commit changes with custom message"
     echo "  version     - Bump version (patch/minor/major)"
     echo "  docs        - 📚 Create documentation and release notes"
-    echo "    docs metadata  - ��️  Update repository metadata (description, topics, etc.)"
+    echo "    docs metadata  - 🏷️  Update repository metadata (description, topics, etc.)"
     echo "  test        - 🧪 Test CLI functionality and workflows"
 
     echo "  help        - Show this help"

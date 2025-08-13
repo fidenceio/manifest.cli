@@ -10,11 +10,10 @@ generate_release_notes() {
     echo "📝 Generating RELEASE_v$version.md..."
     
     # Create release notes file with proper variable expansion
-    cat > "docs/RELEASE_v$version.md" << 'EOF'
+    cat > "docs/RELEASE_v$version.md" << EOF
 # Release v$version
 
-**Release Date:** $timestamp  
-**NTP Timestamp:** $timestamp  
+**Release Date:** $timestamp
 
 ## 🎯 What's New
 
@@ -28,7 +27,7 @@ This release includes various improvements and bug fixes.
 
 ## 🚀 Installation
 
-```bash
+\`\`\`bash
 # Install the CLI
 curl -fsSL https://raw.githubusercontent.com/fidenceio/manifest.cli/main/install-cli.sh | bash
 
@@ -36,11 +35,11 @@ curl -fsSL https://raw.githubusercontent.com/fidenceio/manifest.cli/main/install
 git clone https://github.com/fidenceio/manifest.cli.git
 cd manifest.cli
 ./install-cli.sh
-```
+\`\`\`
 
 ## 📋 Usage
 
-```bash
+\`\`\`bash
 # Complete workflow
 manifest go
 
@@ -49,17 +48,17 @@ manifest go minor
 
 # Test mode
 manifest test
-```
+\`\`\`
 
 ## 🔍 Testing
 
-```bash
+\`\`\`bash
 # Test all functionality
 manifest test all
 
 # Test specific version increments
 manifest test versions
-```
+\`\`\`
 
 ## 📚 Documentation
 
@@ -94,11 +93,10 @@ generate_changelog() {
     local recent_commits=$(git log --oneline -20)
     
     # Create changelog file with proper variable expansion
-    cat > "docs/CHANGELOG_v$version.md" << 'EOF'
+    cat > "docs/CHANGELOG_v$version.md" << EOF
 # Changelog v$version
 
-**Release Date:** $timestamp  
-**NTP Timestamp:** $timestamp  
+**Release Date:** $timestamp
 
 ## 🆕 New Features
 
@@ -120,9 +118,9 @@ generate_changelog() {
 
 ## 📋 Recent Commits
 
-```
+\`\`\`
 $recent_commits
-```
+\`\`\`
 
 ## 🔍 Technical Details
 
@@ -150,16 +148,37 @@ update_readme_version() {
         return 0
     fi
     
-    # Simple approach: append version info to the end
-    echo "" >> README.md
-    echo "## 📋 Version Information" >> README.md
-    echo "" >> README.md
-    echo "| Field | Value |" >> README.md
-    echo "|-------|-------|" >> README.md
-    echo "| **Current Version** | \`$version\` |" >> README.md
-    echo "| **Last Updated** | \`$timestamp\` |" >> README.md
-    echo "| **Generated** | \`$(date -u +%Y-%m-%d\ %H:%M:%S\ UTC)\` |" >> README.md
-    echo "| **CLI Version** | \`$(cat VERSION 2>/dev/null || echo 'Unknown')\` |" >> README.md
+    # Check if version information section already exists and is up to date
+    if grep -q "Current Version.*$version" README.md; then
+        echo "   ✅ README.md already has current version information"
+        return 0
+    fi
+    
+    # Remove any existing version information sections to prevent duplicates
+    sed -i.tmp '/^## 📋 Version Information$/,/^## 📚 Documentation Files$/{ /^## 📚 Documentation Files$/!d; }' README.md
+    sed -i.tmp '/^## 📋 Version Information$/,/^## 🏗️ Architecture$/{ /^## 🏗️ Architecture$/!d; }' README.md
+    rm -f README.md.tmp
+    
+    # Insert new version information after the title
+    sed -i.tmp "1a\\
+\\
+## 📋 Version Information\\
+\\
+| Property | Value |\\
+|----------|-------|\\
+| **Current Version** | \`$version\` |\\
+| **Release Date** | \`$timestamp\` |\\
+| **Git Tag** | \`v$version\` |\\
+| **Branch** | \`main\` |\\
+| **Last Updated** | \`$timestamp\` |\\
+| **CLI Version** | \`$version\` |\\
+\\
+### 📚 Documentation Files\\
+- **Package Info**: [package.json](package.json)\\
+- **CLI Source**: [src/cli/](src/cli/)\\
+- **Install Script**: [install-cli.sh](install-cli.sh)\\
+\\
+" README.md
     
     echo "   ✅ README.md version information updated"
 }

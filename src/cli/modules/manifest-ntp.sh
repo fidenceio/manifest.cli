@@ -60,6 +60,7 @@ run_with_timeout() {
             if command -v timeout >/dev/null 2>&1; then
                 timeout "$timeout" "${command_args[@]}"
             else
+                # Fallback: run command without timeout
                 "${command_args[@]}"
             fi
             ;;
@@ -183,44 +184,16 @@ get_ntp_timestamp() {
 }
 
 # Format timestamp for display (cross-platform compatible)
+# Now uses the centralized format_timestamp_cross_platform function from manifest-os.sh
 format_timestamp() {
     local timestamp="$1"
     local format="$2"
     
-    case "$MANIFEST_OS" in
-        "macos")
-            # macOS: use -r flag for timestamp
-            if date -r "$timestamp" >/dev/null 2>&1; then
-                date -u -r "$timestamp" "$format"
-            else
-                # Fallback: try Linux format
-                date -u -d "@$timestamp" "$format" 2>/dev/null || date -u "$format"
-            fi
-            ;;
-        "linux")
-            # Linux: use -d flag for timestamp
-            if date -d "@$timestamp" >/dev/null 2>&1; then
-                date -u -d "@$timestamp" "$format"
-            else
-                # Fallback: try macOS format
-                date -u -r "$timestamp" "$format" 2>/dev/null || date -u "$format"
-            fi
-            ;;
-        *)
-            # Other systems: try both formats
-            if date -d "@$timestamp" >/dev/null 2>&1; then
-                date -u -d "@$timestamp" "$format"
-            elif date -r "$timestamp" >/dev/null 2>&1; then
-                date -u -r "$timestamp" "$format"
-            else
-                # Final fallback: current time
-                date -u "$format"
-            fi
-            ;;
-    esac
+    # Use the centralized cross-platform function
+    format_timestamp_cross_platform "$timestamp" "$format"
 }
 
-# Display current NTP information
+# Display current timestamp information
 display_ntp_info() {
     echo "🕐 Manifest Timestamp Service"
     echo "============================="
@@ -238,7 +211,7 @@ display_ntp_info() {
     echo "💡 This timestamp is ready for manifest operations"
 }
 
-# Display NTP configuration
+# Display timestamp configuration
 display_ntp_config() {
     echo "⚙️  Manifest Timestamp Configuration"
     echo "===================================="
