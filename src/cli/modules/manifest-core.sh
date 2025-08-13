@@ -102,8 +102,8 @@ manifest_go() {
         echo "      - MANIFEST_BREW_INTERACTIVE: $brew_interactive"
         echo "      - MANIFEST_TAP_REPO: $tap_repo"
         
-        echo "   🚀 Executing Homebrew update script with 60 second timeout..."
-        if timeout 60s MANIFEST_BREW_OPTION="$brew_option" MANIFEST_BREW_INTERACTIVE="$brew_interactive" MANIFEST_TAP_REPO="$tap_repo" ./scripts/update-homebrew.sh; then
+        echo "   🚀 Executing Homebrew update script..."
+        if MANIFEST_BREW_OPTION="$brew_option" MANIFEST_BREW_INTERACTIVE="$brew_interactive" MANIFEST_TAP_REPO="$tap_repo" ./scripts/update-homebrew.sh; then
             echo "   ✅ Homebrew formula updated successfully"
         else
             echo "   ⚠️  Homebrew formula update failed (continuing anyway)"
