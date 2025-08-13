@@ -94,7 +94,9 @@ manifest_go() {
         local brew_option="${MANIFEST_BREW_OPTION:-enabled}"
         # Use user's MANIFEST_BREW_INTERACTIVE if set, otherwise default to no
         local brew_interactive="${MANIFEST_BREW_INTERACTIVE:-no}"
-        if MANIFEST_BREW_OPTION="$brew_option" MANIFEST_BREW_INTERACTIVE="$brew_interactive" ./scripts/update-homebrew.sh; then
+        # Use user's MANIFEST_TAP_REPO if set, otherwise default to the standard tap
+        local tap_repo="${MANIFEST_TAP_REPO:-https://github.com/fidenceio/fidenceio-homebrew-tap.git}"
+        if MANIFEST_BREW_OPTION="$brew_option" MANIFEST_BREW_INTERACTIVE="$brew_interactive" MANIFEST_TAP_REPO="$tap_repo" ./scripts/update-homebrew.sh; then
             echo "   ✅ Homebrew formula updated successfully"
         else
             echo "   ⚠️  Homebrew formula update failed (continuing anyway)"
@@ -331,7 +333,9 @@ main() {
                         local brew_option="${MANIFEST_BREW_OPTION:-enabled}"
                         # Use user's MANIFEST_BREW_INTERACTIVE if set, otherwise default to no
                         local brew_interactive="${MANIFEST_BREW_INTERACTIVE:-no}"
-                        MANIFEST_BREW_OPTION="$brew_option" MANIFEST_BREW_INTERACTIVE="$brew_interactive" ./scripts/update-homebrew.sh
+                        # Use user's MANIFEST_TAP_REPO if set, otherwise default to the standard tap
+                        local tap_repo="${MANIFEST_TAP_REPO:-https://github.com/fidenceio/fidenceio-homebrew-tap.git}"
+                        MANIFEST_BREW_OPTION="$brew_option" MANIFEST_BREW_INTERACTIVE="$brew_interactive" MANIFEST_TAP_REPO="$tap_repo" ./scripts/update-homebrew.sh
                     else
                         echo "   ❌ Homebrew update script not found"
                     fi
@@ -384,6 +388,7 @@ echo ""
 echo "Environment Variables:"
 echo "  • MANIFEST_BREW_OPTION       - Control Homebrew functionality (enabled/disabled)"
 echo "  • MANIFEST_BREW_INTERACTIVE  - Interactive Homebrew updates (yes/true/1, default: no)"
+echo "  • MANIFEST_TAP_REPO          - Homebrew tap repository URL (default: fidenceio/fidenceio-homebrew-tap)"
 echo ""
 echo "For testing and verification:"
 echo "  • manifest test              - Basic functionality test"

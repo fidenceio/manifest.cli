@@ -30,33 +30,57 @@ print_error() {
 
 # Function to update tap repository
 update_tap_repository() {
-    # Check if tap repo exists
-    TAP_DIR="../fidenceio-homebrew-tap"
-    if [ ! -d "$TAP_DIR" ]; then
-        print_warning "Tap directory not found at $TAP_DIR"
-        print_status "Please manually copy the updated formula to your tap repository"
+    # Check if tap repository is configured
+    if [ -z "$MANIFEST_TAP_REPO" ]; then
+        print_warning "MANIFEST_TAP_REPO not set, skipping tap repository update"
+        print_status "Set MANIFEST_TAP_REPO to enable automatic tap updates"
         return 0
     fi
     
-    # Copy updated formula to tap
-    cp "$FORMULA_FILE" "$TAP_DIR/Formula/"
+    print_status "🔄 Updating tap repository: $MANIFEST_TAP_REPO"
     
-    # Navigate to tap directory and commit
-    cd "$TAP_DIR"
+    # Create a temporary directory for the tap repo
+    local temp_tap_dir="/tmp/manifest-tap-$$"
+    mkdir -p "$temp_tap_dir"
     
-    # Check if there are changes
-    if git diff --quiet Formula/; then
-        print_warning "No changes detected in tap repository"
-    else
-        git add Formula/
-        git commit -m "Update manifest formula to v$CURRENT_VERSION"
-        git push
+    # Clone the tap repository
+    if git clone "$MANIFEST_TAP_REPO" "$temp_tap_dir" 2>/dev/null; then
+        # Copy updated formula to temp tap repo
+        cp "$FORMULA_FILE" "$temp_tap_dir/Formula/"
         
-        print_success "✅ Homebrew tap updated and pushed successfully"
+        # Navigate to temp tap directory
+        cd "$temp_tap_dir"
+        
+        # Check if there are changes
+        if git diff --quiet Formula/; then
+            print_warning "No changes detected in tap repository"
+        else
+            git add Formula/
+            git commit -m "Update manifest formula to v$CURRENT_VERSION"
+            
+            # Push to the tap repository
+            if git push origin main; then
+                print_success "✅ Homebrew tap updated and pushed successfully"
+            else
+                print_warning "⚠️  Failed to push to tap repository (continuing anyway)"
+            fi
+        fi
+        
+        # Go back to CLI repo
+        cd - > /dev/null
+        
+        # Clean up temp directory
+        rm -rf "$temp_tap_dir"
+    else
+        print_warning "⚠️  Failed to clone tap repository: $MANIFEST_TAP_REPO"
+        print_status "Skipping tap repository update"
+        
+        # Go back to CLI repo
+        cd - > /dev/null
+        
+        # Clean up temp directory
+        rm -rf "$temp_tap_dir"
     fi
-    
-    # Go back to CLI repo
-    cd "../fidenceio.manifest.cli"
 }
 
 # Check if we're in the right directory
@@ -118,16 +142,19 @@ print_status "📝 Updating formula file..."
 cp "$FORMULA_FILE" "${FORMULA_FILE}.backup"
 
 # Update version in formula
-sed -i.tmp "s|url \".*manifest.cli/archive/refs/tags/v.*\.tar\.gz\"|url \"https://github.com/fidenceio/manifest.cli/archive/refs/tags/v$CURRENT_VERSION.tar.gz\"|" "$FORMULA_FILE"
-
-# Update SHA256
-sed -i.tmp "s|sha256 \".*\"|sha256 \"$NEW_SHA256\"|" "$FORMULA_FILE"
-
-# Update version in test section
-sed -i.tmp "s|assert_match \".*\"|assert_match \"$CURRENT_VERSION\"|" "$FORMULA_FILE"
-
-# Clean up temp files
-rm -f "${FORMULA_FILE}.tmp"
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS: use BSD sed
+    sed -i.tmp "s|url \".*manifest.cli/archive/refs/tags/v.*\.tar\.gz\"|url \"https://github.com/fidenceio/manifest.cli/archive/refs/tags/v$CURRENT_VERSION.tar.gz\"|" "$FORMULA_FILE"
+    sed -i.tmp "s|sha256 \".*\"|sha256 \"$NEW_SHA256\"|" "$FORMULA_FILE"
+    sed -i.tmp "s|assert_match \".*\"|assert_match \"$CURRENT_VERSION\"|" "$FORMULA_FILE"
+    # Clean up temp files
+    rm -f "${FORMULA_FILE}.tmp"
+else
+    # Linux: use GNU sed
+    sed -i "s|url \".*manifest.cli/archive/refs/tags/v.*\.tar\.gz\"|url \"https://github.com/fidenceio/manifest.cli/archive/refs/tags/v$CURRENT_VERSION.tar.gz\"|" "$FORMULA_FILE"
+    sed -i "s|sha256 \".*\"|sha256 \"$NEW_SHA256\"|" "$FORMULA_FILE"
+    sed -i "s|assert_match \".*\"|assert_match \"$CURRENT_VERSION\"|" "$FORMULA_FILE"
+fi
 
 print_success "✅ Formula file updated successfully"
 
