@@ -41,25 +41,33 @@ update_tap_repository() {
     
     # Create a temporary directory for the tap repo
     local temp_tap_dir="/tmp/manifest-tap-$$"
+    print_status "📁 Creating temporary directory: $temp_tap_dir"
     mkdir -p "$temp_tap_dir"
     
-    # Clone the tap repository
-    if git clone "$MANIFEST_TAP_REPO" "$temp_tap_dir" 2>/dev/null; then
+    # Clone the tap repository with timeout
+    print_status "📥 Cloning tap repository..."
+    if timeout 30s git clone "$MANIFEST_TAP_REPO" "$temp_tap_dir" 2>/dev/null; then
+        print_status "✅ Repository cloned successfully"
+        
         # Copy updated formula to temp tap repo
+        print_status "📋 Copying formula to temporary repository..."
         cp "$FORMULA_FILE" "$temp_tap_dir/Formula/"
         
         # Navigate to temp tap directory
         cd "$temp_tap_dir"
         
         # Check if there are changes
+        print_status "🔍 Checking for changes..."
         if git diff --quiet Formula/; then
             print_warning "No changes detected in tap repository"
         else
+            print_status "📝 Committing changes..."
             git add Formula/
             git commit -m "Update manifest formula to v$CURRENT_VERSION"
             
-            # Push to the tap repository
-            if git push origin main; then
+            # Push to the tap repository with timeout
+            print_status "🚀 Pushing to tap repository..."
+            if timeout 30s git push origin main; then
                 print_success "✅ Homebrew tap updated and pushed successfully"
             else
                 print_warning "⚠️  Failed to push to tap repository (continuing anyway)"
@@ -70,6 +78,7 @@ update_tap_repository() {
         cd - > /dev/null
         
         # Clean up temp directory
+        print_status "🧹 Cleaning up temporary directory..."
         rm -rf "$temp_tap_dir"
     else
         print_warning "⚠️  Failed to clone tap repository: $MANIFEST_TAP_REPO"
