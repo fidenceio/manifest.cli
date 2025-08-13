@@ -143,7 +143,7 @@ if [ "$MANIFEST_BREW_OPTION" = "disabled" ] || [ "$MANIFEST_BREW_OPTION" = "fals
     print_status "Skipping Homebrew tap repository update"
 elif [ "$MANIFEST_BREW_OPTION" = "enabled" ] || [ "$MANIFEST_BREW_OPTION" = "true" ] || [ "$MANIFEST_BREW_OPTION" = "1" ] || [ -z "$MANIFEST_BREW_OPTION" ]; then
     # Homebrew functionality is enabled (default behavior)
-    if [ -t 0 ] && [ -z "$MANIFEST_BREW_NONINTERACTIVE" ]; then
+    if [ -t 0 ] && [ "$MANIFEST_BREW_INTERACTIVE" = "yes" ] || [ "$MANIFEST_BREW_INTERACTIVE" = "true" ] || [ "$MANIFEST_BREW_INTERACTIVE" = "1" ]; then
         # Interactive mode - ask user
         read -p "🤔 Do you want to also update the Homebrew tap repository? (y/N): " -n 1 -r
         echo
@@ -152,7 +152,7 @@ elif [ "$MANIFEST_BREW_OPTION" = "enabled" ] || [ "$MANIFEST_BREW_OPTION" = "tru
             update_tap_repository
         fi
     else
-        # Non-interactive mode - automatically update tap
+        # Non-interactive mode - automatically update tap (default)
         print_status "🔄 Automatically updating Homebrew tap repository..."
         update_tap_repository
     fi
@@ -160,7 +160,7 @@ else
     print_warning "Unknown MANIFEST_BREW_OPTION value: $MANIFEST_BREW_OPTION"
     print_status "Defaulting to enabled behavior"
     
-    if [ -t 0 ] && [ -z "$MANIFEST_BREW_NONINTERACTIVE" ]; then
+    if [ -t 0 ] && [ "$MANIFEST_BREW_INTERACTIVE" = "yes" ] || [ "$MANIFEST_BREW_INTERACTIVE" = "true" ] || [ "$MANIFEST_BREW_INTERACTIVE" = "1" ]; then
         # Interactive mode - ask user
         read -p "🤔 Do you want to also update the Homebrew tap repository? (y/N): " -n 1 -r
         echo
@@ -169,7 +169,7 @@ else
             update_tap_repository
         fi
     else
-        # Non-interactive mode - automatically update tap
+        # Non-interactive mode - automatically update tap (default)
         print_status "🔄 Automatically updating Homebrew tap repository..."
         update_tap_repository
     fi

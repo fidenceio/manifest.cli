@@ -92,7 +92,9 @@ manifest_go() {
     if [ -f "scripts/update-homebrew.sh" ]; then
         # Use user's MANIFEST_BREW_OPTION if set, otherwise default to enabled
         local brew_option="${MANIFEST_BREW_OPTION:-enabled}"
-        if MANIFEST_BREW_OPTION="$brew_option" MANIFEST_BREW_NONINTERACTIVE=1 ./scripts/update-homebrew.sh; then
+        # Use user's MANIFEST_BREW_INTERACTIVE if set, otherwise default to no
+        local brew_interactive="${MANIFEST_BREW_INTERACTIVE:-no}"
+        if MANIFEST_BREW_OPTION="$brew_option" MANIFEST_BREW_INTERACTIVE="$brew_interactive" ./scripts/update-homebrew.sh; then
             echo "   ✅ Homebrew formula updated successfully"
         else
             echo "   ⚠️  Homebrew formula update failed (continuing anyway)"
@@ -327,7 +329,9 @@ main() {
                     if [ -f "scripts/update-homebrew.sh" ]; then
                         # Use user's MANIFEST_BREW_OPTION if set, otherwise default to enabled
                         local brew_option="${MANIFEST_BREW_OPTION:-enabled}"
-                        MANIFEST_BREW_OPTION="$brew_option" MANIFEST_BREW_NONINTERACTIVE=1 ./scripts/update-homebrew.sh
+                        # Use user's MANIFEST_BREW_INTERACTIVE if set, otherwise default to no
+                        local brew_interactive="${MANIFEST_BREW_INTERACTIVE:-no}"
+                        MANIFEST_BREW_OPTION="$brew_option" MANIFEST_BREW_INTERACTIVE="$brew_interactive" ./scripts/update-homebrew.sh
                     else
                         echo "   ❌ Homebrew update script not found"
                     fi
@@ -374,12 +378,16 @@ display_help() {
     echo "  help        - Show this help"
     echo ""
     echo "This CLI provides comprehensive Git operations and version management."
-    echo ""
-    echo "The 'go' command performs a complete workflow: sync → docs → version → commit → push → metadata"
-    echo ""
-    echo "For testing and verification:"
-    echo "  • manifest test              - Basic functionality test"
-    echo "  • manifest test versions     - Test version increment logic"
-    echo "  • manifest test all          - Comprehensive system testing"
+echo ""
+echo "The 'go' command performs a complete workflow: sync → docs → version → commit → push → metadata"
+echo ""
+echo "Environment Variables:"
+echo "  • MANIFEST_BREW_OPTION       - Control Homebrew functionality (enabled/disabled)"
+echo "  • MANIFEST_BREW_INTERACTIVE  - Interactive Homebrew updates (yes/true/1, default: no)"
+echo ""
+echo "For testing and verification:"
+echo "  • manifest test              - Basic functionality test"
+echo "  • manifest test versions     - Test version increment logic"
+echo "  • manifest test all          - Comprehensive system testing"
 }
 source "$MODULES_DIR/manifest-test.sh"
