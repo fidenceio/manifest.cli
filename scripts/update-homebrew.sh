@@ -133,7 +133,7 @@ echo "   Formula: $FORMULA_FILE"
 # Check if we should also update the tap repository
 # If run from CLI workflow (non-interactive), automatically update tap
 # If run manually, ask user
-if [ -t 0 ] && [ -z "$MANIFEST_NONINTERACTIVE" ]; then
+if [ -t 0 ] && [ -z "$MANIFEST_BREW_NONINTERACTIVE" ]; then
     # Interactive mode - ask user
     read -p "🤔 Do you want to also update the Homebrew tap repository? (y/N): " -n 1 -r
     echo

@@ -90,7 +90,7 @@ manifest_go() {
     # Update Homebrew formula
     echo "🍺 Updating Homebrew formula..."
     if [ -f "scripts/update-homebrew.sh" ]; then
-        if MANIFEST_NONINTERACTIVE=1 ./scripts/update-homebrew.sh; then
+        if MANIFEST_BREW_NONINTERACTIVE=1 ./scripts/update-homebrew.sh; then
             echo "   ✅ Homebrew formula updated successfully"
         else
             echo "   ⚠️  Homebrew formula update failed (continuing anyway)"
@@ -323,7 +323,7 @@ main() {
                 "homebrew")
                     echo "🍺 Updating Homebrew formula..."
                     if [ -f "scripts/update-homebrew.sh" ]; then
-                        MANIFEST_NONINTERACTIVE=1 ./scripts/update-homebrew.sh
+                        MANIFEST_BREW_NONINTERACTIVE=1 ./scripts/update-homebrew.sh
                     else
                         echo "   ❌ Homebrew update script not found"
                     fi
