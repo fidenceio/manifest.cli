@@ -3,17 +3,9 @@
 # Manifest NTP Module v2.0
 # Simple, highly accurate timestamp service for manifest operations
 
-# OS Detection
-MANIFEST_OS=""
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    MANIFEST_OS="macos"
-elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    MANIFEST_OS="linux"
-elif [[ "$OSTYPE" == "freebsd"* ]]; then
-    MANIFEST_OS="freebsd"
-else
-    MANIFEST_OS="unknown"
-fi
+# Note: OS detection is now handled by manifest-os.sh module
+# This module will use the MANIFEST_OS, MANIFEST_OS_FAMILY, and other variables
+# that are set by the OS detection module.
 
 # Configuration with sensible defaults
 MANIFEST_NTP_SERVERS=${MANIFEST_NTP_SERVERS:-"time.apple.com,time.google.com,pool.ntp.org"}
@@ -28,44 +20,8 @@ MANIFEST_NTP_SERVER=""
 MANIFEST_NTP_SERVER_IP=""
 MANIFEST_NTP_METHOD=""
 
-# OS-aware timeout function
-run_with_timeout() {
-    local timeout="$1"
-    shift
-    local command_args=("$@")
-    
-    case "$MANIFEST_OS" in
-        "macos")
-            # macOS: use gtimeout if available, otherwise fallback
-            if command -v gtimeout >/dev/null 2>&1; then
-                gtimeout "$timeout" "${command_args[@]}"
-            elif command -v timeout >/dev/null 2>&1; then
-                timeout "$timeout" "${command_args[@]}"
-            else
-                # Fallback: run command without timeout
-                "${command_args[@]}"
-            fi
-            ;;
-        "linux")
-            # Linux: use timeout command
-            if command -v timeout >/dev/null 2>&1; then
-                timeout "$timeout" "${command_args[@]}"
-            else
-                # Fallback: run command without timeout
-                "${command_args[@]}"
-            fi
-            ;;
-        *)
-            # Other systems: try timeout, fallback to no timeout
-            if command -v timeout >/dev/null 2>&1; then
-                timeout "$timeout" "${command_args[@]}"
-            else
-                # Fallback: run command without timeout
-                "${command_args[@]}"
-            fi
-            ;;
-    esac
-}
+# Use the centralized timeout function from manifest-os.sh
+# The run_with_timeout function is now provided by the OS module
 
 # Simple NTP query function
 query_ntp_server() {

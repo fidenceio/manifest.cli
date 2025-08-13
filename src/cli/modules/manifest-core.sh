@@ -4,10 +4,12 @@
 # Main CLI interface and workflow orchestration
 
 # Import modules
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/manifest-ntp.sh"
-source "$SCRIPT_DIR/manifest-git.sh"
-source "$SCRIPT_DIR/manifest-docs.sh"
+# Use a simple approach: assume we're in the project root when sourced
+MODULES_DIR="src/cli/modules"
+source "$MODULES_DIR/manifest-os.sh"
+source "$MODULES_DIR/manifest-ntp.sh"
+source "$MODULES_DIR/manifest-git.sh"
+source "$MODULES_DIR/manifest-docs.sh"
 
 # Main workflow function
 manifest_go() {
@@ -353,4 +355,4 @@ display_help() {
     echo "  • manifest test versions     - Test version increment logic"
     echo "  • manifest test all          - Comprehensive system testing"
 }
-source "$SCRIPT_DIR/manifest-test.sh"
+source "$MODULES_DIR/manifest-test.sh"

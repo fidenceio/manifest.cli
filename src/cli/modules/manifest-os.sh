@@ -159,26 +159,26 @@ format_timestamp_cross_platform() {
     case "$MANIFEST_OS" in
         "macOS"|"FreeBSD"|"OpenBSD"|"NetBSD")
             # Unix timestamp format for macOS/BSD
-            $DATE_CMD "$timestamp" "$format"
+            date -u -r "$timestamp" "$format"
             ;;
         "Linux"|"Windows")
             # Unix timestamp format for Linux/Windows
-            $DATE_CMD "@$timestamp" "$format"
+            date -u -d "@$timestamp" "$format"
             ;;
         *)
             # Fallback for unknown platforms
             if [[ "$timestamp" =~ ^[0-9]+$ ]]; then
                 # Try Linux format first
-                if $DATE_CMD "@$timestamp" "$format" 2>/dev/null; then
+                if date -u -d "@$timestamp" "$format" 2>/dev/null; then
                     return 0
                 fi
                 # Try macOS format
-                if $DATE_CMD "$timestamp" "$format" 2>/dev/null; then
+                if date -u -r "$timestamp" "$format" 2>/dev/null; then
                     return 0
                 fi
             fi
             # Last resort: use current time
-            date "$format"
+            date -u "$format"
             ;;
     esac
 }
