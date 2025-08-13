@@ -89,7 +89,21 @@ manifest_go() {
     
     # Update Homebrew formula
     echo "🍺 Updating Homebrew formula..."
+    
+    # Determine the correct path to scripts directory
+    local scripts_dir=""
     if [ -f "scripts/update-homebrew.sh" ]; then
+        # We're in the project root
+        scripts_dir="scripts"
+    elif [ -f "/Users/william/.manifest-cli/scripts/update-homebrew.sh" ]; then
+        # We're running from installed CLI
+        scripts_dir="/Users/william/.manifest-cli/scripts"
+    else
+        echo "   ⚠️  Homebrew update script not found (skipping)"
+        return 0
+    fi
+    
+    if [ -f "$scripts_dir/update-homebrew.sh" ]; then
         # Use user's MANIFEST_BREW_OPTION if set, otherwise default to enabled
         local brew_option="${MANIFEST_BREW_OPTION:-enabled}"
         # Use user's MANIFEST_BREW_INTERACTIVE if set, otherwise default to no
@@ -103,7 +117,7 @@ manifest_go() {
         echo "      - MANIFEST_TAP_REPO: $tap_repo"
         
         echo "   🚀 Executing Homebrew update script..."
-        if MANIFEST_BREW_OPTION="$brew_option" MANIFEST_BREW_INTERACTIVE="$brew_interactive" MANIFEST_TAP_REPO="$tap_repo" ./scripts/update-homebrew.sh; then
+        if MANIFEST_BREW_OPTION="$brew_option" MANIFEST_BREW_INTERACTIVE="$brew_interactive" MANIFEST_TAP_REPO="$tap_repo" "$scripts_dir/update-homebrew.sh"; then
             echo "   ✅ Homebrew formula updated successfully"
         else
             echo "   ⚠️  Homebrew formula update failed (continuing anyway)"
@@ -335,14 +349,28 @@ main() {
                     ;;
                 "homebrew")
                     echo "🍺 Updating Homebrew formula..."
+                    
+                    # Determine the correct path to scripts directory
+                    local scripts_dir=""
                     if [ -f "scripts/update-homebrew.sh" ]; then
+                        # We're in the project root
+                        scripts_dir="scripts"
+                    elif [ -f "/Users/william/.manifest-cli/scripts/update-homebrew.sh" ]; then
+                        # We're running from installed CLI
+                        scripts_dir="/Users/william/.manifest-cli/scripts"
+                    else
+                        echo "   ❌ Homebrew update script not found"
+                        return 0
+                    fi
+                    
+                    if [ -f "$scripts_dir/update-homebrew.sh" ]; then
                         # Use user's MANIFEST_BREW_OPTION if set, otherwise default to enabled
                         local brew_option="${MANIFEST_BREW_OPTION:-enabled}"
                         # Use user's MANIFEST_BREW_INTERACTIVE if set, otherwise default to no
                         local brew_interactive="${MANIFEST_BREW_INTERACTIVE:-no}"
                         # Use user's MANIFEST_TAP_REPO if set, otherwise default to the standard tap
                         local tap_repo="${MANIFEST_TAP_REPO:-https://github.com/fidenceio/fidenceio-homebrew-tap.git}"
-                        MANIFEST_BREW_OPTION="$brew_option" MANIFEST_BREW_INTERACTIVE="$brew_interactive" MANIFEST_TAP_REPO="$tap_repo" ./scripts/update-homebrew.sh
+                        MANIFEST_BREW_OPTION="$brew_option" MANIFEST_BREW_INTERACTIVE="$brew_interactive" MANIFEST_TAP_REPO="$tap_repo" "$scripts_dir/update-homebrew.sh"
                     else
                         echo "   ❌ Homebrew update script not found"
                     fi
