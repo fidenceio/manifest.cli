@@ -1,6 +1,6 @@
 {
   "name": "manifest-cli",
-  "version": "8.6.6",
+  "version": "8.6.7",
   "description": "A powerful CLI tool for managing manifest files, versioning, and repository operations with NTP timestamp verification",
   "main": "src/cli/manifest-cli.sh",
   "bin": {
