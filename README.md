@@ -4,12 +4,12 @@
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `8.6.5` |
-| **Release Date** | `2025-08-13 02:31:06 UTC` |
-| **Git Tag** | `v8.6.5` |
+| **Current Version** | `8.6.6` |
+| **Release Date** | `2025-08-13 02:34:13 UTC` |
+| **Git Tag** | `v8.6.6` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-08-13 02:31:06 UTC` |
-| **CLI Version** | `8.6.5` |
+| **Last Updated** | `2025-08-13 02:34:13 UTC` |
+| **CLI Version** | `8.6.6` |
 
 ### 📚 Documentation Files
 - **Package Info**: [package.json](package.json)
