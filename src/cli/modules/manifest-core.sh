@@ -87,6 +87,19 @@ manifest_go() {
     update_repository_metadata
     echo ""
     
+    # Update Homebrew formula
+    echo "🍺 Updating Homebrew formula..."
+    if [ -f "scripts/update-homebrew.sh" ]; then
+        if ./scripts/update-homebrew.sh; then
+            echo "   ✅ Homebrew formula updated successfully"
+        else
+            echo "   ⚠️  Homebrew formula update failed (continuing anyway)"
+        fi
+    else
+        echo "   ⚠️  Homebrew update script not found (skipping)"
+    fi
+    echo ""
+    
     # Success message
     echo "🎉 Manifest process completed successfully!"
     echo ""
@@ -307,9 +320,18 @@ main() {
                 "metadata")
                     update_repository_metadata
                     ;;
+                "homebrew")
+                    echo "🍺 Updating Homebrew formula..."
+                    if [ -f "scripts/update-homebrew.sh" ]; then
+                        ./scripts/update-homebrew.sh
+                    else
+                        echo "   ❌ Homebrew update script not found"
+                    fi
+                    ;;
                 *)
                     echo "📚 Documentation commands:"
                     echo "   docs metadata  - Update repository metadata"
+                    echo "   docs homebrew - Update Homebrew formula"
                     ;;
             esac
             ;;
@@ -342,6 +364,7 @@ display_help() {
     echo "  version     - Bump version (patch/minor/major)"
     echo "  docs        - 📚 Create documentation and release notes"
     echo "    docs metadata  - 🏷️  Update repository metadata (description, topics, etc.)"
+    echo "    docs homebrew  - 🍺 Update Homebrew formula"
     echo "  test        - 🧪 Test CLI functionality and workflows"
 
     echo "  help        - Show this help"
