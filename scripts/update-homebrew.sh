@@ -72,6 +72,13 @@ if [ -z "$CURRENT_VERSION" ]; then
     exit 1
 fi
 
+# Check if Homebrew functionality is completely disabled
+if [ "$MANIFEST_BREW_OPTION" = "disabled" ] || [ "$MANIFEST_BREW_OPTION" = "false" ] || [ "$MANIFEST_BREW_OPTION" = "0" ]; then
+    print_warning "Homebrew functionality is disabled (MANIFEST_BREW_OPTION=$MANIFEST_BREW_OPTION)"
+    print_status "Exiting without updating Homebrew formula"
+    exit 0
+fi
+
 print_status "🔄 Updating Homebrew formula for version $CURRENT_VERSION"
 
 # Check if Formula directory exists
@@ -130,21 +137,42 @@ echo "   Version: $CURRENT_VERSION"
 echo "   SHA256: $NEW_SHA256"
 echo "   Formula: $FORMULA_FILE"
 
-# Check if we should also update the tap repository
-# If run from CLI workflow (non-interactive), automatically update tap
-# If run manually, ask user
-if [ -t 0 ] && [ -z "$MANIFEST_BREW_NONINTERACTIVE" ]; then
-    # Interactive mode - ask user
-    read -p "🤔 Do you want to also update the Homebrew tap repository? (y/N): " -n 1 -r
-    echo
-    
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+# Check if Homebrew functionality is enabled
+if [ "$MANIFEST_BREW_OPTION" = "disabled" ] || [ "$MANIFEST_BREW_OPTION" = "false" ] || [ "$MANIFEST_BREW_OPTION" = "0" ]; then
+    print_warning "Homebrew functionality is disabled (MANIFEST_BREW_OPTION=$MANIFEST_BREW_OPTION)"
+    print_status "Skipping Homebrew tap repository update"
+elif [ "$MANIFEST_BREW_OPTION" = "enabled" ] || [ "$MANIFEST_BREW_OPTION" = "true" ] || [ "$MANIFEST_BREW_OPTION" = "1" ] || [ -z "$MANIFEST_BREW_OPTION" ]; then
+    # Homebrew functionality is enabled (default behavior)
+    if [ -t 0 ] && [ -z "$MANIFEST_BREW_NONINTERACTIVE" ]; then
+        # Interactive mode - ask user
+        read -p "🤔 Do you want to also update the Homebrew tap repository? (y/N): " -n 1 -r
+        echo
+        
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            update_tap_repository
+        fi
+    else
+        # Non-interactive mode - automatically update tap
+        print_status "🔄 Automatically updating Homebrew tap repository..."
         update_tap_repository
     fi
 else
-    # Non-interactive mode - automatically update tap
-    print_status "🔄 Automatically updating Homebrew tap repository..."
-    update_tap_repository
+    print_warning "Unknown MANIFEST_BREW_OPTION value: $MANIFEST_BREW_OPTION"
+    print_status "Defaulting to enabled behavior"
+    
+    if [ -t 0 ] && [ -z "$MANIFEST_BREW_NONINTERACTIVE" ]; then
+        # Interactive mode - ask user
+        read -p "🤔 Do you want to also update the Homebrew tap repository? (y/N): " -n 1 -r
+        echo
+        
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            update_tap_repository
+        fi
+    else
+        # Non-interactive mode - automatically update tap
+        print_status "🔄 Automatically updating Homebrew tap repository..."
+        update_tap_repository
+    fi
 fi
 
 print_success "🎉 Homebrew formula update complete!"

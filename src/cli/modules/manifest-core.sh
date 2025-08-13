@@ -90,7 +90,9 @@ manifest_go() {
     # Update Homebrew formula
     echo "🍺 Updating Homebrew formula..."
     if [ -f "scripts/update-homebrew.sh" ]; then
-        if MANIFEST_BREW_NONINTERACTIVE=1 ./scripts/update-homebrew.sh; then
+        # Use user's MANIFEST_BREW_OPTION if set, otherwise default to enabled
+        local brew_option="${MANIFEST_BREW_OPTION:-enabled}"
+        if MANIFEST_BREW_OPTION="$brew_option" MANIFEST_BREW_NONINTERACTIVE=1 ./scripts/update-homebrew.sh; then
             echo "   ✅ Homebrew formula updated successfully"
         else
             echo "   ⚠️  Homebrew formula update failed (continuing anyway)"
@@ -323,7 +325,9 @@ main() {
                 "homebrew")
                     echo "🍺 Updating Homebrew formula..."
                     if [ -f "scripts/update-homebrew.sh" ]; then
-                        MANIFEST_BREW_NONINTERACTIVE=1 ./scripts/update-homebrew.sh
+                        # Use user's MANIFEST_BREW_OPTION if set, otherwise default to enabled
+                        local brew_option="${MANIFEST_BREW_OPTION:-enabled}"
+                        MANIFEST_BREW_OPTION="$brew_option" MANIFEST_BREW_NONINTERACTIVE=1 ./scripts/update-homebrew.sh
                     else
                         echo "   ❌ Homebrew update script not found"
                     fi
