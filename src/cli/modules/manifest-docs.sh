@@ -156,6 +156,7 @@ update_readme_version() {
     
     # Remove any existing version information sections to prevent duplicates
     sed -i.tmp '/^## 📋 Version Information$/,/^## 📚 Documentation Files$/{ /^## 📚 Documentation Files$/!d; }' README.md
+    rm -f README.md.tmp
     sed -i.tmp '/^## 📋 Version Information$/,/^## 🏗️ Architecture$/{ /^## 🏗️ Architecture$/!d; }' README.md
     rm -f README.md.tmp
     
@@ -179,6 +180,7 @@ update_readme_version() {
 - **Install Script**: [install-cli.sh](install-cli.sh)\\
 \\
 " README.md
+    rm -f README.md.tmp
     
     echo "   ✅ README.md version information updated"
 }

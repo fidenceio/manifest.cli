@@ -144,11 +144,8 @@ fi
 
 print_success "✅ SHA256: $NEW_SHA256"
 
-# Update the formula file
-print_status "📝 Updating formula file..."
-
-# Create backup
-cp "$FORMULA_FILE" "${FORMULA_FILE}.backup"
+    # Update the formula file
+    print_status "📝 Updating formula file..."
 
 # Update version in formula
 if [[ "$OSTYPE" == "darwin"* ]]; then
