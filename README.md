@@ -4,12 +4,12 @@
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `8.1.3` |
-| **Release Date** | `2025-08-13 00:54:50 UTC` |
-| **Git Tag** | `v8.1.3` |
+| **Current Version** | `8.2.0` |
+| **Release Date** | `` |
+| **Git Tag** | `v8.2.0` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-08-13 00:54:50 UTC` |
-| **CLI Version** | `8.1.3` |
+| **Last Updated** | `` |
+| **CLI Version** | `8.2.0` |
 
 ### 📚 Documentation Files
 - **Package Info**: [package.json](package.json)
@@ -17,6 +17,4 @@
 - **Install Script**: [install-cli.sh](install-cli.sh)
 
 
-
-A powerful command-line interface tool for managing manifest files, versioning, and repository operations with trusted NTP timestamp verification.
 
