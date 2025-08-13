@@ -188,6 +188,12 @@ update_readme_version() {
 update_repository_metadata() {
     echo "🏷️  Updating repository metadata..."
     
+    # Check if we're in a Git repository
+    if ! git rev-parse --git-dir > /dev/null 2>&1; then
+        echo "   ⚠️  Not in a Git repository, skipping metadata update"
+        return 0
+    fi
+    
     # Detect repository provider
     local remote_url=$(git remote get-url origin 2>/dev/null)
     local provider=""
@@ -278,6 +284,7 @@ update_gitlab_metadata() {
     
     echo "   🔄 GitLab metadata updates would be implemented here"
     echo "   ✅ Repository metadata updated automatically"
+    return 0
 }
 
 generate_documentation() {
