@@ -28,6 +28,37 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Function to update tap repository
+update_tap_repository() {
+    # Check if tap repo exists
+    TAP_DIR="../fidenceio-homebrew-tap"
+    if [ ! -d "$TAP_DIR" ]; then
+        print_warning "Tap directory not found at $TAP_DIR"
+        print_status "Please manually copy the updated formula to your tap repository"
+        return 0
+    fi
+    
+    # Copy updated formula to tap
+    cp "$FORMULA_FILE" "$TAP_DIR/Formula/"
+    
+    # Navigate to tap directory and commit
+    cd "$TAP_DIR"
+    
+    # Check if there are changes
+    if git diff --quiet Formula/; then
+        print_warning "No changes detected in tap repository"
+    else
+        git add Formula/
+        git commit -m "Update manifest formula to v$CURRENT_VERSION"
+        git push
+        
+        print_success "✅ Homebrew tap updated and pushed successfully"
+    fi
+    
+    # Go back to CLI repo
+    cd "../fidenceio.manifest.cli"
+}
+
 # Check if we're in the right directory
 if [ ! -f "VERSION" ]; then
     print_error "This script must be run from the manifest.cli project root directory"
@@ -100,39 +131,20 @@ echo "   SHA256: $NEW_SHA256"
 echo "   Formula: $FORMULA_FILE"
 
 # Check if we should also update the tap repository
-read -p "🤔 Do you want to also update the Homebrew tap repository? (y/N): " -n 1 -r
-echo
-
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    print_status "🔄 Updating Homebrew tap repository..."
+# If run from CLI workflow (non-interactive), automatically update tap
+# If run manually, ask user
+if [ -t 0 ] && [ -z "$MANIFEST_NONINTERACTIVE" ]; then
+    # Interactive mode - ask user
+    read -p "🤔 Do you want to also update the Homebrew tap repository? (y/N): " -n 1 -r
+    echo
     
-    # Check if tap repo exists
-    TAP_DIR="../fidenceio-homebrew-tap"
-    if [ ! -d "$TAP_DIR" ]; then
-        print_warning "Tap directory not found at $TAP_DIR"
-        print_status "Please manually copy the updated formula to your tap repository"
-        exit 0
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        update_tap_repository
     fi
-    
-    # Copy updated formula to tap
-    cp "$FORMULA_FILE" "$TAP_DIR/Formula/"
-    
-    # Navigate to tap directory and commit
-    cd "$TAP_DIR"
-    
-    # Check if there are changes
-    if git diff --quiet Formula/; then
-        print_warning "No changes detected in tap repository"
-    else
-        git add Formula/
-        git commit -m "Update manifest formula to v$CURRENT_VERSION"
-        git push
-        
-        print_success "✅ Homebrew tap updated and pushed successfully"
-    fi
-    
-    # Go back to CLI repo
-    cd "../fidenceio.manifest.cli"
+else
+    # Non-interactive mode - automatically update tap
+    print_status "🔄 Automatically updating Homebrew tap repository..."
+    update_tap_repository
 fi
 
 print_success "🎉 Homebrew formula update complete!"
