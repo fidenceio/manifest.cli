@@ -44,7 +44,7 @@
 
 ## 🚀 Quick Start
 
-### Installation
+### 1. Installation
 
 ```bash
 # Clone the repository
@@ -58,7 +58,31 @@ cd fidenceio.manifest.cli
 manifest --help
 ```
 
-### Your First Workflow
+### 2. Critical Configuration ⚠️
+
+**⚠️ IMPORTANT: Before using Manifest CLI, you MUST configure these critical environment variables:**
+
+```bash
+# Copy the example configuration
+cp env.example .env
+
+# Edit the configuration with your specific values
+nano .env
+```
+
+**Essential Variables to Set:**
+- **Git Remote**: The CLI needs to know your repository details
+- **Homebrew Options**: Control Homebrew integration behavior  
+- **NTP Servers**: Customize timestamp servers if needed
+- **Documentation Settings**: Configure how docs are generated
+
+**Why This Matters:**
+- Without proper configuration, the CLI may fail or behave unexpectedly
+- Git operations require valid remote repository information
+- Homebrew integration needs to know your preferences
+- NTP servers affect timestamp accuracy and compliance
+
+### 3. Your First Workflow
 
 ```bash
 # Make some changes to your code
@@ -216,24 +240,31 @@ src/cli/
 
 ## 🔧 Configuration
 
-### Environment Variables
+### Critical Environment Variables ⚠️
+
+**These variables MUST be configured for Manifest CLI to work properly:**
 
 ```bash
-# NTP Configuration
+# NTP Configuration (Required for timestamp verification)
 export MANIFEST_NTP_SERVERS="time.nist.gov,time.google.com,pool.ntp.org"
 export MANIFEST_NTP_TIMEOUT=5
 export MANIFEST_NTP_RETRIES=3
 
-# Homebrew Integration
+# Homebrew Integration (Required for macOS users)
 export MANIFEST_BREW_OPTION=enabled
 export MANIFEST_BREW_INTERACTIVE=no
 export MANIFEST_TAP_REPO="https://github.com/your-org/your-tap.git"
 
-# Git Configuration
+# Git Configuration (Required for repository operations)
 export MANIFEST_GIT_COMMIT_TEMPLATE="Release v{version} - {timestamp}"
 export MANIFEST_GIT_AUTHOR_NAME="Your Name"
 export MANIFEST_GIT_AUTHOR_EMAIL="your.email@example.com"
 ```
+
+**What Happens Without These:**
+- **NTP**: Timestamp verification will fail, affecting compliance
+- **Homebrew**: Formula updates won't work on macOS
+- **Git**: Repository operations may fail or use incorrect defaults
 
 ### Configuration File
 
@@ -503,6 +534,29 @@ jobs:
 - **Issues**: Report bugs and request features on GitHub
 - **Discussions**: Join the community conversation
 - **Examples**: Check the examples folder for real-world usage
+
+### **Common Issues & Solutions**
+
+**Configuration Problems:**
+- **Git Remote Errors**: Ensure your repository has a valid remote origin
+- **Homebrew Failures**: Check `MANIFEST_BREW_OPTION` and `MANIFEST_BREW_INTERACTIVE`
+- **NTP Timeouts**: Verify `MANIFEST_NTP_SERVERS` and network connectivity
+- **Permission Denied**: Ensure your `.env` file has correct permissions
+
+**Quick Fixes:**
+```bash
+# Check your configuration
+cat .env
+
+# Verify git remote
+git remote -v
+
+# Test NTP connectivity
+manifest ntp
+
+# Run diagnostics
+manifest test
+```
 
 ### **Community Resources**
 - **GitHub**: [fidenceio/fidenceio.manifest.cli](https://github.com/fidenceio/fidenceio.manifest.cli)
