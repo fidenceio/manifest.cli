@@ -20,7 +20,7 @@
 
 > **A powerful CLI tool for versioning, AI documenting, and repository operations.**
 
-[![Version](https://img.shields.io/badge/version-8.9.0-blue.svg)](VERSION)
+[![Version](https://img.shields.io/badge/version-8.10.0-blue.svg)](VERSION)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-blue.svg)](docs/INSTALLATION.md)
 [![Documentation](https://img.shields.io/badge/docs-complete-brightgreen.svg)](docs/)
