@@ -159,14 +159,23 @@ update_readme_version() {
     
     # Update the version information table at the bottom
     if grep -q "Current Version" README.md; then
-        # Update the version in the table using simpler regex for macOS compatibility
-        sed -i.tmp "s/| **Current Version** | \`[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\` |/| **Current Version** | \`$version\` |/g" README.md
-        # Update Git Tag with version
-        sed -i.tmp "s/| **Git Tag** | \`v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\` |/| **Git Tag** | \`v$version\` |/g" README.md
-        # Note: Timestamp updates temporarily disabled due to regex complexity
-        # sed -i.tmp "s/| **Release Date** | \`[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9] UTC\` |/| **Release Date** | \`$timestamp\` |/g" README.md
-        # sed -i.tmp "s/| **Last Updated** | \`[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9] UTC\` |/g" README.md
-        sed -i.tmp "s/| **CLI Version** | \`[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\` |/| **CLI Version** | \`$version\` |/g" README.md
+        # Update the version in the table using awk for better macOS compatibility
+        awk -v version="$version" '
+        /^\| \*\*Current Version\*\* \| \`[0-9]+\.[0-9]+\.[0-9]+\` \|$/ {
+            print "| **Current Version** | `" version "` |"
+            next
+        }
+        /^\| \*\*Git Tag\*\* \| \`v[0-9]+\.[0-9]+\.[0-9]+\` \|$/ {
+            print "| **Git Tag** | `v" version "` |"
+            next
+        }
+        /^\| \*\*CLI Version\*\* \| \`[0-9]+\.[0-9]+\.[0-9]+\` \|$/ {
+            print "| **CLI Version** | `" version "` |"
+            next
+        }
+        { print }
+        ' README.md > README.md.tmp && mv README.md.tmp README.md
+        
         echo "   ✅ Version information table updated to $version"
     else
         echo "   ℹ️  No version information table found, skipping table update"
