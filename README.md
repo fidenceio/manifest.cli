@@ -20,7 +20,7 @@
 
 > **A powerful CLI tool for versioning, AI documenting, and repository operations.**
 
-[![Version](https://img.shields.io/badge/version-8.13.0-blue.svg)](VERSION)
+[![Version](https://img.shields.io/badge/version-8.14.0-blue.svg)](VERSION)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-blue.svg)](docs/INSTALLATION.md)
 [![Documentation](https://img.shields.io/badge/docs-complete-brightgreen.svg)](docs/)
@@ -603,12 +603,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `8.8.0` |
-| **Release Date** | `2025-08-14 00:39:51 UTC` |
-| **Git Tag** | `v8.8.0` |
+| **Current Version** | `8.14.0` |
+| **Release Date** | `2025-08-14 01:18:27 UTC` |
+| **Git Tag** | `v8.14.0` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-08-14 00:39:51 UTC` |
-| **CLI Version** | `8.8.0` |
+| **Last Updated** | `2025-08-14 01:18:27 UTC` |
+| **CLI Version** | `8.14.0` |
 
 ---
 
