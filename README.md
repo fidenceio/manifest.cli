@@ -130,10 +130,11 @@ manifest go --interactive
 1. 🕐 **NTP Timestamp** - Get trusted timestamp from multiple servers
 2. 📝 **Change Detection** - Identify and commit pending changes
 3. 🔄 **Remote Sync** - Pull latest changes from remote
-4. 📦 **Version Bump** - Increment version according to type
-5. 🤖 **AI Documentation** - Generate release notes and changelog
-6. 🏷️ **Git Operations** - Commit, tag, and push changes
-7. 🍺 **Homebrew Update** - Update formula if applicable
+4. 📁 **Documentation Cleanup** - Move previous version docs to past_releases
+5. 📦 **Version Bump** - Increment version according to type
+6. 🤖 **AI Documentation** - Generate release notes and changelog
+7. 🏷️ **Git Operations** - Commit, tag, and push changes
+8. 🍺 **Homebrew Update** - Update formula if applicable
 
 ### `manifest test` - Validation Suite
 
@@ -177,6 +178,16 @@ manifest docs
 manifest docs release     # Release notes only
 manifest docs changelog   # Changelog only
 manifest docs metadata    # Repository metadata
+manifest docs cleanup     # Move historical docs to past_releases
+```
+
+### `manifest cleanup` - Historical Documentation Management
+
+Move historical documentation to keep the main docs folder clean:
+
+```bash
+# Move all historical documentation to past_releases
+manifest cleanup
 ```
 
 ### `manifest sync` - Repository Management

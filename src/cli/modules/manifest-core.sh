@@ -43,6 +43,11 @@ manifest_go() {
     sync_repository
     echo ""
     
+    # Move previous version documentation to past_releases
+    echo "📁 Moving previous version documentation..."
+    move_previous_documentation
+    echo ""
+    
     # Bump version
     echo "📦 Bumping version..."
     if ! bump_version "$increment_type"; then
@@ -375,12 +380,21 @@ main() {
                         echo "   ❌ Homebrew update script not found"
                     fi
                     ;;
+                "cleanup")
+                    echo "📁 Moving historical documentation to past_releases..."
+                    move_existing_historical_docs
+                    ;;
                 *)
                     echo "📚 Documentation commands:"
                     echo "   docs metadata  - Update repository metadata"
                     echo "   docs homebrew - Update Homebrew formula"
+                    echo "   docs cleanup  - Move historical docs to past_releases"
                     ;;
             esac
+            ;;
+        "cleanup")
+            echo "📁 Moving historical documentation to past_releases..."
+            move_existing_historical_docs
             ;;
         "test")
             test_command "$@"
@@ -412,6 +426,7 @@ display_help() {
     echo "  docs        - 📚 Create documentation and release notes"
     echo "    docs metadata  - 🏷️  Update repository metadata (description, topics, etc.)"
     echo "    docs homebrew  - 🍺 Update Homebrew formula"
+    echo "  cleanup     - 📁 Move historical documentation to past_releases"
     echo "  test        - 🧪 Test CLI functionality and workflows"
 
     echo "  help        - Show this help"

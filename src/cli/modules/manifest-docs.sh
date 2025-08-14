@@ -287,6 +287,122 @@ update_gitlab_metadata() {
     return 0
 }
 
+# Move previous version's documentation to past_releases folder
+move_previous_documentation() {
+    echo "📁 Moving previous version documentation to past_releases..."
+    
+    # Get current version from VERSION file or package.json
+    local current_version=""
+    if [ -f "VERSION" ]; then
+        current_version=$(cat VERSION)
+    elif [ -f "package.json" ]; then
+        current_version=$(node -p "require('./package.json').version")
+    fi
+    
+    if [ -z "$current_version" ]; then
+        echo "   ⚠️  Could not determine current version, skipping move operation"
+        return 0
+    fi
+    
+    echo "   📋 Current version: $current_version"
+    
+    # Find and move previous version's documentation files
+    local moved_count=0
+    
+    # Move RELEASE files
+    if [ -f "docs/RELEASE_v$current_version.md" ]; then
+        mv "docs/RELEASE_v$current_version.md" "docs/past_releases/"
+        echo "   📄 Moved RELEASE_v$current_version.md to past_releases/"
+        moved_count=$((moved_count + 1))
+    fi
+    
+    # Move CHANGELOG files
+    if [ -f "docs/CHANGELOG_v$current_version.md" ]; then
+        mv "docs/CHANGELOG_v$current_version.md" "docs/past_releases/"
+        echo "   📄 Moved CHANGELOG_v$current_version.md to past_releases/"
+        moved_count=$((moved_count + 1))
+    fi
+    
+    # Move any other version-specific documentation files
+    for file in docs/*_v$current_version.*; do
+        if [ -f "$file" ] && [ "$file" != "docs/*_v$current_version.*" ]; then
+            mv "$file" "docs/past_releases/"
+            echo "   📄 Moved $(basename "$file") to past_releases/"
+            moved_count=$((moved_count + 1))
+        fi
+    done
+    
+    if [ $moved_count -eq 0 ]; then
+        echo "   ℹ️  No previous version documentation found to move"
+    else
+        echo "   ✅ Moved $moved_count documentation file(s) to past_releases/"
+    fi
+    
+    # Clean up past_releases directory (keep only last 10 versions)
+    cleanup_past_releases
+}
+
+# Clean up past_releases directory to keep only recent versions
+cleanup_past_releases() {
+    echo "🧹 Cleaning up past_releases directory..."
+    
+    # Create past_releases directory if it doesn't exist
+    mkdir -p docs/past_releases
+    
+    # Get list of all version files in past_releases
+    local version_files=()
+    for file in docs/past_releases/*_v*.*; do
+        if [ -f "$file" ]; then
+            version_files+=("$file")
+        fi
+    done
+    
+    # If we have more than 20 files, remove the oldest ones
+    if [ ${#version_files[@]} -gt 20 ]; then
+        echo "   📊 Found ${#version_files[@]} files, keeping only the 20 most recent..."
+        
+        # Sort files by modification time (oldest first) and remove oldest
+        local files_to_remove=$(ls -t docs/past_releases/*_v*.* 2>/dev/null | tail -n +21)
+        
+        for file in $files_to_remove; do
+            if [ -f "$file" ]; then
+                rm "$file"
+                echo "   🗑️  Removed old file: $(basename "$file")"
+            fi
+        done
+        
+        echo "   ✅ Cleanup completed, kept 20 most recent files"
+    else
+        echo "   ℹ️  Past releases directory is clean (${#version_files[@]} files)"
+    fi
+}
+
+# Manual function to move existing historical documentation to past_releases
+move_existing_historical_docs() {
+    echo "📁 Moving existing historical documentation to past_releases..."
+    
+    # Create past_releases directory if it doesn't exist
+    mkdir -p docs/past_releases
+    
+    local moved_count=0
+    
+    # Move all existing RELEASE and CHANGELOG files
+    for file in docs/RELEASE_v*.* docs/CHANGELOG_v*.*; do
+        if [ -f "$file" ]; then
+            mv "$file" "docs/past_releases/"
+            echo "   📄 Moved $(basename "$file") to past_releases/"
+            moved_count=$((moved_count + 1))
+        fi
+    done
+    
+    if [ $moved_count -eq 0 ]; then
+        echo "   ℹ️  No historical documentation found to move"
+    else
+        echo "   ✅ Moved $moved_count historical file(s) to past_releases/"
+        echo "   💡 You can now run 'manifest docs' to generate current documentation"
+    fi
+}
+
 generate_documentation() {
     local version="$1"
     local timestamp="$2"
@@ -295,6 +411,9 @@ generate_documentation() {
     
     # Create docs directory if it doesn't exist
     mkdir -p docs
+    
+    # Create past_releases directory if it doesn't exist
+    mkdir -p docs/past_releases
     
     # Generate release notes
     generate_release_notes "$version" "$timestamp"

@@ -70,7 +70,7 @@ Before contributing, ensure you have:
 
 ```
 manifest.cli/
-├── src/cli/                    # CLI source code
+├── src/cli/                   # CLI source code
 │   ├── manifest-cli.sh        # Main entry point
 │   ├── manifest-cli-wrapper.sh # Installation wrapper
 │   └── modules/               # Modular components
