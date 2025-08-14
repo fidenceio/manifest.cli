@@ -229,6 +229,8 @@ cp env.example .env
 nano .env
 ```
 
+**Important**: The `.env` file is automatically ignored by git, so your custom configuration won't be committed to the repository.
+
 **Key Configuration Options:**
 - **NTP Settings**: Customize timestamp servers and timeouts
 - **Git Configuration**: Override user info and commit templates
