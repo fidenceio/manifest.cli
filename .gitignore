@@ -107,3 +107,4 @@ jspm_packages/
 manifest-cloud/
 *.manifest-cloud
 temp_readme.md
+manifest.config

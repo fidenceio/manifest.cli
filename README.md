@@ -442,7 +442,7 @@ jobs:
 
 ### **Configuration**
 - **Environment Variables**: Use for machine-specific settings
-- **Project Configuration**: Use `.manifestrc` for project-specific settings
+- **Project Configuration**: Use `.env` for project-specific settings
 - **Default Values**: Sensible defaults mean minimal configuration needed
 - **Validation**: The CLI validates your configuration automatically
 
