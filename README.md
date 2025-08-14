@@ -29,7 +29,7 @@
 
 ## 🎯 What is Manifest CLI?
 
-**Manifest CLI** is your all-in-one solution for modern software development workflows. Think of it as your personal DevOps assistant that automates the tedious parts of version management, documentation, and repository operations.
+**Manifest CLI** is your personal DevOps assistant that automates the tedious parts of version management, documentation, and repository operations.
 
 ### 🌟 Why Manifest CLI?
 
