@@ -350,41 +350,6 @@ MANIFEST_NTP_VERIFY=true
 EOF
 
     print_success "✅ Configuration file created: $PROJECT_DIR/.env"
-    
-    # Create manifestrc template
-    cat > "$PROJECT_DIR/.manifestrc.template" << 'EOF'
-# =============================================================================
-# Manifest CLI Project Configuration Template
-# =============================================================================
-# Copy this file to your project root as .manifestrc and customize
-# =============================================================================
-
-# NTP Servers (comma-separated)
-NTP_SERVERS="time.apple.com,time.google.com,pool.ntp.org,time.nist.gov"
-
-# Git Configuration
-COMMIT_TEMPLATE="Release v{version} - {timestamp}"
-AUTHOR_NAME="Your Name"
-AUTHOR_EMAIL="your.email@example.com"
-
-# Documentation Settings
-DOCS_TEMPLATE_DIR="./templates"
-AUTO_GENERATE=true
-HISTORICAL_LIMIT=20
-
-# Homebrew Settings
-BREW_OPTION=enabled
-BREW_INTERACTIVE=no
-TAP_REPO="https://github.com/fidenceio/fidenceio-homebrew-tap.git"
-
-# Development Settings
-DEBUG=false
-VERBOSE=false
-LOG_LEVEL="INFO"
-INTERACTIVE=true
-EOF
-
-    print_success "✅ Project configuration template created: $PROJECT_DIR/.manifestrc.template"
     echo ""
 }
 
@@ -486,7 +451,7 @@ display_post_install_info() {
     echo "   2. Run '$CLI_NAME test' to verify everything works"
     echo "   3. Check the generated documentation in the docs/ folder"
     echo "   4. Review and customize $PROJECT_DIR/.env"
-    echo "   5. Copy .manifestrc.template to your project root as .manifestrc"
+    echo "   5. Copy env.example to your project root as .env"
     
     echo
     print_status "📚 Documentation:"
@@ -498,8 +463,8 @@ display_post_install_info() {
     echo
     print_status "🔧 Configuration:"
     echo "   • Environment: $PROJECT_DIR/.env"
-    echo "   • Project Template: $PROJECT_DIR/.manifestrc.template"
-    echo "   • Customize these files for your specific needs"
+    echo "   • Project Template: env.example (copy to .env)"
+    echo "   • Customize the .env file for your specific needs"
     
     echo
     print_status "🌐 Community & Support:"

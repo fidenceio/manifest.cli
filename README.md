@@ -219,18 +219,22 @@ export MANIFEST_GIT_AUTHOR_EMAIL="your.email@example.com"
 
 ### Configuration File
 
-Create `.manifestrc` in your project root:
+Copy `env.example` to `.env` in your project root:
 
 ```bash
-# .manifestrc
-NTP_SERVERS="time.nist.gov,time.google.com,pool.ntp.org"
-COMMIT_TEMPLATE="Release v{version} - {timestamp}"
-DOCS_TEMPLATE_DIR="./templates"
-DEBUG=false
-INTERACTIVE=true
-VERBOSE=false
-LOG_LEVEL="INFO"
+# Copy the example configuration
+cp env.example .env
+
+# Edit the configuration
+nano .env
 ```
+
+**Key Configuration Options:**
+- **NTP Settings**: Customize timestamp servers and timeouts
+- **Git Configuration**: Override user info and commit templates
+- **Documentation**: Control auto-generation and historical limits
+- **Development**: Enable debug, verbose, and interactive modes
+- **Project-Specific**: Add custom variables for your project needs
 
 ---
 
