@@ -148,38 +148,28 @@ update_readme_version() {
         return 0
     fi
     
-    # Check if version information section already exists and is up to date
-    if grep -q "Current Version.*$version" README.md; then
-        echo "   ✅ README.md already has current version information"
-        return 0
+    # Update the version badge in the header
+    if grep -q "badge/version-" README.md; then
+        sed -i.tmp "s/badge\/version-[0-9]\+\.[0-9]\+\.[0-9]\+/badge\/version-$version/g" README.md
+        echo "   ✅ Version badge updated to $version"
+    else
+        echo "   ℹ️  No version badge found, skipping badge update"
     fi
     
-    # Remove any existing version information sections to prevent duplicates
-    sed -i.tmp '/^## 📋 Version Information$/,/^## 📚 Documentation Files$/{ /^## 📚 Documentation Files$/!d; }' README.md
-    rm -f README.md.tmp
-    sed -i.tmp '/^## 📋 Version Information$/,/^## 🏗️ Architecture$/{ /^## 🏗️ Architecture$/!d; }' README.md
-    rm -f README.md.tmp
+    # Update the version information table at the bottom
+    if grep -q "Current Version" README.md; then
+        # Update the version in the table
+        sed -i.tmp "s/| **Current Version** | \`[0-9]\+\.[0-9]\+\.[0-9]\+\` |/| **Current Version** | \`$version\` |/g" README.md
+        sed -i.tmp "s/| **Release Date** | \`[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\} [0-9]\{2\}:[0-9]\{2\}:[0-9]\{2\} UTC\` |/| **Release Date** | \`$timestamp\` |/g" README.md
+        sed -i.tmp "s/| **Git Tag** | \`v[0-9]\+\.[0-9]\+\.[0-9]\+\` |/| **Git Tag** | \`v$version\` |/g" README.md
+        sed -i.tmp "s/| **Last Updated** | \`[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\} [0-9]\{2\}:[0-9]\{2\}:[0-9]\{2\} UTC\` |/| **Last Updated** | \`$timestamp\` |/g" README.md
+        sed -i.tmp "s/| **CLI Version** | \`[0-9]\+\.[0-9]\+\.[0-9]\+\` |/| **CLI Version** | \`$version\` |/g" README.md
+        echo "   ✅ Version information table updated to $version"
+    else
+        echo "   ℹ️  No version information table found, skipping table update"
+    fi
     
-    # Insert new version information after the title
-    sed -i.tmp "1a\\
-\\
-## 📋 Version Information\\
-\\
-| Property | Value |\\
-|----------|-------|\\
-| **Current Version** | \`$version\` |\\
-| **Release Date** | \`$timestamp\` |\\
-| **Git Tag** | \`v$version\` |\\
-| **Branch** | \`main\` |\\
-| **Last Updated** | \`$timestamp\` |\\
-| **CLI Version** | \`$version\` |\\
-\\
-### 📚 Documentation Files\\
-- **Package Info**: [package.json](package.json)\\
-- **CLI Source**: [src/cli/](src/cli/)\\
-- **Install Script**: [install-cli.sh](install-cli.sh)\\
-\\
-" README.md
+    # Clean up temporary files
     rm -f README.md.tmp
     
     echo "   ✅ README.md version information updated"
