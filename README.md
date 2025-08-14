@@ -1,5 +1,23 @@
 # 🚀 Manifest CLI
 
+## 📋 Version Information
+
+| Property | Value |
+|----------|-------|
+| **Current Version** | `8.7.0` |
+| **Release Date** | `2025-08-14 00:26:48 UTC` |
+| **Git Tag** | `v8.7.0` |
+| **Branch** | `main` |
+| **Last Updated** | `2025-08-14 00:26:48 UTC` |
+| **CLI Version** | `8.7.0` |
+
+### 📚 Documentation Files
+- **Package Info**: [package.json](package.json)
+- **CLI Source**: [src/cli/](src/cli/)
+- **Install Script**: [install-cli.sh](install-cli.sh)
+
+
+
 **A powerful CLI tool for versioning, AI documenting, and repository operations.**
 
 [![Version](https://img.shields.io/badge/version-8.6.7-blue.svg)](VERSION)
