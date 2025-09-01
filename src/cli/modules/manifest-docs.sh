@@ -8,8 +8,8 @@ generate_release_notes() {
     local timestamp="$2"
     
     # Generate filename using configuration
-    local filename_pattern="${MANIFEST_DOCS_FILENAME_PATTERN:-{type}_v{version}.md}"
-    local release_filename=$(echo "$filename_pattern" | sed "s/{type}/RELEASE/g" | sed "s/{version}/$version/g")
+    local filename_pattern="${MANIFEST_DOCS_FILENAME_PATTERN:-RELEASE_vVERSION.md}"
+    local release_filename=$(echo "$filename_pattern" | sed "s/VERSION/$version/g")
     
     echo "📝 Generating $release_filename..."
     
@@ -92,7 +92,7 @@ generate_changelog() {
     local timestamp="$2"
     
     # Generate filename using configuration
-    local changelog_filename=$(echo "$filename_pattern" | sed "s/{type}/CHANGELOG/g" | sed "s/{version}/$version/g")
+    local changelog_filename="CHANGELOG_v$version.md"
     
     echo "📝 Generating $changelog_filename..."
     
@@ -319,9 +319,9 @@ move_previous_documentation() {
     local moved_count=0
     
     # Generate filenames using configuration
-    local filename_pattern="${MANIFEST_DOCS_FILENAME_PATTERN:-{type}_v{version}.md}"
-    local release_filename=$(echo "$filename_pattern" | sed "s/{type}/RELEASE/g" | sed "s/{version}/$current_version/g")
-    local changelog_filename=$(echo "$filename_pattern" | sed "s/{type}/CHANGELOG/g" | sed "s/{version}/$current_version/g")
+    local filename_pattern="${MANIFEST_DOCS_FILENAME_PATTERN:-RELEASE_vVERSION.md}"
+    local release_filename=$(echo "$filename_pattern" | sed "s/VERSION/$current_version/g")
+    local changelog_filename="CHANGELOG_v$current_version.md"
     
     # Move RELEASE files
     if [ -f "docs/$release_filename" ]; then
