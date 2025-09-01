@@ -4,12 +4,19 @@
 # Main CLI interface and workflow orchestration
 
 # Import modules
-# Use a simple approach: assume we're in the project root when sourced
-MODULES_DIR="src/cli/modules"
+# Determine the absolute path to the modules directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MODULES_DIR="$SCRIPT_DIR"
+source "$MODULES_DIR/manifest-config.sh"
 source "$MODULES_DIR/manifest-os.sh"
 source "$MODULES_DIR/manifest-ntp.sh"
 source "$MODULES_DIR/manifest-git.sh"
 source "$MODULES_DIR/manifest-docs.sh"
+
+# Load configuration at startup
+# Get the project root (two levels up from modules)
+PROJECT_ROOT="$(dirname "$(dirname "$MODULES_DIR")")"
+load_configuration "$PROJECT_ROOT"
 
 # Main workflow function
 manifest_go() {
@@ -234,32 +241,33 @@ get_next_version() {
         return
     fi
     
-    # Parse version components
-    local major=$(echo "$current_version" | cut -d. -f1)
-    local minor=$(echo "$current_version" | cut -d. -f2)
-    local patch=$(echo "$current_version" | cut -d. -f3)
+    # Parse version components using configuration
+    local separator="${MANIFEST_VERSION_SEPARATOR:-.}"
+    local major=$(echo "$current_version" | cut -d"$separator" -f1)
+    local minor=$(echo "$current_version" | cut -d"$separator" -f2)
+    local patch=$(echo "$current_version" | cut -d"$separator" -f3)
     
     case "$increment_type" in
         "patch")
-            echo "$major.$minor.$((patch + 1))"
+            echo "$major${separator}$minor${separator}$((patch + 1))"
             ;;
         "minor")
-            echo "$major.$((minor + 1)).0"
+            echo "$major${separator}$((minor + 1))${separator}0"
             ;;
         "major")
-            echo "$((major + 1)).0.0"
+            echo "$((major + 1))${separator}0${separator}0"
             ;;
         "revision")
             if [ -f "VERSION" ]; then
-                local revision=$(echo "$current_version" | cut -d. -f4)
+                local revision=$(echo "$current_version" | cut -d"$separator" -f4)
                 if [ -z "$revision" ]; then
                     revision=1
                 else
                     revision=$((revision + 1))
                 fi
-                echo "$major.$minor.$patch.$revision"
+                echo "$major${separator}$minor${separator}$patch${separator}$revision"
             else
-                echo "$major.$minor.$((patch + 1))"
+                echo "$major${separator}$minor${separator}$((patch + 1))"
             fi
             ;;
         *)
@@ -396,6 +404,9 @@ main() {
             echo "📁 Moving historical documentation to past_releases..."
             move_existing_historical_docs
             ;;
+        "config")
+            show_configuration
+            ;;
         "test")
             test_command "$@"
             ;;
@@ -423,11 +434,12 @@ display_help() {
     echo "  push        - Version bump, commit, and push changes"
     echo "  commit      - Commit changes with custom message"
     echo "  version     - Bump version (patch/minor/major)"
-    echo "  docs        - 📚 Create documentation and release notes"
-    echo "    docs metadata  - 🏷️  Update repository metadata (description, topics, etc.)"
-    echo "    docs homebrew  - 🍺 Update Homebrew formula"
-    echo "  cleanup     - 📁 Move historical documentation to past_releases"
-    echo "  test        - 🧪 Test CLI functionality and workflows"
+      echo "  docs        - 📚 Create documentation and release notes"
+  echo "    docs metadata  - 🏷️  Update repository metadata (description, topics, etc.)"
+  echo "    docs homebrew  - 🍺 Update Homebrew formula"
+  echo "  cleanup     - 📁 Move historical documentation to past_releases"
+  echo "  config      - ⚙️  Show current configuration and environment variables"
+  echo "  test        - 🧪 Test CLI functionality and workflows"
 
     echo "  help        - Show this help"
     echo ""

@@ -179,6 +179,17 @@ Move historical documentation to keep the main docs folder clean:
 manifest cleanup
 ```
 
+### ⚙️ `manifest config` - Configuration Management
+
+View and manage your current configuration:
+
+```bash
+# Show current configuration
+manifest config
+```
+
+This displays all environment variables, defaults, and current settings.
+
 ### 🔄 `manifest sync` - Repository Management
 
 Keep your repository synchronized:
@@ -260,6 +271,33 @@ export MANIFEST_GIT_COMMIT_TEMPLATE="Release v{version} - {timestamp}"
 export MANIFEST_GIT_AUTHOR_NAME="Your Name"
 export MANIFEST_GIT_AUTHOR_EMAIL="your.email@example.com"
 ```
+
+### Advanced Configuration Options 🚀
+
+**Manifest CLI now supports extensive customization for different organizations:**
+
+```bash
+# Versioning Formats (Choose your organization's standard)
+MANIFEST_VERSION_FORMAT="XX.XX.XX"           # Standard: 1.0.0
+MANIFEST_VERSION_FORMAT="XXXX.XXXX.XXXX"     # Enterprise: 0001.0001.0001
+MANIFEST_VERSION_FORMAT="YYYY.MM.DD"         # Date-based: 2024.01.15
+MANIFEST_VERSION_FORMAT="X.X.X.X"            # Build numbers: 1.0.0.1
+
+# Branch Naming Conventions
+MANIFEST_DEFAULT_BRANCH="main"               # Your default branch
+MANIFEST_FEATURE_BRANCH_PREFIX="feature/"    # Feature branch prefix
+MANIFEST_HOTFIX_BRANCH_PREFIX="hotfix/"     # Hotfix branch prefix
+
+# Git Tag Customization
+MANIFEST_GIT_TAG_PREFIX="v"                 # Tag prefix (v1.0.0)
+MANIFEST_GIT_TAG_SUFFIX=""                  # Tag suffix (1.0.0-RELEASE)
+
+# Documentation Patterns
+MANIFEST_DOCS_FILENAME_PATTERN="{type}_v{version}.md"
+MANIFEST_DOCS_HISTORICAL_LIMIT=20
+```
+
+**See `env.examples.md` for complete configuration examples for different organization types.**
 
 **What Happens Without These:**
 - **NTP**: Timestamp verification will fail, affecting compliance

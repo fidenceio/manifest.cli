@@ -23,10 +23,11 @@ bump_version() {
     echo "📦 Bumping version..."
     echo "   Current version: $current_version"
     
-    # Parse version components
-    local major=$(echo "$current_version" | cut -d. -f1)
-    local minor=$(echo "$current_version" | cut -d. -f2)
-    local patch=$(echo "$current_version" | cut -d. -f3)
+    # Parse version components using configuration
+    local separator="${MANIFEST_VERSION_SEPARATOR:-.}"
+    local major=$(echo "$current_version" | cut -d"$separator" -f1)
+    local minor=$(echo "$current_version" | cut -d"$separator" -f2)
+    local patch=$(echo "$current_version" | cut -d"$separator" -f3)
     
     case "$increment_type" in
         "patch")
@@ -47,13 +48,13 @@ bump_version() {
         "revision")
             # Add revision number (e.g., 1.0.0.1)
             if [ -f "VERSION" ]; then
-                local revision=$(echo "$current_version" | cut -d. -f4)
+                local revision=$(echo "$current_version" | cut -d"$separator" -f4)
                 if [ -z "$revision" ]; then
                     revision=1
                 else
                     revision=$((revision + 1))
                 fi
-                new_version="${major}.${minor}.${patch}.${revision}"
+                new_version="${major}${separator}${minor}${separator}${patch}${separator}${revision}"
             else
                 echo "   ❌ Revision increment only supported with VERSION file"
                 return 1
@@ -67,7 +68,7 @@ bump_version() {
     
     # Generate new version if not already set
     if [ -z "$new_version" ]; then
-        new_version="${major}.${minor}.${patch}"
+        new_version="${major}${separator}${minor}${separator}${patch}"
     fi
     
     echo "   New version: $new_version"
@@ -120,7 +121,9 @@ commit_changes() {
 
 create_tag() {
     local version="$1"
-    local tag_name="v$version"
+    local tag_prefix="${MANIFEST_GIT_TAG_PREFIX:-v}"
+    local tag_suffix="${MANIFEST_GIT_TAG_SUFFIX:-}"
+    local tag_name="${tag_prefix}${version}${tag_suffix}"
     
     echo "🏷️  Creating git tag..."
     echo "   Tag: $tag_name"
@@ -146,11 +149,12 @@ push_changes() {
     for remote in $remotes; do
         echo "   Pushing to $remote..."
         
-        # Push main branch
-        if git push "$remote" main; then
-            echo "   ✅ Main branch pushed successfully"
+        # Push default branch
+        local default_branch="${MANIFEST_DEFAULT_BRANCH:-main}"
+        if git push "$remote" "$default_branch"; then
+            echo "   ✅ $default_branch branch pushed successfully"
         else
-            echo "   ❌ Failed to push main branch to $remote"
+            echo "   ❌ Failed to push $default_branch branch to $remote"
             return 1
         fi
         
@@ -184,13 +188,14 @@ sync_repository() {
         
         # Check if we're up to date
         local local_commit=$(git rev-parse HEAD)
-        local remote_commit=$(git rev-parse "$remote/main")
+        local default_branch="${MANIFEST_DEFAULT_BRANCH:-main}"
+        local remote_commit=$(git rev-parse "$remote/$default_branch")
         
         if [ "$local_commit" = "$remote_commit" ]; then
             echo "   ✅ Already up to date with $remote"
         else
             echo "   ⚠️  Local is behind $remote, pulling changes..."
-            if git pull "$remote" main; then
+            if git pull "$remote" "$default_branch"; then
                 echo "   ✅ Successfully pulled from $remote"
             else
                 echo "   ❌ Failed to pull from $remote"
