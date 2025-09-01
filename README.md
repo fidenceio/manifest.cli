@@ -274,7 +274,7 @@ export MANIFEST_GIT_AUTHOR_EMAIL="your.email@example.com"
 
 ### Advanced Configuration Options 🚀
 
-**Manifest CLI now supports extensive customization for different organizations:**
+**Manifest CLI now supports extensive customization for different organizations with human-intuitive versioning:**
 
 ```bash
 # Versioning Formats (Choose your organization's standard)
@@ -282,6 +282,25 @@ MANIFEST_VERSION_FORMAT="XX.XX.XX"           # Standard: 1.0.0
 MANIFEST_VERSION_FORMAT="XXXX.XXXX.XXXX"     # Enterprise: 0001.0001.0001
 MANIFEST_VERSION_FORMAT="YYYY.MM.DD"         # Date-based: 2024.01.15
 MANIFEST_VERSION_FORMAT="X.X.X.X"            # Build numbers: 1.0.0.1
+
+# Human-Intuitive Component Mapping
+# LEFT components = More MAJOR changes (bigger impact)
+# RIGHT components = More MINOR changes (smaller impact)
+MANIFEST_MAJOR_COMPONENT_POSITION="1"        # First position (leftmost)
+MANIFEST_MINOR_COMPONENT_POSITION="2"        # Second position (middle)
+MANIFEST_PATCH_COMPONENT_POSITION="3"        # Third position (rightmost)
+MANIFEST_REVISION_COMPONENT_POSITION="4"     # Fourth position (most right)
+
+# Increment Behavior (which component each command affects)
+MANIFEST_MAJOR_INCREMENT_TARGET="1"          # 'manifest go major' increments this
+MANIFEST_MINOR_INCREMENT_TARGET="2"          # 'manifest go minor' increments this
+MANIFEST_PATCH_INCREMENT_TARGET="3"          # 'manifest go patch' increments this
+MANIFEST_REVISION_INCREMENT_TARGET="4"       # 'manifest go revision' increments this
+
+# Reset Behavior (which components reset to 0)
+MANIFEST_MAJOR_RESET_COMPONENTS="2,3,4"     # Reset minor/patch/revision when major changes
+MANIFEST_MINOR_RESET_COMPONENTS="3,4"       # Reset patch/revision when minor changes
+MANIFEST_PATCH_RESET_COMPONENTS="4"          # Reset revision when patch changes
 
 # Branch Naming Conventions
 MANIFEST_DEFAULT_BRANCH="main"               # Your default branch
@@ -296,6 +315,11 @@ MANIFEST_GIT_TAG_SUFFIX=""                  # Tag suffix (1.0.0-RELEASE)
 MANIFEST_DOCS_FILENAME_PATTERN="{type}_v{version}.md"
 MANIFEST_DOCS_HISTORICAL_LIMIT=20
 ```
+
+**🧠 Why This Makes Sense:**
+- **More digits after the last dot = More minor/specific changes**
+- **Fewer digits after the last dot = More major/broad changes**
+- **LEFT = Bigger impact, RIGHT = Smaller impact**
 
 **See `env.examples.md` for complete configuration examples for different organization types.**
 
@@ -356,6 +380,14 @@ nano .env
 ---
 
 ## 📚 Documentation Overview
+
+- **[User Guide](docs/USER_GUIDE.md)** - Comprehensive guide for users
+- **[Command Reference](docs/COMMAND_REFERENCE.md)** - Detailed reference for all CLI commands
+- **[Installation Guide](docs/INSTALLATION.md)** - Step-by-step installation instructions
+- **[Contributing Guidelines](docs/CONTRIBUTING.md)** - Guidelines for project contributors
+- **[Examples](docs/EXAMPLES.md)** - Real-world usage examples and scenarios
+- **[Human-Intuitive Versioning](docs/HUMAN_INTUITIVE_VERSIONING.md)** - How the versioning system matches human thinking
+- **[Configuration Examples](env.examples.md)** - Real-world configuration examples for different organizations
 
 ### **User Guide** (`docs/USER_GUIDE.md`)
 Your comprehensive guide to using Manifest CLI effectively:

@@ -55,6 +55,26 @@ set_default_configuration() {
     export MANIFEST_VERSION_SEPARATOR="${MANIFEST_VERSION_SEPARATOR:-.}"
     export MANIFEST_VERSION_COMPONENTS="${MANIFEST_VERSION_COMPONENTS:-major,minor,patch}"
     export MANIFEST_VERSION_MAX_VALUES="${MANIFEST_VERSION_MAX_VALUES:-0,0,0}"
+    
+    # Human-Intuitive Component Mapping (defaults to standard semantic versioning)
+    export MANIFEST_MAJOR_COMPONENT_POSITION="${MANIFEST_MAJOR_COMPONENT_POSITION:-1}"
+    export MANIFEST_MINOR_COMPONENT_POSITION="${MANIFEST_MINOR_COMPONENT_POSITION:-2}"
+    export MANIFEST_PATCH_COMPONENT_POSITION="${MANIFEST_PATCH_COMPONENT_POSITION:-3}"
+    export MANIFEST_REVISION_COMPONENT_POSITION="${MANIFEST_REVISION_COMPONENT_POSITION:-4}"
+    
+    # Increment Behavior (defaults to standard semantic versioning)
+    export MANIFEST_MAJOR_INCREMENT_TARGET="${MANIFEST_MAJOR_INCREMENT_TARGET:-1}"
+    export MANIFEST_MINOR_INCREMENT_TARGET="${MANIFEST_MINOR_INCREMENT_TARGET:-2}"
+    export MANIFEST_PATCH_INCREMENT_TARGET="${MANIFEST_PATCH_INCREMENT_TARGET:-3}"
+    export MANIFEST_REVISION_INCREMENT_TARGET="${MANIFEST_REVISION_INCREMENT_TARGET:-4}"
+    
+    # Reset Behavior (defaults to standard semantic versioning)
+    export MANIFEST_MAJOR_RESET_COMPONENTS="${MANIFEST_MAJOR_RESET_COMPONENTS:-2,3,4}"
+    export MANIFEST_MINOR_RESET_COMPONENTS="${MANIFEST_MINOR_RESET_COMPONENTS:-3,4}"
+    export MANIFEST_PATCH_RESET_COMPONENTS="${MANIFEST_PATCH_RESET_COMPONENTS:-4}"
+    export MANIFEST_REVISION_RESET_COMPONENTS="${MANIFEST_REVISION_RESET_COMPONENTS:-}"
+    
+    # Git Configuration
     export MANIFEST_GIT_TAG_PREFIX="${MANIFEST_GIT_TAG_PREFIX:-v}"
     export MANIFEST_GIT_TAG_SUFFIX="${MANIFEST_GIT_TAG_SUFFIX:-}"
     
@@ -73,7 +93,7 @@ set_default_configuration() {
     export MANIFEST_NTP_RETRIES="${MANIFEST_NTP_RETRIES:-3}"
     export MANIFEST_NTP_VERIFY="${MANIFEST_NTP_VERIFY:-true}"
     
-    # Git Configuration
+    # Git Operations
     export MANIFEST_GIT_COMMIT_TEMPLATE="${MANIFEST_GIT_COMMIT_TEMPLATE:-Release v{version} - {timestamp}}"
     export MANIFEST_GIT_PRIMARY_REMOTE="${MANIFEST_GIT_PRIMARY_REMOTE:-origin}"
     export MANIFEST_GIT_ADDITIONAL_REMOTES="${MANIFEST_GIT_ADDITIONAL_REMOTES:-}"
@@ -90,6 +110,15 @@ set_default_configuration() {
     export MANIFEST_DOCS_AUTO_GENERATE="${MANIFEST_DOCS_AUTO_GENERATE:-true}"
     export MANIFEST_DOCS_HISTORICAL_LIMIT="${MANIFEST_DOCS_HISTORICAL_LIMIT:-20}"
     export MANIFEST_DOCS_FILENAME_PATTERN="${MANIFEST_DOCS_FILENAME_PATTERN:-RELEASE_vVERSION.md}"
+    
+    # Project Configuration
+    export MANIFEST_PROJECT_NAME="${MANIFEST_PROJECT_NAME:-Manifest CLI}"
+    export MANIFEST_PROJECT_DESCRIPTION="${MANIFEST_PROJECT_DESCRIPTION:-A powerful CLI tool for versioning, AI documenting, and repository operations}"
+    export MANIFEST_ORGANIZATION="${MANIFEST_ORGANIZATION:-Your Organization}"
+    
+    # Advanced Configuration
+    export MANIFEST_VERSION_REGEX="${MANIFEST_VERSION_REGEX:-^[0-9]+(\.[0-9]+)*$}"
+    export MANIFEST_VERSION_VALIDATION="${MANIFEST_VERSION_VALIDATION:-true}"
     
     # Development & Debugging
     export MANIFEST_DEBUG="${MANIFEST_DEBUG:-false}"
@@ -255,48 +284,80 @@ generate_next_version() {
 
 # Display current configuration
 show_configuration() {
-    echo "🔧 Current Manifest CLI Configuration:"
+    echo "🔧 Manifest CLI Configuration"
+    echo "=============================="
     echo ""
     
     echo "📋 Versioning Configuration:"
-    echo "   Format: $MANIFEST_VERSION_FORMAT"
-    echo "   Separator: $MANIFEST_VERSION_SEPARATOR"
-    echo "   Components: $MANIFEST_VERSION_COMPONENTS"
-    echo "   Tag Prefix: $MANIFEST_GIT_TAG_PREFIX"
-    echo "   Tag Suffix: $MANIFEST_GIT_TAG_SUFFIX"
+    echo "   Format: ${MANIFEST_VERSION_FORMAT}"
+    echo "   Separator: ${MANIFEST_VERSION_SEPARATOR}"
+    echo "   Components: ${MANIFEST_VERSION_COMPONENTS}"
+    echo "   Max Values: ${MANIFEST_VERSION_MAX_VALUES}"
+    echo ""
+    
+    echo "🧠 Human-Intuitive Component Mapping:"
+    echo "   Major Position: ${MANIFEST_MAJOR_COMPONENT_POSITION} (leftmost = biggest impact)"
+    echo "   Minor Position: ${MANIFEST_MINOR_COMPONENT_POSITION} (middle = moderate impact)"
+    echo "   Patch Position: ${MANIFEST_PATCH_COMPONENT_POSITION} (rightmost = least impact)"
+    echo "   Revision Position: ${MANIFEST_REVISION_COMPONENT_POSITION} (most right = most specific)"
+    echo ""
+    
+    echo "📈 Increment Behavior:"
+    echo "   Major Target: ${MANIFEST_MAJOR_INCREMENT_TARGET} (which component increments)"
+    echo "   Minor Target: ${MANIFEST_MINOR_INCREMENT_TARGET} (which component increments)"
+    echo "   Patch Target: ${MANIFEST_PATCH_INCREMENT_TARGET} (which component increments)"
+    echo "   Revision Target: ${MANIFEST_REVISION_INCREMENT_TARGET} (which component increments)"
+    echo ""
+    
+    echo "🔄 Reset Behavior:"
+    echo "   Major Reset: ${MANIFEST_MAJOR_RESET_COMPONENTS} (components reset to 0)"
+    echo "   Minor Reset: ${MANIFEST_MINOR_RESET_COMPONENTS} (components reset to 0)"
+    echo "   Patch Reset: ${MANIFEST_PATCH_RESET_COMPONENTS} (components reset to 0)"
+    echo "   Revision Reset: ${MANIFEST_REVISION_RESET_COMPONENTS} (components reset to 0)"
     echo ""
     
     echo "🌿 Branch Configuration:"
-    echo "   Default Branch: $MANIFEST_DEFAULT_BRANCH"
-    echo "   Feature Prefix: $MANIFEST_FEATURE_BRANCH_PREFIX"
-    echo "   Hotfix Prefix: $MANIFEST_HOTFIX_BRANCH_PREFIX"
-    echo "   Release Prefix: $MANIFEST_RELEASE_BRANCH_PREFIX"
-    echo "   Development Branch: $MANIFEST_DEVELOPMENT_BRANCH"
+    echo "   Default Branch: ${MANIFEST_DEFAULT_BRANCH}"
+    echo "   Feature Prefix: ${MANIFEST_FEATURE_BRANCH_PREFIX}"
+    echo "   Hotfix Prefix: ${MANIFEST_HOTFIX_BRANCH_PREFIX}"
+    echo "   Release Prefix: ${MANIFEST_RELEASE_BRANCH_PREFIX}"
+    echo "   Bugfix Prefix: ${MANIFEST_BUGFIX_BRANCH_PREFIX}"
+    echo "   Development Branch: ${MANIFEST_DEVELOPMENT_BRANCH}"
+    echo "   Staging Branch: ${MANIFEST_STAGING_BRANCH}"
     echo ""
     
-    echo "🕐 NTP Configuration:"
-    echo "   Servers: $MANIFEST_NTP_SERVERS"
-    echo "   Timeout: $MANIFEST_NTP_TIMEOUT seconds"
-    echo "   Retries: $MANIFEST_NTP_RETRIES"
-    echo "   Verify: $MANIFEST_NTP_VERIFY"
+    echo "🏷️  Git Configuration:"
+    echo "   Tag Prefix: ${MANIFEST_GIT_TAG_PREFIX}"
+    echo "   Tag Suffix: ${MANIFEST_GIT_TAG_SUFFIX}"
+    echo "   Primary Remote: ${MANIFEST_GIT_PRIMARY_REMOTE}"
+    echo "   Push Strategy: ${MANIFEST_GIT_PUSH_STRATEGY}"
+    echo "   Pull Strategy: ${MANIFEST_GIT_PULL_STRATEGY}"
     echo ""
     
     echo "📚 Documentation Configuration:"
-    echo "   Auto-generate: $MANIFEST_DOCS_AUTO_GENERATE"
-    echo "   Historical Limit: $MANIFEST_DOCS_HISTORICAL_LIMIT"
-    echo "   Filename Pattern: $MANIFEST_DOCS_FILENAME_PATTERN"
+    echo "   Filename Pattern: ${MANIFEST_DOCS_FILENAME_PATTERN}"
+    echo "   Historical Limit: ${MANIFEST_DOCS_HISTORICAL_LIMIT}"
     echo ""
     
-    echo "🍺 Homebrew Configuration:"
-    echo "   Option: $MANIFEST_BREW_OPTION"
-    echo "   Interactive: $MANIFEST_BREW_INTERACTIVE"
+    echo "🏢 Project Configuration:"
+    echo "   Project Name: ${MANIFEST_PROJECT_NAME}"
+    echo "   Description: ${MANIFEST_PROJECT_DESCRIPTION}"
+    echo "   Organization: ${MANIFEST_ORGANIZATION}"
     echo ""
     
-    echo "🔍 Development Configuration:"
-    echo "   Debug: $MANIFEST_DEBUG"
-    echo "   Verbose: $MANIFEST_VERBOSE"
-    echo "   Log Level: $MANIFEST_LOG_LEVEL"
-    echo "   Interactive: $MANIFEST_INTERACTIVE"
+    echo "⚙️  Advanced Configuration:"
+    echo "   Version Regex: ${MANIFEST_VERSION_REGEX}"
+    echo "   Version Validation: ${MANIFEST_VERSION_VALIDATION}"
+    echo ""
+    
+    echo "💡 How This Works:"
+    echo "   • LEFT components = More MAJOR changes (bigger impact)"
+    echo "   • RIGHT components = More MINOR changes (smaller impact)"
+    echo "   • More digits after last dot = More specific/precise changes"
+    echo "   • 'manifest go major' increments component ${MANIFEST_MAJOR_INCREMENT_TARGET}"
+    echo "   • 'manifest go minor' increments component ${MANIFEST_MINOR_INCREMENT_TARGET}"
+    echo "   • 'manifest go patch' increments component ${MANIFEST_PATCH_INCREMENT_TARGET}"
+    echo "   • 'manifest go revision' increments component ${MANIFEST_REVISION_INCREMENT_TARGET}"
 }
 
 # Export functions for use in other modules
