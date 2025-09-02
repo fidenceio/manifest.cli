@@ -192,8 +192,6 @@ validate_system() {
     if command_exists node; then
         local node_version=$(node --version)
         print_success "✅ Node.js $node_version is available"
-    else
-
     fi
     
     if [ $errors -gt 0 ]; then
