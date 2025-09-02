@@ -12,7 +12,7 @@
 | **CLI Version** | `13.1.2` |
 
 ### 📚 Documentation Files
-- **Package Info**: [package.json](package.json)
+- **Version Info**: [VERSION](VERSION)
 - **CLI Source**: [src/cli/](src/cli/)
 - **Install Script**: [install-cli.sh](install-cli.sh)
 

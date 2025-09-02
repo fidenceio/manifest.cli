@@ -124,7 +124,7 @@ set_default_configuration() {
     export MANIFEST_DEBUG="${MANIFEST_DEBUG:-false}"
     export MANIFEST_VERBOSE="${MANIFEST_VERBOSE:-false}"
     export MANIFEST_LOG_LEVEL="${MANIFEST_LOG_LEVEL:-INFO}"
-    export MANIFEST_INTERACTIVE="${MANIFEST_INTERACTIVE:-true}"
+    export MANIFEST_INTERACTIVE="${MANIFEST_INTERACTIVE:-false}"
 }
 
 # Get configuration value with fallback

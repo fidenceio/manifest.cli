@@ -28,6 +28,31 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Function to force Homebrew update
+force_homebrew_update() {
+    print_status "🔄 Forcing Homebrew update to ensure latest version availability..."
+    
+    # Update Homebrew itself
+    if command -v brew >/dev/null 2>&1; then
+        print_status "📦 Updating Homebrew..."
+        if brew update >/dev/null 2>&1; then
+            print_success "✅ Homebrew updated successfully"
+        else
+            print_warning "⚠️  Homebrew update failed, continuing anyway"
+        fi
+        
+        # Force upgrade manifest if already installed
+        print_status "🚀 Forcing upgrade of manifest formula..."
+        if brew upgrade manifest >/dev/null 2>&1; then
+            print_success "✅ Manifest formula upgraded successfully"
+        else
+            print_status "ℹ️  Manifest not installed yet or already up to date"
+        fi
+    else
+        print_warning "⚠️  Homebrew not found, skipping Homebrew update"
+    fi
+}
+
 # Function to update tap repository
 update_tap_repository() {
     # Check if tap repository is configured
@@ -113,6 +138,9 @@ if [ "$MANIFEST_BREW_OPTION" = "disabled" ] || [ "$MANIFEST_BREW_OPTION" = "fals
 fi
 
 print_status "🔄 Updating Homebrew formula for version $CURRENT_VERSION"
+
+# Force Homebrew update first
+force_homebrew_update
 
 # Check if Formula directory exists
 if [ ! -d "Formula" ]; then
@@ -209,4 +237,7 @@ else
 fi
 
 print_success "🎉 Homebrew formula update complete!"
-print_status "💡 Users can now update with: brew upgrade manifest"
+print_status "💡 Users can now update with:"
+print_status "   • brew upgrade manifest                    # Upgrade to latest version"
+print_status "   • brew update && brew upgrade manifest    # Update Homebrew first, then upgrade"
+print_status "   • brew reinstall manifest                  # Force reinstall latest version"

@@ -13,10 +13,8 @@ bump_version() {
     # Read current version
     if [ -f "VERSION" ]; then
         current_version=$(cat VERSION)
-    elif [ -f "package.json" ]; then
-        current_version=$(node -p "require('./package.json').version")
     else
-        echo "❌ No VERSION file or package.json found"
+        echo "❌ No VERSION file found"
         return 1
     fi
     
@@ -79,16 +77,7 @@ bump_version() {
         echo "   ✅ VERSION file updated: $new_version"
     fi
     
-    # Update package.json if it exists
-    if [ -f "package.json" ]; then
-        node -e "
-const fs = require('fs');
-const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-pkg.version = '$new_version';
-fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
-"
-        echo "   ✅ package.json updated: $new_version"
-    fi
+
     
     echo "✅ Version bumped to $new_version"
     return 0

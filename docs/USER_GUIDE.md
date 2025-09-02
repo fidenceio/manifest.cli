@@ -35,7 +35,7 @@ The tool is built with a modular architecture that handles:
 Before using Manifest CLI, ensure you have:
 
 - **Git** installed and configured (2.20+ recommended)
-- **Node.js** 16.0+ (for package.json support)
+
 - **Bash** 4.0+ (for advanced features)
 - A Git repository with proper remote configuration
 - Internet access for NTP timestamp verification
@@ -312,7 +312,7 @@ EOF
 
 **Solutions:**
 - Check VERSION file permissions
-- Verify package.json format
+- Verify VERSION file format
 - Ensure no syntax errors
 - Check for conflicting version files
 

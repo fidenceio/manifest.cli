@@ -193,7 +193,7 @@ validate_system() {
         local node_version=$(node --version)
         print_success "✅ Node.js $node_version is available"
     else
-        print_warning "⚠️  Node.js is not available (package.json version detection will be limited)"
+
     fi
     
     if [ $errors -gt 0 ]; then
@@ -259,7 +259,7 @@ copy_cli_files() {
     fi
     
     # Copy essential project files
-    local essential_files=("package.json" "VERSION" ".gitignore")
+    local essential_files=("VERSION" ".gitignore")
     for file in "${essential_files[@]}"; do
         if [ -f "$file" ]; then
             cp "$file" "$PROJECT_DIR/"

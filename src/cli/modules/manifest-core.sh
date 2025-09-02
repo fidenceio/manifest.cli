@@ -33,26 +33,25 @@ manifest_go() {
     echo ""
     
     # Interactive confirmation for safety
-    # Check if interactive mode is enabled via environment variable or -i flag
-    local interactive_enabled="${MANIFEST_INTERACTIVE_MODE:-true}"
-    local skip_interactive=false
+    # Default: non-interactive (false), use -i flag to enable interactive mode
+    local interactive_mode=false
     
-    # Override with -i flag (skip interactive mode)
+    # Enable interactive mode with -i flag
     if [ "$interactive" = "-i" ]; then
-        skip_interactive=true
+        interactive_mode=true
     fi
     
-    # Skip if interactive mode is disabled in environment
-    if [ "$interactive_enabled" = "false" ] || [ "$interactive_enabled" = "no" ] || [ "$interactive_enabled" = "0" ]; then
-        skip_interactive=true
+    # Enable interactive mode if environment variable is set to true
+    if [ "${MANIFEST_INTERACTIVE_MODE:-false}" = "true" ] || [ "${MANIFEST_INTERACTIVE_MODE:-false}" = "yes" ] || [ "${MANIFEST_INTERACTIVE_MODE:-false}" = "1" ]; then
+        interactive_mode=true
     fi
     
-    # Skip if not in a terminal (CI/CD environments)
+    # Disable interactive mode if not in a terminal (CI/CD environments)
     if [ ! -t 0 ]; then
-        skip_interactive=true
+        interactive_mode=false
     fi
     
-    if [ "$skip_interactive" = "false" ]; then
+    if [ "$interactive_mode" = "true" ]; then
         echo "🔍 Safety Check - CI/CD & Collaborative Environment Protection"
         echo "=============================================================="
         echo ""
@@ -149,8 +148,7 @@ manifest_go() {
     local new_version=""
     if [ -f "VERSION" ]; then
         new_version=$(cat VERSION)
-    elif [ -f "package.json" ]; then
-        new_version=$(node -p "require('./package.json').version")
+
     fi
     
     if [ -z "$new_version" ]; then
@@ -315,8 +313,7 @@ get_next_version() {
     # Read current version
     if [ -f "VERSION" ]; then
         current_version=$(cat VERSION)
-    elif [ -f "package.json" ]; then
-        current_version=$(node -p "require('./package.json').version")
+
     fi
     
     if [ -z "$current_version" ]; then
@@ -423,7 +420,7 @@ main() {
             local timestamp=$(format_timestamp "$(date -u +%s)" '+%Y-%m-%d %H:%M:%S UTC')
             
             bump_version "$increment_type"
-            local new_version=$(cat VERSION 2>/dev/null || node -p "require('./package.json').version")
+            local new_version=$(cat VERSION 2>/dev/null)
             commit_changes "Bump version to $new_version" "$timestamp"
             create_tag "$new_version"
             push_changes "$new_version"
@@ -514,7 +511,7 @@ display_help() {
     echo "  go          - 🚀 Complete automated Manifest workflow (recommended)"
     echo "    go [patch|minor|major|revision] [-i]       # Complete workflow: sync, docs, version, commit, push, metadata"
     echo "    go -p|-m|-M|-r [-i]                        # Short form options with interactive mode"
-    echo "    Note: Interactive safety prompts (set MANIFEST_INTERACTIVE_MODE=false or use -i to skip)"
+    echo "    Note: Use -i flag to enable interactive safety prompts (default: non-interactive)"
     echo "  sync        - 🔄 Sync local repo with remote (pull latest changes)"
     echo "  revert      - 🔄 Revert to previous version"
     echo "  push        - Version bump, commit, and push changes"
@@ -535,7 +532,7 @@ echo ""
 echo "The 'go' command performs a complete workflow: sync → docs → version → commit → push → metadata"
 echo ""
 echo "Environment Variables:"
-echo "  • MANIFEST_INTERACTIVE_MODE  - Interactive safety prompts (true/false, default: true)"
+echo "  • MANIFEST_INTERACTIVE_MODE  - Interactive safety prompts (true/false, default: false)"
 echo "  • MANIFEST_BREW_OPTION       - Control Homebrew functionality (enabled/disabled)"
 echo "  • MANIFEST_BREW_INTERACTIVE  - Interactive Homebrew updates (yes/true/1, default: no)"
 echo "  • MANIFEST_TAP_REPO          - Homebrew tap repository URL (default: fidenceio/fidenceio-homebrew-tap)"

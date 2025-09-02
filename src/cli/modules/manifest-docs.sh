@@ -300,12 +300,11 @@ update_gitlab_metadata() {
 move_previous_documentation() {
     echo "📁 Moving previous version documentation to past_releases..."
     
-    # Get current version from VERSION file or package.json
+    # Get current version from VERSION file
     local current_version=""
     if [ -f "VERSION" ]; then
         current_version=$(cat VERSION)
-    elif [ -f "package.json" ]; then
-        current_version=$(node -p "require('./package.json').version")
+
     fi
     
     if [ -z "$current_version" ]; then

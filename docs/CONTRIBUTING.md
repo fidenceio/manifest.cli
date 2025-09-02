@@ -32,7 +32,7 @@ We're building towards a comprehensive platform that includes:
 Before contributing, ensure you have:
 
 - **Git** 2.20+ installed and configured
-- **Node.js** 16.0+ (for package.json support)
+
 - **Bash** 4.0+ (for advanced features)
 - **Docker** (optional, for testing in different environments)
 - A **GitHub account** for contributing
@@ -84,7 +84,7 @@ manifest.cli/
 ├── scripts/                   # Utility scripts
 ├── Formula/                   # Homebrew formula
 ├── install-cli.sh            # Installation script
-└── package.json              # Project metadata
+└── VERSION                   # Project version
 ```
 
 ## 🔧 Development Guidelines
@@ -311,7 +311,7 @@ cd /app && ./install-cli.sh
 - **Major**: Breaking changes
 
 ### Release Checklist
-- [ ] **Update version** in VERSION and package.json
+- [ ] **Update version** in VERSION file
 - [ ] **Generate changelog** with `manifest docs`
 - [ ] **Run all tests** to ensure stability
 - [ ] **Update documentation** for new features

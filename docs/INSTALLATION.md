@@ -9,7 +9,7 @@ This guide covers all installation methods for Manifest CLI across different pla
 Before installing Manifest CLI, ensure you have:
 
 - **Git** 2.20+ (recommended)
-- **Node.js** 16.0+ (for package.json support)
+
 - **Bash** 4.0+ (for advanced features)
 - **Internet access** (for NTP timestamp verification)
 - **Administrative privileges** (for some installation methods)
