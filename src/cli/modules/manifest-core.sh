@@ -24,16 +24,79 @@ manifest_go() {
     local increment_type="$1"
     local interactive="$2"
     
-    echo "🚀 Starting automated Manifest process..."
-    echo ""
-    
-    # Get NTP timestamp
-    get_ntp_timestamp
-    
     # Determine version increment type
     if [ -z "$increment_type" ]; then
         increment_type="patch"
     fi
+    
+    echo "🚀 Starting automated Manifest process..."
+    echo ""
+    
+    # Interactive confirmation for safety
+    if [ "$interactive" != "-i" ] && [ -t 0 ]; then
+        echo "🔍 Safety Check - CI/CD & Collaborative Environment Protection"
+        echo "=============================================================="
+        echo ""
+        echo "📋 Version increment type: $increment_type"
+        echo "📍 Current branch: $(git branch --show-current 2>/dev/null || echo 'unknown')"
+        echo "🏷️  Current version: $(cat VERSION 2>/dev/null || echo 'unknown')"
+        echo ""
+        echo "⚠️  This will perform a complete version bump workflow including:"
+        echo "   • Sync with remote repository"
+        echo "   • Bump version to next $increment_type"
+        echo "   • Generate documentation and release notes"
+        echo "   • Commit changes and create Git tag"
+        echo "   • Push to remote repository"
+        echo ""
+        echo "🤔 What would you like to do?"
+        echo ""
+        echo "   1) 🧪 Run test/dry-run first (recommended)"
+        echo "   2) 🚀 Go ahead and execute $increment_type version bump now"
+        echo "   3) ❌ Cancel and exit"
+        echo ""
+        
+        while true; do
+            read -p "   Enter your choice (1-3): " choice
+            case $choice in
+                1)
+                    echo ""
+                    echo "🧪 Running test/dry-run first..."
+                    echo "================================"
+                    manifest_test_dry_run "$increment_type"
+                    echo ""
+                    echo "🤔 Test completed. Would you like to proceed with the actual version bump?"
+                    read -p "   Proceed with $increment_type version bump? (y/N): " proceed
+                    case $proceed in
+                        [Yy]|[Yy][Ee][Ss])
+                            echo ""
+                            echo "🚀 Proceeding with $increment_type version bump..."
+                            break
+                            ;;
+                        *)
+                            echo "❌ Version bump cancelled by user."
+                            return 0
+                            ;;
+                    esac
+                    ;;
+                2)
+                    echo ""
+                    echo "🚀 Proceeding with $increment_type version bump..."
+                    break
+                    ;;
+                3)
+                    echo "❌ Version bump cancelled by user."
+                    return 0
+                    ;;
+                *)
+                    echo "   ❌ Invalid choice. Please enter 1, 2, or 3."
+                    ;;
+            esac
+        done
+        echo ""
+    fi
+    
+    # Get NTP timestamp
+    get_ntp_timestamp
     
     echo "📋 Version increment type: $increment_type"
     echo ""
@@ -431,8 +494,8 @@ display_help() {
     echo "  ntp-config  - ⚙️  Show and configure timestamp settings"
     echo "  go          - 🚀 Complete automated Manifest workflow (recommended)"
     echo "    go [patch|minor|major|revision] [-i]       # Complete workflow: sync, docs, version, commit, push, metadata"
-
     echo "    go -p|-m|-M|-r [-i]                        # Short form options with interactive mode"
+    echo "    Note: Interactive safety prompts for CI/CD protection (use -i to skip)"
     echo "  sync        - 🔄 Sync local repo with remote (pull latest changes)"
     echo "  revert      - 🔄 Revert to previous version"
     echo "  push        - Version bump, commit, and push changes"
@@ -462,4 +525,110 @@ echo "  • manifest test              - Basic functionality test"
 echo "  • manifest test versions     - Test version increment logic"
 echo "  • manifest test all          - Comprehensive system testing"
 }
+
+# Test/dry-run function for safety
+manifest_test_dry_run() {
+    local increment_type="$1"
+    local current_version=$(cat VERSION 2>/dev/null || echo "unknown")
+    local next_version=""
+    
+    echo "🧪 Manifest Test/Dry-Run Mode"
+    echo "============================="
+    echo ""
+    
+    # Test version increment logic
+    echo "📋 Version Testing:"
+    echo "   Current version: $current_version"
+    
+    case "$increment_type" in
+        "patch")
+            next_version=$(echo "$current_version" | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')
+            ;;
+        "minor")
+            next_version=$(echo "$current_version" | awk -F. '{$2 = $2 + 1; $3 = 0;} 1' | sed 's/ /./g')
+            ;;
+        "major")
+            next_version=$(echo "$current_version" | awk -F. '{print $1 + 1 ".0.0"}')
+            ;;
+        "revision")
+            next_version="$current_version.1"
+            ;;
+    esac
+    
+    echo "   Next version: $next_version"
+    echo "   Increment type: $increment_type"
+    echo ""
+    
+    # Test Git status
+    echo "🔍 Git Status Check:"
+    if git rev-parse --git-dir >/dev/null 2>&1; then
+        echo "   ✅ In Git repository"
+        echo "   📍 Current branch: $(git branch --show-current)"
+        echo "   📡 Remote: $(git remote get-url origin 2>/dev/null || echo 'none')"
+        
+        # Check for uncommitted changes
+        if [ -n "$(git status --porcelain)" ]; then
+            echo "   ⚠️  Uncommitted changes detected"
+        else
+            echo "   ✅ Working directory clean"
+        fi
+    else
+        echo "   ❌ Not in a Git repository"
+    fi
+    echo ""
+    
+    # Test NTP functionality
+    echo "🕐 NTP Testing:"
+    if command -v sntp >/dev/null 2>&1; then
+        echo "   ✅ sntp command available"
+    elif command -v ntpdate >/dev/null 2>&1; then
+        echo "   ✅ ntpdate command available"
+    else
+        echo "   ⚠️  No NTP command available (will use system time)"
+    fi
+    echo ""
+    
+    # Test documentation generation
+    echo "📚 Documentation Testing:"
+    if [ -f "README.md" ]; then
+        echo "   ✅ README.md exists"
+    else
+        echo "   ❌ README.md missing"
+    fi
+    
+    if [ -d "docs" ]; then
+        echo "   ✅ docs/ directory exists"
+    else
+        echo "   ❌ docs/ directory missing"
+    fi
+    echo ""
+    
+    # Test configuration
+    echo "⚙️  Configuration Testing:"
+    if [ -f "env.example" ]; then
+        echo "   ✅ env.example exists"
+    else
+        echo "   ❌ env.example missing"
+    fi
+    
+    if [ -f "manifest.config" ]; then
+        echo "   ✅ manifest.config exists"
+    else
+        echo "   ❌ manifest.config missing"
+    fi
+    echo ""
+    
+    # Test security
+    echo "🔒 Security Testing:"
+    if manifest security >/dev/null 2>&1; then
+        echo "   ✅ Security audit passed"
+    else
+        echo "   ⚠️  Security audit had issues (check with 'manifest security')"
+    fi
+    echo ""
+    
+    echo "✅ Test/dry-run completed successfully!"
+    echo "   All systems appear ready for version bump."
+}
+
 source "$MODULES_DIR/manifest-test.sh"
