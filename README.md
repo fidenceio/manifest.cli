@@ -387,6 +387,10 @@ nano .env
 - **[Contributing Guidelines](docs/CONTRIBUTING.md)** - Guidelines for project contributors
 - **[Examples](docs/EXAMPLES.md)** - Real-world usage examples and scenarios
 - **[Human-Intuitive Versioning](docs/HUMAN_INTUITIVE_VERSIONING.md)** - How the versioning system matches human thinking
+- **[Security Guide](docs/SECURITY.md)** - Security features and best practices
+- **[Testing Guide](docs/TESTING.md)** - Comprehensive testing and validation
+- **[Configuration vs Security](docs/CONFIG_VS_SECURITY.md)** - Clear distinction between commands
+- **[Coverage Summary](docs/COVERAGE_SUMMARY.md)** - 100% testing and documentation coverage
 - **[Configuration Examples](env.examples.md)** - Real-world configuration examples for different organizations
 
 ### **User Guide** (`docs/USER_GUIDE.md`)

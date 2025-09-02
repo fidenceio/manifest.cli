@@ -1,31 +1,23 @@
-# Manifest CLI - Git Ignore File
+# Manifest CLI Configuration
+manifest.config
 
-# Dependencies
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Environment files
+# Private Environment Files (NEVER commit these!)
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.development
+.env.test
+.env.production
+.env.staging
+.env.*.local
+.env.*.backup
+.env.*.tmp
 
-# CLI installation
-~/.manifest-cli/
-~/.local/bin/manifest
+# User-specific configuration
+.manifestrc
+.manifestrc.local
+.manifestrc.*.local
 
-# Temporary files
-temp_*
-*.tmp
-*.temp
-*.swp
-*.swo
-*~
-
-# OS generated files
+# OS-generated files
 .DS_Store
 .DS_Store?
 ._*
@@ -34,37 +26,33 @@ temp_*
 ehthumbs.db
 Thumbs.db
 
-# IDE files
+# Editor files
 .vscode/
 .idea/
-*.sublime-project
-*.sublime-workspace
+*.swp
+*.swo
+*~
 
 # Logs
-logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Runtime data
-pids/
+pids
 *.pid
 *.seed
 *.pid.lock
 
 # Coverage directory used by tools like istanbul
 coverage/
-*.lcov
-
-# nyc test coverage
-.nyc_output
 
 # Dependency directories
-jspm_packages/
+node_modules/
 
 # Optional npm cache directory
 .npm
-
-# Optional eslint cache
-.eslintcache
 
 # Optional REPL history
 .node_repl_history
@@ -76,7 +64,6 @@ jspm_packages/
 .yarn-integrity
 
 # dotenv environment variables file
-.env.test
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -102,9 +89,3 @@ jspm_packages/
 
 # TernJS port file
 .tern-port
-
-# Manifest CLI specific
-manifest-cloud/
-*.manifest-cloud
-temp_readme.md
-manifest.config

@@ -12,6 +12,7 @@ source "$MODULES_DIR/manifest-os.sh"
 source "$MODULES_DIR/manifest-ntp.sh"
 source "$MODULES_DIR/manifest-git.sh"
 source "$MODULES_DIR/manifest-docs.sh"
+source "$MODULES_DIR/manifest-security.sh"
 
 # Load configuration at startup
 # Get the project root (two levels up from modules)
@@ -407,6 +408,9 @@ main() {
         "config")
             show_configuration
             ;;
+        "security")
+            manifest_security "$PROJECT_ROOT"
+            ;;
         "test")
             test_command "$@"
             ;;
@@ -439,6 +443,7 @@ display_help() {
   echo "    docs homebrew  - 🍺 Update Homebrew formula"
   echo "  cleanup     - 📁 Move historical documentation to past_releases"
   echo "  config      - ⚙️  Show current configuration and environment variables"
+  echo "  security    - 🔒 Security audit for vulnerabilities and privacy protection"
   echo "  test        - 🧪 Test CLI functionality and workflows"
 
     echo "  help        - Show this help"
