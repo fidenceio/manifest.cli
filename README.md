@@ -4,12 +4,12 @@
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `13.1.1` |
+| **Current Version** | `13.1.2` |
 | **Release Date** | `2025-08-14 00:59:29 UTC` |
-| **Git Tag** | `v13.1.1` |
+| **Git Tag** | `v13.1.2` |
 | **Branch** | `main` |
 | **Last Updated** | `2025-08-14 00:59:29 UTC` |
-| **CLI Version** | `13.1.1` |
+| **CLI Version** | `13.1.2` |
 
 ### 📚 Documentation Files
 - **Package Info**: [package.json](package.json)
@@ -20,7 +20,7 @@
 
 > **A powerful CLI tool for versioning, AI documenting, and repository operations.**
 
-[![Version](https://img.shields.io/badge/version-13.1.1-blue.svg)](VERSION)
+[![Version](https://img.shields.io/badge/version-13.1.2-blue.svg)](VERSION)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-blue.svg)](docs/INSTALLATION.md)
 [![Documentation](https://img.shields.io/badge/docs-complete-brightgreen.svg)](docs/)
@@ -677,12 +677,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `13.1.1` |
+| **Current Version** | `13.1.2` |
 | **Release Date** | `2025-08-14 01:18:27 UTC` |
-| **Git Tag** | `v13.1.1` |
+| **Git Tag** | `v13.1.2` |
 | **Branch** | `main` |
 | **Last Updated** | `2025-08-14 01:18:27 UTC` |
-| **CLI Version** | `13.1.1` |
+| **CLI Version** | `13.1.2` |
 
 ---
 
