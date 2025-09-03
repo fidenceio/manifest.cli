@@ -29,9 +29,9 @@ MANIFEST_STAGING_BRANCH="staging"
 
 # Git Configuration
 MANIFEST_GIT_COMMIT_TEMPLATE="[RELEASE] v{version} - {timestamp}"
-MANIFEST_GIT_PRIMARY_REMOTE="origin"
 MANIFEST_GIT_PUSH_STRATEGY="simple"
 MANIFEST_GIT_PULL_STRATEGY="rebase"
+# Note: Manifest CLI automatically uses all configured git remotes
 
 # Documentation Configuration
 MANIFEST_DOCS_FILENAME_PATTERN="RELEASE_{type}_{version}.md"
@@ -66,7 +66,7 @@ MANIFEST_DEVELOPMENT_BRANCH="develop"
 
 # Git Configuration
 MANIFEST_GIT_COMMIT_TEMPLATE="🚀 Release v{version} - {timestamp}"
-MANIFEST_GIT_PRIMARY_REMOTE="origin"
+
 MANIFEST_GIT_PUSH_STRATEGY="simple"
 MANIFEST_GIT_PULL_STRATEGY="rebase"
 
@@ -104,7 +104,7 @@ MANIFEST_STAGING_BRANCH="staging"
 
 # Git Configuration
 MANIFEST_GIT_COMMIT_TEMPLATE="[PRODUCTION] {version} - {timestamp}"
-MANIFEST_GIT_PRIMARY_REMOTE="origin"
+
 MANIFEST_GIT_PUSH_STRATEGY="simple"
 MANIFEST_GIT_PULL_STRATEGY="merge"
 
@@ -142,10 +142,10 @@ MANIFEST_STAGING_BRANCH="staging"
 
 # Git Configuration
 MANIFEST_GIT_COMMIT_TEMPLATE="[COMPLIANCE] v{version} - {timestamp} - {branch}"
-MANIFEST_GIT_PRIMARY_REMOTE="origin"
-MANIFEST_GIT_ADDITIONAL_REMOTES="audit,backup"
 MANIFEST_GIT_PUSH_STRATEGY="matching"
 MANIFEST_GIT_PULL_STRATEGY="rebase"
+# Note: Manifest CLI automatically uses all configured git remotes
+# Use 'git remote add audit <url>' and 'git remote add backup <url>' to add additional remotes
 
 # NTP Configuration (Multiple trusted sources)
 MANIFEST_NTP_SERVERS="time.nist.gov,time.google.com,pool.ntp.org,time.apple.com"
@@ -187,7 +187,7 @@ MANIFEST_STAGING_BRANCH="staging"
 
 # Git Configuration
 MANIFEST_GIT_COMMIT_TEMPLATE="🎮 BUILD v{version} - {timestamp}"
-MANIFEST_GIT_PRIMARY_REMOTE="origin"
+
 MANIFEST_GIT_PUSH_STRATEGY="simple"
 MANIFEST_GIT_PULL_STRATEGY="rebase"
 
@@ -225,8 +225,8 @@ MANIFEST_STAGING_BRANCH="review"
 
 # Git Configuration
 MANIFEST_GIT_COMMIT_TEMPLATE="[PUBLICATION] {version} - {timestamp} - {branch}"
-MANIFEST_GIT_PRIMARY_REMOTE="origin"
-MANIFEST_GIT_ADDITIONAL_REMOTES="archive,peer-review"
+
+# Use 'git remote add archive <url>' and 'git remote add peer-review <url>' to add additional remotes
 MANIFEST_GIT_PUSH_STRATEGY="simple"
 MANIFEST_GIT_PULL_STRATEGY="rebase"
 
@@ -319,15 +319,15 @@ MANIFEST_DEFAULT_BRANCH="main"
 
 ### Multi-Repository Configuration
 ```bash
-# Primary repository
-MANIFEST_GIT_PRIMARY_REMOTE="origin"
-
-# Additional repositories
-MANIFEST_GIT_ADDITIONAL_REMOTES="upstream,staging,archive"
-
-# Different strategies for different remotes
+# Git Configuration
 MANIFEST_GIT_PUSH_STRATEGY="simple"
 MANIFEST_GIT_PULL_STRATEGY="rebase"
+
+# Note: Manifest CLI automatically uses all configured git remotes
+# To set up multiple remotes, use standard git commands:
+# git remote add upstream <upstream-url>
+# git remote add staging <staging-url>
+# git remote add archive <archive-url>
 ```
 
 ## 🎯 Best Practices

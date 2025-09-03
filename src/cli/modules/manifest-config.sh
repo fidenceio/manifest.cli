@@ -95,8 +95,6 @@ set_default_configuration() {
     
     # Git Operations
     export MANIFEST_GIT_COMMIT_TEMPLATE="${MANIFEST_GIT_COMMIT_TEMPLATE:-Release v{version} - {timestamp}}"
-    export MANIFEST_GIT_PRIMARY_REMOTE="${MANIFEST_GIT_PRIMARY_REMOTE:-origin}"
-    export MANIFEST_GIT_ADDITIONAL_REMOTES="${MANIFEST_GIT_ADDITIONAL_REMOTES:-}"
     export MANIFEST_GIT_PUSH_STRATEGY="${MANIFEST_GIT_PUSH_STRATEGY:-simple}"
     export MANIFEST_GIT_PULL_STRATEGY="${MANIFEST_GIT_PULL_STRATEGY:-rebase}"
     
@@ -329,9 +327,9 @@ show_configuration() {
     echo "🏷️  Git Configuration:"
     echo "   Tag Prefix: ${MANIFEST_GIT_TAG_PREFIX}"
     echo "   Tag Suffix: ${MANIFEST_GIT_TAG_SUFFIX}"
-    echo "   Primary Remote: ${MANIFEST_GIT_PRIMARY_REMOTE}"
     echo "   Push Strategy: ${MANIFEST_GIT_PUSH_STRATEGY}"
     echo "   Pull Strategy: ${MANIFEST_GIT_PULL_STRATEGY}"
+    echo "   Remotes: Uses all configured git remotes automatically"
     echo ""
     
     echo "📚 Documentation Configuration:"

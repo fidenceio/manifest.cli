@@ -316,7 +316,9 @@ Specify custom configuration file.
 - `MANIFEST_GIT_COMMIT_TEMPLATE`: Commit message template
 - `MANIFEST_GIT_AUTHOR_NAME`: Default author name
 - `MANIFEST_GIT_AUTHOR_EMAIL`: Default author email
-- `MANIFEST_GIT_REMOTE`: Default remote name
+- `MANIFEST_GIT_PUSH_STRATEGY`: Git push strategy (simple, upstream, current)
+- `MANIFEST_GIT_PULL_STRATEGY`: Git pull strategy (rebase, merge, ff-only)
+- Note: Manifest CLI automatically uses all configured git remotes
 
 ### Documentation Configuration
 - `MANIFEST_DOCS_TEMPLATE_DIR`: Template directory path

@@ -58,29 +58,53 @@ cd fidenceio.manifest.cli
 manifest --help
 ```
 
-### 2. Critical Configuration ⚠️
+### 2. Configuration Setup ⚙️
 
-**⚠️ IMPORTANT: Before using Manifest CLI, you MUST configure these critical environment variables:**
+**Quick Setup (Recommended):**
 
 ```bash
 # Copy the example configuration
 cp env.example .env
 
-# Edit the configuration with your specific values
+# Edit with your specific values
 nano .env
 ```
 
-**Essential Variables to Set:**
-- **Git Remote**: The CLI needs to know your repository details
-- **Homebrew Options**: Control Homebrew integration behavior  
-- **NTP Servers**: Customize timestamp servers if needed
-- **Documentation Settings**: Configure how docs are generated
+**Essential Configuration:**
 
-**Why This Matters:**
-- Without proper configuration, the CLI may fail or behave unexpectedly
-- Git operations require valid remote repository information
-- Homebrew integration needs to know your preferences
-- NTP servers affect timestamp accuracy and compliance
+**🔧 Git Repository Setup:**
+```bash
+# Manifest CLI automatically uses all configured git remotes
+# No need to configure remotes in .env - just use standard git commands:
+
+# Add your primary remote (if not already set)
+git remote add origin https://github.com/yourusername/yourrepo.git
+
+# Add additional remotes as needed
+git remote add upstream https://github.com/original/repo.git
+git remote add staging https://github.com/yourorg/staging.git
+```
+
+**📝 Required Environment Variables:**
+```bash
+# Git Configuration (Required)
+MANIFEST_GIT_AUTHOR_NAME="Your Name"
+MANIFEST_GIT_AUTHOR_EMAIL="your.email@example.com"
+MANIFEST_GIT_COMMIT_TEMPLATE="Release v{version} - {timestamp}"
+
+# NTP Configuration (Required for timestamp verification)
+MANIFEST_NTP_SERVERS="time.nist.gov,time.google.com,pool.ntp.org"
+
+# Homebrew Integration (Required for macOS users)
+MANIFEST_BREW_OPTION=enabled
+MANIFEST_TAP_REPO="https://github.com/your-org/your-tap.git"
+```
+
+**Why This Configuration Matters:**
+- **Git Operations**: Author info ensures proper commit attribution
+- **Timestamp Verification**: NTP servers provide trusted timestamps for compliance
+- **Homebrew Integration**: Enables automatic formula updates on macOS
+- **Multi-Remote Support**: Works with all your configured git remotes automatically
 
 ### 3. Your First Workflow
 
@@ -343,11 +367,22 @@ nano .env
 **Important**: The `.env` file is automatically ignored by git, so your custom configuration won't be committed to the repository.
 
 **Key Configuration Options:**
+- **Git Repository**: Use standard `git remote add/remove` commands (no .env config needed)
 - **NTP Settings**: Customize timestamp servers and timeouts
 - **Git Configuration**: Override user info and commit templates
 - **Documentation**: Control auto-generation and historical limits
 - **Development**: Enable debug, verbose, and interactive modes
 - **Project-Specific**: Add custom variables for your project needs
+
+**Git Remote Management:**
+```bash
+# Add remotes using standard git commands
+git remote add origin https://github.com/yourusername/yourrepo.git
+git remote add upstream https://github.com/original/repo.git
+
+# Manifest CLI automatically works with all configured remotes
+manifest go patch  # Pushes to ALL configured remotes
+```
 
 ---
 
