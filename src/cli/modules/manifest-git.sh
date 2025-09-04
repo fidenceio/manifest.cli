@@ -13,10 +13,14 @@ git_retry() {
     local max_retries="${MANIFEST_GIT_RETRIES:-3}"  # 3 retries default
     local success=false
     
+    # Configure git to use SSH connection multiplexing to reduce connection overhead
+    local git_ssh_command="ssh -o ControlMaster=auto -o ControlPersist=60s -o ControlPath=~/.ssh/control-%r@%h:%p"
+    
     for attempt in $(seq 1 $max_retries); do
         echo "   $description (attempt $attempt/$max_retries)..."
         
-        if timeout "$timeout" $command 2>/dev/null; then
+        # Use GIT_SSH_COMMAND to enable connection multiplexing
+        if timeout "$timeout" env GIT_SSH_COMMAND="$git_ssh_command" $command 2>/dev/null; then
             echo "   ✅ $description successful"
             success=true
             break
@@ -177,15 +181,9 @@ push_changes() {
     for remote in $remotes; do
         echo "   Pushing to $remote..."
         
-        # Push default branch with retry logic
-        if ! git_retry "📤 Pushing $default_branch branch to $remote" "git push --progress $remote $default_branch"; then
-            echo "   ❌ Failed to push $default_branch branch to $remote"
-            return 1
-        fi
-        
-        # Push tags with retry logic
-        if ! git_retry "📤 Pushing tag $tag_name to $remote" "git push $remote $tag_name"; then
-            echo "   ❌ Failed to push tags to $remote"
+        # Push branch and tags together in one operation to reduce SSH connections
+        if ! git_retry "📤 Pushing $default_branch branch and tags to $remote" "git push --progress $remote $default_branch $tag_name"; then
+            echo "   ❌ Failed to push to $remote"
             return 1
         fi
     done
@@ -204,24 +202,12 @@ sync_repository() {
     for remote in $remotes; do
         echo "   Syncing with $remote..."
         
-        # Fetch latest changes with retry logic
-        if ! git_retry "📥 Fetching from $remote" "git fetch $remote $default_branch"; then
-            echo "   ⚠️  All fetch attempts failed for $remote, continuing with local state"
-        fi
-        
-        # Check if we're up to date
-        local local_commit=$(git rev-parse HEAD)
-        local remote_commit=$(git rev-parse "$remote/$default_branch" 2>/dev/null)
-        
-        if [ "$local_commit" = "$remote_commit" ]; then
-            echo "   ✅ Already up to date with $remote"
+        # Use git pull directly (which does fetch + merge in one operation)
+        # This reduces SSH connections from 2 to 1 per remote
+        if ! git_retry "📥 Syncing with $remote/$default_branch" "git pull $remote $default_branch"; then
+            echo "   ⚠️  All sync attempts failed for $remote, continuing with local state"
         else
-            echo "   ⚠️  Local is behind $remote, pulling changes..."
-            
-            # Pull with retry logic
-            if ! git_retry "📥 Pulling from $remote/$default_branch" "git pull $remote $default_branch"; then
-                echo "   ⚠️  All pull attempts failed for $remote, continuing with local state"
-            fi
+            echo "   ✅ Successfully synced with $remote"
         fi
     done
     

@@ -673,10 +673,19 @@ main() {
                     move_existing_historical_docs
                     ;;
                 *)
-                    echo "📚 Documentation commands:"
-                    echo "   docs metadata  - Update repository metadata"
-                    echo "   docs homebrew - Update Homebrew formula"
-                    echo "   docs cleanup  - Move historical docs to zArchive"
+                    # Generate all documentation for current version
+                    local current_version=""
+                    if [ -f "VERSION" ]; then
+                        current_version=$(cat VERSION)
+                    fi
+                    
+                    if [ -z "$current_version" ]; then
+                        echo "❌ Could not determine current version. Please run 'manifest version' first."
+                        return 1
+                    fi
+                    
+                    local timestamp=$(format_timestamp "$(date -u +%s)" '+%Y-%m-%d %H:%M:%S UTC')
+                    generate_documentation "$current_version" "$timestamp"
                     ;;
             esac
             ;;
