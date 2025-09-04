@@ -4,8 +4,15 @@
 # Handles documentation generation, README updates, and release notes
 
 # Load markdown templates
-if [ -f "$(dirname "$0")/manifest-markdown-templates.sh" ]; then
-    source "$(dirname "$0")/manifest-markdown-templates.sh"
+# Use BASH_SOURCE to get the actual file path when sourced
+if [ -n "${BASH_SOURCE[0]}" ]; then
+    TEMPLATES_FILE="$(dirname "${BASH_SOURCE[0]}")/manifest-markdown-templates.sh"
+else
+    TEMPLATES_FILE="$(dirname "$0")/manifest-markdown-templates.sh"
+fi
+
+if [ -f "$TEMPLATES_FILE" ]; then
+    source "$TEMPLATES_FILE"
 fi
 
 generate_release_notes() {
