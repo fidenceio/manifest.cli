@@ -16,10 +16,6 @@
 - **Version Info**: [VERSION](VERSION)
 - **CLI Source**: [src/cli/](src/cli/)
 - **Install Script**: [install-cli.sh](install-cli.sh)
-## 📚 Documentation Files
-- **Version Info**: [VERSION](VERSION)
-- **CLI Source**: [src/cli/](src/cli/)
-- **Install Script**: [install-cli.sh](install-cli.sh)
 
 > **A powerful CLI tool for versioning, AI documenting, and repository operations.**
 
