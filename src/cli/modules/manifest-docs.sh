@@ -110,10 +110,11 @@ update_readme_version() {
             done < "README.md" > "$temp_file" && mv "$temp_file" "README.md"
         else
             # Add version section at the beginning
-            echo "$version_section" > "README.md.tmp"
-            echo "" >> "README.md.tmp"
-            cat "README.md" >> "README.md.tmp"
-            mv "README.md.tmp" "README.md"
+            local temp_file=$(mktemp)
+            echo "$version_section" > "$temp_file"
+            echo "" >> "$temp_file"
+            cat "README.md" >> "$temp_file"
+            mv "$temp_file" "README.md"
         fi
         
         # Clean up backup
@@ -336,5 +337,43 @@ generate_documentation() {
         fi
     fi
     
+    # Clean up any temporary files
+    cleanup_temp_files
+    
     echo "✅ Documentation generated successfully"
+}
+
+# Clean up temporary files
+cleanup_temp_files() {
+    echo "🧹 Cleaning up temporary files..."
+    
+    # Remove common temporary file patterns
+    local temp_patterns=(
+        "*.tmp"
+        "*.backup"
+        "*~"
+        "*.orig"
+        "*.swp"
+        "*.swo"
+        ".DS_Store"
+    )
+    
+    local cleaned_count=0
+    
+    for pattern in "${temp_patterns[@]}"; do
+        # Use find to safely handle patterns that might not match
+        while IFS= read -r -d '' file; do
+            if [ -f "$file" ]; then
+                rm -f "$file"
+                echo "   🗑️  Removed: $(basename "$file")"
+                cleaned_count=$((cleaned_count + 1))
+            fi
+        done < <(find . -name "$pattern" -type f -print0 2>/dev/null)
+    done
+    
+    if [ $cleaned_count -gt 0 ]; then
+        echo "   ✅ Cleaned up $cleaned_count temporary file(s)"
+    else
+        echo "   ✅ No temporary files found"
+    fi
 }
