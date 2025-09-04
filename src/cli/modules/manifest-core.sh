@@ -56,22 +56,42 @@ archive_old_docs() {
     done
     
     # Archive other old documentation files (keep only the most recent)
+    # Note: Core documentation files are protected from archiving
     local static_files=(
         "CONFIG_VS_SECURITY.md"
         "CONTRIBUTING.md" 
         "COVERAGE_SUMMARY.md"
         "HUMAN_INTUITIVE_VERSIONING.md"
-        "INSTALLATION.md"
         "SECURITY.md"
         "TESTING.md"
     )
     
+    # Core documentation files that should never be archived
+    local protected_files=(
+        "README.md"
+        "COMMAND_REFERENCE.md"
+        "EXAMPLES.md"
+        "INSTALLATION.md"
+        "USER_GUIDE.md"
+    )
+    
     for file in "${static_files[@]}"; do
         if [ -f "$docs_dir/$file" ]; then
-            # Check if file is older than 7 days
-            if [ "$(find "$docs_dir/$file" -mtime +7 2>/dev/null)" ]; then
-                echo "   📦 Archiving $file"
-                mv "$docs_dir/$file" "$archive_dir/"
+            # Skip if file is in protected list
+            local is_protected=false
+            for protected in "${protected_files[@]}"; do
+                if [ "$file" = "$protected" ]; then
+                    is_protected=true
+                    break
+                fi
+            done
+            
+            if [ "$is_protected" = "false" ]; then
+                # Check if file is older than 7 days
+                if [ "$(find "$docs_dir/$file" -mtime +7 2>/dev/null)" ]; then
+                    echo "   📦 Archiving $file"
+                    mv "$docs_dir/$file" "$archive_dir/"
+                fi
             fi
         fi
     done
