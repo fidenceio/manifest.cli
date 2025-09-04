@@ -236,6 +236,70 @@ manifest_go() {
     echo "   - Method: $MANIFEST_NTP_METHOD"
 }
 
+# Update CLI function
+update_cli() {
+    local force_update="false"
+    local check_only="false"
+    
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -f|--force)
+                force_update="true"
+                shift
+                ;;
+            -c|--check)
+                check_only="true"
+                shift
+                ;;
+            -h|--help)
+                echo "Manifest CLI Update Command"
+                echo ""
+                echo "Usage: manifest update [OPTIONS]"
+                echo ""
+                echo "Options:"
+                echo "  -f, --force    Force update regardless of current version"
+                echo "  -c, --check    Check for updates only (don't update)"
+                echo "  -h, --help     Show this help message"
+                echo ""
+                echo "Examples:"
+                echo "  manifest update              # Check and optionally update"
+                echo "  manifest update --force      # Force update to latest version"
+                echo "  manifest update --check      # Check version only"
+                return 0
+                ;;
+            *)
+                echo "❌ Unknown option: $1"
+                echo "Use 'manifest update --help' for usage information"
+                return 1
+                ;;
+        esac
+    done
+    
+    # Determine the correct path to the update script
+    local update_script=""
+    if [ -f "scripts/auto-update.sh" ]; then
+        # We're in the project root
+        update_script="scripts/auto-update.sh"
+    elif [ -f "/Users/william/.manifest-cli/scripts/auto-update.sh" ]; then
+        # We're running from installed CLI
+        update_script="/Users/william/.manifest-cli/scripts/auto-update.sh"
+    else
+        echo "❌ Update script not found"
+        echo "Please reinstall Manifest CLI using the install script"
+        return 1
+    fi
+    
+    # Run the update script with appropriate arguments
+    if [ "$force_update" = "true" ]; then
+        "$update_script" --force
+    elif [ "$check_only" = "true" ]; then
+        "$update_script" --check
+    else
+        "$update_script"
+    fi
+}
+
 # Test mode function
 manifest_test() {
     local test_type="$1"
@@ -356,8 +420,60 @@ get_next_version() {
     esac
 }
 
+# Auto-update check with cooldown
+check_auto_update() {
+    # Check if auto-update is disabled
+    if [ "${MANIFEST_AUTO_UPDATE:-true}" = "false" ]; then
+        return 0
+    fi
+    
+    local last_check_file="/Users/william/.manifest-cli/.last_update_check"
+    local cooldown_minutes="${MANIFEST_UPDATE_COOLDOWN:-30}"
+    local current_time=$(date +%s)
+    local last_check_time=0
+    
+    # Read last check time if file exists
+    if [ -f "$last_check_file" ]; then
+        last_check_time=$(cat "$last_check_file" 2>/dev/null || echo "0")
+    fi
+    
+    # Calculate time difference in minutes
+    local time_diff=$(( (current_time - last_check_time) / 60 ))
+    
+    # Only check for updates if cooldown period has passed
+    if [ "$time_diff" -ge "$cooldown_minutes" ]; then
+        # Update last check timestamp
+        echo "$current_time" > "$last_check_file"
+        
+        # Run update check in background (non-blocking)
+        (
+            # Determine the correct path to the update script
+            local update_script=""
+            if [ -f "scripts/auto-update.sh" ]; then
+                update_script="scripts/auto-update.sh"
+            elif [ -f "/Users/william/.manifest-cli/scripts/auto-update.sh" ]; then
+                update_script="/Users/william/.manifest-cli/scripts/auto-update.sh"
+            fi
+            
+            # Run update check if script is available
+            if [ -n "$update_script" ] && [ -f "$update_script" ]; then
+                "$update_script" --check >/dev/null 2>&1
+                local update_available=$?
+                
+                # If update is available, show a subtle notification
+                if [ $update_available -eq 1 ]; then
+                    echo "🔄 Update available! Run 'manifest update' to install the latest version."
+                fi
+            fi
+        ) &
+    fi
+}
+
 # Main command dispatcher
 main() {
+    # Check for updates in background (with cooldown)
+    check_auto_update
+    
     local command="$1"
     shift
     
@@ -493,6 +609,9 @@ main() {
         "test")
             test_command "$@"
             ;;
+        "update")
+            update_cli "$@"
+            ;;
         "help"|*)
             display_help
             ;;
@@ -524,6 +643,8 @@ display_help() {
   echo "  config      - ⚙️  Show current configuration and environment variables"
   echo "  security    - 🔒 Security audit for vulnerabilities and privacy protection"
   echo "  test        - 🧪 Test CLI functionality and workflows"
+  echo "  update      - 🔄 Check for and install CLI updates"
+  echo "    update [--force] [--check]        # Update options: force update or check only"
 
     echo "  help        - Show this help"
     echo ""

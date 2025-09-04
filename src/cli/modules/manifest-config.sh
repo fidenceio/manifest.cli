@@ -111,6 +111,10 @@ set_default_configuration() {
     
     # Project Configuration
     export MANIFEST_PROJECT_NAME="${MANIFEST_PROJECT_NAME:-Manifest CLI}"
+    
+    # Auto-Update Configuration
+    export MANIFEST_AUTO_UPDATE="${MANIFEST_AUTO_UPDATE:-true}"
+    export MANIFEST_UPDATE_COOLDOWN="${MANIFEST_UPDATE_COOLDOWN:-30}"
     export MANIFEST_PROJECT_DESCRIPTION="${MANIFEST_PROJECT_DESCRIPTION:-A powerful CLI tool for versioning, AI documenting, and repository operations}"
     export MANIFEST_ORGANIZATION="${MANIFEST_ORGANIZATION:-Your Organization}"
     
@@ -346,6 +350,11 @@ show_configuration() {
     echo "⚙️  Advanced Configuration:"
     echo "   Version Regex: ${MANIFEST_VERSION_REGEX}"
     echo "   Version Validation: ${MANIFEST_VERSION_VALIDATION}"
+    echo ""
+    
+    echo "🔄 Auto-Update Configuration:"
+    echo "   Auto-Update: ${MANIFEST_AUTO_UPDATE}"
+    echo "   Update Cooldown: ${MANIFEST_UPDATE_COOLDOWN} minutes"
     echo ""
     
     echo "💡 How This Works:"
