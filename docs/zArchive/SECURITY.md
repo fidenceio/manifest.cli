@@ -69,7 +69,7 @@ cp env.example .env
 # Development
 .env.development
 
-# Production  
+# Production
 .env.production
 
 # Testing
@@ -98,7 +98,7 @@ git check-ignore .env
 - **Scope**: Versioning, Git remotes, branch naming, documentation patterns
 - **Use Case**: "What are my current settings?" / "How is Manifest configured?"
 
-### **`manifest security` - Security & Privacy Protection**  
+### **`manifest security` - Security & Privacy Protection**
 - **Purpose**: Check for security vulnerabilities and privacy risks
 - **Scope**: PII exposure, private file leaks, accidental secret commits
 - **Use Case**: "Am I about to expose sensitive data?" / "Is my repo secure?"
@@ -216,7 +216,7 @@ If you encounter security issues:
 ## 🎯 **Security Goals**
 
 - **Zero private file exposure** ✅
-- **Zero sensitive data leaks** ✅  
+- **Zero sensitive data leaks** ✅
 - **Zero PII exposure** ✅
 - **Zero hardcoded credentials** ✅
 - **Real-time vulnerability detection** ✅

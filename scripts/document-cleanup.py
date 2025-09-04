@@ -136,8 +136,8 @@ class DocumentCleanup:
             for line_num, line in enumerate(lines, 1):
                 self.log(f"Processing line {line_num}", "debug")
                 
-                # Remove trailing whitespace (spaces and tabs)
-                cleaned_line = line.rstrip(' \t')
+                # Remove ALL trailing whitespace (more comprehensive than rstrip)
+                cleaned_line = re.sub(r'\s+$', '', line)
                 
                 # Handle line endings - normalize to \n
                 if cleaned_line.endswith('\r\n'):
@@ -153,7 +153,11 @@ class DocumentCleanup:
             # Join lines and handle multiple consecutive blank lines
             content = ''.join(cleaned_lines)
             
-            # Fix multiple consecutive blank lines (replace 3+ with 2)
+            # More comprehensive blank line cleanup
+            # First, normalize all blank lines to single newlines (remove any whitespace)
+            content = re.sub(r'\n[ \t]*\n', '\n\n', content)
+            
+            # Then fix multiple consecutive blank lines (replace 3+ with 2)
             content = re.sub(r'\n{3,}', '\n\n', content)
             
             # Remove any remaining whitespace-only lines at start/end

@@ -230,7 +230,7 @@ manifest test all
 
 # This will test:
 # 1. OS functionality
-# 2. Git functionality  
+# 2. Git functionality
 # 3. NTP functionality
 # 4. Module loading
 # 5. Integration workflows

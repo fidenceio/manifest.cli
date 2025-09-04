@@ -56,7 +56,7 @@ Before contributing, ensure you have:
    ```bash
    # Install the CLI locally
    ./install-cli.sh
-
+   
    # Verify installation
    manifest --version
    ```
@@ -112,19 +112,19 @@ EXAMPLE_RETRIES=${EXAMPLE_RETRIES:-3}
 # Main function with proper error handling
 example_function() {
     local input="$1"
-
+    
     # Validate input
     if [[ -z "$input" ]]; then
         echo "❌ Input parameter required" >&2
         return 1
     fi
-
+    
     # Process with error handling
     if ! process_input "$input"; then
         echo "❌ Failed to process input: $input" >&2
         return 1
     fi
-
+    
     echo "✅ Input processed successfully"
     return 0
 }
@@ -156,19 +156,19 @@ example_function() {
 # In manifest-test.sh
 test_new_feature() {
     echo "🧪 Testing new feature..."
-
+    
     # Test basic functionality
     if ! manifest new-feature "test-input"; then
         echo "   ❌ Basic functionality failed"
         return 1
     fi
-
+    
     # Test error handling
     if manifest new-feature "" 2>/dev/null; then
         echo "   ❌ Error handling failed"
         return 1
     fi
-
+    
     echo "   ✅ New feature tests passed"
     return 0
 }
