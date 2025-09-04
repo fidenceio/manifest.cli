@@ -58,7 +58,6 @@ PROJECT_DIR="$HOME/.manifest-cli"
 CLI_NAME="manifest"
 
 # Version information
-SCRIPT_VERSION="2.0.0"
 MIN_BASH_VERSION="4.0"
 
 # =============================================================================
@@ -482,7 +481,7 @@ main() {
     # Display banner
     echo
     print_header "============================================================================="
-    print_header "🚀 Manifest CLI Installation Script v$SCRIPT_VERSION"
+    print_header "🚀 Manifest CLI Installation Script"
     print_header "============================================================================="
     echo
     
