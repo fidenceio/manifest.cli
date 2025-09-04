@@ -4,28 +4,18 @@
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `15.2.0` |
-| **Release Date** | `2025-09-04 21:50:32 UTC` |
-| **Git Tag** | `v15.2.0` |
+| **Current Version** | `15.2.1` |
+| **Release Date** | `2025-09-04 21:54:39 UTC` |
+| **Git Tag** | `v15.2.1` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-09-04 21:50:32 UTC` |
-| **CLI Version** | `15.2.0` |
+| **Last Updated** | `2025-09-04 21:54:39 UTC` |
+| **CLI Version** | `15.2.1` |
 
 ### 📚 Documentation Files
 
 - **Version Info**: [VERSION](VERSION)
 - **CLI Source**: [src/cli/](src/cli/)
 - **Install Script**: [install-cli.sh](install-cli.sh)
-
-> **A powerful CLI tool for versioning, AI documenting, and repository operations.**
-
-[![Version](https://img.shields.io/badge/version-14.1.1-blue.svg)](VERSION)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-blue.svg)](docs/INSTALLATION.md)
-[![Documentation](https://img.shields.io/badge/docs-complete-brightgreen.svg)](docs/)
-
----
-
 ## 🎯 What is Manifest CLI?
 
 **Manifest CLI** is your personal DevOps assistant that automates the tedious parts of version management, documentation, and repository operations.
