@@ -237,43 +237,7 @@ move_previous_documentation() {
     cleanup_zArchive
 }
 
-# Clean up zArchive directory to keep only recent versions
-cleanup_zArchive() {
-    echo "🧹 Cleaning up zArchive directory..."
-    
-    # Create zArchive directory if it doesn't exist
-    mkdir -p docs/zArchive
-    
-    # Get list of all version files in zArchive
-    local version_files=()
-    for file in docs/zArchive/*_v*.*; do
-        if [ -f "$file" ]; then
-            version_files+=("$file")
-        fi
-    done
-    
-    # Get historical limit from configuration
-    local historical_limit="${MANIFEST_DOCS_HISTORICAL_LIMIT:-20}"
-    
-    # If we have more than the limit, remove the oldest ones
-    if [ ${#version_files[@]} -gt $historical_limit ]; then
-        echo "   📊 Found ${#version_files[@]} files, keeping only the $historical_limit most recent..."
-        
-        # Sort files by modification time (oldest first) and remove oldest
-        local files_to_remove=$(ls -t docs/zArchive/*_v*.* 2>/dev/null | tail -n +$((historical_limit + 1)))
-        
-        for file in $files_to_remove; do
-            if [ -f "$file" ]; then
-                rm "$file"
-                echo "   🗑️  Removed old file: $(basename "$file")"
-            fi
-        done
-        
-        echo "   ✅ Cleanup completed, kept $historical_limit most recent files"
-    else
-        echo "   ℹ️  zArchive directory is clean (${#version_files[@]} files)"
-    fi
-}
+# zArchive cleanup is now handled by the common cleanup module
 
 # Manual function to move existing historical documentation to zArchive
 move_existing_historical_docs() {
@@ -343,37 +307,7 @@ generate_documentation() {
     echo "✅ Documentation generated successfully"
 }
 
-# Clean up temporary files
-cleanup_temp_files() {
-    echo "🧹 Cleaning up temporary files..."
-    
-    # Remove common temporary file patterns
-    local temp_patterns=(
-        "*.tmp"
-        "*.backup"
-        "*~"
-        "*.orig"
-        "*.swp"
-        "*.swo"
-        ".DS_Store"
-    )
-    
-    local cleaned_count=0
-    
-    for pattern in "${temp_patterns[@]}"; do
-        # Use find to safely handle patterns that might not match
-        while IFS= read -r -d '' file; do
-            if [ -f "$file" ]; then
-                rm -f "$file"
-                echo "   🗑️  Removed: $(basename "$file")"
-                cleaned_count=$((cleaned_count + 1))
-            fi
-        done < <(find . -name "$pattern" -type f -print0 2>/dev/null)
-    done
-    
-    if [ $cleaned_count -gt 0 ]; then
-        echo "   ✅ Cleaned up $cleaned_count temporary file(s)"
-    else
-        echo "   ✅ No temporary files found"
-    fi
-}
+# Load cleanup module
+if [ -f "$(dirname "${BASH_SOURCE[0]}")/manifest-cleanup.sh" ]; then
+    source "$(dirname "${BASH_SOURCE[0]}")/manifest-cleanup.sh"
+fi
