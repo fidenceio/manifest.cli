@@ -19,6 +19,67 @@ source "$MODULES_DIR/manifest-security.sh"
 PROJECT_ROOT="$(dirname "$(dirname "$MODULES_DIR")")"
 load_configuration "$PROJECT_ROOT"
 
+# Archive old documentation files
+archive_old_docs() {
+    echo "📁 Archiving old documentation files..."
+    
+    # Ensure zArchive directory exists
+    mkdir -p "$PROJECT_ROOT/docs/zArchive"
+    
+    # Get the current version for comparison
+    local current_version=$(cat "$PROJECT_ROOT/VERSION" 2>/dev/null || echo "0.0.0")
+    local current_major=$(echo "$current_version" | cut -d. -f1)
+    local current_minor=$(echo "$current_version" | cut -d. -f2)
+    
+    # Archive old changelog and release files (keep only the most recent 2 versions)
+    local docs_dir="$PROJECT_ROOT/docs"
+    local archive_dir="$PROJECT_ROOT/docs/zArchive"
+    
+    # Find all CHANGELOG and RELEASE files in docs directory
+    for file in "$docs_dir"/CHANGELOG_v*.md "$docs_dir"/RELEASE_v*.md; do
+        if [ -f "$file" ]; then
+            local filename=$(basename "$file")
+            local version=$(echo "$filename" | sed -n 's/.*_v\([0-9.]*\)\.md/\1/p')
+            
+            if [ -n "$version" ]; then
+                local file_major=$(echo "$version" | cut -d. -f1)
+                local file_minor=$(echo "$version" | cut -d. -f2)
+                
+                # Archive files that are more than 2 versions old
+                if [ "$file_major" -lt "$current_major" ] || 
+                   ([ "$file_major" -eq "$current_major" ] && [ "$file_minor" -lt "$((current_minor - 1))" ]); then
+                    echo "   📦 Archiving $filename"
+                    mv "$file" "$archive_dir/"
+                fi
+            fi
+        fi
+    done
+    
+    # Archive other old documentation files (keep only the most recent)
+    local static_files=(
+        "CONFIG_VS_SECURITY.md"
+        "CONTRIBUTING.md" 
+        "COVERAGE_SUMMARY.md"
+        "HUMAN_INTUITIVE_VERSIONING.md"
+        "INSTALLATION.md"
+        "SECURITY.md"
+        "TESTING.md"
+    )
+    
+    for file in "${static_files[@]}"; do
+        if [ -f "$docs_dir/$file" ]; then
+            # Check if file is older than 7 days
+            if [ "$(find "$docs_dir/$file" -mtime +7 2>/dev/null)" ]; then
+                echo "   📦 Archiving $file"
+                mv "$docs_dir/$file" "$archive_dir/"
+            fi
+        fi
+    done
+    
+    echo "   ✅ Documentation archiving completed"
+    echo ""
+}
+
 # Main workflow function
 manifest_go() {
     local increment_type="$1"
@@ -219,6 +280,9 @@ manifest_go() {
         echo "   ⚠️  Homebrew update script not found (skipping)"
     fi
     echo ""
+    
+    # Archive old documentation files
+    archive_old_docs
     
     # Success message
     echo "🎉 Manifest process completed successfully!"

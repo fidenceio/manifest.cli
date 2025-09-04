@@ -318,7 +318,9 @@ Specify custom configuration file.
 - `MANIFEST_GIT_AUTHOR_EMAIL`: Default author email
 - `MANIFEST_GIT_PUSH_STRATEGY`: Git push strategy (simple, upstream, current)
 - `MANIFEST_GIT_PULL_STRATEGY`: Git pull strategy (rebase, merge, ff-only)
-- Note: Manifest CLI automatically uses all configured git remotes
+- `MANIFEST_GIT_TIMEOUT`: Git operation timeout in seconds (default: 300)
+- `MANIFEST_GIT_RETRIES`: Number of retry attempts for failed operations (default: 3)
+- Note: Manifest CLI automatically uses all configured git remotes with retry logic
 
 ### Documentation Configuration
 - `MANIFEST_DOCS_TEMPLATE_DIR`: Template directory path
@@ -329,6 +331,10 @@ Specify custom configuration file.
 - `MANIFEST_BREW_OPTION`: Control Homebrew functionality (enabled/disabled)
 - `MANIFEST_BREW_INTERACTIVE`: Interactive Homebrew updates (yes/no)
 - `MANIFEST_TAP_REPO`: Homebrew tap repository URL
+
+### Auto-Update Configuration
+- `MANIFEST_AUTO_UPDATE`: Enable automatic update checking (true/false, default: true)
+- `MANIFEST_UPDATE_COOLDOWN`: Cooldown period between update checks in minutes (default: 30)
 
 ### OS Configuration
 - `MANIFEST_OS_PLATFORM`: Override platform detection

@@ -39,6 +39,9 @@
 - **📚 Smart Documentation**: Automatically manages historical docs and keeps your project organized
 - **🍺 Homebrew Ready**: Seamless integration with macOS package management
 - **🔒 Enterprise Grade**: Built for teams, compliance, and production environments
+- **🛡️ Resilient Git Operations**: Retry logic and timeouts handle network issues gracefully
+- **🔄 Self-Updating**: Automatic update checks with configurable cooldown periods
+- **⚡ Fast & Reliable**: Optimized for speed with intelligent error handling
 
 ---
 
@@ -605,6 +608,75 @@ jobs:
 - **Project Configuration**: Use `.env` for project-specific settings
 - **Default Values**: Sensible defaults mean minimal configuration needed
 - **Validation**: The CLI validates your configuration automatically
+
+---
+
+## 🛠️ Troubleshooting
+
+### **Common Issues & Solutions**
+
+**Git Operations Hanging or Timing Out:**
+```bash
+# Check your git configuration
+git config --list | grep -E "(http|ssh|timeout)"
+
+# Test SSH connectivity to GitHub
+ssh -T git@github.com
+
+# If SSH is timing out, the CLI will automatically retry
+# You can adjust retry settings in your .env file:
+MANIFEST_GIT_TIMEOUT="300"    # 5 minutes timeout
+MANIFEST_GIT_RETRIES="3"      # 3 retry attempts
+```
+
+**Network Connectivity Issues:**
+```bash
+# Test basic connectivity
+ping github.com
+
+# Test git operations manually
+git ls-remote origin
+
+# The CLI includes automatic retry logic for network issues
+```
+
+**Auto-Update Not Working:**
+```bash
+# Check if auto-update is enabled
+manifest config | grep "Auto-Update"
+
+# Disable auto-update if needed
+echo "MANIFEST_AUTO_UPDATE=false" >> .env
+
+# Force an update check
+manifest update --check
+```
+
+**Permission Issues:**
+```bash
+# Ensure you have write access to the repository
+git push origin main
+
+# Check SSH key authentication
+ssh-add -l
+
+# Verify git remote configuration
+git remote -v
+```
+
+### **Configuration Debugging**
+
+```bash
+# Show current configuration
+manifest config
+
+# Test all systems
+manifest test all
+
+# Check specific components
+manifest test git
+manifest test ntp
+```
 
 ---
 

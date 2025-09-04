@@ -377,6 +377,67 @@ manifest ntp --servers="ntp.company.com,time.company.com"
 echo "✅ Enterprise NTP configuration completed"
 ```
 
+### Git Retry Configuration
+
+Setting up robust git operations for unreliable networks:
+
+```bash
+#!/bin/bash
+# setup-git-retry.sh - Git retry configuration for unreliable networks
+
+echo "🔄 Git Retry Configuration"
+echo "=========================="
+
+# Configure git retry settings for unreliable networks
+export MANIFEST_GIT_TIMEOUT="600"    # 10 minutes timeout
+export MANIFEST_GIT_RETRIES="5"      # 5 retry attempts
+
+# Test git operations
+echo "📋 Testing git operations..."
+manifest sync
+
+# Test with different retry settings
+echo "📋 Testing with aggressive retry settings..."
+export MANIFEST_GIT_TIMEOUT="300"    # 5 minutes timeout
+export MANIFEST_GIT_RETRIES="10"     # 10 retry attempts
+
+manifest test git
+
+echo "✅ Git retry configuration completed"
+```
+
+### Auto-Update Configuration
+
+Setting up automatic updates for different environments:
+
+```bash
+#!/bin/bash
+# setup-auto-update.sh - Auto-update configuration
+
+echo "🔄 Auto-Update Configuration"
+echo "============================"
+
+# Development environment - frequent updates
+echo "📋 Setting up development environment..."
+export MANIFEST_AUTO_UPDATE="true"
+export MANIFEST_UPDATE_COOLDOWN="5"  # Check every 5 minutes
+
+# Production environment - conservative updates
+echo "📋 Setting up production environment..."
+export MANIFEST_AUTO_UPDATE="true"
+export MANIFEST_UPDATE_COOLDOWN="1440"  # Check once per day
+
+# Disable auto-update for CI/CD
+echo "📋 Setting up CI/CD environment..."
+export MANIFEST_AUTO_UPDATE="false"
+
+# Test update functionality
+echo "📋 Testing update functionality..."
+manifest update --check
+
+echo "✅ Auto-update configuration completed"
+```
+
 ### Custom Documentation Templates
 
 Creating organization-specific documentation:

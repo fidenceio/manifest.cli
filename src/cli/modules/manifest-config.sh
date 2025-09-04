@@ -97,6 +97,8 @@ set_default_configuration() {
     export MANIFEST_GIT_COMMIT_TEMPLATE="${MANIFEST_GIT_COMMIT_TEMPLATE:-Release v{version} - {timestamp}}"
     export MANIFEST_GIT_PUSH_STRATEGY="${MANIFEST_GIT_PUSH_STRATEGY:-simple}"
     export MANIFEST_GIT_PULL_STRATEGY="${MANIFEST_GIT_PULL_STRATEGY:-rebase}"
+    export MANIFEST_GIT_TIMEOUT="${MANIFEST_GIT_TIMEOUT:-300}"
+    export MANIFEST_GIT_RETRIES="${MANIFEST_GIT_RETRIES:-3}"
     
     # Homebrew Configuration
     export MANIFEST_BREW_OPTION="${MANIFEST_BREW_OPTION:-enabled}"
@@ -333,6 +335,8 @@ show_configuration() {
     echo "   Tag Suffix: ${MANIFEST_GIT_TAG_SUFFIX}"
     echo "   Push Strategy: ${MANIFEST_GIT_PUSH_STRATEGY}"
     echo "   Pull Strategy: ${MANIFEST_GIT_PULL_STRATEGY}"
+    echo "   Timeout: ${MANIFEST_GIT_TIMEOUT} seconds"
+    echo "   Retries: ${MANIFEST_GIT_RETRIES} attempts"
     echo "   Remotes: Uses all configured git remotes automatically"
     echo ""
     

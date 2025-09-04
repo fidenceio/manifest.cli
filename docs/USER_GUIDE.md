@@ -292,7 +292,28 @@ EOF
 - Check firewall settings
 - Use `manifest ntp --servers="time.google.com"`
 
-#### 2. Git Authentication Issues
+#### 2. Git Operations Hanging or Timing Out
+
+```bash
+❌ Git fetch/push timed out
+ssh_dispatch_run_fatal: Connection to github.com port 22: Operation timed out
+```
+
+**Solutions:**
+- **Automatic Retry**: The CLI now includes retry logic (3 attempts by default)
+- **Check SSH Connectivity**: `ssh -T git@github.com`
+- **Adjust Timeout Settings**: Set `MANIFEST_GIT_TIMEOUT="600"` for longer timeouts
+- **Increase Retry Attempts**: Set `MANIFEST_GIT_RETRIES="5"` for more attempts
+- **Test Network**: `ping github.com` to check basic connectivity
+
+**Configuration:**
+```bash
+# In your .env file
+MANIFEST_GIT_TIMEOUT="300"    # 5 minutes timeout
+MANIFEST_GIT_RETRIES="3"      # 3 retry attempts
+```
+
+#### 3. Git Authentication Issues
 
 ```bash
 ❌ Git push failed: authentication required
@@ -304,7 +325,7 @@ EOF
 - Verify remote URL format
 - Use `git remote -v` to check configuration
 
-#### 3. Version Bump Failed
+#### 4. Version Bump Failed
 
 ```bash
 ❌ Version bump failed
@@ -316,7 +337,7 @@ EOF
 - Ensure no syntax errors
 - Check for conflicting version files
 
-#### 4. Documentation Generation Failed
+#### 5. Documentation Generation Failed
 
 ```bash
 ❌ Documentation generation failed
