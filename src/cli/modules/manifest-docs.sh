@@ -93,18 +93,21 @@ update_readme_version() {
         
         # Update version information table
         if grep -q "## 📋 Version Information" "README.md"; then
-            # Replace existing version section
-            awk -v new_section="$version_section" '
-                /^## 📋 Version Information/ { 
-                    print new_section; 
-                    skip = 1; 
-                    next 
-                } 
-                skip && /^## / && !/^## 📋 Version Information/ { 
-                    skip = 0 
-                } 
-                !skip { print }
-            ' "README.md" > "README.md.tmp" && mv "README.md.tmp" "README.md"
+            # Replace existing version section using sed instead of awk to avoid newline issues
+            local temp_file=$(mktemp)
+            local in_version_section=false
+            
+            while IFS= read -r line; do
+                if [[ "$line" == "## 📋 Version Information" ]]; then
+                    echo "$version_section"
+                    in_version_section=true
+                elif [[ "$in_version_section" == true && "$line" == "## "* && "$line" != "## 📋 Version Information" ]]; then
+                    in_version_section=false
+                    echo "$line"
+                elif [[ "$in_version_section" == false ]]; then
+                    echo "$line"
+                fi
+            done < "README.md" > "$temp_file" && mv "$temp_file" "README.md"
         else
             # Add version section at the beginning
             echo "$version_section" > "README.md.tmp"

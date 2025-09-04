@@ -4,13 +4,18 @@
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `14.1.1` |
-| **Release Date** | `2025-08-14 00:59:29 UTC` |
-| **Git Tag** | `v14.1.1` |
+| **Current Version** | `14.9.1` |
+| **Release Date** | `2025-09-04 21:23:31 UTC` |
+| **Git Tag** | `v14.9.1` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-08-14 00:59:29 UTC` |
-| **CLI Version** | `14.1.1` |
+| **Last Updated** | `2025-09-04 21:23:31 UTC` |
+| **CLI Version** | `14.9.1` |
 
+### 📚 Documentation Files
+
+- **Version Info**: [VERSION](VERSION)
+- **CLI Source**: [src/cli/](src/cli/)
+- **Install Script**: [install-cli.sh](install-cli.sh)
 ## 📚 Documentation Files
 - **Version Info**: [VERSION](VERSION)
 - **CLI Source**: [src/cli/](src/cli/)
