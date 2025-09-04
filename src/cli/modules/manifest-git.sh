@@ -5,6 +5,44 @@
 
 # Git Configuration
 
+# Shared retry function for git operations
+git_retry() {
+    local description="$1"
+    local command="$2"
+    local timeout="${MANIFEST_GIT_TIMEOUT:-300}"  # 5 minutes default timeout
+    local max_retries="${MANIFEST_GIT_RETRIES:-3}"  # 3 retries default
+    local success=false
+    
+    for attempt in $(seq 1 $max_retries); do
+        echo "   $description (attempt $attempt/$max_retries)..."
+        
+        if timeout "$timeout" $command 2>/dev/null; then
+            echo "   ✅ $description successful"
+            success=true
+            break
+        else
+            local exit_code=$?
+            if [ $exit_code -eq 124 ]; then
+                echo "   ⏰ $description timed out after ${timeout}s (attempt $attempt/$max_retries)"
+            else
+                echo "   ❌ $description failed (attempt $attempt/$max_retries)"
+            fi
+            
+            if [ $attempt -lt $max_retries ]; then
+                echo "   🔄 Retrying in 5 seconds..."
+                sleep 5
+            fi
+        fi
+    done
+    
+    if [ "$success" = "false" ]; then
+        echo "   ⚠️  All attempts failed for $description"
+        return 1
+    fi
+    
+    return 0
+}
+
 bump_version() {
     local increment_type="$1"
     local current_version=""
@@ -129,8 +167,7 @@ create_tag() {
 push_changes() {
     local version="$1"
     local tag_name="v$version"
-    local timeout="${MANIFEST_GIT_TIMEOUT:-300}"  # 5 minutes default timeout
-    local max_retries="${MANIFEST_GIT_RETRIES:-3}"  # 3 retries default
+    local default_branch="${MANIFEST_DEFAULT_BRANCH:-main}"
     
     echo "🚀 Pushing to all remotes..."
     
@@ -141,63 +178,14 @@ push_changes() {
         echo "   Pushing to $remote..."
         
         # Push default branch with retry logic
-        local default_branch="${MANIFEST_DEFAULT_BRANCH:-main}"
-        local push_success=false
-        
-        for attempt in $(seq 1 $max_retries); do
-            echo "   📤 Pushing $default_branch branch to $remote (attempt $attempt/$max_retries)..."
-            
-            if timeout "$timeout" git push --progress "$remote" "$default_branch" 2>/dev/null; then
-                echo "   ✅ $default_branch branch pushed successfully"
-                push_success=true
-                break
-            else
-                local exit_code=$?
-                if [ $exit_code -eq 124 ]; then
-                    echo "   ⏰ Push timed out after ${timeout}s (attempt $attempt/$max_retries)"
-                else
-                    echo "   ❌ Push failed (attempt $attempt/$max_retries)"
-                fi
-                
-                if [ $attempt -lt $max_retries ]; then
-                    echo "   🔄 Retrying in 5 seconds..."
-                    sleep 5
-                fi
-            fi
-        done
-        
-        if [ "$push_success" = "false" ]; then
-            echo "   ❌ Failed to push $default_branch branch to $remote after $max_retries attempts"
+        if ! git_retry "📤 Pushing $default_branch branch to $remote" "git push --progress $remote $default_branch"; then
+            echo "   ❌ Failed to push $default_branch branch to $remote"
             return 1
         fi
         
         # Push tags with retry logic
-        local tag_push_success=false
-        
-        for attempt in $(seq 1 $max_retries); do
-            echo "   📤 Pushing tag $tag_name to $remote (attempt $attempt/$max_retries)..."
-            
-            if timeout "$timeout" git push --progress "$remote" "$tag_name" 2>/dev/null; then
-                echo "   ✅ Tags pushed to $remote"
-                tag_push_success=true
-                break
-            else
-                local exit_code=$?
-                if [ $exit_code -eq 124 ]; then
-                    echo "   ⏰ Tag push timed out after ${timeout}s (attempt $attempt/$max_retries)"
-                else
-                    echo "   ❌ Tag push failed (attempt $attempt/$max_retries)"
-                fi
-                
-                if [ $attempt -lt $max_retries ]; then
-                    echo "   🔄 Retrying in 5 seconds..."
-                    sleep 5
-                fi
-            fi
-        done
-        
-        if [ "$tag_push_success" = "false" ]; then
-            echo "   ❌ Failed to push tags to $remote after $max_retries attempts"
+        if ! git_retry "📤 Pushing tag $tag_name to $remote" "git push $remote $tag_name"; then
+            echo "   ❌ Failed to push tags to $remote"
             return 1
         fi
     done
@@ -208,8 +196,7 @@ push_changes() {
 
 sync_repository() {
     echo "🔄 Syncing with remote..."
-    local timeout="${MANIFEST_GIT_TIMEOUT:-300}"  # 5 minutes default timeout
-    local max_retries="${MANIFEST_GIT_RETRIES:-3}"  # 3 retries default
+    local default_branch="${MANIFEST_DEFAULT_BRANCH:-main}"
     
     # Get list of remotes
     local remotes=$(git remote)
@@ -218,54 +205,22 @@ sync_repository() {
         echo "   Syncing with $remote..."
         
         # Fetch latest changes with retry logic
-        local fetch_success=false
-        for attempt in $(seq 1 $max_retries); do
-            echo "   📥 Fetching from $remote (attempt $attempt/$max_retries)..."
-            
-            if timeout "$timeout" git fetch "$remote" "$default_branch" 2>/dev/null; then
-                echo "   ✅ Fetched latest from $remote"
-                fetch_success=true
-                break
-            else
-                local exit_code=$?
-                if [ $exit_code -eq 124 ]; then
-                    echo "   ⏰ Fetch timed out after ${timeout}s (attempt $attempt/$max_retries)"
-                else
-                    echo "   ❌ Fetch failed (attempt $attempt/$max_retries)"
-                fi
-                
-                if [ $attempt -lt $max_retries ]; then
-                    echo "   🔄 Retrying in 5 seconds..."
-                    sleep 5
-                fi
-            fi
-        done
-        
-        if [ "$fetch_success" = "false" ]; then
+        if ! git_retry "📥 Fetching from $remote" "git fetch $remote $default_branch"; then
             echo "   ⚠️  All fetch attempts failed for $remote, continuing with local state"
-            # Don't return 1, just continue with local state
         fi
         
         # Check if we're up to date
         local local_commit=$(git rev-parse HEAD)
-        local default_branch="${MANIFEST_DEFAULT_BRANCH:-main}"
         local remote_commit=$(git rev-parse "$remote/$default_branch" 2>/dev/null)
         
         if [ "$local_commit" = "$remote_commit" ]; then
             echo "   ✅ Already up to date with $remote"
         else
             echo "   ⚠️  Local is behind $remote, pulling changes..."
-            echo "   📥 Pulling from $remote/$default_branch..."
-            if timeout "$timeout" git pull "$remote" "$default_branch"; then
-                echo "   ✅ Successfully pulled from $remote"
-            else
-                local exit_code=$?
-                if [ $exit_code -eq 124 ]; then
-                    echo "   ⏰ Pull timed out after ${timeout}s"
-                else
-                    echo "   ❌ Failed to pull from $remote"
-                fi
-                return 1
+            
+            # Pull with retry logic
+            if ! git_retry "📥 Pulling from $remote/$default_branch" "git pull $remote $default_branch"; then
+                echo "   ⚠️  All pull attempts failed for $remote, continuing with local state"
             fi
         fi
     done
