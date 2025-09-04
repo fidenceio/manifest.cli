@@ -22,30 +22,30 @@ This reference covers the current capabilities of Manifest CLI (version 8.6.7+) 
 
 ## 🚀 Core Commands
 
-### `manifest go` - Main Workflow
+## `manifest go` - Main Workflow
 
 The primary command that orchestrates the entire release process with intelligent automation.
 
-#### Syntax
+## Syntax
 ```bash
 manifest go [type] [options]
 ```
 
-#### Parameters
+## Parameters
 - **`type`** (optional): Version increment type
   - `patch` (default): 1.0.0 → 1.0.1
   - `minor`: 1.0.0 → 1.1.0
   - `major`: 1.0.0 → 2.0.0
   - `revision`: 1.0.0 → 1.0.0.1
 
-#### Options
+## Options
 - `--interactive` or `-i`: Enable interactive mode
 - `--dry-run` or `-d`: Show what would happen without executing
 - `--force` or `-f`: Force execution even with warnings
 - `--verbose` or `-v`: Enable verbose output
 - `--debug`: Enable debug mode
 
-#### Examples
+## Examples
 ```bash
 # Basic patch version bump
 manifest go
@@ -60,7 +60,7 @@ manifest go major --interactive
 manifest go --dry-run
 ```
 
-#### Workflow Steps
+## Workflow Steps
 1. **🕐 NTP Timestamp**: Get trusted timestamp from multiple servers
 2. **📝 Change Detection**: Check for uncommitted changes and auto-commit
 3. **🔄 Remote Sync**: Pull latest changes from remote
@@ -69,16 +69,16 @@ manifest go --dry-run
 6. **🏷️ Git Operations**: Commit, tag, and push to all remotes
 7. **🍺 Homebrew Update**: Update formula if applicable
 
-### `manifest test` - Testing Framework
+## `manifest test` - Testing Framework
 
 Comprehensive testing suite for validating CLI functionality and workflow integrity.
 
-#### Syntax
+## Syntax
 ```bash
 manifest test [component] [options]
 ```
 
-#### Parameters
+## Parameters
 - **`component`** (optional): Specific test component
   - `all` (default): Run all tests
   - `versions`: Test version management
@@ -87,13 +87,13 @@ manifest test [component] [options]
   - `docs`: Test documentation generation
   - `os`: Test OS detection
 
-#### Options
+## Options
 - `--verbose` or `-v`: Show detailed test output
 - `--fail-fast`: Stop on first failure
 - `--coverage`: Show test coverage
 - `--timeout <seconds>`: Set test timeout
 
-#### Examples
+## Examples
 ```bash
 # Run all tests
 manifest test
@@ -108,53 +108,53 @@ manifest test --verbose
 manifest test --timeout 30
 ```
 
-#### Test Components
+## Test Components
 
-##### Version Management Tests
+### Version Management Tests
 - Version file detection and validation
 - Version increment logic and arithmetic
 - Package.json integration
 - VERSION file handling
 - Multi-format version support
 
-##### NTP Tests
+#### NTP Tests
 - Server connectivity and response time
 - Timestamp accuracy and precision
 - Timezone handling and conversion
 - Fallback mechanisms and error handling
 - Multi-server redundancy
 
-##### Git Tests
+#### Git Tests
 - Repository status and configuration
 - Remote configuration and authentication
 - Branch information and management
 - Push/pull operations
 - Tag creation and management
 
-##### Documentation Tests
+#### Documentation Tests
 - Template generation and validation
 - File creation and permissions
 - Content validation and formatting
 - Link verification and integrity
 - Template customization
 
-##### OS Tests
+#### OS Tests
 - Platform detection and optimization
 - Feature availability and compatibility
 - Performance optimization
 - Cross-platform compatibility
 - Command availability
 
-### `manifest ntp` - NTP Timestamp
+## `manifest ntp` - NTP Timestamp
 
 Get trusted timestamps from NTP servers for verification, compliance, and audit purposes.
 
-#### Syntax
+## Syntax
 ```bash
 manifest ntp [options]
 ```
 
-#### Options
+## Options
 - `--servers <list>`: Custom NTP servers (comma-separated)
 - `--format <format>`: Custom timestamp format
 - `--verify`: Verify timestamp accuracy
@@ -162,7 +162,7 @@ manifest ntp [options]
 - `--retries <count>`: Retry attempts
 - `--json`: Output in JSON format
 
-#### Examples
+## Examples
 ```bash
 # Get basic timestamp
 manifest ntp
@@ -180,12 +180,12 @@ manifest ntp --verify
 manifest ntp --json
 ```
 
-#### Default NTP Servers
+## Default NTP Servers
 - `time.apple.com` (Apple)
 - `time.google.com` (Google)
 - `pool.ntp.org` (NTP Pool)
 
-#### Output Format
+## Output Format
 ```bash
 🕐 Getting trusted NTP timestamp...
 
@@ -202,30 +202,30 @@ manifest ntp --json
 📊 Offset: +0.002 seconds
 ```
 
-### `manifest docs` - AI-Powered Documentation
+## `manifest docs` - AI-Powered Documentation
 
 Automatically generate and update documentation with intelligent analysis and template processing.
 
-#### Syntax
+## Syntax
 ```bash
 manifest docs [type] [options]
 ```
 
-#### Parameters
+## Parameters
 - **`type`** (optional): Documentation type
   - `all` (default): Generate all documentation
   - `release`: Release notes only
   - `changelog`: Changelog only
   - `metadata`: Repository metadata
 
-#### Options
+## Options
 - `--template-dir <path>`: Custom template directory
 - `--output-dir <path>`: Custom output directory
 - `--force` or `-f`: Overwrite existing files
 - `--dry-run` or `-d`: Show what would be generated
 - `--version <version>`: Specify version for generation
 
-#### Examples
+## Examples
 ```bash
 # Generate all documentation
 manifest docs
@@ -240,28 +240,28 @@ manifest docs --template-dir="./templates"
 manifest docs --force
 ```
 
-#### Generated Files
+## Generated Files
 - `docs/RELEASE_v{version}.md` - Professional release notes
 - `docs/CHANGELOG_v{version}.md` - Intelligent changelog
 - `README.md` updates - Version information synchronization
 
-### `manifest sync` - Repository Synchronization
+## `manifest sync` - Repository Synchronization
 
 Keep local repository synchronized with remote repositories.
 
-#### Syntax
+## Syntax
 ```bash
 manifest sync [options]
 ```
 
-#### Options
+## Options
 - `--branch <name>`: Sync specific branch
 - `--force` or `-f`: Force sync (overwrites local changes)
 - `--prune`: Remove remote-tracking references
 - `--depth <number>`: Shallow clone depth
 - `--tags`: Sync tags
 
-#### Examples
+## Examples
 ```bash
 # Basic sync
 manifest sync
@@ -280,39 +280,39 @@ manifest sync --prune
 
 These options are available for all commands:
 
-### `--help` or `-h`
+## `--help` or `-h`
 Show command help and usage information.
 
-### `--version` or `-V`
+## `--version` or `-V`
 Display CLI version information.
 
-### `--verbose` or `-v`
+## `--verbose` or `-v`
 Enable verbose output with detailed information.
 
-### `--debug`
+## `--debug`
 Enable debug mode with extensive logging.
 
-### `--quiet` or `-q`
+## `--quiet` or `-q`
 Suppress non-essential output.
 
-### `--config <file>`
+## `--config <file>`
 Specify custom configuration file.
 
 ## 🌍 Environment Variables
 
-### Core Configuration
+## Core Configuration
 - `MANIFEST_DEBUG`: Enable debug mode
 - `MANIFEST_VERBOSE`: Enable verbose output
 - `MANIFEST_CONFIG`: Configuration file path
 - `MANIFEST_LOG_LEVEL`: Logging level (DEBUG, INFO, WARN, ERROR)
 
-### NTP Configuration
+## NTP Configuration
 - `MANIFEST_NTP_SERVERS`: Custom NTP server list
 - `MANIFEST_NTP_TIMEOUT`: Connection timeout in seconds
 - `MANIFEST_NTP_RETRIES`: Retry attempt count
 - `MANIFEST_NTP_FALLBACK`: Fallback server list
 
-### Git Configuration
+## Git Configuration
 - `MANIFEST_GIT_COMMIT_TEMPLATE`: Commit message template
 - `MANIFEST_GIT_AUTHOR_NAME`: Default author name
 - `MANIFEST_GIT_AUTHOR_EMAIL`: Default author email
@@ -322,28 +322,28 @@ Specify custom configuration file.
 - `MANIFEST_GIT_RETRIES`: Number of retry attempts for failed operations (default: 3)
 - Note: Manifest CLI automatically uses all configured git remotes with retry logic
 
-### Documentation Configuration
+## Documentation Configuration
 - `MANIFEST_DOCS_TEMPLATE_DIR`: Template directory path
 - `MANIFEST_DOCS_OUTPUT_DIR`: Output directory path
 - `MANIFEST_DOCS_FORMAT`: Output format (markdown, html, json)
 
-### Homebrew Configuration
+## Homebrew Configuration
 - `MANIFEST_BREW_OPTION`: Control Homebrew functionality (enabled/disabled)
 - `MANIFEST_BREW_INTERACTIVE`: Interactive Homebrew updates (yes/no)
 - `MANIFEST_TAP_REPO`: Homebrew tap repository URL
 
-### Auto-Update Configuration
+## Auto-Update Configuration
 - `MANIFEST_AUTO_UPDATE`: Enable automatic update checking (true/false, default: true)
 - `MANIFEST_UPDATE_COOLDOWN`: Cooldown period between update checks in minutes (default: 30)
 
-### OS Configuration
+## OS Configuration
 - `MANIFEST_OS_PLATFORM`: Override platform detection
 - `MANIFEST_OS_ARCH`: Override architecture detection
 - `MANIFEST_OS_VERSION`: Override OS version
 
 ## 📁 Configuration Files
 
-### `.manifestrc`
+## `.manifestrc`
 Configuration file in project root or home directory:
 
 ```bash
@@ -360,7 +360,7 @@ BREW_INTERACTIVE=no
 TAP_REPO="https://github.com/fidenceio/fidenceio-homebrew-tap.git"
 ```
 
-### Configuration Priority
+## Configuration Priority
 1. Command line options
 2. Environment variables
 3. `.manifestrc` in project root
@@ -383,10 +383,10 @@ TAP_REPO="https://github.com/fidenceio/fidenceio-homebrew-tap.git"
 
 ## 📊 Output Formats
 
-### Standard Output
+## Standard Output
 Default human-readable format with emojis and formatting.
 
-### JSON Output
+## JSON Output
 Machine-readable format for automation:
 
 ```bash
@@ -405,7 +405,7 @@ manifest ntp --json
 }
 ```
 
-### Quiet Output
+## Quiet Output
 Minimal output for scripting:
 
 ```bash
@@ -414,20 +414,20 @@ manifest go --quiet
 
 ## 🚨 Error Handling
 
-### Error Types
+## Error Types
 - **Validation Errors**: Invalid input or configuration
 - **Network Errors**: Connectivity or timeout issues
 - **Permission Errors**: File system access issues
 - **Git Errors**: Repository operation failures
 - **System Errors**: OS-level problems
 
-### Error Recovery
+## Error Recovery
 - Automatic retries for transient failures
 - Fallback mechanisms for critical operations
 - Detailed error messages with suggestions
 - Logging for debugging and audit trails
 
-### Debugging
+## Debugging
 Enable debug mode for detailed troubleshooting:
 
 ```bash
@@ -437,7 +437,7 @@ manifest go
 
 ## 🔗 Integration
 
-### CI/CD Pipelines
+## CI/CD Pipelines
 ```yaml
 # GitHub Actions example
 - name: Release
@@ -447,7 +447,7 @@ manifest go
     manifest docs
 ```
 
-### Scripts
+## Scripts
 ```bash
 #!/bin/bash
 # Release script
@@ -456,7 +456,7 @@ manifest go minor
 manifest docs
 ```
 
-### Automation
+## Automation
 ```bash
 # Automated release
 if manifest test; then
@@ -468,7 +468,7 @@ else
 fi
 ```
 
-### Homebrew Integration
+## Homebrew Integration
 ```bash
 # Update Homebrew formula
 manifest docs homebrew
@@ -481,7 +481,7 @@ export MANIFEST_TAP_REPO="https://github.com/your-org/your-tap.git"
 
 ## 🌟 Advanced Features
 
-### Future Capabilities
+## Future Capabilities
 
 Manifest CLI is designed with extensibility in mind. Future versions will include:
 
@@ -496,7 +496,7 @@ Manifest CLI is designed with extensibility in mind. Future versions will includ
 - **Team Collaboration**: Multi-user workflows and approvals
 - **Advanced Templates**: Jinja2 and Handlebars support
 
-### Custom NTP Servers
+## Custom NTP Servers
 ```bash
 # Set custom NTP servers
 export MANIFEST_NTP_SERVERS="time.nist.gov,time.google.com,pool.ntp.org"
@@ -506,7 +506,7 @@ export MANIFEST_NTP_TIMEOUT=5
 export MANIFEST_NTP_RETRIES=3
 ```
 
-### Custom Documentation Templates
+## Custom Documentation Templates
 ```bash
 # Create custom templates
 mkdir -p templates
@@ -529,7 +529,7 @@ cat > templates/release.md << 'EOF'
 EOF
 ```
 
-### Git Workflow Customization
+## Git Workflow Customization
 ```bash
 # Custom commit templates
 export MANIFEST_GIT_COMMIT_TEMPLATE="Release v{version} - {timestamp}"
@@ -541,7 +541,7 @@ export MANIFEST_GIT_AUTHOR_EMAIL="your.email@example.com"
 
 ## 📋 Examples
 
-### Basic Release Workflow
+## Basic Release Workflow
 ```bash
 # 1. Test everything
 manifest test all
@@ -554,7 +554,7 @@ git log --oneline -5
 git tag --list -5
 ```
 
-### Feature Release
+## Feature Release
 ```bash
 # 1. Complete feature
 git checkout -b feature/new-feature
@@ -570,7 +570,7 @@ git merge feature/new-feature
 manifest go minor
 ```
 
-### Major Release
+## Major Release
 ```bash
 # 1. Prepare for major release
 manifest test all

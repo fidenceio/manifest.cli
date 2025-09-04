@@ -11,12 +11,10 @@
 | **Last Updated** | `2025-08-14 00:59:29 UTC` |
 | **CLI Version** | `14.1.1` |
 
-### 📚 Documentation Files
+## 📚 Documentation Files
 - **Version Info**: [VERSION](VERSION)
 - **CLI Source**: [src/cli/](src/cli/)
 - **Install Script**: [install-cli.sh](install-cli.sh)
-
-
 
 > **A powerful CLI tool for versioning, AI documenting, and repository operations.**
 
@@ -31,7 +29,7 @@
 
 **Manifest CLI** is your personal DevOps assistant that automates the tedious parts of version management, documentation, and repository operations.
 
-### 🌟 Why Manifest CLI?
+## 🌟 Why Manifest CLI?
 
 - **🤖 AI-Powered**: Intelligent documentation generation that understands your project
 - **⏰ Trusted Timestamps**: NTP-verified timestamps for compliance and audit trails
@@ -47,7 +45,7 @@
 
 ## 🚀 Quick Start
 
-### 1. Installation
+## 1. Installation
 
 ```bash
 # Clone the repository
@@ -61,7 +59,7 @@ cd fidenceio.manifest.cli
 manifest --help
 ```
 
-### 2. Configuration Setup ⚙️
+## 2. Configuration Setup ⚙️
 
 **Quick Setup (Recommended):**
 
@@ -109,7 +107,7 @@ MANIFEST_TAP_REPO="https://github.com/your-org/your-tap.git"
 - **Homebrew Integration**: Enables automatic formula updates on macOS
 - **Multi-Remote Support**: Works with all your configured git remotes automatically
 
-### 3. Your First Workflow
+## 3. Your First Workflow
 
 ```bash
 # Make some changes to your code
@@ -122,7 +120,7 @@ manifest go patch
 # 1. Get trusted timestamp
 # 2. Commit your changes
 # 3. Sync with remote
-# 4. Move old docs to past_releases
+# 4. Move old docs to zArchive
 # 5. Bump version
 # 6. Generate new documentation
 # 7. Commit, tag, and push
@@ -132,7 +130,7 @@ manifest go patch
 
 ## 🎭 Core Commands
 
-### 🚀 `manifest go` - The Complete Workflow
+## 🚀 `manifest go` - The Complete Workflow
 
 Your one-command solution for everything:
 
@@ -154,13 +152,13 @@ manifest go minor -i
 1. 🕐 **NTP Timestamp** - Get trusted timestamp from multiple servers
 2. 📝 **Change Detection** - Identify and commit pending changes
 3. 🔄 **Remote Sync** - Pull latest changes from remote
-4. 📁 **Documentation Cleanup** - Move previous version docs to past_releases
+4. 📁 **Documentation Cleanup** - Move previous version docs to zArchive
 5. 📦 **Version Bump** - Increment version according to type
 6. 🤖 **AI Documentation** - Generate release notes and changelog
 7. 🏷️ **Git Operations** - Commit, tag, and push changes
 8. 🍺 **Homebrew Update** - Update formula if applicable
 
-### 🕐 `manifest ntp` - Trusted Timestamps
+## 🕐 `manifest ntp` - Trusted Timestamps
 
 Get verified timestamps for compliance and audit purposes:
 
@@ -182,7 +180,7 @@ manifest ntp --verify
 - Financial transactions
 - Regulatory submissions
 
-### 📚 `manifest docs` - Documentation Management
+## 📚 `manifest docs` - Documentation Management
 
 Automatically create and update documentation:
 
@@ -194,19 +192,19 @@ manifest docs
 manifest docs release     # Release notes only
 manifest docs changelog   # Changelog only
 manifest docs metadata    # Repository metadata
-manifest docs cleanup     # Move historical docs to past_releases
+manifest docs cleanup     # Move historical docs to zArchive
 ```
 
-### 🧹 `manifest cleanup` - Historical Documentation
+## 🧹 `manifest cleanup` - Historical Documentation
 
 Move historical documentation to keep the main docs folder clean:
 
 ```bash
-# Move all historical documentation to past_releases
+# Move all historical documentation to zArchive
 manifest cleanup
 ```
 
-### ⚙️ `manifest config` - Configuration Management
+## ⚙️ `manifest config` - Configuration Management
 
 View and manage your current configuration:
 
@@ -217,7 +215,7 @@ manifest config
 
 This displays all environment variables, defaults, and current settings.
 
-### 🔄 `manifest sync` - Repository Management
+## 🔄 `manifest sync` - Repository Management
 
 Keep your repository synchronized:
 
@@ -232,7 +230,7 @@ manifest sync --force
 manifest sync --branch=develop
 ```
 
-### 🧪 `manifest test` - Validation Suite
+## 🧪 `manifest test` - Validation Suite
 
 Comprehensive testing to ensure everything works correctly:
 
@@ -266,7 +264,7 @@ src/cli/
     └── manifest-test.sh     # Testing framework
 ```
 
-### 🔧 How It Works
+## 🔧 How It Works
 
 1. **Command Parsing**: Your command is parsed and routed to the appropriate module
 2. **Validation**: System requirements and prerequisites are checked
@@ -278,7 +276,7 @@ src/cli/
 
 ## 🔧 Configuration
 
-### Critical Environment Variables ⚠️
+## Critical Environment Variables ⚠️
 
 **These variables MUST be configured for Manifest CLI to work properly:**
 
@@ -299,7 +297,7 @@ export MANIFEST_GIT_AUTHOR_NAME="Your Name"
 export MANIFEST_GIT_AUTHOR_EMAIL="your.email@example.com"
 ```
 
-### Advanced Configuration Options 🚀
+## Advanced Configuration Options 🚀
 
 **Manifest CLI now supports extensive customization for different organizations with human-intuitive versioning:**
 
@@ -355,7 +353,7 @@ MANIFEST_DOCS_HISTORICAL_LIMIT=20
 - **Homebrew**: Formula updates won't work on macOS
 - **Git**: Repository operations may fail or use incorrect defaults
 
-### Configuration File
+## Configuration File
 
 Copy `env.example` to `.env` in your project root:
 
@@ -391,25 +389,25 @@ manifest go patch  # Pushes to ALL configured remotes
 
 ## 🌟 Use Cases
 
-### **Software Development Teams**
+## **Software Development Teams**
 - **Standardize Release Processes**: Everyone follows the same workflow
 - **Automate Documentation**: No more manual changelog updates
 - **Maintain Consistency**: Uniform versioning across all projects
 - **Ensure Compliance**: Audit trails for regulatory requirements
 
-### **DevOps & CI/CD**
+## **DevOps & CI/CD**
 - **Integrate with Pipelines**: Add to your automated deployment workflows
 - **Generate Release Artifacts**: Automatic release notes and changelogs
 - **Maintain Audit Trails**: Track every change with trusted timestamps
 - **Streamline Releases**: One command handles the entire release process
 
-### **Open Source Projects**
+## **Open Source Projects**
 - **Professional Appearance**: Clean, organized documentation structure
 - **Easy Contribution**: Clear workflows for contributors
 - **Automated Maintenance**: Less manual work, more coding
 - **Community Standards**: Consistent release processes
 
-### **Enterprise & Compliance**
+## **Enterprise & Compliance**
 - **Regulatory Requirements**: NTP-verified timestamps for audits
 - **Change Management**: Track every modification with full context
 - **Documentation Standards**: Professional documentation for stakeholders
@@ -431,7 +429,7 @@ manifest go patch  # Pushes to ALL configured remotes
 - **[Coverage Summary](docs/COVERAGE_SUMMARY.md)** - 100% testing and documentation coverage
 - **[Configuration Examples](env.examples.md)** - Real-world configuration examples for different organizations
 
-### **User Guide** (`docs/USER_GUIDE.md`)
+## **User Guide** (`docs/USER_GUIDE.md`)
 Your comprehensive guide to using Manifest CLI effectively:
 
 **What You'll Learn:**
@@ -447,7 +445,7 @@ Your comprehensive guide to using Manifest CLI effectively:
 - Workflow Examples: Real-world scenarios
 - Configuration Tips: Optimize for your needs
 
-### **Command Reference** (`docs/COMMAND_REFERENCE.md`)
+## **Command Reference** (`docs/COMMAND_REFERENCE.md`)
 Complete reference for all commands and options:
 
 **Comprehensive Coverage:**
@@ -462,7 +460,7 @@ Complete reference for all commands and options:
 - Future Capabilities: What's planned for upcoming versions
 - Cross-references to examples and user guide
 
-### **Installation Guide** (`docs/INSTALLATION.md`)
+## **Installation Guide** (`docs/INSTALLATION.md`)
 Step-by-step installation for all platforms:
 
 **Platform Support:**
@@ -477,7 +475,7 @@ Step-by-step installation for all platforms:
 - Dependencies and prerequisites
 - Troubleshooting installation issues
 
-### **Contributing Guidelines** (`docs/CONTRIBUTING.md`)
+## **Contributing Guidelines** (`docs/CONTRIBUTING.md`)
 How to contribute to Manifest CLI development:
 
 **Development Setup:**
@@ -493,7 +491,7 @@ How to contribute to Manifest CLI development:
 - Pull request guidelines
 - Community guidelines
 
-### **Examples & Use Cases** (`docs/EXAMPLES.md`)
+## **Examples & Use Cases** (`docs/EXAMPLES.md`)
 Real-world examples and scenarios:
 
 **Practical Examples:**
@@ -513,7 +511,7 @@ Real-world examples and scenarios:
 
 ## 🚀 Workflow Examples
 
-### **Daily Development Workflow**
+## **Daily Development Workflow**
 
 ```bash
 # 1. Start your day
@@ -526,7 +524,7 @@ manifest sync                    # Get latest changes
 manifest go patch               # Commit, version, and push
 ```
 
-### **Feature Release Workflow**
+## **Feature Release Workflow**
 
 ```bash
 # 1. Create feature branch
@@ -542,7 +540,7 @@ manifest go minor               # New feature = minor version
 git branch -d feature/new-awesome-thing
 ```
 
-### **Hotfix Workflow**
+## **Hotfix Workflow**
 
 ```bash
 # 1. Create hotfix branch
@@ -558,7 +556,7 @@ manifest go patch               # Bug fix = patch version
 git branch -d hotfix/critical-bug
 ```
 
-### **CI/CD Integration**
+## **CI/CD Integration**
 
 ```yaml
 # .github/workflows/release.yml
@@ -585,25 +583,25 @@ jobs:
 
 ## 🎯 Best Practices
 
-### **Version Management**
+## **Version Management**
 - **Patch (8.8.0 → 8.8.1)**: Bug fixes, documentation updates
 - **Minor (8.8.0 → 8.9.0)**: New features, backward compatible
 - **Major (8.8.0 → 9.0.0)**: Breaking changes, major rewrites
 - **Revision (8.8.0 → 8.8.0.1)**: Build numbers, metadata changes
 
-### **Documentation**
+## **Documentation**
 - **Keep It Current**: Run `manifest docs` after significant changes
 - **Use Descriptive Messages**: Clear commit messages help with changelog generation
 - **Review Generated Docs**: Ensure accuracy before releases
 - **Historical Management**: Let the system handle old documentation
 
-### **Git Workflow**
+## **Git Workflow**
 - **Regular Syncs**: Use `manifest sync` to stay current
 - **Meaningful Commits**: Each commit should represent a logical change
 - **Tag Everything**: Tags are automatically created for versions
 - **Branch Strategy**: Use feature branches for development
 
-### **Configuration**
+## **Configuration**
 - **Environment Variables**: Use for machine-specific settings
 - **Project Configuration**: Use `.env` for project-specific settings
 - **Default Values**: Sensible defaults mean minimal configuration needed
@@ -613,7 +611,7 @@ jobs:
 
 ## 🛠️ Troubleshooting
 
-### **Common Issues & Solutions**
+## **Common Issues & Solutions**
 
 **Git Operations Hanging or Timing Out:**
 ```bash
@@ -664,7 +662,7 @@ ssh-add -l
 git remote -v
 ```
 
-### **Configuration Debugging**
+## **Configuration Debugging**
 
 ```bash
 # Show current configuration
@@ -682,25 +680,25 @@ manifest test ntp
 
 ## 🔮 Future Roadmap
 
-### **🤖 AI & Machine Learning**
+## **🤖 AI & Machine Learning**
 - **Intelligent Changelog Generation**: AI-powered change analysis
 - **Smart Version Recommendations**: ML-based version bump suggestions
 - **Natural Language Commands**: "Release the new feature" instead of commands
 - **Predictive Analytics**: Forecast release impact and dependencies
 
-### **🔒 Security & Compliance**
+## **🔒 Security & Compliance**
 - **Blockchain Timestamps**: Immutable timestamp verification
 - **Digital Signatures**: Cryptographically signed releases
 - **Compliance Frameworks**: Built-in support for SOC2, ISO27001, etc.
 - **Audit Automation**: Automatic compliance reporting
 
-### **☁️ Cloud Integration**
+## **☁️ Cloud Integration**
 - **Multi-Cloud Support**: AWS, Azure, GCP integration
 - **Container Orchestration**: Kubernetes, Docker Swarm support
 - **Serverless Deployments**: Lambda, Cloud Functions integration
 - **Infrastructure as Code**: Terraform, CloudFormation integration
 
-### **👨‍💻 Developer Experience**
+## **👨‍💻 Developer Experience**
 - **IDE Integration**: VS Code, IntelliJ, Vim plugins
 - **Graphical Interface**: Web-based dashboard for non-CLI users
 - **API Access**: RESTful API for programmatic access
@@ -710,13 +708,13 @@ manifest test ntp
 
 ## 🆘 Support & Community
 
-### **Getting Help**
+## **Getting Help**
 - **Documentation**: Start with this README and the docs folder
 - **Issues**: Report bugs and request features on GitHub
 - **Discussions**: Join the community conversation
 - **Examples**: Check the examples folder for real-world usage
 
-### **Common Issues & Solutions**
+## **Common Issues & Solutions**
 
 **Configuration Problems:**
 - **Git Remote Errors**: Ensure your repository has a valid remote origin
@@ -739,13 +737,13 @@ manifest ntp
 manifest test
 ```
 
-### **Community Resources**
+## **Community Resources**
 - **GitHub**: [fidenceio/fidenceio.manifest.cli](https://github.com/fidenceio/fidenceio.manifest.cli)
 - **Issues**: [Bug Reports & Feature Requests](https://github.com/fidenceio/fidenceio.manifest.cli/issues)
 - **Discussions**: [Community Q&A](https://github.com/fidenceio/fidenceio.manifest.cli/discussions)
 - **Wiki**: [Additional Resources](https://github.com/fidenceio/fidenceio.manifest.cli/wiki)
 
-### **Contributing**
+## **Contributing**
 We welcome contributions! See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for details on:
 - Setting up your development environment
 - Code style and standards
@@ -802,6 +800,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 *Made with ❤️ by the Manifest CLI team*
 
 </div>
-
-
 

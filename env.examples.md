@@ -239,7 +239,7 @@ MANIFEST_DOCS_HISTORICAL_LIMIT=1000
 
 ## 🚀 Quick Start Templates
 
-### Minimal Configuration
+## Minimal Configuration
 ```bash
 # Copy and customize for immediate use
 cp env.example .env
@@ -252,7 +252,7 @@ MANIFEST_NTP_SERVERS="time.nist.gov,time.google.com"
 MANIFEST_BREW_OPTION=enabled
 ```
 
-### Development Team Configuration
+## Development Team Configuration
 ```bash
 # For development teams
 MANIFEST_DEFAULT_BRANCH="develop"
@@ -266,7 +266,7 @@ MANIFEST_DEBUG=true
 MANIFEST_VERBOSE=true
 ```
 
-### Production Environment Configuration
+## Production Environment Configuration
 ```bash
 # For production environments
 MANIFEST_DEFAULT_BRANCH="main"
@@ -295,7 +295,7 @@ manifest ntp
 
 ## 📚 Advanced Configuration
 
-### Custom Version Parsing
+## Custom Version Parsing
 ```bash
 # Custom regex for version parsing
 MANIFEST_VERSION_REGEX="^v?([0-9]+)\\.([0-9]+)\\.([0-9]+)(?:-([0-9A-Za-z-]+))?$"
@@ -304,7 +304,7 @@ MANIFEST_VERSION_REGEX="^v?([0-9]+)\\.([0-9]+)\\.([0-9]+)(?:-([0-9A-Za-z-]+))?$"
 MANIFEST_VERSION_VALIDATION="major > 0, minor >= 0, patch >= 0"
 ```
 
-### Environment-Specific Overrides
+## Environment-Specific Overrides
 ```bash
 # .env.development
 MANIFEST_DEBUG=true
@@ -317,7 +317,7 @@ MANIFEST_VERBOSE=false
 MANIFEST_DEFAULT_BRANCH="main"
 ```
 
-### Multi-Repository Configuration
+## Multi-Repository Configuration
 ```bash
 # Git Configuration
 MANIFEST_GIT_PUSH_STRATEGY="simple"
@@ -349,7 +349,7 @@ MANIFEST_GIT_PULL_STRATEGY="rebase"
 
 ## 🔍 Troubleshooting
 
-### Configuration Not Loading
+## Configuration Not Loading
 ```bash
 # Check file permissions
 ls -la .env*
@@ -361,7 +361,7 @@ grep -v "^#" .env | grep -v "^$"
 source .env && echo "Configuration loaded"
 ```
 
-### Version Parsing Issues
+## Version Parsing Issues
 ```bash
 # Test version format
 echo "1.2.3" | cut -d"." -f1
@@ -373,7 +373,7 @@ echo "$MANIFEST_VERSION_SEPARATOR"
 echo "$MANIFEST_VERSION_FORMAT"
 ```
 
-### Branch Name Conflicts
+## Branch Name Conflicts
 ```bash
 # List actual branches
 git branch -a

@@ -15,13 +15,13 @@ The tool is built with a modular architecture that handles:
 - **Timestamp Verification**: Trusted NTP-based timestamps for compliance
 - **Homebrew Integration**: Automatic formula updates and maintenance
 
-### **Current Capabilities**
+## **Current Capabilities**
 - **Core Workflow Automation**: Complete release process from version bump to deployment
 - **Cross-Platform Support**: Optimized for macOS, Linux, and BSD systems
 - **Intelligent Testing**: Comprehensive validation before release
 - **Custom Templates**: Flexible documentation and workflow customization
 
-### **Future Capabilities**
+## **Future Capabilities**
 - **Advanced AI**: Smarter commit analysis and intelligent categorization
 - **Plugin System**: Extensible architecture for custom functionality
 - **Cloud Integration**: Multi-cloud deployment and infrastructure automation
@@ -30,7 +30,7 @@ The tool is built with a modular architecture that handles:
 
 ## 🚀 Getting Started
 
-### Prerequisites
+## Prerequisites
 
 Before using Manifest CLI, ensure you have:
 
@@ -40,7 +40,7 @@ Before using Manifest CLI, ensure you have:
 - A Git repository with proper remote configuration
 - Internet access for NTP timestamp verification
 
-### First Run
+## First Run
 
 After installation, run the CLI for the first time:
 
@@ -52,7 +52,7 @@ This will show you all available commands and options.
 
 ## 📚 Core Commands Deep Dive
 
-### 1. `manifest go` - The Main Workflow
+## 1. `manifest go` - The Main Workflow
 
 The `manifest go` command is the heart of the CLI. It orchestrates the entire release process with intelligent automation:
 
@@ -67,7 +67,7 @@ manifest go major      # 1.0.0 → 2.0.0
 manifest go revision   # 1.0.0 → 1.0.0.1
 ```
 
-#### What Happens During `manifest go`:
+## What Happens During `manifest go`:
 
 1. **🕐 NTP Timestamp**: Gets a trusted timestamp from multiple NTP servers
 2. **📝 Change Detection**: Checks for uncommitted changes and auto-commits them
@@ -77,7 +77,7 @@ manifest go revision   # 1.0.0 → 1.0.0.1
 6. **🏷️ Git Operations**: Creates commit, tag, and pushes to all remotes
 7. **🍺 Homebrew Update**: Updates Homebrew formula if applicable
 
-#### Interactive Mode
+## Interactive Mode
 
 For more control, you can run in interactive mode:
 
@@ -87,7 +87,7 @@ manifest go --interactive
 
 This will prompt you for confirmation at each step of the workflow.
 
-### 2. `manifest test` - Testing Your Setup
+## 2. `manifest test` - Testing Your Setup
 
 The testing framework helps ensure everything is working correctly before you release:
 
@@ -103,7 +103,7 @@ manifest test docs        # Test documentation generation
 manifest test os          # Test OS detection
 ```
 
-#### Test Output Example
+## Test Output Example
 
 ```bash
 🧪 Running Manifest CLI tests...
@@ -141,7 +141,7 @@ manifest test os          # Test OS detection
 🎉 All tests passed! Your Manifest CLI is ready to use.
 ```
 
-### 3. `manifest ntp` - Trusted Timestamps
+## 3. `manifest ntp` - Trusted Timestamps
 
 Get verified timestamps for compliance and audit purposes:
 
@@ -156,7 +156,7 @@ manifest ntp --format="%Y-%m-%d %H:%M:%S UTC"
 manifest ntp --verify
 ```
 
-#### NTP Output Example
+## NTP Output Example
 
 ```bash
 🕐 Getting trusted NTP timestamp...
@@ -174,7 +174,7 @@ manifest ntp --verify
 📊 Offset: +0.002 seconds
 ```
 
-### 4. `manifest docs` - AI-Powered Documentation
+## 4. `manifest docs` - AI-Powered Documentation
 
 Automatically generate and update documentation with intelligent analysis:
 
@@ -188,14 +188,14 @@ manifest docs changelog  # Changelog only
 manifest docs metadata   # Repository metadata
 ```
 
-#### Generated Documentation
+## Generated Documentation
 
 The CLI automatically creates:
 - `docs/RELEASE_v{version}.md` - Professional release notes
 - `docs/CHANGELOG_v{version}.md` - Intelligent changelog
 - `README.md` updates - Version information synchronization
 
-### 5. `manifest sync` - Repository Synchronization
+## 5. `manifest sync` - Repository Synchronization
 
 Keep your local repository synchronized with remote:
 
@@ -212,7 +212,7 @@ manifest sync --branch=main
 
 ## 🔧 Advanced Usage
 
-### Environment Variables
+## Environment Variables
 
 You can customize behavior with environment variables:
 
@@ -230,7 +230,7 @@ export MANIFEST_DEBUG=true
 export MANIFEST_DOCS_TEMPLATE_DIR="/path/to/templates"
 ```
 
-### Configuration Files
+## Configuration Files
 
 For advanced users, you can create a `.manifestrc` file in your project root:
 
@@ -245,7 +245,7 @@ VERBOSE=false
 LOG_LEVEL="INFO"
 ```
 
-### Custom Documentation Templates
+## Custom Documentation Templates
 
 Create custom templates for release notes and changelogs:
 
@@ -278,9 +278,9 @@ EOF
 
 ## 🚨 Troubleshooting
 
-### Common Issues
+## Common Issues
 
-#### 1. NTP Connection Failed
+## 1. NTP Connection Failed
 
 ```bash
 ❌ NTP connection failed
@@ -292,7 +292,7 @@ EOF
 - Check firewall settings
 - Use `manifest ntp --servers="time.google.com"`
 
-#### 2. Git Operations Hanging or Timing Out
+## 2. Git Operations Hanging or Timing Out
 
 ```bash
 ❌ Git fetch/push timed out
@@ -313,7 +313,7 @@ MANIFEST_GIT_TIMEOUT="300"    # 5 minutes timeout
 MANIFEST_GIT_RETRIES="3"      # 3 retry attempts
 ```
 
-#### 3. Git Authentication Issues
+## 3. Git Authentication Issues
 
 ```bash
 ❌ Git push failed: authentication required
@@ -325,7 +325,7 @@ MANIFEST_GIT_RETRIES="3"      # 3 retry attempts
 - Verify remote URL format
 - Use `git remote -v` to check configuration
 
-#### 4. Version Bump Failed
+## 4. Version Bump Failed
 
 ```bash
 ❌ Version bump failed
@@ -337,7 +337,7 @@ MANIFEST_GIT_RETRIES="3"      # 3 retry attempts
 - Ensure no syntax errors
 - Check for conflicting version files
 
-#### 5. Documentation Generation Failed
+## 5. Documentation Generation Failed
 
 ```bash
 ❌ Documentation generation failed
@@ -349,7 +349,7 @@ MANIFEST_GIT_RETRIES="3"      # 3 retry attempts
 - Ensure required files exist
 - Check disk space
 
-### Debug Mode
+## Debug Mode
 
 Enable debug mode for detailed troubleshooting:
 
@@ -360,7 +360,7 @@ manifest go
 
 This will show detailed information about each step of the process.
 
-### Log Files
+## Log Files
 
 Check log files for detailed error information:
 
@@ -374,7 +374,7 @@ grep "ERROR" ~/.manifest-cli/logs/manifest.log
 
 ## 🔄 Workflow Examples
 
-### Daily Development Workflow
+## Daily Development Workflow
 
 ```bash
 # 1. Make your changes
@@ -392,7 +392,7 @@ git log --oneline -5
 git tag --list -5
 ```
 
-### Feature Release Workflow
+## Feature Release Workflow
 
 ```bash
 # 1. Complete feature development
@@ -412,7 +412,7 @@ manifest go minor
 git branch -d feature/new-feature
 ```
 
-### Major Release Workflow
+## Major Release Workflow
 
 ```bash
 # 1. Prepare for major release
@@ -429,7 +429,7 @@ manifest docs
 cat docs/RELEASE_v$(cat VERSION).md
 ```
 
-### CI/CD Integration
+## CI/CD Integration
 
 ```bash
 # GitHub Actions example
@@ -442,35 +442,35 @@ cat docs/RELEASE_v$(cat VERSION).md
 
 ## 📊 Best Practices
 
-### 1. Version Management
+## 1. Version Management
 
 - Use semantic versioning consistently
 - Document breaking changes clearly
 - Tag releases immediately after creation
 - Keep version files in sync
 
-### 2. Git Workflow
+## 2. Git Workflow
 
 - Always pull before releasing
 - Use meaningful commit messages
 - Tag releases with version numbers
 - Keep branches clean and organized
 
-### 3. Documentation
+## 3. Documentation
 
 - Generate documentation for every release
 - Keep templates up-to-date
 - Review generated content before publishing
 - Archive old documentation
 
-### 4. Testing
+## 4. Testing
 
 - Run tests before every release
 - Test in different environments
 - Validate generated artifacts
 - Monitor for regressions
 
-### 5. NTP Configuration
+## 5. NTP Configuration
 
 - Use multiple NTP servers for redundancy
 - Set appropriate timeouts for your network
@@ -479,7 +479,7 @@ cat docs/RELEASE_v$(cat VERSION).md
 
 ## 🌟 Advanced Features
 
-### Custom NTP Servers
+## Custom NTP Servers
 
 ```bash
 # Set custom NTP servers
@@ -490,7 +490,7 @@ export MANIFEST_NTP_TIMEOUT=5
 export MANIFEST_NTP_RETRIES=3
 ```
 
-### Homebrew Integration
+## Homebrew Integration
 
 ```bash
 # Control Homebrew functionality
@@ -501,7 +501,7 @@ export MANIFEST_BREW_INTERACTIVE=no
 export MANIFEST_TAP_REPO="https://github.com/your-org/your-tap.git"
 ```
 
-### Git Configuration
+## Git Configuration
 
 ```bash
 # Custom commit templates

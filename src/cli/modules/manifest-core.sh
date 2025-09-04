@@ -213,7 +213,7 @@ manifest_go() {
     sync_repository
     echo ""
     
-    # Move previous version documentation to past_releases
+    # Move previous version documentation to zArchive
     echo "📁 Moving previous version documentation..."
     move_previous_documentation
     echo ""
@@ -669,19 +669,19 @@ main() {
                     fi
                     ;;
                 "cleanup")
-                    echo "📁 Moving historical documentation to past_releases..."
+                    echo "📁 Moving historical documentation to zArchive..."
                     move_existing_historical_docs
                     ;;
                 *)
                     echo "📚 Documentation commands:"
                     echo "   docs metadata  - Update repository metadata"
                     echo "   docs homebrew - Update Homebrew formula"
-                    echo "   docs cleanup  - Move historical docs to past_releases"
+                    echo "   docs cleanup  - Move historical docs to zArchive"
                     ;;
             esac
             ;;
         "cleanup")
-            echo "📁 Moving historical documentation to past_releases..."
+            echo "📁 Moving historical documentation to zArchive..."
             move_existing_historical_docs
             ;;
         "config")
@@ -723,7 +723,7 @@ display_help() {
       echo "  docs        - 📚 Create documentation and release notes"
   echo "    docs metadata  - 🏷️  Update repository metadata (description, topics, etc.)"
   echo "    docs homebrew  - 🍺 Update Homebrew formula"
-  echo "  cleanup     - 📁 Move historical documentation to past_releases"
+  echo "  cleanup     - 📁 Move historical documentation to zArchive"
   echo "  config      - ⚙️  Show current configuration and environment variables"
   echo "  security    - 🔒 Security audit for vulnerabilities and privacy protection"
   echo "  test        - 🧪 Test CLI functionality and workflows"

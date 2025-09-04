@@ -14,15 +14,15 @@ Before installing Manifest CLI, ensure you have:
 - **Internet access** (for NTP timestamp verification)
 - **Administrative privileges** (for some installation methods)
 
-### **System Requirements**
+## **System Requirements**
 
-#### **Current Version (8.6.7+)**
+## **Current Version (8.6.7+)**
 - **Operating System**: macOS 10.15+, Linux (kernel 4.0+), BSD
 - **Memory**: 512MB RAM minimum, 1GB recommended
 - **Storage**: 100MB available disk space
 - **Network**: Stable internet connection for NTP and updates
 
-#### **Future Versions**
+## **Future Versions**
 - **Operating System**: Windows 10/11, additional Linux distributions
 - **Memory**: 1GB RAM minimum, 2GB recommended
 - **Storage**: 200MB available disk space
@@ -30,7 +30,7 @@ Before installing Manifest CLI, ensure you have:
 
 ## 🍺 Installation Methods
 
-### Method 1: Homebrew (Recommended)
+## Method 1: Homebrew (Recommended)
 
 The easiest way to install Manifest CLI on macOS and Linux:
 
@@ -52,7 +52,7 @@ manifest --version
 brew upgrade manifest
 ```
 
-### Method 2: Direct Installation Script
+## Method 2: Direct Installation Script
 
 Install directly from the repository:
 
@@ -68,7 +68,7 @@ curl -fsSL https://raw.githubusercontent.com/fidenceio/manifest.cli/main/install
 4. Adds to PATH (current session)
 5. Verifies installation
 
-### Method 3: Manual Installation
+## Method 3: Manual Installation
 
 For advanced users who want full control:
 
@@ -81,9 +81,9 @@ cd manifest.cli
 ./install-cli.sh
 ```
 
-### Method 4: Package Managers
+## Method 4: Package Managers
 
-#### Arch Linux (AUR)
+## Arch Linux (AUR)
 ```bash
 # Using yay
 yay -S manifest-cli
@@ -92,7 +92,7 @@ yay -S manifest-cli
 paru -S manifest-cli
 ```
 
-#### Nix/NixOS
+## Nix/NixOS
 ```bash
 # Add to configuration.nix
 environment.systemPackages = with pkgs; [ manifest-cli ];
@@ -103,14 +103,14 @@ nix-env -iA nixpkgs.manifest-cli
 
 ## 🖥️ Platform-Specific Instructions
 
-### macOS
+## macOS
 
-#### Homebrew (Recommended)
+## Homebrew (Recommended)
 ```bash
 brew install fidenceio/manifest/manifest
 ```
 
-#### Manual Installation
+## Manual Installation
 ```bash
 # Install dependencies
 brew install coreutils git node
@@ -121,9 +121,9 @@ cd manifest.cli
 ./install-cli.sh
 ```
 
-### Linux
+## Linux
 
-#### Ubuntu/Debian
+## Ubuntu/Debian
 ```bash
 # Install dependencies
 sudo apt update
@@ -133,7 +133,7 @@ sudo apt install git nodejs npm curl
 curl -fsSL https://raw.githubusercontent.com/fidenceio/manifest.cli/main/install-cli.sh | bash
 ```
 
-#### CentOS/RHEL/Fedora
+## CentOS/RHEL/Fedora
 ```bash
 # Install dependencies
 sudo yum install git nodejs npm curl  # CentOS/RHEL
@@ -144,7 +144,7 @@ sudo dnf install git nodejs npm curl  # Fedora
 curl -fsSL https://raw.githubusercontent.com/fidenceio/manifest.cli/main/install-cli.sh | bash
 ```
 
-#### Arch Linux
+## Arch Linux
 ```bash
 # Install from AUR
 yay -S manifest-cli
@@ -154,9 +154,9 @@ sudo pacman -S git nodejs npm curl
 curl -fsSL https://raw.githubusercontent.com/fidenceio/manifest.cli.git/main/install-cli.sh | bash
 ```
 
-### Windows
+## Windows
 
-#### WSL2 (Recommended)
+## WSL2 (Recommended)
 ```bash
 # Install WSL2 with Ubuntu
 wsl --install -d Ubuntu
@@ -164,7 +164,7 @@ wsl --install -d Ubuntu
 # Follow Ubuntu installation instructions above
 ```
 
-#### Git Bash
+## Git Bash
 ```bash
 # Install Git for Windows
 # Download from: https://git-scm.com/download/win
@@ -176,7 +176,7 @@ wsl --install -d Ubuntu
 curl -fsSL https://raw.githubusercontent.com/fidenceio/manifest.cli/main/install-cli.sh | bash
 ```
 
-#### PowerShell
+## PowerShell
 ```powershell
 # Install using winget (Windows 10/11)
 winget install fidenceio.manifest
@@ -185,9 +185,9 @@ winget install fidenceio.manifest
 choco install manifest-cli
 ```
 
-### BSD Systems
+## BSD Systems
 
-#### FreeBSD
+## FreeBSD
 ```bash
 # Install dependencies
 sudo pkg install git node npm curl
@@ -196,7 +196,7 @@ sudo pkg install git node npm curl
 curl -fsSL https://raw.githubusercontent.com/fidenceio/manifest.cli/main/install-cli.sh | bash
 ```
 
-#### OpenBSD
+## OpenBSD
 ```bash
 # Install dependencies
 sudo pkg_add git node npm curl
@@ -207,7 +207,7 @@ curl -fsSL https://raw.githubusercontent.com/fidenceio/manifest.cli/main/install
 
 ## 🔧 Post-Installation Setup
 
-### 1. Verify Installation
+## 1. Verify Installation
 
 ```bash
 # Check CLI version
@@ -220,7 +220,7 @@ manifest --help
 manifest test
 ```
 
-### 2. Configure Git
+## 2. Configure Git
 
 Ensure Git is properly configured:
 
@@ -233,7 +233,7 @@ git config --global user.email "your.email@example.com"
 git config --list
 ```
 
-### 3. Set Up SSH Keys (Recommended)
+## 3. Set Up SSH Keys (Recommended)
 
 For secure repository access:
 
@@ -252,7 +252,7 @@ pbcopy < ~/.ssh/id_ed25519.pub
 xclip -selection clipboard < ~/.ssh/id_ed25519.pub
 ```
 
-### 4. Environment Configuration
+## 4. Environment Configuration
 
 Add to your shell profile:
 
@@ -267,7 +267,7 @@ export PATH="$HOME/.local/bin:$PATH"
 set -gx PATH $HOME/.local/bin $PATH
 ```
 
-### 5. Custom Configuration
+## 5. Custom Configuration
 
 Create `.manifestrc` in your project root:
 
@@ -287,7 +287,7 @@ TAP_REPO="https://github.com/fidenceio/fidenceio-homebrew-tap.git"
 
 ## 🧪 Testing Your Installation
 
-### Basic Functionality Test
+## Basic Functionality Test
 
 ```bash
 # Test CLI availability
@@ -303,14 +303,14 @@ manifest test git
 manifest test docs
 ```
 
-### Comprehensive Test
+## Comprehensive Test
 
 ```bash
 # Run all tests
 manifest test all
 ```
 
-### Workflow Test
+## Workflow Test
 
 ```bash
 # Test complete workflow (dry run)
@@ -319,9 +319,9 @@ manifest go --dry-run
 
 ## 🚨 Troubleshooting
 
-### Common Installation Issues
+## Common Installation Issues
 
-#### 1. Command Not Found
+## 1. Command Not Found
 
 ```bash
 ❌ manifest: command not found
@@ -332,7 +332,7 @@ manifest go --dry-run
 - Restart your terminal
 - Verify installation location: `which manifest`
 
-#### 2. Permission Denied
+## 2. Permission Denied
 
 ```bash
 ❌ Permission denied
@@ -343,7 +343,7 @@ manifest go --dry-run
 - Make executable: `chmod +x ~/.local/bin/manifest`
 - Check directory permissions: `ls -la ~/.local/bin/`
 
-#### 3. Dependencies Missing
+## 3. Dependencies Missing
 
 ```bash
 ❌ Required command not found
@@ -354,7 +354,7 @@ manifest go --dry-run
 - Install Node.js: `brew install node` (macOS) or `sudo apt install nodejs` (Ubuntu)
 - Install coreutils: `brew install coreutils` (macOS)
 
-#### 4. Network Issues
+## 4. Network Issues
 
 ```bash
 ❌ Failed to download installation script
@@ -366,9 +366,9 @@ manifest go --dry-run
 - Use VPN if behind corporate firewall
 - Download manually and run locally
 
-### Platform-Specific Issues
+## Platform-Specific Issues
 
-#### macOS Issues
+## macOS Issues
 
 **Homebrew not found:**
 ```bash
@@ -382,7 +382,7 @@ manifest go --dry-run
 sudo chown -R $(whoami) /usr/local/bin /usr/local/lib /usr/local/sbin
 ```
 
-#### Linux Issues
+## Linux Issues
 
 **Package manager errors:**
 ```bash
@@ -399,7 +399,7 @@ curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt-get install -y nodejs
 ```
 
-#### Windows Issues
+## Windows Issues
 
 **WSL2 not working:**
 ```bash
@@ -415,7 +415,7 @@ dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /nores
 
 ## 🔄 Updating Manifest CLI
 
-### Homebrew Users
+## Homebrew Users
 
 ```bash
 # Update Homebrew
@@ -425,7 +425,7 @@ brew update
 brew upgrade manifest
 ```
 
-### Manual Installation Users
+## Manual Installation Users
 
 ```bash
 # Pull latest changes
@@ -436,7 +436,7 @@ git pull origin main
 ./install-cli.sh
 ```
 
-### Direct Installation Users
+## Direct Installation Users
 
 ```bash
 # Download and run latest installation script
@@ -445,7 +445,7 @@ curl -fsSL https://raw.githubusercontent.com/fidenceio/manifest.cli/main/install
 
 ## 🗑️ Uninstalling Manifest CLI
 
-### Homebrew Users
+## Homebrew Users
 
 ```bash
 # Remove the CLI
@@ -455,7 +455,7 @@ brew uninstall manifest
 brew untap fidenceio/manifest
 ```
 
-### Manual Installation Users
+## Manual Installation Users
 
 ```bash
 # Remove CLI binary
