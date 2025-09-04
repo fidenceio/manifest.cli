@@ -1,6 +1,11 @@
 #!/bin/bash
 # Manifest Cleanup Module
-# Provides centralized, iterative file cleanup utilities
+# Provides centralized, iterative file cleanup utilities with exclusion support
+#
+# Environment Variables:
+#   MANIFEST_CLEANUP_MAX_ATTEMPTS - Maximum retry attempts (default: 3)
+#   MANIFEST_CLEANUP_DELAY - Delay between retry attempts in seconds (default: 1)
+#   MANIFEST_CLEANUP_EXCLUDE_DIRS - Comma-separated list of directories to exclude from cleanup
 
 # Common file patterns for cleanup
 declare -a COMMON_TEMP_PATTERNS=(
@@ -16,15 +21,46 @@ declare -a COMMON_TEMP_PATTERNS=(
     "*.lock"
 )
 
-# Iterative file removal with retry logic
+# Check if directory should be excluded from cleanup
+is_excluded_directory() {
+    local file_path="$1"
+    local exclude_dirs="${MANIFEST_CLEANUP_EXCLUDE_DIRS:-}"
+    
+    if [ -z "$exclude_dirs" ]; then
+        return 1  # Not excluded
+    fi
+    
+    # Convert comma-separated list to array
+    IFS=',' read -ra exclude_array <<< "$exclude_dirs"
+    
+    for exclude_dir in "${exclude_array[@]}"; do
+        # Trim whitespace
+        exclude_dir=$(echo "$exclude_dir" | xargs)
+        
+        # Check if file is in excluded directory
+        if [[ "$file_path" == *"$exclude_dir"* ]]; then
+            return 0  # Is excluded
+        fi
+    done
+    
+    return 1  # Not excluded
+}
+
+# Iterative file removal with retry logic and exclusion support
 remove_files_iteratively() {
     local patterns=("$@")
     local max_attempts="${MANIFEST_CLEANUP_MAX_ATTEMPTS:-3}"
     local delay="${MANIFEST_CLEANUP_DELAY:-1}"
     local cleaned_count=0
     local failed_count=0
+    local excluded_count=0
     
     echo "🧹 Starting iterative file cleanup..."
+    
+    # Show exclusion info if configured
+    if [ -n "${MANIFEST_CLEANUP_EXCLUDE_DIRS:-}" ]; then
+        echo "   🚫 Excluding directories: ${MANIFEST_CLEANUP_EXCLUDE_DIRS}"
+    fi
     
     for pattern in "${patterns[@]}"; do
         local attempt=1
@@ -37,6 +73,12 @@ remove_files_iteratively() {
             while IFS= read -r -d '' file; do
                 if [ -f "$file" ]; then
                     files_found=$((files_found + 1))
+                    
+                    # Check if file is in excluded directory
+                    if is_excluded_directory "$file"; then
+                        excluded_count=$((excluded_count + 1))
+                        continue
+                    fi
                     
                     # Attempt to remove file
                     if rm -f "$file" 2>/dev/null; then
@@ -70,12 +112,16 @@ remove_files_iteratively() {
         echo "   ✅ Successfully cleaned $cleaned_count file(s)"
     fi
     
+    if [ $excluded_count -gt 0 ]; then
+        echo "   🚫 Excluded $excluded_count file(s) from cleanup"
+    fi
+    
     if [ $failed_count -gt 0 ]; then
         echo "   ⚠️  Failed to clean $failed_count file(s)"
         return 1
     fi
     
-    if [ $cleaned_count -eq 0 ] && [ $failed_count -eq 0 ]; then
+    if [ $cleaned_count -eq 0 ] && [ $failed_count -eq 0 ] && [ $excluded_count -eq 0 ]; then
         echo "   ✅ No files found to clean"
     fi
     
@@ -145,14 +191,6 @@ comprehensive_cleanup() {
     
     # Clean zArchive
     cleanup_zArchive
-    
-    # Clean any other specified directories
-    if [ -n "$MANIFEST_CLEANUP_DIRS" ]; then
-        IFS=',' read -ra dirs <<< "$MANIFEST_CLEANUP_DIRS"
-        for dir in "${dirs[@]}"; do
-            cleanup_directory "$dir" "*" 10
-        done
-    fi
     
     echo "✅ Comprehensive cleanup completed"
 }
