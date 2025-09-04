@@ -4,12 +4,12 @@
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `15.2.1` |
-| **Release Date** | `2025-09-04 21:54:39 UTC` |
-| **Git Tag** | `v15.2.1` |
+| **Current Version** | `15.3.0` |
+| **Release Date** | `2025-09-04 23:21:44 UTC` |
+| **Git Tag** | `v15.3.0` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-09-04 21:54:39 UTC` |
-| **CLI Version** | `15.2.1` |
+| **Last Updated** | `2025-09-04 23:21:44 UTC` |
+| **CLI Version** | `15.3.0` |
 
 ### 📚 Documentation Files
 
