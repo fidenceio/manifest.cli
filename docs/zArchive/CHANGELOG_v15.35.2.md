@@ -1,6 +1,6 @@
 # Changelog v15.35.2
 
-**Release Date:** 2025-09-05 16:41:10 UTC  
+**Release Date:** 2025-09-05 17:18:37 UTC  
 **Release Type:** patch
 
 ## 🆕 New Features
@@ -44,8 +44,7 @@
 
 
 ## Improvements
-ℹ️  Getting changes since v15.35.1
-Auto-commit before Manifest process [NTP: 2025-09-05 16:41:10 UTC]
+ℹ️  Getting changes since v15.35.2
 
 ## Bug Fixes
 
