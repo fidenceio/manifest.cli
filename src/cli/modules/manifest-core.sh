@@ -37,6 +37,7 @@ source "$MODULES_DIR/manifest-os.sh"
 source "$MODULES_DIR/manifest-ntp.sh"
 source "$MODULES_DIR/manifest-git.sh"
 source "$MODULES_DIR/manifest-security.sh"
+source "$MODULES_DIR/manifest-documentation.sh"
 source "$MODULES_DIR/manifest-orchestrator.sh"
 
 # Debug output (can be removed in production)
