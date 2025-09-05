@@ -473,7 +473,7 @@ rm -rf ~/.manifest-cli
 After successful installation:
 
 1. **Read the [User Guide](USER_GUIDE.md)** for usage instructions
-2. **Check the [API Reference](API_REFERENCE.md)** for command details
+2. **Check the [Command Reference](COMMAND_REFERENCE.md)** for command details
 3. **Try the examples** in the documentation
 4. **Join the community** on GitHub Discussions
 5. **Report issues** if you encounter problems
@@ -481,7 +481,7 @@ After successful installation:
 ## 📞 Getting Help
 
 - **Installation Issues**: Check this guide and troubleshooting section
-- **Usage Questions**: See [User Guide](USER_GUIDE.md) and [API Reference](API_REFERENCE.md)
+- **Usage Questions**: See [User Guide](USER_GUIDE.md) and [Command Reference](COMMAND_REFERENCE.md)
 - **Bug Reports**: [GitHub Issues](https://github.com/fidenceio/manifest.cli/issues)
 - **Community Support**: [GitHub Discussions](https://github.com/fidenceio/manifest.cli/discussions)
 

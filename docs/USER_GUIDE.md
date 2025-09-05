@@ -527,7 +527,7 @@ Now that you're familiar with the basics:
 - **Documentation**: Check other docs in this directory
 - **Issues**: Report bugs on [GitHub](https://github.com/fidenceio/manifest.cli/issues)
 - **Discussions**: Ask questions on [GitHub Discussions](https://github.com/fidenceio/manifest.cli/discussions)
-- **Examples**: See the [examples directory](docs/EXAMPLES.md) for more use cases
+- **Examples**: See the [examples directory](EXAMPLES.md) for more use cases
 - **Command Reference**: See [COMMAND_REFERENCE.md](COMMAND_REFERENCE.md) for complete command details
 
 ---

@@ -20,8 +20,8 @@ VERSION_FILE_URL="https://raw.githubusercontent.com/fidenceio/manifest.cli/main/
 
 # Get current version
 get_current_version() {
-    if [ -f "/Users/william/.manifest-cli/VERSION" ]; then
-        cat "/Users/william/.manifest-cli/VERSION"
+    if [ -f "$HOME/.manifest-cli/VERSION" ]; then
+        cat "$HOME/.manifest-cli/VERSION"
     elif [ -f "./VERSION" ]; then
         cat "./VERSION"
     else

@@ -6,7 +6,7 @@
 set -e
 
 # Source the core module from the project directory
-source "/Users/william/.manifest-cli/src/cli/modules/manifest-core.sh"
+source "$HOME/.manifest-cli/src/cli/modules/manifest-core.sh"
 
 # Call the main function
 main "$@"

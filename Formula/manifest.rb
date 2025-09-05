@@ -1,8 +1,8 @@
 class Manifest < Formula
   desc "A powerful CLI tool for managing manifest files, versioning, and repository operations with trusted timestamp verification"
   homepage "https://github.com/fidenceio/manifest.cli"
-  url "https://github.com/fidenceio/manifest.cli/archive/refs/tags/v15.22.0.tar.gz"
-  sha256 "e7f703c6eb9943be918fdd4208a86df55a95deb4da6a9d604e5773630828ddd4"
+  url "https://github.com/fidenceio/manifest.cli/archive/refs/tags/v15.23.0.tar.gz"
+  sha256 "956f17d72f6b25a49a9f33ebe7eb3ee9de374514c3395e4b0a45dec84ba00658"
   license "MIT"
   head "https://github.com/fidenceio/manifest.cli.git", branch: "main"
 
@@ -24,7 +24,7 @@ class Manifest < Formula
     
     # Update the wrapper to point to the correct location
     inreplace bin/"manifest" do |s|
-      s.gsub! "/Users/william/.manifest-cli", libexec
+      s.gsub! "$HOME/.manifest-cli", libexec
     end
     
     # Create a proper shebang

@@ -284,9 +284,9 @@ manifest_go() {
     if [ -f "scripts/update-homebrew.sh" ]; then
         # We're in the project root
         scripts_dir="scripts"
-    elif [ -f "/Users/william/.manifest-cli/scripts/update-homebrew.sh" ]; then
+    elif [ -f "$HOME/.manifest-cli/scripts/update-homebrew.sh" ]; then
         # We're running from installed CLI
-        scripts_dir="/Users/william/.manifest-cli/scripts"
+        scripts_dir="$HOME/.manifest-cli/scripts"
     else
         echo "   ⚠️  Homebrew update script not found (skipping)"
         return 0
@@ -381,9 +381,9 @@ update_cli() {
     if [ -f "scripts/auto-update.sh" ]; then
         # We're in the project root
         update_script="scripts/auto-update.sh"
-    elif [ -f "/Users/william/.manifest-cli/scripts/auto-update.sh" ]; then
+    elif [ -f "$HOME/.manifest-cli/scripts/auto-update.sh" ]; then
         # We're running from installed CLI
-        update_script="/Users/william/.manifest-cli/scripts/auto-update.sh"
+        update_script="$HOME/.manifest-cli/scripts/auto-update.sh"
     else
         echo "❌ Update script not found"
         echo "Please reinstall Manifest CLI using the install script"
@@ -527,7 +527,7 @@ check_auto_update() {
         return 0
     fi
     
-    local last_check_file="/Users/william/.manifest-cli/.last_update_check"
+    local last_check_file="$HOME/.manifest-cli/.last_update_check"
     local cooldown_minutes="${MANIFEST_UPDATE_COOLDOWN:-30}"
     local current_time=$(date +%s)
     local last_check_time=0
@@ -551,8 +551,8 @@ check_auto_update() {
             local update_script=""
             if [ -f "scripts/auto-update.sh" ]; then
                 update_script="scripts/auto-update.sh"
-            elif [ -f "/Users/william/.manifest-cli/scripts/auto-update.sh" ]; then
-                update_script="/Users/william/.manifest-cli/scripts/auto-update.sh"
+            elif [ -f "$HOME/.manifest-cli/scripts/auto-update.sh" ]; then
+                update_script="$HOME/.manifest-cli/scripts/auto-update.sh"
             fi
             
             # Run update check if script is available
@@ -664,9 +664,9 @@ main() {
                     if [ -f "scripts/update-homebrew.sh" ]; then
                         # We're in the project root
                         scripts_dir="scripts"
-                    elif [ -f "/Users/william/.manifest-cli/scripts/update-homebrew.sh" ]; then
+                    elif [ -f "$HOME/.manifest-cli/scripts/update-homebrew.sh" ]; then
                         # We're running from installed CLI
-                        scripts_dir="/Users/william/.manifest-cli/scripts"
+                        scripts_dir="$HOME/.manifest-cli/scripts"
                     else
                         echo "   ❌ Homebrew update script not found"
                         return 0
