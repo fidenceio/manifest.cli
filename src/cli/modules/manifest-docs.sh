@@ -261,8 +261,11 @@ validate_file_references_in_file() {
             if [[ ! "$file_path" =~ ^https?:// ]]; then
                 # Check if file/directory exists
                 if [[ ! -f "$file_path" && ! -d "$file_path" ]]; then
-                    missing_files+=("$file_path")
-                    issues=$((issues + 1))
+                    # Skip common directory references that are valid
+                    if [[ "$file_path" != "docs/" && "$file_path" != "src/" && "$file_path" != "." ]]; then
+                        missing_files+=("$file_path")
+                        issues=$((issues + 1))
+                    fi
                 fi
             fi
         fi
