@@ -229,6 +229,29 @@ validate_system() {
 # Installation Functions
 # =============================================================================
 
+# Clean up old installation directory
+cleanup_old_installation() {
+    print_subheader "🧹 Cleaning Up Old Installation"
+    
+    # Clean up the old .manifest-cli directory
+    if [ -d "$PROJECT_DIR" ]; then
+        print_status "Removing old installation directory: $PROJECT_DIR"
+        rm -rf "$PROJECT_DIR"
+        print_success "✅ Old installation directory removed"
+    else
+        print_success "✅ No old installation directory found"
+    fi
+    
+    # Clean up any old CLI binary
+    if [ -f "$LOCAL_BIN/$CLI_NAME" ]; then
+        print_status "Removing old CLI binary: $LOCAL_BIN/$CLI_NAME"
+        rm -f "$LOCAL_BIN/$CLI_NAME"
+        print_success "✅ Old CLI binary removed"
+    fi
+    
+    echo ""
+}
+
 # Create directory structure
 create_directories() {
     print_subheader "📁 Creating Directory Structure"
@@ -518,6 +541,7 @@ main() {
     validate_system
     
     # Installation process
+    cleanup_old_installation
     create_directories
     copy_cli_files
     create_configuration

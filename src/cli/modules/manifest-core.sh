@@ -62,48 +62,12 @@ archive_old_docs() {
 
 # Update CLI function
 update_cli() {
-    local force_update="false"
-    local check_only="false"
+    # Source the auto-update module
+    source "$(dirname "${BASH_SOURCE[0]}")/manifest-auto-update.sh"
     
-    # Parse arguments
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            -f|--force)
-                force_update="true"
-                shift
-                ;;
-            -c|--check)
-                check_only="true"
-                shift
-                ;;
-            -h|--help)
-                echo "Manifest CLI Update Command"
-                echo ""
-                echo "Usage: manifest update [OPTIONS]"
-                echo ""
-                echo "Options:"
-                echo "  -f, --force    Force update regardless of current version"
-                echo "  -c, --check    Check for updates only (don't update)"
-                echo "  -h, --help     Show this help message"
-                echo ""
-                echo "Examples:"
-                echo "  manifest update              # Check and optionally update"
-                echo "  manifest update --force      # Force update to latest version"
-                echo "  manifest update --check      # Check version only"
-                return 0
-                ;;
-            *)
-                echo "❌ Unknown option: $1"
-                echo "Use 'manifest update --help' for usage information"
-                return 1
-                ;;
-        esac
-    done
-    
-    # Update functionality is now handled by the orchestrator
-    echo "❌ Update functionality has been moved to the orchestrator"
-    echo "Please use 'manifest go' for the complete workflow"
-    return 1
+    # Call the update function from the auto-update module
+    local args=("$@")
+    update_cli_internal "${args[@]}"
 }
 
 # Test mode function
@@ -228,33 +192,11 @@ get_next_version() {
 
 # Auto-update check with cooldown
 check_auto_update() {
-    # Check if auto-update is disabled
-    if [ "${MANIFEST_AUTO_UPDATE:-true}" = "false" ]; then
-        return 0
-    fi
+    # Source the auto-update module
+    source "$(dirname "${BASH_SOURCE[0]}")/manifest-auto-update.sh"
     
-    local last_check_file="$CLI_DIR/.last_update_check"
-    local cooldown_minutes="${MANIFEST_UPDATE_COOLDOWN:-30}"
-    local current_time=$(date +%s)
-    local last_check_time=0
-    
-    # Read last check time if file exists
-    if [ -f "$last_check_file" ]; then
-        last_check_time=$(cat "$last_check_file" 2>/dev/null || echo "0")
-    fi
-    
-    # Calculate time difference in minutes
-    local time_diff=$(( (current_time - last_check_time) / 60 ))
-    
-    # Only check for updates if cooldown period has passed
-    if [ "$time_diff" -ge "$cooldown_minutes" ]; then
-        # Update last check timestamp
-        echo "$current_time" > "$last_check_file"
-        
-        # Auto-update functionality is now handled by the orchestrator
-        # Skip background update check for now
-        :
-    fi
+    # Call the check function from the auto-update module
+    check_auto_update_internal
 }
 
 # Main command dispatcher
@@ -375,7 +317,7 @@ main() {
         "cleanup")
             echo "📁 Repository cleanup operations..."
             source "$MODULES_DIR/manifest-archive.sh"
-            main_cleanup
+            main clean
             ;;
         "config")
             show_configuration
