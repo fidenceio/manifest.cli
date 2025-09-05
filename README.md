@@ -62,23 +62,23 @@ The CLI will be installed to `~/.local/bin/manifest` and added to your PATH.
 
 ```bash
 # Create installation directory
-mkdir -p ~/.manifest-local
-cd ~/.manifest-local
+mkdir -p /usr/local/share/manifest-cli
+cd /usr/local/share/manifest-cli
 
 # Copy source files
 cp -r /path/to/manifest.cli/src ./
 cp /path/to/manifest.cli/VERSION ./
 cp /path/to/manifest.cli/README.md ./
 
-# Install dependencies
-npm install
+# Set permissions
+chmod +x src/cli/manifest-cli.sh
 
 # Create executable
 mkdir -p ~/.local/bin
 cat > ~/.local/bin/manifest << 'EOF'
 #!/bin/bash
-cd ~/.manifest-local
-node src/cli/manifest-cli.js "$@"
+cd /usr/local/share/manifest-cli
+bash src/cli/manifest-cli.sh "$@"
 EOF
 chmod +x ~/.local/bin/manifest
 ```
@@ -217,7 +217,7 @@ Show help information.
 
 ### Environment Variables
 
-Create `~/.manifest-local/.env` for cloud integration:
+Create `/usr/local/share/manifest-cli/.env` for cloud integration:
 
 ```bash
 # Manifest Cloud Service
@@ -241,12 +241,15 @@ git config --global user.email "your.email@example.com"
 ## 🏗️ Project Structure
 
 ```
-~/.manifest-local/
+/usr/local/share/manifest-cli/
 ├── src/
-│   ├── cli/
-│   │   └── manifest-cli.js    # Main CLI logic
-│   └── client/
-│       └── manifestCloudClient.js  # Cloud service client
+│   └── cli/
+│       ├── manifest-cli.sh    # Main CLI entry point
+│       └── modules/           # Modular CLI functionality
+│           ├── manifest-core.sh
+│           ├── manifest-docs.sh
+│           ├── manifest-git.sh
+│           └── ...
 ├── examples/
 │   └── test-manifest-cloud-client.js
 ├── VERSION
@@ -346,7 +349,7 @@ The Manifest CLI can optionally integrate with Manifest Cloud for enhanced featu
 - **API Change Detection**: Automatically identify breaking changes
 
 ### Setup
-1. Configure environment variables in `~/.manifest-local/.env`
+1. Configure environment variables in `/usr/local/share/manifest-cli/.env`
 2. Use `manifest analyze` and `manifest changelog` commands
 3. Enhanced `manifest go` workflow with intelligent recommendations
 
