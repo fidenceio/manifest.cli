@@ -3,9 +3,18 @@
 # Manifest Orchestrator Module
 # Coordinates the complete manifest workflow using atomized modules
 
-# Get the project root (three levels up from modules)
+# Get the installation location (three levels up from modules)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")"
+INSTALL_LOCATION="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")"
+
+# Determine the project root (where we're actually working)
+if git rev-parse --git-dir > /dev/null 2>&1; then
+    # We're in a git repository, use current directory
+    PROJECT_ROOT="$(pwd)"
+else
+    # Not in a git repository, use installation location
+    PROJECT_ROOT="$INSTALL_LOCATION"
+fi
 
 # Import required modules
 source "$SCRIPT_DIR/manifest-config.sh"
@@ -44,6 +53,12 @@ log_error() {
 manifest_go() {
     local increment_type="$1"
     local interactive="$2"
+    
+    # Change to the project root directory for all operations
+    cd "$PROJECT_ROOT" || {
+        echo "❌ Failed to change to project root: $PROJECT_ROOT"
+        return 1
+    }
     
     # Determine version increment type
     if [ -z "$increment_type" ]; then

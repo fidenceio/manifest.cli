@@ -3,6 +3,19 @@
 # Manifest Git Module
 # Handles Git operations, versioning, and workflow automation
 
+# Get the installation location (three levels up from modules)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INSTALL_LOCATION="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")"
+
+# Determine the project root (where we're actually working)
+if git rev-parse --git-dir > /dev/null 2>&1; then
+    # We're in a git repository, use current directory
+    PROJECT_ROOT="$(pwd)"
+else
+    # Not in a git repository, use installation location
+    PROJECT_ROOT="$INSTALL_LOCATION"
+fi
+
 # Git Configuration
 
 # Shared retry function for git operations
@@ -51,6 +64,12 @@ bump_version() {
     local increment_type="$1"
     local current_version=""
     local new_version=""
+    
+    # Change to project root directory
+    cd "$PROJECT_ROOT" || {
+        echo "❌ Failed to change to project root: $PROJECT_ROOT"
+        return 1
+    }
     
     # Read current version
     if [ -f "VERSION" ]; then
@@ -140,6 +159,12 @@ commit_changes() {
     echo "💾 Committing changes..."
     echo "   Message: $message"
     
+    # Change to project root directory
+    cd "$PROJECT_ROOT" || {
+        echo "❌ Failed to change to project root: $PROJECT_ROOT"
+        return 1
+    }
+    
     git add .
     if git commit -m "$message"; then
         echo "✅ Changes committed"
@@ -159,6 +184,12 @@ create_tag() {
     echo "🏷️  Creating git tag..."
     echo "   Tag: $tag_name"
     
+    # Change to project root directory
+    cd "$PROJECT_ROOT" || {
+        echo "❌ Failed to change to project root: $PROJECT_ROOT"
+        return 1
+    }
+    
     if git tag "$tag_name"; then
         echo "✅ Tag $tag_name created"
         return 0
@@ -174,6 +205,12 @@ push_changes() {
     local default_branch="${MANIFEST_DEFAULT_BRANCH:-main}"
     
     echo "🚀 Pushing to all remotes..."
+    
+    # Change to project root directory
+    cd "$PROJECT_ROOT" || {
+        echo "❌ Failed to change to project root: $PROJECT_ROOT"
+        return 1
+    }
     
     # Get list of remotes
     local remotes=$(git remote)
@@ -195,6 +232,12 @@ push_changes() {
 sync_repository() {
     echo "🔄 Syncing with remote..."
     local default_branch="${MANIFEST_DEFAULT_BRANCH:-main}"
+    
+    # Change to project root directory
+    cd "$PROJECT_ROOT" || {
+        echo "❌ Failed to change to project root: $PROJECT_ROOT"
+        return 1
+    }
     
     # Get list of remotes
     local remotes=$(git remote)
