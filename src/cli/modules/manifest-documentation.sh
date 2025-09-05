@@ -242,16 +242,6 @@ generate_documents() {
         log_warning "Documentation index generation failed, but continuing..."
     fi
     
-    # Copy the latest changelog to root as CHANGELOG.md (before cleanup)
-    local changelog_file="$DOCS_DIR/CHANGELOG_v$version.md"
-    log_info "Attempting to copy changelog: $changelog_file"
-    if [[ -f "$changelog_file" ]]; then
-        cp "$changelog_file" "$PROJECT_ROOT/CHANGELOG.md"
-        log_success "Main CHANGELOG.md updated from $changelog_file"
-    else
-        log_warning "Changelog file not found: $changelog_file"
-    fi
-    
     # Clean up
     rm -f "$changes_file"
     
