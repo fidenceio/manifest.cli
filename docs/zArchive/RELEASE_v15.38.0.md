@@ -61,7 +61,7 @@ manifest docs
 
 
 ## Improvements
-
+Bump version to 15.38.0 [NTP: 2025-09-05 17:30:01 UTC]
 
 ## Bug Fixes
 
