@@ -6,12 +6,12 @@ A powerful command-line tool for automating Git workflows, version management, a
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `15.16.0` |
-| **Release Date** | `2025-09-05 01:59:34 UTC` |
-| **Git Tag** | `v15.16.0` |
+| **Current Version** | `15.17.0` |
+| **Release Date** | `2025-09-05 02:03:41 UTC` |
+| **Git Tag** | `v15.17.0` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-09-05 01:59:34 UTC` |
-| **CLI Version** | `15.16.0` |
+| **Last Updated** | `2025-09-05 02:03:41 UTC` |
+| **CLI Version** | `15.17.0` |
 
 ### 📚 Documentation Files
 
@@ -395,4 +395,4 @@ This project is open source and available under the MIT License.
 - Added comprehensive diagnostics command
 - Improved error handling and user feedback
 
-See [CHANGELOG_v3.0.0.md](docs/CHANGELOG_v3.0.0.md) for full details.
+See the latest [CHANGELOG](docs/) for full details.
