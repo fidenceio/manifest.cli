@@ -157,13 +157,6 @@ manifest_go() {
     echo "📚 Generating documentation and release notes..."
     if generate_documents "$new_version" "$timestamp" "$increment_type"; then
         echo "✅ Documentation generated successfully"
-        
-        # Copy the latest changelog to root for GitHub visibility
-        local latest_changelog="$PROJECT_ROOT/docs/CHANGELOG_v$new_version.md"
-        if [[ -f "$latest_changelog" ]]; then
-            cp "$latest_changelog" "$PROJECT_ROOT/CHANGELOG.md"
-            echo "✅ Main CHANGELOG.md updated for GitHub"
-        fi
     else
         echo "⚠️  Documentation generation had issues, but continuing..."
     fi
@@ -186,6 +179,19 @@ manifest_go() {
     # Commit version changes
     echo "💾 Committing version changes..."
     commit_changes "Bump version to $new_version" "$timestamp"
+    echo ""
+    
+    # Update main CHANGELOG.md for GitHub visibility
+    echo "📝 Updating main CHANGELOG.md for GitHub..."
+    local latest_changelog="$PROJECT_ROOT/docs/CHANGELOG_v$new_version.md"
+    if [[ -f "$latest_changelog" ]]; then
+        cp "$latest_changelog" "$PROJECT_ROOT/CHANGELOG.md"
+        git add CHANGELOG.md
+        git commit -m "Update main CHANGELOG.md to v$new_version"
+        echo "✅ Main CHANGELOG.md updated for GitHub"
+    else
+        echo "⚠️  Latest changelog not found: $latest_changelog"
+    fi
     echo ""
     
     # Validate repository state after commit
