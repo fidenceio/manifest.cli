@@ -54,14 +54,13 @@ NC='\033[0m' # No Color
 
 # Installation paths
 LOCAL_BIN="$HOME/.local/bin"
-PROJECT_DIR="$HOME/.manifest-cli"
 CLI_NAME="manifest"
 
 # Function to determine the best installation directory
-get_install_dir() {
+get_install_location() {
     # Check if user has a preference
-    if [ -n "$MANIFEST_INSTALL_DIR" ]; then
-        echo "$MANIFEST_INSTALL_DIR"
+    if [ -n "$MANIFEST_INSTALL_LOCATION" ]; then
+        echo "$MANIFEST_INSTALL_LOCATION"
         return 0
     fi
     
@@ -78,7 +77,7 @@ get_install_dir() {
 }
 
 # Set the actual installation directory
-INSTALL_DIR="$(get_install_dir)"
+INSTALL_LOCATION="$(get_install_location)"
 
 # Version information
 MIN_BASH_VERSION="4.0"
@@ -234,9 +233,9 @@ cleanup_old_installation() {
     print_subheader "🧹 Cleaning Up Old Installation"
     
     # Clean up the old .manifest-cli directory
-    if [ -d "$PROJECT_DIR" ]; then
-        print_status "Removing old installation directory: $PROJECT_DIR"
-        rm -rf "$PROJECT_DIR"
+    if [ -d "$INSTALL_LOCATION" ]; then
+        print_status "Removing old installation directory: $INSTALL_LOCATION"
+        rm -rf "$INSTALL_LOCATION"
         print_success "✅ Old installation directory removed"
     else
         print_success "✅ No old installation directory found"
@@ -265,17 +264,17 @@ create_directories() {
     fi
     
     # Create project directory
-    if [ ! -d "$INSTALL_DIR" ]; then
-        mkdir -p "$INSTALL_DIR"
-        print_success "✅ Created $INSTALL_DIR"
+    if [ ! -d "$INSTALL_LOCATION" ]; then
+        mkdir -p "$INSTALL_LOCATION"
+        print_success "✅ Created $INSTALL_LOCATION"
     else
-        print_success "✅ $INSTALL_DIR already exists"
+        print_success "✅ $INSTALL_LOCATION already exists"
     fi
     
     # Create subdirectories
-    mkdir -p "$INSTALL_DIR/src"
-    mkdir -p "$INSTALL_DIR/scripts"
-    mkdir -p "$INSTALL_DIR/docs"
+    mkdir -p "$INSTALL_LOCATION/src"
+    mkdir -p "$INSTALL_LOCATION/scripts"
+    mkdir -p "$INSTALL_LOCATION/docs"
     
     print_success "✅ Directory structure created"
     echo ""
@@ -297,7 +296,7 @@ copy_cli_files() {
     
     # Copy source modules
     if [ -d "src" ]; then
-        cp -r "src" "$INSTALL_DIR/"
+        cp -r "src" "$INSTALL_LOCATION/"
         print_success "✅ Copied source modules"
     fi
     
@@ -305,7 +304,7 @@ copy_cli_files() {
     local essential_files=("VERSION" ".gitignore")
     for file in "${essential_files[@]}"; do
         if [ -f "$file" ]; then
-            cp "$file" "$INSTALL_DIR/"
+            cp "$file" "$INSTALL_LOCATION/"
             print_success "✅ Copied $file"
         else
             print_warning "⚠️  $file not found (skipping)"
@@ -314,13 +313,13 @@ copy_cli_files() {
     
     # Copy documentation
     if [ -d "docs" ]; then
-        cp -r "docs" "$INSTALL_DIR/"
+        cp -r "docs" "$INSTALL_LOCATION/"
         print_success "✅ Copied documentation"
     fi
     
     # Copy scripts
     if [ -d "scripts" ]; then
-        cp -r "scripts" "$INSTALL_DIR/"
+        cp -r "scripts" "$INSTALL_LOCATION/"
         print_success "✅ Copied utility scripts"
     fi
     
@@ -333,7 +332,7 @@ create_configuration() {
     print_subheader "⚙️  Creating Configuration Files"
     
     # Create main .env configuration
-    cat > "$INSTALL_DIR/.env" << 'EOF'
+    cat > "$INSTALL_LOCATION/.env" << 'EOF'
 # =============================================================================
 # Manifest CLI Configuration
 # =============================================================================
@@ -392,7 +391,7 @@ MANIFEST_NTP_VERIFY=true
 # =============================================================================
 EOF
 
-    print_success "✅ Configuration file created: $INSTALL_DIR/.env"
+    print_success "✅ Configuration file created: $INSTALL_LOCATION/.env"
     echo ""
 }
 
@@ -457,7 +456,7 @@ verify_installation() {
         fi
         
         print_status "📍 Location: $(which "$CLI_NAME")"
-        print_status "🏠 Project directory: $INSTALL_DIR"
+        print_status "🏠 Project directory: $INSTALL_LOCATION"
         
         # Test basic functionality
         print_status "🧪 Testing basic functionality..."
@@ -493,19 +492,19 @@ display_post_install_info() {
     echo "   1. Configure your Git credentials if not already set"
     echo "   2. Run '$CLI_NAME test' to verify everything works"
     echo "   3. Check the generated documentation in the docs/ folder"
-    echo "   4. Review and customize $INSTALL_DIR/.env"
+    echo "   4. Review and customize $INSTALL_LOCATION/.env"
     echo "   5. Copy env.example to your project root as .env"
     
     echo
     print_status "📚 Documentation:"
-    echo "   • User Guide: $INSTALL_DIR/docs/USER_GUIDE.md"
-    echo "   • Command Reference: $INSTALL_DIR/docs/COMMAND_REFERENCE.md"
-    echo "   • Examples: $INSTALL_DIR/docs/EXAMPLES.md"
-    echo "   • Contributing: $INSTALL_DIR/docs/CONTRIBUTING.md"
+    echo "   • User Guide: $INSTALL_LOCATION/docs/USER_GUIDE.md"
+    echo "   • Command Reference: $INSTALL_LOCATION/docs/COMMAND_REFERENCE.md"
+    echo "   • Examples: $INSTALL_LOCATION/docs/EXAMPLES.md"
+    echo "   • Contributing: $INSTALL_LOCATION/docs/CONTRIBUTING.md"
     
     echo
     print_status "🔧 Configuration:"
-    echo "   • Environment: $INSTALL_DIR/.env"
+    echo "   • Environment: $INSTALL_LOCATION/.env"
     echo "   • Project Template: env.example (copy to .env)"
     echo "   • Customize the .env file for your specific needs"
     

@@ -5,30 +5,6 @@
 
 # Git changes module - uses PROJECT_ROOT from core module
 
-# Colors and formatting
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Logging functions
-log_info() {
-    echo -e "${BLUE}ℹ️  $1${NC}"
-}
-
-log_success() {
-    echo -e "${GREEN}✅ $1${NC}"
-}
-
-log_warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
-}
-
-log_error() {
-    echo -e "${RED}❌ $1${NC}"
-}
-
 # Get git changes since last tag
 get_git_changes() {
     local version="$1"
@@ -120,9 +96,7 @@ main() {
         "get")
             local version="${2:-}"
             if [[ -z "$version" ]]; then
-                log_error "Version is required"
-                echo "Usage: $0 get <version>"
-                exit 1
+                show_required_arg_error "Version" "get <version>"
             fi
             get_git_changes "$version"
             ;;
@@ -130,9 +104,7 @@ main() {
             local version="${2:-}"
             local changes_file="${3:-}"
             if [[ -z "$version" || -z "$changes_file" ]]; then
-                log_error "Version and changes file are required"
-                echo "Usage: $0 analyze <version> <changes_file>"
-                exit 1
+                show_required_arg_error "Version and changes file" "analyze <version> <changes_file>"
             fi
             analyze_changes "$version" "$changes_file"
             ;;
@@ -152,9 +124,7 @@ main() {
             echo "  $0 analyze 15.28.0 /tmp/changes.md"
             ;;
         *)
-            log_error "Unknown command: $1"
-            echo "Use '$0 help' for usage information"
-            exit 1
+            show_usage_error "$1"
             ;;
     esac
 }

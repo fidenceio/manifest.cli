@@ -5,30 +5,6 @@
 
 # Markdown validation module - uses PROJECT_ROOT from core module
 
-# Colors and formatting
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Logging functions
-log_info() {
-    echo -e "${BLUE}ℹ️  $1${NC}"
-}
-
-log_success() {
-    echo -e "${GREEN}✅ $1${NC}"
-}
-
-log_warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
-}
-
-log_error() {
-    echo -e "${RED}❌ $1${NC}"
-}
-
 # Markdown validation helper
 validate_markdown_syntax() {
     local content="$1"
@@ -183,9 +159,7 @@ main() {
             local clean="${3:-false}"
             
             if [[ -z "$file" ]]; then
-                log_error "File path is required"
-                echo "Usage: $0 file <path> [clean]"
-                exit 1
+                show_required_arg_error "File path" "file <path> [clean]"
             fi
             
             validate_file "$file" "$clean"
@@ -195,9 +169,7 @@ main() {
             local clean="${3:-false}"
             
             if [[ -z "$dir" ]]; then
-                log_error "Directory path is required"
-                echo "Usage: $0 dir <path> [clean]"
-                exit 1
+                show_required_arg_error "Directory path" "dir <path> [clean]"
             fi
             
             validate_directory "$dir" "$clean"
@@ -239,9 +211,7 @@ main() {
             echo "  $0 clean README.md"
             ;;
         *)
-            log_error "Unknown command: $1"
-            echo "Use '$0 help' for usage information"
-            exit 1
+            show_usage_error "$1"
             ;;
     esac
 }

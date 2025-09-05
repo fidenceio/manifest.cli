@@ -12,30 +12,6 @@ source "$SCRIPT_DIR/manifest-git-changes.sh"
 source "$SCRIPT_DIR/manifest-markdown-templates.sh"
 source "$SCRIPT_DIR/manifest-markdown-validation.sh"
 
-# Colors and formatting
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Logging functions
-log_info() {
-    echo -e "${BLUE}ℹ️  $1${NC}"
-}
-
-log_success() {
-    echo -e "${GREEN}✅ $1${NC}"
-}
-
-log_warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
-}
-
-log_error() {
-    echo -e "${RED}❌ $1${NC}"
-}
-
 # Generate release notes
 generate_release_notes() {
     local version="$1"
@@ -261,9 +237,7 @@ main() {
             local release_type="${4:-patch}"
             
             if [[ -z "$version" ]]; then
-                log_error "Version is required"
-                echo "Usage: $0 generate <version> [timestamp] [release_type]"
-                exit 1
+                show_required_arg_error "Version" "generate <version> [timestamp] [release_type]"
             fi
             
             generate_documents "$version" "$timestamp" "$release_type"
@@ -271,9 +245,7 @@ main() {
         "analyze")
             local version="${2:-}"
             if [[ -z "$version" ]]; then
-                log_error "Version is required"
-                echo "Usage: $0 analyze <version>"
-                exit 1
+                show_required_arg_error "Version" "analyze <version>"
             fi
             
             local changes_file=$(mktemp)
@@ -302,9 +274,7 @@ main() {
             echo "  $0 analyze 15.28.0"
             ;;
         *)
-            log_error "Unknown command: $1"
-            echo "Use '$0 help' for usage information"
-            exit 1
+            show_usage_error "$1"
             ;;
     esac
 }

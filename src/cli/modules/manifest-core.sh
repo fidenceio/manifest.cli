@@ -28,6 +28,9 @@ fi
 export INSTALL_LOCATION
 export PROJECT_ROOT
 
+# Source shared utilities first
+source "$MODULES_DIR/manifest-shared-utils.sh"
+
 # Now source modules after variables are set
 source "$MODULES_DIR/manifest-config.sh"
 source "$MODULES_DIR/manifest-os.sh"

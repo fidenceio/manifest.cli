@@ -14,30 +14,6 @@ source "$SCRIPT_DIR/manifest-documentation.sh"
 source "$SCRIPT_DIR/manifest-cleanup-docs.sh"
 source "$SCRIPT_DIR/manifest-markdown-validation.sh"
 
-# Colors and formatting
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Logging functions
-log_info() {
-    echo -e "${BLUE}ℹ️  $1${NC}"
-}
-
-log_success() {
-    echo -e "${GREEN}✅ $1${NC}"
-}
-
-log_warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
-}
-
-log_error() {
-    echo -e "${RED}❌ $1${NC}"
-}
-
 # Main workflow function
 manifest_go() {
     local increment_type="$1"
@@ -383,9 +359,7 @@ main() {
             echo "  $0 test major"
             ;;
         *)
-            log_error "Unknown command: $1"
-            echo "Use '$0 help' for usage information"
-            exit 1
+            show_usage_error "$1"
             ;;
     esac
 }
