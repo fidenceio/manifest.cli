@@ -222,17 +222,11 @@ sync_repository() {
     echo "🔄 Syncing with remote..."
     local default_branch="${MANIFEST_DEFAULT_BRANCH:-main}"
     
-    # Debug output
-    echo "DEBUG GIT: PROJECT_ROOT=$PROJECT_ROOT" >&2
-    echo "DEBUG GIT: Current directory before cd=$(pwd)" >&2
-    
     # Change to project root directory
     cd "$PROJECT_ROOT" || {
         echo "❌ Failed to change to project root: $PROJECT_ROOT"
         return 1
     }
-    
-    echo "DEBUG GIT: Current directory after cd=$(pwd)" >&2
     
     # Get list of remotes
     local remotes=$(git remote)

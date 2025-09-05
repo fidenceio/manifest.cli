@@ -17,11 +17,11 @@ INSTALL_LOCATION="$(dirname "$(dirname "$(dirname "$MODULES_DIR")")")"
 if [ -n "$PWD" ] && git -C "$PWD" rev-parse --git-dir > /dev/null 2>&1; then
     # We're in a git repository, use current working directory
     PROJECT_ROOT="$PWD"
-    echo "DEBUG: Using PWD as PROJECT_ROOT: $PROJECT_ROOT" >&2
+    # echo "DEBUG: Using PWD as PROJECT_ROOT: $PROJECT_ROOT" >&2
 else
     # Not in a git repository, use installation location
     PROJECT_ROOT="$INSTALL_LOCATION"
-    echo "DEBUG: Using INSTALL_LOCATION as PROJECT_ROOT: $PROJECT_ROOT" >&2
+    # echo "DEBUG: Using INSTALL_LOCATION as PROJECT_ROOT: $PROJECT_ROOT" >&2
 fi
 
 # Export variables so they're available to sourced modules
@@ -36,12 +36,12 @@ source "$MODULES_DIR/manifest-git.sh"
 source "$MODULES_DIR/manifest-security.sh"
 source "$MODULES_DIR/manifest-orchestrator.sh"
 
-# Debug output
-echo "DEBUG: INSTALL_LOCATION=$INSTALL_LOCATION" >&2
-echo "DEBUG: PROJECT_ROOT=$PROJECT_ROOT" >&2
-echo "DEBUG: Current directory=$(pwd)" >&2
-echo "DEBUG: PWD=$PWD" >&2
-echo "DEBUG: Git check result=$(git -C "$PWD" rev-parse --git-dir 2>&1)" >&2
+# Debug output (can be removed in production)
+# echo "DEBUG: INSTALL_LOCATION=$INSTALL_LOCATION" >&2
+# echo "DEBUG: PROJECT_ROOT=$PROJECT_ROOT" >&2
+# echo "DEBUG: Current directory=$(pwd)" >&2
+# echo "DEBUG: PWD=$PWD" >&2
+# echo "DEBUG: Git check result=$(git -C "$PWD" rev-parse --git-dir 2>&1)" >&2
 
 # Function to get the CLI installation directory dynamically
 get_cli_dir() {
