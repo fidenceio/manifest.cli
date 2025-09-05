@@ -9,23 +9,28 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODULES_DIR="$SCRIPT_DIR"
 
 # Load configuration at startup
-# Get the installation location (three levels up from modules)
-INSTALL_LOCATION="$(dirname "$(dirname "$(dirname "$MODULES_DIR")")")"
+# Get the binary location (where the CLI binary is installed)
+BINARY_LOCATION="$HOME/.local/bin"
 
 # Determine the project root (where we're actually working)
 # Use the current working directory from the environment, not the script's directory
 if [ -n "$PWD" ] && git -C "$PWD" rev-parse --git-dir > /dev/null 2>&1; then
     # We're in a git repository, use current working directory
     PROJECT_ROOT="$PWD"
+    # When in a git repo, INSTALL_LOCATION is where the CLI files are installed
+    INSTALL_LOCATION="/usr/local/share/manifest-cli"
     # echo "DEBUG: Using PWD as PROJECT_ROOT: $PROJECT_ROOT" >&2
+    # echo "DEBUG: Using /usr/local/share/manifest-cli as INSTALL_LOCATION" >&2
 else
-    # Not in a git repository, use installation location
+    # Not in a git repository, use installation location for both
+    INSTALL_LOCATION="$(dirname "$(dirname "$(dirname "$MODULES_DIR")")")"
     PROJECT_ROOT="$INSTALL_LOCATION"
     # echo "DEBUG: Using INSTALL_LOCATION as PROJECT_ROOT: $PROJECT_ROOT" >&2
 fi
 
 # Export variables so they're available to sourced modules
 export INSTALL_LOCATION
+export BINARY_LOCATION
 export PROJECT_ROOT
 
 # Source shared utilities first

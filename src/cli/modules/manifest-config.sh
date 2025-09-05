@@ -351,6 +351,12 @@ show_configuration() {
     echo "   Organization: ${MANIFEST_ORGANIZATION}"
     echo ""
     
+    echo "📍 Installation Configuration:"
+    echo "   Binary Location: ${BINARY_LOCATION:-Not set}"
+    echo "   Install Location: ${INSTALL_LOCATION:-Not set}"
+    echo "   Project Root: ${PROJECT_ROOT:-Not set}"
+    echo ""
+    
     echo "⚙️  Advanced Configuration:"
     echo "   Version Regex: ${MANIFEST_VERSION_REGEX}"
     echo "   Version Validation: ${MANIFEST_VERSION_VALIDATION}"
