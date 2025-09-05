@@ -1,6 +1,6 @@
 # Release v15.10.0
 
-**Release Date:** 2025-09-05 00:25:02 UTC
+**Release Date:** 2025-09-05 00:38:26 UTC
 **Release Type:** minor
 
 ## 🎯 What's New
