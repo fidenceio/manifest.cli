@@ -1,6 +1,6 @@
 # Changelog v15.29.0
 
-**Release Date:** 2025-09-05 14:32:57 UTC
+**Release Date:** 2025-09-05 14:34:40 UTC
 **Release Type:** minor
 
 ## 🆕 New Features

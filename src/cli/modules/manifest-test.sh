@@ -209,7 +209,7 @@ test_module_loading() {
     echo "🧪 Testing module loading..."
     
     # Check if all required modules exist
-    local required_modules=("manifest-core.sh" "manifest-config.sh" "manifest-git.sh" "manifest-docs.sh" "manifest-ntp.sh" "manifest-os.sh" "manifest-security.sh" "manifest-test.sh")
+    local required_modules=("manifest-core.sh" "manifest-config.sh" "manifest-git.sh" "manifest-documentation.sh" "manifest-ntp.sh" "manifest-os.sh" "manifest-security.sh" "manifest-test.sh")
     local modules_dir="src/cli/modules"
     
     for module in "${required_modules[@]}"; do

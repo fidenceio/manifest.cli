@@ -216,41 +216,9 @@ manifest_go() {
     # Update Homebrew formula
     echo "🍺 Updating Homebrew formula..."
     
-    # Determine the correct path to scripts directory
-    local scripts_dir=""
-    if [ -f "scripts/update-homebrew.sh" ]; then
-        # We're in the project root
-        scripts_dir="scripts"
-    elif [ -f "$CLI_DIR/scripts/update-homebrew.sh" ]; then
-        # We're running from installed CLI
-        scripts_dir="$CLI_DIR/scripts"
-    else
-        echo "   ⚠️  Homebrew update script not found (skipping)"
-        return 0
-    fi
-    
-    if [ -f "$scripts_dir/update-homebrew.sh" ]; then
-        # Use user's MANIFEST_BREW_OPTION if set, otherwise default to enabled
-        local brew_option="${MANIFEST_BREW_OPTION:-enabled}"
-        # Use user's MANIFEST_BREW_INTERACTIVE if set, otherwise default to no
-        local brew_interactive="${MANIFEST_BREW_INTERACTIVE:-no}"
-        # Use user's MANIFEST_TAP_REPO if set, otherwise default to the standard tap
-        local tap_repo="${MANIFEST_TAP_REPO:-https://github.com/fidenceio/fidenceio-homebrew-tap.git}"
-        
-        echo "   🔧 Environment variables:"
-        echo "      - MANIFEST_BREW_OPTION: $brew_option"
-        echo "      - MANIFEST_BREW_INTERACTIVE: $brew_interactive"
-        echo "      - MANIFEST_TAP_REPO: $tap_repo"
-        
-        echo "   🚀 Executing Homebrew update script..."
-        if MANIFEST_BREW_OPTION="$brew_option" MANIFEST_BREW_INTERACTIVE="$brew_interactive" MANIFEST_TAP_REPO="$tap_repo" "$scripts_dir/update-homebrew.sh"; then
-            echo "   ✅ Homebrew formula updated successfully"
-        else
-            echo "   ⚠️  Homebrew formula update failed (continuing anyway)"
-        fi
-    else
-        echo "   ⚠️  Homebrew update script not found (skipping)"
-    fi
+    # Homebrew update functionality is now handled by the orchestrator
+    echo "   ⚠️  Homebrew update functionality is now integrated into the orchestrator"
+    return 0
     echo ""
     
     # Archive old documentation files (completed after new version creation)
