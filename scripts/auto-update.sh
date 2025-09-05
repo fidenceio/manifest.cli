@@ -18,12 +18,39 @@ REPO_API_URL="https://api.github.com/repos/fidenceio/manifest.cli"
 INSTALL_SCRIPT_URL="https://raw.githubusercontent.com/fidenceio/manifest.cli/main/install-cli.sh"
 VERSION_FILE_URL="https://raw.githubusercontent.com/fidenceio/manifest.cli/main/VERSION"
 
+# Function to find the CLI installation directory
+find_cli_dir() {
+    # Try multiple possible locations
+    local possible_dirs=(
+        "$HOME/.manifest-cli"
+        "$HOME/.local/share/manifest-cli"
+        "/usr/local/share/manifest-cli"
+        "/opt/manifest-cli"
+        "/usr/share/manifest-cli"
+    )
+    
+    for dir in "${possible_dirs[@]}"; do
+        if [ -f "$dir/VERSION" ]; then
+            echo "$dir"
+            return 0
+        fi
+    done
+    
+    # If not found, try current directory
+    if [ -f "./VERSION" ]; then
+        echo "."
+        return 0
+    fi
+    
+    echo "ERROR: Could not find Manifest CLI installation directory" >&2
+    exit 1
+}
+
 # Get current version
 get_current_version() {
-    if [ -f "$HOME/.manifest-cli/VERSION" ]; then
-        cat "$HOME/.manifest-cli/VERSION"
-    elif [ -f "./VERSION" ]; then
-        cat "./VERSION"
+    local cli_dir="$(find_cli_dir)"
+    if [ -f "$cli_dir/VERSION" ]; then
+        cat "$cli_dir/VERSION"
     else
         echo "0.0.0"
     fi
