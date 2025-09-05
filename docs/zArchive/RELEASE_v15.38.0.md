@@ -1,6 +1,6 @@
 # Release v15.38.0
 
-**Release Date:** 2025-09-05 17:30:01 UTC  
+**Release Date:** 2025-09-05 17:30:01 UTC
 **Release Type:** minor
 
 ## 🎯 What's New
@@ -59,14 +59,11 @@ manifest docs
 
 ## New Features
 
-
 ## Improvements
 Bump version to 15.38.0 [NTP: 2025-09-05 17:30:01 UTC]
 
 ## Bug Fixes
 
-
 ## Breaking Changes
-
 
 ## Documentation

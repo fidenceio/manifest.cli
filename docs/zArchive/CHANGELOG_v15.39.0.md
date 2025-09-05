@@ -1,6 +1,6 @@
 # Changelog v15.39.0
 
-**Release Date:** 2025-09-05 19:16:26 UTC  
+**Release Date:** 2025-09-05 19:16:26 UTC
 **Release Type:** minor
 
 ## 🆕 New Features
@@ -42,14 +42,11 @@
 
 ## New Features
 
-
 ## Improvements
 Bump version to 15.38.2 [NTP: 2025-09-05 19:15:42 UTC]
 
 ## Bug Fixes
 
-
 ## Breaking Changes
-
 
 ## Documentation

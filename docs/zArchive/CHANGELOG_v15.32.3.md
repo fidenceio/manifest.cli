@@ -1,6 +1,6 @@
 # Changelog v15.32.3
 
-**Release Date:** 2025-09-05 15:48:07 UTC  
+**Release Date:** 2025-09-05 15:48:07 UTC
 **Release Type:** patch
 
 ## 🆕 New Features
@@ -42,7 +42,6 @@
 
 ## New Features
 
-
 ## Improvements
 ℹ️  Getting changes since v15.30.0
 Auto-commit before Manifest process [NTP: 2025-09-05 15:45:57 UTC]
@@ -52,9 +51,7 @@ Auto-commit before Manifest process [NTP: 2025-09-05 15:42:46 UTC]
 
 ## Bug Fixes
 
-
 ## Breaking Changes
-
 
 ## Documentation
 Fix documentation generation path resolution

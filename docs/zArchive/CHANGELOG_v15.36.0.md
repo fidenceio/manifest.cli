@@ -1,6 +1,6 @@
 # Changelog v15.36.0
 
-**Release Date:** 2025-09-05 17:24:13 UTC  
+**Release Date:** 2025-09-05 17:24:13 UTC
 **Release Type:** minor
 
 ## 🆕 New Features
@@ -42,15 +42,12 @@
 
 ## New Features
 
-
 ## Improvements
 ℹ️  Getting changes since v15.35.2
 Bump version to 15.36.0 [NTP: 2025-09-05 17:24:13 UTC]
 
 ## Bug Fixes
 
-
 ## Breaking Changes
-
 
 ## Documentation

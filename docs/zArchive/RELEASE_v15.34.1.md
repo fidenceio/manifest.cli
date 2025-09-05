@@ -1,6 +1,6 @@
 # Release v15.34.1
 
-**Release Date:** 2025-09-05 16:23:05 UTC  
+**Release Date:** 2025-09-05 16:23:05 UTC
 **Release Type:** patch
 
 ## 🎯 What's New
@@ -59,14 +59,11 @@ manifest docs
 
 ## New Features
 
-
 ## Improvements
 ℹ️  Getting changes since v15.34.0
 
 ## Bug Fixes
 
-
 ## Breaking Changes
-
 
 ## Documentation

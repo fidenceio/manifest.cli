@@ -1,6 +1,6 @@
 # Release v15.38.2
 
-**Release Date:** 2025-09-05 19:15:42 UTC  
+**Release Date:** 2025-09-05 19:15:42 UTC
 **Release Type:** patch
 
 ## 🎯 What's New
@@ -59,14 +59,10 @@ manifest docs
 
 ## New Features
 
-
 ## Improvements
-
 
 ## Bug Fixes
 
-
 ## Breaking Changes
-
 
 ## Documentation

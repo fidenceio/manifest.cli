@@ -1,6 +1,6 @@
 # Changelog v15.40.0
 
-**Release Date:** 2025-09-05 19:18:28 UTC  
+**Release Date:** 2025-09-05 19:18:28 UTC
 **Release Type:** minor
 
 ## 🆕 New Features
@@ -42,14 +42,10 @@
 
 ## New Features
 
-
 ## Improvements
-
 
 ## Bug Fixes
 
-
 ## Breaking Changes
-
 
 ## Documentation

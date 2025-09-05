@@ -1,6 +1,6 @@
 # Release v15.35.0
 
-**Release Date:** 2025-09-05 16:29:46 UTC  
+**Release Date:** 2025-09-05 16:29:46 UTC
 **Release Type:** minor
 
 ## 🎯 What's New
@@ -59,14 +59,11 @@ manifest docs
 
 ## New Features
 
-
 ## Improvements
 ℹ️  Getting changes since v15.34.1
 
 ## Bug Fixes
 
-
 ## Breaking Changes
-
 
 ## Documentation

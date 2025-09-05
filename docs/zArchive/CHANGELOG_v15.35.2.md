@@ -1,6 +1,6 @@
 # Changelog v15.35.2
 
-**Release Date:** 2025-09-05 17:18:37 UTC  
+**Release Date:** 2025-09-05 17:18:37 UTC
 **Release Type:** patch
 
 ## 🆕 New Features
@@ -42,14 +42,11 @@
 
 ## New Features
 
-
 ## Improvements
 ℹ️  Getting changes since v15.35.2
 
 ## Bug Fixes
 
-
 ## Breaking Changes
-
 
 ## Documentation

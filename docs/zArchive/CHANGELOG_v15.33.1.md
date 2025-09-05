@@ -1,6 +1,6 @@
 # Changelog v15.33.1
 
-**Release Date:** 2025-09-05 15:55:38 UTC  
+**Release Date:** 2025-09-05 15:55:38 UTC
 **Release Type:** patch
 
 ## 🆕 New Features
@@ -42,7 +42,6 @@
 
 ## New Features
 
-
 ## Improvements
 ℹ️  Getting changes since v15.30.0
 Fix PROJECT_ROOT path resolution across modules
@@ -55,9 +54,7 @@ Auto-commit before Manifest process [NTP: 2025-09-05 15:42:46 UTC]
 
 ## Bug Fixes
 
-
 ## Breaking Changes
-
 
 ## Documentation
 Rename manifest-archive.sh to manifest-cleanup-docs.sh
