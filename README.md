@@ -6,12 +6,12 @@ A powerful command-line tool for automating Git workflows, version management, a
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `15.23.0` |
-| **Release Date** | `2025-09-05 02:09:18 UTC` |
-| **Git Tag** | `v15.23.0` |
+| **Current Version** | `15.24.0` |
+| **Release Date** | `2025-09-05 02:19:45 UTC` |
+| **Git Tag** | `v15.24.0` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-09-05 02:09:18 UTC` |
-| **CLI Version** | `15.23.0` |
+| **Last Updated** | `2025-09-05 02:19:45 UTC` |
+| **CLI Version** | `15.24.0` |
 
 ### 📚 Documentation Files
 
