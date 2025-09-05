@@ -1,6 +1,6 @@
 # Release v15.33.2
 
-**Release Date:** 2025-09-05 15:58:58 UTC  
+**Release Date:** 2025-09-05 16:04:09 UTC  
 **Release Type:** patch
 
 ## 🎯 What's New
@@ -61,7 +61,16 @@ manifest docs
 
 
 ## Improvements
-ℹ️  No previous tags found, getting all changes
+ℹ️  Getting changes since v15.30.0
+Auto-commit before Manifest process [NTP: 2025-09-05 16:04:09 UTC]
+Fix PROJECT_ROOT path resolution in git module
+Fix PROJECT_ROOT path resolution across modules
+Auto-commit before Manifest process [NTP: 2025-09-05 15:49:59 UTC]
+Demo commit using manifest CLI [NTP: 2025-09-05 15:49:10 UTC]
+Auto-commit before Manifest process [NTP: 2025-09-05 15:45:57 UTC]
+Fix manifest-archive.sh to use current working directory when in git repo
+Bump version to 15.32.0 [NTP: 2025-09-05 15:42:46 UTC]
+Auto-commit before Manifest process [NTP: 2025-09-05 15:42:46 UTC]
 
 ## Bug Fixes
 
@@ -70,3 +79,6 @@ manifest docs
 
 
 ## Documentation
+Rename manifest-archive.sh to manifest-cleanup-docs.sh
+Fix documentation generation path resolution
+Fix documentation generation to use current working directory
