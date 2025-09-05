@@ -37,8 +37,9 @@ generate_release_notes() {
 ${changes}"
     fi
     
-    # Write the file
+    # Write the file with proper newline
     echo "$content" > "$release_file"
+    echo "" >> "$release_file"
     
     if [[ -f "$release_file" ]]; then
         log_success "Release notes generated: $release_file"
@@ -74,8 +75,9 @@ generate_changelog() {
 ${changes}"
     fi
     
-    # Write the file
+    # Write the file with proper newline
     echo "$content" > "$changelog_file"
+    echo "" >> "$changelog_file"
     
     if [[ -f "$changelog_file" ]]; then
         log_success "Changelog generated: $changelog_file"

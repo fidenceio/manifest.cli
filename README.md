@@ -1,4 +1,4 @@
-# Manifes
+# Manifest
 A powerful command-line tool for automating Git workflows, version management, and documentation generation. The Manifest CLI streamlines your development process with intelligent versioning, automated commits, and seamless integration with Manifest Cloud for enhanced features.
 
 ## 📋 Version Information
