@@ -124,6 +124,9 @@ update_readme_version() {
             done < "README.md" > "$temp_file" && mv "$temp_file" "README.md"
         fi
         
+        # Validate ALL file references in README
+        validate_file_references_in_file "README.md"
+        
         echo "   ✅ Version information table updated to $version"
         echo "   ✅ README.md version information updated"
     else
@@ -217,7 +220,107 @@ generate_documentation() {
         echo "   ✅ Markdown files processed"
     fi
     
+    # Validate all file references
+    validate_file_references
+    
     echo "✅ Documentation generated successfully"
+}
+
+# Validate file references in a specific file
+validate_file_references_in_file() {
+    local file="$1"
+    if [[ ! -f "$file" ]]; then
+        return 0
+    fi
+    
+    local issues=0
+    local missing_files=()
+    local invalid_refs=()
+    
+    # Check all file references in the file
+    while IFS= read -r line; do
+        # Extract markdown links [text](path)
+        if [[ "$line" =~ \[([^\]]+)\]\(([^)]+)\) ]]; then
+            local link_text="${BASH_REMATCH[1]}"
+            local file_path="${BASH_REMATCH[2]}"
+            
+            # Skip external URLs
+            if [[ ! "$file_path" =~ ^https?:// ]]; then
+                # Check if file/directory exists
+                if [[ ! -f "$file_path" && ! -d "$file_path" ]]; then
+                    missing_files+=("$file_path")
+                    issues=$((issues + 1))
+                fi
+            fi
+        fi
+        
+        # Extract code block file references (```bash, ./script.sh, etc.)
+        if [[ "$line" =~ \.\/[a-zA-Z0-9_\.-]+ ]]; then
+            local script_ref="${BASH_REMATCH[0]}"
+            if [[ ! -f "$script_ref" ]]; then
+                invalid_refs+=("$script_ref")
+                issues=$((issues + 1))
+            fi
+        fi
+        
+        # Extract direct file references in text
+        if [[ "$line" =~ [^a-zA-Z0-9_\.-]([a-zA-Z0-9_\.-]+\.(sh|py|js|ts|md|txt|json|yaml|yml)) ]]; then
+            local file_ref="${BASH_REMATCH[1]}"
+            if [[ ! -f "$file_ref" && ! -d "$file_ref" ]]; then
+                # Only flag if it looks like a file reference (not just text)
+                if [[ "$line" =~ (script|file|install|run|execute).*$file_ref ]]; then
+                    invalid_refs+=("$file_ref")
+                    issues=$((issues + 1))
+                fi
+            fi
+        fi
+    done < "$file"
+    
+    # Report issues
+    if [[ $issues -gt 0 ]]; then
+        echo "   ⚠️  Found $issues invalid file references:"
+        if [[ ${#missing_files[@]} -gt 0 ]]; then
+            echo "     Missing files: ${missing_files[*]}"
+        fi
+        if [[ ${#invalid_refs[@]} -gt 0 ]]; then
+            echo "     Invalid references: ${invalid_refs[*]}"
+        fi
+    else
+        echo "   ✅ All file references are valid"
+    fi
+    
+    return $issues
+}
+
+# Validate all file references in markdown files
+validate_file_references() {
+    echo "🔍 Validating file references in all markdown files..."
+    
+    local total_issues=0
+    local files_checked=0
+    
+    # Find all markdown files (excluding zArchive)
+    while IFS= read -r file; do
+        if [[ -f "$file" ]]; then
+            files_checked=$((files_checked + 1))
+            echo "   Checking: $file"
+            
+            if validate_file_references_in_file "$file"; then
+                # Function returns 0 for no issues, >0 for issues
+                local file_issues=$?
+                total_issues=$((total_issues + file_issues))
+            fi
+        fi
+    done < <(find . -name "*.md" -type f | grep -v "docs/zArchive" | sort)
+    
+    echo ""
+    if [[ $total_issues -eq 0 ]]; then
+        echo "✅ All file references are valid ($files_checked files checked)"
+    else
+        echo "⚠️  Found $total_issues total issues across $files_checked files"
+    fi
+    
+    return $total_issues
 }
 
 # Load cleanup module

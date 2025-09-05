@@ -54,7 +54,7 @@ git clone https://github.com/fidenceio/manifest.local.git
 cd manifest.local
 
 # Install the CLI
-./install-local-cli.sh
+./install-cli.sh
 ```
 
 The CLI will be installed to `~/.local/bin/manifest` and added to your PATH.
