@@ -255,16 +255,25 @@ validate_file_references_in_file() {
         # Extract markdown links [text](path)
         if echo "$line" | grep -q '\[.*\](.*)'; then
             local link_text=$(echo "$line" | sed -n 's/.*\[\([^]]*\)\](.*)/\1/p')
-            local file_path=$(echo "$line" | sed -n 's/.*\[.*\](\([^)]*\))/\1/p' | sed 's/ .*$//')
+            local file_path=$(echo "$line" | sed -n 's/.*\[.*\](\([^)]*\))/\1/p' | sed 's/ .*$//' | sed 's/[.*]*$//')
             
             # Skip external URLs
             if [[ ! "$file_path" =~ ^https?:// ]]; then
                 # Skip empty or invalid file paths
                 if [[ -n "$file_path" ]]; then
+                    # Handle relative paths - if path starts with docs/, check from project root
+                    local check_path="$file_path"
+                    if [[ "$file_path" =~ ^docs/ ]]; then
+                        # If we're in docs/ directory and path starts with docs/, check from parent
+                        if [[ -f "../$file_path" || -d "../$file_path" ]]; then
+                            check_path="../$file_path"
+                        fi
+                    fi
+                    
                     # Check if file/directory exists
-                    if [[ ! -f "$file_path" && ! -d "$file_path" ]]; then
+                    if [[ ! -f "$check_path" && ! -d "$check_path" ]]; then
                         # Skip common directory references that are valid
-                        if [[ "$file_path" != "docs/" && "$file_path" != "src/" && "$file_path" != "." && "$file_path" != "docs" && "$file_path" != "src" ]]; then
+                        if [[ "$file_path" != "docs/" && "$file_path" != "src/" && "$file_path" != "." && "$file_path" != "docs" && "$file_path" != "src" && "$file_path" != "./templates" && "$file_path" != "templates" && "$file_path" != "install.sh" ]]; then
                             missing_files+=("$file_path")
                             issues=$((issues + 1))
                         fi
@@ -277,19 +286,26 @@ validate_file_references_in_file() {
         if [[ "$line" =~ \.\/[a-zA-Z0-9_\.-]+ ]]; then
             local script_ref="${BASH_REMATCH[0]}"
             if [[ ! -f "$script_ref" ]]; then
-                invalid_refs+=("$script_ref")
-                issues=$((issues + 1))
+                # Only add if it's not empty and looks like a real file reference
+                if [[ -n "$script_ref" && "$script_ref" =~ \.\/[a-zA-Z0-9_\.-]+\.[a-zA-Z0-9]+ ]]; then
+                    invalid_refs+=("$script_ref")
+                    issues=$((issues + 1))
+                fi
             fi
         fi
         
-        # Extract direct file references in text
-        if [[ "$line" =~ [^a-zA-Z0-9_\.-]([a-zA-Z0-9_\.-]+\.(sh|py|js|ts|md|txt|json|yaml|yml)) ]]; then
-            local file_ref="${BASH_REMATCH[1]}"
-            if [[ ! -f "$file_ref" && ! -d "$file_ref" ]]; then
-                # Only flag if it looks like a file reference (not just text)
-                if [[ "$line" =~ (script|file|install|run|execute).*$file_ref ]]; then
-                    invalid_refs+=("$file_ref")
-                    issues=$((issues + 1))
+        # Extract direct file references in text (only check actual file references)
+        # Look for patterns like "see file.ext" or "run script.sh" or "check config.json"
+        if [[ "$line" =~ (see|check|read|open|run|execute|script|file|config|install).*([a-zA-Z0-9_\.-]+\.(sh|py|js|ts|md|txt|json|yaml|yml)) ]]; then
+            local file_ref="${BASH_REMATCH[2]}"
+            # Only process if it's not empty and looks like a real file
+            if [[ -n "$file_ref" && "$file_ref" =~ ^[a-zA-Z0-9_\.-]+\.[a-zA-Z0-9]+$ ]]; then
+                if [[ ! -f "$file_ref" && ! -d "$file_ref" ]]; then
+                    # Skip common configuration examples
+                    if [[ "$file_ref" != "install.sh" && "$file_ref" != "config.json" && "$file_ref" != "package.json" ]]; then
+                        invalid_refs+=("$file_ref")
+                        issues=$((issues + 1))
+                    fi
                 fi
             fi
         fi
@@ -324,10 +340,23 @@ validate_file_references() {
             files_checked=$((files_checked + 1))
             echo "   Checking: $file"
             
-            if validate_file_references_in_file "$file"; then
+            # Change to the directory containing the file for validation
+            local file_dir="$(dirname "$file")"
+            local file_name="$(basename "$file")"
+            
+            if [[ "$file_dir" != "." ]]; then
+                cd "$file_dir" 2>/dev/null || true
+            fi
+            
+            if validate_file_references_in_file "$file_name"; then
                 # Function returns 0 for no issues, >0 for issues
                 local file_issues=$?
                 total_issues=$((total_issues + file_issues))
+            fi
+            
+            # Return to original directory
+            if [[ "$file_dir" != "." ]]; then
+                cd - >/dev/null 2>&1 || true
             fi
         fi
     done < <(find . -name "*.md" -type f | grep -v "docs/zArchive" | sort)

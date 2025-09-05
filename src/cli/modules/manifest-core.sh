@@ -12,6 +12,7 @@ source "$MODULES_DIR/manifest-os.sh"
 source "$MODULES_DIR/manifest-ntp.sh"
 source "$MODULES_DIR/manifest-git.sh"
 source "$MODULES_DIR/manifest-docs.sh"
+source "$MODULES_DIR/manifest-markdown-validation.sh"
 source "$MODULES_DIR/manifest-security.sh"
 
 # Load configuration at startup
@@ -281,13 +282,7 @@ manifest_go() {
     echo ""
     
     # Final markdown validation and fixing (before commit)
-    echo "🔍 Final markdown validation and fixing..."
-    if [ -f "scripts/markdown-validator.sh" ]; then
-        ./scripts/markdown-validator.sh
-        echo "   ✅ All markdown files validated and fixed"
-    else
-        echo "   ⚠️  markdown-validator.sh not found, skipping validation"
-    fi
+    validate_all_markdown
     echo ""
     
     # Commit version changes
