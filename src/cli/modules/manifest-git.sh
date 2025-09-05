@@ -3,18 +3,7 @@
 # Manifest Git Module
 # Handles Git operations, versioning, and workflow automation
 
-# Get the installation location (three levels up from modules)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-INSTALL_LOCATION="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")"
-
-# Determine the project root (where we're actually working)
-if git rev-parse --git-dir > /dev/null 2>&1; then
-    # We're in a git repository, use current directory
-    PROJECT_ROOT="$(pwd)"
-else
-    # Not in a git repository, use installation location
-    PROJECT_ROOT="$INSTALL_LOCATION"
-fi
+# Git module - uses PROJECT_ROOT from core module
 
 # Git Configuration
 
@@ -233,11 +222,17 @@ sync_repository() {
     echo "🔄 Syncing with remote..."
     local default_branch="${MANIFEST_DEFAULT_BRANCH:-main}"
     
+    # Debug output
+    echo "DEBUG GIT: PROJECT_ROOT=$PROJECT_ROOT" >&2
+    echo "DEBUG GIT: Current directory before cd=$(pwd)" >&2
+    
     # Change to project root directory
     cd "$PROJECT_ROOT" || {
         echo "❌ Failed to change to project root: $PROJECT_ROOT"
         return 1
     }
+    
+    echo "DEBUG GIT: Current directory after cd=$(pwd)" >&2
     
     # Get list of remotes
     local remotes=$(git remote)

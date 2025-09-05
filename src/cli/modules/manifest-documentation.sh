@@ -3,18 +3,7 @@
 # Manifest Documentation Module
 # Orchestrates document generation using atomized modules
 
-# Get the installation location (three levels up from modules)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-INSTALL_LOCATION="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")"
-
-# Determine the project root (where we're actually working)
-if git rev-parse --git-dir > /dev/null 2>&1; then
-    # We're in a git repository, use current directory
-    PROJECT_ROOT="$(pwd)"
-else
-    # Not in a git repository, use installation location
-    PROJECT_ROOT="$INSTALL_LOCATION"
-fi
+# Documentation module - uses PROJECT_ROOT from core module
 
 DOCS_DIR="$PROJECT_ROOT/docs"
 

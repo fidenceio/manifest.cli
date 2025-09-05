@@ -3,18 +3,7 @@
 # Manifest Cleanup Docs Module
 # Handles moving old documentation to zArchive and general repository cleanup
 
-# Get the installation location (three levels up from modules)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-INSTALL_LOCATION="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")"
-
-# Determine the project root (where we're actually working)
-if git rev-parse --git-dir > /dev/null 2>&1; then
-    # We're in a git repository, use current directory
-    PROJECT_ROOT="$(pwd)"
-else
-    # Not in a git repository, use installation location
-    PROJECT_ROOT="$INSTALL_LOCATION"
-fi
+# Cleanup-docs module - uses PROJECT_ROOT from core module
 
 ZARCHIVE_DIR="$PROJECT_ROOT/docs/zArchive"
 

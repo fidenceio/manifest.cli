@@ -7,6 +7,28 @@
 # Determine the absolute path to the modules directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODULES_DIR="$SCRIPT_DIR"
+
+# Load configuration at startup
+# Get the installation location (three levels up from modules)
+INSTALL_LOCATION="$(dirname "$(dirname "$(dirname "$MODULES_DIR")")")"
+
+# Determine the project root (where we're actually working)
+# Use the current working directory from the environment, not the script's directory
+if [ -n "$PWD" ] && git -C "$PWD" rev-parse --git-dir > /dev/null 2>&1; then
+    # We're in a git repository, use current working directory
+    PROJECT_ROOT="$PWD"
+    echo "DEBUG: Using PWD as PROJECT_ROOT: $PROJECT_ROOT" >&2
+else
+    # Not in a git repository, use installation location
+    PROJECT_ROOT="$INSTALL_LOCATION"
+    echo "DEBUG: Using INSTALL_LOCATION as PROJECT_ROOT: $PROJECT_ROOT" >&2
+fi
+
+# Export variables so they're available to sourced modules
+export INSTALL_LOCATION
+export PROJECT_ROOT
+
+# Now source modules after variables are set
 source "$MODULES_DIR/manifest-config.sh"
 source "$MODULES_DIR/manifest-os.sh"
 source "$MODULES_DIR/manifest-ntp.sh"
@@ -14,9 +36,12 @@ source "$MODULES_DIR/manifest-git.sh"
 source "$MODULES_DIR/manifest-security.sh"
 source "$MODULES_DIR/manifest-orchestrator.sh"
 
-# Load configuration at startup
-# Get the project root (two levels up from modules)
-PROJECT_ROOT="$(dirname "$(dirname "$MODULES_DIR")")"
+# Debug output
+echo "DEBUG: INSTALL_LOCATION=$INSTALL_LOCATION" >&2
+echo "DEBUG: PROJECT_ROOT=$PROJECT_ROOT" >&2
+echo "DEBUG: Current directory=$(pwd)" >&2
+echo "DEBUG: PWD=$PWD" >&2
+echo "DEBUG: Git check result=$(git -C "$PWD" rev-parse --git-dir 2>&1)" >&2
 
 # Function to get the CLI installation directory dynamically
 get_cli_dir() {

@@ -3,9 +3,7 @@
 # Manifest Markdown Validation Module
 # Provides comprehensive markdown validation and cleaning
 
-# Get the project root (three levels up from modules)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")"
+# Markdown validation module - uses PROJECT_ROOT from core module
 
 # Colors and formatting
 RED='\033[0;31m'
