@@ -59,16 +59,12 @@ manifest docs
 
 ## New Features
 
-
 ## Improvements
 Bump version to 16.2.4 [NTP: 2025-09-05 22:46:43 UTC]
 Auto-commit before Manifest process [NTP: 2025-09-05 22:46:43 UTC]
 
 ## Bug Fixes
 
-
 ## Breaking Changes
 
-
 ## Documentation
-
