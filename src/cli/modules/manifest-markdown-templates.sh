@@ -106,7 +106,7 @@ generate_release_notes_template() {
     cat << EOF
 # Release v${version}
 
-**Release Date:** ${timestamp}  
+**Release Date:** ${timestamp}
 **Release Type:** ${release_type}
 
 ## 🎯 What's New
@@ -170,7 +170,7 @@ generate_changelog_template() {
     cat << EOF
 # Changelog v${version}
 
-**Release Date:** ${timestamp}  
+**Release Date:** ${timestamp}
 **Release Type:** ${release_type}
 
 ## 🆕 New Features

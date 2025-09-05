@@ -169,7 +169,7 @@ manifest_go() {
     
     # Final markdown validation and fixing (before commit)
     echo "🔍 Final markdown validation and fixing..."
-    if validate_project; then
+    if validate_project "true"; then
         echo "✅ Markdown validation completed"
     else
         echo "⚠️  Markdown validation found issues, but continuing..."
