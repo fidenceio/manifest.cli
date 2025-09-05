@@ -217,15 +217,6 @@ generate_documentation() {
         echo "   ✅ Markdown files processed"
     fi
     
-    # Clean repository files (temp files, old docs, backups)
-    if [ -f "scripts/repo-cleanup.sh" ]; then
-        echo "🧹 Cleaning repository files..."
-        MANIFEST_NON_INTERACTIVE=true ./scripts/repo-cleanup.sh all
-        echo "   ✅ Repository cleanup completed"
-    else
-        echo "   ⚠️  repo-cleanup.sh not found, skipping repository cleanup"
-    fi
-    
     echo "✅ Documentation generated successfully"
 }
 
