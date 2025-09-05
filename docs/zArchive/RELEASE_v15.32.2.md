@@ -1,6 +1,6 @@
 # Release v15.32.2
 
-**Release Date:** 2025-09-05 15:46:27 UTC  
+**Release Date:** 2025-09-05 15:47:32 UTC  
 **Release Type:** patch
 
 ## 🎯 What's New
@@ -74,3 +74,4 @@ Auto-commit before Manifest process [NTP: 2025-09-05 15:42:46 UTC]
 
 
 ## Documentation
+Fix documentation generation to use current working directory

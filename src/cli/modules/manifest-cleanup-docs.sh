@@ -3,14 +3,17 @@
 # Manifest Cleanup Docs Module
 # Handles moving old documentation to zArchive and general repository cleanup
 
-# Get the project root (three levels up from modules)
+# Get the installation location (three levels up from modules)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")"
+INSTALL_LOCATION="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")"
 
-# Use current working directory if we're in a git repository, otherwise use PROJECT_ROOT
+# Determine the project root (where we're actually working)
 if git rev-parse --git-dir > /dev/null 2>&1; then
     # We're in a git repository, use current directory
     PROJECT_ROOT="$(pwd)"
+else
+    # Not in a git repository, use installation location
+    PROJECT_ROOT="$INSTALL_LOCATION"
 fi
 
 ZARCHIVE_DIR="$PROJECT_ROOT/docs/zArchive"
@@ -209,7 +212,12 @@ main() {
             main_cleanup "${2:-}" "${3:-}"
             ;;
         "clean")
-            main_cleanup "" ""
+            # For clean command, archive all old documentation files
+            local latest_version=""
+            if [ -f "$PROJECT_ROOT/VERSION" ]; then
+                latest_version=$(cat "$PROJECT_ROOT/VERSION" 2>/dev/null || echo "")
+            fi
+            main_cleanup "$latest_version" "$(date -u +"%Y-%m-%d %H:%M:%S UTC")"
             ;;
         "validate")
             validate_repository
