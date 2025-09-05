@@ -164,7 +164,7 @@ manifest_go() {
     
     # Archive previous version documentation to zArchive (now that new version is created)
     echo "📁 Archiving previous version documentation..."
-    main_cleanup --force
+    main_cleanup "$new_version" "$timestamp"
     echo ""
     
     # Final markdown validation and fixing (before commit)
