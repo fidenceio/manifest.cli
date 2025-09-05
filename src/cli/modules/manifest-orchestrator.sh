@@ -221,7 +221,6 @@ manifest_go() {
     
     # Homebrew update functionality is now handled by the orchestrator
     echo "   ⚠️  Homebrew update functionality is now integrated into the orchestrator"
-    return 0
     echo ""
     
     # Archive old documentation files (completed after new version creation)
