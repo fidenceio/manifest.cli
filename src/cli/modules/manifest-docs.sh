@@ -2,376 +2,287 @@
 
 # Manifest Documentation Module
 # Handles documentation generation, README updates, and release notes
+# Now uses the new script architecture for better separation of concerns
 
-# Load markdown templates
-# Use BASH_SOURCE to get the actual file path when sourced
-if [ -n "${BASH_SOURCE[0]}" ]; then
-    TEMPLATES_FILE="$(dirname "${BASH_SOURCE[0]}")/manifest-markdown-templates.sh"
-else
-    TEMPLATES_FILE="$(dirname "$0")/manifest-markdown-templates.sh"
-fi
+# Get the project root (three levels up from modules)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")"
 
-if [ -f "$TEMPLATES_FILE" ]; then
-    source "$TEMPLATES_FILE"
-fi
+# Import the new script architecture
+REPO_CLEANUP_SCRIPT="$PROJECT_ROOT/scripts/repo-cleanup.sh"
+GENERATE_DOCS_SCRIPT="$PROJECT_ROOT/scripts/generate-documents.sh"
+MARKDOWN_VALIDATION_SCRIPT="$PROJECT_ROOT/scripts/markdown-validation.sh"
 
-generate_release_notes() {
-    local version="$1"
-    local timestamp="$2"
-    
-    # Generate filename using configuration
-    local filename_pattern="${MANIFEST_DOCS_FILENAME_PATTERN:-RELEASE_vVERSION.md}"
-    local release_filename=$(echo "$filename_pattern" | sed "s/VERSION/$version/g")
-    
-    echo "📝 Generating $release_filename..."
-    
-    # Determine release type based on version
-    local release_type="patch"
-    if [[ $version =~ ^[0-9]+\.[0-9]+\.0$ ]]; then
-        release_type="minor"
-    elif [[ $version =~ ^[0-9]+\.0\.0$ ]]; then
-        release_type="major"
-    fi
-    
-    # Generate content using template
-    local content=$(generate_release_notes_template "$version" "$timestamp" "$release_type")
-    
-    # Clean and validate markdown
-    content=$(clean_markdown "$content")
-    
-    # Write to file
-    echo "$content" > "docs/$release_filename"
-    
-    echo "✅ $release_filename created"
+# Colors and formatting
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Logging functions
+log_info() {
+    echo -e "${BLUE}ℹ️  $1${NC}"
 }
 
-generate_changelog() {
-    local version="$1"
-    local timestamp="$2"
-    
-    # Generate filename using configuration
-    local changelog_filename="CHANGELOG_v$version.md"
-    
-    echo "📝 Generating $changelog_filename..."
-    
-    # Determine release type based on version
-    local release_type="patch"
-    if [[ $version =~ ^[0-9]+\.[0-9]+\.0$ ]]; then
-        release_type="minor"
-    elif [[ $version =~ ^[0-9]+\.0\.0$ ]]; then
-        release_type="major"
-    fi
-    
-    # Generate content using template
-    local content=$(generate_changelog_template "$version" "$timestamp" "$release_type")
-    
-    # Clean and validate markdown
-    content=$(clean_markdown "$content")
-    
-    # Write to file
-    echo "$content" > "docs/$changelog_filename"
-    
-    echo "✅ $changelog_filename created"
+log_success() {
+    echo -e "${GREEN}✅ $1${NC}"
 }
 
-update_readme_version() {
-    local version="$1"
-    local timestamp="$2"
-    
-    echo "📝 Updating README.md..."
-    
-    # Generate version section using template
-    local version_section=$(generate_readme_version_section "$version" "$timestamp")
-    
-    # Update README.md with new version information
-    if [ -f "README.md" ]; then
-        # Update version in badges (if any exist)
-        if grep -q "version-[0-9]\+\.[0-9]\+\.[0-9]\+" "README.md"; then
-            sed -i '' "s/version-[0-9]\+\.[0-9]\+\.[0-9]\+/version-${version}/g" "README.md"
-            echo "   ✅ Version badge updated to $version"
-        fi
-        
-        # Update version information table
-        if grep -q "## 📋 Version Information" "README.md"; then
-            # Replace existing version section using sed instead of awk to avoid newline issues
-            local temp_file=$(mktemp)
-            local in_version_section=false
-            
-            while IFS= read -r line; do
-                if [[ "$line" == "## 📋 Version Information" ]]; then
-                    echo "$version_section"
-                    in_version_section=true
-                elif [[ "$in_version_section" == true && "$line" == "## "* && "$line" != "## 📋 Version Information" ]]; then
-                    in_version_section=false
-                    echo "$line"
-                elif [[ "$in_version_section" == false ]]; then
-                    echo "$line"
-                fi
-            done < "README.md" > "$temp_file" && mv "$temp_file" "README.md"
-        else
-            # Add version section after the title
-            local temp_file=$(mktemp)
-            local added_version_section=false
-            
-            while IFS= read -r line; do
-                echo "$line"
-                # Add version section after the first heading (title)
-                if [[ "$line" =~ ^#\  && "$added_version_section" == false ]]; then
-                    echo ""
-                    echo "$version_section"
-                    added_version_section=true
-                fi
-            done < "README.md" > "$temp_file" && mv "$temp_file" "README.md"
-        fi
-        
-        # Validate and fix common incorrect references in README
-        local fixed_refs=()
-        
-        # Check for incorrect repository references
-        if grep -q "manifest\.local" "README.md"; then
-            sed -i '' 's/manifest\.local/manifest.cli/g' "README.md"
-            fixed_refs+=("manifest.local → manifest.cli")
-        fi
-        
-        # Check for package.json references (should be VERSION)
-        if grep -q "package\.json" "README.md"; then
-            sed -i '' 's/package\.json/VERSION/g' "README.md"
-            fixed_refs+=("package.json → VERSION")
-        fi
-        
-        # Report fixes
-        if [[ ${#fixed_refs[@]} -gt 0 ]]; then
-            echo "   ✅ Fixed incorrect references: ${fixed_refs[*]}"
-        fi
-        
-        # Validate ALL file references in README
-        validate_file_references_in_file "README.md"
-        
-        echo "   ✅ Version information table updated to $version"
-        echo "   ✅ README.md version information updated"
-    else
-        echo "   ⚠️  README.md not found, skipping version update"
-    fi
+log_warning() {
+    echo -e "${YELLOW}⚠️  $1${NC}"
 }
 
-# Repository metadata update function
-update_repository_metadata() {
-    echo "🏷️  Updating repository metadata..."
+log_error() {
+    echo -e "${RED}❌ $1${NC}"
+}
+
+# Check if required scripts exist
+check_required_scripts() {
+    local missing_scripts=()
     
-    # Check if we're in a git repository
-    if ! git rev-parse --git-dir > /dev/null 2>&1; then
-        echo "   ⚠️  Not in a git repository, skipping metadata update"
-        return 0
+    if [[ ! -f "$REPO_CLEANUP_SCRIPT" ]]; then
+        missing_scripts+=("repo-cleanup.sh")
     fi
     
-    # Get repository URL
-    local repo_url=$(git config --get remote.origin.url 2>/dev/null || echo "")
-    
-    if [ -z "$repo_url" ]; then
-        echo "   ⚠️  No remote origin found, skipping metadata update"
-        return 0
+    if [[ ! -f "$GENERATE_DOCS_SCRIPT" ]]; then
+        missing_scripts+=("generate-documents.sh")
     fi
     
-    # Detect repository provider
-    local provider=""
-    if [[ $repo_url == *"github.com"* ]]; then
-        provider="github"
-    elif [[ $repo_url == *"gitlab.com"* ]]; then
-        provider="gitlab"
-    else
-        echo "   ⚠️  Unsupported repository provider, skipping metadata update"
-        return 0
+    if [[ ! -f "$MARKDOWN_VALIDATION_SCRIPT" ]]; then
+        missing_scripts+=("markdown-validation.sh")
     fi
     
-    echo "   🔄 Automatically updating repository metadata..."
-    echo "   ✅ Detected provider: $provider"
-    
-    # Update repository description and topics
-    if [ "$provider" = "github" ]; then
-        # GitHub-specific metadata updates would go here
-        echo "   🔄 GitHub metadata updates would be implemented here"
-        echo "   ✅ Repository metadata updated automatically"
-    elif [ "$provider" = "gitlab" ]; then
-        # GitLab-specific metadata updates would go here
-        echo "   🔄 GitLab metadata updates would be implemented here"
-        echo "   ✅ Repository metadata updated automatically"
+    if [[ ${#missing_scripts[@]} -gt 0 ]]; then
+        log_error "Missing required scripts: ${missing_scripts[*]}"
+        log_error "Please ensure all scripts are in the scripts/ directory"
+        return 1
     fi
     
     return 0
 }
 
-# Move previous version's documentation to zArchive folder
-# This function is now handled by repo-cleanup.sh
-move_previous_documentation() {
-    echo "📁 Moving previous version documentation to zArchive..."
-    echo "   ℹ️  This operation is now handled by repo-cleanup.sh"
-    echo "   💡 Run 'manifest cleanup archive' to move old documentation"
-}
-
-# zArchive cleanup is now handled by the common cleanup module
-
-# Manual function to move existing historical documentation to zArchive
-# This function is now handled by repo-cleanup.sh
-move_existing_historical_docs() {
-    echo "📁 Moving existing historical documentation to zArchive..."
-    echo "   ℹ️  This operation is now handled by repo-cleanup.sh"
-    echo "   💡 Run 'manifest cleanup archive' to move old documentation"
-}
-
-generate_documentation() {
+# Archive old documentation using repo-cleanup script
+archive_old_documentation() {
     local version="$1"
     local timestamp="$2"
     
-    echo "📚 Generating documentation and release notes..."
+    log_info "Archiving old documentation using repo-cleanup script..."
     
-    # Generate release notes
-    generate_release_notes "$version" "$timestamp"
-    
-    # Generate changelog
-    generate_changelog "$version" "$timestamp"
-    
-    # Update README
-    update_readme_version "$version" "$timestamp"
-    
-    # Validate all file references
-    validate_file_references
-    
-    echo "✅ Documentation generated successfully"
+    if [[ -f "$REPO_CLEANUP_SCRIPT" ]]; then
+        if "$REPO_CLEANUP_SCRIPT" archive "$version" "$timestamp"; then
+            log_success "Old documentation archived successfully"
+            return 0
+        else
+            log_error "Failed to archive old documentation"
+            return 1
+        fi
+    else
+        log_error "Repository cleanup script not found: $REPO_CLEANUP_SCRIPT"
+        return 1
+    fi
 }
 
-# Validate file references in a specific file
-validate_file_references_in_file() {
-    local file="$1"
-    if [[ ! -f "$file" ]]; then
+# Generate documentation using generate-documents script
+generate_documentation() {
+    local version="$1"
+    local timestamp="$2"
+    local release_type="${3:-patch}"
+    
+    log_info "Generating documentation using generate-documents script..."
+    
+    if [[ -f "$GENERATE_DOCS_SCRIPT" ]]; then
+        if "$GENERATE_DOCS_SCRIPT" generate "$version" "$timestamp" "$release_type"; then
+            log_success "Documentation generated successfully"
+            return 0
+        else
+            log_error "Failed to generate documentation"
+            return 1
+        fi
+    else
+        log_error "Document generation script not found: $GENERATE_DOCS_SCRIPT"
+        return 1
+    fi
+}
+
+# Validate markdown using markdown-validation script
+validate_markdown() {
+    log_info "Validating markdown using markdown-validation script..."
+    
+    if [[ -f "$MARKDOWN_VALIDATION_SCRIPT" ]]; then
+        if "$MARKDOWN_VALIDATION_SCRIPT" project; then
+            log_success "Markdown validation completed successfully"
+            return 0
+        else
+            log_warning "Markdown validation found issues"
+            return 1
+        fi
+    else
+        log_warning "Markdown validation script not found: $MARKDOWN_VALIDATION_SCRIPT"
+        log_info "Skipping markdown validation"
         return 0
     fi
-    
-    local issues=0
-    local missing_files=()
-    local invalid_refs=()
-    
-    # Check all file references in the file
-    while IFS= read -r line; do
-        # Extract markdown links [text](path)
-        if echo "$line" | grep -q '\[.*\](.*)'; then
-            local link_text=$(echo "$line" | sed -n 's/.*\[\([^]]*\)\](.*)/\1/p')
-            local file_path=$(echo "$line" | sed -n 's/.*\[.*\](\([^)]*\))/\1/p' | sed 's/ .*$//' | sed 's/[.*]*$//')
-            
-            # Skip external URLs
-            if [[ ! "$file_path" =~ ^https?:// ]]; then
-                # Skip empty or invalid file paths
-                if [[ -n "$file_path" ]]; then
-                    # Handle relative paths - if path starts with docs/, check from project root
-                    local check_path="$file_path"
-                    if [[ "$file_path" =~ ^docs/ ]]; then
-                        # If we're in docs/ directory and path starts with docs/, check from parent
-                        if [[ -f "../$file_path" || -d "../$file_path" ]]; then
-                            check_path="../$file_path"
-                        fi
-                    fi
-                    
-                    # Check if file/directory exists
-                    if [[ ! -f "$check_path" && ! -d "$check_path" ]]; then
-                        # Skip common directory references that are valid
-                        if [[ "$file_path" != "docs/" && "$file_path" != "src/" && "$file_path" != "." && "$file_path" != "docs" && "$file_path" != "src" && "$file_path" != "./templates" && "$file_path" != "templates" && "$file_path" != "install.sh" ]]; then
-                            missing_files+=("$file_path")
-                            issues=$((issues + 1))
-                        fi
-                    fi
-                fi
-            fi
-        fi
-        
-        # Extract code block file references (```bash, ./script.sh, etc.)
-        if [[ "$line" =~ \.\/[a-zA-Z0-9_\.-]+ ]]; then
-            local script_ref="${BASH_REMATCH[0]}"
-            if [[ ! -f "$script_ref" ]]; then
-                # Only add if it's not empty and looks like a real file reference
-                if [[ -n "$script_ref" && "$script_ref" =~ \.\/[a-zA-Z0-9_\.-]+\.[a-zA-Z0-9]+ ]]; then
-                    invalid_refs+=("$script_ref")
-                    issues=$((issues + 1))
-                fi
-            fi
-        fi
-        
-        # Extract direct file references in text (only check actual file references)
-        # Look for patterns like "see file.ext" or "run script.sh" or "check config.json"
-        if [[ "$line" =~ (see|check|read|open|run|execute|script|file|config|install).*([a-zA-Z0-9_\.-]+\.(sh|py|js|ts|md|txt|json|yaml|yml)) ]]; then
-            local file_ref="${BASH_REMATCH[2]}"
-            # Only process if it's not empty and looks like a real file
-            if [[ -n "$file_ref" && "$file_ref" =~ ^[a-zA-Z0-9_\.-]+\.[a-zA-Z0-9]+$ ]]; then
-                if [[ ! -f "$file_ref" && ! -d "$file_ref" ]]; then
-                    # Skip common configuration examples
-                    if [[ "$file_ref" != "install.sh" && "$file_ref" != "config.json" && "$file_ref" != "package.json" ]]; then
-                        invalid_refs+=("$file_ref")
-                        issues=$((issues + 1))
-                    fi
-                fi
-            fi
-        fi
-    done < "$file"
-    
-    # Report issues
-    if [[ $issues -gt 0 ]]; then
-        echo "   ⚠️  Found $issues invalid file references:"
-        if [[ ${#missing_files[@]} -gt 0 ]]; then
-            echo "     Missing files: ${missing_files[*]}"
-        fi
-        if [[ ${#invalid_refs[@]} -gt 0 ]]; then
-            echo "     Invalid references: ${invalid_refs[*]}"
-        fi
-    else
-        echo "   ✅ All file references are valid"
-    fi
-    
-    return $issues
 }
 
-# Validate all file references in markdown files
-validate_file_references() {
-    echo "🔍 Validating file references in all markdown files..."
+# Main documentation workflow
+generate_documentation_workflow() {
+    local version="$1"
+    local timestamp="$2"
+    local release_type="${3:-patch}"
     
-    local total_issues=0
-    local files_checked=0
+    log_info "Starting documentation workflow for version $version..."
     
-    # Find all markdown files (excluding zArchive)
-    while IFS= read -r file; do
-        if [[ -f "$file" ]]; then
-            files_checked=$((files_checked + 1))
-            echo "   Checking: $file"
-            
-            # Change to the directory containing the file for validation
-            local file_dir="$(dirname "$file")"
-            local file_name="$(basename "$file")"
-            
-            if [[ "$file_dir" != "." ]]; then
-                cd "$file_dir" 2>/dev/null || true
-            fi
-            
-            if validate_file_references_in_file "$file_name"; then
-                # Function returns 0 for no issues, >0 for issues
-                local file_issues=$?
-                total_issues=$((total_issues + file_issues))
-            fi
-            
-            # Return to original directory
-            if [[ "$file_dir" != "." ]]; then
-                cd - >/dev/null 2>&1 || true
-            fi
-        fi
-    done < <(find . -name "*.md" -type f | grep -v "docs/zArchive" | sort)
-    
-    echo ""
-    if [[ $total_issues -eq 0 ]]; then
-        echo "✅ All file references are valid ($files_checked files checked)"
-    else
-        echo "⚠️  Found $total_issues total issues across $files_checked files"
+    # Check required scripts
+    if ! check_required_scripts; then
+        return 1
     fi
     
-    return $total_issues
+    # Step 1: Archive old documentation
+    if ! archive_old_documentation "$version" "$timestamp"; then
+        log_error "Failed to archive old documentation"
+        return 1
+    fi
+    
+    # Step 2: Generate new documentation
+    if ! generate_documentation "$version" "$timestamp" "$release_type"; then
+        log_error "Failed to generate documentation"
+        return 1
+    fi
+    
+    # Step 3: Validate markdown
+    if ! validate_markdown; then
+        log_warning "Markdown validation found issues, but continuing..."
+    fi
+    
+    log_success "Documentation workflow completed successfully"
+    return 0
 }
 
-# Load cleanup module
-if [ -f "$(dirname "${BASH_SOURCE[0]}")/manifest-cleanup.sh" ]; then
-    source "$(dirname "${BASH_SOURCE[0]}")/manifest-cleanup.sh"
+# Legacy function for backward compatibility
+generate_release_notes() {
+    local version="$1"
+    local timestamp="$2"
+    local release_type="${3:-patch}"
+    
+    log_warning "Using legacy generate_release_notes function"
+    log_info "Consider using generate_documentation_workflow instead"
+    
+    return generate_documentation_workflow "$version" "$timestamp" "$release_type"
+}
+
+# Legacy function for backward compatibility
+generate_changelog() {
+    local version="$1"
+    local timestamp="$2"
+    local release_type="${3:-patch}"
+    
+    log_warning "Using legacy generate_changelog function"
+    log_info "Consider using generate_documentation_workflow instead"
+    
+    return generate_documentation_workflow "$version" "$timestamp" "$release_type"
+}
+
+# Legacy function for backward compatibility
+update_readme_version() {
+    local version="$1"
+    local timestamp="$2"
+    
+    log_warning "Using legacy update_readme_version function"
+    log_info "Consider using generate_documentation_workflow instead"
+    
+    return generate_documentation_workflow "$version" "$timestamp" "patch"
+}
+
+# Legacy function for backward compatibility
+move_previous_documentation() {
+    local version="$1"
+    local timestamp="$2"
+    
+    log_warning "Using legacy move_previous_documentation function"
+    log_info "Consider using archive_old_documentation instead"
+    
+    return archive_old_documentation "$version" "$timestamp"
+}
+
+# Legacy function for backward compatibility
+move_existing_historical_docs() {
+    log_warning "Using legacy move_existing_historical_docs function"
+    log_info "This function is now handled by repo-cleanup.sh"
+    
+    # Call repo-cleanup script for general cleanup
+    if [[ -f "$REPO_CLEANUP_SCRIPT" ]]; then
+        "$REPO_CLEANUP_SCRIPT" clean
+    else
+        log_error "Repository cleanup script not found"
+        return 1
+    fi
+}
+
+# Main function for command-line usage
+main() {
+    case "${1:-help}" in
+        "generate")
+            local version="${2:-}"
+            local timestamp="${3:-$(date -u +"%Y-%m-%d %H:%M:%S UTC")}"
+            local release_type="${4:-patch}"
+            
+            if [[ -z "$version" ]]; then
+                log_error "Version is required"
+                echo "Usage: $0 generate <version> [timestamp] [release_type]"
+                exit 1
+            fi
+            
+            generate_documentation_workflow "$version" "$timestamp" "$release_type"
+            ;;
+        "archive")
+            local version="${2:-}"
+            local timestamp="${3:-$(date -u +"%Y-%m-%d %H:%M:%S UTC")}"
+            
+            if [[ -z "$version" ]]; then
+                log_error "Version is required"
+                echo "Usage: $0 archive <version> [timestamp]"
+                exit 1
+            fi
+            
+            archive_old_documentation "$version" "$timestamp"
+            ;;
+        "validate")
+            validate_markdown
+            ;;
+        "check")
+            check_required_scripts
+            ;;
+        "help"|"-h"|"--help")
+            echo "Manifest Documentation Module"
+            echo "============================="
+            echo ""
+            echo "Usage: $0 [command] [options]"
+            echo ""
+            echo "Commands:"
+            echo "  generate <version> [timestamp] [type]  - Complete documentation workflow"
+            echo "  archive <version> [timestamp]          - Archive old documentation only"
+            echo "  validate                               - Validate markdown only"
+            echo "  check                                  - Check required scripts"
+            echo "  help                                   - Show this help"
+            echo ""
+            echo "Release Types:"
+            echo "  patch, minor, major"
+            echo ""
+            echo "Examples:"
+            echo "  $0 generate 15.27.0"
+            echo "  $0 generate 15.27.0 '2025-09-05 13:41:28 UTC' minor"
+            echo "  $0 archive 15.27.0"
+            echo "  $0 validate"
+            ;;
+        *)
+            log_error "Unknown command: $1"
+            echo "Use '$0 help' for usage information"
+            exit 1
+            ;;
+    esac
+}
+
+# If script is being executed directly
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
 fi

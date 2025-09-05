@@ -267,9 +267,14 @@ manifest_go() {
     
     echo ""
     
-    # Generate documentation
+    # Generate documentation using new architecture
     local timestamp=$(format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
-    generate_documentation "$new_version" "$timestamp"
+    echo "📚 Generating documentation and release notes..."
+    if generate_documentation_workflow "$new_version" "$timestamp" "$increment_type"; then
+        echo "✅ Documentation generated successfully"
+    else
+        echo "⚠️  Documentation generation had issues, but continuing..."
+    fi
     echo ""
     
     # Archive previous version documentation to zArchive (now that new version is created)
@@ -727,7 +732,7 @@ main() {
                     fi
                     
                     local timestamp=$(format_timestamp "$(date -u +%s)" '+%Y-%m-%d %H:%M:%S UTC')
-                    generate_documentation "$current_version" "$timestamp"
+                    generate_documentation_workflow "$current_version" "$timestamp" "patch"
                     ;;
             esac
             ;;

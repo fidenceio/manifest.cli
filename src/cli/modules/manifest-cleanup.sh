@@ -1,6 +1,7 @@
 #!/bin/bash
 # Manifest Cleanup Module
 # Provides centralized, iterative file cleanup utilities with exclusion support
+# Now integrates with /scripts/repo-cleanup.sh for comprehensive cleanup
 #
 # Environment Variables:
 #   MANIFEST_CLEANUP_MAX_ATTEMPTS - Maximum retry attempts (default: 3)
@@ -196,6 +197,32 @@ comprehensive_cleanup() {
 }
 
 # Force cleanup (removes everything matching patterns)
+# Call the comprehensive repo-cleanup script
+call_repo_cleanup() {
+    local version="${1:-}"
+    local timestamp="${2:-$(date -u +"%Y-%m-%d %H:%M:%S UTC")}"
+    
+    echo "🧹 Calling comprehensive repository cleanup..."
+    
+    # Get the project root (two levels up from modules)
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local project_root="$(dirname "$(dirname "$script_dir")")"
+    local repo_cleanup_script="$project_root/scripts/repo-cleanup.sh"
+    
+    if [[ -f "$repo_cleanup_script" ]]; then
+        if [[ -n "$version" ]]; then
+            "$repo_cleanup_script" archive "$version" "$timestamp"
+        else
+            "$repo_cleanup_script" clean
+        fi
+        echo "✅ Repository cleanup completed"
+    else
+        echo "⚠️  Repository cleanup script not found: $repo_cleanup_script"
+        echo "   Falling back to basic cleanup..."
+        force_cleanup
+    fi
+}
+
 force_cleanup() {
     echo "🧹 Starting force cleanup..."
     local patterns=("$@")

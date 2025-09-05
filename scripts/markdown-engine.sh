@@ -1,7 +1,37 @@
 #!/bin/bash
 
-# Markdown Template System for Manifest CLI
-# Provides consistent, well-formatted markdown generation
+# Markdown Engine Script
+# Provides consistent, well-formatted markdown generation, templates, and validation
+
+set -euo pipefail
+
+# Configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Colors and formatting
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Logging functions
+log_info() {
+    echo -e "${BLUE}ℹ️  $1${NC}"
+}
+
+log_success() {
+    echo -e "${GREEN}✅ $1${NC}"
+}
+
+log_warning() {
+    echo -e "${YELLOW}⚠️  $1${NC}"
+}
+
+log_error() {
+    echo -e "${RED}❌ $1${NC}"
+}
 
 # Markdown formatting functions
 markdown_header() {
@@ -361,7 +391,7 @@ validate_markdown_syntax() {
         if [[ $line =~ ^(#+)[[:space:]] ]]; then
             local current_level=${#BASH_REMATCH[1]}
             if [ $current_level -gt $((prev_level + 1)) ]; then
-                echo "❌ Heading level skipped: $line"
+                log_error "Heading level skipped: $line"
                 errors=$((errors + 1))
             fi
             prev_level=$current_level
@@ -370,13 +400,13 @@ validate_markdown_syntax() {
     
     # Check for multiple consecutive blank lines
     if echo "$content" | awk '/^$/{if(prev_empty){print "found"; exit} prev_empty=1; next} {prev_empty=0} END{exit 0}' | grep -q "found"; then
-        echo "❌ Multiple consecutive blank lines found"
+        log_error "Multiple consecutive blank lines found"
         errors=$((errors + 1))
     fi
     
     # Check for trailing whitespace
     if echo "$content" | grep -q "[[:space:]]$"; then
-        echo "❌ Trailing whitespace found"
+        log_error "Trailing whitespace found"
         errors=$((errors + 1))
     fi
     
@@ -400,3 +430,134 @@ clean_markdown() {
     
     echo "$content"
 }
+
+# Generate markdown file with validation
+generate_markdown_file() {
+    local file_path="$1"
+    local content="$2"
+    local validate="${3:-true}"
+    
+    log_info "Generating markdown file: $file_path"
+    
+    # Clean the content
+    content=$(clean_markdown "$content")
+    
+    # Validate syntax if requested
+    if [[ "$validate" == "true" ]]; then
+        if ! validate_markdown_syntax "$content"; then
+            log_warning "Markdown syntax issues found in $file_path"
+        fi
+    fi
+    
+    # Write the file
+    echo "$content" > "$file_path"
+    
+    if [[ -f "$file_path" ]]; then
+        log_success "Generated: $file_path"
+        return 0
+    else
+        log_error "Failed to generate: $file_path"
+        return 1
+    fi
+}
+
+# Main function for command-line usage
+main() {
+    case "${1:-help}" in
+        "template")
+            case "${2:-}" in
+                "release")
+                    generate_release_notes_template "${3:-}" "${4:-}" "${5:-}"
+                    ;;
+                "changelog")
+                    generate_changelog_template "${3:-}" "${4:-}" "${5:-}"
+                    ;;
+                "readme")
+                    generate_readme_version_section "${3:-}" "${4:-}"
+                    ;;
+                "help")
+                    generate_command_help_template "${3:-}" "${4:-}" "${5:-}" "${6:-}"
+                    ;;
+                "config")
+                    generate_config_section_template "${3:-}" "${4:-}" "${5:-}"
+                    ;;
+                "troubleshooting")
+                    generate_troubleshooting_template "${3:-}" "${4:-}" "${5:-}"
+                    ;;
+                "workflow")
+                    generate_workflow_template "${3:-}" "${4:-}" "${5:-}" "${6:-}"
+                    ;;
+                *)
+                    log_error "Unknown template type: ${2:-}"
+                    echo "Available templates: release, changelog, readme, help, config, troubleshooting, workflow"
+                    return 1
+                    ;;
+            esac
+            ;;
+        "validate")
+            local file="${2:-}"
+            if [[ -n "$file" && -f "$file" ]]; then
+                local content=$(cat "$file")
+                if validate_markdown_syntax "$content"; then
+                    log_success "Markdown syntax is valid: $file"
+                    return 0
+                else
+                    log_error "Markdown syntax issues found: $file"
+                    return 1
+                fi
+            else
+                log_error "File not found: $file"
+                return 1
+            fi
+            ;;
+        "clean")
+            local file="${2:-}"
+            if [[ -n "$file" && -f "$file" ]]; then
+                local content=$(cat "$file")
+                local cleaned=$(clean_markdown "$content")
+                echo "$cleaned" > "$file"
+                log_success "Cleaned markdown file: $file"
+            else
+                log_error "File not found: $file"
+                return 1
+            fi
+            ;;
+        "help"|"-h"|"--help")
+            echo "Markdown Engine Script"
+            echo "====================="
+            echo ""
+            echo "Usage: $0 [command] [options]"
+            echo ""
+            echo "Commands:"
+            echo "  template [type] [args...]  - Generate markdown templates"
+            echo "  validate [file]            - Validate markdown syntax"
+            echo "  clean [file]               - Clean markdown file"
+            echo "  help                       - Show this help"
+            echo ""
+            echo "Template Types:"
+            echo "  release [version] [timestamp] [type]"
+            echo "  changelog [version] [timestamp] [type]"
+            echo "  readme [version] [timestamp]"
+            echo "  help [command] [description] [emoji] [examples]"
+            echo "  config [title] [description] [variables]"
+            echo "  troubleshooting [issue] [symptoms] [solutions]"
+            echo "  workflow [title] [description] [steps] [commands]"
+            echo ""
+            echo "Examples:"
+            echo "  $0 template release 15.27.0 '2025-09-05 13:41:28 UTC' minor"
+            echo "  $0 validate README.md"
+            echo "  $0 clean docs/USER_GUIDE.md"
+            ;;
+        *)
+            log_error "Unknown command: $1"
+            echo "Use '$0 help' for usage information"
+            return 1
+            ;;
+    esac
+}
+
+# If script is being executed directly
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi
+

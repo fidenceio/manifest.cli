@@ -1,315 +1,233 @@
 #!/bin/bash
 
-# Repository Cleanup Tool - File Management
-# Deletes temp files and moves old documentation
+# Repository Cleanup Script
+# Handles moving old documentation to zArchive and general repository cleanup
 
 set -euo pipefail
 
-# Colors
+# Configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+ZARCHIVE_DIR="$PROJECT_ROOT/docs/zArchive"
+
+# Colors and formatting
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m'
+NC='\033[0m' # No Color
 
-# Simple logging
-log_error() { echo -e "${RED}❌ $1${NC}"; }
-log_success() { echo -e "${GREEN}✅ $1${NC}"; }
-log_info() { echo -e "${YELLOW}ℹ️  $1${NC}"; }
-log_warning() { echo -e "${BLUE}⚠️  $1${NC}"; }
-
-# Find temp files
-find_temp_files() {
-    find . -name "*.tmp*" -o -name "*.temp*" -o -name "*.backup*" -o -name "*.bak*" -o -name "*.orig*" -o -name "*~" -o -name ".#*" -o -name "#*#" -o -name "*.swp*" -o -name "*.swo*" 2>/dev/null | grep -v ".git" | sort
+# Logging functions
+log_info() {
+    echo -e "${BLUE}ℹ️  $1${NC}"
 }
 
-# Find old documentation files (exclude current version)
-find_old_docs() {
-    local current_version=""
-    if [ -f "VERSION" ]; then
-        current_version=$(cat VERSION)
-    fi
-    
-    if [ -z "$current_version" ]; then
-        # If no VERSION file, find all versioned files
-        find . -name "*_old*" -o -name "*_new*" -o -name "RELEASE_v*" -o -name "CHANGELOG_v*" 2>/dev/null | grep -v ".git" | sort
-    else
-        # Exclude current version files
-        find . -name "*_old*" -o -name "*_new*" -o -name "RELEASE_v*" -o -name "CHANGELOG_v*" 2>/dev/null | grep -v ".git" | grep -v "_v${current_version}.md" | sort
-    fi
+log_success() {
+    echo -e "${GREEN}✅ $1${NC}"
 }
 
-# Clean temp files
-clean_temp_files() {
-    # Check if running non-interactively (from manifest docs)
-    if [[ "${MANIFEST_NON_INTERACTIVE:-false}" == "true" ]]; then
-        # Non-interactive mode: just clean without prompting
-        find . -name "*.tmp*" -o -name "*.temp*" -o -name "*.backup*" -o -name "*.bak*" -o -name "*.orig*" -o -name "*~" -o -name ".#*" -o -name "#*#" -o -name "*.swp*" -o -name "*.swo*" 2>/dev/null | grep -v ".git" | xargs rm -f 2>/dev/null || true
-        log_success "Temp files cleaned"
-    else
-        # Interactive mode: show files and prompt
-        local temp_files
-        temp_files=$(find_temp_files)
-        
-        if [[ -z "$temp_files" ]]; then
-            log_info "No temp files found"
-            return 0
-        fi
-        
-        echo "Found temp files:"
-        echo "$temp_files"
-        echo ""
-        
-        read -p "Delete these temp files? (y/N): " -n 1 -r
-        echo ""
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            echo "$temp_files" | xargs rm -f
-            log_success "Temp files cleaned"
-        else
-            log_info "Temp files kept"
-        fi
+log_warning() {
+    echo -e "${YELLOW}⚠️  $1${NC}"
+}
+
+log_error() {
+    echo -e "${RED}❌ $1${NC}"
+}
+
+# Ensure zArchive directory exists
+ensure_zarchive_dir() {
+    if [[ ! -d "$ZARCHIVE_DIR" ]]; then
+        log_info "Creating zArchive directory: $ZARCHIVE_DIR"
+        mkdir -p "$ZARCHIVE_DIR"
+        log_success "zArchive directory created"
     fi
 }
 
-# Move old documentation to archive
-archive_old_docs() {
-    local old_docs
-    old_docs=$(find_old_docs)
+# Move old documentation to zArchive
+archive_old_documentation() {
+    local version="$1"
+    local timestamp="$2"
     
-    if [[ -z "$old_docs" ]]; then
-        log_info "No old documentation files found"
-        return 0
-    fi
+    log_info "Archiving old documentation for version $version..."
     
-    echo "Found old documentation files:"
-    echo "$old_docs"
-    echo ""
+    ensure_zarchive_dir
     
-    # Create zArchive directory if it doesn't exist
-    local archive_dir="docs/zArchive"
-    if [[ ! -d "$archive_dir" ]]; then
-        mkdir -p "$archive_dir"
-        log_info "Created zArchive directory: $archive_dir"
-    fi
+    local moved_count=0
+    local skipped_count=0
     
-    # Check if running non-interactively (from manifest docs)
-    if [[ "${MANIFEST_NON_INTERACTIVE:-false}" == "true" ]]; then
-        # Non-interactive mode: just move files
-        echo "$old_docs" | while read -r file; do
-            if [[ -f "$file" ]]; then
-                local basename_file=$(basename "$file")
-                mv "$file" "$archive_dir/$basename_file"
-                log_success "Moved: $file -> $archive_dir/$basename_file"
+    # Find all version-specific documentation files
+    while IFS= read -r file; do
+        if [[ -f "$file" ]]; then
+            local filename="$(basename "$file")"
+            local dest="$ZARCHIVE_DIR/$filename"
+            
+            # Skip if already in zArchive
+            if [[ "$file" == *"/zArchive/"* ]]; then
+                skipped_count=$((skipped_count + 1))
+                continue
             fi
-        done
-        log_success "Documentation archiving completed"
-    else
-        # Interactive mode: show files and prompt
-        read -p "Move these files to $archive_dir? (y/N): " -n 1 -r
-        echo ""
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            echo "$old_docs" | while read -r file; do
-                if [[ -f "$file" ]]; then
-                    local basename_file=$(basename "$file")
-                    mv "$file" "$archive_dir/$basename_file"
-                    log_success "Moved: $file -> $archive_dir/$basename_file"
-                fi
-            done
-        else
-            log_info "Old documentation files kept"
+            
+            # Move the file
+            if mv "$file" "$dest" 2>/dev/null; then
+                log_success "Moved: $filename"
+                moved_count=$((moved_count + 1))
+            else
+                log_warning "Failed to move: $filename"
+            fi
         fi
-    fi
+    done < <(find "$PROJECT_ROOT/docs" -name "CHANGELOG_v*.md" -o -name "RELEASE_v*.md" | grep -v "zArchive")
+    
+    log_success "Archived $moved_count files, skipped $skipped_count files"
 }
 
-# Clean up backup files
-cleanup_backups() {
-    local backup_files
-    backup_files=$(find . -name "*.backup.*" -o -name "*.bak.*" 2>/dev/null | grep -v ".git" | sort)
+# Clean up temporary files
+cleanup_temp_files() {
+    log_info "Cleaning up temporary files..."
     
-    if [[ -z "$backup_files" ]]; then
-        log_info "No backup files found"
-        return 0
-    fi
+    local cleaned_count=0
     
-    echo "Found backup files:"
-    echo "$backup_files"
-    echo ""
+    # Remove common temporary files
+    local temp_patterns=(
+        "*.tmp"
+        "*.temp"
+        "*.bak"
+        "*.backup"
+        "*~"
+        ".DS_Store"
+        "Thumbs.db"
+    )
     
-    read -p "Delete these backup files? (y/N): " -n 1 -r
-    echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "$backup_files" | xargs rm -f
-        log_success "Backup files cleaned"
-    else
-        log_info "Backup files kept"
-    fi
-}
-
-# Show usage
-show_usage() {
-    cat << EOF
-Repository Cleanup Tool - File Management
-
-USAGE:
-    $0 [command] [options]
-
-COMMANDS:
-    temp            Clean up temporary files
-    archive         Move old documentation to archive
-    backups         Clean up backup files
-    all             Run all cleanup operations
-
-OPTIONS:
-    --force, -f     Skip confirmation prompts
-    --help, -h      Show this help
-
-EXAMPLES:
-    $0 temp                    # Clean temp files
-    $0 archive                 # Archive old docs
-    $0 all                     # Run all cleanup
-    $0 temp --force            # Clean temp files without confirmation
-
-EOF
-}
-
-# Main processing
-main() {
-    # Check for help first
-    if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
-        show_usage
-        exit 0
-    fi
-    
-    local command="${1:-all}"
-    local force=false
-    shift || true
-    
-    # Parse options
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --force|-f)
-                force=true
-                shift
-                ;;
-            *)
-                log_error "Unknown option: $1"
-                show_usage
-                exit 1
-                ;;
-        esac
+    for pattern in "${temp_patterns[@]}"; do
+        while IFS= read -r file; do
+            if [[ -f "$file" ]]; then
+                rm -f "$file"
+                cleaned_count=$((cleaned_count + 1))
+            fi
+        done < <(find "$PROJECT_ROOT" -name "$pattern" -type f 2>/dev/null || true)
     done
     
-    case "$command" in
-        temp)
-            if [[ "$force" == "true" ]]; then
-                local temp_files
-                temp_files=$(find_temp_files)
-                if [[ -n "$temp_files" ]]; then
-                    echo "$temp_files" | xargs rm -f
-                    log_success "Temp files cleaned"
-                else
-                    log_info "No temp files found"
-                fi
-            else
-                clean_temp_files
-            fi
-            ;;
-        archive)
-            if [[ "$force" == "true" ]]; then
-                local old_docs
-                old_docs=$(find_old_docs)
-                if [[ -n "$old_docs" ]]; then
-                    local archive_dir="docs/zArchive"
-                    mkdir -p "$archive_dir"
-                    echo "$old_docs" | while read -r file; do
-                        if [[ -f "$file" ]]; then
-                            local basename_file=$(basename "$file")
-                            mv "$file" "$archive_dir/$basename_file"
-                            log_success "Moved: $file -> $archive_dir/$basename_file"
-                        fi
-                    done
-                else
-                    log_info "No old documentation files found"
-                fi
-            else
-                archive_old_docs
-            fi
-            ;;
-        backups)
-            if [[ "$force" == "true" ]]; then
-                local backup_files
-                backup_files=$(find . -name "*.backup.*" -o -name "*.bak.*" 2>/dev/null | grep -v ".git" | sort)
-                if [[ -n "$backup_files" ]]; then
-                    echo "$backup_files" | xargs rm -f
-                    log_success "Backup files cleaned"
-                else
-                    log_info "No backup files found"
-                fi
-            else
-                cleanup_backups
-            fi
-            ;;
-        all)
-            log_info "Running all cleanup operations..."
-            echo ""
-            
-            log_info "1. Cleaning temp files..."
-            if [[ "$force" == "true" ]]; then
-                local temp_files
-                temp_files=$(find_temp_files)
-                if [[ -n "$temp_files" ]]; then
-                    echo "$temp_files" | xargs rm -f
-                    log_success "Temp files cleaned"
-                else
-                    log_info "No temp files found"
-                fi
-            else
-                clean_temp_files
-            fi
-            echo ""
-            
-            log_info "2. Archiving old documentation..."
-            if [[ "$force" == "true" ]]; then
-                local old_docs
-                old_docs=$(find_old_docs)
-                if [[ -n "$old_docs" ]]; then
-                    local archive_dir="docs/zArchive"
-                    mkdir -p "$archive_dir"
-                    echo "$old_docs" | while read -r file; do
-                        if [[ -f "$file" ]]; then
-                            local basename_file=$(basename "$file")
-                            mv "$file" "$archive_dir/$basename_file"
-                            log_success "Moved: $file -> $archive_dir/$basename_file"
-                        fi
-                    done
-                else
-                    log_info "No old documentation files found"
-                fi
-            else
-                archive_old_docs
-            fi
-            echo ""
-            
-            log_info "3. Cleaning backup files..."
-            if [[ "$force" == "true" ]]; then
-                local backup_files
-                backup_files=$(find . -name "*.backup.*" -o -name "*.bak.*" 2>/dev/null | grep -v ".git" | sort)
-                if [[ -n "$backup_files" ]]; then
-                    echo "$backup_files" | xargs rm -f
-                    log_success "Backup files cleaned"
-                else
-                    log_info "No backup files found"
-                fi
-            else
-                cleanup_backups
-            fi
-            ;;
-        *)
-            log_error "Unknown command: $command"
-            show_usage
-            exit 1
-            ;;
-    esac
+    if [[ $cleaned_count -gt 0 ]]; then
+        log_success "Cleaned up $cleaned_count temporary files"
+    else
+        log_info "No temporary files found"
+    fi
 }
 
-main "$@"
+# Clean up empty directories
+cleanup_empty_dirs() {
+    log_info "Cleaning up empty directories..."
+    
+    local cleaned_count=0
+    
+    # Find and remove empty directories (except important ones)
+    while IFS= read -r dir; do
+        if [[ -d "$dir" && "$dir" != "$PROJECT_ROOT" && "$dir" != "$PROJECT_ROOT/.git" ]]; then
+            if [[ -z "$(ls -A "$dir" 2>/dev/null)" ]]; then
+                rmdir "$dir" 2>/dev/null && cleaned_count=$((cleaned_count + 1))
+            fi
+        fi
+    done < <(find "$PROJECT_ROOT" -type d -empty 2>/dev/null || true)
+    
+    if [[ $cleaned_count -gt 0 ]]; then
+        log_success "Removed $cleaned_count empty directories"
+    else
+        log_info "No empty directories found"
+    fi
+}
+
+# Validate repository state
+validate_repository() {
+    log_info "Validating repository state..."
+    
+    local issues=0
+    
+    # Check for uncommitted changes
+    if ! git diff --quiet 2>/dev/null; then
+        log_warning "Repository has uncommitted changes"
+        issues=$((issues + 1))
+    fi
+    
+    # Check for untracked files
+    if [[ -n "$(git ls-files --others --exclude-standard 2>/dev/null)" ]]; then
+        log_warning "Repository has untracked files"
+        issues=$((issues + 1))
+    fi
+    
+    # Check zArchive directory
+    if [[ ! -d "$ZARCHIVE_DIR" ]]; then
+        log_warning "zArchive directory does not exist"
+        issues=$((issues + 1))
+    fi
+    
+    if [[ $issues -eq 0 ]]; then
+        log_success "Repository state is valid"
+        return 0
+    else
+        log_warning "Repository has $issues issues"
+        return 1
+    fi
+}
+
+# Main cleanup function
+main_cleanup() {
+    local version="${1:-}"
+    local timestamp="${2:-$(date -u +"%Y-%m-%d %H:%M:%S UTC")}"
+    
+    log_info "Starting repository cleanup..."
+    log_info "Version: $version"
+    log_info "Timestamp: $timestamp"
+    
+    # Change to project root
+    cd "$PROJECT_ROOT"
+    
+    # Archive old documentation
+    if [[ -n "$version" ]]; then
+        archive_old_documentation "$version" "$timestamp"
+    fi
+    
+    # Clean up temporary files
+    cleanup_temp_files
+    
+    # Clean up empty directories
+    cleanup_empty_dirs
+    
+    # Validate repository state (don't fail on warnings)
+    validate_repository || true
+    
+    log_success "Repository cleanup completed"
+}
+
+# Command-line interface
+case "${1:-help}" in
+    "archive")
+        main_cleanup "${2:-}" "${3:-}"
+        ;;
+    "clean")
+        main_cleanup "" ""
+        ;;
+    "validate")
+        validate_repository
+        ;;
+    "help"|"-h"|"--help")
+        echo "Repository Cleanup Script"
+        echo "========================"
+        echo ""
+        echo "Usage: $0 [command] [version] [timestamp]"
+        echo ""
+        echo "Commands:"
+        echo "  archive [version] [timestamp]  - Archive old documentation and cleanup"
+        echo "  clean                          - General cleanup (no archiving)"
+        echo "  validate                       - Validate repository state"
+        echo "  help                           - Show this help"
+        echo ""
+        echo "Examples:"
+        echo "  $0 archive 15.27.0             # Archive docs for version 15.27.0"
+        echo "  $0 clean                       # General cleanup"
+        echo "  $0 validate                    # Check repository state"
+        ;;
+    *)
+        log_error "Unknown command: $1"
+        echo "Use '$0 help' for usage information"
+        exit 1
+        ;;
+esac
