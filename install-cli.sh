@@ -228,27 +228,40 @@ validate_system() {
 # Installation Functions
 # =============================================================================
 
-# Clean up old installation directory
+# Source the uninstall module for cleanup
+source_manifest_uninstall() {
+    # Get the directory where this script is located
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local modules_dir="$script_dir/src/cli/modules"
+    
+    # Source shared utilities first
+    if [ -f "$modules_dir/manifest-shared-utils.sh" ]; then
+        source "$modules_dir/manifest-shared-utils.sh"
+    fi
+    
+    # Source the uninstall module
+    if [ -f "$modules_dir/manifest-uninstall.sh" ]; then
+        source "$modules_dir/manifest-uninstall.sh"
+    else
+        print_error "❌ Uninstall module not found: $modules_dir/manifest-uninstall.sh"
+        return 1
+    fi
+}
+
+# Clean up old installation using the uninstall module
 cleanup_old_installation() {
     print_subheader "🧹 Cleaning Up Old Installation"
     
-    # Clean up the old .manifest-cli directory
-    if [ -d "$INSTALL_LOCATION" ]; then
-        print_status "Removing old installation directory: $INSTALL_LOCATION"
-        rm -rf "$INSTALL_LOCATION"
-        print_success "✅ Old installation directory removed"
-    else
-        print_success "✅ No old installation directory found"
+    # Source the uninstall module
+    if ! source_manifest_uninstall; then
+        print_error "❌ Failed to load uninstall module"
+        print_error "❌ Cannot proceed with installation without cleanup capability"
+        return 1
     fi
     
-    # Clean up any old CLI binary
-    if [ -f "$LOCAL_BIN/$CLI_NAME" ]; then
-        print_status "Removing old CLI binary: $LOCAL_BIN/$CLI_NAME"
-        rm -f "$LOCAL_BIN/$CLI_NAME"
-        print_success "✅ Old CLI binary removed"
-    fi
-    
-    echo ""
+    # Use the uninstall module for comprehensive cleanup
+    # Parameters: skip_confirmations=true, non_interactive=true
+    uninstall_manifest "true" "true"
 }
 
 # Create directory structure

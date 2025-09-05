@@ -38,6 +38,7 @@ source "$MODULES_DIR/manifest-ntp.sh"
 source "$MODULES_DIR/manifest-git.sh"
 source "$MODULES_DIR/manifest-security.sh"
 source "$MODULES_DIR/manifest-documentation.sh"
+source "$MODULES_DIR/manifest-uninstall.sh"
 source "$MODULES_DIR/manifest-orchestrator.sh"
 
 # Debug output (can be removed in production)
@@ -360,6 +361,10 @@ main() {
         "update")
             update_cli "$@"
             ;;
+        "uninstall")
+            # Parameters: skip_confirmations (from --force flag), non_interactive=false (interactive by default)
+            uninstall_manifest "${2:-false}" "false"
+            ;;
         "help"|*)
             display_help
             ;;
@@ -393,8 +398,9 @@ display_help() {
   echo "  test        - 🧪 Test CLI functionality and workflows"
   echo "  update      - 🔄 Check for and install CLI updates"
   echo "    update [--force] [--check]        # Update options: force update or check only"
-
-    echo "  help        - Show this help"
+  echo "  uninstall   - 🗑️  Remove Manifest CLI completely"
+  echo "    uninstall [--force]               # Uninstall options: force uninstall without confirmation"
+  echo "  help        - Show this help"
     echo ""
     echo "This CLI provides comprehensive Git operations and version management."
 echo ""
