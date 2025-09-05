@@ -6,6 +6,13 @@
 # Get the project root (three levels up from modules)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$(dirname "$SCRIPT_DIR")")")"
+
+# Use current working directory if we're in a git repository, otherwise use PROJECT_ROOT
+if git rev-parse --git-dir > /dev/null 2>&1; then
+    # We're in a git repository, use current directory
+    PROJECT_ROOT="$(pwd)"
+fi
+
 ZARCHIVE_DIR="$PROJECT_ROOT/docs/zArchive"
 
 # Colors and formatting
