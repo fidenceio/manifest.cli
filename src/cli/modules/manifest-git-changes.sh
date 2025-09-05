@@ -16,9 +16,11 @@ get_git_changes() {
     if [[ -n "$last_tag" ]]; then
         log_info "Getting changes since $last_tag" >&2
         git log --oneline --pretty=format:"- %s" "$last_tag..HEAD" 2>/dev/null || true
+        echo  # Add final newline
     else
         log_info "No previous tags found, getting all changes" >&2
         git log --oneline --pretty=format:"- %s" 2>/dev/null || true
+        echo  # Add final newline
     fi
 }
 
@@ -50,10 +52,10 @@ analyze_changes() {
             *"break"*|*"BREAKING"*)
                 breaking_changes+=("$change")
                 ;;
-            *"docs"*|*"documentation"*|*"readme"*)
+            *"docs"*|*"documentation"*|*"readme"*|*"README"*|*"Update README"*)
                 documentation+=("$change")
                 ;;
-            *"refactor"*|*"improve"*|*"optimize"*|*"enhance"*)
+            *"refactor"*|*"improve"*|*"optimize"*|*"enhance"*|*"Bump version"*)
                 improvements+=("$change")
                 ;;
             *)
@@ -67,19 +69,19 @@ analyze_changes() {
 # Change Analysis for v$version
 
 ## New Features
-$(printf '%s\n' "${new_features[@]:-}")
+$(printf '%s\n' "${new_features[@]}")
 
 ## Improvements
-$(printf '%s\n' "${improvements[@]:-}")
+$(printf '%s\n' "${improvements[@]}")
 
 ## Bug Fixes
-$(printf '%s\n' "${bug_fixes[@]:-}")
+$(printf '%s\n' "${bug_fixes[@]}")
 
 ## Breaking Changes
-$(printf '%s\n' "${breaking_changes[@]:-}")
+$(printf '%s\n' "${breaking_changes[@]}")
 
 ## Documentation
-$(printf '%s\n' "${documentation[@]:-}")
+$(printf '%s\n' "${documentation[@]}")
 EOF
     
     log_success "Change analysis completed"
