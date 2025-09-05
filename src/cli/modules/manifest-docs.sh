@@ -255,7 +255,7 @@ validate_file_references_in_file() {
         # Extract markdown links [text](path)
         if echo "$line" | grep -q '\[.*\](.*)'; then
             local link_text=$(echo "$line" | sed -n 's/.*\[\([^]]*\)\](.*)/\1/p')
-            local file_path=$(echo "$line" | sed -n 's/.*\[.*\](\([^)]*\))/\1/p')
+            local file_path=$(echo "$line" | sed -n 's/.*\[.*\](\([^)]*\))/\1/p' | sed 's/ .*$//')
             
             # Skip external URLs
             if [[ ! "$file_path" =~ ^https?:// ]]; then
