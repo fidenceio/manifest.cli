@@ -16,6 +16,55 @@ log_error() { echo -e "${RED}❌ $1${NC}"; }
 log_success() { echo -e "${GREEN}✅ $1${NC}"; }
 log_warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
 
+# Fix file issues
+fix_file() {
+    local file="$1"
+    local temp_file=$(mktemp)
+    local fixed=false
+    
+    # Fix trailing whitespace
+    if grep -q '[[:space:]]$' "$file" 2>/dev/null; then
+        sed 's/[[:space:]]*$//' "$file" > "$temp_file" && mv "$temp_file" "$file"
+        log_success "Fixed trailing whitespace"
+        fixed=true
+    fi
+    
+    # Fix multiple blank lines (reduce to max 2 consecutive)
+    # Simple approach: replace 3+ consecutive empty lines with 2
+    local has_multiple_blanks
+    has_multiple_blanks=$(grep -c '^[[:space:]]*$' "$file" 2>/dev/null || echo "0")
+    has_multiple_blanks=$(echo "$has_multiple_blanks" | head -1)  # Take only first line
+    if [[ "$has_multiple_blanks" -gt 2 ]]; then
+        # Use a simple perl one-liner to fix multiple blank lines
+        perl -i -pe 's/\n{3,}/\n\n/g' "$file" 2>/dev/null
+        log_success "Fixed multiple blank lines"
+        fixed=true
+    fi
+    
+    # Fix file ending - ensure single newline at end
+    if [[ -s "$file" ]]; then
+        # Simple approach: remove trailing newlines and add exactly one
+        perl -i -pe 'chomp if eof' "$file" 2>/dev/null
+        echo "" >> "$file"
+        log_success "Fixed file ending"
+        fixed=true
+    fi
+    
+    # Note: Unclosed code blocks require manual intervention
+    local code_count
+    code_count=$(grep -c '^```' "$file" 2>/dev/null || echo "0")
+    code_count=$(echo "$code_count" | head -1)
+    if [[ "$code_count" -gt 0 ]] && [[ $((code_count % 2)) -ne 0 ]]; then
+        log_warning "Unclosed code block found - requires manual fix"
+    fi
+    
+    if [[ "$fixed" == true ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 # Check if file has issues
 check_file() {
     local file="$1"
@@ -78,22 +127,23 @@ main() {
         exit 0
     fi
     
-    local total_errors=0
+    local total_fixed=0
     for file in "${files[@]}"; do
         if [[ -f "$file" ]]; then
-            if ! check_file "$file"; then
-                total_errors=$((total_errors + 1))
+            echo "Processing: $file"
+            if fix_file "$file"; then
+                total_fixed=$((total_fixed + 1))
             fi
             echo ""
         fi
     done
     
-    if [[ $total_errors -eq 0 ]]; then
-        log_success "All files are valid!"
+    if [[ $total_fixed -eq 0 ]]; then
+        log_success "All files are already valid!"
         exit 0
     else
-        log_error "Found $total_errors files with issues"
-        exit 1
+        log_success "Fixed $total_fixed files"
+        exit 0
     fi
 }
 

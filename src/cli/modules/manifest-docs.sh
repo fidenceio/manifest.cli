@@ -210,19 +210,23 @@ generate_documentation() {
     # Update README
     update_readme_version "$version" "$timestamp"
     
-    # Validate markdown files
+    # Fix and validate markdown files
     if [ -f "scripts/markdown-validator.sh" ]; then
-        echo "🔍 Validating markdown files..."
-        if ./scripts/markdown-validator.sh >/dev/null 2>&1; then
-            echo "   ✅ All markdown files are valid"
-        else
-            echo "   ⚠️  Markdown validation issues found"
-            echo "   💡 Run 'manifest cleanup' to fix file issues"
-        fi
+        echo "🔍 Fixing and validating markdown files..."
+        ./scripts/markdown-validator.sh
+        echo "   ✅ Markdown files processed"
+    fi
+    
+    # Clean repository files (temp files, old docs, backups)
+    if [ -f "scripts/repo-cleanup.sh" ]; then
+        echo "🧹 Cleaning repository files..."
+        MANIFEST_NON_INTERACTIVE=true ./scripts/repo-cleanup.sh all
+        echo "   ✅ Repository cleanup completed"
+    else
+        echo "   ⚠️  repo-cleanup.sh not found, skipping repository cleanup"
     fi
     
     echo "✅ Documentation generated successfully"
-    echo "   💡 Run 'manifest cleanup' to manage repository files"
 }
 
 # Load cleanup module

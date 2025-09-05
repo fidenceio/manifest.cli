@@ -41,25 +41,33 @@ find_old_docs() {
 
 # Clean temp files
 clean_temp_files() {
-    local temp_files
-    temp_files=$(find_temp_files)
-    
-    if [[ -z "$temp_files" ]]; then
-        log_info "No temp files found"
-        return 0
-    fi
-    
-    echo "Found temp files:"
-    echo "$temp_files"
-    echo ""
-    
-    read -p "Delete these temp files? (y/N): " -n 1 -r
-    echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "$temp_files" | xargs rm -f
+    # Check if running non-interactively (from manifest docs)
+    if [[ "${MANIFEST_NON_INTERACTIVE:-false}" == "true" ]]; then
+        # Non-interactive mode: just clean without prompting
+        find . -name "*.tmp*" -o -name "*.temp*" -o -name "*.backup*" -o -name "*.bak*" -o -name "*.orig*" -o -name "*~" -o -name ".#*" -o -name "#*#" -o -name "*.swp*" -o -name "*.swo*" 2>/dev/null | grep -v ".git" | xargs rm -f 2>/dev/null || true
         log_success "Temp files cleaned"
     else
-        log_info "Temp files kept"
+        # Interactive mode: show files and prompt
+        local temp_files
+        temp_files=$(find_temp_files)
+        
+        if [[ -z "$temp_files" ]]; then
+            log_info "No temp files found"
+            return 0
+        fi
+        
+        echo "Found temp files:"
+        echo "$temp_files"
+        echo ""
+        
+        read -p "Delete these temp files? (y/N): " -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo "$temp_files" | xargs rm -f
+            log_success "Temp files cleaned"
+        else
+            log_info "Temp files kept"
+        fi
     fi
 }
 
@@ -84,9 +92,9 @@ archive_old_docs() {
         log_info "Created zArchive directory: $archive_dir"
     fi
     
-    read -p "Move these files to $archive_dir? (y/N): " -n 1 -r
-    echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+    # Check if running non-interactively (from manifest docs)
+    if [[ "${MANIFEST_NON_INTERACTIVE:-false}" == "true" ]]; then
+        # Non-interactive mode: just move files
         echo "$old_docs" | while read -r file; do
             if [[ -f "$file" ]]; then
                 local basename_file=$(basename "$file")
@@ -94,8 +102,22 @@ archive_old_docs() {
                 log_success "Moved: $file -> $archive_dir/$basename_file"
             fi
         done
+        log_success "Documentation archiving completed"
     else
-        log_info "Old documentation files kept"
+        # Interactive mode: show files and prompt
+        read -p "Move these files to $archive_dir? (y/N): " -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo "$old_docs" | while read -r file; do
+                if [[ -f "$file" ]]; then
+                    local basename_file=$(basename "$file")
+                    mv "$file" "$archive_dir/$basename_file"
+                    log_success "Moved: $file -> $archive_dir/$basename_file"
+                fi
+            done
+        else
+            log_info "Old documentation files kept"
+        fi
     fi
 }
 
