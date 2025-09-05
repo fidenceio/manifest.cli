@@ -213,14 +213,6 @@ manifest_go() {
     sync_repository
     echo ""
     
-    # Archive previous version documentation to zArchive
-    echo "📁 Archiving previous version documentation..."
-    if [ -f "scripts/repo-cleanup.sh" ]; then
-        ./scripts/repo-cleanup.sh archive --force
-    else
-        move_previous_documentation
-    fi
-    echo ""
     
     # Bump version
     echo "📦 Bumping version..."
@@ -246,6 +238,15 @@ manifest_go() {
     # Generate documentation
     local timestamp=$(format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
     generate_documentation "$new_version" "$timestamp"
+    echo ""
+    
+    # Archive previous version documentation to zArchive (now that new version is created)
+    echo "📁 Archiving previous version documentation..."
+    if [ -f "scripts/repo-cleanup.sh" ]; then
+        ./scripts/repo-cleanup.sh archive --force
+    else
+        move_previous_documentation
+    fi
     echo ""
     
     # Commit version changes
@@ -305,7 +306,7 @@ manifest_go() {
     fi
     echo ""
     
-    # Archive old documentation files (already done at beginning of workflow)
+    # Archive old documentation files (completed after new version creation)
     echo "📁 Archiving old documentation files..."
     echo "   ✅ Documentation archiving completed"
     
