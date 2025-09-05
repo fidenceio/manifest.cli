@@ -10,8 +10,8 @@ get_git_changes() {
     local version="$1"
     local last_tag=""
     
-    # Get the last tag
-    last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+    # Get the previous tag (not the current one)
+    last_tag=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
     
     if [[ -n "$last_tag" ]]; then
         log_info "Getting changes since $last_tag"
@@ -83,11 +83,11 @@ $(printf '%s\n' "${documentation[@]:-}")
 EOF
     
     log_success "Change analysis completed"
-    log_info "New features: ${#new_features[@]:-0}"
-    log_info "Improvements: ${#improvements[@]:-0}"
-    log_info "Bug fixes: ${#bug_fixes[@]:-0}"
-    log_info "Breaking changes: ${#breaking_changes[@]:-0}"
-    log_info "Documentation: ${#documentation[@]:-0}"
+    log_info "New features: ${#new_features[@]}"
+    log_info "Improvements: ${#improvements[@]}"
+    log_info "Bug fixes: ${#bug_fixes[@]}"
+    log_info "Breaking changes: ${#breaking_changes[@]}"
+    log_info "Documentation: ${#documentation[@]}"
 }
 
 # Main function for command-line usage
