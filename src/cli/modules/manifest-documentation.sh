@@ -236,6 +236,7 @@ generate_documents() {
     
     # Copy the latest changelog to root as CHANGELOG.md (before cleanup)
     local changelog_file="$DOCS_DIR/CHANGELOG_v$version.md"
+    log_info "Attempting to copy changelog: $changelog_file"
     if [[ -f "$changelog_file" ]]; then
         cp "$changelog_file" "$PROJECT_ROOT/CHANGELOG.md"
         log_success "Main CHANGELOG.md updated from $changelog_file"
