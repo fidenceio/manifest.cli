@@ -690,8 +690,13 @@ main() {
             esac
             ;;
         "cleanup")
-            echo "📁 Moving historical documentation to zArchive..."
-            move_existing_historical_docs
+            echo "📁 Repository cleanup operations..."
+            if [ -f "scripts/repo-cleanup.sh" ]; then
+                ./scripts/repo-cleanup.sh all
+            else
+                echo "❌ repo-cleanup.sh not found. Please run from project root."
+                return 1
+            fi
             ;;
         "config")
             show_configuration
@@ -732,7 +737,7 @@ display_help() {
       echo "  docs        - 📚 Create documentation and release notes"
   echo "    docs metadata  - 🏷️  Update repository metadata (description, topics, etc.)"
   echo "    docs homebrew  - 🍺 Update Homebrew formula"
-  echo "  cleanup     - 📁 Move historical documentation to zArchive"
+  echo "  cleanup     - 📁 Clean repository files and archive old docs"
   echo "  config      - ⚙️  Show current configuration and environment variables"
   echo "  security    - 🔒 Security audit for vulnerabilities and privacy protection"
   echo "  test        - 🧪 Test CLI functionality and workflows"

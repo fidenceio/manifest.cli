@@ -176,7 +176,7 @@ cleanup_zArchive() {
     # Create zArchive directory if it doesn't exist
     mkdir -p docs/zArchive
     
-    # Clean up old documentation files
+    # Clean up old documentation files (archive management)
     cleanup_directory "docs/zArchive" "*.md" 20
     
     echo "   ✅ zArchive cleanup completed"

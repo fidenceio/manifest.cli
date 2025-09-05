@@ -342,7 +342,7 @@ MANIFEST_NTP_VERIFY=true
 # 3. Test functionality: manifest test
 # 4. Get timestamp: manifest ntp
 # 5. Sync repository: manifest sync
-# 6. Clean documentation: manifest cleanup
+# 6. Clean repository files: manifest cleanup
 # =============================================================================
 EOF
 

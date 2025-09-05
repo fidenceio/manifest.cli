@@ -85,9 +85,6 @@ update_readme_version() {
     
     # Update README.md with new version information
     if [ -f "README.md" ]; then
-        # Create backup
-        cp "README.md" "README.md.backup"
-        
         # Update version in badges
         sed -i '' "s/version-[0-9]\+\.[0-9]\+\.[0-9]\+/version-${version}/g" "README.md"
         
@@ -116,9 +113,6 @@ update_readme_version() {
             cat "README.md" >> "$temp_file"
             mv "$temp_file" "README.md"
         fi
-        
-        # Clean up backup
-        rm "README.md.backup"
         
         echo "   ✅ Version badge updated to $version"
         echo "   ✅ Version information table updated to $version"
@@ -175,94 +169,21 @@ update_repository_metadata() {
 }
 
 # Move previous version's documentation to zArchive folder
+# This function is now handled by repo-cleanup.sh
 move_previous_documentation() {
     echo "📁 Moving previous version documentation to zArchive..."
-    
-    # Get current version from VERSION file
-    local current_version=""
-    if [ -f "VERSION" ]; then
-        current_version=$(cat VERSION)
-    else
-        echo "   ⚠️  VERSION file not found, skipping documentation move"
-        return 0
-    fi
-    
-    if [ -z "$current_version" ]; then
-        echo "   ⚠️  Could not determine current version, skipping documentation move"
-        return 0
-    fi
-    
-    echo "   📋 Current version: $current_version"
-    
-    # Ensure zArchive directory exists
-    mkdir -p "docs/zArchive"
-    
-    local moved_count=0
-    
-    # Generate filenames using configuration
-    local filename_pattern="${MANIFEST_DOCS_FILENAME_PATTERN:-RELEASE_vVERSION.md}"
-    local release_filename=$(echo "$filename_pattern" | sed "s/VERSION/$current_version/g")
-    local changelog_filename="CHANGELOG_v$current_version.md"
-    
-    # Move RELEASE files
-    if [ -f "docs/$release_filename" ]; then
-        mv "docs/$release_filename" "docs/zArchive/"
-        echo "   📄 Moved $release_filename to zArchive/"
-        moved_count=$((moved_count + 1))
-    fi
-    
-    # Move CHANGELOG files
-    if [ -f "docs/$changelog_filename" ]; then
-        mv "docs/$changelog_filename" "docs/zArchive/"
-        echo "   📄 Moved $changelog_filename to zArchive/"
-        moved_count=$((moved_count + 1))
-    fi
-    
-    # Move any other version-specific documentation files
-    for file in docs/*_v$current_version.*; do
-        if [ -f "$file" ] && [ "$file" != "docs/*_v$current_version.*" ]; then
-            mv "$file" "docs/zArchive/"
-            echo "   📄 Moved $(basename "$file") to zArchive/"
-            moved_count=$((moved_count + 1))
-        fi
-    done
-    
-    if [ $moved_count -eq 0 ]; then
-        echo "   ℹ️  No previous version documentation found to move"
-    else
-        echo "   ✅ Moved $moved_count documentation file(s) to zArchive/"
-    fi
-    
-    # Clean up zArchive directory (keep only last 10 versions)
-    cleanup_zArchive
+    echo "   ℹ️  This operation is now handled by repo-cleanup.sh"
+    echo "   💡 Run 'manifest cleanup archive' to move old documentation"
 }
 
 # zArchive cleanup is now handled by the common cleanup module
 
 # Manual function to move existing historical documentation to zArchive
+# This function is now handled by repo-cleanup.sh
 move_existing_historical_docs() {
     echo "📁 Moving existing historical documentation to zArchive..."
-    
-    # Create zArchive directory if it doesn't exist
-    mkdir -p docs/zArchive
-    
-    local moved_count=0
-    
-    # Move all existing RELEASE and CHANGELOG files
-    for file in docs/RELEASE_v*.* docs/CHANGELOG_v*.*; do
-        if [ -f "$file" ]; then
-            mv "$file" "docs/zArchive/"
-            echo "   📄 Moved $(basename "$file") to zArchive/"
-            moved_count=$((moved_count + 1))
-        fi
-    done
-    
-    if [ $moved_count -eq 0 ]; then
-        echo "   ℹ️  No historical documentation found to move"
-    else
-        echo "   ✅ Moved $moved_count historical file(s) to zArchive/"
-        echo "   💡 You can now run 'manifest docs' to generate current documentation"
-    fi
+    echo "   ℹ️  This operation is now handled by repo-cleanup.sh"
+    echo "   💡 Run 'manifest cleanup archive' to move old documentation"
 }
 
 generate_documentation() {
@@ -270,12 +191,6 @@ generate_documentation() {
     local timestamp="$2"
     
     echo "📚 Generating documentation and release notes..."
-    
-    # Create docs directory if it doesn't exist
-    mkdir -p docs
-    
-    # Create zArchive directory if it doesn't exist
-    mkdir -p docs/zArchive
     
     # Generate release notes
     generate_release_notes "$version" "$timestamp"
@@ -289,22 +204,16 @@ generate_documentation() {
     # Validate markdown files
     if [ -f "scripts/markdown-validator.sh" ]; then
         echo "🔍 Validating markdown files..."
-        if ./scripts/markdown-validator.sh validate >/dev/null 2>&1; then
+        if ./scripts/markdown-validator.sh >/dev/null 2>&1; then
             echo "   ✅ All markdown files are valid"
         else
-            echo "   ⚠️  Markdown validation issues found, attempting to fix..."
-            if ./scripts/markdown-validator.sh fix >/dev/null 2>&1; then
-                echo "   ✅ Markdown issues fixed automatically"
-            else
-                echo "   ❌ Some markdown issues could not be fixed automatically"
-            fi
+            echo "   ⚠️  Markdown validation issues found"
+            echo "   💡 Run 'manifest cleanup' to fix file issues"
         fi
     fi
     
-    # Clean up any temporary files
-    cleanup_temp_files
-    
     echo "✅ Documentation generated successfully"
+    echo "   💡 Run 'manifest cleanup' to manage repository files"
 }
 
 # Load cleanup module
