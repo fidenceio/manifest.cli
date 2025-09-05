@@ -50,8 +50,8 @@ A powerful command-line tool for automating Git workflows, version management, a
 
 ```bash
 # Clone the repository
-git clone https://github.com/fidenceio/manifest.local.git
-cd manifest.local
+git clone https://github.com/fidenceio/manifest.cli.git
+cd manifest.cli
 
 # Install the CLI
 ./install-cli.sh
@@ -67,9 +67,9 @@ mkdir -p ~/.manifest-local
 cd ~/.manifest-local
 
 # Copy source files
-cp -r /path/to/manifest.local/src ./
-cp /path/to/manifest.local/package.json ./
-cp /path/to/manifest.local/README.md ./
+cp -r /path/to/manifest.cli/src ./
+cp /path/to/manifest.cli/VERSION ./
+cp /path/to/manifest.cli/README.md ./
 
 # Install dependencies
 npm install
@@ -144,7 +144,7 @@ manifest go           # Auto-detect increment type
 1. Checks for uncommitted changes
 2. Analyzes commits (if cloud service configured)
 3. Bumps version according to type
-4. Updates VERSION file and package.json
+4. Updates VERSION file
 5. Commits changes
 6. Creates Git tag
 7. Pushes to all remotes
@@ -172,7 +172,7 @@ Interactive version reversion with safety confirmations.
 ```bash
 manifest revert
 # Shows available versions and prompts for selection
-# Updates VERSION file, package.json, and README.md
+# Updates VERSION file and README.md
 # Commits changes and creates tag
 ```
 
@@ -250,7 +250,7 @@ git config --global user.email "your.email@example.com"
 │       └── manifestCloudClient.js  # Cloud service client
 ├── examples/
 │   └── test-manifest-cloud-client.js
-├── package.json
+├── VERSION
 ├── .env                        # Cloud service configuration
 └── README.md
 ```
@@ -372,8 +372,8 @@ This project is open source and available under the MIT License.
 ## 🆘 Support
 
 - **Documentation**: [docs/](docs/)
-- **Issues**: [GitHub Issues](https://github.com/fidenceio/manifest.local/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/fidenceio/manifest.local/discussions)
+- **Issues**: [GitHub Issues](https://github.com/fidenceio/manifest.cli/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/fidenceio/manifest.cli/discussions)
 
 ---
 

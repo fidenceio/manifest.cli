@@ -124,6 +124,26 @@ update_readme_version() {
             done < "README.md" > "$temp_file" && mv "$temp_file" "README.md"
         fi
         
+        # Validate and fix common incorrect references in README
+        local fixed_refs=()
+        
+        # Check for incorrect repository references
+        if grep -q "manifest\.local" "README.md"; then
+            sed -i '' 's/manifest\.local/manifest.cli/g' "README.md"
+            fixed_refs+=("manifest.local → manifest.cli")
+        fi
+        
+        # Check for package.json references (should be VERSION)
+        if grep -q "package\.json" "README.md"; then
+            sed -i '' 's/package\.json/VERSION/g' "README.md"
+            fixed_refs+=("package.json → VERSION")
+        fi
+        
+        # Report fixes
+        if [[ ${#fixed_refs[@]} -gt 0 ]]; then
+            echo "   ✅ Fixed incorrect references: ${fixed_refs[*]}"
+        fi
+        
         # Validate ALL file references in README
         validate_file_references_in_file "README.md"
         
