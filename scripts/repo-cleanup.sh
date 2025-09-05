@@ -23,9 +23,20 @@ find_temp_files() {
     find . -name "*.tmp*" -o -name "*.temp*" -o -name "*.backup*" -o -name "*.bak*" -o -name "*.orig*" -o -name "*~" -o -name ".#*" -o -name "#*#" -o -name "*.swp*" -o -name "*.swo*" 2>/dev/null | grep -v ".git" | sort
 }
 
-# Find old documentation files
+# Find old documentation files (exclude current version)
 find_old_docs() {
-    find . -name "*_old*" -o -name "*_new*" -o -name "*_v14*" -o -name "*_v15*" -o -name "RELEASE_v*" -o -name "CHANGELOG_v*" 2>/dev/null | grep -v ".git" | sort
+    local current_version=""
+    if [ -f "VERSION" ]; then
+        current_version=$(cat VERSION)
+    fi
+    
+    if [ -z "$current_version" ]; then
+        # If no VERSION file, find all versioned files
+        find . -name "*_old*" -o -name "*_new*" -o -name "RELEASE_v*" -o -name "CHANGELOG_v*" 2>/dev/null | grep -v ".git" | sort
+    else
+        # Exclude current version files
+        find . -name "*_old*" -o -name "*_new*" -o -name "RELEASE_v*" -o -name "CHANGELOG_v*" 2>/dev/null | grep -v ".git" | grep -v "_v${current_version}.md" | sort
+    fi
 }
 
 # Clean temp files

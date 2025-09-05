@@ -213,9 +213,13 @@ manifest_go() {
     sync_repository
     echo ""
     
-    # Move previous version documentation to zArchive
-    echo "📁 Moving previous version documentation..."
-    move_previous_documentation
+    # Archive previous version documentation to zArchive
+    echo "📁 Archiving previous version documentation..."
+    if [ -f "scripts/repo-cleanup.sh" ]; then
+        ./scripts/repo-cleanup.sh archive --force
+    else
+        move_previous_documentation
+    fi
     echo ""
     
     # Bump version
@@ -301,12 +305,9 @@ manifest_go() {
     fi
     echo ""
     
-    # Archive old documentation files using repo-cleanup
-    if [ -f "scripts/repo-cleanup.sh" ]; then
-        ./scripts/repo-cleanup.sh archive --force
-    else
-        archive_old_docs
-    fi
+    # Archive old documentation files (already done at beginning of workflow)
+    echo "📁 Archiving old documentation files..."
+    echo "   ✅ Documentation archiving completed"
     
     # Success message
     echo "🎉 Manifest process completed successfully!"
