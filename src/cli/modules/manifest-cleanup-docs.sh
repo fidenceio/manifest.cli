@@ -164,9 +164,6 @@ main_cleanup() {
     # Clean up empty directories
     cleanup_empty_dirs
     
-    # Validate repository state (don't fail on warnings)
-    validate_repository || true
-    
     log_success "Repository cleanup completed"
 }
 

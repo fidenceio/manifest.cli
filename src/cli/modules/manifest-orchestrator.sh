@@ -181,6 +181,11 @@ manifest_go() {
     commit_changes "Bump version to $new_version" "$timestamp"
     echo ""
     
+    # Validate repository state after commit
+    echo "🔍 Validating repository state..."
+    validate_repository || true
+    echo ""
+    
     # Create git tag
     create_tag "$new_version"
     echo ""
