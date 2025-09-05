@@ -234,7 +234,7 @@ generate_documents() {
     update_readme_version "$version" "$timestamp"
     generate_docs_index "$version"
     
-    # Copy the latest changelog to root as CHANGELOG.md
+    # Copy the latest changelog to root as CHANGELOG.md (before cleanup)
     local changelog_file="$DOCS_DIR/CHANGELOG_v$version.md"
     if [[ -f "$changelog_file" ]]; then
         cp "$changelog_file" "$PROJECT_ROOT/CHANGELOG.md"
