@@ -85,8 +85,11 @@ update_readme_version() {
     
     # Update README.md with new version information
     if [ -f "README.md" ]; then
-        # Update version in badges
-        sed -i '' "s/version-[0-9]\+\.[0-9]\+\.[0-9]\+/version-${version}/g" "README.md"
+        # Update version in badges (if any exist)
+        if grep -q "version-[0-9]\+\.[0-9]\+\.[0-9]\+" "README.md"; then
+            sed -i '' "s/version-[0-9]\+\.[0-9]\+\.[0-9]\+/version-${version}/g" "README.md"
+            echo "   ✅ Version badge updated to $version"
+        fi
         
         # Update version information table
         if grep -q "## 📋 Version Information" "README.md"; then
@@ -106,15 +109,21 @@ update_readme_version() {
                 fi
             done < "README.md" > "$temp_file" && mv "$temp_file" "README.md"
         else
-            # Add version section at the beginning
+            # Add version section after the title
             local temp_file=$(mktemp)
-            echo "$version_section" > "$temp_file"
-            echo "" >> "$temp_file"
-            cat "README.md" >> "$temp_file"
-            mv "$temp_file" "README.md"
+            local added_version_section=false
+            
+            while IFS= read -r line; do
+                echo "$line"
+                # Add version section after the first heading (title)
+                if [[ "$line" =~ ^#\  && "$added_version_section" == false ]]; then
+                    echo ""
+                    echo "$version_section"
+                    added_version_section=true
+                fi
+            done < "README.md" > "$temp_file" && mv "$temp_file" "README.md"
         fi
         
-        echo "   ✅ Version badge updated to $version"
         echo "   ✅ Version information table updated to $version"
         echo "   ✅ README.md version information updated"
     else
