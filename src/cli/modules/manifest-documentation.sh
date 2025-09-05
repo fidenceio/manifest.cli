@@ -229,10 +229,18 @@ generate_documents() {
     analyze_changes "$version" "$changes_file"
     
     # Generate documents
-    generate_release_notes "$version" "$timestamp" "$release_type" "$changes_file"
-    generate_changelog "$version" "$timestamp" "$release_type" "$changes_file"
-    update_readme_version "$version" "$timestamp"
-    generate_docs_index "$version"
+    if ! generate_release_notes "$version" "$timestamp" "$release_type" "$changes_file"; then
+        log_warning "Release notes generation failed, but continuing..."
+    fi
+    if ! generate_changelog "$version" "$timestamp" "$release_type" "$changes_file"; then
+        log_warning "Changelog generation failed, but continuing..."
+    fi
+    if ! update_readme_version "$version" "$timestamp"; then
+        log_warning "README version update failed, but continuing..."
+    fi
+    if ! generate_docs_index "$version"; then
+        log_warning "Documentation index generation failed, but continuing..."
+    fi
     
     # Copy the latest changelog to root as CHANGELOG.md (before cleanup)
     local changelog_file="$DOCS_DIR/CHANGELOG_v$version.md"
