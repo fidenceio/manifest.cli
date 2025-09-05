@@ -185,7 +185,12 @@ manifest_go() {
     echo "📝 Updating main CHANGELOG.md for GitHub..."
     local latest_changelog="$PROJECT_ROOT/docs/CHANGELOG_v$new_version.md"
     if [[ -f "$latest_changelog" ]]; then
+        # Copy the changelog and add the update message
         cp "$latest_changelog" "$PROJECT_ROOT/CHANGELOG.md"
+        echo "" >> "$PROJECT_ROOT/CHANGELOG.md"
+        echo "---" >> "$PROJECT_ROOT/CHANGELOG.md"
+        echo "" >> "$PROJECT_ROOT/CHANGELOG.md"
+        echo "📝 Updating main CHANGELOG.md for GitHub..." >> "$PROJECT_ROOT/CHANGELOG.md"
         git add CHANGELOG.md
         git commit -m "Update main CHANGELOG.md to v$new_version"
         echo "✅ Main CHANGELOG.md updated for GitHub"
