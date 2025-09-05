@@ -233,13 +233,6 @@ generate_documentation() {
     # Update README
     update_readme_version "$version" "$timestamp"
     
-    # Fix and validate markdown files
-    if [ -f "scripts/markdown-validator.sh" ]; then
-        echo "🔍 Fixing and validating markdown files..."
-        ./scripts/markdown-validator.sh
-        echo "   ✅ Markdown files processed"
-    fi
-    
     # Validate all file references
     validate_file_references
     
@@ -260,9 +253,9 @@ validate_file_references_in_file() {
     # Check all file references in the file
     while IFS= read -r line; do
         # Extract markdown links [text](path)
-        if [[ "$line" =~ \[([^\]]+)\]\(([^)]+)\) ]]; then
-            local link_text="${BASH_REMATCH[1]}"
-            local file_path="${BASH_REMATCH[2]}"
+        if echo "$line" | grep -q '\[.*\](.*)'; then
+            local link_text=$(echo "$line" | sed -n 's/.*\[\([^]]*\)\](.*)/\1/p')
+            local file_path=$(echo "$line" | sed -n 's/.*\[.*\](\([^)]*\))/\1/p')
             
             # Skip external URLs
             if [[ ! "$file_path" =~ ^https?:// ]]; then

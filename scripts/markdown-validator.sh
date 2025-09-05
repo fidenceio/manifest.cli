@@ -30,24 +30,61 @@ fix_file() {
     fi
     
     # Fix multiple blank lines (reduce to max 2 consecutive)
-    # Simple approach: replace 3+ consecutive empty lines with 2
-    local has_multiple_blanks
-    has_multiple_blanks=$(grep -c '^[[:space:]]*$' "$file" 2>/dev/null || echo "0")
-    has_multiple_blanks=$(echo "$has_multiple_blanks" | head -1)  # Take only first line
-    if [[ "$has_multiple_blanks" -gt 2 ]]; then
-        # Use a simple perl one-liner to fix multiple blank lines
-        perl -i -pe 's/\n{3,}/\n\n/g' "$file" 2>/dev/null
+    # Use awk to process the file line by line and reduce consecutive empty lines
+    local temp_file2=$(mktemp)
+    local empty_count=0
+    local prev_empty=false
+    
+    while IFS= read -r line; do
+        if [[ -z "$line" || "$line" =~ ^[[:space:]]*$ ]]; then
+            # This is an empty line
+            if [[ "$prev_empty" == true ]]; then
+                empty_count=$((empty_count + 1))
+            else
+                empty_count=1
+                prev_empty=true
+            fi
+            
+            # Only keep up to 2 consecutive empty lines
+            if [[ $empty_count -le 2 ]]; then
+                echo "" >> "$temp_file2"
+            fi
+        else
+            # This is a non-empty line
+            echo "$line" >> "$temp_file2"
+            empty_count=0
+            prev_empty=false
+        fi
+    done < "$file"
+    
+    # Check if we made changes
+    if ! cmp -s "$file" "$temp_file2"; then
+        mv "$temp_file2" "$file"
         log_success "Fixed multiple blank lines"
         fixed=true
+    else
+        rm "$temp_file2"
     fi
     
     # Fix file ending - ensure single newline at end
     if [[ -s "$file" ]]; then
-        # Simple approach: remove trailing newlines and add exactly one
-        perl -i -pe 'chomp if eof' "$file" 2>/dev/null
-        echo "" >> "$file"
-        log_success "Fixed file ending"
-        fixed=true
+        # Check if file ends with exactly one newline
+        local last_char=$(tail -c1 "$file" 2>/dev/null)
+        if [[ "$last_char" != "" ]]; then
+            # File doesn't end with newline, add one
+            echo "" >> "$file"
+            log_success "Fixed file ending"
+            fixed=true
+        elif [[ $(tail -c2 "$file" 2>/dev/null | wc -c) -eq 2 ]]; then
+            # File ends with exactly one newline, this is correct
+            :
+        else
+            # File might have multiple trailing newlines, fix it
+            perl -i -pe 'chomp if eof' "$file" 2>/dev/null
+            echo "" >> "$file"
+            log_success "Fixed file ending"
+            fixed=true
+        fi
     fi
     
     # Note: Unclosed code blocks require manual intervention

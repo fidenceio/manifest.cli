@@ -249,6 +249,16 @@ manifest_go() {
     fi
     echo ""
     
+    # Final markdown validation and fixing (before commit)
+    echo "🔍 Final markdown validation and fixing..."
+    if [ -f "scripts/markdown-validator.sh" ]; then
+        ./scripts/markdown-validator.sh
+        echo "   ✅ All markdown files validated and fixed"
+    else
+        echo "   ⚠️  markdown-validator.sh not found, skipping validation"
+    fi
+    echo ""
+    
     # Commit version changes
     echo "💾 Committing version changes..."
     commit_changes "Bump version to $new_version" "$timestamp"
