@@ -88,7 +88,7 @@ load_configuration "$CLI_DIR"
 # Archive old documentation files (delegated to manifest-cleanup-docs.sh)
 archive_old_docs() {
     echo "📁 Archiving old documentation files..."
-    main_cleanup --force
+    main_cleanup
     echo "   ✅ Documentation archiving completed"
     echo ""
 }

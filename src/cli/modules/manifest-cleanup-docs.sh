@@ -16,48 +16,6 @@ ensure_zarchive_dir() {
     fi
 }
 
-# Move old documentation to zArchive
-archive_old_documentation() {
-    local version="$1"
-    local timestamp="$2"
-    
-    log_info "Archiving old documentation for version $version..."
-    
-    ensure_zarchive_dir
-    
-    local moved_count=0
-    local skipped_count=0
-    
-    # Find all version-specific documentation files
-    while IFS= read -r file; do
-        if [[ -f "$file" ]]; then
-            local filename="$(basename "$file")"
-            local dest="$ZARCHIVE_DIR/$filename"
-            
-            # Skip if already in zArchive
-            if [[ "$file" == *"/zArchive/"* ]]; then
-                skipped_count=$((skipped_count + 1))
-                continue
-            fi
-            
-            # Skip if this is the current version file
-            if [[ "$filename" == *"v$version"* ]]; then
-                skipped_count=$((skipped_count + 1))
-                continue
-            fi
-            
-            # Move the file
-            if mv "$file" "$dest" 2>/dev/null; then
-                log_success "Moved: $filename"
-                moved_count=$((moved_count + 1))
-            else
-                log_warning "Failed to move: $filename"
-            fi
-        fi
-    done < <(find "$PROJECT_ROOT/docs" -name "CHANGELOG_v*.md" -o -name "RELEASE_v*.md" | grep -v "zArchive")
-    
-    log_success "Archived $moved_count files, skipped $skipped_count files"
-}
 
 # Clean up temporary files
 cleanup_temp_files() {
@@ -147,7 +105,7 @@ validate_repository() {
     fi
 }
 
-# Main cleanup function
+# Main cleanup function - handles archiving and general cleanup
 main_cleanup() {
     local version="${1:-}"
     local timestamp="${2:-$(date -u +"%Y-%m-%d %H:%M:%S UTC")}"
@@ -161,7 +119,42 @@ main_cleanup() {
     
     # Archive old documentation
     if [[ -n "$version" ]]; then
-        archive_old_documentation "$version" "$timestamp"
+        log_info "Archiving old documentation for version $version..."
+        
+        ensure_zarchive_dir
+        
+        local moved_count=0
+        local skipped_count=0
+        
+        # Find all version-specific documentation files
+        while IFS= read -r file; do
+            if [[ -f "$file" ]]; then
+                local filename="$(basename "$file")"
+                local dest="$ZARCHIVE_DIR/$filename"
+                
+                # Skip if already in zArchive
+                if [[ "$file" == *"/zArchive/"* ]]; then
+                    skipped_count=$((skipped_count + 1))
+                    continue
+                fi
+                
+                # Skip if this is the current version file
+                if [[ "$filename" == *"v$version"* ]]; then
+                    skipped_count=$((skipped_count + 1))
+                    continue
+                fi
+                
+                # Move the file
+                if mv "$file" "$dest" 2>/dev/null; then
+                    log_success "Moved: $filename"
+                    moved_count=$((moved_count + 1))
+                else
+                    log_warning "Failed to move: $filename"
+                fi
+            fi
+        done < <(find "$PROJECT_ROOT/docs" -name "CHANGELOG_v*.md" -o -name "RELEASE_v*.md" | grep -v "zArchive")
+        
+        log_success "Archived $moved_count files, skipped $skipped_count files"
     fi
     
     # Clean up temporary files
