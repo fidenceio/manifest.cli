@@ -45,9 +45,9 @@ archive_old_docs() {
                 local file_major=$(echo "$version" | cut -d. -f1)
                 local file_minor=$(echo "$version" | cut -d. -f2)
                 
-                # Archive files that are more than 2 versions old
+                # Archive files that are not the current version
                 if [ "$file_major" -lt "$current_major" ] || 
-                   ([ "$file_major" -eq "$current_major" ] && [ "$file_minor" -lt "$((current_minor - 1))" ]); then
+                   ([ "$file_major" -eq "$current_major" ] && [ "$file_minor" -lt "$current_minor" ]); then
                     echo "   📦 Archiving $filename"
                     mv "$file" "$archive_dir/"
                 fi
@@ -301,8 +301,12 @@ manifest_go() {
     fi
     echo ""
     
-    # Archive old documentation files
-    archive_old_docs
+    # Archive old documentation files using repo-cleanup
+    if [ -f "scripts/repo-cleanup.sh" ]; then
+        ./scripts/repo-cleanup.sh archive --force
+    else
+        archive_old_docs
+    fi
     
     # Success message
     echo "🎉 Manifest process completed successfully!"

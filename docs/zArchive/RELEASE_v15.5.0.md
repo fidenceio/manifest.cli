@@ -1,6 +1,6 @@
 # Release v15.5.0
 
-**Release Date:** 2024-09-04T18:55:00Z
+**Release Date:** 2025-09-05 00:01:38 UTC
 **Release Type:** minor
 
 ## 🎯 What's New
