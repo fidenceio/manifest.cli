@@ -12,7 +12,7 @@ A powerful command-line tool for automating Git workflows, version management, a
 | **Last Updated** | `2025-09-05 22:26:48 UTC` |
 | **CLI Version** | `16.1.2` |
 
-### 📚 Documentation Files
+#### 📚 Documentation Files
 
 - **Version Info**: [VERSION](VERSION)
 - **CLI Source**: [src/cli/](src/cli/)
@@ -85,7 +85,7 @@ chmod +x ~/.local/bin/manifest
 
 ## 🎯 Quick Start
 
-### 1. Basic Version Management
+#### 1. Basic Version Management
 
 ```bash
 # Check current version
@@ -259,7 +259,7 @@ git config --global user.email "your.email@example.com"
 
 ## 🔄 Workflow Examples
 
-### Standard Release Process
+#### Standard Release Process
 
 ```bash
 # 1. Generate documentation
@@ -294,7 +294,7 @@ manifest go major
 
 ## 🚨 Troubleshooting
 
-### Common Issues
+#### Common Issues
 
 #### "Not in a git repository"
 ```bash
