@@ -468,8 +468,15 @@ verify_installation() {
             print_status "📋 CLI Version: Version info not available"
         fi
         
+        # Determine project root (current working directory if in git repo)
+        if [ -n "$PWD" ] && git -C "$PWD" rev-parse --git-dir > /dev/null 2>&1; then
+            PROJECT_ROOT="$PWD"
+        else
+            PROJECT_ROOT="$INSTALL_LOCATION"
+        fi
+        
         print_status "📍 Location: $(which "$CLI_NAME")"
-        print_status "🏠 Project directory: $INSTALL_LOCATION"
+        print_status "🏠 Project directory: $PROJECT_ROOT"
         
         # Test basic functionality
         print_status "🧪 Testing basic functionality..."
