@@ -125,11 +125,14 @@ validate_project() {
     local clean="${1:-false}"
     local errors=0
     
+    # Use PROJECT_ROOT if available, otherwise use current directory
+    local project_root="${PROJECT_ROOT:-$(pwd)}"
+    
     log_info "Validating project documentation..."
     
     # Validate root README
-    if [[ -f "$PROJECT_ROOT/README.md" ]]; then
-        if ! validate_file "$PROJECT_ROOT/README.md" "$clean"; then
+    if [[ -f "$project_root/README.md" ]]; then
+        if ! validate_file "$project_root/README.md" "$clean"; then
             errors=$((errors + 1))
         fi
     else
@@ -137,8 +140,8 @@ validate_project() {
     fi
     
     # Validate docs directory
-    if [[ -d "$PROJECT_ROOT/docs" ]]; then
-        if ! validate_directory "$PROJECT_ROOT/docs" "$clean"; then
+    if [[ -d "$project_root/docs" ]]; then
+        if ! validate_directory "$project_root/docs" "$clean"; then
             errors=$((errors + 1))
         fi
     else
