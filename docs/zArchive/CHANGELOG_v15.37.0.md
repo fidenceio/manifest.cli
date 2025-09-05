@@ -44,7 +44,7 @@
 
 
 ## Improvements
-ℹ️  Getting changes since v15.36.0
+Bump version to 15.37.0 [NTP: 2025-09-05 17:27:32 UTC]
 
 ## Bug Fixes
 
