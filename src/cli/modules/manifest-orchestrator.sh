@@ -13,7 +13,7 @@ source "$SCRIPT_DIR/manifest-os.sh"
 source "$SCRIPT_DIR/manifest-ntp.sh"
 source "$SCRIPT_DIR/manifest-git.sh"
 source "$SCRIPT_DIR/manifest-documentation.sh"
-source "$SCRIPT_DIR/manifest-archive.sh"
+source "$SCRIPT_DIR/manifest-cleanup-docs.sh"
 source "$SCRIPT_DIR/manifest-markdown-validation.sh"
 
 # Colors and formatting

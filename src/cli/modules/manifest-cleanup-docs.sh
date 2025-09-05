@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Manifest Archive Module
+# Manifest Cleanup Docs Module
 # Handles moving old documentation to zArchive and general repository cleanup
 
 # Get the project root (three levels up from modules)
@@ -215,7 +215,7 @@ main() {
             validate_repository
             ;;
         "help"|"-h"|"--help")
-            echo "Manifest Archive Module"
+            echo "Manifest Cleanup Docs Module"
             echo "======================"
             echo ""
             echo "Usage: $0 [command] [version] [timestamp]"

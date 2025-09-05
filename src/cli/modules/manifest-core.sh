@@ -50,7 +50,7 @@ get_cli_dir() {
 CLI_DIR="$(get_cli_dir)"
 load_configuration "$CLI_DIR"
 
-# Archive old documentation files (delegated to manifest-archive.sh)
+# Archive old documentation files (delegated to manifest-cleanup-docs.sh)
 archive_old_docs() {
     echo "📁 Archiving old documentation files..."
     main_cleanup --force
@@ -316,7 +316,7 @@ main() {
             ;;
         "cleanup")
             echo "📁 Repository cleanup operations..."
-            source "$MODULES_DIR/manifest-archive.sh"
+            source "$MODULES_DIR/manifest-cleanup-docs.sh"
             main clean
             ;;
         "config")
