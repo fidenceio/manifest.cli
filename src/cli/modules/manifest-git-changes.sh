@@ -14,10 +14,10 @@ get_git_changes() {
     last_tag=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
     
     if [[ -n "$last_tag" ]]; then
-        log_info "Getting changes since $last_tag"
+        log_info "Getting changes since $last_tag" >&2
         git log --oneline --pretty=format:"- %s" "$last_tag..HEAD" 2>/dev/null || true
     else
-        log_info "No previous tags found, getting all changes"
+        log_info "No previous tags found, getting all changes" >&2
         git log --oneline --pretty=format:"- %s" 2>/dev/null || true
     fi
 }
