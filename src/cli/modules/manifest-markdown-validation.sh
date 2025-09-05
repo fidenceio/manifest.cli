@@ -13,8 +13,11 @@ validate_markdown_syntax() {
     # Check for proper heading hierarchy
     local prev_level=0
     while IFS= read -r line; do
-        if [[ $line =~ ^(#+)[[:space:]] ]]; then
+        if [[ $line =~ ^#{1,6}[[:space:]] ]]; then
             local current_level=${#BASH_REMATCH[1]}
+            # Only flag as error if we skip a heading level (e.g., H1 -> H3, H2 -> H4)
+            # Going back to a higher level (e.g., H3 -> H2) is allowed
+            # Same level (e.g., H3 -> H3) is also allowed
             if [ $current_level -gt $((prev_level + 1)) ]; then
                 log_error "Heading level skipped: $line"
                 errors=$((errors + 1))
