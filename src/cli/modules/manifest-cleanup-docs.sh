@@ -40,6 +40,12 @@ archive_old_documentation() {
                 continue
             fi
             
+            # Skip if this is the current version file
+            if [[ "$filename" == *"v$version"* ]]; then
+                skipped_count=$((skipped_count + 1))
+                continue
+            fi
+            
             # Move the file
             if mv "$file" "$dest" 2>/dev/null; then
                 log_success "Moved: $filename"
