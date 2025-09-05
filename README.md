@@ -58,7 +58,7 @@ cd manifest.cli
 
 The CLI will be installed to `~/.local/bin/manifest` and added to your PATH.
 
-### Manual Installation
+#### Manual Installation
 
 ```bash
 # Create installation directory
@@ -101,7 +101,7 @@ manifest version minor
 manifest version major
 ```
 
-### 2. Automated Workflow
+#### 2. Automated Workflow
 
 ```bash
 # Complete automated process (recommended)
@@ -111,7 +111,7 @@ manifest go patch    # Patch version bump
 manifest go          # Auto-detect increment type
 ```
 
-### 3. Documentation Generation
+#### 3. Documentation Generation
 
 ```bash
 # Generate release notes and changelog
@@ -175,7 +175,7 @@ manifest revert
 # Commits changes and creates tag
 ```
 
-#### `manifest push [type]`
+##### `manifest push [type]`
 Legacy command for version bumping and pushing.
 
 ```bash
@@ -225,7 +225,7 @@ MANIFEST_CLOUD_URL=http://localhost:3001
 MANIFEST_CLOUD_API_KEY=your-api-key-here
 ```
 
-### Git Configuration
+#### Git Configuration
 
 The CLI automatically uses your existing Git configuration:
 
@@ -274,7 +274,7 @@ manifest go minor
 # Result: Version bumped, committed, tagged, and pushed
 ```
 
-### Hotfix Process
+#### Hotfix Process
 
 ```bash
 # Quick patch release
@@ -283,7 +283,7 @@ manifest go patch
 # Result: 2.1.0 → 2.1.1, committed, tagged, and pushed
 ```
 
-### Major Version Release
+#### Major Version Release
 
 ```bash
 # Major version with full workflow
@@ -303,14 +303,14 @@ git init
 git remote add origin <your-repo-url>
 ```
 
-#### "Permission denied (publickey)"
+##### "Permission denied (publickey)"
 ```bash
 # Check SSH key
 ssh-add ~/.ssh/id_rsa
 ssh -T git@github.com
 ```
 
-#### "Remote is ahead, cannot fast-forward"
+##### "Remote is ahead, cannot fast-forward"
 ```bash
 # Use diagnose to check status
 manifest diagnose
@@ -319,13 +319,13 @@ manifest diagnose
 git pull origin main --rebase
 ```
 
-#### VERSION file out of sync
+##### VERSION file out of sync
 ```bash
 # Regenerate VERSION file
 manifest version patch
 ```
 
-### Getting Help
+#### Getting Help
 
 ```bash
 # Comprehensive health check
