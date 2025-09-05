@@ -5,10 +5,10 @@
 | Property | Value |
 |----------|-------|
 | **Current Version** | `15.9.0` |
-| **Release Date** | `2025-09-05 00:19:24 UTC` |
+| **Release Date** | `2025-09-05 00:22:13 UTC` |
 | **Git Tag** | `v15.9.0` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-09-05 00:19:24 UTC` |
+| **Last Updated** | `2025-09-05 00:22:13 UTC` |
 | **CLI Version** | `15.9.0` |
 
 ### 📚 Documentation Files
@@ -16,6 +16,9 @@
 - **Version Info**: [VERSION](VERSION)
 - **CLI Source**: [src/cli/](src/cli/)
 - **Install Script**: [install-cli.sh](install-cli.sh)
+
+A powerful command-line tool for automating Git workflows, version management, and documentation generation. The Manifest CLI streamlines your development process with intelligent versioning, automated commits, and seamless integration with Manifest Cloud for enhanced features.
+
 ## 🚀 Features
 
 ### Core Git Operations
@@ -28,7 +31,7 @@
 - **Release Notes**: Generate comprehensive release documentation
 - **Changelog Creation**: Build detailed changelogs from commit history
 - **README Updates**: Keep documentation in sync with versions
-- **VERSION File Management**: Maintain a simple VERSION file alongside package.json
+- **VERSION File Management**: Maintain a simple VERSION file for version tracking
 
 ### Advanced Workflows
 - **One-Command Automation**: `manifest go` for complete version bump → commit → tag → push workflow
@@ -365,7 +368,7 @@ If Manifest Cloud is not configured or unavailable, the CLI gracefully falls bac
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is open source and available under the MIT License.
 
 ## 🆘 Support
 
