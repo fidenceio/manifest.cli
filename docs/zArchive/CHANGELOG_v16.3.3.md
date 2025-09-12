@@ -42,7 +42,6 @@
 
 ## New Features
 
-
 ## Improvements
 Bump version to 16.3.0 [NTP: 2025-09-12 19:30:29 UTC]
 Auto-commit before Manifest process [NTP: 2025-09-12 19:30:29 UTC]
@@ -50,9 +49,6 @@ Update main CHANGELOG.md to v16.2.13 with GitHub message
 
 ## Bug Fixes
 
-
 ## Breaking Changes
 
-
 ## Documentation
-
