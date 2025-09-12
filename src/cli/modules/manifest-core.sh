@@ -46,6 +46,9 @@ source "$MODULES_DIR/manifest-documentation.sh"
 source "$MODULES_DIR/manifest-uninstall.sh"
 source "$MODULES_DIR/manifest-orchestrator.sh"
 
+# Source MCP connector for Manifest Cloud
+source "$MODULES_DIR/manifest-mcp-connector.sh"
+
 # Debug output (can be removed in production)
 # echo "DEBUG: INSTALL_LOCATION=$INSTALL_LOCATION" >&2
 # echo "DEBUG: PROJECT_ROOT=$PROJECT_ROOT" >&2
@@ -370,6 +373,61 @@ main() {
             # Parameters: skip_confirmations (from --force flag), non_interactive=false (interactive by default)
             uninstall_manifest "${2:-false}" "false"
             ;;
+        "cloud")
+            local subcommand="$1"
+            case "$subcommand" in
+                "test")
+                    test_mcp_connectivity
+                    ;;
+                "config")
+                    configure_mcp_connection
+                    ;;
+                "status")
+                    show_mcp_status
+                    ;;
+                "generate")
+                    local version="${2:-}"
+                    local timestamp="${3:-$(date -u +"%Y-%m-%d %H:%M:%S UTC")}"
+                    local release_type="${4:-patch}"
+                    
+                    if [ -z "$version" ]; then
+                        echo "❌ Version required"
+                        echo "Usage: manifest cloud generate <version> [timestamp] [release_type]"
+                        return 1
+                    fi
+                    
+                    # Create temporary changes file
+                    local changes_file=$(mktemp)
+                    get_git_changes "$version" > "$changes_file"
+                    
+                    send_to_manifest_cloud "$version" "$changes_file" "$release_type"
+                    local result=$?
+                    rm -f "$changes_file"
+                    return $result
+                    ;;
+                *)
+                    echo "Manifest Cloud MCP Usage:"
+                    echo "========================="
+                    echo ""
+                    echo "Commands:"
+                    echo "  cloud test                    - Test MCP connectivity to Manifest Cloud"
+                    echo "  cloud config                  - Configure API key and connection"
+                    echo "  cloud status                  - Show connection status"
+                    echo "  cloud generate <version> [opts] - Generate documentation via Manifest Cloud"
+                    echo ""
+                    echo "Configuration:"
+                    echo "  MANIFEST_CLOUD_API_KEY       - Your Manifest Cloud API key"
+                    echo "  MANIFEST_CLOUD_ENDPOINT      - Manifest Cloud endpoint (optional)"
+                    echo ""
+                    echo "Examples:"
+                    echo "  manifest cloud test"
+                    echo "  manifest cloud config"
+                    echo "  manifest cloud generate 1.2.3 '2025-01-27 10:00:00 UTC' patch"
+                    echo ""
+                    echo "Get your API key from: https://manifest.cloud/dashboard"
+                    ;;
+            esac
+            ;;
         "help"|*)
             display_help
             ;;
@@ -405,7 +463,12 @@ display_help() {
   echo "    update [--force] [--check]        # Update options: force update or check only"
   echo "  uninstall   - 🗑️  Remove Manifest CLI completely"
   echo "    uninstall [--force]               # Uninstall options: force uninstall without confirmation"
-  echo "  help        - Show this help"
+  echo "  cloud       - ☁️  Manifest Cloud MCP connector"
+  echo "    cloud test                        # Test connectivity to Manifest Cloud"
+  echo "    cloud config                      # Configure API key and connection"
+  echo "    cloud status                      # Show connection status"
+  echo "    cloud generate <version> [opts]   # Generate documentation via Manifest Cloud"
+    echo "  help        - Show this help"
     echo ""
     echo "This CLI provides comprehensive Git operations and version management."
 echo ""
@@ -416,6 +479,10 @@ echo "  • MANIFEST_INTERACTIVE_MODE  - Interactive safety prompts (true/false,
 echo "  • MANIFEST_BREW_OPTION       - Control Homebrew functionality (enabled/disabled)"
 echo "  • MANIFEST_BREW_INTERACTIVE  - Interactive Homebrew updates (yes/true/1, default: no)"
 echo "  • MANIFEST_TAP_REPO          - Homebrew tap repository URL (default: fidenceio/fidenceio-homebrew-tap)"
+echo "  • MANIFEST_CLOUD_API_KEY     - Manifest Cloud API key (get from https://manifest.cloud/dashboard)"
+echo "  • MANIFEST_CLOUD_ENDPOINT    - Manifest Cloud endpoint (default: https://api.manifest.cloud)"
+echo "  • MANIFEST_CLOUD_SKIP        - Skip Manifest Cloud and use local docs (true/false)"
+echo "  • MANIFEST_OFFLINE_MODE      - Force offline mode, no cloud connectivity (true/false)"
 echo ""
 echo "For testing and verification:"
 echo "  • manifest test              - Basic functionality test"
