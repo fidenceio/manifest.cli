@@ -459,7 +459,7 @@ create_default_readme() {
     cat > "$readme_file" << EOF
 # $project_name
 
-A project managed with Manifest CLI.
+A software project with automated version management and documentation.
 
 ## 📋 Version Information
 
@@ -473,46 +473,47 @@ A project managed with Manifest CLI.
 
 ## 🚀 Getting Started
 
-This project uses Manifest CLI for version management and automated workflows.
-
 ### Prerequisites
 
-- Git
-- Manifest CLI (install with: \`curl -sSL https://raw.githubusercontent.com/fidenceio/fidenceio.manifest.cli/main/install-cli.sh | bash\`)
+- Git (for version control)
+- Basic command-line tools
 
-### Basic Usage
+### Development Workflow
+
+This project uses automated version management and documentation generation:
 
 \`\`\`bash
-# Initialize version management
-manifest init
+# View current version
+cat VERSION
 
-# Bump version and create release
-manifest go patch
+# Check project status
+git status
 
-# Generate documentation
-manifest docs
-
-# View help
-manifest help
+# View changelog
+cat CHANGELOG.md
 \`\`\`
 
 ## 📚 Documentation
 
 - **Version Info**: [VERSION](VERSION)
 - **Changelog**: [CHANGELOG.md](CHANGELOG.md)
-- **Install Script**: [install-cli.sh](install-cli.sh)
+- **Project Docs**: [docs/](docs/) (if available)
 
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Run \`manifest go patch\` to version and release
+4. Test your changes
 5. Submit a pull request
 
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+*This project uses [Manifest CLI](https://github.com/fidenceio/fidenceio.manifest.cli) for automated version management and documentation generation.*
 EOF
 }
 
@@ -533,14 +534,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Initial project setup
-- Manifest CLI integration
+- Automated version management
+- Documentation generation
 
 ## [$current_version] - $(date -u +'%Y-%m-%d')
 
 ### Added
 - Initial release
 - Basic project structure
-- Version management with Manifest CLI
+- Version tracking system
 
 ### Changed
 - N/A
