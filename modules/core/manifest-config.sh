@@ -12,6 +12,45 @@ CONFIG_FILES=(
     ".env.production"
 )
 
+# Configuration validation
+validate_config() {
+    local errors=0
+    
+    # Validate version format
+    if ! validate_version_format "${MANIFEST_VERSION_FORMAT:-XX.XX.XX}"; then
+        errors=$((errors + 1))
+    fi
+    
+    # Validate Git configuration
+    if [[ -n "${MANIFEST_GIT_TIMEOUT:-}" ]] && ! [[ "${MANIFEST_GIT_TIMEOUT}" =~ ^[0-9]+$ ]]; then
+        show_config_error "MANIFEST_GIT_TIMEOUT must be a positive integer"
+        errors=$((errors + 1))
+    fi
+    
+    # Validate NTP configuration
+    if [[ -n "${MANIFEST_NTP_TIMEOUT:-}" ]] && ! [[ "${MANIFEST_NTP_TIMEOUT}" =~ ^[0-9]+$ ]]; then
+        show_config_error "MANIFEST_NTP_TIMEOUT must be a positive integer"
+        errors=$((errors + 1))
+    fi
+    
+    # Validate log level
+    case "${MANIFEST_LOG_LEVEL:-INFO}" in
+        DEBUG|INFO|WARN|ERROR) ;;
+        *) 
+            show_config_error "MANIFEST_LOG_LEVEL must be DEBUG, INFO, WARN, or ERROR"
+            errors=$((errors + 1))
+            ;;
+    esac
+    
+    if [[ $errors -gt 0 ]]; then
+        log_error "Configuration validation failed with $errors error(s)"
+        return 1
+    fi
+    
+    log_debug "Configuration validation passed"
+    return 0
+}
+
 # Load configuration from environment files
 load_configuration() {
     local project_root="$1"
@@ -129,6 +168,9 @@ set_default_configuration() {
     export MANIFEST_VERBOSE="${MANIFEST_VERBOSE:-false}"
     export MANIFEST_LOG_LEVEL="${MANIFEST_LOG_LEVEL:-INFO}"
     export MANIFEST_INTERACTIVE="${MANIFEST_INTERACTIVE:-false}"
+    
+    # Validate configuration after setting defaults
+    validate_config
 }
 
 # Get configuration value with fallback

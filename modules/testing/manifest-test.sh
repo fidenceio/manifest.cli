@@ -209,8 +209,8 @@ test_module_loading() {
     echo "🧪 Testing module loading..."
     
     # Check if all required modules exist
-    local required_modules=("manifest-core.sh" "manifest-config.sh" "manifest-git.sh" "manifest-documentation.sh" "manifest-ntp.sh" "manifest-os.sh" "manifest-security.sh" "manifest-test.sh")
-    local modules_dir="src/cli/modules"
+    local required_modules=("core/manifest-core.sh" "core/manifest-config.sh" "git/manifest-git.sh" "docs/manifest-documentation.sh" "system/manifest-ntp.sh" "system/manifest-os.sh" "system/manifest-security.sh" "testing/manifest-test.sh")
+    local modules_dir="modules"
     
     for module in "${required_modules[@]}"; do
         if [ -f "$modules_dir/$module" ]; then
@@ -221,8 +221,8 @@ test_module_loading() {
     done
     
     # Test module sourcing
-    if [ -f "$modules_dir/manifest-core.sh" ]; then
-        if source "$modules_dir/manifest-core.sh" >/dev/null 2>&1; then
+    if [ -f "$modules_dir/core/manifest-core.sh" ]; then
+        if source "$modules_dir/core/manifest-core.sh" >/dev/null 2>&1; then
             echo "   ✅ Core module sourcing successful"
         else
             echo "   ⚠️  Core module sourcing had issues"
@@ -286,26 +286,4 @@ test_all_functionality() {
     echo "✅ Comprehensive testing completed"
 }
 
-# Get next version for testing
-get_next_version() {
-    local increment_type="$1"
-    local current_version=$(cat VERSION 2>/dev/null || echo "1.0.0")
-    
-    case "$increment_type" in
-        "patch")
-            echo "$current_version" | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g'
-            ;;
-        "minor")
-            echo "$current_version" | awk -F. '{$2 = $2 + 1; $3 = 0;} 1' | sed 's/ /./g'
-            ;;
-        "major")
-            echo "$current_version" | awk -F. '{print $1 + 1 ".0.0"}'
-            ;;
-        "revision")
-            echo "$current_version.1"
-            ;;
-        *)
-            echo "$current_version"
-            ;;
-    esac
-}
+# get_next_version() - Now available from manifest-shared-functions.sh

@@ -18,7 +18,7 @@ find_cli_dir() {
     )
     
     for dir in "${possible_dirs[@]}"; do
-        if [ -f "$dir/src/cli/modules/manifest-core.sh" ]; then
+        if [ -f "$dir/modules/core/manifest-core.sh" ]; then
             echo "$dir"
             return 0
         fi
@@ -28,7 +28,7 @@ find_cli_dir() {
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     local project_root="$(dirname "$(dirname "$(dirname "$script_dir")")")"
     
-    if [ -f "$project_root/src/cli/modules/manifest-core.sh" ]; then
+    if [ -f "$project_root/modules/core/manifest-core.sh" ]; then
         echo "$project_root"
         return 0
     fi
@@ -39,7 +39,7 @@ find_cli_dir() {
 
 # Find and source the core module
 CLI_DIR="$(find_cli_dir)"
-source "$CLI_DIR/src/cli/modules/manifest-core.sh"
+source "$CLI_DIR/modules/core/manifest-core.sh"
 
 # Call the main function
 main "$@"

@@ -17,7 +17,7 @@ ensure_zarchive_dir() {
 }
 
 
-# Clean up temporary files
+# Clean up temporary files (enhanced version)
 cleanup_temp_files() {
     log_info "Cleaning up temporary files..."
     

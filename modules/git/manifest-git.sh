@@ -51,6 +51,19 @@ git_retry() {
 
 bump_version() {
     local increment_type="$1"
+    
+    # Validate input
+    if [[ -z "$increment_type" ]]; then
+        show_required_arg_error "increment_type" "bump_version <patch|minor|major>"
+        return 1
+    fi
+    
+    # Sanitize and validate increment type
+    increment_type="$(echo "$increment_type" | tr '[:upper:]' '[:lower:]')"
+    case "$increment_type" in
+        patch|minor|major|revision) ;;
+        *) show_validation_error "Invalid increment type: $increment_type (must be patch, minor, major, or revision)" ;;
+    esac
     local current_version=""
     local new_version=""
     

@@ -6,7 +6,7 @@
 # Import modules
 # Determine the absolute path to the modules directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MODULES_DIR="$SCRIPT_DIR"
+MODULES_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Load configuration at startup
 # Get the binary location (where the CLI binary is installed)
@@ -19,13 +19,10 @@ if [ -n "$PWD" ] && git -C "$PWD" rev-parse --git-dir > /dev/null 2>&1; then
     PROJECT_ROOT="$PWD"
     # When in a git repo, INSTALL_LOCATION is where the CLI files are installed
     INSTALL_LOCATION="/usr/local/share/manifest-cli"
-    # echo "DEBUG: Using PWD as PROJECT_ROOT: $PROJECT_ROOT" >&2
-    # echo "DEBUG: Using /usr/local/share/manifest-cli as INSTALL_LOCATION" >&2
 else
     # Not in a git repository, use installation location for both
     INSTALL_LOCATION="$(dirname "$(dirname "$(dirname "$MODULES_DIR")")")"
     PROJECT_ROOT="$INSTALL_LOCATION"
-    # echo "DEBUG: Using INSTALL_LOCATION as PROJECT_ROOT: $PROJECT_ROOT" >&2
 fi
 
 # Export variables so they're available to sourced modules
@@ -34,32 +31,31 @@ export BINARY_LOCATION
 export PROJECT_ROOT
 
 # Source shared utilities first
-source "$MODULES_DIR/manifest-shared-utils.sh"
+source "$MODULES_DIR/core/manifest-shared-utils.sh"
+source "$MODULES_DIR/core/manifest-shared-functions.sh"
+source "$MODULES_DIR/core/manifest-function-registry.sh"
 
 # Now source modules after variables are set
-source "$MODULES_DIR/manifest-config.sh"
-source "$MODULES_DIR/manifest-os.sh"
-source "$MODULES_DIR/manifest-ntp.sh"
-source "$MODULES_DIR/manifest-git.sh"
-source "$MODULES_DIR/manifest-security.sh"
-source "$MODULES_DIR/manifest-documentation.sh"
-source "$MODULES_DIR/manifest-uninstall.sh"
-source "$MODULES_DIR/manifest-orchestrator.sh"
+source "$MODULES_DIR/core/manifest-config.sh"
+source "$MODULES_DIR/system/manifest-os.sh"
+source "$MODULES_DIR/system/manifest-ntp.sh"
+source "$MODULES_DIR/git/manifest-git.sh"
+source "$MODULES_DIR/system/manifest-security.sh"
+source "$MODULES_DIR/docs/manifest-documentation.sh"
+source "$MODULES_DIR/system/manifest-uninstall.sh"
+source "$MODULES_DIR/workflow/manifest-orchestrator.sh"
+source "$MODULES_DIR/docs/manifest-cleanup-docs.sh"
+source "$MODULES_DIR/testing/manifest-test.sh"
+source "$MODULES_DIR/cloud/manifest-agent-containerized.sh"
 
-# Source MCP connector for Manifest Cloud
-source "$MODULES_DIR/manifest-mcp-connector.sh"
-
-# Debug output (can be removed in production)
-# echo "DEBUG: INSTALL_LOCATION=$INSTALL_LOCATION" >&2
-# echo "DEBUG: PROJECT_ROOT=$PROJECT_ROOT" >&2
-# echo "DEBUG: Current directory=$(pwd)" >&2
-# echo "DEBUG: PWD=$PWD" >&2
-# echo "DEBUG: Git check result=$(git -C "$PWD" rev-parse --git-dir 2>&1)" >&2
+# Source MCP utilities and connector for Manifest Cloud
+source "$MODULES_DIR/cloud/manifest-mcp-utils.sh"
+source "$MODULES_DIR/cloud/manifest-mcp-connector.sh"
 
 # Function to get the CLI installation directory dynamically
 get_cli_dir() {
     # If we're in a development environment, use the current project root
-    if [ -f "$PROJECT_ROOT/VERSION" ] && [ -f "$PROJECT_ROOT/src/cli/manifest-cli-wrapper.sh" ]; then
+    if [ -f "$PROJECT_ROOT/VERSION" ] && [ -f "$PROJECT_ROOT/manifest-cli-wrapper.sh" ]; then
         echo "$PROJECT_ROOT"
         return 0
     fi
@@ -101,7 +97,7 @@ archive_old_docs() {
 # Update CLI function
 update_cli() {
     # Source the auto-update module
-    source "$(dirname "${BASH_SOURCE[0]}")/manifest-auto-update.sh"
+    source "$MODULES_DIR/workflow/manifest-auto-update.sh"
     
     # Call the update function from the auto-update module
     local args=("$@")
@@ -177,61 +173,12 @@ manifest_test() {
     esac
 }
 
-# Helper function to get next version
-get_next_version() {
-    local increment_type="$1"
-    local current_version=""
-    
-    # Read current version
-    if [ -f "VERSION" ]; then
-        current_version=$(cat VERSION)
-
-    fi
-    
-    if [ -z "$current_version" ]; then
-        echo "unknown"
-        return
-    fi
-    
-    # Parse version components using configuration
-    local separator="${MANIFEST_VERSION_SEPARATOR:-.}"
-    local major=$(echo "$current_version" | cut -d"$separator" -f1)
-    local minor=$(echo "$current_version" | cut -d"$separator" -f2)
-    local patch=$(echo "$current_version" | cut -d"$separator" -f3)
-    
-    case "$increment_type" in
-        "patch")
-            echo "$major${separator}$minor${separator}$((patch + 1))"
-            ;;
-        "minor")
-            echo "$major${separator}$((minor + 1))${separator}0"
-            ;;
-        "major")
-            echo "$((major + 1))${separator}0${separator}0"
-            ;;
-        "revision")
-            if [ -f "VERSION" ]; then
-                local revision=$(echo "$current_version" | cut -d"$separator" -f4)
-                if [ -z "$revision" ]; then
-                    revision=1
-                else
-                    revision=$((revision + 1))
-                fi
-                echo "$major${separator}$minor${separator}$patch${separator}$revision"
-            else
-                echo "$major${separator}$minor${separator}$((patch + 1))"
-            fi
-            ;;
-        *)
-            echo "$current_version"
-            ;;
-    esac
-}
+# get_next_version() - Now available from manifest-shared-functions.sh
 
 # Auto-update check with cooldown
 check_auto_update() {
     # Source the auto-update module
-    source "$(dirname "${BASH_SOURCE[0]}")/manifest-auto-update.sh"
+    source "$MODULES_DIR/workflow/manifest-auto-update.sh"
     
     # Call the check function from the auto-update module
     check_auto_update_internal
@@ -284,7 +231,7 @@ main() {
                         shift
                         ;;
                     *)
-                        echo "❌ Unknown option: $1"
+                        log_error "Unknown option: $1"
                         echo "Usage: manifest go [patch|minor|major|revision] [-i|--interactive]"
                         return 1
                         ;;
@@ -292,7 +239,6 @@ main() {
             done
             
             # Call the orchestrator's manifest_go function
-            source "$MODULES_DIR/manifest-orchestrator.sh"
             manifest_go "$increment_type" "$interactive"
             ;;
         "sync")
@@ -342,20 +288,18 @@ main() {
                     fi
                     
                     if [ -z "$current_version" ]; then
-                        echo "❌ Could not determine current version. Please run 'manifest version' first."
+                        log_error "Could not determine current version. Please run 'manifest version' first."
                         return 1
                     fi
                     
                     local timestamp=$(format_timestamp "$(date -u +%s)" '+%Y-%m-%d %H:%M:%S UTC')
-                    source "$MODULES_DIR/manifest-documentation.sh"
                     generate_documents "$current_version" "$timestamp" "patch"
                     ;;
             esac
             ;;
         "cleanup")
             echo "📁 Repository cleanup operations..."
-            source "$MODULES_DIR/manifest-cleanup-docs.sh"
-            main clean
+            main_cleanup
             ;;
         "config")
             show_configuration
@@ -373,6 +317,35 @@ main() {
             # Parameters: skip_confirmations (from --force flag), non_interactive=false (interactive by default)
             uninstall_manifest "${2:-false}" "false"
             ;;
+        "registry")
+            # Function registry commands
+            case "$1" in
+                "status")
+                    show_function_registry
+                    ;;
+                "find")
+                    if [ -z "$2" ]; then
+                        log_error "Pattern required for registry find"
+                        echo "Usage: $0 registry find <pattern>"
+                        exit 1
+                    fi
+                    find_functions "$2"
+                    ;;
+                "deps")
+                    if [ -z "$2" ]; then
+                        log_error "Function name required for registry deps"
+                        echo "Usage: $0 registry deps <function_name>"
+                        exit 1
+                    fi
+                    check_function_dependencies "$2"
+                    ;;
+                *)
+                    log_error "Unknown registry command: $1"
+                    echo "Available registry commands: status, find, deps"
+                    exit 1
+                    ;;
+            esac
+            ;;
         "cloud")
             local subcommand="$1"
             case "$subcommand" in
@@ -389,17 +362,17 @@ main() {
                     local version="${2:-}"
                     local timestamp="${3:-$(date -u +"%Y-%m-%d %H:%M:%S UTC")}"
                     local release_type="${4:-patch}"
-                    
+
                     if [ -z "$version" ]; then
-                        echo "❌ Version required"
+                        log_error "Version required"
                         echo "Usage: manifest cloud generate <version> [timestamp] [release_type]"
                         return 1
                     fi
-                    
+
                     # Create temporary changes file
                     local changes_file=$(mktemp)
                     get_git_changes "$version" > "$changes_file"
-                    
+
                     send_to_manifest_cloud "$version" "$changes_file" "$release_type"
                     local result=$?
                     rm -f "$changes_file"
@@ -427,6 +400,9 @@ main() {
                     echo "Get your API key from: https://manifest.cloud/dashboard"
                     ;;
             esac
+            ;;
+        "agent")
+            agent_main "${@}"
             ;;
         "help"|*)
             display_help
@@ -468,7 +444,19 @@ display_help() {
   echo "    cloud config                      # Configure API key and connection"
   echo "    cloud status                      # Show connection status"
   echo "    cloud generate <version> [opts]   # Generate documentation via Manifest Cloud"
-    echo "  help        - Show this help"
+  echo "  agent       - 🤖  Containerized agent for secure cloud integration"
+  echo "    agent init <mode>                 # Initialize agent (docker|binary|script)"
+  echo "    agent auth github                 # Set up GitHub OAuth authentication"
+  echo "    agent auth manifest               # Set up Manifest Cloud subscription"
+  echo "    agent status                      # Show agent status and configuration"
+  echo "    agent logs                        # Show agent operation logs"
+  echo "    agent test                        # Test agent functionality"
+  echo "    agent uninstall                   # Remove agent completely"
+  echo "  registry    - 📋  Function registry management"
+  echo "    registry status                   # Show function registry status"
+  echo "    registry find <pattern>           # Find functions matching pattern"
+  echo "    registry deps <function>          # Check function dependencies"
+  echo "  help        - Show this help"
     echo ""
     echo "This CLI provides comprehensive Git operations and version management."
 echo ""
@@ -490,10 +478,4 @@ echo "  • manifest test versions     - Test version increment logic"
 echo "  • manifest test all          - Comprehensive system testing"
 }
 
-# Test/dry-run function (delegated to orchestrator)
-manifest_test_dry_run() {
-    source "$MODULES_DIR/manifest-orchestrator.sh"
-    manifest_test_dry_run "$@"
-}
-
-source "$MODULES_DIR/manifest-test.sh"
+# Test module is sourced at the top level

@@ -174,7 +174,7 @@ validate_system() {
     local errors=0
     
     # Check if we're in the right directory
-    if [ ! -f "src/cli/manifest-cli.sh" ]; then
+    if [ ! -f "manifest-cli.sh" ]; then
         print_error "❌ This script must be run from the manifest.cli project root directory"
         print_error "   Please navigate to the project root and try again"
         errors=$((errors + 1))
@@ -232,18 +232,18 @@ validate_system() {
 source_manifest_uninstall() {
     # Get the directory where this script is located
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local modules_dir="$script_dir/src/cli/modules"
+    local modules_dir="$script_dir/modules"
     
     # Source shared utilities first
-    if [ -f "$modules_dir/manifest-shared-utils.sh" ]; then
-        source "$modules_dir/manifest-shared-utils.sh"
+    if [ -f "$modules_dir/core/manifest-shared-utils.sh" ]; then
+        source "$modules_dir/core/manifest-shared-utils.sh"
     fi
     
     # Source the uninstall module
-    if [ -f "$modules_dir/manifest-uninstall.sh" ]; then
-        source "$modules_dir/manifest-uninstall.sh"
+    if [ -f "$modules_dir/system/manifest-uninstall.sh" ]; then
+        source "$modules_dir/system/manifest-uninstall.sh"
     else
-        print_error "❌ Uninstall module not found: $modules_dir/manifest-uninstall.sh"
+        print_error "❌ Uninstall module not found: $modules_dir/system/manifest-uninstall.sh"
         return 1
     fi
 }
@@ -298,8 +298,8 @@ copy_cli_files() {
     print_subheader "📦 Copying CLI Files"
     
     # Copy main CLI script
-    if [ -f "src/cli/manifest-cli-wrapper.sh" ]; then
-        cp "src/cli/manifest-cli-wrapper.sh" "$LOCAL_BIN/$CLI_NAME"
+    if [ -f "manifest-cli-wrapper.sh" ]; then
+        cp "manifest-cli-wrapper.sh" "$LOCAL_BIN/$CLI_NAME"
         chmod +x "$LOCAL_BIN/$CLI_NAME"
         print_success "✅ Copied CLI script to $LOCAL_BIN/$CLI_NAME"
     else
@@ -308,8 +308,8 @@ copy_cli_files() {
     fi
     
     # Copy source modules
-    if [ -d "src" ]; then
-        cp -r "src" "$INSTALL_LOCATION/"
+    if [ -d "modules" ]; then
+        cp -r "modules" "$INSTALL_LOCATION/"
         print_success "✅ Copied source modules"
     fi
     

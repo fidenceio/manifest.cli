@@ -5,31 +5,7 @@
 
 # Auto-update module - uses PROJECT_ROOT from core module
 
-# Get current version from VERSION file
-get_current_version() {
-    if [ -f "$PROJECT_ROOT/VERSION" ]; then
-        cat "$PROJECT_ROOT/VERSION" 2>/dev/null || echo "unknown"
-    else
-        echo "unknown"
-    fi
-}
-
-# Get latest version from GitHub (if available)
-get_latest_version() {
-    local repo_url="${MANIFEST_REPO_URL:-https://api.github.com/repos/fidenceio/fidenceio.manifest.cli/releases/latest}"
-    
-    # Try to get latest version from GitHub API
-    if command -v curl >/dev/null 2>&1; then
-        local latest_version=$(curl -s "$repo_url" 2>/dev/null | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
-        if [ -n "$latest_version" ]; then
-            echo "$latest_version"
-            return 0
-        fi
-    fi
-    
-    # Fallback: return current version
-    get_current_version
-}
+# get_current_version() and get_latest_version() - Now available from manifest-shared-functions.sh
 
 # Check if update is available
 check_for_updates() {

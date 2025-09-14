@@ -5,14 +5,7 @@
 
 # Orchestrator module - uses PROJECT_ROOT from core module
 
-# Import required modules
-source "$SCRIPT_DIR/manifest-config.sh"
-source "$SCRIPT_DIR/manifest-os.sh"
-source "$SCRIPT_DIR/manifest-ntp.sh"
-source "$SCRIPT_DIR/manifest-git.sh"
-source "$SCRIPT_DIR/manifest-documentation.sh"
-source "$SCRIPT_DIR/manifest-cleanup-docs.sh"
-source "$SCRIPT_DIR/manifest-markdown-validation.sh"
+# Orchestrator module - modules are already sourced by manifest-core.sh
 
 # Main workflow function
 manifest_go() {
@@ -21,7 +14,7 @@ manifest_go() {
     
     # Change to the project root directory for all operations
     cd "$PROJECT_ROOT" || {
-        echo "❌ Failed to change to project root: $PROJECT_ROOT"
+        log_error "Failed to change to project root: $PROJECT_ROOT"
         return 1
     }
     
@@ -31,6 +24,14 @@ manifest_go() {
     fi
     
     echo "🚀 Starting automated Manifest process..."
+    echo ""
+    
+    # Ensure required files exist before proceeding
+    echo "🔍 Checking for required files..."
+    if ! ensure_required_files "$PROJECT_ROOT"; then
+        log_error "Failed to ensure required files are present"
+        return 1
+    fi
     echo ""
     
     # Interactive confirmation for safety
@@ -135,7 +136,7 @@ manifest_go() {
     # Bump version
     echo "📦 Bumping version..."
     if ! bump_version "$increment_type"; then
-        echo "❌ Version bump failed"
+        log_error "Version bump failed"
         return 1
     fi
     
@@ -146,7 +147,7 @@ manifest_go() {
     fi
     
     if [ -z "$new_version" ]; then
-        echo "❌ Could not determine new version"
+        log_error "Could not determine new version"
         return 1
     fi
     
@@ -251,6 +252,15 @@ manifest_test_dry_run() {
     
     echo "🧪 Manifest Test/Dry-Run Mode"
     echo "============================="
+    echo ""
+    
+    # Test file requirements
+    echo "📁 File Requirements Testing:"
+    if ensure_required_files "$PROJECT_ROOT"; then
+        echo "   ✅ All required files are present or created"
+    else
+        echo "   ❌ Failed to ensure required files"
+    fi
     echo ""
     
     # Test version increment logic
