@@ -9,15 +9,12 @@ PRIVATE_ENV_FILES=(".env" ".env.local" ".env.development" ".env.test" ".env.prod
 
 # Main security audit function
 manifest_security() {
-    local project_root=""
+    # Use the validated PROJECT_ROOT from the main command dispatcher
+    local project_root="$PROJECT_ROOT"
     
-    # Detect project root
-    if [ -f "VERSION" ] && [ -f "env.example" ]; then
-        project_root="$(pwd)"
-    elif [ -f "../VERSION" ] && [ -f "../env.example" ]; then
-        project_root="$(cd .. && pwd)"
-    else
-        echo "❌ Could not determine project root. Please run from project directory."
+    # Validate that we have a valid project root
+    if [[ -z "$project_root" || ! -d "$project_root" ]]; then
+        echo "❌ Invalid project root. Please run from a valid Git repository."
         return 1
     fi
     

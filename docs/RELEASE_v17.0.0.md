@@ -1,7 +1,7 @@
 # Release v17.0.0
 
-**Release Date:** 2025-09-18 00:06:28 UTC
-**Release Type:** major
+**Release Date:** 2025-09-18 00:44:23 UTC
+**Release Type:** patch
 
 ## 🎯 What's New
 
@@ -59,11 +59,17 @@ manifest docs
 
 ## New Features
 
+
 ## Improvements
+Update main CHANGELOG.md to v17.0.0
+Bump version to 17.0.0 [NTP: 2025-09-18 00:06:28 UTC]
 Auto-commit before Manifest process [NTP: 2025-09-18 00:06:28 UTC]
 
 ## Bug Fixes
 
+
 ## Breaking Changes
 
+
 ## Documentation
+

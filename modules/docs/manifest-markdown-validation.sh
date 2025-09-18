@@ -125,8 +125,8 @@ validate_project() {
     local clean="${1:-false}"
     local errors=0
     
-    # Use PROJECT_ROOT if available, otherwise use current directory
-    local project_root="${PROJECT_ROOT:-$(pwd)}"
+    # Use PROJECT_ROOT (which should be validated repository root)
+    local project_root="$PROJECT_ROOT"
     
     log_info "Validating project documentation..."
     

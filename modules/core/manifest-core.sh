@@ -25,6 +25,9 @@ else
     PROJECT_ROOT="$INSTALL_LOCATION"
 fi
 
+# Note: PROJECT_ROOT will be validated and corrected in the main() function
+# to ensure we're always working from the repository root
+
 # Export variables so they're available to sourced modules
 export INSTALL_LOCATION
 export BINARY_LOCATION
