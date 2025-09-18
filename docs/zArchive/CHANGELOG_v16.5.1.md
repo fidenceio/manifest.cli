@@ -42,16 +42,12 @@
 
 ## New Features
 
-
 ## Improvements
 Bump version to 16.5.1 [NTP: 2025-09-18 00:04:51 UTC]
 Auto-commit before Manifest process [NTP: 2025-09-18 00:04:51 UTC]
 
 ## Bug Fixes
 
-
 ## Breaking Changes
 
-
 ## Documentation
-
