@@ -115,6 +115,87 @@ get_project_root() {
     echo "$current_dir"
 }
 
+# Validate and ensure we're running from repository root
+validate_repository_root() {
+    local current_dir="$(pwd)"
+    local git_root=""
+    
+    # Check if we're in a git repository
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        log_error "Not in a Git repository. Please run Manifest from within a Git repository."
+        return 1
+    fi
+    
+    # Get the git repository root
+    git_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+    if [[ -z "$git_root" ]]; then
+        log_error "Could not determine Git repository root"
+        return 1
+    fi
+    
+    # Check if current directory is the repository root
+    if [[ "$current_dir" != "$git_root" ]]; then
+        log_error "Manifest must be run from the repository root directory"
+        log_error "Current directory: $current_dir"
+        log_error "Repository root: $git_root"
+        log_error ""
+        log_error "Please run: cd \"$git_root\" && manifest $*"
+        return 1
+    fi
+    
+    # Additional validation: ensure we have a .git directory
+    if [[ ! -d ".git" ]]; then
+        log_error "No .git directory found in current location"
+        return 1
+    fi
+    
+    log_debug "Repository root validation passed: $current_dir"
+    return 0
+}
+
+# Ensure we're in repository root and change directory if needed
+ensure_repository_root() {
+    local current_dir="$(pwd)"
+    local git_root=""
+    
+    # Check if we're in a git repository
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        log_error "Not in a Git repository. Please run Manifest from within a Git repository."
+        return 1
+    fi
+    
+    # Get the git repository root
+    git_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+    if [[ -z "$git_root" ]]; then
+        log_error "Could not determine Git repository root"
+        return 1
+    fi
+    
+    # Check if current directory is the repository root
+    if [[ "$current_dir" != "$git_root" ]]; then
+        log_warning "Not running from repository root. Changing to repository root..."
+        log_warning "From: $current_dir"
+        log_warning "To: $git_root"
+        
+        # Change to repository root
+        if ! cd "$git_root"; then
+            log_error "Failed to change to repository root: $git_root"
+            return 1
+        fi
+        
+        log_success "Changed to repository root: $git_root"
+    fi
+    
+    # Additional validation: ensure we have a .git directory
+    if [[ ! -d ".git" ]]; then
+        log_error "No .git directory found in current location"
+        return 1
+    fi
+    
+    log_debug "Repository root ensured: $(pwd)"
+    return 0
+}
+
 get_modules_dir() {
     local script_dir="$(get_script_dir)"
     # If we're in a module subdirectory, go up to modules root
@@ -295,6 +376,7 @@ export -f log_debug log_info log_success log_warning log_error log_trace
 export -f validate_required_args ensure_directory create_temp_file
 export -f show_help show_usage_error show_required_arg_error
 export -f get_script_dir get_script_parent_dir get_project_root get_modules_dir
+export -f validate_repository_root ensure_repository_root
 export -f show_network_error show_file_error show_git_error show_config_error
 export -f show_validation_error show_permission_error show_dependency_error
 export -f sanitize_filename sanitize_version sanitize_path validate_version_format

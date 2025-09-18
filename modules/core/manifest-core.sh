@@ -186,6 +186,16 @@ check_auto_update() {
 
 # Main command dispatcher
 main() {
+    # Ensure we're running from repository root for all commands
+    if ! ensure_repository_root; then
+        log_error "Repository root validation failed"
+        return 1
+    fi
+    
+    # Update PROJECT_ROOT to the actual current directory (in case we changed)
+    PROJECT_ROOT="$(pwd)"
+    export PROJECT_ROOT
+    
     # Check for updates in background (with cooldown)
     check_auto_update
     

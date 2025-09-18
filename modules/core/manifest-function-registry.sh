@@ -108,6 +108,8 @@ register_function "validate_version_format" "manifest-shared-utils" "Validate ve
 register_function "validate_git_repo" "manifest-shared-utils" "Validate Git repository"
 register_function "validate_file_exists" "manifest-shared-utils" "Validate file exists"
 register_function "validate_directory_exists" "manifest-shared-utils" "Validate directory exists"
+register_function "validate_repository_root" "manifest-shared-utils" "Validate running from repository root"
+register_function "ensure_repository_root" "manifest-shared-utils" "Ensure running from repository root"
 
 # Register shared functions
 register_function "get_current_version" "manifest-shared-functions" "Get current version from VERSION file"

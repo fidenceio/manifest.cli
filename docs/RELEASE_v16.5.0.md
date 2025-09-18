@@ -1,7 +1,7 @@
 # Release v16.5.0
 
-**Release Date:** 2025-09-14 23:02:47 UTC
-**Release Type:** minor
+**Release Date:** 2025-09-18 00:04:41 UTC
+**Release Type:** patch
 
 ## 🎯 What's New
 
@@ -59,11 +59,17 @@ manifest docs
 
 ## New Features
 
+
 ## Improvements
+Update main CHANGELOG.md to v16.5.0
+Bump version to 16.5.0 [NTP: 2025-09-14 23:02:47 UTC]
 Auto-commit before Manifest process [NTP: 2025-09-14 23:02:47 UTC]
 
 ## Bug Fixes
 
+
 ## Breaking Changes
 
+
 ## Documentation
+

@@ -12,11 +12,15 @@ manifest_go() {
     local increment_type="$1"
     local interactive="$2"
     
-    # Change to the project root directory for all operations
-    cd "$PROJECT_ROOT" || {
-        log_error "Failed to change to project root: $PROJECT_ROOT"
+    # Ensure we're running from repository root
+    if ! ensure_repository_root; then
+        log_error "Repository root validation failed"
         return 1
-    }
+    fi
+    
+    # Update PROJECT_ROOT to the actual current directory (in case we changed)
+    PROJECT_ROOT="$(pwd)"
+    export PROJECT_ROOT
     
     # Determine version increment type
     if [ -z "$increment_type" ]; then
