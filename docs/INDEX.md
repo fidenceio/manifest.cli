@@ -1,6 +1,6 @@
 # Manifest CLI Documentation
 
-**Version:** 17.0.0  
+**Version:** 17.0.0
 **Last Updated:** 2025-09-18 00:44:23 UTC
 
 ## 📚 Available Documentation
