@@ -5,13 +5,17 @@
 
 # Cleanup-docs module - uses PROJECT_ROOT from core module
 
-ZARCHIVE_DIR="$PROJECT_ROOT/docs/zArchive"
+# Get configurable documentation paths
+get_zarchive_dir() {
+    get_docs_archive_folder "$PROJECT_ROOT"
+}
 
 # Ensure zArchive directory exists
 ensure_zarchive_dir() {
-    if [[ ! -d "$ZARCHIVE_DIR" ]]; then
-        log_info "Creating zArchive directory: $ZARCHIVE_DIR"
-        mkdir -p "$ZARCHIVE_DIR"
+    local zarchive_dir=$(get_zarchive_dir)
+    if [[ ! -d "$zarchive_dir" ]]; then
+        log_info "Creating zArchive directory: $zarchive_dir"
+        mkdir -p "$zarchive_dir"
         log_success "zArchive directory created"
     fi
 }
@@ -91,8 +95,9 @@ validate_repository() {
     fi
     
     # Check zArchive directory
-    if [[ ! -d "$ZARCHIVE_DIR" ]]; then
-        log_warning "zArchive directory does not exist"
+    local zarchive_dir=$(get_zarchive_dir)
+    if [[ ! -d "$zarchive_dir" ]]; then
+        log_warning "zArchive directory does not exist: $zarchive_dir"
         issues=$((issues + 1))
     fi
     
@@ -152,7 +157,7 @@ main_cleanup() {
                     log_warning "Failed to move: $filename"
                 fi
             fi
-        done < <(find "$PROJECT_ROOT/docs" -name "CHANGELOG_v*.md" -o -name "RELEASE_v*.md" | grep -v "zArchive")
+        done < <(find "$(get_docs_folder "$PROJECT_ROOT")" -name "CHANGELOG_v*.md" -o -name "RELEASE_v*.md" | grep -v "$(basename "$(get_zarchive_dir)")")
         
         log_success "Archived $moved_count files, skipped $skipped_count files"
     fi

@@ -108,7 +108,8 @@ test_documentation_functionality() {
     echo "🧪 Testing documentation functionality..."
     
     # Check if documentation files exist
-    local doc_files=("README.md" "docs/USER_GUIDE.md" "docs/COMMAND_REFERENCE.md" "docs/INSTALLATION.md")
+    local docs_dir=$(get_docs_folder)
+    local doc_files=("README.md" "$(basename "$docs_dir")/USER_GUIDE.md" "$(basename "$docs_dir")/COMMAND_REFERENCE.md" "$(basename "$docs_dir")/INSTALLATION.md")
     for doc_file in "${doc_files[@]}"; do
         if [ -f "$doc_file" ]; then
             echo "   ✅ Documentation file exists: $doc_file"

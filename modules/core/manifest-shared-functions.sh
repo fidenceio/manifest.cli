@@ -417,11 +417,12 @@ ensure_required_files() {
     fi
     
     # Ensure docs directory exists
-    if [ ! -d "$project_root/docs" ]; then
-        log_info "Creating docs directory..."
-        mkdir -p "$project_root/docs"
-        created_files+=("docs/")
-        log_success "Created docs directory"
+    local docs_dir=$(get_docs_folder "$project_root")
+    if [ ! -d "$docs_dir" ]; then
+        log_info "Creating documentation directory..."
+        mkdir -p "$docs_dir"
+        created_files+=("$(basename "$docs_dir")/")
+        log_success "Created documentation directory: $(basename "$docs_dir")/"
     fi
     
     # Ensure CHANGELOG.md exists
@@ -497,7 +498,7 @@ cat CHANGELOG.md
 
 - **Version Info**: [VERSION](VERSION)
 - **Changelog**: [CHANGELOG.md](CHANGELOG.md)
-- **Project Docs**: [docs/](docs/) (if available)
+- **Project Docs**: [$(basename "$(get_docs_folder)")/]($(basename "$(get_docs_folder)")/) (if available)
 
 ## 🤝 Contributing
 

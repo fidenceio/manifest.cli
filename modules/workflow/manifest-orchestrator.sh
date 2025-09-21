@@ -188,7 +188,7 @@ manifest_go() {
     
     # Update main CHANGELOG.md for GitHub visibility
     echo "📝 Updating main CHANGELOG.md for GitHub..."
-    local latest_changelog="$PROJECT_ROOT/docs/CHANGELOG_v$new_version.md"
+    local latest_changelog="$(get_docs_folder "$PROJECT_ROOT")/CHANGELOG_v$new_version.md"
     if [[ -f "$latest_changelog" ]]; then
         # Copy the changelog and add the update message
         cp "$latest_changelog" "$PROJECT_ROOT/CHANGELOG.md"
@@ -327,10 +327,11 @@ manifest_test_dry_run() {
         echo "   ❌ README.md missing"
     fi
     
-    if [ -d "docs" ]; then
-        echo "   ✅ docs/ directory exists"
+    local docs_dir=$(get_docs_folder)
+    if [ -d "$docs_dir" ]; then
+        echo "   ✅ Documentation directory exists: $(basename "$docs_dir")/"
     else
-        echo "   ❌ docs/ directory missing"
+        echo "   ❌ Documentation directory missing: $(basename "$docs_dir")/"
     fi
     echo ""
     

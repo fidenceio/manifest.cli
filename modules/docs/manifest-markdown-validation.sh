@@ -145,7 +145,8 @@ validate_project() {
             errors=$((errors + 1))
         fi
     else
-        log_warning "docs/ directory not found"
+        local docs_dir=$(get_docs_folder "$project_root")
+        log_warning "Documentation directory not found: $docs_dir"
     fi
     
     if [[ $errors -eq 0 ]]; then
@@ -212,7 +213,7 @@ main() {
             echo "Examples:"
             echo "  $0 file README.md"
             echo "  $0 file README.md clean"
-            echo "  $0 dir docs/"
+            echo "  $0 dir $(basename "$(get_docs_folder)")/"
             echo "  $0 project clean"
             echo "  $0 clean README.md"
             ;;

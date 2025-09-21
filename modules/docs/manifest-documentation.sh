@@ -5,7 +5,10 @@
 
 # Documentation module - uses PROJECT_ROOT from core module
 
-DOCS_DIR="$PROJECT_ROOT/docs"
+# Get configurable documentation directory
+get_docs_dir() {
+    get_docs_folder "$PROJECT_ROOT"
+}
 
 # Import required modules
 SCRIPT_DIR="$(get_script_dir)"
@@ -22,7 +25,7 @@ generate_release_notes() {
     
     log_info "Generating release notes for v$version..."
     
-    local release_file="$DOCS_DIR/RELEASE_v$version.md"
+    local release_file="$(get_docs_dir)/RELEASE_v$version.md"
     
     # Generate template
     local content=$(generate_release_notes_template "$version" "$timestamp" "$release_type")
@@ -60,7 +63,7 @@ generate_changelog() {
     
     log_info "Generating changelog for v$version..."
     
-    local changelog_file="$DOCS_DIR/CHANGELOG_v$version.md"
+    local changelog_file="$(get_docs_dir)/CHANGELOG_v$version.md"
     
     # Generate template
     local content=$(generate_changelog_template "$version" "$timestamp" "$release_type")
@@ -150,7 +153,7 @@ generate_docs_index() {
     
     log_info "Generating documentation index..."
     
-    local index_file="$DOCS_DIR/INDEX.md"
+    local index_file="$(get_docs_dir)/INDEX.md"
     
     cat > "$index_file" << EOF
 # Manifest CLI Documentation
@@ -220,7 +223,7 @@ generate_documents() {
     log_info "Starting document generation for version $version..."
     
     # Ensure docs directory exists
-    mkdir -p "$DOCS_DIR"
+    mkdir -p "$(get_docs_dir)"
     
     # Create temporary changes file
     local changes_file=$(mktemp)

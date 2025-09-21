@@ -75,8 +75,21 @@ load_configuration() {
                     
                     # Skip lines that don't look like variable assignments
                     if [[ "$line" =~ ^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*= ]]; then
+                        # Parse the line to handle quoted values properly
+                        local var_name="${line%%=*}"
+                        local var_value="${line#*=}"
+                        
+                        # Remove quotes if present
+                        if [[ "$var_value" =~ ^\".*\"$ ]]; then
+                            var_value="${var_value#\"}"
+                            var_value="${var_value%\"}"
+                        elif [[ "$var_value" =~ ^\'.*\'$ ]]; then
+                            var_value="${var_value#\'}"
+                            var_value="${var_value%\'}"
+                        fi
+                        
                         # Export the variable
-                        export "$line"
+                        export "$var_name=$var_value"
                     fi
                 done < "$full_path"
             fi
@@ -145,6 +158,8 @@ set_default_configuration() {
     export MANIFEST_TAP_REPO="${MANIFEST_TAP_REPO:-https://github.com/fidenceio/fidenceio-homebrew-tap.git}"
     
     # Documentation Configuration
+    export MANIFEST_DOCS_FOLDER="${MANIFEST_DOCS_FOLDER:-docs}"
+    export MANIFEST_DOCS_ARCHIVE_FOLDER="${MANIFEST_DOCS_ARCHIVE_FOLDER:-docs/zArchive}"
     export MANIFEST_DOCS_TEMPLATE_DIR="${MANIFEST_DOCS_TEMPLATE_DIR:-}"
     export MANIFEST_DOCS_AUTO_GENERATE="${MANIFEST_DOCS_AUTO_GENERATE:-true}"
     export MANIFEST_DOCS_HISTORICAL_LIMIT="${MANIFEST_DOCS_HISTORICAL_LIMIT:-20}"
@@ -383,6 +398,8 @@ show_configuration() {
     echo ""
     
     echo "📚 Documentation Configuration:"
+    echo "   Docs Folder: ${MANIFEST_DOCS_FOLDER}"
+    echo "   Archive Folder: ${MANIFEST_DOCS_ARCHIVE_FOLDER}"
     echo "   Filename Pattern: ${MANIFEST_DOCS_FILENAME_PATTERN}"
     echo "   Historical Limit: ${MANIFEST_DOCS_HISTORICAL_LIMIT}"
     echo ""
@@ -419,6 +436,34 @@ show_configuration() {
     echo "   • 'manifest go revision' increments component ${MANIFEST_REVISION_INCREMENT_TARGET}"
 }
 
+# Get documentation folder path
+get_docs_folder() {
+    local project_root="$1"
+    if [ -z "$project_root" ]; then
+        project_root="$PROJECT_ROOT"
+    fi
+    
+    if [ -z "$project_root" ]; then
+        project_root="."
+    fi
+    
+    echo "$project_root/$MANIFEST_DOCS_FOLDER"
+}
+
+# Get documentation archive folder path
+get_docs_archive_folder() {
+    local project_root="$1"
+    if [ -z "$project_root" ]; then
+        project_root="$PROJECT_ROOT"
+    fi
+    
+    if [ -z "$project_root" ]; then
+        project_root="."
+    fi
+    
+    echo "$project_root/$MANIFEST_DOCS_ARCHIVE_FOLDER"
+}
+
 # Export functions for use in other modules
 export -f load_configuration
 export -f set_default_configuration
@@ -427,3 +472,5 @@ export -f validate_version_config
 export -f parse_version_components
 export -f generate_next_version
 export -f show_configuration
+export -f get_docs_folder
+export -f get_docs_archive_folder

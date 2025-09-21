@@ -146,9 +146,9 @@ manifest docs
 
 ## 📚 Documentation
 
-- [User Guide](docs/USER_GUIDE.md)
-- [Command Reference](docs/COMMAND_REFERENCE.md)
-- [Examples](docs/EXAMPLES.md)
+- [User Guide]($(basename "$(get_docs_folder)")/USER_GUIDE.md)
+- [Command Reference]($(basename "$(get_docs_folder)")/COMMAND_REFERENCE.md)
+- [Examples]($(basename "$(get_docs_folder)")/EXAMPLES.md)
 
 ## 🔗 Links
 
