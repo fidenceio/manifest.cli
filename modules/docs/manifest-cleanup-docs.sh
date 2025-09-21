@@ -135,7 +135,7 @@ main_cleanup() {
         while IFS= read -r file; do
             if [[ -f "$file" ]]; then
                 local filename="$(basename "$file")"
-                local dest="$ZARCHIVE_DIR/$filename"
+                local dest="$(get_zarchive_dir)/$filename"
                 
                 # Skip if already in zArchive
                 if [[ "$file" == *"/zArchive/"* ]]; then

@@ -312,7 +312,12 @@ main() {
             ;;
         "cleanup")
             echo "📁 Repository cleanup operations..."
-            main_cleanup
+            local current_version=""
+            if [ -f "VERSION" ]; then
+                current_version=$(cat VERSION)
+            fi
+            local timestamp=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+            main_cleanup "$current_version" "$timestamp"
             ;;
         "config")
             show_configuration
