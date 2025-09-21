@@ -7,9 +7,6 @@
 CONFIG_FILES=(
     ".env"
     ".env.local"
-    ".env.development"
-    ".env.staging"
-    ".env.production"
 )
 
 # Configuration validation
