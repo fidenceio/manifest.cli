@@ -5,7 +5,7 @@
 
 # Security configuration
 SECURITY_CONFIG_FILE="manifest.config"
-PRIVATE_ENV_FILES=(".env" ".env.local" ".env.development" ".env.test" ".env.production" ".env.staging")
+PRIVATE_ENV_FILES=(".env" ".env.manifest.local" ".env.development" ".env.test" ".env.production" ".env.staging")
 
 # Main security audit function
 manifest_security() {

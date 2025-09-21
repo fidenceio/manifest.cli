@@ -345,13 +345,13 @@ create_configuration() {
     print_subheader "⚙️  Creating Configuration Files"
     
     # Copy global configuration template
-    if [ -f "env.global.example" ]; then
-        cp "env.global.example" "$INSTALL_LOCATION/.env.global"
-        print_success "✅ Global configuration template copied: $INSTALL_LOCATION/.env.global"
+    if [ -f "env.manifest.global.example" ]; then
+        cp "env.manifest.global.example" "$INSTALL_LOCATION/.env.manifest.global"
+        print_success "✅ Global configuration template copied: $INSTALL_LOCATION/.env.manifest.global"
     else
-        print_warning "⚠️  env.global.example not found, creating basic configuration"
+        print_warning "⚠️  env.manifest.global.example not found, creating basic configuration"
         # Create minimal configuration if template not found
-        cat > "$INSTALL_LOCATION/.env.global" << 'EOF'
+        cat > "$INSTALL_LOCATION/.env.manifest.global" << 'EOF'
 # =============================================================================
 # Manifest CLI Configuration
 # =============================================================================
@@ -379,7 +379,7 @@ MANIFEST_INTERACTIVE_MODE=false
 EOF
     fi
 
-    print_success "✅ Configuration file created: $INSTALL_LOCATION/.env.global"
+    print_success "✅ Configuration file created: $INSTALL_LOCATION/.env.manifest.global"
     echo ""
 }
 
@@ -487,8 +487,8 @@ display_post_install_info() {
     echo "   1. Configure your Git credentials if not already set"
     echo "   2. Run '$CLI_NAME test' to verify everything works"
     echo "   3. Check the generated documentation in the docs/ folder"
-    echo "   4. Review and customize $INSTALL_LOCATION/.env.global"
-    echo "   5. Copy env.global.example to your project root as .env.global"
+    echo "   4. Review and customize $INSTALL_LOCATION/.env.manifest.global"
+    echo "   5. Copy env.manifest.global.example to your project root as .env.manifest.global"
     
     echo
     print_status "📚 Documentation:"
@@ -499,9 +499,9 @@ display_post_install_info() {
     
     echo
     print_status "🔧 Configuration:"
-    echo "   • Environment: $INSTALL_LOCATION/.env.global"
-    echo "   • Global Template: env.global.example (copy to .env.global)"
-    echo "   • Customize the .env.global file for your specific needs"
+    echo "   • Environment: $INSTALL_LOCATION/.env.manifest.global"
+    echo "   • Global Template: env.manifest.global.example (copy to .env.manifest.global)"
+    echo "   • Customize the .env.manifest.global file for your specific needs"
     
     echo
     print_status "🌐 Community & Support:"

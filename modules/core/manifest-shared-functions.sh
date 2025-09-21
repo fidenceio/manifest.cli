@@ -622,7 +622,7 @@ bower_components/
 # dotenv environment variables file
 .env
 .env.test
-.env.local
+.env.manifest.local
 .env.production
 
 # Temporary files

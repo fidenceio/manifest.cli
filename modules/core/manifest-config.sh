@@ -5,8 +5,8 @@
 
 # Configuration file paths (in order of precedence)
 CONFIG_FILES=(
-    ".env.global"
-    ".env.local"
+    ".env.manifest.global"
+    ".env.manifest.local"
 )
 
 # Configuration validation
