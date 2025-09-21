@@ -315,13 +315,16 @@ sanitize_filename() {
 sanitize_version() {
     local version="$1"
     # Only allow alphanumeric, dots, and hyphens
-    echo "$version" | sed 's/[^a-zA-Z0-9.-]//g'
+    echo "${version//[^a-zA-Z0-9.-]/}"
 }
 
 sanitize_path() {
     local path="$1"
     # Remove path traversal attempts and normalize
-    echo "$path" | sed 's/\.\.//g' | sed 's/\/\//\//g' | sed 's/^\/\///'
+    path="${path//../}"
+    path="${path//\/\//\/}"
+    path="${path#//}"
+    echo "$path"
 }
 
 validate_version_format() {

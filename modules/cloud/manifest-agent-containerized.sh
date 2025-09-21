@@ -168,8 +168,15 @@ if [ ! -f "$AGENT_CONFIG" ]; then
     exit 1
 fi
 
-# Source configuration
-eval "$(jq -r 'to_entries[] | "export \(.key)=\(.value)"' "$AGENT_CONFIG")"
+# Source configuration safely
+while IFS='=' read -r key value; do
+    # Validate variable name to prevent injection
+    if [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+        export "$key"="$value"
+    else
+        log_warning "Invalid environment variable name: $key (skipping)"
+    fi
+done < <(jq -r 'to_entries[] | "\(.key)=\(.value)"' "$AGENT_CONFIG" 2>/dev/null || echo "")
 
 # log_operation() and generate_agent_id() - Now available from manifest-shared-functions.sh
 

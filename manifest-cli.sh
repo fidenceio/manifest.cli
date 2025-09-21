@@ -3,7 +3,7 @@
 # Manifest CLI - New Modular Version
 # A powerful command-line tool for Git operations and version management
 
-set -e
+set -eo pipefail
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

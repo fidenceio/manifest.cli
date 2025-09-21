@@ -3,6 +3,9 @@
 # Manifest Core Module
 # Main CLI interface and workflow orchestration
 
+# Enable strict error handling for critical operations
+set -eo pipefail
+
 # Import modules
 # Determine the absolute path to the modules directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,7 +24,7 @@ if [ -n "$PWD" ] && git -C "$PWD" rev-parse --git-dir > /dev/null 2>&1; then
     INSTALL_LOCATION="/usr/local/share/manifest-cli"
 else
     # Not in a git repository, use installation location for both
-    INSTALL_LOCATION="$(dirname "$(dirname "$(dirname "$MODULES_DIR")")")"
+    INSTALL_LOCATION="${MODULES_DIR%/*/*/*}"
     PROJECT_ROOT="$INSTALL_LOCATION"
 fi
 

@@ -1,7 +1,7 @@
 # Changelog v18.1.0
 
-**Release Date:** 2025-09-21 20:48:57 UTC
-**Release Type:** minor
+**Release Date:** 2025-09-21 20:53:10 UTC
+**Release Type:** patch
 
 ## 🆕 New Features
 
@@ -42,11 +42,17 @@
 
 ## New Features
 
+
 ## Improvements
+Update main CHANGELOG.md to v18.1.0
+Bump version to 18.1.0 [NTP: 2025-09-21 20:48:57 UTC]
 Auto-commit before Manifest process [NTP: 2025-09-21 20:48:57 UTC]
 
 ## Bug Fixes
 
+
 ## Breaking Changes
 
+
 ## Documentation
+
