@@ -5,7 +5,7 @@
 
 # Configuration file paths (in order of precedence)
 CONFIG_FILES=(
-    ".env"
+    ".env.global"
     ".env.local"
 )
 

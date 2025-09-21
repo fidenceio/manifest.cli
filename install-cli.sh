@@ -344,67 +344,42 @@ copy_cli_files() {
 create_configuration() {
     print_subheader "⚙️  Creating Configuration Files"
     
-    # Create main .env configuration
-    cat > "$INSTALL_LOCATION/.env" << 'EOF'
+    # Copy global configuration template
+    if [ -f "env.global.example" ]; then
+        cp "env.global.example" "$INSTALL_LOCATION/.env.global"
+        print_success "✅ Global configuration template copied: $INSTALL_LOCATION/.env.global"
+    else
+        print_warning "⚠️  env.global.example not found, creating basic configuration"
+        # Create minimal configuration if template not found
+        cat > "$INSTALL_LOCATION/.env.global" << 'EOF'
 # =============================================================================
 # Manifest CLI Configuration
 # =============================================================================
-# This file contains environment-specific settings for the Manifest CLI
-# Copy this file to your project root and customize as needed
+# Copy env.global.example to customize this file
 # =============================================================================
 
-# NTP Configuration (Trusted Timestamps)
-# Multiple servers for redundancy and accuracy
+# NTP Configuration
 MANIFEST_NTP_SERVERS="time.apple.com,time.google.com,pool.ntp.org,time.nist.gov"
 MANIFEST_NTP_TIMEOUT=5
 MANIFEST_NTP_RETRIES=3
 MANIFEST_NTP_VERIFY=true
 
-# Repository Configuration (Auto-detected)
-# These are automatically detected from your git remote
-# MANIFEST_REPO_PROVIDER=github
-# MANIFEST_REPO_OWNER=fidenceio
-# MANIFEST_REPO_NAME=manifest.cli
-
-# Git Configuration (Uses system defaults if not set)
-# MANIFEST_GIT_USER_NAME="Your Name"
-# MANIFEST_GIT_USER_EMAIL="your.email@example.com"
-# MANIFEST_GIT_COMMIT_TEMPLATE="Release v{version} - {timestamp}"
-
-# Homebrew Integration (macOS)
-# MANIFEST_BREW_OPTION=enabled          # enabled/disabled
-# MANIFEST_BREW_INTERACTIVE=no          # yes/no
-# MANIFEST_TAP_REPO="https://github.com/fidenceio/fidenceio-homebrew-tap.git"
+# Versioning Configuration
+MANIFEST_VERSION_FORMAT="XX.XX.XX"
+MANIFEST_GIT_TAG_PREFIX="v"
+MANIFEST_DEFAULT_BRANCH="main"
 
 # Documentation Configuration
-# MANIFEST_DOCS_TEMPLATE_DIR="./templates"
-# MANIFEST_DOCS_AUTO_GENERATE=true
-# MANIFEST_DOCS_HISTORICAL_LIMIT=20
+MANIFEST_DOCS_FOLDER="docs"
+MANIFEST_DOCS_ARCHIVE_FOLDER="docs/zArchive"
+MANIFEST_DOCS_AUTO_GENERATE=true
 
-# Development & Debugging
-# MANIFEST_DEBUG=false
-# MANIFEST_VERBOSE=false
-# MANIFEST_LOG_LEVEL="INFO"
-# MANIFEST_INTERACTIVE=true
-
-# Cloud Services (Future Features)
-# MANIFEST_CLOUD_URL=https://your-cloud-service.com
-# MANIFEST_CLOUD_API_KEY=your-api-key
-# MANIFEST_CLOUD_PROJECT_ID=your-project-id
-
-# =============================================================================
-# Quick Start Examples
-# =============================================================================
-# 1. Basic usage: manifest go patch
-# 2. Interactive mode: manifest go minor -i
-# 3. Test functionality: manifest test
-# 4. Get timestamp: manifest ntp
-# 5. Sync repository: manifest sync
-# 6. Clean repository files: manifest cleanup
-# =============================================================================
+# Interactive Mode
+MANIFEST_INTERACTIVE_MODE=false
 EOF
+    fi
 
-    print_success "✅ Configuration file created: $INSTALL_LOCATION/.env"
+    print_success "✅ Configuration file created: $INSTALL_LOCATION/.env.global"
     echo ""
 }
 
@@ -512,8 +487,8 @@ display_post_install_info() {
     echo "   1. Configure your Git credentials if not already set"
     echo "   2. Run '$CLI_NAME test' to verify everything works"
     echo "   3. Check the generated documentation in the docs/ folder"
-    echo "   4. Review and customize $INSTALL_LOCATION/.env"
-    echo "   5. Copy env.example to your project root as .env"
+    echo "   4. Review and customize $INSTALL_LOCATION/.env.global"
+    echo "   5. Copy env.global.example to your project root as .env.global"
     
     echo
     print_status "📚 Documentation:"
@@ -524,9 +499,9 @@ display_post_install_info() {
     
     echo
     print_status "🔧 Configuration:"
-    echo "   • Environment: $INSTALL_LOCATION/.env"
-    echo "   • Project Template: env.example (copy to .env)"
-    echo "   • Customize the .env file for your specific needs"
+    echo "   • Environment: $INSTALL_LOCATION/.env.global"
+    echo "   • Global Template: env.global.example (copy to .env.global)"
+    echo "   • Customize the .env.global file for your specific needs"
     
     echo
     print_status "🌐 Community & Support:"
