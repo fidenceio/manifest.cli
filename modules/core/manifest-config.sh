@@ -3,6 +3,12 @@
 # Manifest Configuration Module
 # Handles environment variable loading, validation, and defaults
 
+# Configuration file paths (in order of precedence)
+CONFIG_FILES=(
+    ".env.manifest.global"
+    ".env.manifest.local"
+)
+
 # Configuration validation
 validate_config() {
     # Temporarily disable validation to debug NTP issue
@@ -224,12 +230,6 @@ set_default_configuration() {
     export MANIFEST_CLI_VERBOSE="${MANIFEST_CLI_VERBOSE:-false}"
     export MANIFEST_CLI_LOG_LEVEL="${MANIFEST_CLI_LOG_LEVEL:-INFO}"
     export MANIFEST_CLI_INTERACTIVE="${MANIFEST_CLI_INTERACTIVE:-false}"
-    
-    # Configuration file paths (in order of precedence)
-    CONFIG_FILES=(
-        ".env.manifest.global"
-        ".env.manifest.local"
-    )
     
     # Validate configuration after setting defaults
     # validate_config
