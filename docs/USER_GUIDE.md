@@ -246,7 +246,7 @@ Test your CLI across different shell environments:
 # Test Zsh 5.9 compatibility
 manifest test zsh
 
-# Test Bash 3.2 compatibility  
+# Test Bash 3.2 compatibility
 manifest test bash32
 
 # Test Bash 4+ compatibility
