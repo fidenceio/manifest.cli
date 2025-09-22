@@ -39,7 +39,7 @@ export PROJECT_ROOT
 # Source shared utilities first
 source "$MODULES_DIR/core/manifest-shared-utils.sh"
 source "$MODULES_DIR/core/manifest-shared-functions.sh"
-source "$MODULES_DIR/core/manifest-function-registry.sh"
+# Function registry removed - not compatible with macOS default Bash 3.2
 
 # Now source modules after variables are set
 source "$MODULES_DIR/core/manifest-config.sh"
@@ -349,35 +349,7 @@ main() {
             # Parameters: skip_confirmations (from --force flag), non_interactive=false (interactive by default)
             uninstall_manifest "${2:-false}" "false"
             ;;
-        "registry")
-            # Function registry commands
-            case "$1" in
-                "status")
-                    show_function_registry
-                    ;;
-                "find")
-                    if [ -z "$2" ]; then
-                        log_error "Pattern required for registry find"
-                        echo "Usage: $0 registry find <pattern>"
-                        exit 1
-                    fi
-                    find_functions "$2"
-                    ;;
-                "deps")
-                    if [ -z "$2" ]; then
-                        log_error "Function name required for registry deps"
-                        echo "Usage: $0 registry deps <function_name>"
-                        exit 1
-                    fi
-                    check_function_dependencies "$2"
-                    ;;
-                *)
-                    log_error "Unknown registry command: $1"
-                    echo "Available registry commands: status, find, deps"
-                    exit 1
-                    ;;
-            esac
-            ;;
+        # Registry commands removed - not compatible with macOS default Bash 3.2
         "cloud")
             local subcommand="$1"
             case "$subcommand" in
@@ -484,10 +456,7 @@ display_help() {
   echo "    agent logs                        # Show agent operation logs"
   echo "    agent test                        # Test agent functionality"
   echo "    agent uninstall                   # Remove agent completely"
-  echo "  registry    - 📋  Function registry management"
-  echo "    registry status                   # Show function registry status"
-  echo "    registry find <pattern>           # Find functions matching pattern"
-  echo "    registry deps <function>          # Check function dependencies"
+  # Registry commands removed - not compatible with macOS default Bash 3.2
   echo "  help        - Show this help"
     echo ""
     echo "This CLI provides comprehensive Git operations and version management."

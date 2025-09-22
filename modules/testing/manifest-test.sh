@@ -237,12 +237,16 @@ test_module_loading() {
 test_integration_workflows() {
     echo "🧪 Testing integration workflows..."
     
-    # Test basic workflow commands
+    # Test basic workflow commands by trying to call them with --help
     local workflow_commands=("sync" "version" "commit" "push" "cleanup")
     
     for cmd in "${workflow_commands[@]}"; do
-        if command -v manifest >/dev/null 2>&1; then
-            if manifest help | grep -q "$cmd"; then
+        # Test if the command exists by calling it with --help (should not fail)
+        if manifest "$cmd" --help >/dev/null 2>&1 || manifest "$cmd" -h >/dev/null 2>&1; then
+            echo "   ✅ Workflow command available: $cmd"
+        else
+            # Fallback: check if it's in the help text
+            if echo "$(manifest --help 2>/dev/null)" | grep -q "$cmd"; then
                 echo "   ✅ Workflow command available: $cmd"
             else
                 echo "   ❌ Workflow command missing: $cmd"
@@ -251,8 +255,11 @@ test_integration_workflows() {
     done
     
     # Test go command
-    if command -v manifest >/dev/null 2>&1; then
-        if manifest help | grep -q "go.*workflow"; then
+    if manifest go --help >/dev/null 2>&1 || manifest go -h >/dev/null 2>&1; then
+        echo "   ✅ Go workflow command available"
+    else
+        # Fallback: check help text
+        if echo "$(manifest --help 2>/dev/null)" | grep -q "go.*workflow\|Complete automated Manifest workflow"; then
             echo "   ✅ Go workflow command available"
         else
             echo "   ❌ Go workflow command missing"
