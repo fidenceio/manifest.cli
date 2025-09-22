@@ -36,11 +36,20 @@ parse_ntp_output() {
     case "$os" in
         "macOS")
             # macOS sntp output format: +0.047157 +/- 0.021125 time.apple.com 17.253.6.45
+            if [ "${MANIFEST_DEBUG:-0}" = "1" ]; then
+                echo "   🔍 Debug: macOS parsing - raw output: '$sntp_output'" >&2
+            fi
             local ntp_line=$(echo "$sntp_output" | grep -E "^[+-][0-9]" | tail -1)
+            if [ "${MANIFEST_DEBUG:-0}" = "1" ]; then
+                echo "   🔍 Debug: macOS parsing - ntp_line: '$ntp_line'" >&2
+            fi
             if [ -n "$ntp_line" ]; then
                 local offset=$(echo "$ntp_line" | awk '{print $1}')
                 local uncertainty=$(echo "$ntp_line" | awk '{print $3}')
                 local server_ip=$(echo "$ntp_line" | awk '{print $5}')
+                if [ "${MANIFEST_DEBUG:-0}" = "1" ]; then
+                    echo "   🔍 Debug: macOS parsing - offset='$offset', uncertainty='$uncertainty', server_ip='$server_ip'" >&2
+                fi
                 echo "$offset|$uncertainty|$server_ip"
                 return 0
             fi
@@ -197,23 +206,44 @@ calculate_ntp_timestamp() {
     
     # Debug: Show what we're calculating
     if [ "${MANIFEST_DEBUG:-0}" = "1" ]; then
-        echo "   🔍 Debug: Calculating timestamp - system_time=$system_time, offset=$offset, offset_sign=$offset_sign, offset_abs=$offset_abs" >&2
+        echo "   🔍 Debug: Calculating timestamp - system_time=$system_time, offset='$offset', offset_sign='$offset_sign', offset_abs='$offset_abs'" >&2
+    fi
+    
+    # Validate inputs
+    if [ -z "$offset" ] || [ -z "$offset_abs" ]; then
+        if [ "${MANIFEST_DEBUG:-0}" = "1" ]; then
+            echo "   ⚠️  Debug: Invalid offset data - offset='$offset', offset_abs='$offset_abs', using system time" >&2
+        fi
+        echo "$system_time|$offset|$uncertainty"
+        return 0
     fi
     
     # Check if bc is available
     if command -v bc >/dev/null 2>&1; then
-        if [ "$offset_sign" = "-" ]; then
-            # Negative offset means system is behind NTP time, so add the offset
-            ntp_timestamp=$(echo "$system_time + $offset_abs" | bc -l 2>/dev/null)
+        # Validate offset_abs is a valid number
+        if [[ "$offset_abs" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+            if [ "$offset_sign" = "-" ]; then
+                # Negative offset means system is behind NTP time, so add the offset
+                ntp_timestamp=$(echo "$system_time + $offset_abs" | bc -l 2>/dev/null)
+            else
+                # Positive offset means system is ahead of NTP time, so subtract the offset
+                ntp_timestamp=$(echo "$system_time - $offset_abs" | bc -l 2>/dev/null)
+            fi
+            
+            # Handle bc errors by falling back to system time
+            if [ $? -ne 0 ] || [ -z "$ntp_timestamp" ]; then
+                if [ "${MANIFEST_DEBUG:-0}" = "1" ]; then
+                    echo "   ⚠️  Debug: bc calculation failed (exit code: $?), using system time" >&2
+                fi
+                ntp_timestamp="$system_time"
+            else
+                if [ "${MANIFEST_DEBUG:-0}" = "1" ]; then
+                    echo "   🔍 Debug: bc calculation successful: $ntp_timestamp" >&2
+                fi
+            fi
         else
-            # Positive offset means system is ahead of NTP time, so subtract the offset
-            ntp_timestamp=$(echo "$system_time - $offset_abs" | bc -l 2>/dev/null)
-        fi
-        
-        # Handle bc errors by falling back to system time
-        if [ $? -ne 0 ] || [ -z "$ntp_timestamp" ]; then
             if [ "${MANIFEST_DEBUG:-0}" = "1" ]; then
-                echo "   ⚠️  Debug: bc calculation failed, using system time" >&2
+                echo "   ⚠️  Debug: Invalid offset_abs format: '$offset_abs', using system time" >&2
             fi
             ntp_timestamp="$system_time"
         fi
@@ -242,15 +272,30 @@ get_ntp_timestamp() {
     local server_ip=""
     local method=""
     
-    # Convert comma-separated servers to array
-    local ntp_servers=($(echo "$MANIFEST_NTP_SERVERS" | tr ',' ' '))
+    # Build array of NTP servers from individual variables
+    local ntp_servers=()
+    for i in {1..4}; do
+        local server_var="MANIFEST_NTP_SERVER$i"
+        local server_value="${!server_var:-}"
+        if [ -n "$server_value" ]; then
+            ntp_servers+=("$server_value")
+        fi
+    done
     
     # Try external NTP servers first
     for ntp_server in "${ntp_servers[@]}"; do
         echo "   🔍 Querying $ntp_server..."
         
+        if [ "${MANIFEST_DEBUG:-0}" = "1" ]; then
+            echo "   🔍 Debug: Calling query_ntp_server with server='$ntp_server', timeout='$MANIFEST_NTP_TIMEOUT'" >&2
+        fi
+        
         local result=$(query_ntp_server "$ntp_server" "$MANIFEST_NTP_TIMEOUT")
         local query_exit_code=$?
+        
+        if [ "${MANIFEST_DEBUG:-0}" = "1" ]; then
+            echo "   🔍 Debug: query_ntp_server returned exit_code=$query_exit_code, result='$result'" >&2
+        fi
         
         if [ $query_exit_code -eq 0 ] && [ -n "$result" ]; then
             # Parse result: offset|uncertainty|server_ip

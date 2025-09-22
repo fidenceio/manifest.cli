@@ -1,6 +1,6 @@
 # Release v19.7.0
 
-**Release Date:** 2025-09-22 01:39:10 UTC
+**Release Date:** 2025-09-22 01:31:02 UTC
 **Release Type:** patch
 
 ## 🎯 What's New
@@ -40,9 +40,9 @@ manifest docs
 
 ## 📚 Documentation
 
-- [User Guide](docs/USER_GUIDE.md)
-- [Command Reference](docs/COMMAND_REFERENCE.md)
-- [Examples](docs/EXAMPLES.md)
+- [User Guide]("docs"                 # Main documentation folder/USER_GUIDE.md)
+- [Command Reference]("docs"                 # Main documentation folder/COMMAND_REFERENCE.md)
+- [Examples]("docs"                 # Main documentation folder/EXAMPLES.md)
 
 ## 🔗 Links
 

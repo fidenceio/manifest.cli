@@ -202,6 +202,9 @@ main() {
     PROJECT_ROOT="$(pwd)"
     export PROJECT_ROOT
     
+    # Load configuration now that all variables are properly set
+    load_configuration "$PROJECT_ROOT"
+    
     # Check for updates in background (with cooldown)
     check_auto_update
     
