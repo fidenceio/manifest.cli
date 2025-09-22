@@ -314,7 +314,7 @@ copy_cli_files() {
     fi
     
     # Copy essential project files
-    local essential_files=("$MANIFEST_VERSION_FILE" "$MANIFEST_GITIGNORE_FILE")
+    local essential_files=("$MANIFEST_CLI_VERSION_FILE" "$MANIFEST_CLI_GITIGNORE_FILE")
     for file in "${essential_files[@]}"; do
         if [ -f "$file" ]; then
             cp "$file" "$INSTALL_LOCATION/"

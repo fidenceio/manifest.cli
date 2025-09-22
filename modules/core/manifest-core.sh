@@ -13,7 +13,7 @@ MODULES_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Load configuration at startup
 # Get the binary location (where the CLI binary is installed)
-BINARY_LOCATION="${MANIFEST_BIN_DIR:-$HOME/.local/bin}"
+BINARY_LOCATION="${MANIFEST_CLI_BIN_DIR:-$HOME/.local/bin}"
 
 # Determine the project root (where we're actually working)
 # Use the current working directory from the environment, not the script's directory
@@ -21,7 +21,7 @@ if [ -n "$PWD" ] && git -C "$PWD" rev-parse --git-dir > /dev/null 2>&1; then
     # We're in a git repository, use current working directory
     PROJECT_ROOT="$PWD"
     # When in a git repo, INSTALL_LOCATION is where the CLI files are installed
-    INSTALL_LOCATION="${MANIFEST_INSTALL_DIR:-/usr/local/share/manifest-cli}"
+    INSTALL_LOCATION="${MANIFEST_CLI_INSTALL_DIR:-/usr/local/share/manifest-cli}"
 else
     # Not in a git repository, use installation location for both
     INSTALL_LOCATION="${MODULES_DIR%/*/*/*}"
@@ -61,7 +61,7 @@ source "$MODULES_DIR/cloud/manifest-mcp-connector.sh"
 # Function to get the CLI installation directory dynamically
 get_cli_dir() {
     # If we're in a development environment, use the current project root
-    if [ -f "$PROJECT_ROOT/$MANIFEST_VERSION_FILE" ] && [ -f "$PROJECT_ROOT/manifest-cli-wrapper.sh" ]; then
+    if [ -f "$PROJECT_ROOT/$MANIFEST_CLI_VERSION_FILE" ] && [ -f "$PROJECT_ROOT/manifest-cli-wrapper.sh" ]; then
         echo "$PROJECT_ROOT"
         return 0
     fi
@@ -76,7 +76,7 @@ get_cli_dir() {
     )
     
     for dir in "${possible_dirs[@]}"; do
-        if [ -d "$dir" ] && [ -f "$dir/$MANIFEST_VERSION_FILE" ] && [ -f "$dir/src/cli/manifest-cli-wrapper.sh" ]; then
+        if [ -d "$dir" ] && [ -f "$dir/$MANIFEST_CLI_VERSION_FILE" ] && [ -f "$dir/src/cli/manifest-cli-wrapper.sh" ]; then
             echo "$dir"
             return 0
         fi
@@ -273,7 +273,7 @@ main() {
             local timestamp=$(format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
             
             bump_version "$increment_type"
-            local new_version=$(cat "$MANIFEST_VERSION_FILE" 2>/dev/null)
+            local new_version=$(cat "$MANIFEST_CLI_VERSION_FILE" 2>/dev/null)
             commit_changes "Bump version to $new_version" "$timestamp"
             create_tag "$new_version"
             push_changes "$new_version"
@@ -306,8 +306,8 @@ main() {
                 *)
                     # Generate all documentation for current version
                     local current_version=""
-                    if [ -f "$MANIFEST_VERSION_FILE" ]; then
-                        current_version=$(cat "$MANIFEST_VERSION_FILE")
+                    if [ -f "$MANIFEST_CLI_VERSION_FILE" ]; then
+                        current_version=$(cat "$MANIFEST_CLI_VERSION_FILE")
                     fi
                     
                     if [ -z "$current_version" ]; then
@@ -325,8 +325,8 @@ main() {
         "cleanup")
             echo "📁 Repository cleanup operations..."
             local current_version=""
-            if [ -f "$MANIFEST_VERSION_FILE" ]; then
-                current_version=$(cat "$MANIFEST_VERSION_FILE")
+            if [ -f "$MANIFEST_CLI_VERSION_FILE" ]; then
+                current_version=$(cat "$MANIFEST_CLI_VERSION_FILE")
             fi
             # Get NTP timestamp for accurate cleanup
             get_ntp_timestamp >/dev/null

@@ -180,27 +180,27 @@ set_default_configuration() {
     export MANIFEST_DOCS_FILENAME_PATTERN="${MANIFEST_DOCS_FILENAME_PATTERN:-RELEASE_vVERSION.md}"
     
     # File and directory names
-    export MANIFEST_README_FILE="${MANIFEST_README_FILE:-README.md}"
-    export MANIFEST_VERSION_FILE="${MANIFEST_VERSION_FILE:-VERSION}"
-    export MANIFEST_GITIGNORE_FILE="${MANIFEST_GITIGNORE_FILE:-.gitignore}"
-    export MANIFEST_DOCUMENTATION_ARCHIVE_DIR="${MANIFEST_DOCUMENTATION_ARCHIVE_DIR:-zArchive}"
-    export MANIFEST_GIT_DIR="${MANIFEST_GIT_DIR:-.git}"
-    export MANIFEST_MODULES_DIR="${MANIFEST_MODULES_DIR:-modules}"
+    export MANIFEST_CLI_README_FILE="${MANIFEST_CLI_README_FILE:-README.md}"
+    export MANIFEST_CLI_VERSION_FILE="${MANIFEST_CLI_VERSION_FILE:-VERSION}"
+    export MANIFEST_CLI_GITIGNORE_FILE="${MANIFEST_CLI_GITIGNORE_FILE:-.gitignore}"
+    export MANIFEST_CLI_DOCUMENTATION_ARCHIVE_DIR="${MANIFEST_CLI_DOCUMENTATION_ARCHIVE_DIR:-zArchive}"
+    export MANIFEST_CLI_GIT_DIR="${MANIFEST_CLI_GIT_DIR:-.git}"
+    export MANIFEST_CLI_MODULES_DIR="${MANIFEST_CLI_MODULES_DIR:-modules}"
     
     # File extensions
-    export MANIFEST_MARKDOWN_EXT="${MANIFEST_MARKDOWN_EXT:-*.md}"
+    export MANIFEST_CLI_MARKDOWN_EXT="${MANIFEST_CLI_MARKDOWN_EXT:-*.md}"
     
     # Installation paths
-    export MANIFEST_INSTALL_DIR="${MANIFEST_INSTALL_DIR:-/usr/local/share/manifest-cli}"
-    export MANIFEST_BIN_DIR="${MANIFEST_BIN_DIR:-~/.local/bin}"
+    export MANIFEST_CLI_INSTALL_DIR="${MANIFEST_CLI_INSTALL_DIR:-/usr/local/share/manifest-cli}"
+    export MANIFEST_CLI_BIN_DIR="${MANIFEST_CLI_BIN_DIR:-~/.local/bin}"
     
     # Temporary file paths
-    export MANIFEST_TEMP_DIR="${MANIFEST_TEMP_DIR:-~/.manifest-cli}"
-    export MANIFEST_TEMP_LIST="${MANIFEST_TEMP_LIST:-temp-files.list}"
+    export MANIFEST_CLI_TEMP_DIR="${MANIFEST_CLI_TEMP_DIR:-~/.manifest-cli}"
+    export MANIFEST_CLI_TEMP_LIST="${MANIFEST_CLI_TEMP_LIST:-temp-files.list}"
     
     # Configuration file names
-    export MANIFEST_CONFIG_GLOBAL="${MANIFEST_CONFIG_GLOBAL:-.env.manifest.global}"
-    export MANIFEST_CONFIG_LOCAL="${MANIFEST_CONFIG_LOCAL:-.env.manifest.local}"
+    export MANIFEST_CLI_CONFIG_GLOBAL="${MANIFEST_CLI_CONFIG_GLOBAL:-.env.manifest.global}"
+    export MANIFEST_CLI_CONFIG_LOCAL="${MANIFEST_CLI_CONFIG_LOCAL:-.env.manifest.local}"
     
     # Project Configuration
     export MANIFEST_PROJECT_NAME="${MANIFEST_PROJECT_NAME:-Manifest CLI}"
@@ -223,8 +223,8 @@ set_default_configuration() {
     
     # Configuration file paths (in order of precedence)
     CONFIG_FILES=(
-        "$MANIFEST_CONFIG_GLOBAL"
-        "$MANIFEST_CONFIG_LOCAL"
+        ".env.manifest.global"
+        ".env.manifest.local"
     )
     
     # Validate configuration after setting defaults

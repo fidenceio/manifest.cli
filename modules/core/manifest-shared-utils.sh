@@ -144,8 +144,8 @@ validate_repository_root() {
     fi
     
     # Additional validation: ensure we have a .git directory
-    if [[ ! -d "$MANIFEST_GIT_DIR" ]]; then
-        log_error "No $MANIFEST_GIT_DIR directory found in current location"
+    if [[ ! -d "$MANIFEST_CLI_GIT_DIR" ]]; then
+        log_error "No $MANIFEST_CLI_GIT_DIR directory found in current location"
         return 1
     fi
     
@@ -187,8 +187,8 @@ ensure_repository_root() {
     fi
     
     # Additional validation: ensure we have a .git directory
-    if [[ ! -d "$MANIFEST_GIT_DIR" ]]; then
-        log_error "No $MANIFEST_GIT_DIR directory found in current location"
+    if [[ ! -d "$MANIFEST_CLI_GIT_DIR" ]]; then
+        log_error "No $MANIFEST_CLI_GIT_DIR directory found in current location"
         return 1
     fi
     
