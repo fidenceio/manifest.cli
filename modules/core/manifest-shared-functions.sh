@@ -99,13 +99,8 @@ get_latest_version() {
         local latest_version=""
         local timeout_seconds="${MANIFEST_UPDATE_TIMEOUT:-10}"
         
-        if [ -n "$timeout_cmd" ]; then
-            # Use OS-specific timeout command
-            latest_version=$($timeout_cmd "$timeout_seconds" curl -s "$repo_url" 2>/dev/null | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
-        else
-            # Use curl's built-in timeout as fallback
-            latest_version=$(curl -s --max-time "$timeout_seconds" --connect-timeout 5 "$repo_url" 2>/dev/null | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
-        fi
+        # Use secure curl request
+        latest_version=$(secure_curl_request "$repo_url" "$timeout_seconds" 2>/dev/null | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
         
         if [ -n "$latest_version" ]; then
             echo "$latest_version"
@@ -120,6 +115,36 @@ get_latest_version() {
 # =============================================================================
 # NETWORK AND CONNECTIVITY FUNCTIONS
 # =============================================================================
+
+# Secure curl request with security headers and validation
+secure_curl_request() {
+    local url="$1"
+    local timeout="${2:-10}"
+    local additional_args=("${@:3}")
+    
+    # Validate URL to prevent injection
+    if ! [[ "$url" =~ ^https?:// ]]; then
+        echo "Error: Invalid URL format" >&2
+        return 1
+    fi
+    
+    # Add security headers and options
+    local security_args=(
+        "--max-time" "$timeout"
+        "--connect-timeout" "5"
+        "--retry" "0"
+        "--retry-delay" "0"
+        "--fail"
+        "--silent"
+        "--show-error"
+        "--location"
+        "--compressed"
+        "--user-agent" "Manifest-CLI/$(cat "$MANIFEST_CLI_VERSION_FILE" 2>/dev/null || echo "unknown")"
+    )
+    
+    # Execute curl with security options
+    curl "${security_args[@]}" "${additional_args[@]}" "$url"
+}
 
 # Check network connectivity with OS-dependent timeout
 check_network_connectivity() {
@@ -153,19 +178,11 @@ check_network_connectivity() {
         fi
     fi
     
-    # Try alternative connectivity check with curl
+    # Try alternative connectivity check with secure curl
     local curl_timeout=5
-    if [ -n "$timeout_cmd" ]; then
-        if $timeout_cmd "$curl_timeout" curl -s --max-time "$curl_timeout" --connect-timeout 3 https://www.google.com >/dev/null 2>&1; then
-            log_debug "Network connectivity check passed (curl with timeout)"
-            return 0
-        fi
-    else
-        # Fallback: use curl with built-in timeout
-        if curl -s --max-time "$curl_timeout" --connect-timeout 3 https://www.google.com >/dev/null 2>&1; then
-            log_debug "Network connectivity check passed (curl fallback)"
-            return 0
-        fi
+    if secure_curl_request "https://www.google.com" "$curl_timeout" >/dev/null 2>&1; then
+        log_debug "Network connectivity check passed (secure curl)"
+        return 0
     fi
     
     log_debug "Network connectivity check failed"
@@ -275,10 +292,39 @@ is_git_repository() {
 # FILE OPERATIONS FUNCTIONS
 # =============================================================================
 
-# Safe file read with error handling
+# Validate file path to prevent directory traversal attacks
+validate_file_path() {
+    local file_path="$1"
+    
+    # Check for path traversal attempts
+    if [[ "$file_path" =~ \.\./ ]] || [[ "$file_path" =~ \.\.\\ ]]; then
+        return 1
+    fi
+    
+    # Check for absolute paths outside project (if PROJECT_ROOT is set)
+    if [[ "$file_path" =~ ^/ ]] && [[ -n "${PROJECT_ROOT:-}" ]] && [[ ! "$file_path" =~ ^$PROJECT_ROOT ]]; then
+        return 1
+    fi
+    
+    # Check for null bytes or other dangerous characters
+    if [[ "$file_path" =~ $'\0' ]]; then
+        return 1
+    fi
+    
+    return 0
+}
+
+# Safe file read with error handling and path validation
 safe_read_file() {
     local file="$1"
     local default="${2:-}"
+    
+    # Validate file path to prevent traversal attacks
+    if ! validate_file_path "$file"; then
+        echo "Error: Invalid file path" >&2
+        echo "$default"
+        return 1
+    fi
     
     if [ -f "$file" ] && [ -r "$file" ]; then
         cat "$file" 2>/dev/null || echo "$default"
@@ -287,11 +333,17 @@ safe_read_file() {
     fi
 }
 
-# Safe file write with backup
+# Safe file write with backup and path validation
 safe_write_file() {
     local file="$1"
     local content="$2"
     local backup="${3:-true}"
+    
+    # Validate file path to prevent traversal attacks
+    if ! validate_file_path "$file"; then
+        echo "Error: Invalid file path" >&2
+        return 1
+    fi
     
     # Create backup if requested
     if [ "$backup" = "true" ] && [ -f "$file" ]; then
@@ -706,7 +758,7 @@ EOF
 
 # Export all shared functions
 export -f get_current_version get_next_version get_latest_version
-export -f check_network_connectivity check_required_tools
+export -f secure_curl_request check_network_connectivity check_required_tools
 export -f generate_agent_id generate_session_id log_operation
 export -f get_git_info is_git_repository
 export -f safe_read_file safe_write_file

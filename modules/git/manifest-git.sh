@@ -7,6 +7,35 @@
 
 # Git Configuration
 
+# Enhanced input validation functions
+validate_version_selection() {
+    local selection="$1"
+    local max_options="$2"
+    
+    # Check if it's a valid number
+    if ! [[ "$selection" =~ ^[0-9]+$ ]]; then
+        return 1
+    fi
+    
+    # Check if it's within valid range
+    if [ "$selection" -lt 1 ] || [ "$selection" -gt "$max_options" ]; then
+        return 1
+    fi
+    
+    return 0
+}
+
+validate_increment_type() {
+    local increment_type="$1"
+    
+    # Convert to lowercase and validate
+    increment_type="$(echo "$increment_type" | tr '[:upper:]' '[:lower:]')"
+    case "$increment_type" in
+        patch|minor|major|revision) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 # Shared retry function for git operations
 git_retry() {
     local description="$1"
@@ -15,14 +44,30 @@ git_retry() {
     local max_retries="${MANIFEST_CLI_GIT_RETRIES:-3}"  # 3 retries default
     local success=false
     
+    # Validate command input to prevent injection
+    if [[ -z "$command" ]]; then
+        echo "   ❌ Error: No command provided"
+        return 1
+    fi
+    
+    # Parse command into array to prevent injection
+    local cmd_array=()
+    IFS=' ' read -ra cmd_array <<< "$command"
+    
+    # Validate that it's a git command
+    if [[ "${cmd_array[0]}" != "git" ]]; then
+        echo "   ❌ Error: Only git commands are allowed"
+        return 1
+    fi
+    
     # Configure git to use SSH connection multiplexing to reduce connection overhead
     local git_ssh_command="ssh -o ControlMaster=auto -o ControlPersist=60s -o ControlPath=~/.ssh/control-%r@%h:%p"
     
     for attempt in $(seq 1 $max_retries); do
         echo "   $description (attempt $attempt/$max_retries)..."
         
-        # Use GIT_SSH_COMMAND to enable connection multiplexing
-        if timeout "$timeout" env GIT_SSH_COMMAND="$git_ssh_command" $command 2>/dev/null; then
+        # Use GIT_SSH_COMMAND to enable connection multiplexing with safe array execution
+        if timeout "$timeout" env GIT_SSH_COMMAND="$git_ssh_command" "${cmd_array[@]}" 2>/dev/null; then
             echo "   ✅ $description successful"
             success=true
             break
@@ -58,12 +103,14 @@ bump_version() {
         return 1
     fi
     
-    # Sanitize and validate increment type
+    # Enhanced input validation
+    if ! validate_increment_type "$increment_type"; then
+        show_validation_error "Invalid increment type: $increment_type (must be patch, minor, major, or revision)"
+        return 1
+    fi
+    
+    # Sanitize increment type
     increment_type="$(echo "$increment_type" | tr '[:upper:]' '[:lower:]')"
-    case "$increment_type" in
-        patch|minor|major|revision) ;;
-        *) show_validation_error "Invalid increment type: $increment_type (must be patch, minor, major, or revision)" ;;
-    esac
     local current_version=""
     local new_version=""
     
@@ -290,8 +337,9 @@ revert_version() {
         return 0
     fi
     
-    if ! [[ "$selection" =~ [0-9]+$ ]] || [ "$selection" -lt 1 ] || [ "$selection" -gt ${#available_versions[@]} ]; then
-        echo "❌ Invalid selection. Please choose a number between 1 and ${#available_versions[@]}"
+    # Enhanced input validation
+    if ! validate_version_selection "$selection" "${#available_versions[@]}"; then
+        echo "❌ Invalid selection. Please enter a number between 1 and ${#available_versions[@]} or 'q' to quit."
         return 1
     fi
     

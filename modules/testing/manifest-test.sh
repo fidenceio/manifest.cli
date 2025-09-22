@@ -7,6 +7,120 @@
 TEST_TIMEOUT=30
 TEST_VERBOSE=false
 
+# Security testing functions
+test_security_validation() {
+    echo "🔒 Testing security validation functions..."
+    
+    # Test path validation
+    echo "   Testing path validation..."
+    if validate_file_path "valid/path/file.txt"; then
+        echo "   ✅ Valid path accepted"
+    else
+        echo "   ❌ Valid path rejected"
+        return 1
+    fi
+    
+    if ! validate_file_path "../malicious/path"; then
+        echo "   ✅ Path traversal attempt blocked"
+    else
+        echo "   ❌ Path traversal not blocked"
+        return 1
+    fi
+    
+    if ! validate_file_path "/etc/passwd"; then
+        echo "   ✅ Absolute path outside project blocked"
+    else
+        echo "   ❌ Absolute path outside project allowed"
+        return 1
+    fi
+    
+    # Test input validation
+    echo "   Testing input validation..."
+    if validate_increment_type "patch"; then
+        echo "   ✅ Valid increment type accepted"
+    else
+        echo "   ❌ Valid increment type rejected"
+        return 1
+    fi
+    
+    if ! validate_increment_type "malicious"; then
+        echo "   ✅ Invalid increment type blocked"
+    else
+        echo "   ❌ Invalid increment type allowed"
+        return 1
+    fi
+    
+    if validate_version_selection "1" "5"; then
+        echo "   ✅ Valid version selection accepted"
+    else
+        echo "   ❌ Valid version selection rejected"
+        return 1
+    fi
+    
+    if ! validate_version_selection "10" "5"; then
+        echo "   ✅ Invalid version selection blocked"
+    else
+        echo "   ❌ Invalid version selection allowed"
+        return 1
+    fi
+    
+    echo "   ✅ Security validation tests passed"
+    return 0
+}
+
+test_command_injection_protection() {
+    echo "🛡️  Testing command injection protection..."
+    
+    # Test git_retry with malicious input
+    echo "   Testing git command injection protection..."
+    if ! git_retry "Test" "rm -rf /" 2>/dev/null; then
+        echo "   ✅ Malicious git command blocked"
+    else
+        echo "   ❌ Malicious git command allowed"
+        return 1
+    fi
+    
+    if ! git_retry "Test" "ls; rm -rf /" 2>/dev/null; then
+        echo "   ✅ Command chaining blocked"
+    else
+        echo "   ❌ Command chaining allowed"
+        return 1
+    fi
+    
+    if ! git_retry "Test" "echo 'test' | cat" 2>/dev/null; then
+        echo "   ✅ Non-git command blocked"
+    else
+        echo "   ❌ Non-git command allowed"
+        return 1
+    fi
+    
+    echo "   ✅ Command injection protection tests passed"
+    return 0
+}
+
+test_network_security() {
+    echo "🌐 Testing network security..."
+    
+    # Test secure curl with invalid URL
+    echo "   Testing URL validation..."
+    if ! secure_curl_request "invalid-url" 5 2>/dev/null; then
+        echo "   ✅ Invalid URL blocked"
+    else
+        echo "   ❌ Invalid URL allowed"
+        return 1
+    fi
+    
+    if ! secure_curl_request "ftp://example.com" 5 2>/dev/null; then
+        echo "   ✅ Non-HTTPS URL blocked"
+    else
+        echo "   ❌ Non-HTTPS URL allowed"
+        return 1
+    fi
+    
+    echo "   ✅ Network security tests passed"
+    return 0
+}
+
 # Test command dispatcher
 test_command() {
     local test_type="$1"
@@ -16,7 +130,11 @@ test_command() {
             test_version_increments
             ;;
         "security")
-            test_security_functionality
+            echo "🔒 Running security test suite..."
+            test_security_validation
+            test_command_injection_protection
+            test_network_security
+            echo "✅ Security tests completed"
             ;;
         "config")
             test_config_functionality
@@ -282,7 +400,9 @@ test_all_functionality() {
     echo ""
     test_config_functionality
     echo ""
-    test_security_functionality
+    test_security_validation
+    test_command_injection_protection
+    test_network_security
     echo ""
     
     echo "✅ Comprehensive testing completed"

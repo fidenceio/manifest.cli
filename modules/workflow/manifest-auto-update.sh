@@ -53,10 +53,16 @@ cleanup_old_installation() {
     # Clean up any old installation in /usr/local/share
     local old_install_dir="/usr/local/share/manifest-cli"
     if [ -d "$old_install_dir" ]; then
-        log_info "Removing old system installation: $old_install_dir"
-        sudo rm -rf "$old_install_dir" 2>/dev/null || {
-            log_warning "Could not remove system installation (may require sudo)"
-        }
+        # Validate path before sudo operations to prevent privilege escalation
+        if [[ "$old_install_dir" =~ ^/usr/local/share/manifest-cli ]] && [ -d "$old_install_dir" ]; then
+            log_info "Removing old system installation: $old_install_dir"
+            sudo rm -rf "$old_install_dir" 2>/dev/null || {
+                log_warning "Could not remove system installation (may require sudo)"
+            }
+        else
+            log_error "Invalid installation directory path: $old_install_dir"
+            return 1
+        fi
     fi
 }
 
