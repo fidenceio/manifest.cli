@@ -60,16 +60,16 @@ remove_installation_directory() {
     local install_dir="$1"
     
     if [ -d "$install_dir" ]; then
-        log_info "Removing installation directory: $install_dir"
+        echo "Removing installation directory: $install_dir"
         if rm -rf "$install_dir"; then
-            log_success "✅ Installation directory removed: $install_dir"
+            echo "✅ Installation directory removed: $install_dir"
             return 0
         else
-            log_error "❌ Failed to remove installation directory: $install_dir"
+            echo "❌ Failed to remove installation directory: $install_dir"
             return 1
         fi
     else
-        log_info "No installation directory found at: $install_dir"
+        echo "No installation directory found at: $install_dir"
         return 0
     fi
 }
@@ -79,16 +79,16 @@ remove_cli_binary() {
     local binary_path="$1"
     
     if [ -f "$binary_path" ]; then
-        log_info "Removing CLI binary: $binary_path"
+        echo "Removing CLI binary: $binary_path"
         if rm -f "$binary_path"; then
-            log_success "✅ CLI binary removed: $binary_path"
+            echo "✅ CLI binary removed: $binary_path"
             return 0
         else
-            log_error "❌ Failed to remove CLI binary: $binary_path"
+            echo "❌ Failed to remove CLI binary: $binary_path"
             return 1
         fi
     else
-        log_info "No CLI binary found at: $binary_path"
+        echo "No CLI binary found at: $binary_path"
         return 0
     fi
 }
@@ -99,23 +99,56 @@ cleanup_config_files() {
         "$HOME/.manifestrc"
         "$HOME/.manifest-cli.conf"
         "$HOME/.config/manifest-cli"
+        "$HOME/.env.manifest.global"
+        "$HOME/.env.manifest.local"
     )
     
     local cleaned=0
     for config_file in "${config_files[@]}"; do
         if [ -f "$config_file" ] || [ -d "$config_file" ]; then
-            log_info "Removing config file: $config_file"
+            echo "Removing config file: $config_file"
             if rm -rf "$config_file"; then
-                log_success "✅ Config file removed: $config_file"
+                echo "✅ Config file removed: $config_file"
                 ((cleaned++))
             else
-                log_error "❌ Failed to remove config file: $config_file"
+                echo "❌ Failed to remove config file: $config_file"
             fi
         fi
     done
     
     if [ $cleaned -eq 0 ]; then
-        log_info "No configuration files found to clean up"
+        echo "No configuration files found to clean up"
+    fi
+}
+
+# Function to clean up environment variables
+cleanup_environment_variables() {
+    echo "🧹 Cleaning up environment variables..."
+    
+    # Source the environment management module if available
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local modules_dir="$(dirname "$script_dir")"
+    local env_management_module="$modules_dir/core/manifest-env-management.sh"
+    
+    if [ -f "$env_management_module" ]; then
+        # Source shared utilities first
+        if [ -f "$modules_dir/core/manifest-shared-utils.sh" ]; then
+            source "$modules_dir/core/manifest-shared-utils.sh"
+        fi
+        
+        # Source the environment management module
+        source "$env_management_module"
+        
+        # Clean up all Manifest-related environment variables
+        cleanup_all_manifest_env_vars
+        
+        # Remove Manifest variables from shell profile files
+        remove_manifest_from_shell_profiles
+        
+        echo "✅ Environment variable cleanup completed"
+    else
+        echo "⚠️  Environment management module not found, skipping environment cleanup"
+        echo "You may need to manually remove MANIFEST_* and MANIFEST_CLI_* variables from your shell profile"
     fi
 }
 
@@ -124,7 +157,7 @@ uninstall_manifest() {
     local skip_confirmations="${1:-false}"  # true = skip confirmation prompts
     local non_interactive="${2:-false}"    # true = run without user interaction
     
-    log_info "Starting Manifest CLI uninstall process..."
+    echo "Starting Manifest CLI uninstall process..."
     
     # Find all installation locations
     local install_locations=($(find_installation_locations))
@@ -132,12 +165,12 @@ uninstall_manifest() {
     
     # Check if anything is installed
     if [ ${#install_locations[@]} -eq 0 ] && [ ${#cli_binaries[@]} -eq 0 ]; then
-        log_info "No Manifest CLI installation found"
+        echo "No Manifest CLI installation found"
         return 0
     fi
     
     # Show what will be removed
-    log_info "Found the following Manifest CLI installations:"
+    echo "Found the following Manifest CLI installations:"
     for location in "${install_locations[@]}"; do
         echo "  📁 $location"
     done
@@ -151,7 +184,7 @@ uninstall_manifest() {
         read -p "Are you sure you want to uninstall Manifest CLI? (y/N): " -n 1 -r
         echo ""
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            log_info "Uninstall cancelled"
+            echo "Uninstall cancelled"
             return 0
         fi
     fi
@@ -175,17 +208,18 @@ uninstall_manifest() {
     # Clean up configuration files
     cleanup_config_files
     
+    # Clean up environment variables
+    cleanup_environment_variables
+    
     # Summary
     if [ $errors -eq 0 ]; then
-        log_success "✅ Manifest CLI uninstalled successfully"
+        echo "✅ Manifest CLI uninstalled successfully"
         echo ""
-        log_info "💡 You may want to remove the following from your shell profile:"
-        echo "   - Any PATH modifications for Manifest CLI"
-        echo "   - Any alias definitions for 'manifest'"
-        echo "   - Any environment variables related to Manifest CLI"
+        echo "💡 Environment variables and shell profile entries have been cleaned up"
+        echo "   You may need to restart your terminal or run 'source ~/.zshrc' (or equivalent)"
         return 0
     else
-        log_error "❌ Uninstall completed with $errors errors"
+        echo "❌ Uninstall completed with $errors errors"
         return 1
     fi
 }

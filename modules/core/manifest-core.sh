@@ -346,8 +346,13 @@ main() {
             update_cli "$@"
             ;;
         "uninstall")
-            # Parameters: skip_confirmations (from --force flag), non_interactive=false (interactive by default)
-            uninstall_manifest "${2:-false}" "false"
+            # Check for --force flag
+            local force_flag="false"
+            if [ "$2" = "--force" ]; then
+                force_flag="true"
+            fi
+            # Parameters: skip_confirmations (from --force flag), non_interactive=true (non-interactive by default)
+            uninstall_manifest "$force_flag" "true"
             ;;
         # Registry commands removed - not compatible with macOS default Bash 3.2
         "cloud")

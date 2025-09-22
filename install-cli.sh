@@ -248,6 +248,46 @@ source_manifest_uninstall() {
     fi
 }
 
+# Source the environment management module
+source_manifest_env_management() {
+    # Get the directory where this script is located
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local modules_dir="$script_dir/modules"
+    
+    # Source shared utilities first
+    if [ -f "$modules_dir/core/manifest-shared-utils.sh" ]; then
+        source "$modules_dir/core/manifest-shared-utils.sh"
+    fi
+    
+    # Source the environment management module
+    if [ -f "$modules_dir/core/manifest-env-management.sh" ]; then
+        source "$modules_dir/core/manifest-env-management.sh"
+    else
+        print_error "❌ Environment management module not found: $modules_dir/core/manifest-env-management.sh"
+        return 1
+    fi
+}
+
+# Clean up environment variables
+cleanup_environment_variables() {
+    print_subheader "🧹 Cleaning Up Environment Variables"
+    
+    # Source the environment management module
+    if ! source_manifest_env_management; then
+        print_error "❌ Failed to load environment management module"
+        print_error "❌ Cannot proceed with environment cleanup"
+        return 1
+    fi
+    
+    # Clean up all Manifest-related environment variables
+    cleanup_all_manifest_env_vars
+    
+    # Remove Manifest variables from shell profile files
+    remove_manifest_from_shell_profiles
+    
+    print_success "✅ Environment variable cleanup completed"
+}
+
 # Clean up old installation using the uninstall module
 cleanup_old_installation() {
     print_subheader "🧹 Cleaning Up Old Installation"
@@ -355,31 +395,62 @@ create_configuration() {
 # =============================================================================
 # Manifest CLI Configuration
 # =============================================================================
-# Copy env.global.example to customize this file
+# Copy env.manifest.global.example to customize this file
 # =============================================================================
 
 # NTP Configuration
-MANIFEST_NTP_SERVERS="time.apple.com,time.google.com,pool.ntp.org,time.nist.gov"
-MANIFEST_NTP_TIMEOUT=5
-MANIFEST_NTP_RETRIES=3
-MANIFEST_NTP_VERIFY=true
+MANIFEST_CLI_NTP_SERVER1=time.apple.com
+MANIFEST_CLI_NTP_SERVER2=time.google.com
+MANIFEST_CLI_NTP_SERVER3=pool.ntp.org
+MANIFEST_CLI_NTP_SERVER4=time.nist.gov
+MANIFEST_CLI_NTP_TIMEOUT=5
+MANIFEST_CLI_NTP_RETRIES=3
+MANIFEST_CLI_NTP_VERIFY=true
 
 # Versioning Configuration
-MANIFEST_VERSION_FORMAT="XX.XX.XX"
-MANIFEST_GIT_TAG_PREFIX="v"
-MANIFEST_DEFAULT_BRANCH="main"
+MANIFEST_CLI_VERSION_FORMAT=XX.XX.XX
+MANIFEST_CLI_GIT_TAG_PREFIX=v
+MANIFEST_CLI_DEFAULT_BRANCH=main
 
 # Documentation Configuration
-MANIFEST_DOCS_FOLDER="docs"
-MANIFEST_DOCS_ARCHIVE_FOLDER="docs/zArchive"
-MANIFEST_DOCS_AUTO_GENERATE=true
+MANIFEST_CLI_DOCS_FOLDER=docs
+MANIFEST_CLI_DOCS_ARCHIVE_FOLDER=docs/zArchive
+MANIFEST_CLI_DOCS_AUTO_GENERATE=true
 
 # Interactive Mode
-MANIFEST_INTERACTIVE_MODE=false
+MANIFEST_CLI_INTERACTIVE_MODE=false
 EOF
     fi
 
     print_success "✅ Configuration file created: $INSTALL_LOCATION/.env.manifest.global"
+    echo ""
+}
+
+# Set up environment variables
+setup_environment_variables() {
+    print_subheader "🌍 Setting Up Environment Variables"
+    
+    # Source the environment management module
+    if ! source_manifest_env_management; then
+        print_error "❌ Failed to load environment management module"
+        return 1
+    fi
+    
+    # Export environment variables from the configuration file
+    if [ -f "$INSTALL_LOCATION/.env.manifest.global" ]; then
+        export_env_from_config "$INSTALL_LOCATION/.env.manifest.global"
+        print_success "✅ Environment variables loaded from configuration"
+    else
+        print_warning "⚠️  Configuration file not found, using defaults"
+    fi
+    
+    # Set essential installation variables
+    export MANIFEST_CLI_INSTALL_DIR="$INSTALL_LOCATION"
+    export MANIFEST_CLI_BIN_DIR="$LOCAL_BIN"
+    export MANIFEST_CLI_VERSION_FILE="VERSION"
+    export MANIFEST_CLI_GITIGNORE_FILE=".gitignore"
+    
+    print_success "✅ Environment variables configured"
     echo ""
 }
 
@@ -535,10 +606,12 @@ main() {
     validate_system
     
     # Installation process
+    cleanup_environment_variables
     cleanup_old_installation
     create_directories
     copy_cli_files
     create_configuration
+    setup_environment_variables
     configure_path
     
     # Verification
