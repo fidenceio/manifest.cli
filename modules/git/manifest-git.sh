@@ -204,7 +204,7 @@ create_tag() {
 push_changes() {
     local version="$1"
     local tag_name="v$version"
-    local default_branch="${MANIFEST_CLI_DEFAULT_BRANCH:-main}"
+    local default_branch="${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}"
     
     echo "🚀 Pushing to all remotes..."
     
@@ -233,7 +233,7 @@ push_changes() {
 
 sync_repository() {
     echo "🔄 Syncing with remote..."
-    local default_branch="${MANIFEST_CLI_DEFAULT_BRANCH:-main}"
+    local default_branch="${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}"
     
     # Change to project root directory
     cd "$PROJECT_ROOT" || {
