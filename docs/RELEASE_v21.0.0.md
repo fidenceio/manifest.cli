@@ -1,7 +1,7 @@
 # Release v21.0.0
 
-**Release Date:** 2025-09-22 03:45:19 UTC
-**Release Type:** major
+**Release Date:** 2025-09-22 17:00:59 UTC
+**Release Type:** patch
 
 ## 🎯 What's New
 
@@ -59,11 +59,17 @@ manifest docs
 
 ## New Features
 
+
 ## Improvements
+Update main CHANGELOG.md to v21.0.0
+Bump version to 21.0.0 [NTP: 2025-09-22 03:45:19 UTC]
 Auto-commit before Manifest process [NTP: 2025-09-22 03:45:19 UTC]
 
 ## Bug Fixes
 
+
 ## Breaking Changes
 
+
 ## Documentation
+

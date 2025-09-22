@@ -6,10 +6,10 @@ A powerful command-line tool for automating Git workflows, version management, a
 | Property | Value |
 |----------|-------|
 | **Current Version** | `21.0.0` |
-| **Release Date** | `2025-09-22 03:45:19 UTC` |
+| **Release Date** | `2025-09-22 17:00:59 UTC` |
 | **Git Tag** | `v21.0.0` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-09-22 03:45:19 UTC` |
+| **Last Updated** | `2025-09-22 17:00:59 UTC` |
 | **CLI Version** | `21.0.0` |
 
 ### 📚 Documentation Files
@@ -221,8 +221,8 @@ Create `/usr/local/share/manifest-cli/.env` for cloud integration:
 
 ```bash
 # Manifest Cloud Service
-MANIFEST_CLOUD_URL=http://localhost:3001
-MANIFEST_CLOUD_API_KEY=your-api-key-here
+MANIFEST_CLI_CLOUD_URL=http://localhost:3001
+MANIFEST_CLI_CLOUD_API_KEY=your-api-key-here
 ```
 
 #### Git Configuration

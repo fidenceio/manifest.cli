@@ -123,7 +123,7 @@ cleanup_config_files() {
 
 # Function to clean up environment variables
 cleanup_environment_variables() {
-    echo "🧹 Cleaning up environment variables..."
+    echo "🧹 Cleaning up Manifest CLI environment variables..."
     
     # Source the environment management module if available
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -139,10 +139,10 @@ cleanup_environment_variables() {
         # Source the environment management module
         source "$env_management_module"
         
-        # Clean up all Manifest-related environment variables
+        # Clean up all Manifest CLI-related environment variables
         cleanup_all_manifest_env_vars
         
-        # Remove Manifest variables from shell profile files
+        # Remove Manifest CLI variables from shell profile files
         remove_manifest_from_shell_profiles
         
         echo "✅ Environment variable cleanup completed"

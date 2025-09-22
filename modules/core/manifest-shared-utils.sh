@@ -16,56 +16,56 @@ NC='\033[0m' # No Color
 MANIFEST_CLI_LOG_LEVEL="${MANIFEST_CLI_LOG_LEVEL:-INFO}"
 
 # Logging levels (numeric for comparison)
-LOG_LEVEL_DEBUG=0
-LOG_LEVEL_INFO=1
-LOG_LEVEL_WARN=2
-LOG_LEVEL_ERROR=3
+MANIFEST_CLI_SHARED_LOG_LEVEL_DEBUG=0
+MANIFEST_CLI_SHARED_LOG_LEVEL_INFO=1
+MANIFEST_CLI_SHARED_LOG_LEVEL_WARN=2
+MANIFEST_CLI_SHARED_LOG_LEVEL_ERROR=3
 
 # Get current log level
 get_log_level() {
     local level="$(echo "${MANIFEST_CLI_LOG_LEVEL}" | tr '[:lower:]' '[:upper:]')"
     case "$level" in
-        DEBUG) echo $LOG_LEVEL_DEBUG ;;
-        INFO)  echo $LOG_LEVEL_INFO ;;
-        WARN)  echo $LOG_LEVEL_WARN ;;
-        ERROR) echo $LOG_LEVEL_ERROR ;;
-        *)     echo $LOG_LEVEL_INFO ;;
+        DEBUG) echo $MANIFEST_CLI_SHARED_LOG_LEVEL_DEBUG ;;
+        INFO)  echo $MANIFEST_CLI_SHARED_LOG_LEVEL_INFO ;;
+        WARN)  echo $MANIFEST_CLI_SHARED_LOG_LEVEL_WARN ;;
+        ERROR) echo $MANIFEST_CLI_SHARED_LOG_LEVEL_ERROR ;;
+        *)     echo $MANIFEST_CLI_SHARED_LOG_LEVEL_INFO ;;
     esac
 }
 
 # Enhanced logging functions with levels
 log_debug() {
-    if [[ $(get_log_level) -le $LOG_LEVEL_DEBUG ]]; then
+    if [[ $(get_log_level) -le $MANIFEST_CLI_SHARED_LOG_LEVEL_DEBUG ]]; then
         echo -e "${PURPLE}🐛 DEBUG: $1${NC}" >&2
     fi
 }
 
 log_info() {
-    if [[ $(get_log_level) -le $LOG_LEVEL_INFO ]]; then
+    if [[ $(get_log_level) -le $MANIFEST_CLI_SHARED_LOG_LEVEL_INFO ]]; then
         echo -e "${BLUE}ℹ️  INFO: $1${NC}" >&2
     fi
 }
 
 log_success() {
-    if [[ $(get_log_level) -le $LOG_LEVEL_INFO ]]; then
+    if [[ $(get_log_level) -le $MANIFEST_CLI_SHARED_LOG_LEVEL_INFO ]]; then
         echo -e "${GREEN}✅ SUCCESS: $1${NC}" >&2
     fi
 }
 
 log_warning() {
-    if [[ $(get_log_level) -le $LOG_LEVEL_WARN ]]; then
+    if [[ $(get_log_level) -le $MANIFEST_CLI_SHARED_LOG_LEVEL_WARN ]]; then
         echo -e "${YELLOW}⚠️  WARN: $1${NC}" >&2
     fi
 }
 
 log_error() {
-    if [[ $(get_log_level) -le $LOG_LEVEL_ERROR ]]; then
+    if [[ $(get_log_level) -le $MANIFEST_CLI_SHARED_LOG_LEVEL_ERROR ]]; then
         echo -e "${RED}❌ ERROR: $1${NC}" >&2
     fi
 }
 
 log_trace() {
-    if [[ $(get_log_level) -le $LOG_LEVEL_DEBUG ]]; then
+    if [[ $(get_log_level) -le $MANIFEST_CLI_SHARED_LOG_LEVEL_DEBUG ]]; then
         echo -e "${CYAN}🔍 TRACE: $1${NC}" >&2
     fi
 }
@@ -177,13 +177,13 @@ validate_repository_root() {
     
     # Get the git repository root
     git_root="$(git rev-parse --show-toplevel 2>/dev/null)"
-    if [[ -z "$git_root" ]]; then
+    if check_string_empty "$git_root"; then
         log_error "Could not determine Git repository root"
         return 1
     fi
     
     # Check if current directory is the repository root
-    if [[ "$current_dir" != "$git_root" ]]; then
+    if compare_strings "$current_dir" "!=" "$git_root"; then
         log_error "Manifest must be run from the repository root directory"
         log_error "Current directory: $current_dir"
         log_error "Repository root: $git_root"
@@ -193,8 +193,8 @@ validate_repository_root() {
     fi
     
     # Additional validation: ensure we have a .git directory
-    if [[ ! -d "$MANIFEST_CLI_GIT_DIR" ]]; then
-        log_error "No $MANIFEST_CLI_GIT_DIR directory found in current location"
+    if ! check_directory_exists ".git"; then
+        log_error "No .git directory found in current location"
         return 1
     fi
     
@@ -215,13 +215,13 @@ ensure_repository_root() {
     
     # Get the git repository root
     git_root="$(git rev-parse --show-toplevel 2>/dev/null)"
-    if [[ -z "$git_root" ]]; then
+    if check_string_empty "$git_root"; then
         log_error "Could not determine Git repository root"
         return 1
     fi
     
     # Check if current directory is the repository root
-    if [[ "$current_dir" != "$git_root" ]]; then
+    if compare_strings "$current_dir" "!=" "$git_root"; then
         log_warning "Not running from repository root. Changing to repository root..."
         log_warning "From: $current_dir"
         log_warning "To: $git_root"
@@ -236,8 +236,8 @@ ensure_repository_root() {
     fi
     
     # Additional validation: ensure we have a .git directory
-    if [[ ! -d "$MANIFEST_CLI_GIT_DIR" ]]; then
-        log_error "No $MANIFEST_CLI_GIT_DIR directory found in current location"
+    if ! check_directory_exists ".git"; then
+        log_error "No .git directory found in current location"
         return 1
     fi
     

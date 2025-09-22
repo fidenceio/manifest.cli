@@ -8,12 +8,12 @@ set -eo pipefail
 
 # Import modules
 # Determine the absolute path to the modules directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MODULES_DIR="$(dirname "$SCRIPT_DIR")"
+MANIFEST_CLI_CORE_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MANIFEST_CLI_CORE_MODULES_DIR="$(dirname "$MANIFEST_CLI_CORE_SCRIPT_DIR")"
 
 # Load configuration at startup
 # Get the binary location (where the CLI binary is installed)
-BINARY_LOCATION="${MANIFEST_CLI_BIN_DIR:-$HOME/.local/bin}"
+MANIFEST_CLI_CORE_BINARY_LOCATION="${MANIFEST_CLI_BIN_DIR:-$HOME/.local/bin}"
 
 # Determine the project root (where we're actually working)
 # Use the current working directory from the environment, not the script's directory
@@ -24,7 +24,7 @@ if [ -n "$PWD" ] && git -C "$PWD" rev-parse --git-dir > /dev/null 2>&1; then
     INSTALL_LOCATION="${MANIFEST_CLI_INSTALL_DIR:-/usr/local/share/manifest-cli}"
 else
     # Not in a git repository, use installation location for both
-    INSTALL_LOCATION="${MODULES_DIR%/*/*/*}"
+    INSTALL_LOCATION="${MANIFEST_CLI_CORE_MODULES_DIR%/*/*/*}"
     PROJECT_ROOT="$INSTALL_LOCATION"
 fi
 
@@ -33,30 +33,30 @@ fi
 
 # Export variables so they're available to sourced modules
 export INSTALL_LOCATION
-export BINARY_LOCATION
+export MANIFEST_CLI_CORE_BINARY_LOCATION
 export PROJECT_ROOT
 
 # Source shared utilities first
-source "$MODULES_DIR/core/manifest-shared-utils.sh"
-source "$MODULES_DIR/core/manifest-shared-functions.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-shared-utils.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-shared-functions.sh"
 # Function registry removed - not compatible with macOS default Bash 3.2
 
 # Now source modules after variables are set
-source "$MODULES_DIR/core/manifest-config.sh"
-source "$MODULES_DIR/system/manifest-os.sh"
-source "$MODULES_DIR/system/manifest-ntp.sh"
-source "$MODULES_DIR/git/manifest-git.sh"
-source "$MODULES_DIR/system/manifest-security.sh"
-source "$MODULES_DIR/docs/manifest-documentation.sh"
-source "$MODULES_DIR/system/manifest-uninstall.sh"
-source "$MODULES_DIR/workflow/manifest-orchestrator.sh"
-source "$MODULES_DIR/docs/manifest-cleanup-docs.sh"
-source "$MODULES_DIR/testing/manifest-test.sh"
-source "$MODULES_DIR/cloud/manifest-agent-containerized.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-config.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-os.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-ntp.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/git/manifest-git.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-security.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/docs/manifest-documentation.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-uninstall.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/workflow/manifest-orchestrator.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/docs/manifest-cleanup-docs.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/testing/manifest-test.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/cloud/manifest-agent-containerized.sh"
 
 # Source MCP utilities and connector for Manifest Cloud
-source "$MODULES_DIR/cloud/manifest-mcp-utils.sh"
-source "$MODULES_DIR/cloud/manifest-mcp-connector.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/cloud/manifest-mcp-utils.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/cloud/manifest-mcp-connector.sh"
 
 # Function to get the CLI installation directory dynamically
 get_cli_dir() {
@@ -87,7 +87,7 @@ get_cli_dir() {
 }
 
 # Set the CLI directory
-CLI_DIR="$(get_cli_dir)"
+MANIFEST_CLI_CORE_DIR="$(get_cli_dir)"
 
 # Archive old documentation files (delegated to manifest-cleanup-docs.sh)
 archive_old_docs() {
@@ -102,7 +102,7 @@ archive_old_docs() {
 # Update CLI function
 update_cli() {
     # Source the auto-update module
-    source "$MODULES_DIR/workflow/manifest-auto-update.sh"
+    source "$MANIFEST_CLI_CORE_MODULES_DIR/workflow/manifest-auto-update.sh"
     
     # Call the update function from the auto-update module
     local args=("$@")
@@ -183,7 +183,7 @@ manifest_test() {
 # Auto-update check with cooldown
 check_auto_update() {
     # Source the auto-update module
-    source "$MODULES_DIR/workflow/manifest-auto-update.sh"
+    source "$MANIFEST_CLI_CORE_MODULES_DIR/workflow/manifest-auto-update.sh"
     
     # Call the check function from the auto-update module
     check_auto_update_internal

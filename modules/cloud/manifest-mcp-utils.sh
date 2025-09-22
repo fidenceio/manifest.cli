@@ -4,9 +4,9 @@
 # Common utilities for MCP (Model Context Protocol) operations
 
 # MCP Configuration
-MCP_DEFAULT_ENDPOINT="https://api.manifest.cloud"
-MCP_DEFAULT_TIMEOUT=30
-MCP_DEFAULT_RETRIES=3
+MANIFEST_CLI_CLOUD_MCP_DEFAULT_ENDPOINT="https://api.manifest.cloud"
+MANIFEST_CLI_CLOUD_MCP_DEFAULT_TIMEOUT=30
+MANIFEST_CLI_CLOUD_MCP_DEFAULT_RETRIES=3
 
 # Check if user wants to skip cloud operations
 should_skip_cloud() {

@@ -4,7 +4,7 @@
 # Handles environment variable loading, validation, and defaults
 
 # Configuration file paths (in order of precedence)
-CONFIG_FILES=(
+MANIFEST_CLI_CONFIG_FILES=(
     ".env.manifest.global"
     ".env.manifest.local"
 )
@@ -28,7 +28,7 @@ load_configuration() {
     # First try the installation location for global config
     if [ -n "${INSTALL_LOCATION:-}" ] && [ -d "$INSTALL_LOCATION" ]; then
         local config_loaded=false
-        for config_file in "${CONFIG_FILES[@]}"; do
+        for config_file in "${MANIFEST_CLI_CONFIG_FILES[@]}"; do
             local full_path="$INSTALL_LOCATION/$config_file"
             if [ -f "$full_path" ]; then
                 if [ "$config_loaded" = "false" ]; then
@@ -69,7 +69,7 @@ load_configuration() {
     fi
     
     # Then try the project root for local overrides
-    for config_file in "${CONFIG_FILES[@]}"; do
+    for config_file in "${MANIFEST_CLI_CONFIG_FILES[@]}"; do
         local full_path="$project_root/$config_file"
         if [ -f "$full_path" ]; then
             echo "🔧 Loading project configuration from: $config_file (Project: $project_root)"

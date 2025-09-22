@@ -4,19 +4,19 @@
 # Highly secure, minimal installation with maximum isolation
 
 # Source shared utilities
-SCRIPT_DIR="$(get_script_dir)"
-source "$(dirname "$SCRIPT_DIR")/core/manifest-shared-utils.sh"
+MANIFEST_CLI_SCRIPT_DIR="$(get_script_dir)"
+source "$(dirname "$MANIFEST_CLI_SCRIPT_DIR")/core/manifest-shared-utils.sh"
 
 # Agent configuration (user-space only)
-AGENT_DIR="$HOME/.manifest-agent"
-AGENT_CONFIG="$AGENT_DIR/config.json"
-AGENT_LOGS="$AGENT_DIR/logs"
-AGENT_CACHE="$AGENT_DIR/cache"
+MANIFEST_CLI_CLOUD_AGENT_DIR="$HOME/.manifest-agent"
+MANIFEST_CLI_CLOUD_AGENT_CONFIG="$MANIFEST_CLI_CLOUD_AGENT_DIR/config.json"
+MANIFEST_CLI_CLOUD_AGENT_LOGS="$MANIFEST_CLI_CLOUD_AGENT_DIR/logs"
+MANIFEST_CLI_CLOUD_AGENT_CACHE="$MANIFEST_CLI_CLOUD_AGENT_DIR/cache"
 
 # Agent modes
-AGENT_MODE_DOCKER="docker"
-AGENT_MODE_BINARY="binary" 
-AGENT_MODE_SCRIPT="script"
+MANIFEST_CLI_CLOUD_AGENT_MODE_DOCKER="docker"
+MANIFEST_CLI_CLOUD_AGENT_MODE_BINARY="binary" 
+MANIFEST_CLI_CLOUD_AGENT_MODE_SCRIPT="script"
 
 # Initialize minimal agent (no persistent services)
 init_agent() {
@@ -25,10 +25,10 @@ init_agent() {
     log_info "Initializing Manifest Agent (containerized mode: $mode)..."
     
     # Create minimal directory structure
-    mkdir -p "$AGENT_DIR" "$AGENT_LOGS" "$AGENT_CACHE"
+    mkdir -p "$MANIFEST_CLI_CLOUD_AGENT_DIR" "$MANIFEST_CLI_CLOUD_AGENT_LOGS" "$MANIFEST_CLI_CLOUD_AGENT_CACHE"
     
     # Create configuration
-    cat > "$AGENT_CONFIG" << EOF
+    cat > "$MANIFEST_CLI_CLOUD_AGENT_CONFIG" << EOF
 {
     "agent_id": "$(generate_agent_id)",
     "version": "1.0.0",
@@ -48,13 +48,13 @@ EOF
     log_operation "agent_initialized" "Agent initialized in $mode mode (containerized)"
     
     case "$mode" in
-        "$AGENT_MODE_DOCKER")
+        "$MANIFEST_CLI_CLOUD_AGENT_MODE_DOCKER")
             setup_docker_agent
             ;;
-        "$AGENT_MODE_BINARY")
+        "$MANIFEST_CLI_CLOUD_AGENT_MODE_BINARY")
             setup_binary_agent
             ;;
-        "$AGENT_MODE_SCRIPT")
+        "$MANIFEST_CLI_CLOUD_AGENT_MODE_SCRIPT")
             setup_script_agent
             ;;
     esac
@@ -75,30 +75,30 @@ setup_docker_agent() {
     fi
     
     # Create Docker wrapper script
-    cat > "$AGENT_DIR/manifest-agent-docker" << 'EOF'
+    cat > "$MANIFEST_CLI_CLOUD_AGENT_DIR/manifest-agent-docker" << 'EOF'
 #!/bin/bash
 # Docker-based Manifest Agent wrapper
 
-AGENT_DIR="$HOME/.manifest-agent"
-AGENT_CONFIG="$AGENT_DIR/config.json"
-AGENT_LOGS="$AGENT_DIR/logs"
+MANIFEST_CLI_CLOUD_AGENT_DIR="$HOME/.manifest-agent"
+MANIFEST_CLI_CLOUD_AGENT_CONFIG="$MANIFEST_CLI_CLOUD_AGENT_DIR/config.json"
+MANIFEST_CLI_CLOUD_AGENT_LOGS="$MANIFEST_CLI_CLOUD_AGENT_DIR/logs"
 
 # Read configuration
-if [ ! -f "$AGENT_CONFIG" ]; then
+if [ ! -f "$MANIFEST_CLI_CLOUD_AGENT_CONFIG" ]; then
     echo "Agent not initialized. Run 'manifest agent init docker' first."
     exit 1
 fi
 
 # Get configuration
-MANIFEST_CLI_CLOUD_ENDPOINT=$(jq -r '.manifest_cloud_endpoint' "$AGENT_CONFIG")
-SUBSCRIPTION_TOKEN=$(jq -r '.subscription_token // empty' "$AGENT_CONFIG")
+MANIFEST_CLI_CLOUD_ENDPOINT=$(jq -r '.manifest_cloud_endpoint' "$MANIFEST_CLI_CLOUD_AGENT_CONFIG")
+MANIFEST_CLI_CLOUD_SUBSCRIPTION_TOKEN=$(jq -r '.subscription_token // empty' "$MANIFEST_CLI_CLOUD_AGENT_CONFIG")
 
 # Docker command with strict security
 docker run --rm \
     --network=host \
     -v "$(pwd)":/workspace:ro \
-    -v "$AGENT_DIR":/agent-config:ro \
-    -v "$AGENT_LOGS":/agent-logs \
+    -v "$MANIFEST_CLI_CLOUD_AGENT_DIR":/agent-config:ro \
+    -v "$MANIFEST_CLI_CLOUD_AGENT_LOGS":/agent-logs \
     --read-only \
     --tmpfs /tmp \
     --user $(id -u):$(id -g) \
@@ -107,7 +107,7 @@ docker run --rm \
     "$@"
 EOF
     
-    chmod +x "$AGENT_DIR/manifest-agent-docker"
+    chmod +x "$MANIFEST_CLI_CLOUD_AGENT_DIR/manifest-agent-docker"
     log_success "Docker agent wrapper created"
 }
 
@@ -116,12 +116,12 @@ setup_binary_agent() {
     log_info "Setting up static binary agent..."
     
     # Create binary download script
-    cat > "$AGENT_DIR/manifest-agent-binary" << 'EOF'
+    cat > "$MANIFEST_CLI_CLOUD_AGENT_DIR/manifest-agent-binary" << 'EOF'
 #!/bin/bash
 # Static binary Manifest Agent
 
-AGENT_DIR="$HOME/.manifest-agent"
-BINARY_PATH="$AGENT_DIR/manifest-agent-bin"
+MANIFEST_CLI_CLOUD_AGENT_DIR="$HOME/.manifest-agent"
+MANIFEST_CLI_CLOUD_BINARY_PATH="$MANIFEST_CLI_CLOUD_AGENT_DIR/manifest-agent-bin"
 
 # Download binary if not exists
 if [ ! -f "$BINARY_PATH" ]; then
@@ -142,10 +142,10 @@ if [ ! -f "$BINARY_PATH" ]; then
 fi
 
 # Execute binary with restricted permissions
-exec "$BINARY_PATH" --config "$AGENT_DIR/config.json" "$@"
+exec "$BINARY_PATH" --config "$MANIFEST_CLI_CLOUD_AGENT_DIR/config.json" "$@"
 EOF
     
-    chmod +x "$AGENT_DIR/manifest-agent-binary"
+    chmod +x "$MANIFEST_CLI_CLOUD_AGENT_DIR/manifest-agent-binary"
     log_success "Binary agent wrapper created"
 }
 
@@ -154,16 +154,16 @@ setup_script_agent() {
     log_info "Setting up script-based agent..."
     
     # Create main agent script
-    cat > "$AGENT_DIR/manifest-agent-script" << 'EOF'
+    cat > "$MANIFEST_CLI_CLOUD_AGENT_DIR/manifest-agent-script" << 'EOF'
 #!/bin/bash
 # Script-based Manifest Agent
 
-AGENT_DIR="$HOME/.manifest-agent"
-AGENT_CONFIG="$AGENT_DIR/config.json"
-AGENT_LOGS="$AGENT_DIR/logs"
+MANIFEST_CLI_CLOUD_AGENT_DIR="$HOME/.manifest-agent"
+MANIFEST_CLI_CLOUD_AGENT_CONFIG="$MANIFEST_CLI_CLOUD_AGENT_DIR/config.json"
+MANIFEST_CLI_CLOUD_AGENT_LOGS="$MANIFEST_CLI_CLOUD_AGENT_DIR/logs"
 
 # Load configuration
-if [ ! -f "$AGENT_CONFIG" ]; then
+if [ ! -f "$MANIFEST_CLI_CLOUD_AGENT_CONFIG" ]; then
     echo "Agent not initialized. Run 'manifest agent init script' first."
     exit 1
 fi
@@ -176,7 +176,7 @@ while IFS='=' read -r key value; do
     else
         log_warning "Invalid environment variable name: $key (skipping)"
     fi
-done < <(jq -r 'to_entries[] | "\(.key)=\(.value)"' "$AGENT_CONFIG" 2>/dev/null || echo "")
+done < <(jq -r 'to_entries[] | "\(.key)=\(.value)"' "$MANIFEST_CLI_CLOUD_AGENT_CONFIG" 2>/dev/null || echo "")
 
 # log_operation() and generate_agent_id() - Now available from manifest-shared-functions.sh
 
@@ -336,7 +336,7 @@ case "${1:-help}" in
 esac
 EOF
     
-    chmod +x "$AGENT_DIR/manifest-agent-script"
+    chmod +x "$MANIFEST_CLI_CLOUD_AGENT_DIR/manifest-agent-script"
     log_success "Script agent created"
 }
 
@@ -365,7 +365,7 @@ setup_github_auth() {
     
     if [ -n "$token" ]; then
         # Store token in agent config
-        jq --arg token "$token" '.github_token = $token' "$AGENT_CONFIG" > "$AGENT_CONFIG.tmp" && mv "$AGENT_CONFIG.tmp" "$AGENT_CONFIG"
+        jq --arg token "$token" '.github_token = $token' "$MANIFEST_CLI_CLOUD_AGENT_CONFIG" > "$MANIFEST_CLI_CLOUD_AGENT_CONFIG.tmp" && mv "$MANIFEST_CLI_CLOUD_AGENT_CONFIG.tmp" "$MANIFEST_CLI_CLOUD_AGENT_CONFIG"
         log_success "GitHub authentication configured"
         log_operation "github_auth" "GitHub OAuth configured successfully"
     else
@@ -400,7 +400,7 @@ setup_manifest_auth() {
     
     if echo "$response" | jq -e '.status' >/dev/null 2>&1; then
         # Store token in agent config
-        jq --arg token "$api_key" '.subscription_token = $token' "$AGENT_CONFIG" > "$AGENT_CONFIG.tmp" && mv "$AGENT_CONFIG.tmp" "$AGENT_CONFIG"
+        jq --arg token "$api_key" '.subscription_token = $token' "$MANIFEST_CLI_CLOUD_AGENT_CONFIG" > "$MANIFEST_CLI_CLOUD_AGENT_CONFIG.tmp" && mv "$MANIFEST_CLI_CLOUD_AGENT_CONFIG.tmp" "$MANIFEST_CLI_CLOUD_AGENT_CONFIG"
         log_success "Manifest Cloud subscription configured"
         log_operation "manifest_auth" "Manifest Cloud API key configured successfully"
     else
@@ -417,7 +417,7 @@ show_agent_status() {
     echo ""
     
     # Check if agent is initialized
-    if [ ! -f "$AGENT_CONFIG" ]; then
+    if [ ! -f "$MANIFEST_CLI_CLOUD_AGENT_CONFIG" ]; then
         echo "Status: Not initialized"
         echo "Run 'manifest agent init <mode>' to initialize"
         echo ""
@@ -429,11 +429,11 @@ show_agent_status() {
     fi
     
     # Load configuration
-    local agent_id=$(jq -r '.agent_id // "unknown"' "$AGENT_CONFIG")
-    local mode=$(jq -r '.mode // "unknown"' "$AGENT_CONFIG")
-    local github_token=$(jq -r '.github_token // empty' "$AGENT_CONFIG")
-    local subscription_token=$(jq -r '.subscription_token // empty' "$AGENT_CONFIG")
-    local last_operation=$(jq -r '.last_operation // "never"' "$AGENT_CONFIG")
+    local agent_id=$(jq -r '.agent_id // "unknown"' "$MANIFEST_CLI_CLOUD_AGENT_CONFIG")
+    local mode=$(jq -r '.mode // "unknown"' "$MANIFEST_CLI_CLOUD_AGENT_CONFIG")
+    local github_token=$(jq -r '.github_token // empty' "$MANIFEST_CLI_CLOUD_AGENT_CONFIG")
+    local subscription_token=$(jq -r '.subscription_token // empty' "$MANIFEST_CLI_CLOUD_AGENT_CONFIG")
+    local last_operation=$(jq -r '.last_operation // "never"' "$MANIFEST_CLI_CLOUD_AGENT_CONFIG")
     
     echo "Status: Initialized"
     echo "Mode: $mode (containerized)"
@@ -442,8 +442,8 @@ show_agent_status() {
     echo "Subscription: $([ -n "$subscription_token" ] && echo "✅ Configured" || echo "❌ Not configured")"
     echo "Last Operation: $last_operation"
     echo ""
-    echo "Configuration: $AGENT_CONFIG"
-    echo "Logs: $AGENT_LOGS"
+    echo "Configuration: $MANIFEST_CLI_CLOUD_AGENT_CONFIG"
+    echo "Logs: $MANIFEST_CLI_CLOUD_AGENT_LOGS"
     echo ""
     echo "Security Features:"
     echo "  ✅ No persistent services"
@@ -455,14 +455,14 @@ show_agent_status() {
 
 # Show agent logs
 show_agent_logs() {
-    if [ ! -d "$AGENT_LOGS" ]; then
+    if [ ! -d "$MANIFEST_CLI_CLOUD_AGENT_LOGS" ]; then
         log_error "Agent logs not found. Agent may not be initialized."
         return 1
     fi
     
     echo "=== Agent Operations Log ==="
-    if [ -f "$AGENT_LOGS/operations.log" ]; then
-        tail -n 20 "$AGENT_LOGS/operations.log"
+    if [ -f "$MANIFEST_CLI_CLOUD_AGENT_LOGS/operations.log" ]; then
+        tail -n 20 "$MANIFEST_CLI_CLOUD_AGENT_LOGS/operations.log"
     else
         echo "No operation logs found"
     fi
@@ -472,36 +472,36 @@ show_agent_logs() {
 test_agent() {
     log_info "Testing containerized agent functionality..."
     
-    if [ ! -f "$AGENT_CONFIG" ]; then
+    if [ ! -f "$MANIFEST_CLI_CLOUD_AGENT_CONFIG" ]; then
         log_error "Agent not initialized. Run 'manifest agent init <mode>' first."
         return 1
     fi
     
-    local mode=$(jq -r '.mode // "unknown"' "$AGENT_CONFIG")
+    local mode=$(jq -r '.mode // "unknown"' "$MANIFEST_CLI_CLOUD_AGENT_CONFIG")
     
     case "$mode" in
         "docker")
-            if [ -f "$AGENT_DIR/manifest-agent-docker" ]; then
+            if [ -f "$MANIFEST_CLI_CLOUD_AGENT_DIR/manifest-agent-docker" ]; then
                 log_info "Testing Docker agent..."
-                "$AGENT_DIR/manifest-agent-docker" heartbeat
+                "$MANIFEST_CLI_CLOUD_AGENT_DIR/manifest-agent-docker" heartbeat
             else
                 log_error "Docker agent not found"
                 return 1
             fi
             ;;
         "binary")
-            if [ -f "$AGENT_DIR/manifest-agent-binary" ]; then
+            if [ -f "$MANIFEST_CLI_CLOUD_AGENT_DIR/manifest-agent-binary" ]; then
                 log_info "Testing binary agent..."
-                "$AGENT_DIR/manifest-agent-binary" heartbeat
+                "$MANIFEST_CLI_CLOUD_AGENT_DIR/manifest-agent-binary" heartbeat
             else
                 log_error "Binary agent not found"
                 return 1
             fi
             ;;
         "script")
-            if [ -f "$AGENT_DIR/manifest-agent-script" ]; then
+            if [ -f "$MANIFEST_CLI_CLOUD_AGENT_DIR/manifest-agent-script" ]; then
                 log_info "Testing script agent..."
-                "$AGENT_DIR/manifest-agent-script" heartbeat
+                "$MANIFEST_CLI_CLOUD_AGENT_DIR/manifest-agent-script" heartbeat
             else
                 log_error "Script agent not found"
                 return 1
@@ -519,8 +519,8 @@ uninstall_agent() {
     log_info "Uninstalling containerized agent..."
     
     # Remove agent directory
-    if [ -d "$AGENT_DIR" ]; then
-        rm -rf "$AGENT_DIR"
+    if [ -d "$MANIFEST_CLI_CLOUD_AGENT_DIR" ]; then
+        rm -rf "$MANIFEST_CLI_CLOUD_AGENT_DIR"
         log_success "Agent directory removed"
     fi
     

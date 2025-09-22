@@ -4,8 +4,8 @@
 # Provides security auditing and privacy protection
 
 # Security configuration
-SECURITY_CONFIG_FILE="manifest.config"
-PRIVATE_ENV_FILES=(".env" ".env.manifest.local" ".env.development" ".env.test" ".env.production" ".env.staging")
+MANIFEST_CLI_SECURITY_CONFIG_FILE="manifest.config"
+MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES=(".env" ".env.manifest.local" ".env.development" ".env.test" ".env.production" ".env.staging")
 
 # Main security audit function
 manifest_security() {
@@ -101,7 +101,7 @@ check_git_tracking() {
     fi
     
     # Check if any private files are tracked
-    for env_file in "${PRIVATE_ENV_FILES[@]}"; do
+    for env_file in "${MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES[@]}"; do
         if [ -f "$project_root/$env_file" ]; then
             if git -C "$project_root" ls-files "$env_file" >/dev/null 2>&1; then
                 echo "      ❌ $env_file is tracked by Git (SECURITY RISK!)"
@@ -327,7 +327,7 @@ check_environment_file_security() {
     # Check if .env files exist and are properly ignored
     local security_issues=0
     
-    for env_file in "${PRIVATE_ENV_FILES[@]}"; do
+    for env_file in "${MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES[@]}"; do
         if [ -f "$project_root/$env_file" ]; then
             # Check if file is properly ignored by Git
             if ! git -C "$project_root" check-ignore "$env_file" >/dev/null 2>&1; then

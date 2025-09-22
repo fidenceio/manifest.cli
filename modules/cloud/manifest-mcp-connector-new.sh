@@ -4,8 +4,8 @@
 # Model Context Protocol connector for Manifest Cloud API
 
 # Source MCP utilities
-SCRIPT_DIR="$(get_script_dir)"
-source "$SCRIPT_DIR/manifest-mcp-utils.sh"
+MANIFEST_CLI_SCRIPT_DIR="$(get_script_dir)"
+source "$MANIFEST_CLI_SCRIPT_DIR/manifest-mcp-utils.sh"
 
 # Send code context to Manifest Cloud via MCP with comprehensive error handling
 send_to_manifest_cloud() {

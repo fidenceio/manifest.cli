@@ -53,8 +53,8 @@ BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 # Installation paths
-LOCAL_BIN="$HOME/.local/bin"
-CLI_NAME="manifest"
+MANIFEST_CLI_LOCAL_BIN="$HOME/.local/bin"
+MANIFEST_CLI_NAME="manifest"
 
 # Function to determine the best installation directory
 get_install_location() {
@@ -77,10 +77,10 @@ get_install_location() {
 }
 
 # Set the actual installation directory
-INSTALL_LOCATION="$(get_install_location)"
+MANIFEST_CLI_INSTALL_LOCATION="$(get_install_location)"
 
 # Version information
-MIN_BASH_VERSION="4.0"
+MANIFEST_CLI_MIN_BASH_VERSION="4.0"
 
 # =============================================================================
 # Utility Functions
@@ -270,7 +270,7 @@ source_manifest_env_management() {
 
 # Clean up environment variables
 cleanup_environment_variables() {
-    print_subheader "🧹 Cleaning Up Environment Variables"
+    print_subheader "🧹 Cleaning Up Manifest CLI Environment Variables"
     
     # Source the environment management module
     if ! source_manifest_env_management; then
@@ -279,10 +279,10 @@ cleanup_environment_variables() {
         return 1
     fi
     
-    # Clean up all Manifest-related environment variables
+    # Clean up all Manifest CLI-related environment variables
     cleanup_all_manifest_env_vars
     
-    # Remove Manifest variables from shell profile files
+    # Remove Manifest CLI variables from shell profile files
     remove_manifest_from_shell_profiles
     
     print_success "✅ Environment variable cleanup completed"
@@ -309,25 +309,25 @@ create_directories() {
     print_subheader "📁 Creating Directory Structure"
     
     # Create local bin directory
-    if [ ! -d "$LOCAL_BIN" ]; then
-        mkdir -p "$LOCAL_BIN"
-        print_success "✅ Created $LOCAL_BIN"
+    if [ ! -d "$MANIFEST_CLI_LOCAL_BIN" ]; then
+        mkdir -p "$MANIFEST_CLI_LOCAL_BIN"
+        print_success "✅ Created $MANIFEST_CLI_LOCAL_BIN"
     else
-        print_success "✅ $LOCAL_BIN already exists"
+        print_success "✅ $MANIFEST_CLI_LOCAL_BIN already exists"
     fi
     
     # Create project directory
-    if [ ! -d "$INSTALL_LOCATION" ]; then
-        mkdir -p "$INSTALL_LOCATION"
-        print_success "✅ Created $INSTALL_LOCATION"
+    if [ ! -d "$MANIFEST_CLI_INSTALL_LOCATION" ]; then
+        mkdir -p "$MANIFEST_CLI_INSTALL_LOCATION"
+        print_success "✅ Created $MANIFEST_CLI_INSTALL_LOCATION"
     else
-        print_success "✅ $INSTALL_LOCATION already exists"
+        print_success "✅ $MANIFEST_CLI_INSTALL_LOCATION already exists"
     fi
     
     # Create subdirectories
-    mkdir -p "$INSTALL_LOCATION/src"
-    mkdir -p "$INSTALL_LOCATION/scripts"
-    mkdir -p "$INSTALL_LOCATION/docs"
+    mkdir -p "$MANIFEST_CLI_INSTALL_LOCATION/src"
+    mkdir -p "$MANIFEST_CLI_INSTALL_LOCATION/scripts"
+    mkdir -p "$MANIFEST_CLI_INSTALL_LOCATION/docs"
     
     print_success "✅ Directory structure created"
     echo ""
@@ -339,9 +339,9 @@ copy_cli_files() {
     
     # Copy main CLI script
     if [ -f "manifest-cli-wrapper.sh" ]; then
-        cp "manifest-cli-wrapper.sh" "$LOCAL_BIN/$CLI_NAME"
-        chmod +x "$LOCAL_BIN/$CLI_NAME"
-        print_success "✅ Copied CLI script to $LOCAL_BIN/$CLI_NAME"
+        cp "manifest-cli-wrapper.sh" "$MANIFEST_CLI_LOCAL_BIN/$MANIFEST_CLI_NAME"
+        chmod +x "$MANIFEST_CLI_LOCAL_BIN/$MANIFEST_CLI_NAME"
+        print_success "✅ Copied CLI script to $MANIFEST_CLI_LOCAL_BIN/$MANIFEST_CLI_NAME"
     else
         print_error "❌ CLI wrapper script not found"
         exit 1
@@ -349,7 +349,7 @@ copy_cli_files() {
     
     # Copy source modules
     if [ -d "modules" ]; then
-        cp -r "modules" "$INSTALL_LOCATION/"
+        cp -r "modules" "$MANIFEST_CLI_INSTALL_LOCATION/"
         print_success "✅ Copied source modules"
     fi
     
@@ -357,7 +357,7 @@ copy_cli_files() {
     local essential_files=("$MANIFEST_CLI_VERSION_FILE" "$MANIFEST_CLI_GITIGNORE_FILE")
     for file in "${essential_files[@]}"; do
         if [ -f "$file" ]; then
-            cp "$file" "$INSTALL_LOCATION/"
+            cp "$file" "$MANIFEST_CLI_INSTALL_LOCATION/"
             print_success "✅ Copied $file"
         else
             print_warning "⚠️  $file not found (skipping)"
@@ -366,13 +366,13 @@ copy_cli_files() {
     
     # Copy documentation
     if [ -d "docs" ]; then
-        cp -r "docs" "$INSTALL_LOCATION/"
+        cp -r "docs" "$MANIFEST_CLI_INSTALL_LOCATION/"
         print_success "✅ Copied documentation"
     fi
     
     # Copy scripts
     if [ -d "scripts" ]; then
-        cp -r "scripts" "$INSTALL_LOCATION/"
+        cp -r "scripts" "$MANIFEST_CLI_INSTALL_LOCATION/"
         print_success "✅ Copied utility scripts"
     fi
     
@@ -386,12 +386,12 @@ create_configuration() {
     
     # Copy global configuration template
     if [ -f "env.manifest.global.example" ]; then
-        cp "env.manifest.global.example" "$INSTALL_LOCATION/.env.manifest.global"
-        print_success "✅ Global configuration template copied: $INSTALL_LOCATION/.env.manifest.global"
+        cp "env.manifest.global.example" "$MANIFEST_CLI_INSTALL_LOCATION/.env.manifest.global"
+        print_success "✅ Global configuration template copied: $MANIFEST_CLI_INSTALL_LOCATION/.env.manifest.global"
     else
         print_warning "⚠️  env.manifest.global.example not found, creating basic configuration"
         # Create minimal configuration if template not found
-        cat > "$INSTALL_LOCATION/.env.manifest.global" << 'EOF'
+        cat > "$MANIFEST_CLI_INSTALL_LOCATION/.env.manifest.global" << 'EOF'
 # =============================================================================
 # Manifest CLI Configuration
 # =============================================================================
@@ -422,7 +422,7 @@ MANIFEST_CLI_INTERACTIVE_MODE=false
 EOF
     fi
 
-    print_success "✅ Configuration file created: $INSTALL_LOCATION/.env.manifest.global"
+    print_success "✅ Configuration file created: $MANIFEST_CLI_INSTALL_LOCATION/.env.manifest.global"
     echo ""
 }
 
@@ -437,16 +437,16 @@ setup_environment_variables() {
     fi
     
     # Export environment variables from the configuration file
-    if [ -f "$INSTALL_LOCATION/.env.manifest.global" ]; then
-        export_env_from_config "$INSTALL_LOCATION/.env.manifest.global"
+    if [ -f "$MANIFEST_CLI_INSTALL_LOCATION/.env.manifest.global" ]; then
+        export_env_from_config "$MANIFEST_CLI_INSTALL_LOCATION/.env.manifest.global"
         print_success "✅ Environment variables loaded from configuration"
     else
         print_warning "⚠️  Configuration file not found, using defaults"
     fi
     
     # Set essential installation variables
-    export MANIFEST_CLI_INSTALL_DIR="$INSTALL_LOCATION"
-    export MANIFEST_CLI_BIN_DIR="$LOCAL_BIN"
+    export MANIFEST_CLI_INSTALL_DIR="$MANIFEST_CLI_INSTALL_LOCATION"
+    export MANIFEST_CLI_BIN_DIR="$MANIFEST_CLI_LOCAL_BIN"
     export MANIFEST_CLI_VERSION_FILE="VERSION"
     export MANIFEST_CLI_GITIGNORE_FILE=".gitignore"
     
@@ -458,12 +458,12 @@ setup_environment_variables() {
 configure_path() {
     print_subheader "🛤️  Configuring PATH"
     
-    if [[ ":$PATH:" != *":$LOCAL_BIN:"* ]]; then
-        print_warning "⚠️  $LOCAL_BIN is not in your PATH"
+    if [[ ":$PATH:" != *":$MANIFEST_CLI_LOCAL_BIN:"* ]]; then
+        print_warning "⚠️  $MANIFEST_CLI_LOCAL_BIN is not in your PATH"
         
         # Add to current session
         print_status "Adding to PATH for current session..."
-        export PATH="$LOCAL_BIN:$PATH"
+        export PATH="$MANIFEST_CLI_LOCAL_BIN:$PATH"
         
         # Detect shell and suggest permanent configuration
         local shell_profile=""
@@ -481,19 +481,19 @@ configure_path() {
         
         if [ -n "$shell_profile" ]; then
             print_warning "⚠️  To make this permanent, add this line to $shell_profile:"
-            echo "   export PATH=\"$LOCAL_BIN:\$PATH\""
+            echo "   export PATH=\"$MANIFEST_CLI_LOCAL_BIN:\$PATH\""
             
             # Offer to add it automatically
             read -p "   Would you like me to add this to $shell_profile? (y/N): " -n 1 -r
             echo
             if [[ $REPLY =~ ^[Yy]$ ]]; then
-                echo "export PATH=\"$LOCAL_BIN:\$PATH\"" >> "$shell_profile"
+                echo "export PATH=\"$MANIFEST_CLI_LOCAL_BIN:\$PATH\"" >> "$shell_profile"
                 print_success "✅ Added to $shell_profile"
                 print_status "Please restart your terminal or run: source $shell_profile"
             fi
         fi
     else
-        print_success "✅ $LOCAL_BIN is already in your PATH"
+        print_success "✅ $MANIFEST_CLI_LOCAL_BIN is already in your PATH"
     fi
     
     echo ""
@@ -503,12 +503,12 @@ configure_path() {
 verify_installation() {
     print_subheader "🔍 Verifying Installation"
     
-    if command_exists "$CLI_NAME"; then
+    if command_exists "$MANIFEST_CLI_NAME"; then
         print_success "✅ Manifest CLI installed successfully!"
         
         # Get version information
         local version_info
-        if version_info=$("$CLI_NAME" --version 2>/dev/null); then
+        if version_info=$("$MANIFEST_CLI_NAME" --version 2>/dev/null); then
             print_status "📋 CLI Version: $version_info"
         else
             print_status "📋 CLI Version: Version info not available"
@@ -518,15 +518,15 @@ verify_installation() {
         if [ -n "$PWD" ] && git -C "$PWD" rev-parse --git-dir > /dev/null 2>&1; then
             PROJECT_ROOT="$PWD"
         else
-            PROJECT_ROOT="$INSTALL_LOCATION"
+            PROJECT_ROOT="$MANIFEST_CLI_INSTALL_LOCATION"
         fi
         
-        print_status "📍 Location: $(which "$CLI_NAME")"
+        print_status "📍 Location: $(which "$MANIFEST_CLI_NAME")"
         print_status "🏠 Project directory: $PROJECT_ROOT"
         
         # Test basic functionality
         print_status "🧪 Testing basic functionality..."
-        if "$CLI_NAME" --help >/dev/null 2>&1; then
+        if "$MANIFEST_CLI_NAME" --help >/dev/null 2>&1; then
             print_success "✅ Help command working"
         else
             print_warning "⚠️  Help command failed"
@@ -534,7 +534,7 @@ verify_installation() {
         
         return 0
     else
-        print_error "❌ Installation failed - $CLI_NAME command not found"
+        print_error "❌ Installation failed - $MANIFEST_CLI_NAME command not found"
         print_error "Please check the installation and try again"
         return 1
     fi
@@ -546,31 +546,31 @@ display_post_install_info() {
     
     echo
     print_success "🚀 You can now use the Manifest CLI:"
-    echo "   $CLI_NAME --help          # Show comprehensive help"
-    echo "   $CLI_NAME go              # Run complete workflow"
-    echo "   $CLI_NAME test            # Test functionality"
-    echo "   $CLI_NAME ntp             # Get NTP timestamp"
-    echo "   $CLI_NAME sync            # Sync with remote"
-    echo "   $CLI_NAME cleanup         # Manage historical docs"
+    echo "   $MANIFEST_CLI_NAME --help          # Show comprehensive help"
+    echo "   $MANIFEST_CLI_NAME go              # Run complete workflow"
+    echo "   $MANIFEST_CLI_NAME test            # Test functionality"
+    echo "   $MANIFEST_CLI_NAME ntp             # Get NTP timestamp"
+    echo "   $MANIFEST_CLI_NAME sync            # Sync with remote"
+    echo "   $MANIFEST_CLI_NAME cleanup         # Manage historical docs"
     
     echo
     print_status "💡 Next Steps:"
     echo "   1. Configure your Git credentials if not already set"
-    echo "   2. Run '$CLI_NAME test' to verify everything works"
+    echo "   2. Run '$MANIFEST_CLI_NAME test' to verify everything works"
     echo "   3. Check the generated documentation in the docs/ folder"
-    echo "   4. Review and customize $INSTALL_LOCATION/.env.manifest.global"
+    echo "   4. Review and customize $MANIFEST_CLI_INSTALL_LOCATION/.env.manifest.global"
     echo "   5. Copy env.manifest.global.example to your project root as .env.manifest.global"
     
     echo
     print_status "📚 Documentation:"
-    echo "   • User Guide: $INSTALL_LOCATION/docs/USER_GUIDE.md"
-    echo "   • Command Reference: $INSTALL_LOCATION/docs/COMMAND_REFERENCE.md"
-    echo "   • Examples: $INSTALL_LOCATION/docs/EXAMPLES.md"
-    echo "   • Contributing: $INSTALL_LOCATION/docs/CONTRIBUTING.md"
+    echo "   • User Guide: $MANIFEST_CLI_INSTALL_LOCATION/docs/USER_GUIDE.md"
+    echo "   • Command Reference: $MANIFEST_CLI_INSTALL_LOCATION/docs/COMMAND_REFERENCE.md"
+    echo "   • Examples: $MANIFEST_CLI_INSTALL_LOCATION/docs/EXAMPLES.md"
+    echo "   • Contributing: $MANIFEST_CLI_INSTALL_LOCATION/docs/CONTRIBUTING.md"
     
     echo
     print_status "🔧 Configuration:"
-    echo "   • Environment: $INSTALL_LOCATION/.env.manifest.global"
+    echo "   • Environment: $MANIFEST_CLI_INSTALL_LOCATION/.env.manifest.global"
     echo "   • Global Template: env.manifest.global.example (copy to .env.manifest.global)"
     echo "   • Customize the .env.manifest.global file for your specific needs"
     

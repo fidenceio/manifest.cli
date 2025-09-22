@@ -60,9 +60,9 @@ unset_manifest_cli_env_vars() {
     return 0
 }
 
-# Function to clean up all Manifest-related environment variables
+# Function to clean up all Manifest CLI-related environment variables
 cleanup_all_manifest_env_vars() {
-    echo "🧹 Cleaning up all Manifest-related environment variables..."
+    echo "🧹 Cleaning up all Manifest CLI-related environment variables..."
     
     # Unset old MANIFEST_* variables
     unset_manifest_env_vars
@@ -88,7 +88,7 @@ remove_manifest_from_shell_profiles() {
         shell_files=("$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.profile")
     fi
     
-    echo "🔍 Checking shell profile files for Manifest environment variables..."
+    echo "🔍 Checking shell profile files for Manifest CLI environment variables..."
     
     for profile_file in "${shell_files[@]}"; do
         if [ -f "$profile_file" ]; then
@@ -104,11 +104,11 @@ remove_manifest_from_shell_profiles() {
             if grep -v -E '^[[:space:]]*export[[:space:]]+MANIFEST_[A-Z_]+=' "$profile_file" > "$temp_file"; then
                 if [ -s "$temp_file" ] && ! cmp -s "$profile_file" "$temp_file"; then
                     mv "$temp_file" "$profile_file"
-                    echo "✅ Removed Manifest environment variables from $profile_file"
+                    echo "✅ Removed Manifest CLI environment variables from $profile_file"
                     ((removed_count++))
                 else
                     rm -f "$temp_file"
-                    echo "No Manifest environment variables found in $profile_file"
+                    echo "No Manifest CLI environment variables found in $profile_file"
                 fi
             else
                 rm -f "$temp_file"
@@ -118,16 +118,16 @@ remove_manifest_from_shell_profiles() {
     done
     
     if [ $removed_count -gt 0 ]; then
-        echo "✅ Removed Manifest environment variables from $removed_count shell profile files"
+        echo "✅ Removed Manifest CLI environment variables from $removed_count shell profile files"
         echo "💡 You may need to restart your terminal or run 'source ~/.zshrc' (or equivalent) to apply changes"
     else
-        echo "No Manifest environment variables found in shell profile files"
+        echo "No Manifest CLI environment variables found in shell profile files"
     fi
 }
 
 # Function to display current Manifest environment variables
 display_manifest_env_vars() {
-    echo "📋 Current Manifest environment variables:"
+    echo "📋 Current Manifest CLI environment variables:"
     
     local manifest_vars=($(get_manifest_env_vars))
     local manifest_cli_vars=($(get_manifest_cli_env_vars))
@@ -147,7 +147,7 @@ display_manifest_env_vars() {
     fi
     
     if [ ${#manifest_vars[@]} -eq 0 ] && [ ${#manifest_cli_vars[@]} -eq 0 ]; then
-        echo "No Manifest environment variables currently set"
+        echo "No Manifest CLI environment variables currently set"
     fi
 }
 

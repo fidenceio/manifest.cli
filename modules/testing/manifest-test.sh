@@ -7,6 +7,19 @@
 TEST_TIMEOUT=30
 TEST_VERBOSE=false
 
+# Source the compatibility test modules
+if [ -f "$(dirname "${BASH_SOURCE[0]}")/manifest-zsh-compatibility-test.sh" ]; then
+    source "$(dirname "${BASH_SOURCE[0]}")/manifest-zsh-compatibility-test.sh"
+fi
+
+if [ -f "$(dirname "${BASH_SOURCE[0]}")/manifest-bash32-compatibility-test.sh" ]; then
+    source "$(dirname "${BASH_SOURCE[0]}")/manifest-bash32-compatibility-test.sh"
+fi
+
+if [ -f "$(dirname "${BASH_SOURCE[0]}")/manifest-bash4-compatibility-test.sh" ]; then
+    source "$(dirname "${BASH_SOURCE[0]}")/manifest-bash4-compatibility-test.sh"
+fi
+
 # Security testing functions
 test_security_validation() {
     echo "🔒 Testing security validation functions..."
@@ -157,7 +170,36 @@ test_command() {
         "integration")
             test_integration_workflows
             ;;
-        "all"|*)
+        "zsh")
+            echo "🐚 Running zsh 5.9 compatibility tests..."
+            run_zsh_compatibility_tests
+            ;;
+        "bash32")
+            echo "🐍 Running bash 3.2 compatibility tests..."
+            run_bash32_compatibility_tests
+            ;;
+        "bash4")
+            echo "🐍 Running bash 4+ compatibility tests..."
+            run_bash4_compatibility_tests
+            ;;
+        "bash")
+            echo "🐍 Running bash compatibility tests..."
+            local bash_version=$(bash --version | head -n1 | grep -oE 'version [0-9]+\.[0-9]+' | cut -d' ' -f2)
+            local major_version=$(echo "$bash_version" | cut -d'.' -f1)
+            
+            if [ "$major_version" -ge 4 ]; then
+                echo "   Detected bash $bash_version - running bash 4+ tests..."
+                run_bash4_compatibility_tests
+            else
+                echo "   Detected bash $bash_version - running bash 3.2 tests..."
+                run_bash32_compatibility_tests
+            fi
+            ;;
+        "all")
+            test_all_functionality
+            ;;
+        *)
+            echo "🧪 Running basic functionality tests..."
             test_all_functionality
             ;;
     esac

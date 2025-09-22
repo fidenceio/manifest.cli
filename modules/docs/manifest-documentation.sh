@@ -11,10 +11,10 @@ get_docs_dir() {
 }
 
 # Import required modules
-SCRIPT_DIR="$(get_script_dir)"
-source "$(dirname "$SCRIPT_DIR")/git/manifest-git-changes.sh"
-source "$(dirname "$SCRIPT_DIR")/docs/manifest-markdown-templates.sh"
-source "$(dirname "$SCRIPT_DIR")/docs/manifest-markdown-validation.sh"
+MANIFEST_CLI_SCRIPT_DIR="$(get_script_dir)"
+source "$(dirname "$MANIFEST_CLI_SCRIPT_DIR")/git/manifest-git-changes.sh"
+source "$(dirname "$MANIFEST_CLI_SCRIPT_DIR")/docs/manifest-markdown-templates.sh"
+source "$(dirname "$MANIFEST_CLI_SCRIPT_DIR")/docs/manifest-markdown-validation.sh"
 
 # Generate release notes
 generate_release_notes() {
