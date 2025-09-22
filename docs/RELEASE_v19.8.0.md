@@ -1,6 +1,6 @@
 # Release v19.8.0
 
-**Release Date:** 2025-09-22 01:52:29 UTC
+**Release Date:** 2025-09-22 01:54:36 UTC
 **Release Type:** patch
 
 ## 🎯 What's New
@@ -61,9 +61,7 @@ manifest docs
 
 
 ## Improvements
-Update main CHANGELOG.md to v19.8.0
-Bump version to 19.8.0 [NTP: 2025-09-22 01:46:28 UTC]
-Auto-commit before Manifest process [NTP: 2025-09-22 01:46:28 UTC]
+--help [NTP: 2025-09-22 01:53:50 UTC]
 
 ## Bug Fixes
 
