@@ -2,11 +2,11 @@
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `23.2.0` |
-| **Release Date** | `2025-09-22 23:07:57 UTC` |
-| **Git Tag** | `v23.2.0` |
+| **Current Version** | `24.0.0` |
+| **Release Date** | `2025-09-22 23:10:11 UTC` |
+| **Git Tag** | `v24.0.0` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-09-22 23:07:57 UTC` |
+| **Last Updated** | `2025-09-22 23:10:11 UTC` |
 | **Project Type** | `` |
 
 ### 📚 Documentation Files
