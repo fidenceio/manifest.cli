@@ -12,36 +12,27 @@ The most common use case - releasing a bug fix or minor improvement:
 
 ```bash
 # 1. Make your changes
-
 git add .
-
 git commit -m "Fix: resolve authentication issue with SSH keys"
 
 # 2. Test everything works
-
 manifest test
 
 # 3. Release with patch version bump
-
 manifest go
 
 # 4. Verify the release
-
 git log --oneline -3
-
 git tag --list -3
-
 ```
 
 **What happens:**
-
 - Version: 1.0.0 → 1.0.1
-
 - Documentation: Auto-generated release notes and changelog
-
 - Git: Committed, tagged, and pushed to remote
-
 - Homebrew: Formula updated (if applicable)
+- Security: Input validation and path security checks
+- NTP: Trusted timestamp for compliance
 
 ## Feature Release
 
@@ -395,45 +386,115 @@ Thorough testing before release:
 # test-workflow.sh - Comprehensive testing script
 
 echo "🧪 Manifest CLI Testing Workflow"
-
 echo "================================="
 
 # 1. Basic functionality tests
-
 echo "📋 Testing basic functionality..."
-
 manifest test
 
 # 2. Component-specific tests
-
 echo "📋 Testing NTP functionality..."
-
 manifest test ntp
 
 echo "📋 Testing Git operations..."
-
 manifest test git
 
 echo "📋 Testing documentation generation..."
-
 manifest test docs
 
-# 3. Integration tests
+# 3. Cross-shell compatibility tests
+echo "📋 Testing cross-shell compatibility..."
+manifest test zsh
+manifest test bash32
+manifest test bash4
 
+# 4. Security testing
+echo "📋 Testing security features..."
+manifest security
+
+# 5. Integration tests
 echo "📋 Testing complete workflow..."
-
 manifest go --dry-run
 
-# 4. Performance tests
-
+# 6. Performance tests
 echo "📋 Testing performance..."
-
 time manifest ntp
-
 time manifest test all
 
 echo "✅ All tests completed successfully"
+```
 
+## Cross-Shell Compatibility Testing
+
+Test your CLI across different shell environments:
+
+```bash
+#!/bin/bash
+# cross-shell-test.sh - Cross-shell compatibility testing
+
+echo "🐚 Cross-Shell Compatibility Testing"
+echo "===================================="
+
+# Test Zsh 5.9 compatibility
+echo "📋 Testing Zsh 5.9 compatibility..."
+if command -v zsh &> /dev/null; then
+    manifest test zsh
+    echo "✅ Zsh 5.9 tests completed"
+else
+    echo "⚠️  Zsh not available, skipping Zsh tests"
+fi
+
+# Test Bash 3.2 compatibility
+echo "📋 Testing Bash 3.2 compatibility..."
+manifest test bash32
+
+# Test Bash 4+ compatibility
+echo "📋 Testing Bash 4+ compatibility..."
+manifest test bash4
+
+# Auto-detect current shell
+echo "📋 Testing current shell compatibility..."
+manifest test bash
+
+echo "✅ Cross-shell compatibility testing completed"
+```
+
+## Security Testing Examples
+
+Comprehensive security validation:
+
+```bash
+#!/bin/bash
+# security-test.sh - Security testing examples
+
+echo "🔒 Security Testing Examples"
+echo "============================"
+
+# 1. Full security audit
+echo "📋 Running full security audit..."
+manifest security
+
+# 2. Vulnerability scanning
+echo "📋 Scanning for vulnerabilities..."
+manifest security --vulnerabilities
+
+# 3. Privacy protection scan
+echo "📋 Scanning for privacy-sensitive information..."
+manifest security --privacy
+
+# 4. Path validation
+echo "📋 Validating file paths..."
+manifest security --paths
+
+# 5. Input validation
+echo "📋 Validating input parameters..."
+manifest security --input
+
+# 6. Network security check
+echo "📋 Checking network security..."
+manifest security --network
+
+echo "✅ Security testing completed"
 ```
 
 ## Cross-Platform Testing
@@ -496,6 +557,53 @@ echo "✅ Cross-platform testing completed"
 
 ## 🔧 Configuration Examples
 
+## Environment Variable Configuration
+
+Setting up standardized environment variables with the new `MANIFEST_CLI_` prefix:
+
+```bash
+#!/bin/bash
+# setup-env-vars.sh - Environment variable configuration
+
+echo "🔧 Environment Variable Configuration"
+echo "===================================="
+
+# Core configuration
+export MANIFEST_CLI_DEBUG=false
+export MANIFEST_CLI_VERBOSE=true
+export MANIFEST_CLI_LOG_LEVEL="INFO"
+export MANIFEST_CLI_INTERACTIVE=false
+
+# NTP configuration
+export MANIFEST_CLI_NTP_SERVERS="time.apple.com,time.google.com,pool.ntp.org"
+export MANIFEST_CLI_NTP_TIMEOUT=5
+export MANIFEST_CLI_NTP_RETRIES=3
+export MANIFEST_CLI_NTP_VERIFY=true
+
+# Git configuration with retry logic
+export MANIFEST_CLI_GIT_TIMEOUT=300
+export MANIFEST_CLI_GIT_RETRIES=3
+export MANIFEST_CLI_GIT_COMMIT_TEMPLATE="Release v{version} - {timestamp}"
+
+# Documentation configuration
+export MANIFEST_CLI_DOCS_TEMPLATE_DIR="./templates"
+export MANIFEST_CLI_DOCS_OUTPUT_DIR="./docs"
+export MANIFEST_CLI_DOCS_AUTO_GENERATE=true
+
+# Homebrew configuration
+export MANIFEST_CLI_BREW_OPTION="enabled"
+export MANIFEST_CLI_BREW_INTERACTIVE="no"
+export MANIFEST_CLI_TAP_REPO="https://github.com/your-org/your-tap.git"
+
+# Cloud configuration
+export MANIFEST_CLI_CLOUD_API_KEY="your-api-key-here"
+export MANIFEST_CLI_CLOUD_ENDPOINT="https://api.manifest.cloud"
+export MANIFEST_CLI_CLOUD_SKIP=false
+export MANIFEST_CLI_OFFLINE_MODE=false
+
+echo "✅ Environment variables configured"
+```
+
 ## Custom NTP Configuration
 
 Setting up custom NTP servers for enterprise environments:
@@ -505,33 +613,24 @@ Setting up custom NTP servers for enterprise environments:
 # setup-enterprise-ntp.sh - Enterprise NTP configuration
 
 echo "🏢 Enterprise NTP Configuration"
-
 echo "================================"
 
 # Set enterprise NTP servers
-
-export MANIFEST_NTP_SERVERS="ntp.company.com,time.company.com,pool.ntp.org"
+export MANIFEST_CLI_NTP_SERVERS="ntp.company.com,time.company.com,pool.ntp.org"
 
 # Set longer timeouts for corporate networks
-
-export MANIFEST_NTP_TIMEOUT=10
-
-export MANIFEST_NTP_RETRIES=5
+export MANIFEST_CLI_NTP_TIMEOUT=10
+export MANIFEST_CLI_NTP_RETRIES=5
 
 # Test configuration
-
 echo "📋 Testing NTP configuration..."
-
 manifest ntp --verify
 
 # Verify with custom servers
-
 echo "📋 Testing custom servers..."
-
 manifest ntp --servers="ntp.company.com,time.company.com"
 
 echo "✅ Enterprise NTP configuration completed"
-
 ```
 
 ## Git Retry Configuration
@@ -543,33 +642,24 @@ Setting up robust git operations for unreliable networks:
 # setup-git-retry.sh - Git retry configuration for unreliable networks
 
 echo "🔄 Git Retry Configuration"
-
 echo "=========================="
 
 # Configure git retry settings for unreliable networks
-
-export MANIFEST_GIT_TIMEOUT="600"    # 10 minutes timeout
-
-export MANIFEST_GIT_RETRIES="5"      # 5 retry attempts
+export MANIFEST_CLI_GIT_TIMEOUT="600"    # 10 minutes timeout
+export MANIFEST_CLI_GIT_RETRIES="5"      # 5 retry attempts
 
 # Test git operations
-
 echo "📋 Testing git operations..."
-
 manifest sync
 
 # Test with different retry settings
-
 echo "📋 Testing with aggressive retry settings..."
-
-export MANIFEST_GIT_TIMEOUT="300"    # 5 minutes timeout
-
-export MANIFEST_GIT_RETRIES="10"     # 10 retry attempts
+export MANIFEST_CLI_GIT_TIMEOUT="300"    # 5 minutes timeout
+export MANIFEST_CLI_GIT_RETRIES="10"     # 10 retry attempts
 
 manifest test git
 
 echo "✅ Git retry configuration completed"
-
 ```
 
 ## Auto-Update Configuration
@@ -581,39 +671,27 @@ Setting up automatic updates for different environments:
 # setup-auto-update.sh - Auto-update configuration
 
 echo "🔄 Auto-Update Configuration"
-
 echo "============================"
 
 # Development environment - frequent updates
-
 echo "📋 Setting up development environment..."
-
-export MANIFEST_AUTO_UPDATE="true"
-
-export MANIFEST_UPDATE_COOLDOWN="5"  # Check every 5 minutes
+export MANIFEST_CLI_AUTO_UPDATE="true"
+export MANIFEST_CLI_UPDATE_COOLDOWN="5"  # Check every 5 minutes
 
 # Production environment - conservative updates
-
 echo "📋 Setting up production environment..."
-
-export MANIFEST_AUTO_UPDATE="true"
-
-export MANIFEST_UPDATE_COOLDOWN="1440"  # Check once per day
+export MANIFEST_CLI_AUTO_UPDATE="true"
+export MANIFEST_CLI_UPDATE_COOLDOWN="1440"  # Check once per day
 
 # Disable auto-update for CI/CD
-
 echo "📋 Setting up CI/CD environment..."
-
-export MANIFEST_AUTO_UPDATE="false"
+export MANIFEST_CLI_AUTO_UPDATE="false"
 
 # Test update functionality
-
 echo "📋 Testing update functionality..."
-
 manifest update --check
 
 echo "✅ Auto-update configuration completed"
-
 ```
 
 ## Custom Documentation Templates

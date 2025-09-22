@@ -1,7 +1,7 @@
 # Release v22.0.0
 
-**Release Date:** 2025-09-22 17:01:40 UTC
-**Release Type:** major
+**Release Date:** 2025-09-22 17:07:18 UTC
+**Release Type:** patch
 
 ## 🎯 What's New
 
@@ -59,11 +59,17 @@ manifest docs
 
 ## New Features
 
+
 ## Improvements
+Update main CHANGELOG.md to v22.0.0
+Bump version to 22.0.0 [NTP: 2025-09-22 17:01:40 UTC]
 Auto-commit before Manifest process [NTP: 2025-09-22 17:01:40 UTC]
 
 ## Bug Fixes
 
+
 ## Breaking Changes
 
+
 ## Documentation
+

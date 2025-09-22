@@ -352,7 +352,7 @@ main() {
             show_configuration
             ;;
         "security")
-            manifest_security "$PROJECT_ROOT"
+            manifest_security
             ;;
         "test")
             test_command "$@"

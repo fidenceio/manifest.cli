@@ -17,9 +17,16 @@ The tool is built with a modular architecture that handles:
 
 ## **Current Capabilities**
 - **Core Workflow Automation**: Complete release process from version bump to deployment
-- **Cross-Platform Support**: Optimized for macOS, Linux, and BSD systems
-- **Intelligent Testing**: Comprehensive validation before release
+- **Cross-Platform Support**: Optimized for macOS, Linux, and BSD systems with shell compatibility (Bash 3.2+, Zsh 5.9+)
+- **Intelligent Testing**: Comprehensive validation before release with cross-shell compatibility testing
 - **Custom Templates**: Flexible documentation and workflow customization
+- **Environment Variable Management**: Standardized `MANIFEST_CLI_` prefixed variables for all configurations
+- **Dynamic Path Resolution**: Portable across different users and systems without hardcoded paths
+- **Advanced Security**: Input validation, command injection protection, and path traversal prevention
+- **Comprehensive Testing Suite**: Bash 3.2, Bash 4+, and Zsh 5.9 compatibility testing
+- **NTP Timestamp Verification**: Trusted timestamps from multiple servers for compliance
+- **Homebrew Integration**: Automatic formula updates and maintenance
+- **Git Retry Logic**: Robust handling of network issues with configurable timeouts and retries
 
 ## **Future Capabilities**
 - **Advanced AI**: Smarter commit analysis and intelligent categorization
@@ -101,6 +108,12 @@ manifest test ntp         # Test NTP connectivity
 manifest test git         # Test Git operations
 manifest test docs        # Test documentation generation
 manifest test os          # Test OS detection
+
+# Cross-shell compatibility testing
+manifest test zsh         # Test Zsh 5.9 compatibility
+manifest test bash32      # Test Bash 3.2 compatibility
+manifest test bash4       # Test Bash 4+ compatibility
+manifest test bash        # Auto-detect and test current Bash version
 ```
 
 ## Test Output Example
@@ -210,39 +223,105 @@ manifest sync --force
 manifest sync --branch=main
 ```
 
+## 6. `manifest security` - Security Audit
+
+Perform security audits and privacy protection:
+
+```bash
+# Run security audit
+manifest security
+
+# Check for vulnerabilities
+manifest security --vulnerabilities
+
+# Privacy protection scan
+manifest security --privacy
+```
+
+## 7. Cross-Shell Compatibility Testing
+
+Test your CLI across different shell environments:
+
+```bash
+# Test Zsh 5.9 compatibility
+manifest test zsh
+
+# Test Bash 3.2 compatibility  
+manifest test bash32
+
+# Test Bash 4+ compatibility
+manifest test bash4
+
+# Auto-detect current shell and test
+manifest test bash
+```
+
 ## 🔧 Advanced Usage
 
 ## Environment Variables
 
-You can customize behavior with environment variables:
+You can customize behavior with environment variables. All Manifest CLI variables use the `MANIFEST_CLI_` prefix for consistency and safety:
 
 ```bash
-# Set custom NTP servers
-export MANIFEST_NTP_SERVERS="time.nist.gov,time.google.com"
+# Core configuration
+export MANIFEST_CLI_DEBUG=true
+export MANIFEST_CLI_VERBOSE=true
+export MANIFEST_CLI_LOG_LEVEL="INFO"
 
-# Set custom Git commit message template
-export MANIFEST_COMMIT_TEMPLATE="Release v{version} - {timestamp}"
+# NTP configuration
+export MANIFEST_CLI_NTP_SERVERS="time.nist.gov,time.google.com,pool.ntp.org"
+export MANIFEST_CLI_NTP_TIMEOUT=5
+export MANIFEST_CLI_NTP_RETRIES=3
 
-# Enable debug mode
-export MANIFEST_DEBUG=true
+# Git configuration with retry logic
+export MANIFEST_CLI_GIT_TIMEOUT=300
+export MANIFEST_CLI_GIT_RETRIES=3
+export MANIFEST_CLI_GIT_COMMIT_TEMPLATE="Release v{version} - {timestamp}"
 
-# Set custom documentation templates
-export MANIFEST_DOCS_TEMPLATE_DIR="/path/to/templates"
+# Documentation configuration
+export MANIFEST_CLI_DOCS_TEMPLATE_DIR="/path/to/templates"
+export MANIFEST_CLI_DOCS_OUTPUT_DIR="./docs"
+
+# Homebrew integration
+export MANIFEST_CLI_BREW_OPTION="enabled"
+export MANIFEST_CLI_BREW_INTERACTIVE="no"
+export MANIFEST_CLI_TAP_REPO="https://github.com/your-org/your-tap.git"
+
+# Auto-update configuration
+export MANIFEST_CLI_AUTO_UPDATE=true
+export MANIFEST_CLI_UPDATE_COOLDOWN=30
 ```
 
 ## Configuration Files
 
-For advanced users, you can create a `.manifestrc` file in your project root:
+For advanced users, you can create a `.env.manifest.global` file in your project root:
 
 ```bash
-# .manifestrc
-NTP_SERVERS="time.nist.gov,time.google.com,pool.ntp.org"
-COMMIT_TEMPLATE="Release v{version} - {timestamp}"
-DOCS_TEMPLATE_DIR="./templates"
-DEBUG=false
-INTERACTIVE=true
-VERBOSE=false
-LOG_LEVEL="INFO"
+# .env.manifest.global
+# Core configuration
+MANIFEST_CLI_DEBUG=false
+MANIFEST_CLI_VERBOSE=false
+MANIFEST_CLI_LOG_LEVEL="INFO"
+MANIFEST_CLI_INTERACTIVE=true
+
+# NTP configuration
+MANIFEST_CLI_NTP_SERVERS="time.apple.com,time.google.com,pool.ntp.org"
+MANIFEST_CLI_NTP_TIMEOUT=5
+MANIFEST_CLI_NTP_RETRIES=3
+
+# Git configuration
+MANIFEST_CLI_GIT_COMMIT_TEMPLATE="Release v{version} - {timestamp}"
+MANIFEST_CLI_GIT_TIMEOUT=300
+MANIFEST_CLI_GIT_RETRIES=3
+
+# Documentation configuration
+MANIFEST_CLI_DOCS_TEMPLATE_DIR="./templates"
+MANIFEST_CLI_DOCS_OUTPUT_DIR="./docs"
+
+# Homebrew configuration
+MANIFEST_CLI_BREW_OPTION="enabled"
+MANIFEST_CLI_BREW_INTERACTIVE="no"
+MANIFEST_CLI_TAP_REPO="https://github.com/your-org/your-tap.git"
 ```
 
 ## Custom Documentation Templates

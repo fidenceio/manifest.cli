@@ -9,24 +9,27 @@ This guide covers all installation methods for Manifest CLI across different pla
 Before installing Manifest CLI, ensure you have:
 
 - **Git** 2.20+ (recommended)
-
-- **Bash** 4.0+ (for advanced features)
+- **Bash** 3.2+ (Bash 4.0+ recommended for advanced features)
+- **Zsh** 5.9+ (optional, for cross-shell compatibility testing)
 - **Internet access** (for NTP timestamp verification)
 - **Administrative privileges** (for some installation methods)
 
 ## **System Requirements**
 
-## **Current Version (8.6.7+)**
+## **Current Version (22.0.0+)**
 - **Operating System**: macOS 10.15+, Linux (kernel 4.0+), BSD
 - **Memory**: 512MB RAM minimum, 1GB recommended
 - **Storage**: 100MB available disk space
 - **Network**: Stable internet connection for NTP and updates
+- **Shell Compatibility**: Bash 3.2+, Zsh 5.9+ (with comprehensive testing)
+- **Security**: Input validation, path security, command injection protection
 
 ## **Future Versions**
 - **Operating System**: Windows 10/11, additional Linux distributions
 - **Memory**: 1GB RAM minimum, 2GB recommended
 - **Storage**: 200MB available disk space
 - **Network**: Enhanced offline capabilities and local NTP servers
+- **Security**: Advanced GPG signing, vulnerability scanning
 
 ## 🍺 Installation Methods
 
@@ -269,20 +272,40 @@ set -gx PATH $HOME/.local/bin $PATH
 
 ## 5. Custom Configuration
 
-Create `.manifestrc` in your project root:
+Create `.env.manifest.global` in your project root:
 
 ```bash
-# .manifestrc
-NTP_SERVERS="time.apple.com,time.google.com,pool.ntp.org"
-COMMIT_TEMPLATE="Release v{version} - {timestamp}"
-DOCS_TEMPLATE_DIR="./templates"
-DEBUG=false
-INTERACTIVE=true
-VERBOSE=false
-LOG_LEVEL="INFO"
-BREW_OPTION=enabled
-BREW_INTERACTIVE=no
-TAP_REPO="https://github.com/fidenceio/fidenceio-homebrew-tap.git"
+# .env.manifest.global
+# Core configuration
+MANIFEST_CLI_DEBUG=false
+MANIFEST_CLI_VERBOSE=false
+MANIFEST_CLI_LOG_LEVEL="INFO"
+MANIFEST_CLI_INTERACTIVE=true
+
+# NTP configuration
+MANIFEST_CLI_NTP_SERVERS="time.apple.com,time.google.com,pool.ntp.org"
+MANIFEST_CLI_NTP_TIMEOUT=5
+MANIFEST_CLI_NTP_RETRIES=3
+
+# Git configuration with retry logic
+MANIFEST_CLI_GIT_TIMEOUT=300
+MANIFEST_CLI_GIT_RETRIES=3
+MANIFEST_CLI_GIT_COMMIT_TEMPLATE="Release v{version} - {timestamp}"
+
+# Documentation configuration
+MANIFEST_CLI_DOCS_TEMPLATE_DIR="./templates"
+MANIFEST_CLI_DOCS_OUTPUT_DIR="./docs"
+
+# Homebrew configuration
+MANIFEST_CLI_BREW_OPTION="enabled"
+MANIFEST_CLI_BREW_INTERACTIVE="no"
+MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/fidenceio-homebrew-tap.git"
+
+# Cloud configuration
+MANIFEST_CLI_CLOUD_API_KEY="your-api-key-here"
+MANIFEST_CLI_CLOUD_ENDPOINT="https://api.manifest.cloud"
+MANIFEST_CLI_CLOUD_SKIP=false
+MANIFEST_CLI_OFFLINE_MODE=false
 ```
 
 ## 🧪 Testing Your Installation
@@ -308,6 +331,38 @@ manifest test docs
 ```bash
 # Run all tests
 manifest test all
+```
+
+## Cross-Shell Compatibility Test
+
+Test your installation across different shell environments:
+
+```bash
+# Test Zsh 5.9 compatibility
+manifest test zsh
+
+# Test Bash 3.2 compatibility
+manifest test bash32
+
+# Test Bash 4+ compatibility
+manifest test bash4
+
+# Auto-detect current shell and test
+manifest test bash
+```
+
+## Security Test
+
+Test security features and validation:
+
+```bash
+# Run security audit
+manifest security
+
+# Test specific security features
+manifest security --vulnerabilities
+manifest security --privacy
+manifest security --paths
 ```
 
 ## Workflow Test

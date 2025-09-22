@@ -163,7 +163,7 @@ main_cleanup() {
                     log_warning "Failed to move: $filename"
                 fi
             fi
-        done < <(find "$(get_docs_folder "$PROJECT_ROOT")" -name "CHANGELOG_v*.md" -o -name "RELEASE_v*.md" | grep -v "$(basename "$(get_zarchive_dir)")")
+        done < <(find "$(get_docs_folder "$PROJECT_ROOT")" -name "CHANGELOG_v*.md" -o -name "RELEASE_v*.md" -o -name "SECURITY_ANALYSIS_REPORT_v*.md" | grep -v "$(basename "$(get_zarchive_dir)")")
         
         log_success "Archived $moved_count files, skipped $skipped_count files"
     fi

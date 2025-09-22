@@ -17,6 +17,13 @@ This reference covers the current capabilities of Manifest CLI (version 8.6.7+) 
 | `manifest ntp` | Get NTP timestamp | `manifest ntp [options]` |
 | `manifest docs` | Generate documentation | `manifest docs [type] [options]` |
 | `manifest sync` | Sync repository | `manifest sync [options]` |
+| `manifest security` | Security audit | `manifest security [options]` |
+| `manifest config` | Show configuration | `manifest config [options]` |
+| `manifest cleanup` | Clean repository | `manifest cleanup [options]` |
+| `manifest update` | Update CLI | `manifest update [options]` |
+| `manifest uninstall` | Remove CLI | `manifest uninstall [options]` |
+| `manifest cloud` | Cloud integration | `manifest cloud [command] [options]` |
+| `manifest agent` | Containerized agent | `manifest agent [command] [options]` |
 | `manifest --help` | Show help | `manifest --help` |
 | `manifest --version` | Show version | `manifest --version` |
 
@@ -117,33 +124,76 @@ manifest test --timeout 30
 - VERSION file handling
 - Multi-format version support
 
-#### NTP Tests
+### NTP Tests
 - Server connectivity and response time
 - Timestamp accuracy and precision
 - Timezone handling and conversion
 - Fallback mechanisms and error handling
 - Multi-server redundancy
 
-#### Git Tests
+### Git Tests
 - Repository status and configuration
 - Remote configuration and authentication
 - Branch information and management
 - Push/pull operations
 - Tag creation and management
 
-#### Documentation Tests
+### Documentation Tests
 - Template generation and validation
 - File creation and permissions
 - Content validation and formatting
 - Link verification and integrity
 - Template customization
 
-#### OS Tests
+### OS Tests
 - Platform detection and optimization
 - Feature availability and compatibility
 - Performance optimization
 - Cross-platform compatibility
 - Command availability
+
+### Cross-Shell Compatibility Tests
+- **Zsh 5.9 Testing**: `manifest test zsh`
+  - Zsh environment detection
+  - Bash compatibility within Zsh
+  - Conditional function testing
+  - String comparison validation
+  - File and directory operations
+  - Core CLI command execution
+  - Error handling verification
+  - Environment variable handling
+  - Module loading validation
+  - Cross-shell consistency checks
+
+- **Bash 3.2 Testing**: `manifest test bash32`
+  - Bash 3.2 environment detection
+  - Capability detection validation
+  - Conditional function compatibility
+  - String comparison edge cases
+  - File and directory checks
+  - Core CLI command execution
+  - Error handling verification
+  - Environment variable handling
+  - Module loading validation
+  - Bash 3.2 specific syntax testing
+
+- **Bash 4+ Testing**: `manifest test bash4`
+  - Bash 4+ environment detection
+  - Advanced capability detection
+  - Conditional function testing
+  - String comparison validation
+  - File and directory operations
+  - Core CLI command execution
+  - Error handling verification
+  - Environment variable handling
+  - Module loading validation
+  - Bash 4+ specific features (associative arrays, advanced parameter expansion)
+
+- **Auto-Detection Testing**: `manifest test bash`
+  - Automatically detects current Bash version
+  - Runs appropriate compatibility tests
+  - Provides version-specific feedback
+  - Ensures optimal performance for current environment
 
 ## `manifest ntp` - NTP Timestamp
 
@@ -276,6 +326,48 @@ manifest sync --branch=develop
 manifest sync --prune
 ```
 
+## `manifest security` - Security Audit
+
+Perform comprehensive security audits and privacy protection scans.
+
+## Syntax
+```bash
+manifest security [options]
+```
+
+## Options
+- `--vulnerabilities`: Check for security vulnerabilities
+- `--privacy`: Scan for privacy-sensitive information
+- `--paths`: Validate file paths for security issues
+- `--input`: Validate input parameters
+- `--network`: Check network security settings
+- `--verbose` or `-v`: Show detailed security information
+
+## Examples
+```bash
+# Run full security audit
+manifest security
+
+# Check for vulnerabilities only
+manifest security --vulnerabilities
+
+# Privacy protection scan
+manifest security --privacy
+
+# Validate file paths
+manifest security --paths
+
+# Verbose security report
+manifest security --verbose
+```
+
+## Security Features
+- **Path Validation**: Prevents directory traversal attacks
+- **Input Sanitization**: Validates and sanitizes user inputs
+- **Command Injection Protection**: Prevents malicious command execution
+- **Privacy Scanning**: Detects sensitive information in files
+- **Network Security**: Validates URL and network configurations
+
 ## 🔧 Global Options
 
 These options are available for all commands:
@@ -300,71 +392,101 @@ Specify custom configuration file.
 
 ## 🌍 Environment Variables
 
+All Manifest CLI environment variables use the `MANIFEST_CLI_` prefix for consistency and safety.
+
 ## Core Configuration
-- `MANIFEST_DEBUG`: Enable debug mode
-- `MANIFEST_VERBOSE`: Enable verbose output
-- `MANIFEST_CONFIG`: Configuration file path
-- `MANIFEST_LOG_LEVEL`: Logging level (DEBUG, INFO, WARN, ERROR)
+- `MANIFEST_CLI_DEBUG`: Enable debug mode (true/false)
+- `MANIFEST_CLI_VERBOSE`: Enable verbose output (true/false)
+- `MANIFEST_CLI_LOG_LEVEL`: Logging level (DEBUG, INFO, WARN, ERROR)
+- `MANIFEST_CLI_INTERACTIVE`: Interactive mode (true/false)
+- `MANIFEST_CLI_CONFIG`: Configuration file path
 
 ## NTP Configuration
-- `MANIFEST_NTP_SERVERS`: Custom NTP server list
-- `MANIFEST_NTP_TIMEOUT`: Connection timeout in seconds
-- `MANIFEST_NTP_RETRIES`: Retry attempt count
-- `MANIFEST_NTP_FALLBACK`: Fallback server list
+- `MANIFEST_CLI_NTP_SERVERS`: Custom NTP server list (comma-separated)
+- `MANIFEST_CLI_NTP_TIMEOUT`: Connection timeout in seconds (default: 5)
+- `MANIFEST_CLI_NTP_RETRIES`: Retry attempt count (default: 3)
+- `MANIFEST_CLI_NTP_VERIFY`: Enable timestamp verification (true/false)
 
 ## Git Configuration
-- `MANIFEST_GIT_COMMIT_TEMPLATE`: Commit message template
-- `MANIFEST_GIT_AUTHOR_NAME`: Default author name
-- `MANIFEST_GIT_AUTHOR_EMAIL`: Default author email
-- `MANIFEST_GIT_PUSH_STRATEGY`: Git push strategy (simple, upstream, current)
-- `MANIFEST_GIT_PULL_STRATEGY`: Git pull strategy (rebase, merge, ff-only)
-- `MANIFEST_GIT_TIMEOUT`: Git operation timeout in seconds (default: 300)
-- `MANIFEST_GIT_RETRIES`: Number of retry attempts for failed operations (default: 3)
+- `MANIFEST_CLI_GIT_COMMIT_TEMPLATE`: Commit message template
+- `MANIFEST_CLI_GIT_AUTHOR_NAME`: Default author name
+- `MANIFEST_CLI_GIT_AUTHOR_EMAIL`: Default author email
+- `MANIFEST_CLI_GIT_PUSH_STRATEGY`: Git push strategy (simple, upstream, current)
+- `MANIFEST_CLI_GIT_PULL_STRATEGY`: Git pull strategy (rebase, merge, ff-only)
+- `MANIFEST_CLI_GIT_TIMEOUT`: Git operation timeout in seconds (default: 300)
+- `MANIFEST_CLI_GIT_RETRIES`: Number of retry attempts for failed operations (default: 3)
 - Note: Manifest CLI automatically uses all configured git remotes with retry logic
 
 ## Documentation Configuration
-- `MANIFEST_DOCS_TEMPLATE_DIR`: Template directory path
-- `MANIFEST_DOCS_OUTPUT_DIR`: Output directory path
-- `MANIFEST_DOCS_FORMAT`: Output format (markdown, html, json)
+- `MANIFEST_CLI_DOCS_TEMPLATE_DIR`: Template directory path
+- `MANIFEST_CLI_DOCS_OUTPUT_DIR`: Output directory path
+- `MANIFEST_CLI_DOCS_FORMAT`: Output format (markdown, html, json)
+- `MANIFEST_CLI_DOCS_AUTO_GENERATE`: Auto-generate docs on release (true/false)
 
 ## Homebrew Configuration
-- `MANIFEST_BREW_OPTION`: Control Homebrew functionality (enabled/disabled)
-- `MANIFEST_BREW_INTERACTIVE`: Interactive Homebrew updates (yes/no)
-- `MANIFEST_TAP_REPO`: Homebrew tap repository URL
+- `MANIFEST_CLI_BREW_OPTION`: Control Homebrew functionality (enabled/disabled)
+- `MANIFEST_CLI_BREW_INTERACTIVE`: Interactive Homebrew updates (yes/no)
+- `MANIFEST_CLI_TAP_REPO`: Homebrew tap repository URL
 
 ## Auto-Update Configuration
-- `MANIFEST_AUTO_UPDATE`: Enable automatic update checking (true/false, default: true)
-- `MANIFEST_UPDATE_COOLDOWN`: Cooldown period between update checks in minutes (default: 30)
+- `MANIFEST_CLI_AUTO_UPDATE`: Enable automatic update checking (true/false, default: true)
+- `MANIFEST_CLI_UPDATE_COOLDOWN`: Cooldown period between update checks in minutes (default: 30)
 
 ## OS Configuration
-- `MANIFEST_OS_PLATFORM`: Override platform detection
-- `MANIFEST_OS_ARCH`: Override architecture detection
-- `MANIFEST_OS_VERSION`: Override OS version
+- `MANIFEST_CLI_OS_PLATFORM`: Override platform detection
+- `MANIFEST_CLI_OS_ARCH`: Override architecture detection
+- `MANIFEST_CLI_OS_VERSION`: Override OS version
+
+## Cloud Configuration
+- `MANIFEST_CLI_CLOUD_API_KEY`: Manifest Cloud API key
+- `MANIFEST_CLI_CLOUD_ENDPOINT`: Manifest Cloud endpoint URL
+- `MANIFEST_CLI_CLOUD_SKIP`: Skip cloud integration (true/false)
+- `MANIFEST_CLI_OFFLINE_MODE`: Force offline mode (true/false)
 
 ## 📁 Configuration Files
 
-## `.manifestrc`
-Configuration file in project root or home directory:
+## `.env.manifest.global`
+Primary configuration file in project root:
 
 ```bash
-# .manifestrc
-NTP_SERVERS="time.apple.com,time.google.com,pool.ntp.org"
-COMMIT_TEMPLATE="Release v{version} - {timestamp}"
-DOCS_TEMPLATE_DIR="./templates"
-DEBUG=false
-INTERACTIVE=true
-VERBOSE=false
-LOG_LEVEL="INFO"
-BREW_OPTION=enabled
-BREW_INTERACTIVE=no
-TAP_REPO="https://github.com/fidenceio/fidenceio-homebrew-tap.git"
+# .env.manifest.global
+# Core configuration
+MANIFEST_CLI_DEBUG=false
+MANIFEST_CLI_VERBOSE=false
+MANIFEST_CLI_LOG_LEVEL="INFO"
+MANIFEST_CLI_INTERACTIVE=true
+
+# NTP configuration
+MANIFEST_CLI_NTP_SERVERS="time.apple.com,time.google.com,pool.ntp.org"
+MANIFEST_CLI_NTP_TIMEOUT=5
+MANIFEST_CLI_NTP_RETRIES=3
+
+# Git configuration
+MANIFEST_CLI_GIT_COMMIT_TEMPLATE="Release v{version} - {timestamp}"
+MANIFEST_CLI_GIT_TIMEOUT=300
+MANIFEST_CLI_GIT_RETRIES=3
+
+# Documentation configuration
+MANIFEST_CLI_DOCS_TEMPLATE_DIR="./templates"
+MANIFEST_CLI_DOCS_OUTPUT_DIR="./docs"
+
+# Homebrew configuration
+MANIFEST_CLI_BREW_OPTION="enabled"
+MANIFEST_CLI_BREW_INTERACTIVE="no"
+MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/fidenceio-homebrew-tap.git"
+
+# Cloud configuration
+MANIFEST_CLI_CLOUD_API_KEY="your-api-key-here"
+MANIFEST_CLI_CLOUD_ENDPOINT="https://api.manifest.cloud"
+MANIFEST_CLI_CLOUD_SKIP=false
+MANIFEST_CLI_OFFLINE_MODE=false
 ```
 
 ## Configuration Priority
 1. Command line options
 2. Environment variables
-3. `.manifestrc` in project root
-4. `.manifestrc` in home directory
+3. `.env.manifest.global` in project root
+4. `.env.manifest.local` in project root (for local overrides)
 5. Default values
 
 ## 🔄 Exit Codes
