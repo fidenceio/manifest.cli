@@ -354,7 +354,7 @@ copy_cli_files() {
     fi
     
     # Copy essential project files
-    local essential_files=("$MANIFEST_CLI_VERSION_FILE" "$MANIFEST_CLI_GITIGNORE_FILE")
+    local essential_files=("VERSION" ".gitignore" "README.md" "CHANGELOG.md")
     for file in "${essential_files[@]}"; do
         if [ -f "$file" ]; then
             cp "$file" "$MANIFEST_CLI_INSTALL_LOCATION/"
@@ -370,10 +370,10 @@ copy_cli_files() {
         print_success "✅ Copied documentation"
     fi
     
-    # Copy scripts
-    if [ -d "scripts" ]; then
-        cp -r "scripts" "$MANIFEST_CLI_INSTALL_LOCATION/"
-        print_success "✅ Copied utility scripts"
+    # Copy Formula directory (Homebrew formula)
+    if [ -d "Formula" ]; then
+        cp -r "Formula" "$MANIFEST_CLI_INSTALL_LOCATION/"
+        print_success "✅ Copied Homebrew formula"
     fi
     
     print_success "✅ All CLI files copied successfully"
@@ -384,7 +384,18 @@ copy_cli_files() {
 create_configuration() {
     print_subheader "⚙️  Creating Configuration Files"
     
-    # Copy global configuration template
+    # Copy configuration templates
+    local config_files=("env.manifest.global.example" "env.manifest.local.example" "env.manifest.examples.md")
+    for config_file in "${config_files[@]}"; do
+        if [ -f "$config_file" ]; then
+            cp "$config_file" "$MANIFEST_CLI_INSTALL_LOCATION/"
+            print_success "✅ Copied $config_file"
+        else
+            print_warning "⚠️  $config_file not found (skipping)"
+        fi
+    done
+    
+    # Copy global configuration template as active config
     if [ -f "env.manifest.global.example" ]; then
         cp "env.manifest.global.example" "$MANIFEST_CLI_INSTALL_LOCATION/.env.manifest.global"
         print_success "✅ Global configuration template copied: $MANIFEST_CLI_INSTALL_LOCATION/.env.manifest.global"
@@ -447,8 +458,6 @@ setup_environment_variables() {
     # Set essential installation variables
     export MANIFEST_CLI_INSTALL_DIR="$MANIFEST_CLI_INSTALL_LOCATION"
     export MANIFEST_CLI_BIN_DIR="$MANIFEST_CLI_LOCAL_BIN"
-    export MANIFEST_CLI_VERSION_FILE="VERSION"
-    export MANIFEST_CLI_GITIGNORE_FILE=".gitignore"
     
     print_success "✅ Environment variables configured"
     echo ""
@@ -549,9 +558,12 @@ display_post_install_info() {
     echo "   $MANIFEST_CLI_NAME --help          # Show comprehensive help"
     echo "   $MANIFEST_CLI_NAME go              # Run complete workflow"
     echo "   $MANIFEST_CLI_NAME test            # Test functionality"
+    echo "   $MANIFEST_CLI_NAME security        # Security audit"
     echo "   $MANIFEST_CLI_NAME ntp             # Get NTP timestamp"
     echo "   $MANIFEST_CLI_NAME sync            # Sync with remote"
     echo "   $MANIFEST_CLI_NAME cleanup         # Manage historical docs"
+    echo "   $MANIFEST_CLI_NAME update          # Update CLI"
+    echo "   $MANIFEST_CLI_NAME config          # Show configuration"
     
     echo
     print_status "💡 Next Steps:"
@@ -560,6 +572,8 @@ display_post_install_info() {
     echo "   3. Check the generated documentation in the docs/ folder"
     echo "   4. Review and customize $MANIFEST_CLI_INSTALL_LOCATION/.env.manifest.global"
     echo "   5. Copy env.manifest.global.example to your project root as .env.manifest.global"
+    echo "   6. Run '$MANIFEST_CLI_NAME security' to perform security audit"
+    echo "   7. Test cross-shell compatibility with '$MANIFEST_CLI_NAME test zsh' or '$MANIFEST_CLI_NAME test bash'"
     
     echo
     print_status "📚 Documentation:"
