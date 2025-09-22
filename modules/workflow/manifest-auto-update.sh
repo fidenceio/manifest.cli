@@ -123,7 +123,9 @@ MANIFEST_UPDATE_COOLDOWN=30
 
 # NTP settings
 MANIFEST_NTP_TIMESTAMP=true
-MANIFEST_NTP_SERVERS="pool.ntp.org,time.nist.gov,time.google.com"
+MANIFEST_NTP_SERVERS="time.apple.com,time.google.com,pool.ntp.org"
+MANIFEST_NTP_TIMEOUT=3
+MANIFEST_NTP_RETRIES=2
 
 # Interactive mode
 MANIFEST_INTERACTIVE_MODE=false

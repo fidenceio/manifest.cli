@@ -140,7 +140,7 @@ prepare_mcp_context() {
     },
     "changes": "$(echo "$changes_content" | jq -R -s .)",
     "context": {
-        "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+        "timestamp": "$(get_formatted_timestamp | sed 's/ UTC//' | sed 's/ /T/' | sed 's/$/Z/')",
         "cli_version": "1.0.0",
         "project_root": "$PROJECT_ROOT"
     }
@@ -212,7 +212,7 @@ test_mcp_connectivity() {
     },
     "changes": "test",
     "context": {
-        "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+        "timestamp": "$(get_formatted_timestamp | sed 's/ UTC//' | sed 's/ /T/' | sed 's/$/Z/')",
         "cli_version": "1.0.0",
         "test": true
     }

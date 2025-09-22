@@ -265,7 +265,9 @@ main() {
             ;;
         "push")
             local increment_type="${1:-patch}"
-            local timestamp=$(format_timestamp "$(date -u +%s)" '+%Y-%m-%d %H:%M:%S UTC')
+            # Get NTP timestamp for accurate versioning
+            get_ntp_timestamp >/dev/null
+            local timestamp=$(format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
             
             bump_version "$increment_type"
             local new_version=$(cat VERSION 2>/dev/null)
@@ -275,7 +277,9 @@ main() {
             ;;
         "commit")
             local message="$1"
-            local timestamp=$(format_timestamp "$(date -u +%s)" '+%Y-%m-%d %H:%M:%S UTC')
+            # Get NTP timestamp for accurate versioning
+            get_ntp_timestamp >/dev/null
+            local timestamp=$(format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
             commit_changes "$message" "$timestamp"
             ;;
         "version")
@@ -308,7 +312,9 @@ main() {
                         return 1
                     fi
                     
-                    local timestamp=$(format_timestamp "$(date -u +%s)" '+%Y-%m-%d %H:%M:%S UTC')
+                    # Get NTP timestamp for accurate documentation
+                    get_ntp_timestamp >/dev/null
+                    local timestamp=$(format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
                     generate_documents "$current_version" "$timestamp" "patch"
                     ;;
             esac
@@ -319,7 +325,9 @@ main() {
             if [ -f "VERSION" ]; then
                 current_version=$(cat VERSION)
             fi
-            local timestamp=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+            # Get NTP timestamp for accurate cleanup
+            get_ntp_timestamp >/dev/null
+            local timestamp=$(format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
             main_cleanup "$current_version" "$timestamp"
             ;;
         "config")

@@ -189,7 +189,9 @@ send_heartbeat() {
     
     log_operation "heartbeat" "Sending heartbeat to Manifest Cloud"
     
-    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    # Get NTP timestamp for accurate heartbeat
+    get_ntp_timestamp >/dev/null
+    local timestamp=$(format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%dT%H:%M:%SZ')
     local response=$(curl -s --max-time 10 \
         -X POST "$manifest_cloud_endpoint/api/v1/agent/heartbeat" \
         -H "Authorization: Bearer $subscription_token" \
@@ -274,7 +276,7 @@ analyze_code_metadata() {
         "change_summary": "$changes_summary"
     },
     "context": {
-        "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+        "timestamp": "$(get_formatted_timestamp | sed 's/ UTC//' | sed 's/ /T/' | sed 's/$/Z/')",
         "agent_version": "1.0.0"
     }
 }

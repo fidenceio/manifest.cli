@@ -75,13 +75,38 @@ get_next_version() {
     fi
 }
 
-# Get latest version from GitHub API
+# Get latest version from GitHub API with OS-dependent timeout
 get_latest_version() {
     local repo_url="${MANIFEST_REPO_URL:-https://api.github.com/repos/fidenceio/fidenceio.manifest.cli/releases/latest}"
     
-    # Try to get latest version from GitHub API
+    # Use OS-dependent timeout strategy
+    local timeout_cmd=""
+    case "${MANIFEST_OS:-Unknown}" in
+        "macOS")
+            if command -v gtimeout >/dev/null 2>&1; then
+                timeout_cmd="gtimeout"
+            fi
+            ;;
+        "Linux"|"FreeBSD"|"OpenBSD"|"NetBSD")
+            if command -v timeout >/dev/null 2>&1; then
+                timeout_cmd="timeout"
+            fi
+            ;;
+    esac
+    
+    # Try to get latest version from GitHub API with timeout
     if command -v curl >/dev/null 2>&1; then
-        local latest_version=$(curl -s "$repo_url" 2>/dev/null | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
+        local latest_version=""
+        local timeout_seconds="${MANIFEST_UPDATE_TIMEOUT:-10}"
+        
+        if [ -n "$timeout_cmd" ]; then
+            # Use OS-specific timeout command
+            latest_version=$($timeout_cmd "$timeout_seconds" curl -s "$repo_url" 2>/dev/null | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
+        else
+            # Use curl's built-in timeout as fallback
+            latest_version=$(curl -s --max-time "$timeout_seconds" --connect-timeout 5 "$repo_url" 2>/dev/null | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
+        fi
+        
         if [ -n "$latest_version" ]; then
             echo "$latest_version"
             return 0
@@ -96,18 +121,51 @@ get_latest_version() {
 # NETWORK AND CONNECTIVITY FUNCTIONS
 # =============================================================================
 
-# Check network connectivity
+# Check network connectivity with OS-dependent timeout
 check_network_connectivity() {
-    # Try to ping a reliable service
-    if ping -c 1 -W 3 8.8.8.8 >/dev/null 2>&1; then
-        log_debug "Network connectivity check passed"
-        return 0
+    # Use OS-dependent timeout strategy
+    local timeout_cmd=""
+    case "${MANIFEST_OS:-Unknown}" in
+        "macOS")
+            if command -v gtimeout >/dev/null 2>&1; then
+                timeout_cmd="gtimeout"
+            fi
+            ;;
+        "Linux"|"FreeBSD"|"OpenBSD"|"NetBSD")
+            if command -v timeout >/dev/null 2>&1; then
+                timeout_cmd="timeout"
+            fi
+            ;;
+    esac
+    
+    # Try to ping a reliable service with timeout
+    local ping_timeout=3
+    if [ -n "$timeout_cmd" ]; then
+        if $timeout_cmd "$ping_timeout" ping -c 1 -W "$ping_timeout" 8.8.8.8 >/dev/null 2>&1; then
+            log_debug "Network connectivity check passed (ping with timeout)"
+            return 0
+        fi
+    else
+        # Fallback: use ping with built-in timeout
+        if ping -c 1 -W "$ping_timeout" 8.8.8.8 >/dev/null 2>&1; then
+            log_debug "Network connectivity check passed (ping fallback)"
+            return 0
+        fi
     fi
     
-    # Try alternative connectivity check
-    if curl -s --max-time 5 --connect-timeout 3 https://www.google.com >/dev/null 2>&1; then
-        log_debug "Network connectivity check passed (curl method)"
-        return 0
+    # Try alternative connectivity check with curl
+    local curl_timeout=5
+    if [ -n "$timeout_cmd" ]; then
+        if $timeout_cmd "$curl_timeout" curl -s --max-time "$curl_timeout" --connect-timeout 3 https://www.google.com >/dev/null 2>&1; then
+            log_debug "Network connectivity check passed (curl with timeout)"
+            return 0
+        fi
+    else
+        # Fallback: use curl with built-in timeout
+        if curl -s --max-time "$curl_timeout" --connect-timeout 3 https://www.google.com >/dev/null 2>&1; then
+            log_debug "Network connectivity check passed (curl fallback)"
+            return 0
+        fi
     fi
     
     log_debug "Network connectivity check failed"

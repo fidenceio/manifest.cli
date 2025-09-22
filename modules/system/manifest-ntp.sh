@@ -23,29 +23,161 @@ MANIFEST_NTP_METHOD=""
 # Use the centralized timeout function from manifest-os.sh
 # The run_with_timeout function is now provided by the OS module
 
-# Simple NTP query function
+# OS-dependent NTP parsing function
+parse_ntp_output() {
+    local sntp_output="$1"
+    local os="$2"
+    
+    # Debug: Show what we're parsing
+    if [ "${MANIFEST_DEBUG:-0}" = "1" ]; then
+        echo "   🔍 Debug: Parsing for OS='$os'" >&2
+    fi
+    
+    case "$os" in
+        "macOS")
+            # macOS sntp output format: +0.047157 +/- 0.021125 time.apple.com 17.253.6.45
+            local ntp_line=$(echo "$sntp_output" | grep -E "^[+-][0-9]" | tail -1)
+            if [ -n "$ntp_line" ]; then
+                local offset=$(echo "$ntp_line" | awk '{print $1}')
+                local uncertainty=$(echo "$ntp_line" | awk '{print $3}')
+                local server_ip=$(echo "$ntp_line" | awk '{print $5}')
+                echo "$offset|$uncertainty|$server_ip"
+                return 0
+            fi
+            ;;
+        "Linux")
+            # Linux sntp output format: +0.047157 +/- 0.021125 time.apple.com 17.253.6.45
+            # or sometimes: 2025-09-22 00:47:43.438049 (+0000) +0.047157 +/- 0.021125 time.apple.com 17.253.6.45
+            local ntp_line=$(echo "$sntp_output" | grep -E "^[+-][0-9]" | tail -1)
+            if [ -n "$ntp_line" ]; then
+                local offset=$(echo "$ntp_line" | awk '{print $1}')
+                local uncertainty=$(echo "$ntp_line" | awk '{print $3}')
+                local server_ip=$(echo "$ntp_line" | awk '{print $5}')
+                echo "$offset|$uncertainty|$server_ip"
+                return 0
+            fi
+            ;;
+        "FreeBSD"|"OpenBSD"|"NetBSD")
+            # BSD sntp output format: +0.047157 +/- 0.021125 time.apple.com 17.253.6.45
+            local ntp_line=$(echo "$sntp_output" | grep -E "^[+-][0-9]" | tail -1)
+            if [ -n "$ntp_line" ]; then
+                local offset=$(echo "$ntp_line" | awk '{print $1}')
+                local uncertainty=$(echo "$ntp_line" | awk '{print $3}')
+                local server_ip=$(echo "$ntp_line" | awk '{print $5}')
+                echo "$offset|$uncertainty|$server_ip"
+                return 0
+            fi
+            ;;
+        *)
+            # Generic fallback - try multiple parsing strategies
+            if [ "${MANIFEST_DEBUG:-0}" = "1" ]; then
+                echo "   🔍 Debug: Using generic parsing for unknown OS: $os" >&2
+            fi
+            
+            # Strategy 1: Standard format
+            local ntp_line=$(echo "$sntp_output" | grep -E "^[+-][0-9]" | tail -1)
+            if [ -n "$ntp_line" ]; then
+                local offset=$(echo "$ntp_line" | awk '{print $1}')
+                local uncertainty=$(echo "$ntp_line" | awk '{print $3}')
+                local server_ip=$(echo "$ntp_line" | awk '{print $5}')
+                echo "$offset|$uncertainty|$server_ip"
+                return 0
+            fi
+            
+            # Strategy 2: Alternative format with date prefix
+            ntp_line=$(echo "$sntp_output" | grep -E "[+-][0-9]" | tail -1)
+            if [ -n "$ntp_line" ]; then
+                local offset=$(echo "$ntp_line" | grep -oE '[+-][0-9]+\.[0-9]+' | head -1)
+                local uncertainty=$(echo "$ntp_line" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
+                local server_ip=$(echo "$ntp_line" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | tail -1)
+                echo "$offset|$uncertainty|$server_ip"
+                return 0
+            fi
+            ;;
+    esac
+    
+    return 1
+}
+
+# OS-dependent timeout strategy
+get_timeout_command() {
+    local os="$1"
+    
+    case "$os" in
+        "macOS")
+            if command -v gtimeout >/dev/null 2>&1; then
+                echo "gtimeout"
+                return 0
+            fi
+            ;;
+        "Linux"|"FreeBSD"|"OpenBSD"|"NetBSD")
+            if command -v timeout >/dev/null 2>&1; then
+                echo "timeout"
+                return 0
+            fi
+            ;;
+    esac
+    
+    # Fallback: no timeout command
+    echo ""
+    return 1
+}
+
+# Simple NTP query function with OS-dependent parsing and timeout strategy
 query_ntp_server() {
     local server="$1"
     local timeout="$2"
     
-    # Use OS-aware timeout with sntp
-    local result=$(run_with_timeout "$timeout" sntp "$server" 2>/dev/null | tail -1)
+    # Use OS-dependent timeout strategy
+    local timeout_cmd=$(get_timeout_command "$MANIFEST_OS")
     
-    if [ $? -eq 0 ] && [ -n "$result" ]; then
-        # Parse sntp output: date time offset +/- uncertainty server ip
-        # Example: 2025-08-12 15:52:23.438049 (+0500) +2.012665 +/- 1.341959 time.apple.com 17.253.6.37
-        local offset=$(echo "$result" | awk '{print $4}')
-        local uncertainty=$(echo "$result" | awk '{print $6}')
-        local server_ip=$(echo "$result" | awk '{print $8}')
-        
-        # Validate offset format and ensure we have valid data
-        if [[ "$offset" =~ ^[+-]?[0-9]+\.[0-9]+$ ]] && [[ "$uncertainty" =~ ^[0-9]+\.[0-9]+$ ]]; then
-            echo "$offset|$uncertainty|$server_ip"
-            return 0
-        fi
+    # Execute sntp with appropriate timeout strategy
+    local sntp_output=""
+    local exit_code=0
+    
+    if [ -n "$timeout_cmd" ]; then
+        # Use system timeout command
+        sntp_output=$($timeout_cmd "$timeout" sntp "$server" 2>&1)
+        exit_code=$?
+    else
+        # No timeout command available, rely on sntp's internal timeout
+        sntp_output=$(sntp "$server" 2>&1)
+        exit_code=$?
     fi
     
-    return 1
+    # Debug: Show what we got
+    if [ "${MANIFEST_DEBUG:-0}" = "1" ]; then
+        echo "   🔍 Debug: OS='$MANIFEST_OS', timeout_cmd='$timeout_cmd', exit_code=$exit_code" >&2
+        echo "   🔍 Debug: sntp_output='$sntp_output'" >&2
+    fi
+    
+    # Parse the output using OS-dependent strategy
+    local parsed_result=$(parse_ntp_output "$sntp_output" "$MANIFEST_OS")
+    local parse_exit_code=$?
+    
+    if [ $parse_exit_code -eq 0 ] && [ -n "$parsed_result" ]; then
+        # Validate the parsed values
+        IFS='|' read -r offset uncertainty server_ip <<< "$parsed_result"
+        
+        if [[ "$offset" =~ ^[+-]?[0-9]+\.[0-9]+$ ]] && [[ "$uncertainty" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            if [ "${MANIFEST_DEBUG:-0}" = "1" ]; then
+                echo "   🔍 Debug: Successfully parsed - offset='$offset' uncertainty='$uncertainty' ip='$server_ip'" >&2
+            fi
+            echo "$parsed_result"
+            return 0
+        else
+            if [ "${MANIFEST_DEBUG:-0}" = "1" ]; then
+                echo "   ⚠️  Debug: Invalid format - offset='$offset' uncertainty='$uncertainty'" >&2
+            fi
+            return 1
+        fi
+    else
+        # No valid NTP response found
+        if [ "${MANIFEST_DEBUG:-0}" = "1" ]; then
+            echo "   ⚠️  Debug: No valid NTP response found for OS='$MANIFEST_OS'" >&2
+        fi
+        return 1
+    fi
 }
 
 # Calculate accurate timestamp from NTP offset
@@ -62,10 +194,35 @@ calculate_ntp_timestamp() {
     
     # Calculate NTP-corrected timestamp using bc for floating-point arithmetic
     local ntp_timestamp
-    if [ "$offset_sign" = "-" ]; then
-        ntp_timestamp=$(echo "$system_time + $offset_abs" | bc)
+    
+    # Debug: Show what we're calculating
+    if [ "${MANIFEST_DEBUG:-0}" = "1" ]; then
+        echo "   🔍 Debug: Calculating timestamp - system_time=$system_time, offset=$offset, offset_sign=$offset_sign, offset_abs=$offset_abs" >&2
+    fi
+    
+    # Check if bc is available
+    if command -v bc >/dev/null 2>&1; then
+        if [ "$offset_sign" = "-" ]; then
+            # Negative offset means system is behind NTP time, so add the offset
+            ntp_timestamp=$(echo "$system_time + $offset_abs" | bc -l 2>/dev/null)
+        else
+            # Positive offset means system is ahead of NTP time, so subtract the offset
+            ntp_timestamp=$(echo "$system_time - $offset_abs" | bc -l 2>/dev/null)
+        fi
+        
+        # Handle bc errors by falling back to system time
+        if [ $? -ne 0 ] || [ -z "$ntp_timestamp" ]; then
+            if [ "${MANIFEST_DEBUG:-0}" = "1" ]; then
+                echo "   ⚠️  Debug: bc calculation failed, using system time" >&2
+            fi
+            ntp_timestamp="$system_time"
+        fi
     else
-        ntp_timestamp=$(echo "$system_time - $offset_abs" | bc)
+        # bc not available, use simple integer arithmetic
+        if [ "${MANIFEST_DEBUG:-0}" = "1" ]; then
+            echo "   ⚠️  Debug: bc not available, using system time" >&2
+        fi
+        ntp_timestamp="$system_time"
     fi
     
     # Convert to integer for timestamp
@@ -93,7 +250,9 @@ get_ntp_timestamp() {
         echo "   🔍 Querying $ntp_server..."
         
         local result=$(query_ntp_server "$ntp_server" "$MANIFEST_NTP_TIMEOUT")
-        if [ $? -eq 0 ]; then
+        local query_exit_code=$?
+        
+        if [ $query_exit_code -eq 0 ] && [ -n "$result" ]; then
             # Parse result: offset|uncertainty|server_ip
             IFS='|' read -r calculated_offset calculated_uncertainty server_ip <<< "$result"
             
@@ -109,7 +268,10 @@ get_ntp_timestamp() {
             echo "   📊 Offset: $offset seconds (±$uncertainty)"
             break
         else
-            echo "   ⚠️  Failed to query $ntp_server"
+            if [ "${MANIFEST_DEBUG:-0}" = "1" ]; then
+                echo "   ⚠️  Debug: Query failed with exit code $query_exit_code, result='$result'" >&2
+            fi
+            echo "   ⚠️  Failed to query $ntp_server (network timeout or parsing error)"
         fi
     done
     
