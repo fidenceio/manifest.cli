@@ -59,15 +59,11 @@ manifest docs
 
 ## New Features
 
-
 ## Improvements
 --help [NTP: 2025-09-22 01:53:50 UTC]
 
 ## Bug Fixes
 
-
 ## Breaking Changes
 
-
 ## Documentation
-
