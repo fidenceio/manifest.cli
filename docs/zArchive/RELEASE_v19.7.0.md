@@ -59,16 +59,12 @@ manifest docs
 
 ## New Features
 
-
 ## Improvements
 Update main CHANGELOG.md to v19.7.0
 Bump version to 19.7.0 [NTP: 2025-09-22 01:10:51 UTC]
 
 ## Bug Fixes
 
-
 ## Breaking Changes
 
-
 ## Documentation
-
