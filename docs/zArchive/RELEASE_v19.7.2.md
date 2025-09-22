@@ -59,7 +59,6 @@ manifest docs
 
 ## New Features
 
-
 ## Improvements
 Update main CHANGELOG.md to v19.7.2
 Bump version to 19.7.2 [NTP: 2025-09-22 01:41:18 UTC]
@@ -67,9 +66,6 @@ Auto-commit before Manifest process [NTP: 2025-09-22 01:41:18 UTC]
 
 ## Bug Fixes
 
-
 ## Breaking Changes
 
-
 ## Documentation
-
