@@ -187,12 +187,8 @@ validate_system() {
             local major_ver=$(echo "$bash_ver" | cut -d'.' -f1)
             local minor_ver=$(echo "$bash_ver" | cut -d'.' -f2)
             
-            if [ "$major_ver" -lt 4 ] || ([ "$major_ver" -eq 4 ] && [ "$minor_ver" -lt 0 ]); then
-                print_warning "⚠️  Bash version $bash_ver detected. Version 4.0+ recommended."
-                print_warning "   Some features may not work correctly with older versions."
-            else
-                print_success "✅ Bash version $bash_ver meets requirements"
-            fi
+            # All bash versions are supported with proper OS/shell detection
+            print_success "✅ Bash version $bash_ver detected and supported"
         fi
     else
         print_error "❌ Bash is not installed or not in PATH"

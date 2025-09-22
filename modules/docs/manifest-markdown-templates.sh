@@ -98,7 +98,7 @@ markdown_table_row() {
 }
 
 # Template for release notes
-generate_release_notes_template() {
+generate_markdown_release_notes_template() {
     local version="$1"
     local timestamp="$2"
     local release_type="$3"
@@ -162,7 +162,7 @@ EOF
 }
 
 # Template for changelog
-generate_changelog_template() {
+generate_markdown_changelog_template() {
     local version="$1"
     local timestamp="$2"
     local release_type="$3"
@@ -356,10 +356,10 @@ EOF
 main() {
     case "${1:-help}" in
         "release")
-            generate_release_notes_template "${2:-}" "${3:-}" "${4:-}"
+            generate_markdown_release_notes_template "${2:-}" "${3:-}" "${4:-}"
             ;;
         "changelog")
-            generate_changelog_template "${2:-}" "${3:-}" "${4:-}"
+            generate_markdown_changelog_template "${2:-}" "${3:-}" "${4:-}"
             ;;
         "readme")
             generate_readme_version_section "${2:-}" "${3:-}"

@@ -1,0 +1,15 @@
+## 📋 Version Information
+
+| Property | Value |
+|----------|-------|
+| **Current Version** | `${version}` |
+| **Release Date** | `${timestamp}` |
+| **Git Tag** | `v${version}` |
+| **Branch** | `main` |
+| **Last Updated** | `${timestamp}` |
+| **Project Type** | `${project_type}` |
+
+### 📚 Documentation Files
+
+- **Version Info**: [VERSION](VERSION)
+- **Project Source**: [src/](src/) or [lib/](lib/) or [app/](app/)

@@ -1,22 +1,18 @@
-# Manifest
-A powerful command-line tool for automating Git workflows, version management, and documentation generation. The Manifest CLI streamlines your development process with intelligent versioning, automated commits, and seamless integration with Manifest Cloud for enhanced features.
-
 ## 📋 Version Information
 
 | Property | Value |
 |----------|-------|
 | **Current Version** | `23.2.0` |
-| **Release Date** | `2025-09-22 18:24:34 UTC` |
+| **Release Date** | `2025-09-22 23:07:57 UTC` |
 | **Git Tag** | `v23.2.0` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-09-22 18:24:34 UTC` |
-| **CLI Version** | `23.2.0` |
+| **Last Updated** | `2025-09-22 23:07:57 UTC` |
+| **Project Type** | `` |
 
 ### 📚 Documentation Files
 
 - **Version Info**: [VERSION](VERSION)
-- **CLI Source**: [src/cli/](src/cli/)
-- **Install Script**: [install-cli.sh](install-cli.sh)
+- **Project Source**: [src/](src/) or [lib/](lib/) or [app/](app/)
 ## 🚀 Features
 
 ### Core Git Operations

@@ -47,7 +47,7 @@ source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-os.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-ntp.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/git/manifest-git.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-security.sh"
-source "$MANIFEST_CLI_CORE_MODULES_DIR/docs/manifest-documentation.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/docs/manifest-docs.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-uninstall.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/workflow/manifest-orchestrator.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/docs/manifest-cleanup-docs.sh"
@@ -318,6 +318,46 @@ main() {
                     echo "📁 Moving historical documentation to zArchive..."
                     move_existing_historical_docs
                     ;;
+                "detect")
+                    echo "🔍 Detecting project type and metadata..."
+                    get_project_info "$PROJECT_ROOT"
+                    ;;
+                "templates")
+                    local template_subcommand="$2"
+                    case "$template_subcommand" in
+                        "list")
+                            echo "📋 Available documentation templates:"
+                            ls -la "$PROJECT_ROOT/documentation_templates/" 2>/dev/null || echo "No custom templates found"
+                            ;;
+                        "create")
+                            local template_name="$3"
+                            if [[ -z "$template_name" ]]; then
+                                echo "❌ Template name required"
+                                echo "Usage: manifest docs templates create <template_name>"
+                                return 1
+                            fi
+                            echo "📝 Creating custom template: $template_name"
+                            touch "$PROJECT_ROOT/documentation_templates/${template_name}.template"
+                            echo "Template created: $PROJECT_ROOT/documentation_templates/${template_name}.template"
+                            ;;
+                        "get")
+                            local template_name="$3"
+                            if [[ -z "$template_name" ]]; then
+                                echo "❌ Template name required"
+                                echo "Usage: manifest docs templates get <template_name>"
+                                return 1
+                            fi
+                            echo "📄 Template content for: $template_name"
+                            cat "$PROJECT_ROOT/documentation_templates/${template_name}.template" 2>/dev/null || echo "Template not found"
+                            ;;
+                        *)
+                            echo "Template commands:"
+                            echo "  list                    - List available templates"
+                            echo "  create <template_name>  - Create custom template"
+                            echo "  get <template_name>     - Get template content"
+                            ;;
+                    esac
+                    ;;
                 *)
                     # Generate all documentation for current version
                     local current_version=""
@@ -453,8 +493,10 @@ display_help() {
     echo "  commit      - Commit changes with custom message"
     echo "  version     - Bump version (patch/minor/major)"
       echo "  docs        - 📚 Create documentation and release notes"
-  echo "    docs metadata  - 🏷️  Update repository metadata (description, topics, etc.)"
-  echo "    docs homebrew  - 🍺 Update Homebrew formula"
+  echo "    docs metadata    - 🏷️  Update repository metadata (description, topics, etc.)"
+  echo "    docs homebrew    - 🍺 Update Homebrew formula"
+  echo "    docs detect      - 🔍 Detect project type and extract metadata"
+  echo "    docs templates   - 📋 Manage documentation templates"
   echo "  cleanup     - 📁 Clean repository files and archive old docs"
   echo "  config      - ⚙️  Show current configuration and environment variables"
   echo "  security    - 🔒 Security audit for vulnerabilities and privacy protection"
