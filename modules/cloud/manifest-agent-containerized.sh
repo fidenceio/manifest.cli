@@ -90,7 +90,7 @@ if [ ! -f "$AGENT_CONFIG" ]; then
 fi
 
 # Get configuration
-MANIFEST_CLOUD_ENDPOINT=$(jq -r '.manifest_cloud_endpoint' "$AGENT_CONFIG")
+MANIFEST_CLI_CLOUD_ENDPOINT=$(jq -r '.manifest_cloud_endpoint' "$AGENT_CONFIG")
 SUBSCRIPTION_TOKEN=$(jq -r '.subscription_token // empty' "$AGENT_CONFIG")
 
 # Docker command with strict security
@@ -191,7 +191,7 @@ send_heartbeat() {
     
     # Get NTP timestamp for accurate heartbeat
     get_ntp_timestamp >/dev/null
-    local timestamp=$(format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%dT%H:%M:%SZ')
+    local timestamp=$(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%dT%H:%M:%SZ')
     local response=$(curl -s --max-time 10 \
         -X POST "$manifest_cloud_endpoint/api/v1/agent/heartbeat" \
         -H "Authorization: Bearer $subscription_token" \

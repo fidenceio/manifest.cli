@@ -13,12 +13,12 @@ MANIFEST_CLI_NTP_TIMEOUT=${MANIFEST_CLI_NTP_TIMEOUT:-3}
 MANIFEST_CLI_NTP_RETRIES=${MANIFEST_CLI_NTP_RETRIES:-2}
 
 # Global timestamp variables
-MANIFEST_NTP_TIMESTAMP=""
-MANIFEST_NTP_OFFSET=""
-MANIFEST_NTP_UNCERTAINTY=""
-MANIFEST_NTP_SERVER=""
-MANIFEST_NTP_SERVER_IP=""
-MANIFEST_NTP_METHOD=""
+MANIFEST_CLI_NTP_TIMESTAMP=""
+MANIFEST_CLI_NTP_OFFSET=""
+MANIFEST_CLI_NTP_UNCERTAINTY=""
+MANIFEST_CLI_NTP_SERVER=""
+MANIFEST_CLI_NTP_SERVER_IP=""
+MANIFEST_CLI_NTP_METHOD=""
 
 # Use the centralized timeout function from manifest-os.sh
 # The run_with_timeout function is now provided by the OS module
@@ -332,12 +332,12 @@ get_ntp_timestamp() {
     fi
     
     # Export variables for use in other functions
-    export MANIFEST_NTP_TIMESTAMP="$timestamp"
-    export MANIFEST_NTP_OFFSET="$offset"
-    export MANIFEST_NTP_UNCERTAINTY="$uncertainty"
-    export MANIFEST_NTP_SERVER="$server"
-    export MANIFEST_NTP_SERVER_IP="$server_ip"
-    export MANIFEST_NTP_METHOD="$method"
+    export MANIFEST_CLI_NTP_TIMESTAMP="$timestamp"
+    export MANIFEST_CLI_NTP_OFFSET="$offset"
+    export MANIFEST_CLI_NTP_UNCERTAINTY="$uncertainty"
+    export MANIFEST_CLI_NTP_SERVER="$server"
+    export MANIFEST_CLI_NTP_SERVER_IP="$server_ip"
+    export MANIFEST_CLI_NTP_METHOD="$method"
     
     # Display timestamp info
     local formatted_time=$(format_timestamp "$timestamp" '+%Y-%m-%d %H:%M:%S UTC')
@@ -365,11 +365,11 @@ display_ntp_info() {
     get_ntp_timestamp
     
     echo "📊 Timestamp Details:"
-    echo "   🕐 Time: $(format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')"
-    echo "   📊 Offset: $MANIFEST_NTP_OFFSET seconds"
-    echo "   🎯 Uncertainty: ±$MANIFEST_NTP_UNCERTAINTY seconds"
-    echo "   🌐 Source: $MANIFEST_NTP_SERVER ($MANIFEST_NTP_SERVER_IP)"
-    echo "   🔧 Method: $MANIFEST_NTP_METHOD"
+    echo "   🕐 Time: $(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')"
+    echo "   📊 Offset: $MANIFEST_CLI_NTP_OFFSET seconds"
+    echo "   🎯 Uncertainty: ±$MANIFEST_CLI_NTP_UNCERTAINTY seconds"
+    echo "   🌐 Source: $MANIFEST_CLI_NTP_SERVER ($MANIFEST_CLI_NTP_SERVER_IP)"
+    echo "   🔧 Method: $MANIFEST_CLI_NTP_METHOD"
     echo ""
     echo "💡 This timestamp is ready for manifest operations"
 }
@@ -414,13 +414,13 @@ display_ntp_config() {
 # Quick timestamp function for simple operations
 get_timestamp() {
     get_ntp_timestamp >/dev/null
-    echo "$MANIFEST_NTP_TIMESTAMP"
+    echo "$MANIFEST_CLI_NTP_TIMESTAMP"
 }
 
 # Get formatted timestamp string
 get_formatted_timestamp() {
     get_ntp_timestamp >/dev/null
-    format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC'
+    format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC'
 }
 
 # Display OS compatibility information

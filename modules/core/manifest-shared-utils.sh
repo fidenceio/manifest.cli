@@ -13,7 +13,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Logging configuration
-MANIFEST_LOG_LEVEL="${MANIFEST_LOG_LEVEL:-INFO}"
+MANIFEST_CLI_LOG_LEVEL="${MANIFEST_CLI_LOG_LEVEL:-INFO}"
 
 # Logging levels (numeric for comparison)
 LOG_LEVEL_DEBUG=0
@@ -23,7 +23,7 @@ LOG_LEVEL_ERROR=3
 
 # Get current log level
 get_log_level() {
-    local level="$(echo "${MANIFEST_LOG_LEVEL}" | tr '[:lower:]' '[:upper:]')"
+    local level="$(echo "${MANIFEST_CLI_LOG_LEVEL}" | tr '[:lower:]' '[:upper:]')"
     case "$level" in
         DEBUG) echo $LOG_LEVEL_DEBUG ;;
         INFO)  echo $LOG_LEVEL_INFO ;;
@@ -378,7 +378,7 @@ sanitize_path() {
 
 validate_version_format() {
     local version="$1"
-    local pattern="${MANIFEST_VERSION_REGEX:-^[0-9]+(\.[0-9]+)*$}"
+    local pattern="${MANIFEST_CLI_VERSION_REGEX:-^[0-9]+(\.[0-9]+)*$}"
     
     # Skip validation for template patterns
     if [[ "$version" == *"X"* ]] || [[ "$version" == *"XX"* ]]; then

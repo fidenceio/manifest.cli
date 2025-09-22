@@ -59,8 +59,8 @@ CLI_NAME="manifest"
 # Function to determine the best installation directory
 get_install_location() {
     # Check if user has a preference
-    if [ -n "$MANIFEST_INSTALL_LOCATION" ]; then
-        echo "$MANIFEST_INSTALL_LOCATION"
+    if [ -n "$MANIFEST_CLI_INSTALL_LOCATION" ]; then
+        echo "$MANIFEST_CLI_INSTALL_LOCATION"
         return 0
     fi
     

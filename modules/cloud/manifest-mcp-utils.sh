@@ -11,13 +11,13 @@ MCP_DEFAULT_RETRIES=3
 # Check if user wants to skip cloud operations
 should_skip_cloud() {
     # Check environment variables for skip conditions
-    if [ "${MANIFEST_CLOUD_SKIP:-false}" = "true" ]; then
-        log_debug "Cloud operations skipped: MANIFEST_CLOUD_SKIP=true"
+    if [ "${MANIFEST_CLI_CLOUD_SKIP:-false}" = "true" ]; then
+        log_debug "Cloud operations skipped: MANIFEST_CLI_CLOUD_SKIP=true"
         return 0
     fi
     
-    if [ "${MANIFEST_OFFLINE_MODE:-false}" = "true" ]; then
-        log_debug "Cloud operations skipped: MANIFEST_OFFLINE_MODE=true"
+    if [ "${MANIFEST_CLI_OFFLINE_MODE:-false}" = "true" ]; then
+        log_debug "Cloud operations skipped: MANIFEST_CLI_OFFLINE_MODE=true"
         return 0
     fi
     
@@ -31,17 +31,17 @@ check_mcp_prerequisites_with_details() {
     log_debug "Checking MCP prerequisites..."
     
     # Check if API key is configured
-    if [ -z "${MANIFEST_CLOUD_API_KEY:-}" ]; then
-        log_error "MANIFEST_CLOUD_API_KEY is not set"
+    if [ -z "${MANIFEST_CLI_CLOUD_API_KEY:-}" ]; then
+        log_error "MANIFEST_CLI_CLOUD_API_KEY is not set"
         log_info "Get your API key from: https://manifest.cloud/dashboard"
-        log_info "Then set: export MANIFEST_CLOUD_API_KEY='your_api_key'"
+        log_info "Then set: export MANIFEST_CLI_CLOUD_API_KEY='your_api_key'"
         return 1
     fi
     
     # Check if endpoint is configured
-    if [ -z "${MANIFEST_CLOUD_ENDPOINT:-}" ]; then
-        log_debug "MANIFEST_CLOUD_ENDPOINT not set, using default: $MCP_DEFAULT_ENDPOINT"
-        export MANIFEST_CLOUD_ENDPOINT="$MCP_DEFAULT_ENDPOINT"
+    if [ -z "${MANIFEST_CLI_CLOUD_ENDPOINT:-}" ]; then
+        log_debug "MANIFEST_CLI_CLOUD_ENDPOINT not set, using default: $MCP_DEFAULT_ENDPOINT"
+        export MANIFEST_CLI_CLOUD_ENDPOINT="$MCP_DEFAULT_ENDPOINT"
     fi
     
     # Check network connectivity
@@ -63,7 +63,7 @@ check_mcp_prerequisites_with_details() {
 send_mcp_request_with_retry() {
     local mcp_context="$1"
     local attempt="$2"
-    local endpoint="${MANIFEST_CLOUD_ENDPOINT:-$MCP_DEFAULT_ENDPOINT}"
+    local endpoint="${MANIFEST_CLI_CLOUD_ENDPOINT:-$MCP_DEFAULT_ENDPOINT}"
     local timeout="${MCP_DEFAULT_TIMEOUT}"
     
     log_debug "Sending MCP request (attempt $attempt) to $endpoint"
@@ -74,7 +74,7 @@ send_mcp_request_with_retry() {
         --retry 0 \
         --retry-delay 0 \
         -X POST "$endpoint/api/v1/mcp/analyze" \
-        -H "Authorization: Bearer $MANIFEST_CLOUD_API_KEY" \
+        -H "Authorization: Bearer $MANIFEST_CLI_CLOUD_API_KEY" \
         -H "Content-Type: application/json" \
         -H "User-Agent: Manifest-CLI/1.0" \
         -d "$mcp_context" 2>/dev/null)
@@ -251,17 +251,17 @@ configure_mcp_connection() {
     
     # Test the API key
     log_info "Testing API key..."
-    local test_endpoint="${MANIFEST_CLOUD_ENDPOINT:-$MCP_DEFAULT_ENDPOINT}"
+    local test_endpoint="${MANIFEST_CLI_CLOUD_ENDPOINT:-$MCP_DEFAULT_ENDPOINT}"
     local response
     response=$(curl -s --max-time 10 \
         -X GET "$test_endpoint/api/v1/agent/subscription/status" \
         -H "Authorization: Bearer $api_key")
     
     if echo "$response" | jq -e '.status' >/dev/null 2>&1; then
-        export MANIFEST_CLOUD_API_KEY="$api_key"
+        export MANIFEST_CLI_CLOUD_API_KEY="$api_key"
         log_success "MCP connection configured successfully"
         log_info "API key saved to current session. Add to your shell profile for persistence:"
-        echo "   export MANIFEST_CLOUD_API_KEY='$api_key'"
+        echo "   export MANIFEST_CLI_CLOUD_API_KEY='$api_key'"
         return 0
     else
         show_validation_error "Invalid API key or connection failed"
@@ -277,14 +277,14 @@ show_mcp_status() {
     echo ""
     
     # Check API key
-    if [ -n "${MANIFEST_CLOUD_API_KEY:-}" ]; then
+    if [ -n "${MANIFEST_CLI_CLOUD_API_KEY:-}" ]; then
         echo "  API Key: ✅ Configured"
     else
         echo "  API Key: ❌ Not configured"
     fi
     
     # Check endpoint
-    local endpoint="${MANIFEST_CLOUD_ENDPOINT:-$MCP_DEFAULT_ENDPOINT}"
+    local endpoint="${MANIFEST_CLI_CLOUD_ENDPOINT:-$MCP_DEFAULT_ENDPOINT}"
     echo "  Endpoint: $endpoint"
     
     # Check network connectivity
@@ -303,15 +303,15 @@ show_mcp_status() {
     
     # Check skip settings
     local skip_cloud="false"
-    if [ "${MANIFEST_CLOUD_SKIP:-false}" = "true" ] || [ "${MANIFEST_OFFLINE_MODE:-false}" = "true" ]; then
+    if [ "${MANIFEST_CLI_CLOUD_SKIP:-false}" = "true" ] || [ "${MANIFEST_CLI_OFFLINE_MODE:-false}" = "true" ]; then
         skip_cloud="true"
     fi
     echo "  Skip Cloud: $skip_cloud"
     
     echo ""
     echo "Configuration:"
-    echo "  MANIFEST_CLOUD_API_KEY     - Your Manifest Cloud API key"
-    echo "  MANIFEST_CLOUD_ENDPOINT    - Manifest Cloud endpoint (default: $MCP_DEFAULT_ENDPOINT)"
-    echo "  MANIFEST_CLOUD_SKIP        - Skip Manifest Cloud and use local docs (true/false)"
-    echo "  MANIFEST_OFFLINE_MODE      - Force offline mode, no cloud connectivity (true/false)"
+    echo "  MANIFEST_CLI_CLOUD_API_KEY     - Your Manifest Cloud API key"
+    echo "  MANIFEST_CLI_CLOUD_ENDPOINT    - Manifest Cloud endpoint (default: $MCP_DEFAULT_ENDPOINT)"
+    echo "  MANIFEST_CLI_CLOUD_SKIP        - Skip Manifest Cloud and use local docs (true/false)"
+    echo "  MANIFEST_CLI_OFFLINE_MODE      - Force offline mode, no cloud connectivity (true/false)"
 }

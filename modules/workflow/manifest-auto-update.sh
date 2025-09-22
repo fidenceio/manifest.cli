@@ -128,8 +128,10 @@ MANIFEST_CLI_AUTO_UPDATE=true
 MANIFEST_CLI_UPDATE_COOLDOWN=30
 
 # NTP settings
-MANIFEST_NTP_TIMESTAMP=true
-MANIFEST_CLI_NTP_SERVERS="time.apple.com,time.google.com,pool.ntp.org"
+MANIFEST_CLI_NTP_TIMESTAMP=true
+MANIFEST_CLI_NTP_SERVER1="time.apple.com"
+MANIFEST_CLI_NTP_SERVER2="time.google.com"
+MANIFEST_CLI_NTP_SERVER3="pool.ntp.org"
 MANIFEST_CLI_NTP_TIMEOUT=3
 MANIFEST_CLI_NTP_RETRIES=2
 
@@ -142,7 +144,7 @@ MANIFEST_CLI_BREW_INTERACTIVE=no
 MANIFEST_CLI_TAP_REPO="fidenceio/fidenceio-homebrew-tap"
 
 # Repository settings
-MANIFEST_REPO_URL="https://api.github.com/repos/fidenceio/fidenceio.manifest.cli"
+MANIFEST_CLI_REPO_URL="https://api.github.com/repos/fidenceio/fidenceio.manifest.cli"
 EOF
         log_success "Configuration file created"
     fi

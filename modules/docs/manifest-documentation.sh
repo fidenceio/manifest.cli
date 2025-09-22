@@ -262,7 +262,7 @@ main() {
             # Get NTP timestamp if not provided
             if [ -z "$timestamp" ]; then
                 get_ntp_timestamp >/dev/null
-                timestamp=$(format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+                timestamp=$(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
             fi
             local release_type="${4:-patch}"
             

@@ -285,7 +285,7 @@ main() {
             local increment_type="${1:-patch}"
             # Get NTP timestamp for accurate versioning
             get_ntp_timestamp >/dev/null
-            local timestamp=$(format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+            local timestamp=$(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
             
             bump_version "$increment_type"
             local new_version=$(cat "$MANIFEST_CLI_VERSION_FILE" 2>/dev/null)
@@ -297,7 +297,7 @@ main() {
             local message="$1"
             # Get NTP timestamp for accurate versioning
             get_ntp_timestamp >/dev/null
-            local timestamp=$(format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+            local timestamp=$(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
             commit_changes "$message" "$timestamp"
             ;;
         "version")
@@ -332,7 +332,7 @@ main() {
                     
                     # Get NTP timestamp for accurate documentation
                     get_ntp_timestamp >/dev/null
-                    local timestamp=$(format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+                    local timestamp=$(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
                     generate_documents "$current_version" "$timestamp" "patch"
                     ;;
             esac
@@ -345,7 +345,7 @@ main() {
             fi
             # Get NTP timestamp for accurate cleanup
             get_ntp_timestamp >/dev/null
-            local timestamp=$(format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+            local timestamp=$(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
             main_cleanup "$current_version" "$timestamp"
             ;;
         "config")
@@ -413,8 +413,8 @@ main() {
                     echo "  cloud generate <version> [opts] - Generate documentation via Manifest Cloud"
                     echo ""
                     echo "Configuration:"
-                    echo "  MANIFEST_CLOUD_API_KEY       - Your Manifest Cloud API key"
-                    echo "  MANIFEST_CLOUD_ENDPOINT      - Manifest Cloud endpoint (optional)"
+                    echo "  MANIFEST_CLI_CLOUD_API_KEY       - Your Manifest Cloud API key"
+                    echo "  MANIFEST_CLI_CLOUD_ENDPOINT      - Manifest Cloud endpoint (optional)"
                     echo ""
                     echo "Examples:"
                     echo "  manifest cloud test"
@@ -484,14 +484,14 @@ echo ""
 echo "The 'go' command performs a complete workflow: sync → docs → version → commit → push → metadata"
 echo ""
 echo "Environment Variables:"
-echo "  • MANIFEST_INTERACTIVE_MODE  - Interactive safety prompts (true/false, default: false)"
-echo "  • MANIFEST_BREW_OPTION       - Control Homebrew functionality (enabled/disabled)"
-echo "  • MANIFEST_BREW_INTERACTIVE  - Interactive Homebrew updates (yes/true/1, default: no)"
-echo "  • MANIFEST_TAP_REPO          - Homebrew tap repository URL (default: fidenceio/fidenceio-homebrew-tap)"
-echo "  • MANIFEST_CLOUD_API_KEY     - Manifest Cloud API key (get from https://manifest.cloud/dashboard)"
-echo "  • MANIFEST_CLOUD_ENDPOINT    - Manifest Cloud endpoint (default: https://api.manifest.cloud)"
-echo "  • MANIFEST_CLOUD_SKIP        - Skip Manifest Cloud and use local docs (true/false)"
-echo "  • MANIFEST_OFFLINE_MODE      - Force offline mode, no cloud connectivity (true/false)"
+echo "  • MANIFEST_CLI_INTERACTIVE_MODE  - Interactive safety prompts (true/false, default: false)"
+echo "  • MANIFEST_CLI_BREW_OPTION       - Control Homebrew functionality (enabled/disabled)"
+echo "  • MANIFEST_CLI_BREW_INTERACTIVE  - Interactive Homebrew updates (yes/true/1, default: no)"
+echo "  • MANIFEST_CLI_TAP_REPO          - Homebrew tap repository URL (default: fidenceio/fidenceio-homebrew-tap)"
+echo "  • MANIFEST_CLI_CLOUD_API_KEY     - Manifest Cloud API key (get from https://manifest.cloud/dashboard)"
+echo "  • MANIFEST_CLI_CLOUD_ENDPOINT    - Manifest Cloud endpoint (default: https://api.manifest.cloud)"
+echo "  • MANIFEST_CLI_CLOUD_SKIP        - Skip Manifest Cloud and use local docs (true/false)"
+echo "  • MANIFEST_CLI_OFFLINE_MODE      - Force offline mode, no cloud connectivity (true/false)"
 echo ""
 echo "For testing and verification:"
 echo "  • manifest test              - Basic functionality test"

@@ -47,7 +47,7 @@ manifest_go() {
     fi
     
     # Enable interactive mode if environment variable is set to true
-    if [ "${MANIFEST_INTERACTIVE_MODE:-false}" = "true" ] || [ "${MANIFEST_INTERACTIVE_MODE:-false}" = "yes" ] || [ "${MANIFEST_INTERACTIVE_MODE:-false}" = "1" ]; then
+    if [ "${MANIFEST_CLI_INTERACTIVE_MODE:-false}" = "true" ] || [ "${MANIFEST_CLI_INTERACTIVE_MODE:-false}" = "yes" ] || [ "${MANIFEST_CLI_INTERACTIVE_MODE:-false}" = "1" ]; then
         interactive_mode=true
     fi
     
@@ -127,7 +127,7 @@ manifest_go() {
     # Check for uncommitted changes
     if [ -n "$(git status --porcelain)" ]; then
         echo "📝 Uncommitted changes detected. Committing first..."
-        local timestamp=$(format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+        local timestamp=$(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
         commit_changes "Auto-commit before Manifest process" "$timestamp"
         echo ""
     fi
@@ -158,7 +158,7 @@ manifest_go() {
     echo ""
     
     # Generate documentation using new architecture
-    local timestamp=$(format_timestamp "$MANIFEST_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+    local timestamp=$(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
     echo "📚 Generating documentation and release notes..."
     if generate_documents "$new_version" "$timestamp" "$increment_type"; then
         echo "✅ Documentation generated successfully"

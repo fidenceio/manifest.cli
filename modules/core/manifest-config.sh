@@ -250,12 +250,12 @@ get_config() {
 
 # Validate version format configuration
 validate_version_config() {
-    local format="$MANIFEST_VERSION_FORMAT"
+    local format="$MANIFEST_CLI_VERSION_FORMAT"
     local separator="$MANIFEST_CLI_VERSION_SEPARATOR"
     
     # Basic validation
     if [ -z "$format" ]; then
-        echo "❌ MANIFEST_VERSION_FORMAT is not set"
+        echo "❌ MANIFEST_CLI_VERSION_FORMAT is not set"
         return 1
     fi
     
@@ -266,7 +266,7 @@ validate_version_config() {
     
     # Check if format contains the separator
     if [[ "$format" != *"$separator"* ]]; then
-        echo "❌ MANIFEST_VERSION_FORMAT must contain MANIFEST_CLI_VERSION_SEPARATOR"
+        echo "❌ MANIFEST_CLI_VERSION_FORMAT must contain MANIFEST_CLI_VERSION_SEPARATOR"
         return 1
     fi
     
@@ -277,7 +277,7 @@ validate_version_config() {
 # Parse version components based on configuration
 parse_version_components() {
     local version="$1"
-    local format="$MANIFEST_VERSION_FORMAT"
+    local format="$MANIFEST_CLI_VERSION_FORMAT"
     local separator="$MANIFEST_CLI_VERSION_SEPARATOR"
     
     if [ -z "$version" ] || [ -z "$format" ]; then
@@ -333,7 +333,7 @@ parse_version_components() {
 generate_next_version() {
     local current_version="$1"
     local increment_type="$2"
-    local format="$MANIFEST_VERSION_FORMAT"
+    local format="$MANIFEST_CLI_VERSION_FORMAT"
     local separator="$MANIFEST_CLI_VERSION_SEPARATOR"
     
     if [ -z "$current_version" ] || [ -z "$format" ]; then
