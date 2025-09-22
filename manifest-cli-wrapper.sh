@@ -11,7 +11,7 @@ find_cli_dir() {
     local possible_dirs=(
         "$HOME/.manifest-cli"
         "$HOME/.local/share/manifest-cli"
-        "/usr/local/share/manifest-cli"
+        "${MANIFEST_INSTALL_DIR:-/usr/local/share/manifest-cli}"
         "/opt/manifest-cli"
         # Check if we're running from a development directory
         "$(dirname "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")")"

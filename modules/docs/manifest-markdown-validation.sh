@@ -109,12 +109,16 @@ validate_directory() {
     
     while IFS= read -r file; do
         if [[ -f "$file" ]]; then
+            # Skip files in archive directories
+            if [[ "$file" == *"/$MANIFEST_DOCUMENTATION_ARCHIVE_DIR/"* ]] || [[ "$file" == *"/archive/"* ]]; then
+                continue
+            fi
             total=$((total + 1))
             if ! validate_file "$file" "$clean"; then
                 errors=$((errors + 1))
             fi
         fi
-    done < <(find "$dir" -name "*.md" -type f)
+    done < <(find "$dir" -name "$MANIFEST_MARKDOWN_EXT" -type f)
     
     log_info "Validated $total files with $errors errors"
     return $errors
@@ -131,12 +135,12 @@ validate_project() {
     log_info "Validating project documentation..."
     
     # Validate root README
-    if [[ -f "$project_root/README.md" ]]; then
-        if ! validate_file "$project_root/README.md" "$clean"; then
+    if [[ -f "$project_root/$MANIFEST_README_FILE" ]]; then
+        if ! validate_file "$project_root/$MANIFEST_README_FILE" "$clean"; then
             errors=$((errors + 1))
         fi
     else
-        log_warning "README.md not found in project root"
+        log_warning "$MANIFEST_README_FILE not found in project root"
     fi
     
     # Validate docs directory
@@ -202,7 +206,7 @@ main() {
             echo ""
             echo "Commands:"
             echo "  file <path> [clean]     - Validate a single file"
-            echo "  dir <path> [clean]      - Validate all .md files in directory"
+            echo "  dir <path> [clean]      - Validate all $MANIFEST_MARKDOWN_EXT files in directory"
             echo "  project [clean]         - Validate project documentation"
             echo "  clean <file>            - Clean a single file"
             echo "  help                    - Show this help"
@@ -211,11 +215,11 @@ main() {
             echo "  clean                   - Clean files while validating"
             echo ""
             echo "Examples:"
-            echo "  $0 file README.md"
-            echo "  $0 file README.md clean"
+            echo "  $0 file $MANIFEST_README_FILE"
+            echo "  $0 file $MANIFEST_README_FILE clean"
             echo "  $0 dir $(basename "$(get_docs_folder)")/"
             echo "  $0 project clean"
-            echo "  $0 clean README.md"
+            echo "  $0 clean $MANIFEST_README_FILE"
             ;;
         *)
             show_usage_error "$1"

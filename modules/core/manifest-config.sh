@@ -3,12 +3,6 @@
 # Manifest Configuration Module
 # Handles environment variable loading, validation, and defaults
 
-# Configuration file paths (in order of precedence)
-CONFIG_FILES=(
-    ".env.manifest.global"
-    ".env.manifest.local"
-)
-
 # Configuration validation
 validate_config() {
     # Temporarily disable validation to debug NTP issue
@@ -185,6 +179,29 @@ set_default_configuration() {
     export MANIFEST_DOCS_HISTORICAL_LIMIT="${MANIFEST_DOCS_HISTORICAL_LIMIT:-20}"
     export MANIFEST_DOCS_FILENAME_PATTERN="${MANIFEST_DOCS_FILENAME_PATTERN:-RELEASE_vVERSION.md}"
     
+    # File and directory names
+    export MANIFEST_README_FILE="${MANIFEST_README_FILE:-README.md}"
+    export MANIFEST_VERSION_FILE="${MANIFEST_VERSION_FILE:-VERSION}"
+    export MANIFEST_GITIGNORE_FILE="${MANIFEST_GITIGNORE_FILE:-.gitignore}"
+    export MANIFEST_DOCUMENTATION_ARCHIVE_DIR="${MANIFEST_DOCUMENTATION_ARCHIVE_DIR:-zArchive}"
+    export MANIFEST_GIT_DIR="${MANIFEST_GIT_DIR:-.git}"
+    export MANIFEST_MODULES_DIR="${MANIFEST_MODULES_DIR:-modules}"
+    
+    # File extensions
+    export MANIFEST_MARKDOWN_EXT="${MANIFEST_MARKDOWN_EXT:-*.md}"
+    
+    # Installation paths
+    export MANIFEST_INSTALL_DIR="${MANIFEST_INSTALL_DIR:-/usr/local/share/manifest-cli}"
+    export MANIFEST_BIN_DIR="${MANIFEST_BIN_DIR:-~/.local/bin}"
+    
+    # Temporary file paths
+    export MANIFEST_TEMP_DIR="${MANIFEST_TEMP_DIR:-~/.manifest-cli}"
+    export MANIFEST_TEMP_LIST="${MANIFEST_TEMP_LIST:-temp-files.list}"
+    
+    # Configuration file names
+    export MANIFEST_CONFIG_GLOBAL="${MANIFEST_CONFIG_GLOBAL:-.env.manifest.global}"
+    export MANIFEST_CONFIG_LOCAL="${MANIFEST_CONFIG_LOCAL:-.env.manifest.local}"
+    
     # Project Configuration
     export MANIFEST_PROJECT_NAME="${MANIFEST_PROJECT_NAME:-Manifest CLI}"
     
@@ -203,6 +220,12 @@ set_default_configuration() {
     export MANIFEST_VERBOSE="${MANIFEST_VERBOSE:-false}"
     export MANIFEST_LOG_LEVEL="${MANIFEST_LOG_LEVEL:-INFO}"
     export MANIFEST_INTERACTIVE="${MANIFEST_INTERACTIVE:-false}"
+    
+    # Configuration file paths (in order of precedence)
+    CONFIG_FILES=(
+        "$MANIFEST_CONFIG_GLOBAL"
+        "$MANIFEST_CONFIG_LOCAL"
+    )
     
     # Validate configuration after setting defaults
     # validate_config

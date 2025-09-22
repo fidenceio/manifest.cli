@@ -48,7 +48,7 @@ test_command() {
 # Test version increment functionality
 test_version_increments() {
     echo "🧪 Testing version increment functionality..."
-    echo "   📋 Current version: $(cat VERSION 2>/dev/null || echo "unknown")"
+    echo "   📋 Current version: $(cat "$MANIFEST_VERSION_FILE" 2>/dev/null || echo "unknown")"
     
     # Test each increment type
     local increment_types=("patch" "minor" "major" "revision")
@@ -109,7 +109,7 @@ test_documentation_functionality() {
     
     # Check if documentation files exist
     local docs_dir=$(get_docs_folder)
-    local doc_files=("README.md" "$(basename "$docs_dir")/USER_GUIDE.md" "$(basename "$docs_dir")/COMMAND_REFERENCE.md" "$(basename "$docs_dir")/INSTALLATION.md")
+    local doc_files=("$MANIFEST_README_FILE" "$(basename "$docs_dir")/USER_GUIDE.md" "$(basename "$docs_dir")/COMMAND_REFERENCE.md" "$(basename "$docs_dir")/INSTALLATION.md")
     for doc_file in "${doc_files[@]}"; do
         if [ -f "$doc_file" ]; then
             echo "   ✅ Documentation file exists: $doc_file"

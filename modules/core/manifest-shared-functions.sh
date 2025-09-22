@@ -323,14 +323,14 @@ create_managed_temp_file() {
     fi
     
     # Track for cleanup
-    echo "$temp_file" >> "$HOME/.manifest-cli/temp-files.list" 2>/dev/null || true
+    echo "$temp_file" >> "$HOME/$MANIFEST_TEMP_DIR/$MANIFEST_TEMP_LIST" 2>/dev/null || true
     
     echo "$temp_file"
 }
 
 # Clean up tracked temporary files
 cleanup_managed_temp_files() {
-    local temp_list="$HOME/.manifest-cli/temp-files.list"
+    local temp_list="$HOME/$MANIFEST_TEMP_DIR/$MANIFEST_TEMP_LIST"
     
     if [ -f "$temp_list" ]; then
         while IFS= read -r temp_file; do
