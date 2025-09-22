@@ -88,7 +88,6 @@ get_cli_dir() {
 
 # Set the CLI directory
 CLI_DIR="$(get_cli_dir)"
-load_configuration "$CLI_DIR"
 
 # Archive old documentation files (delegated to manifest-cleanup-docs.sh)
 archive_old_docs() {

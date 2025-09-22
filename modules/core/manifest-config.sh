@@ -21,10 +21,14 @@ load_configuration() {
     # Load configuration files in order (last wins)
     # First try the installation location for global config
     if [ -n "${INSTALL_LOCATION:-}" ] && [ -d "$INSTALL_LOCATION" ]; then
+        local config_loaded=false
         for config_file in "${CONFIG_FILES[@]}"; do
             local full_path="$INSTALL_LOCATION/$config_file"
             if [ -f "$full_path" ]; then
-                echo "🔧 Loading global configuration from: $config_file"
+                if [ "$config_loaded" = "false" ]; then
+                    echo "🔧 Loading global configuration from: $config_file (CLI: $INSTALL_LOCATION)"
+                    config_loaded=true
+                fi
                 # Source the file to load variables
                 if [ -r "$full_path" ]; then
                     # Use a safe way to load env files
@@ -62,7 +66,7 @@ load_configuration() {
     for config_file in "${CONFIG_FILES[@]}"; do
         local full_path="$project_root/$config_file"
         if [ -f "$full_path" ]; then
-            echo "🔧 Loading project configuration from: $config_file"
+            echo "🔧 Loading project configuration from: $config_file (Project: $project_root)"
             # Source the file to load variables
             if [ -r "$full_path" ]; then
                 # Use a safe way to load env files
@@ -518,9 +522,5 @@ export -f show_configuration
 export -f get_docs_folder
 export -f get_docs_archive_folder
 
-# Load configuration automatically when this module is sourced
-# This ensures all environment variables are set up properly
-# But only if INSTALL_LOCATION is already set (avoid race condition)
-if [ -n "${INSTALL_LOCATION:-}" ]; then
-    load_configuration "${PROJECT_ROOT:-.}"
-fi
+# Note: Configuration loading is handled explicitly by the main CLI module
+# to ensure proper initialization order and avoid duplicate loading
