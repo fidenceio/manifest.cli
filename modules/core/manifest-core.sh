@@ -191,6 +191,22 @@ check_auto_update() {
 
 # Main command dispatcher
 main() {
+    # Set INSTALL_LOCATION early for security checks
+    INSTALL_LOCATION="${MANIFEST_CLI_INSTALL_DIR:-/usr/local/share/manifest-cli}"
+    export INSTALL_LOCATION
+    
+    # SECURITY: Early check to prevent running from installation directory
+    if is_installation_directory "$(pwd)"; then
+        log_error "❌ SECURITY ERROR: Cannot run Manifest CLI from installation directory"
+        log_error "   Installation directory: ${INSTALL_LOCATION:-/usr/local/share/manifest-cli}"
+        log_error "   Current directory: $(pwd)"
+        log_error ""
+        log_error "💡 Please run Manifest CLI from your project directory instead:"
+        log_error "   cd /path/to/your/project"
+        log_error "   manifest [command]"
+        return 1
+    fi
+    
     # Ensure we're running from repository root for all commands
     if ! ensure_repository_root; then
         log_error "Repository root validation failed"

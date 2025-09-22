@@ -115,10 +115,59 @@ get_project_root() {
     echo "$current_dir"
 }
 
+# Check if we're running from the installation directory
+is_installation_directory() {
+    local current_dir="$1"
+    local install_location="${INSTALL_LOCATION:-/usr/local/share/manifest-cli}"
+    
+    if [ -z "$current_dir" ]; then
+        current_dir="$(pwd)"
+    fi
+    
+    # Check if current directory is the installation directory
+    if [[ "$current_dir" == "$install_location" ]]; then
+        return 0
+    fi
+    
+    # Check if current directory is a subdirectory of installation directory
+    if [[ "$current_dir" == "$install_location"/* ]]; then
+        return 0
+    fi
+    
+    # Additional check: if INSTALL_LOCATION is not set, check common installation paths
+    if [[ -z "${INSTALL_LOCATION:-}" ]]; then
+        local common_install_paths=(
+            "/usr/local/share/manifest-cli"
+            "/opt/manifest-cli"
+            "/usr/share/manifest-cli"
+        )
+        
+        for path in "${common_install_paths[@]}"; do
+            if [[ "$current_dir" == "$path" ]] || [[ "$current_dir" == "$path"/* ]]; then
+                return 0
+            fi
+        done
+    fi
+    
+    return 1
+}
+
 # Validate and ensure we're running from repository root
 validate_repository_root() {
     local current_dir="$(pwd)"
     local git_root=""
+    
+    # SECURITY: Prevent running from installation directory
+    if is_installation_directory "$current_dir"; then
+        log_error "❌ SECURITY ERROR: Cannot run Manifest CLI from installation directory"
+        log_error "   Installation directory: ${INSTALL_LOCATION:-/usr/local/share/manifest-cli}"
+        log_error "   Current directory: $current_dir"
+        log_error ""
+        log_error "💡 Please run Manifest CLI from your project directory instead:"
+        log_error "   cd /path/to/your/project"
+        log_error "   manifest [command]"
+        return 1
+    fi
     
     # Check if we're in a git repository
     if ! git rev-parse --git-dir >/dev/null 2>&1; then
@@ -379,7 +428,7 @@ export -f log_debug log_info log_success log_warning log_error log_trace
 export -f validate_required_args ensure_directory create_temp_file
 export -f show_help show_usage_error show_required_arg_error
 export -f get_script_dir get_script_parent_dir get_project_root get_modules_dir
-export -f validate_repository_root ensure_repository_root
+export -f is_installation_directory validate_repository_root ensure_repository_root
 export -f show_network_error show_file_error show_git_error show_config_error
 export -f show_validation_error show_permission_error show_dependency_error
 export -f sanitize_filename sanitize_version sanitize_path validate_version_format
