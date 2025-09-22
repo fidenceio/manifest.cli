@@ -8,9 +8,9 @@
 # that are set by the OS detection module.
 
 # Configuration with sensible defaults
-MANIFEST_NTP_SERVERS=${MANIFEST_NTP_SERVERS:-"time.apple.com,time.google.com,pool.ntp.org"}
-MANIFEST_NTP_TIMEOUT=${MANIFEST_NTP_TIMEOUT:-3}
-MANIFEST_NTP_RETRIES=${MANIFEST_NTP_RETRIES:-2}
+MANIFEST_CLI_NTP_SERVERS=${MANIFEST_CLI_NTP_SERVERS:-"time.apple.com,time.google.com,pool.ntp.org"}
+MANIFEST_CLI_NTP_TIMEOUT=${MANIFEST_CLI_NTP_TIMEOUT:-3}
+MANIFEST_CLI_NTP_RETRIES=${MANIFEST_CLI_NTP_RETRIES:-2}
 
 # Global timestamp variables
 MANIFEST_NTP_TIMESTAMP=""
@@ -275,7 +275,7 @@ get_ntp_timestamp() {
     # Build array of NTP servers from individual variables
     local ntp_servers=()
     for i in {1..4}; do
-        local server_var="MANIFEST_NTP_SERVER$i"
+        local server_var="MANIFEST_CLI_NTP_SERVER$i"
         local server_value="${!server_var:-}"
         if [ -n "$server_value" ]; then
             ntp_servers+=("$server_value")
@@ -287,10 +287,10 @@ get_ntp_timestamp() {
         echo "   🔍 Querying $ntp_server..."
         
         if [ "${MANIFEST_DEBUG:-0}" = "1" ]; then
-            echo "   🔍 Debug: Calling query_ntp_server with server='$ntp_server', timeout='$MANIFEST_NTP_TIMEOUT'" >&2
+            echo "   🔍 Debug: Calling query_ntp_server with server='$ntp_server', timeout='$MANIFEST_CLI_NTP_TIMEOUT'" >&2
         fi
         
-        local result=$(query_ntp_server "$ntp_server" "$MANIFEST_NTP_TIMEOUT")
+        local result=$(query_ntp_server "$ntp_server" "$MANIFEST_CLI_NTP_TIMEOUT")
         local query_exit_code=$?
         
         if [ "${MANIFEST_DEBUG:-0}" = "1" ]; then
@@ -379,11 +379,11 @@ display_ntp_config() {
     echo "⚙️  Manifest Timestamp Configuration"
     echo "===================================="
     echo "   🖥️  OS: $MANIFEST_OS"
-    echo "   ⏱️  Timeout: ${MANIFEST_NTP_TIMEOUT}s"
-    echo "   🔄 Retries: ${MANIFEST_NTP_RETRIES}"
+    echo "   ⏱️  Timeout: ${MANIFEST_CLI_NTP_TIMEOUT}s"
+    echo "   🔄 Retries: ${MANIFEST_CLI_NTP_RETRIES}"
     echo "   🌐 Servers:"
     
-    local ntp_servers=($(echo "$MANIFEST_NTP_SERVERS" | tr ',' ' '))
+    local ntp_servers=($(echo "$MANIFEST_CLI_NTP_SERVERS" | tr ',' ' '))
     for server in "${ntp_servers[@]}"; do
         case "$server" in
             "time.apple.com")
@@ -406,9 +406,9 @@ display_ntp_config() {
     
     echo ""
     echo "💡 Customize with environment variables:"
-    echo "   export MANIFEST_NTP_SERVERS='time.apple.com,time.google.com'"
-    echo "   export MANIFEST_NTP_TIMEOUT=5"
-    echo "   export MANIFEST_NTP_RETRIES=3"
+    echo "   export MANIFEST_CLI_NTP_SERVERS='time.apple.com,time.google.com'"
+    echo "   export MANIFEST_CLI_NTP_TIMEOUT=5"
+    echo "   export MANIFEST_CLI_NTP_RETRIES=3"
 }
 
 # Quick timestamp function for simple operations

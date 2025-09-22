@@ -114,70 +114,70 @@ load_configuration() {
 # Set default configuration values
 set_default_configuration() {
     # Versioning Configuration
-    export MANIFEST_VERSION_FORMAT="${MANIFEST_VERSION_FORMAT:-XX.XX.XX}"
-    export MANIFEST_VERSION_SEPARATOR="${MANIFEST_VERSION_SEPARATOR:-.}"
-    export MANIFEST_VERSION_COMPONENTS="${MANIFEST_VERSION_COMPONENTS:-major,minor,patch}"
-    export MANIFEST_VERSION_MAX_VALUES="${MANIFEST_VERSION_MAX_VALUES:-0,0,0}"
+    export MANIFEST_CLI_VERSION_FORMAT="${MANIFEST_CLI_VERSION_FORMAT:-XX.XX.XX}"
+    export MANIFEST_CLI_VERSION_SEPARATOR="${MANIFEST_CLI_VERSION_SEPARATOR:-.}"
+    export MANIFEST_CLI_VERSION_COMPONENTS="${MANIFEST_CLI_VERSION_COMPONENTS:-major,minor,patch}"
+    export MANIFEST_CLI_VERSION_MAX_VALUES="${MANIFEST_CLI_VERSION_MAX_VALUES:-0,0,0}"
     
     # Human-Intuitive Component Mapping (defaults to standard semantic versioning)
-    export MANIFEST_MAJOR_COMPONENT_POSITION="${MANIFEST_MAJOR_COMPONENT_POSITION:-1}"
-    export MANIFEST_MINOR_COMPONENT_POSITION="${MANIFEST_MINOR_COMPONENT_POSITION:-2}"
-    export MANIFEST_PATCH_COMPONENT_POSITION="${MANIFEST_PATCH_COMPONENT_POSITION:-3}"
-    export MANIFEST_REVISION_COMPONENT_POSITION="${MANIFEST_REVISION_COMPONENT_POSITION:-4}"
+    export MANIFEST_CLI_MAJOR_COMPONENT_POSITION="${MANIFEST_CLI_MAJOR_COMPONENT_POSITION:-1}"
+    export MANIFEST_CLI_MINOR_COMPONENT_POSITION="${MANIFEST_CLI_MINOR_COMPONENT_POSITION:-2}"
+    export MANIFEST_CLI_PATCH_COMPONENT_POSITION="${MANIFEST_CLI_PATCH_COMPONENT_POSITION:-3}"
+    export MANIFEST_CLI_REVISION_COMPONENT_POSITION="${MANIFEST_CLI_REVISION_COMPONENT_POSITION:-4}"
     
     # Increment Behavior (defaults to standard semantic versioning)
-    export MANIFEST_MAJOR_INCREMENT_TARGET="${MANIFEST_MAJOR_INCREMENT_TARGET:-1}"
-    export MANIFEST_MINOR_INCREMENT_TARGET="${MANIFEST_MINOR_INCREMENT_TARGET:-2}"
-    export MANIFEST_PATCH_INCREMENT_TARGET="${MANIFEST_PATCH_INCREMENT_TARGET:-3}"
-    export MANIFEST_REVISION_INCREMENT_TARGET="${MANIFEST_REVISION_INCREMENT_TARGET:-4}"
+    export MANIFEST_CLI_MAJOR_INCREMENT_TARGET="${MANIFEST_CLI_MAJOR_INCREMENT_TARGET:-1}"
+    export MANIFEST_CLI_MINOR_INCREMENT_TARGET="${MANIFEST_CLI_MINOR_INCREMENT_TARGET:-2}"
+    export MANIFEST_CLI_PATCH_INCREMENT_TARGET="${MANIFEST_CLI_PATCH_INCREMENT_TARGET:-3}"
+    export MANIFEST_CLI_REVISION_INCREMENT_TARGET="${MANIFEST_CLI_REVISION_INCREMENT_TARGET:-4}"
     
     # Reset Behavior (defaults to standard semantic versioning)
-    export MANIFEST_MAJOR_RESET_COMPONENTS="${MANIFEST_MAJOR_RESET_COMPONENTS:-2,3,4}"
-    export MANIFEST_MINOR_RESET_COMPONENTS="${MANIFEST_MINOR_RESET_COMPONENTS:-3,4}"
-    export MANIFEST_PATCH_RESET_COMPONENTS="${MANIFEST_PATCH_RESET_COMPONENTS:-4}"
-    export MANIFEST_REVISION_RESET_COMPONENTS="${MANIFEST_REVISION_RESET_COMPONENTS:-}"
+    export MANIFEST_CLI_MAJOR_RESET_COMPONENTS="${MANIFEST_CLI_MAJOR_RESET_COMPONENTS:-2,3,4}"
+    export MANIFEST_CLI_MINOR_RESET_COMPONENTS="${MANIFEST_CLI_MINOR_RESET_COMPONENTS:-3,4}"
+    export MANIFEST_CLI_PATCH_RESET_COMPONENTS="${MANIFEST_CLI_PATCH_RESET_COMPONENTS:-4}"
+    export MANIFEST_CLI_REVISION_RESET_COMPONENTS="${MANIFEST_CLI_REVISION_RESET_COMPONENTS:-}"
     
     # Git Configuration
-    export MANIFEST_GIT_TAG_PREFIX="${MANIFEST_GIT_TAG_PREFIX:-v}"
-    export MANIFEST_GIT_TAG_SUFFIX="${MANIFEST_GIT_TAG_SUFFIX:-}"
+    export MANIFEST_CLI_GIT_TAG_PREFIX="${MANIFEST_CLI_GIT_TAG_PREFIX:-v}"
+    export MANIFEST_CLI_GIT_TAG_SUFFIX="${MANIFEST_CLI_GIT_TAG_SUFFIX:-}"
     
     # Branch Naming Configuration
-    export MANIFEST_DEFAULT_BRANCH="${MANIFEST_DEFAULT_BRANCH:-main}"
-    export MANIFEST_FEATURE_BRANCH_PREFIX="${MANIFEST_FEATURE_BRANCH_PREFIX:-feature/}"
-    export MANIFEST_HOTFIX_BRANCH_PREFIX="${MANIFEST_HOTFIX_BRANCH_PREFIX:-hotfix/}"
-    export MANIFEST_RELEASE_BRANCH_PREFIX="${MANIFEST_RELEASE_BRANCH_PREFIX:-release/}"
-    export MANIFEST_BUGFIX_BRANCH_PREFIX="${MANIFEST_BUGFIX_BRANCH_PREFIX:-bugfix/}"
-    export MANIFEST_DEVELOPMENT_BRANCH="${MANIFEST_DEVELOPMENT_BRANCH:-develop}"
-    export MANIFEST_STAGING_BRANCH="${MANIFEST_STAGING_BRANCH:-staging}"
+    export MANIFEST_CLI_DEFAULT_BRANCH="${MANIFEST_CLI_DEFAULT_BRANCH:-main}"
+    export MANIFEST_CLI_FEATURE_BRANCH_PREFIX="${MANIFEST_CLI_FEATURE_BRANCH_PREFIX:-feature/}"
+    export MANIFEST_CLI_HOTFIX_BRANCH_PREFIX="${MANIFEST_CLI_HOTFIX_BRANCH_PREFIX:-hotfix/}"
+    export MANIFEST_CLI_RELEASE_BRANCH_PREFIX="${MANIFEST_CLI_RELEASE_BRANCH_PREFIX:-release/}"
+    export MANIFEST_CLI_BUGFIX_BRANCH_PREFIX="${MANIFEST_CLI_BUGFIX_BRANCH_PREFIX:-bugfix/}"
+    export MANIFEST_CLI_DEVELOPMENT_BRANCH="${MANIFEST_CLI_DEVELOPMENT_BRANCH:-develop}"
+    export MANIFEST_CLI_STAGING_BRANCH="${MANIFEST_CLI_STAGING_BRANCH:-staging}"
     
     # NTP Configuration
-    export MANIFEST_NTP_SERVER1="${MANIFEST_NTP_SERVER1:-time.apple.com}"
-    export MANIFEST_NTP_SERVER2="${MANIFEST_NTP_SERVER2:-time.google.com}"
-    export MANIFEST_NTP_SERVER3="${MANIFEST_NTP_SERVER3:-pool.ntp.org}"
-    export MANIFEST_NTP_SERVER4="${MANIFEST_NTP_SERVER4:-time.nist.gov}"
-    export MANIFEST_NTP_TIMEOUT="${MANIFEST_NTP_TIMEOUT:-5}"
-    export MANIFEST_NTP_RETRIES="${MANIFEST_NTP_RETRIES:-3}"
-    export MANIFEST_NTP_VERIFY="${MANIFEST_NTP_VERIFY:-true}"
+    export MANIFEST_CLI_NTP_SERVER1="${MANIFEST_CLI_NTP_SERVER1:-time.apple.com}"
+    export MANIFEST_CLI_NTP_SERVER2="${MANIFEST_CLI_NTP_SERVER2:-time.google.com}"
+    export MANIFEST_CLI_NTP_SERVER3="${MANIFEST_CLI_NTP_SERVER3:-pool.ntp.org}"
+    export MANIFEST_CLI_NTP_SERVER4="${MANIFEST_CLI_NTP_SERVER4:-time.nist.gov}"
+    export MANIFEST_CLI_NTP_TIMEOUT="${MANIFEST_CLI_NTP_TIMEOUT:-5}"
+    export MANIFEST_CLI_NTP_RETRIES="${MANIFEST_CLI_NTP_RETRIES:-3}"
+    export MANIFEST_CLI_NTP_VERIFY="${MANIFEST_CLI_NTP_VERIFY:-true}"
     
     # Git Operations
-    export MANIFEST_GIT_COMMIT_TEMPLATE="${MANIFEST_GIT_COMMIT_TEMPLATE:-Release v{version} - {timestamp}}"
-    export MANIFEST_GIT_PUSH_STRATEGY="${MANIFEST_GIT_PUSH_STRATEGY:-simple}"
-    export MANIFEST_GIT_PULL_STRATEGY="${MANIFEST_GIT_PULL_STRATEGY:-rebase}"
-    export MANIFEST_GIT_TIMEOUT="${MANIFEST_GIT_TIMEOUT:-300}"
-    export MANIFEST_GIT_RETRIES="${MANIFEST_GIT_RETRIES:-3}"
+    export MANIFEST_CLI_GIT_COMMIT_TEMPLATE="${MANIFEST_CLI_GIT_COMMIT_TEMPLATE:-Release v{version} - {timestamp}}"
+    export MANIFEST_CLI_GIT_PUSH_STRATEGY="${MANIFEST_CLI_GIT_PUSH_STRATEGY:-simple}"
+    export MANIFEST_CLI_GIT_PULL_STRATEGY="${MANIFEST_CLI_GIT_PULL_STRATEGY:-rebase}"
+    export MANIFEST_CLI_GIT_TIMEOUT="${MANIFEST_CLI_GIT_TIMEOUT:-300}"
+    export MANIFEST_CLI_GIT_RETRIES="${MANIFEST_CLI_GIT_RETRIES:-3}"
     
     # Homebrew Configuration
-    export MANIFEST_BREW_OPTION="${MANIFEST_BREW_OPTION:-enabled}"
-    export MANIFEST_BREW_INTERACTIVE="${MANIFEST_BREW_INTERACTIVE:-no}"
-    export MANIFEST_TAP_REPO="${MANIFEST_TAP_REPO:-https://github.com/fidenceio/fidenceio-homebrew-tap.git}"
+    export MANIFEST_CLI_BREW_OPTION="${MANIFEST_CLI_BREW_OPTION:-enabled}"
+    export MANIFEST_CLI_BREW_INTERACTIVE="${MANIFEST_CLI_BREW_INTERACTIVE:-no}"
+    export MANIFEST_CLI_TAP_REPO="${MANIFEST_CLI_TAP_REPO:-https://github.com/fidenceio/fidenceio-homebrew-tap.git}"
     
     # Documentation Configuration
-    export MANIFEST_DOCS_FOLDER="${MANIFEST_DOCS_FOLDER:-docs}"
-    export MANIFEST_DOCS_ARCHIVE_FOLDER="${MANIFEST_DOCS_ARCHIVE_FOLDER:-docs/zArchive}"
-    export MANIFEST_DOCS_TEMPLATE_DIR="${MANIFEST_DOCS_TEMPLATE_DIR:-}"
-    export MANIFEST_DOCS_AUTO_GENERATE="${MANIFEST_DOCS_AUTO_GENERATE:-true}"
-    export MANIFEST_DOCS_HISTORICAL_LIMIT="${MANIFEST_DOCS_HISTORICAL_LIMIT:-20}"
-    export MANIFEST_DOCS_FILENAME_PATTERN="${MANIFEST_DOCS_FILENAME_PATTERN:-RELEASE_vVERSION.md}"
+    export MANIFEST_CLI_DOCS_FOLDER="${MANIFEST_CLI_DOCS_FOLDER:-docs}"
+    export MANIFEST_CLI_DOCS_ARCHIVE_FOLDER="${MANIFEST_CLI_DOCS_ARCHIVE_FOLDER:-docs/zArchive}"
+    export MANIFEST_CLI_DOCS_TEMPLATE_DIR="${MANIFEST_CLI_DOCS_TEMPLATE_DIR:-}"
+    export MANIFEST_CLI_DOCS_AUTO_GENERATE="${MANIFEST_CLI_DOCS_AUTO_GENERATE:-true}"
+    export MANIFEST_CLI_DOCS_HISTORICAL_LIMIT="${MANIFEST_CLI_DOCS_HISTORICAL_LIMIT:-20}"
+    export MANIFEST_CLI_DOCS_FILENAME_PATTERN="${MANIFEST_CLI_DOCS_FILENAME_PATTERN:-RELEASE_vVERSION.md}"
     
     # File and directory names
     export MANIFEST_CLI_README_FILE="${MANIFEST_CLI_README_FILE:-README.md}"
@@ -203,23 +203,23 @@ set_default_configuration() {
     export MANIFEST_CLI_CONFIG_LOCAL="${MANIFEST_CLI_CONFIG_LOCAL:-.env.manifest.local}"
     
     # Project Configuration
-    export MANIFEST_PROJECT_NAME="${MANIFEST_PROJECT_NAME:-Manifest CLI}"
+    export MANIFEST_CLI_PROJECT_NAME="${MANIFEST_CLI_PROJECT_NAME:-Manifest CLI}"
     
     # Auto-Update Configuration
-    export MANIFEST_AUTO_UPDATE="${MANIFEST_AUTO_UPDATE:-true}"
-    export MANIFEST_UPDATE_COOLDOWN="${MANIFEST_UPDATE_COOLDOWN:-30}"
-    export MANIFEST_PROJECT_DESCRIPTION="${MANIFEST_PROJECT_DESCRIPTION:-A powerful CLI tool for versioning, AI documenting, and repository operations}"
-    export MANIFEST_ORGANIZATION="${MANIFEST_ORGANIZATION:-Your Organization}"
+    export MANIFEST_CLI_AUTO_UPDATE="${MANIFEST_CLI_AUTO_UPDATE:-true}"
+    export MANIFEST_CLI_UPDATE_COOLDOWN="${MANIFEST_CLI_UPDATE_COOLDOWN:-30}"
+    export MANIFEST_CLI_PROJECT_DESCRIPTION="${MANIFEST_CLI_PROJECT_DESCRIPTION:-A powerful CLI tool for versioning, AI documenting, and repository operations}"
+    export MANIFEST_CLI_ORGANIZATION="${MANIFEST_CLI_ORGANIZATION:-Your Organization}"
     
     # Advanced Configuration
-    export MANIFEST_VERSION_REGEX="${MANIFEST_VERSION_REGEX:-^[0-9]+(\.[0-9]+)*$}"
-    export MANIFEST_VERSION_VALIDATION="${MANIFEST_VERSION_VALIDATION:-true}"
+    export MANIFEST_CLI_VERSION_REGEX="${MANIFEST_CLI_VERSION_REGEX:-^[0-9]+(\.[0-9]+)*$}"
+    export MANIFEST_CLI_VERSION_VALIDATION="${MANIFEST_CLI_VERSION_VALIDATION:-true}"
     
     # Development & Debugging
-    export MANIFEST_DEBUG="${MANIFEST_DEBUG:-false}"
-    export MANIFEST_VERBOSE="${MANIFEST_VERBOSE:-false}"
-    export MANIFEST_LOG_LEVEL="${MANIFEST_LOG_LEVEL:-INFO}"
-    export MANIFEST_INTERACTIVE="${MANIFEST_INTERACTIVE:-false}"
+    export MANIFEST_CLI_DEBUG="${MANIFEST_CLI_DEBUG:-false}"
+    export MANIFEST_CLI_VERBOSE="${MANIFEST_CLI_VERBOSE:-false}"
+    export MANIFEST_CLI_LOG_LEVEL="${MANIFEST_CLI_LOG_LEVEL:-INFO}"
+    export MANIFEST_CLI_INTERACTIVE="${MANIFEST_CLI_INTERACTIVE:-false}"
     
     # Configuration file paths (in order of precedence)
     CONFIG_FILES=(
@@ -247,7 +247,7 @@ get_config() {
 # Validate version format configuration
 validate_version_config() {
     local format="$MANIFEST_VERSION_FORMAT"
-    local separator="$MANIFEST_VERSION_SEPARATOR"
+    local separator="$MANIFEST_CLI_VERSION_SEPARATOR"
     
     # Basic validation
     if [ -z "$format" ]; then
@@ -256,13 +256,13 @@ validate_version_config() {
     fi
     
     if [ -z "$separator" ]; then
-        echo "❌ MANIFEST_VERSION_SEPARATOR is not set"
+        echo "❌ MANIFEST_CLI_VERSION_SEPARATOR is not set"
         return 1
     fi
     
     # Check if format contains the separator
     if [[ "$format" != *"$separator"* ]]; then
-        echo "❌ MANIFEST_VERSION_FORMAT must contain MANIFEST_VERSION_SEPARATOR"
+        echo "❌ MANIFEST_VERSION_FORMAT must contain MANIFEST_CLI_VERSION_SEPARATOR"
         return 1
     fi
     
@@ -274,7 +274,7 @@ validate_version_config() {
 parse_version_components() {
     local version="$1"
     local format="$MANIFEST_VERSION_FORMAT"
-    local separator="$MANIFEST_VERSION_SEPARATOR"
+    local separator="$MANIFEST_CLI_VERSION_SEPARATOR"
     
     if [ -z "$version" ] || [ -z "$format" ]; then
         return 1
@@ -330,7 +330,7 @@ generate_next_version() {
     local current_version="$1"
     local increment_type="$2"
     local format="$MANIFEST_VERSION_FORMAT"
-    local separator="$MANIFEST_VERSION_SEPARATOR"
+    local separator="$MANIFEST_CLI_VERSION_SEPARATOR"
     
     if [ -z "$current_version" ] || [ -z "$format" ]; then
         return 1
@@ -393,64 +393,64 @@ show_configuration() {
     echo ""
     
     echo "📋 Versioning Configuration:"
-    echo "   Format: ${MANIFEST_VERSION_FORMAT}"
-    echo "   Separator: ${MANIFEST_VERSION_SEPARATOR}"
-    echo "   Components: ${MANIFEST_VERSION_COMPONENTS}"
-    echo "   Max Values: ${MANIFEST_VERSION_MAX_VALUES}"
+    echo "   Format: ${MANIFEST_CLI_VERSION_FORMAT}"
+    echo "   Separator: ${MANIFEST_CLI_VERSION_SEPARATOR}"
+    echo "   Components: ${MANIFEST_CLI_VERSION_COMPONENTS}"
+    echo "   Max Values: ${MANIFEST_CLI_VERSION_MAX_VALUES}"
     echo ""
     
     echo "🧠 Human-Intuitive Component Mapping:"
-    echo "   Major Position: ${MANIFEST_MAJOR_COMPONENT_POSITION} (leftmost = biggest impact)"
-    echo "   Minor Position: ${MANIFEST_MINOR_COMPONENT_POSITION} (middle = moderate impact)"
-    echo "   Patch Position: ${MANIFEST_PATCH_COMPONENT_POSITION} (rightmost = least impact)"
-    echo "   Revision Position: ${MANIFEST_REVISION_COMPONENT_POSITION} (most right = most specific)"
+    echo "   Major Position: ${MANIFEST_CLI_MAJOR_COMPONENT_POSITION} (leftmost = biggest impact)"
+    echo "   Minor Position: ${MANIFEST_CLI_MINOR_COMPONENT_POSITION} (middle = moderate impact)"
+    echo "   Patch Position: ${MANIFEST_CLI_PATCH_COMPONENT_POSITION} (rightmost = least impact)"
+    echo "   Revision Position: ${MANIFEST_CLI_REVISION_COMPONENT_POSITION} (most right = most specific)"
     echo ""
     
     echo "📈 Increment Behavior:"
-    echo "   Major Target: ${MANIFEST_MAJOR_INCREMENT_TARGET} (which component increments)"
-    echo "   Minor Target: ${MANIFEST_MINOR_INCREMENT_TARGET} (which component increments)"
-    echo "   Patch Target: ${MANIFEST_PATCH_INCREMENT_TARGET} (which component increments)"
-    echo "   Revision Target: ${MANIFEST_REVISION_INCREMENT_TARGET} (which component increments)"
+    echo "   Major Target: ${MANIFEST_CLI_MAJOR_INCREMENT_TARGET} (which component increments)"
+    echo "   Minor Target: ${MANIFEST_CLI_MINOR_INCREMENT_TARGET} (which component increments)"
+    echo "   Patch Target: ${MANIFEST_CLI_PATCH_INCREMENT_TARGET} (which component increments)"
+    echo "   Revision Target: ${MANIFEST_CLI_REVISION_INCREMENT_TARGET} (which component increments)"
     echo ""
     
     echo "🔄 Reset Behavior:"
-    echo "   Major Reset: ${MANIFEST_MAJOR_RESET_COMPONENTS} (components reset to 0)"
-    echo "   Minor Reset: ${MANIFEST_MINOR_RESET_COMPONENTS} (components reset to 0)"
-    echo "   Patch Reset: ${MANIFEST_PATCH_RESET_COMPONENTS} (components reset to 0)"
-    echo "   Revision Reset: ${MANIFEST_REVISION_RESET_COMPONENTS} (components reset to 0)"
+    echo "   Major Reset: ${MANIFEST_CLI_MAJOR_RESET_COMPONENTS} (components reset to 0)"
+    echo "   Minor Reset: ${MANIFEST_CLI_MINOR_RESET_COMPONENTS} (components reset to 0)"
+    echo "   Patch Reset: ${MANIFEST_CLI_PATCH_RESET_COMPONENTS} (components reset to 0)"
+    echo "   Revision Reset: ${MANIFEST_CLI_REVISION_RESET_COMPONENTS} (components reset to 0)"
     echo ""
     
     echo "🌿 Branch Configuration:"
-    echo "   Default Branch: ${MANIFEST_DEFAULT_BRANCH}"
-    echo "   Feature Prefix: ${MANIFEST_FEATURE_BRANCH_PREFIX}"
-    echo "   Hotfix Prefix: ${MANIFEST_HOTFIX_BRANCH_PREFIX}"
-    echo "   Release Prefix: ${MANIFEST_RELEASE_BRANCH_PREFIX}"
-    echo "   Bugfix Prefix: ${MANIFEST_BUGFIX_BRANCH_PREFIX}"
-    echo "   Development Branch: ${MANIFEST_DEVELOPMENT_BRANCH}"
-    echo "   Staging Branch: ${MANIFEST_STAGING_BRANCH}"
+    echo "   Default Branch: ${MANIFEST_CLI_DEFAULT_BRANCH}"
+    echo "   Feature Prefix: ${MANIFEST_CLI_FEATURE_BRANCH_PREFIX}"
+    echo "   Hotfix Prefix: ${MANIFEST_CLI_HOTFIX_BRANCH_PREFIX}"
+    echo "   Release Prefix: ${MANIFEST_CLI_RELEASE_BRANCH_PREFIX}"
+    echo "   Bugfix Prefix: ${MANIFEST_CLI_BUGFIX_BRANCH_PREFIX}"
+    echo "   Development Branch: ${MANIFEST_CLI_DEVELOPMENT_BRANCH}"
+    echo "   Staging Branch: ${MANIFEST_CLI_STAGING_BRANCH}"
     echo ""
     
     echo "🏷️  Git Configuration:"
-    echo "   Tag Prefix: ${MANIFEST_GIT_TAG_PREFIX}"
-    echo "   Tag Suffix: ${MANIFEST_GIT_TAG_SUFFIX}"
-    echo "   Push Strategy: ${MANIFEST_GIT_PUSH_STRATEGY}"
-    echo "   Pull Strategy: ${MANIFEST_GIT_PULL_STRATEGY}"
-    echo "   Timeout: ${MANIFEST_GIT_TIMEOUT} seconds"
-    echo "   Retries: ${MANIFEST_GIT_RETRIES} attempts"
+    echo "   Tag Prefix: ${MANIFEST_CLI_GIT_TAG_PREFIX}"
+    echo "   Tag Suffix: ${MANIFEST_CLI_GIT_TAG_SUFFIX}"
+    echo "   Push Strategy: ${MANIFEST_CLI_GIT_PUSH_STRATEGY}"
+    echo "   Pull Strategy: ${MANIFEST_CLI_GIT_PULL_STRATEGY}"
+    echo "   Timeout: ${MANIFEST_CLI_GIT_TIMEOUT} seconds"
+    echo "   Retries: ${MANIFEST_CLI_GIT_RETRIES} attempts"
     echo "   Remotes: Uses all configured git remotes automatically"
     echo ""
     
     echo "📚 Documentation Configuration:"
-    echo "   Docs Folder: ${MANIFEST_DOCS_FOLDER}"
-    echo "   Archive Folder: ${MANIFEST_DOCS_ARCHIVE_FOLDER}"
-    echo "   Filename Pattern: ${MANIFEST_DOCS_FILENAME_PATTERN}"
-    echo "   Historical Limit: ${MANIFEST_DOCS_HISTORICAL_LIMIT}"
+    echo "   Docs Folder: ${MANIFEST_CLI_DOCS_FOLDER}"
+    echo "   Archive Folder: ${MANIFEST_CLI_DOCS_ARCHIVE_FOLDER}"
+    echo "   Filename Pattern: ${MANIFEST_CLI_DOCS_FILENAME_PATTERN}"
+    echo "   Historical Limit: ${MANIFEST_CLI_DOCS_HISTORICAL_LIMIT}"
     echo ""
     
     echo "🏢 Project Configuration:"
-    echo "   Project Name: ${MANIFEST_PROJECT_NAME}"
-    echo "   Description: ${MANIFEST_PROJECT_DESCRIPTION}"
-    echo "   Organization: ${MANIFEST_ORGANIZATION}"
+    echo "   Project Name: ${MANIFEST_CLI_PROJECT_NAME}"
+    echo "   Description: ${MANIFEST_CLI_PROJECT_DESCRIPTION}"
+    echo "   Organization: ${MANIFEST_CLI_ORGANIZATION}"
     echo ""
     
     echo "📍 Installation Configuration:"
@@ -460,23 +460,23 @@ show_configuration() {
     echo ""
     
     echo "⚙️  Advanced Configuration:"
-    echo "   Version Regex: ${MANIFEST_VERSION_REGEX}"
-    echo "   Version Validation: ${MANIFEST_VERSION_VALIDATION}"
+    echo "   Version Regex: ${MANIFEST_CLI_VERSION_REGEX}"
+    echo "   Version Validation: ${MANIFEST_CLI_VERSION_VALIDATION}"
     echo ""
     
     echo "🔄 Auto-Update Configuration:"
-    echo "   Auto-Update: ${MANIFEST_AUTO_UPDATE}"
-    echo "   Update Cooldown: ${MANIFEST_UPDATE_COOLDOWN} minutes"
+    echo "   Auto-Update: ${MANIFEST_CLI_AUTO_UPDATE}"
+    echo "   Update Cooldown: ${MANIFEST_CLI_UPDATE_COOLDOWN} minutes"
     echo ""
     
     echo "💡 How This Works:"
     echo "   • LEFT components = More MAJOR changes (bigger impact)"
     echo "   • RIGHT components = More MINOR changes (smaller impact)"
     echo "   • More digits after last dot = More specific/precise changes"
-    echo "   • 'manifest go major' increments component ${MANIFEST_MAJOR_INCREMENT_TARGET}"
-    echo "   • 'manifest go minor' increments component ${MANIFEST_MINOR_INCREMENT_TARGET}"
-    echo "   • 'manifest go patch' increments component ${MANIFEST_PATCH_INCREMENT_TARGET}"
-    echo "   • 'manifest go revision' increments component ${MANIFEST_REVISION_INCREMENT_TARGET}"
+    echo "   • 'manifest go major' increments component ${MANIFEST_CLI_MAJOR_INCREMENT_TARGET}"
+    echo "   • 'manifest go minor' increments component ${MANIFEST_CLI_MINOR_INCREMENT_TARGET}"
+    echo "   • 'manifest go patch' increments component ${MANIFEST_CLI_PATCH_INCREMENT_TARGET}"
+    echo "   • 'manifest go revision' increments component ${MANIFEST_CLI_REVISION_INCREMENT_TARGET}"
 }
 
 # Get documentation folder path
@@ -490,7 +490,7 @@ get_docs_folder() {
         project_root="."
     fi
     
-    echo "$project_root/$MANIFEST_DOCS_FOLDER"
+    echo "$project_root/$MANIFEST_CLI_DOCS_FOLDER"
 }
 
 # Get documentation archive folder path
@@ -504,7 +504,7 @@ get_docs_archive_folder() {
         project_root="."
     fi
     
-    echo "$project_root/$MANIFEST_DOCS_ARCHIVE_FOLDER"
+    echo "$project_root/$MANIFEST_CLI_DOCS_ARCHIVE_FOLDER"
 }
 
 # Export functions for use in other modules

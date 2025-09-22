@@ -118,22 +118,22 @@ install_cli() {
 # Generated on $(date)
 
 # Update settings
-MANIFEST_AUTO_UPDATE=true
-MANIFEST_UPDATE_COOLDOWN=30
+MANIFEST_CLI_AUTO_UPDATE=true
+MANIFEST_CLI_UPDATE_COOLDOWN=30
 
 # NTP settings
 MANIFEST_NTP_TIMESTAMP=true
-MANIFEST_NTP_SERVERS="time.apple.com,time.google.com,pool.ntp.org"
-MANIFEST_NTP_TIMEOUT=3
-MANIFEST_NTP_RETRIES=2
+MANIFEST_CLI_NTP_SERVERS="time.apple.com,time.google.com,pool.ntp.org"
+MANIFEST_CLI_NTP_TIMEOUT=3
+MANIFEST_CLI_NTP_RETRIES=2
 
 # Interactive mode
-MANIFEST_INTERACTIVE_MODE=false
+MANIFEST_CLI_INTERACTIVE_MODE=false
 
 # Homebrew settings
-MANIFEST_BREW_OPTION=enabled
-MANIFEST_BREW_INTERACTIVE=no
-MANIFEST_TAP_REPO="fidenceio/fidenceio-homebrew-tap"
+MANIFEST_CLI_BREW_OPTION=enabled
+MANIFEST_CLI_BREW_INTERACTIVE=no
+MANIFEST_CLI_TAP_REPO="fidenceio/fidenceio-homebrew-tap"
 
 # Repository settings
 MANIFEST_REPO_URL="https://api.github.com/repos/fidenceio/fidenceio.manifest.cli"
@@ -148,12 +148,12 @@ EOF
 # Auto-update check with cooldown
 check_auto_update_internal() {
     # Check if auto-update is disabled
-    if [ "${MANIFEST_AUTO_UPDATE:-true}" = "false" ]; then
+    if [ "${MANIFEST_CLI_AUTO_UPDATE:-true}" = "false" ]; then
         return 0
     fi
     
     local last_check_file="$PROJECT_ROOT/.last_update_check"
-    local cooldown_minutes="${MANIFEST_UPDATE_COOLDOWN:-30}"
+    local cooldown_minutes="${MANIFEST_CLI_UPDATE_COOLDOWN:-30}"
     local current_time=$(date +%s)
     local last_check_time=0
     

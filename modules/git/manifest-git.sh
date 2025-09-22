@@ -11,8 +11,8 @@
 git_retry() {
     local description="$1"
     local command="$2"
-    local timeout="${MANIFEST_GIT_TIMEOUT:-300}"  # 5 minutes default timeout
-    local max_retries="${MANIFEST_GIT_RETRIES:-3}"  # 3 retries default
+    local timeout="${MANIFEST_CLI_GIT_TIMEOUT:-300}"  # 5 minutes default timeout
+    local max_retries="${MANIFEST_CLI_GIT_RETRIES:-3}"  # 3 retries default
     local success=false
     
     # Configure git to use SSH connection multiplexing to reduce connection overhead
@@ -85,7 +85,7 @@ bump_version() {
     echo "   Current version: $current_version"
     
     # Parse version components using configuration
-    local separator="${MANIFEST_VERSION_SEPARATOR:-.}"
+    local separator="${MANIFEST_CLI_VERSION_SEPARATOR:-.}"
     local major=$(echo "$current_version" | cut -d"$separator" -f1)
     local minor=$(echo "$current_version" | cut -d"$separator" -f2)
     local patch=$(echo "$current_version" | cut -d"$separator" -f3)
@@ -179,8 +179,8 @@ commit_changes() {
 
 create_tag() {
     local version="$1"
-    local tag_prefix="${MANIFEST_GIT_TAG_PREFIX:-v}"
-    local tag_suffix="${MANIFEST_GIT_TAG_SUFFIX:-}"
+    local tag_prefix="${MANIFEST_CLI_GIT_TAG_PREFIX:-v}"
+    local tag_suffix="${MANIFEST_CLI_GIT_TAG_SUFFIX:-}"
     local tag_name="${tag_prefix}${version}${tag_suffix}"
     
     echo "🏷️  Creating git tag..."
@@ -204,7 +204,7 @@ create_tag() {
 push_changes() {
     local version="$1"
     local tag_name="v$version"
-    local default_branch="${MANIFEST_DEFAULT_BRANCH:-main}"
+    local default_branch="${MANIFEST_CLI_DEFAULT_BRANCH:-main}"
     
     echo "🚀 Pushing to all remotes..."
     
@@ -233,7 +233,7 @@ push_changes() {
 
 sync_repository() {
     echo "🔄 Syncing with remote..."
-    local default_branch="${MANIFEST_DEFAULT_BRANCH:-main}"
+    local default_branch="${MANIFEST_CLI_DEFAULT_BRANCH:-main}"
     
     # Change to project root directory
     cd "$PROJECT_ROOT" || {
