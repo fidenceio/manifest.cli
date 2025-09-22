@@ -1,6 +1,6 @@
 # 🌟 Manifest CLI Environment Configuration Examples
 
-This document provides real-world examples of how to configure Manifest CLI for different organizations, versioning schemes, and workflows.
+This document provides real-world examples of how to configure Manifest CLI for different organizations, versioning schemes, and workflows using the current `MANIFEST_CLI_*` variable naming convention.
 
 ## 🏢 Enterprise Organization (4-Digit Versioning)
 
@@ -12,30 +12,40 @@ This document provides real-world examples of how to configure Manifest CLI for 
 # =============================================================================
 
 # Versioning Configuration
-MANIFEST_VERSION_FORMAT="XXXX.XXXX.XXXX"
-MANIFEST_VERSION_SEPARATOR="."
-MANIFEST_VERSION_COMPONENTS="major,minor,patch"
-MANIFEST_VERSION_MAX_VALUES="9999,9999,9999"
-MANIFEST_GIT_TAG_PREFIX="v"
-MANIFEST_GIT_TAG_SUFFIX=""
+MANIFEST_CLI_VERSION_FORMAT="XXXX.XXXX.XXXX"
+MANIFEST_CLI_VERSION_SEPARATOR="."
+MANIFEST_CLI_VERSION_COMPONENTS="major,minor,patch"
+MANIFEST_CLI_VERSION_MAX_VALUES="9999,9999,9999"
+MANIFEST_CLI_GIT_TAG_PREFIX="v"
+MANIFEST_CLI_GIT_TAG_SUFFIX=""
 
 # Branch Naming Configuration
-MANIFEST_DEFAULT_BRANCH="main"
-MANIFEST_FEATURE_BRANCH_PREFIX="feature/"
-MANIFEST_HOTFIX_BRANCH_PREFIX="hotfix/"
-MANIFEST_RELEASE_BRANCH_PREFIX="release/"
-MANIFEST_DEVELOPMENT_BRANCH="develop"
-MANIFEST_STAGING_BRANCH="staging"
+MANIFEST_CLI_GIT_DEFAULT_BRANCH="main"
+MANIFEST_CLI_GIT_FEATURE_BRANCH_PREFIX="feature/"
+MANIFEST_CLI_GIT_HOTFIX_BRANCH_PREFIX="hotfix/"
+MANIFEST_CLI_GIT_RELEASE_BRANCH_PREFIX="release/"
+MANIFEST_CLI_GIT_DEVELOPMENT_BRANCH="develop"
+MANIFEST_CLI_GIT_STAGING_BRANCH="staging"
 
 # Git Configuration
-MANIFEST_GIT_COMMIT_TEMPLATE="[RELEASE] v{version} - {timestamp}"
-MANIFEST_GIT_PUSH_STRATEGY="simple"
-MANIFEST_GIT_PULL_STRATEGY="rebase"
-# Note: Manifest CLI automatically uses all configured git remotes
+MANIFEST_CLI_GIT_COMMIT_TEMPLATE="[RELEASE] v{version} - {timestamp}"
+MANIFEST_CLI_GIT_PUSH_STRATEGY="simple"
+MANIFEST_CLI_GIT_PULL_STRATEGY="rebase"
+MANIFEST_CLI_GIT_TIMEOUT=600
+MANIFEST_CLI_GIT_RETRIES=5
 
 # Documentation Configuration
-MANIFEST_DOCS_FILENAME_PATTERN="RELEASE_{type}_{version}.md"
-MANIFEST_DOCS_HISTORICAL_LIMIT=50
+MANIFEST_CLI_DOCS_FOLDER="docs"
+MANIFEST_CLI_DOCS_ARCHIVE_FOLDER="docs/zArchive"
+MANIFEST_CLI_DOCS_FILENAME_PATTERN="RELEASE_{type}_{version}.md"
+MANIFEST_CLI_DOCS_HISTORICAL_LIMIT=50
+
+# NTP Configuration
+MANIFEST_CLI_NTP_SERVER1="time.apple.com"
+MANIFEST_CLI_NTP_SERVER2="time.google.com"
+MANIFEST_CLI_NTP_SERVER3="pool.ntp.org"
+MANIFEST_CLI_NTP_TIMEOUT=10
+MANIFEST_CLI_NTP_RETRIES=3
 
 # Example versions: 0001.0001.0001, 0001.0002.0000, 0002.0000.0000
 ```
@@ -50,36 +60,45 @@ MANIFEST_DOCS_HISTORICAL_LIMIT=50
 # =============================================================================
 
 # Versioning Configuration
-MANIFEST_VERSION_FORMAT="X.X.X"
-MANIFEST_VERSION_SEPARATOR="."
-MANIFEST_VERSION_COMPONENTS="major,minor,patch"
-MANIFEST_VERSION_MAX_VALUES="0,0,0"
-MANIFEST_GIT_TAG_PREFIX="v"
-MANIFEST_GIT_TAG_SUFFIX=""
+MANIFEST_CLI_VERSION_FORMAT="XX.XX.XX"
+MANIFEST_CLI_VERSION_SEPARATOR="."
+MANIFEST_CLI_VERSION_COMPONENTS="major,minor,patch"
+MANIFEST_CLI_VERSION_MAX_VALUES="99,99,99"
+MANIFEST_CLI_GIT_TAG_PREFIX="v"
+MANIFEST_CLI_GIT_TAG_SUFFIX=""
 
 # Branch Naming Configuration
-MANIFEST_DEFAULT_BRANCH="main"
-MANIFEST_FEATURE_BRANCH_PREFIX="feature/"
-MANIFEST_HOTFIX_BRANCH_PREFIX="hotfix/"
-MANIFEST_RELEASE_BRANCH_PREFIX="release/"
-MANIFEST_DEVELOPMENT_BRANCH="develop"
+MANIFEST_CLI_GIT_DEFAULT_BRANCH="main"
+MANIFEST_CLI_GIT_FEATURE_BRANCH_PREFIX="feature/"
+MANIFEST_CLI_GIT_HOTFIX_BRANCH_PREFIX="hotfix/"
+MANIFEST_CLI_GIT_RELEASE_BRANCH_PREFIX="release/"
+MANIFEST_CLI_GIT_DEVELOPMENT_BRANCH="develop"
+MANIFEST_CLI_GIT_STAGING_BRANCH="staging"
 
 # Git Configuration
-MANIFEST_GIT_COMMIT_TEMPLATE="🚀 Release v{version} - {timestamp}"
-
-MANIFEST_GIT_PUSH_STRATEGY="simple"
-MANIFEST_GIT_PULL_STRATEGY="rebase"
+MANIFEST_CLI_GIT_COMMIT_TEMPLATE="Release v{version} - {timestamp}"
+MANIFEST_CLI_GIT_PUSH_STRATEGY="simple"
+MANIFEST_CLI_GIT_PULL_STRATEGY="rebase"
+MANIFEST_CLI_GIT_TIMEOUT=300
+MANIFEST_CLI_GIT_RETRIES=3
 
 # Documentation Configuration
-MANIFEST_DOCS_FILENAME_PATTERN="{type}_v{version}.md"
-MANIFEST_DOCS_HISTORICAL_LIMIT=20
+MANIFEST_CLI_DOCS_FOLDER="docs"
+MANIFEST_CLI_DOCS_ARCHIVE_FOLDER="docs/zArchive"
+MANIFEST_CLI_DOCS_AUTO_GENERATE=true
+
+# NTP Configuration
+MANIFEST_CLI_NTP_SERVER1="time.apple.com"
+MANIFEST_CLI_NTP_SERVER2="time.google.com"
+MANIFEST_CLI_NTP_TIMEOUT=5
+MANIFEST_CLI_NTP_RETRIES=2
 
 # Example versions: 1.0.0, 1.1.0, 2.0.0
 ```
 
-## 🏭 Manufacturing Company (Date-Based Versioning)
+## 🏭 Manufacturing/Industrial (Date-Based Versioning)
 
-**Use Case**: Manufacturing company that releases based on production schedules
+**Use Case**: Manufacturing company with date-based versioning for compliance
 
 ```bash
 # =============================================================================
@@ -87,37 +106,97 @@ MANIFEST_DOCS_HISTORICAL_LIMIT=20
 # =============================================================================
 
 # Versioning Configuration
-MANIFEST_VERSION_FORMAT="YYYY.MM.DD"
-MANIFEST_VERSION_SEPARATOR="."
-MANIFEST_VERSION_COMPONENTS="year,month,day"
-MANIFEST_VERSION_MAX_VALUES="0,0,0"
-MANIFEST_GIT_TAG_PREFIX="PROD-"
-MANIFEST_GIT_TAG_SUFFIX=""
+MANIFEST_CLI_VERSION_FORMAT="YYYY.MM.DD"
+MANIFEST_CLI_VERSION_SEPARATOR="."
+MANIFEST_CLI_VERSION_COMPONENTS="year,month,day"
+MANIFEST_CLI_VERSION_MAX_VALUES="9999,12,31"
+MANIFEST_CLI_GIT_TAG_PREFIX="release-"
+MANIFEST_CLI_GIT_TAG_SUFFIX="-stable"
 
 # Branch Naming Configuration
-MANIFEST_DEFAULT_BRANCH="production"
-MANIFEST_FEATURE_BRANCH_PREFIX="feature/"
-MANIFEST_HOTFIX_BRANCH_PREFIX="hotfix/"
-MANIFEST_RELEASE_BRANCH_PREFIX="release/"
-MANIFEST_DEVELOPMENT_BRANCH="development"
-MANIFEST_STAGING_BRANCH="staging"
+MANIFEST_CLI_GIT_DEFAULT_BRANCH="production"
+MANIFEST_CLI_GIT_FEATURE_BRANCH_PREFIX="feature/"
+MANIFEST_CLI_GIT_HOTFIX_BRANCH_PREFIX="hotfix/"
+MANIFEST_CLI_GIT_RELEASE_BRANCH_PREFIX="release/"
+MANIFEST_CLI_GIT_BUGFIX_BRANCH_PREFIX="bugfix/"
+MANIFEST_CLI_GIT_DEVELOPMENT_BRANCH="development"
+MANIFEST_CLI_GIT_STAGING_BRANCH="staging"
 
 # Git Configuration
-MANIFEST_GIT_COMMIT_TEMPLATE="[PRODUCTION] {version} - {timestamp}"
-
-MANIFEST_GIT_PUSH_STRATEGY="simple"
-MANIFEST_GIT_PULL_STRATEGY="merge"
+MANIFEST_CLI_GIT_COMMIT_TEMPLATE="[MANUFACTURING] Release {version} - {timestamp}"
+MANIFEST_CLI_GIT_PUSH_STRATEGY="simple"
+MANIFEST_CLI_GIT_PULL_STRATEGY="rebase"
+MANIFEST_CLI_GIT_TIMEOUT=600
+MANIFEST_CLI_GIT_RETRIES=5
 
 # Documentation Configuration
-MANIFEST_DOCS_FILENAME_PATTERN="{type}_{version}.md"
-MANIFEST_DOCS_HISTORICAL_LIMIT=100
+MANIFEST_CLI_DOCS_FOLDER="documentation"
+MANIFEST_CLI_DOCS_ARCHIVE_FOLDER="documentation/archive"
+MANIFEST_CLI_DOCS_FILENAME_PATTERN="RELEASE_{type}_{version}.md"
+MANIFEST_CLI_DOCS_HISTORICAL_LIMIT=100
 
-# Example versions: 2024.01.15, 2024.01.16, 2024.02.01
+# NTP Configuration (Critical for manufacturing timestamps)
+MANIFEST_CLI_NTP_SERVER1="time.nist.gov"
+MANIFEST_CLI_NTP_SERVER2="time.apple.com"
+MANIFEST_CLI_NTP_SERVER3="pool.ntp.org"
+MANIFEST_CLI_NTP_TIMEOUT=15
+MANIFEST_CLI_NTP_RETRIES=5
+MANIFEST_CLI_NTP_VERIFY=true
+
+# Example versions: 2024.03.15, 2024.03.16, 2024.04.01
 ```
 
-## 🏥 Healthcare Organization (Compliance-Focused)
+## 🎮 Gaming/Software (Alpha/Beta/Release)
 
-**Use Case**: Healthcare company requiring strict audit trails and compliance
+**Use Case**: Game development with alpha/beta/stable release cycles
+
+```bash
+# =============================================================================
+# Gaming Configuration - Alpha/Beta/Release Cycle
+# =============================================================================
+
+# Versioning Configuration
+MANIFEST_CLI_VERSION_FORMAT="XX.XX.XX"
+MANIFEST_CLI_VERSION_SEPARATOR="."
+MANIFEST_CLI_VERSION_COMPONENTS="major,minor,patch"
+MANIFEST_CLI_VERSION_MAX_VALUES="99,99,99"
+MANIFEST_CLI_GIT_TAG_PREFIX="v"
+MANIFEST_CLI_GIT_TAG_SUFFIX=""
+
+# Branch Naming Configuration
+MANIFEST_CLI_GIT_DEFAULT_BRANCH="main"
+MANIFEST_CLI_GIT_FEATURE_BRANCH_PREFIX="feature/"
+MANIFEST_CLI_GIT_HOTFIX_BRANCH_PREFIX="hotfix/"
+MANIFEST_CLI_GIT_RELEASE_BRANCH_PREFIX="release/"
+MANIFEST_CLI_GIT_BUGFIX_BRANCH_PREFIX="bugfix/"
+MANIFEST_CLI_GIT_DEVELOPMENT_BRANCH="develop"
+MANIFEST_CLI_GIT_STAGING_BRANCH="staging"
+
+# Git Configuration
+MANIFEST_CLI_GIT_COMMIT_TEMPLATE="[GAME] v{version} - {timestamp}"
+MANIFEST_CLI_GIT_PUSH_STRATEGY="simple"
+MANIFEST_CLI_GIT_PULL_STRATEGY="rebase"
+MANIFEST_CLI_GIT_TIMEOUT=300
+MANIFEST_CLI_GIT_RETRIES=3
+
+# Documentation Configuration
+MANIFEST_CLI_DOCS_FOLDER="docs"
+MANIFEST_CLI_DOCS_ARCHIVE_FOLDER="docs/zArchive"
+MANIFEST_CLI_DOCS_AUTO_GENERATE=true
+MANIFEST_CLI_DOCS_FILENAME_PATTERN="RELEASE_{type}_{version}.md"
+
+# NTP Configuration
+MANIFEST_CLI_NTP_SERVER1="time.apple.com"
+MANIFEST_CLI_NTP_SERVER2="time.google.com"
+MANIFEST_CLI_NTP_TIMEOUT=5
+MANIFEST_CLI_NTP_RETRIES=2
+
+# Example versions: 1.0.0-alpha, 1.0.0-beta, 1.0.0
+```
+
+## 🏥 Healthcare/Medical (Compliance-Focused)
+
+**Use Case**: Healthcare software with strict compliance and audit requirements
 
 ```bash
 # =============================================================================
@@ -125,266 +204,505 @@ MANIFEST_DOCS_HISTORICAL_LIMIT=100
 # =============================================================================
 
 # Versioning Configuration
-MANIFEST_VERSION_FORMAT="XX.XX.XX.XX"
-MANIFEST_VERSION_SEPARATOR="."
-MANIFEST_VERSION_COMPONENTS="major,minor,patch,build"
-MANIFEST_VERSION_MAX_VALUES="99,99,99,999"
-MANIFEST_GIT_TAG_PREFIX="HC-"
-MANIFEST_GIT_TAG_SUFFIX="-COMPLIANT"
+MANIFEST_CLI_VERSION_FORMAT="XX.XX.XX"
+MANIFEST_CLI_VERSION_SEPARATOR="."
+MANIFEST_CLI_VERSION_COMPONENTS="major,minor,patch"
+MANIFEST_CLI_VERSION_MAX_VALUES="99,99,99"
+MANIFEST_CLI_GIT_TAG_PREFIX="v"
+MANIFEST_CLI_GIT_TAG_SUFFIX=""
 
 # Branch Naming Configuration
-MANIFEST_DEFAULT_BRANCH="main"
-MANIFEST_FEATURE_BRANCH_PREFIX="feature/"
-MANIFEST_HOTFIX_BRANCH_PREFIX="hotfix/"
-MANIFEST_RELEASE_BRANCH_PREFIX="release/"
-MANIFEST_DEVELOPMENT_BRANCH="development"
-MANIFEST_STAGING_BRANCH="staging"
+MANIFEST_CLI_GIT_DEFAULT_BRANCH="main"
+MANIFEST_CLI_GIT_FEATURE_BRANCH_PREFIX="feature/"
+MANIFEST_CLI_GIT_HOTFIX_BRANCH_PREFIX="hotfix/"
+MANIFEST_CLI_GIT_RELEASE_BRANCH_PREFIX="release/"
+MANIFEST_CLI_GIT_BUGFIX_BRANCH_PREFIX="bugfix/"
+MANIFEST_CLI_GIT_DEVELOPMENT_BRANCH="develop"
+MANIFEST_CLI_GIT_STAGING_BRANCH="staging"
 
 # Git Configuration
-MANIFEST_GIT_COMMIT_TEMPLATE="[COMPLIANCE] v{version} - {timestamp} - {branch}"
-MANIFEST_GIT_PUSH_STRATEGY="matching"
-MANIFEST_GIT_PULL_STRATEGY="rebase"
-# Note: Manifest CLI automatically uses all configured git remotes
-# Use 'git remote add audit <url>' and 'git remote add backup <url>' to add additional remotes
-
-# NTP Configuration (Multiple trusted sources)
-MANIFEST_NTP_SERVERS="time.nist.gov,time.google.com,pool.ntp.org,time.apple.com"
-MANIFEST_NTP_TIMEOUT=10
-MANIFEST_NTP_RETRIES=5
-MANIFEST_NTP_VERIFY=true
+MANIFEST_CLI_GIT_COMMIT_TEMPLATE="[HEALTHCARE] Release v{version} - {timestamp}"
+MANIFEST_CLI_GIT_PUSH_STRATEGY="simple"
+MANIFEST_CLI_GIT_PULL_STRATEGY="rebase"
+MANIFEST_CLI_GIT_TIMEOUT=600
+MANIFEST_CLI_GIT_RETRIES=5
 
 # Documentation Configuration
-MANIFEST_DOCS_FILENAME_PATTERN="{type}_v{version}_COMPLIANT.md"
-MANIFEST_DOCS_HISTORICAL_LIMIT=200
+MANIFEST_CLI_DOCS_FOLDER="documentation"
+MANIFEST_CLI_DOCS_ARCHIVE_FOLDER="documentation/archive"
+MANIFEST_CLI_DOCS_FILENAME_PATTERN="RELEASE_{type}_{version}.md"
+MANIFEST_CLI_DOCS_HISTORICAL_LIMIT=200
 
-# Example versions: 01.02.03.001, 01.02.04.000, 02.00.00.000
+# NTP Configuration (Critical for audit trails)
+MANIFEST_CLI_NTP_SERVER1="time.nist.gov"
+MANIFEST_CLI_NTP_SERVER2="time.apple.com"
+MANIFEST_CLI_NTP_SERVER3="pool.ntp.org"
+MANIFEST_CLI_NTP_TIMEOUT=15
+MANIFEST_CLI_NTP_RETRIES=5
+MANIFEST_CLI_NTP_VERIFY=true
+
+# Debug and Logging (Enhanced for compliance)
+MANIFEST_CLI_DEBUG=true
+MANIFEST_CLI_LOG_LEVEL="INFO"
+MANIFEST_CLI_LOG_FILE="manifest-cli.log"
+
+# Example versions: 1.0.0, 1.1.0, 2.0.0
 ```
 
-## 🎮 Gaming Studio (Build Number Versioning)
+## 🏦 Financial Services (High-Security)
 
-**Use Case**: Game development studio with frequent builds and releases
+**Use Case**: Financial institution with high-security requirements
 
 ```bash
 # =============================================================================
-# Gaming Studio Configuration - Build Number Versioning
+# Financial Services Configuration - High-Security
 # =============================================================================
 
 # Versioning Configuration
-MANIFEST_VERSION_FORMAT="X.X.X.X"
-MANIFEST_VERSION_SEPARATOR="."
-MANIFEST_VERSION_COMPONENTS="major,minor,patch,revision"
-MANIFEST_VERSION_MAX_VALUES="0,0,0,0"
-MANIFEST_GIT_TAG_PREFIX="BUILD-"
-MANIFEST_GIT_TAG_SUFFIX=""
+MANIFEST_CLI_VERSION_FORMAT="XX.XX.XX"
+MANIFEST_CLI_VERSION_SEPARATOR="."
+MANIFEST_CLI_VERSION_COMPONENTS="major,minor,patch"
+MANIFEST_CLI_VERSION_MAX_VALUES="99,99,99"
+MANIFEST_CLI_GIT_TAG_PREFIX="v"
+MANIFEST_CLI_GIT_TAG_SUFFIX=""
 
 # Branch Naming Configuration
-MANIFEST_DEFAULT_BRANCH="main"
-MANIFEST_FEATURE_BRANCH_PREFIX="feature/"
-MANIFEST_HOTFIX_BRANCH_PREFIX="hotfix/"
-MANIFEST_RELEASE_BRANCH_PREFIX="release/"
-MANIFEST_DEVELOPMENT_BRANCH="develop"
-MANIFEST_STAGING_BRANCH="staging"
+MANIFEST_CLI_GIT_DEFAULT_BRANCH="main"
+MANIFEST_CLI_GIT_FEATURE_BRANCH_PREFIX="feature/"
+MANIFEST_CLI_GIT_HOTFIX_BRANCH_PREFIX="hotfix/"
+MANIFEST_CLI_GIT_RELEASE_BRANCH_PREFIX="release/"
+MANIFEST_CLI_GIT_BUGFIX_BRANCH_PREFIX="bugfix/"
+MANIFEST_CLI_GIT_DEVELOPMENT_BRANCH="develop"
+MANIFEST_CLI_GIT_STAGING_BRANCH="staging"
 
 # Git Configuration
-MANIFEST_GIT_COMMIT_TEMPLATE="🎮 BUILD v{version} - {timestamp}"
-
-MANIFEST_GIT_PUSH_STRATEGY="simple"
-MANIFEST_GIT_PULL_STRATEGY="rebase"
+MANIFEST_CLI_GIT_COMMIT_TEMPLATE="[FINANCIAL] Release v{version} - {timestamp}"
+MANIFEST_CLI_GIT_PUSH_STRATEGY="simple"
+MANIFEST_CLI_GIT_PULL_STRATEGY="rebase"
+MANIFEST_CLI_GIT_TIMEOUT=900
+MANIFEST_CLI_GIT_RETRIES=10
 
 # Documentation Configuration
-MANIFEST_DOCS_FILENAME_PATTERN="{type}_BUILD_{version}.md"
-MANIFEST_DOCS_HISTORICAL_LIMIT=30
+MANIFEST_CLI_DOCS_FOLDER="documentation"
+MANIFEST_CLI_DOCS_ARCHIVE_FOLDER="documentation/archive"
+MANIFEST_CLI_DOCS_FILENAME_PATTERN="RELEASE_{type}_{version}.md"
+MANIFEST_CLI_DOCS_HISTORICAL_LIMIT=500
 
-# Example versions: 1.0.0.1, 1.0.0.2, 1.0.1.0
+# NTP Configuration (Critical for financial timestamps)
+MANIFEST_CLI_NTP_SERVER1="time.nist.gov"
+MANIFEST_CLI_NTP_SERVER2="time.apple.com"
+MANIFEST_CLI_NTP_SERVER3="pool.ntp.org"
+MANIFEST_CLI_NTP_TIMEOUT=20
+MANIFEST_CLI_NTP_RETRIES=10
+MANIFEST_CLI_NTP_VERIFY=true
+
+# Security Configuration
+MANIFEST_CLI_DEBUG=false
+MANIFEST_CLI_LOG_LEVEL="WARN"
+MANIFEST_CLI_LOG_FILE="manifest-cli.log"
+MANIFEST_CLI_INTERACTIVE_MODE=false
+
+# Example versions: 1.0.0, 1.1.0, 2.0.0
 ```
 
-## 🔬 Research Institution (Academic Versioning)
+## 🎯 Open Source Project (Community-Driven)
 
-**Use Case**: Academic research institution with publication-based releases
+**Use Case**: Open source project with community contributions
 
 ```bash
 # =============================================================================
-# Research Configuration - Academic Versioning
+# Open Source Configuration - Community-Driven
 # =============================================================================
 
 # Versioning Configuration
-MANIFEST_VERSION_FORMAT="YYYY.MM.XX"
-MANIFEST_VERSION_SEPARATOR="."
-MANIFEST_VERSION_COMPONENTS="year,month,publication"
-MANIFEST_VERSION_MAX_VALUES="0,0,99"
-MANIFEST_GIT_TAG_PREFIX="PUB-"
-MANIFEST_GIT_TAG_SUFFIX=""
+MANIFEST_CLI_VERSION_FORMAT="XX.XX.XX"
+MANIFEST_CLI_VERSION_SEPARATOR="."
+MANIFEST_CLI_VERSION_COMPONENTS="major,minor,patch"
+MANIFEST_CLI_VERSION_MAX_VALUES="99,99,99"
+MANIFEST_CLI_GIT_TAG_PREFIX="v"
+MANIFEST_CLI_GIT_TAG_SUFFIX=""
 
 # Branch Naming Configuration
-MANIFEST_DEFAULT_BRANCH="main"
-MANIFEST_FEATURE_BRANCH_PREFIX="research/"
-MANIFEST_HOTFIX_BRANCH_PREFIX="correction/"
-MANIFEST_RELEASE_BRANCH_PREFIX="publication/"
-MANIFEST_DEVELOPMENT_BRANCH="development"
-MANIFEST_STAGING_BRANCH="review"
+MANIFEST_CLI_GIT_DEFAULT_BRANCH="main"
+MANIFEST_CLI_GIT_FEATURE_BRANCH_PREFIX="feature/"
+MANIFEST_CLI_GIT_HOTFIX_BRANCH_PREFIX="hotfix/"
+MANIFEST_CLI_GIT_RELEASE_BRANCH_PREFIX="release/"
+MANIFEST_CLI_GIT_BUGFIX_BRANCH_PREFIX="bugfix/"
+MANIFEST_CLI_GIT_DEVELOPMENT_BRANCH="develop"
+MANIFEST_CLI_GIT_STAGING_BRANCH="staging"
 
 # Git Configuration
-MANIFEST_GIT_COMMIT_TEMPLATE="[PUBLICATION] {version} - {timestamp} - {branch}"
-
-# Use 'git remote add archive <url>' and 'git remote add peer-review <url>' to add additional remotes
-MANIFEST_GIT_PUSH_STRATEGY="simple"
-MANIFEST_GIT_PULL_STRATEGY="rebase"
+MANIFEST_CLI_GIT_COMMIT_TEMPLATE="Release v{version} - {timestamp}"
+MANIFEST_CLI_GIT_PUSH_STRATEGY="simple"
+MANIFEST_CLI_GIT_PULL_STRATEGY="rebase"
+MANIFEST_CLI_GIT_TIMEOUT=300
+MANIFEST_CLI_GIT_RETRIES=3
 
 # Documentation Configuration
-MANIFEST_DOCS_FILENAME_PATTERN="{type}_PUB_{version}.md"
-MANIFEST_DOCS_HISTORICAL_LIMIT=1000
+MANIFEST_CLI_DOCS_FOLDER="docs"
+MANIFEST_CLI_DOCS_ARCHIVE_FOLDER="docs/zArchive"
+MANIFEST_CLI_DOCS_AUTO_GENERATE=true
+MANIFEST_CLI_DOCS_FILENAME_PATTERN="RELEASE_{type}_{version}.md"
 
-# Example versions: 2024.01.01, 2024.01.02, 2024.02.01
+# NTP Configuration
+MANIFEST_CLI_NTP_SERVER1="time.apple.com"
+MANIFEST_CLI_NTP_SERVER2="time.google.com"
+MANIFEST_CLI_NTP_TIMEOUT=5
+MANIFEST_CLI_NTP_RETRIES=2
+
+# Interactive Mode (Community-friendly)
+MANIFEST_CLI_INTERACTIVE_MODE=true
+MANIFEST_CLI_DEBUG=false
+
+# Example versions: 1.0.0, 1.1.0, 2.0.0
+```
+
+## 🔧 Development Team (Multi-Environment)
+
+**Use Case**: Development team with multiple environments and complex workflows
+
+```bash
+# =============================================================================
+# Development Team Configuration - Multi-Environment
+# =============================================================================
+
+# Versioning Configuration
+MANIFEST_CLI_VERSION_FORMAT="XX.XX.XX"
+MANIFEST_CLI_VERSION_SEPARATOR="."
+MANIFEST_CLI_VERSION_COMPONENTS="major,minor,patch"
+MANIFEST_CLI_VERSION_MAX_VALUES="99,99,99"
+MANIFEST_CLI_GIT_TAG_PREFIX="v"
+MANIFEST_CLI_GIT_TAG_SUFFIX=""
+
+# Branch Naming Configuration
+MANIFEST_CLI_GIT_DEFAULT_BRANCH="main"
+MANIFEST_CLI_GIT_FEATURE_BRANCH_PREFIX="feature/"
+MANIFEST_CLI_GIT_HOTFIX_BRANCH_PREFIX="hotfix/"
+MANIFEST_CLI_GIT_RELEASE_BRANCH_PREFIX="release/"
+MANIFEST_CLI_GIT_BUGFIX_BRANCH_PREFIX="bugfix/"
+MANIFEST_CLI_GIT_DEVELOPMENT_BRANCH="develop"
+MANIFEST_CLI_GIT_STAGING_BRANCH="staging"
+
+# Git Configuration
+MANIFEST_CLI_GIT_COMMIT_TEMPLATE="[TEAM] Release v{version} - {timestamp}"
+MANIFEST_CLI_GIT_PUSH_STRATEGY="simple"
+MANIFEST_CLI_GIT_PULL_STRATEGY="rebase"
+MANIFEST_CLI_GIT_TIMEOUT=600
+MANIFEST_CLI_GIT_RETRIES=5
+
+# Documentation Configuration
+MANIFEST_CLI_DOCS_FOLDER="docs"
+MANIFEST_CLI_DOCS_ARCHIVE_FOLDER="docs/zArchive"
+MANIFEST_CLI_DOCS_AUTO_GENERATE=true
+MANIFEST_CLI_DOCS_FILENAME_PATTERN="RELEASE_{type}_{version}.md"
+MANIFEST_CLI_DOCS_HISTORICAL_LIMIT=100
+
+# NTP Configuration
+MANIFEST_CLI_NTP_SERVER1="time.apple.com"
+MANIFEST_CLI_NTP_SERVER2="time.google.com"
+MANIFEST_CLI_NTP_SERVER3="pool.ntp.org"
+MANIFEST_CLI_NTP_TIMEOUT=10
+MANIFEST_CLI_NTP_RETRIES=3
+
+# Auto-Update Configuration
+MANIFEST_CLI_AUTO_UPDATE=true
+MANIFEST_CLI_UPDATE_COOLDOWN=60
+MANIFEST_CLI_BREW_OPTION=true
+MANIFEST_CLI_BREW_INTERACTIVE=false
+
+# Debug Configuration
+MANIFEST_CLI_DEBUG=true
+MANIFEST_CLI_LOG_LEVEL="DEBUG"
+MANIFEST_CLI_LOG_FILE="manifest-cli.log"
+
+# Example versions: 1.0.0, 1.1.0, 2.0.0
+```
+
+## 📱 Mobile App Development (Platform-Specific)
+
+**Use Case**: Mobile app development with platform-specific releases
+
+```bash
+# =============================================================================
+# Mobile App Configuration - Platform-Specific
+# =============================================================================
+
+# Versioning Configuration
+MANIFEST_CLI_VERSION_FORMAT="XX.XX.XX"
+MANIFEST_CLI_VERSION_SEPARATOR="."
+MANIFEST_CLI_VERSION_COMPONENTS="major,minor,patch"
+MANIFEST_CLI_VERSION_MAX_VALUES="99,99,99"
+MANIFEST_CLI_GIT_TAG_PREFIX="v"
+MANIFEST_CLI_GIT_TAG_SUFFIX=""
+
+# Branch Naming Configuration
+MANIFEST_CLI_GIT_DEFAULT_BRANCH="main"
+MANIFEST_CLI_GIT_FEATURE_BRANCH_PREFIX="feature/"
+MANIFEST_CLI_GIT_HOTFIX_BRANCH_PREFIX="hotfix/"
+MANIFEST_CLI_GIT_RELEASE_BRANCH_PREFIX="release/"
+MANIFEST_CLI_GIT_BUGFIX_BRANCH_PREFIX="bugfix/"
+MANIFEST_CLI_GIT_DEVELOPMENT_BRANCH="develop"
+MANIFEST_CLI_GIT_STAGING_BRANCH="staging"
+
+# Git Configuration
+MANIFEST_CLI_GIT_COMMIT_TEMPLATE="[MOBILE] Release v{version} - {timestamp}"
+MANIFEST_CLI_GIT_PUSH_STRATEGY="simple"
+MANIFEST_CLI_GIT_PULL_STRATEGY="rebase"
+MANIFEST_CLI_GIT_TIMEOUT=300
+MANIFEST_CLI_GIT_RETRIES=3
+
+# Documentation Configuration
+MANIFEST_CLI_DOCS_FOLDER="docs"
+MANIFEST_CLI_DOCS_ARCHIVE_FOLDER="docs/zArchive"
+MANIFEST_CLI_DOCS_AUTO_GENERATE=true
+MANIFEST_CLI_DOCS_FILENAME_PATTERN="RELEASE_{type}_{version}.md"
+
+# NTP Configuration
+MANIFEST_CLI_NTP_SERVER1="time.apple.com"
+MANIFEST_CLI_NTP_SERVER2="time.google.com"
+MANIFEST_CLI_NTP_TIMEOUT=5
+MANIFEST_CLI_NTP_RETRIES=2
+
+# Auto-Update Configuration
+MANIFEST_CLI_AUTO_UPDATE=true
+MANIFEST_CLI_UPDATE_COOLDOWN=30
+MANIFEST_CLI_BREW_OPTION=true
+MANIFEST_CLI_BREW_INTERACTIVE=false
+
+# Example versions: 1.0.0, 1.1.0, 2.0.0
+```
+
+## 🎨 Creative Agency (Client-Focused)
+
+**Use Case**: Creative agency with client-specific projects
+
+```bash
+# =============================================================================
+# Creative Agency Configuration - Client-Focused
+# =============================================================================
+
+# Versioning Configuration
+MANIFEST_CLI_VERSION_FORMAT="XX.XX.XX"
+MANIFEST_CLI_VERSION_SEPARATOR="."
+MANIFEST_CLI_VERSION_COMPONENTS="major,minor,patch"
+MANIFEST_CLI_VERSION_MAX_VALUES="99,99,99"
+MANIFEST_CLI_GIT_TAG_PREFIX="v"
+MANIFEST_CLI_GIT_TAG_SUFFIX=""
+
+# Branch Naming Configuration
+MANIFEST_CLI_GIT_DEFAULT_BRANCH="main"
+MANIFEST_CLI_GIT_FEATURE_BRANCH_PREFIX="feature/"
+MANIFEST_CLI_GIT_HOTFIX_BRANCH_PREFIX="hotfix/"
+MANIFEST_CLI_GIT_RELEASE_BRANCH_PREFIX="release/"
+MANIFEST_CLI_GIT_BUGFIX_BRANCH_PREFIX="bugfix/"
+MANIFEST_CLI_GIT_DEVELOPMENT_BRANCH="develop"
+MANIFEST_CLI_GIT_STAGING_BRANCH="staging"
+
+# Git Configuration
+MANIFEST_CLI_GIT_COMMIT_TEMPLATE="[CLIENT] Release v{version} - {timestamp}"
+MANIFEST_CLI_GIT_PUSH_STRATEGY="simple"
+MANIFEST_CLI_GIT_PULL_STRATEGY="rebase"
+MANIFEST_CLI_GIT_TIMEOUT=300
+MANIFEST_CLI_GIT_RETRIES=3
+
+# Documentation Configuration
+MANIFEST_CLI_DOCS_FOLDER="documentation"
+MANIFEST_CLI_DOCS_ARCHIVE_FOLDER="documentation/archive"
+MANIFEST_CLI_DOCS_AUTO_GENERATE=true
+MANIFEST_CLI_DOCS_FILENAME_PATTERN="RELEASE_{type}_{version}.md"
+
+# NTP Configuration
+MANIFEST_CLI_NTP_SERVER1="time.apple.com"
+MANIFEST_CLI_NTP_SERVER2="time.google.com"
+MANIFEST_CLI_NTP_TIMEOUT=5
+MANIFEST_CLI_NTP_RETRIES=2
+
+# Interactive Mode (Client-friendly)
+MANIFEST_CLI_INTERACTIVE_MODE=true
+MANIFEST_CLI_DEBUG=false
+
+# Example versions: 1.0.0, 1.1.0, 2.0.0
+```
+
+## 🔬 Research/Academic (Publication-Focused)
+
+**Use Case**: Research institution with publication-focused versioning
+
+```bash
+# =============================================================================
+# Research Configuration - Publication-Focused
+# =============================================================================
+
+# Versioning Configuration
+MANIFEST_CLI_VERSION_FORMAT="XX.XX.XX"
+MANIFEST_CLI_VERSION_SEPARATOR="."
+MANIFEST_CLI_VERSION_COMPONENTS="major,minor,patch"
+MANIFEST_CLI_VERSION_MAX_VALUES="99,99,99"
+MANIFEST_CLI_GIT_TAG_PREFIX="v"
+MANIFEST_CLI_GIT_TAG_SUFFIX=""
+
+# Branch Naming Configuration
+MANIFEST_CLI_GIT_DEFAULT_BRANCH="main"
+MANIFEST_CLI_GIT_FEATURE_BRANCH_PREFIX="feature/"
+MANIFEST_CLI_GIT_HOTFIX_BRANCH_PREFIX="hotfix/"
+MANIFEST_CLI_GIT_RELEASE_BRANCH_PREFIX="release/"
+MANIFEST_CLI_GIT_BUGFIX_BRANCH_PREFIX="bugfix/"
+MANIFEST_CLI_GIT_DEVELOPMENT_BRANCH="develop"
+MANIFEST_CLI_GIT_STAGING_BRANCH="staging"
+
+# Git Configuration
+MANIFEST_CLI_GIT_COMMIT_TEMPLATE="[RESEARCH] Release v{version} - {timestamp}"
+MANIFEST_CLI_GIT_PUSH_STRATEGY="simple"
+MANIFEST_CLI_GIT_PULL_STRATEGY="rebase"
+MANIFEST_CLI_GIT_TIMEOUT=600
+MANIFEST_CLI_GIT_RETRIES=5
+
+# Documentation Configuration
+MANIFEST_CLI_DOCS_FOLDER="documentation"
+MANIFEST_CLI_DOCS_ARCHIVE_FOLDER="documentation/archive"
+MANIFEST_CLI_DOCS_AUTO_GENERATE=true
+MANIFEST_CLI_DOCS_FILENAME_PATTERN="RELEASE_{type}_{version}.md"
+MANIFEST_CLI_DOCS_HISTORICAL_LIMIT=200
+
+# NTP Configuration (Critical for research timestamps)
+MANIFEST_CLI_NTP_SERVER1="time.nist.gov"
+MANIFEST_CLI_NTP_SERVER2="time.apple.com"
+MANIFEST_CLI_NTP_SERVER3="pool.ntp.org"
+MANIFEST_CLI_NTP_TIMEOUT=15
+MANIFEST_CLI_NTP_RETRIES=5
+MANIFEST_CLI_NTP_VERIFY=true
+
+# Debug Configuration (Research-friendly)
+MANIFEST_CLI_DEBUG=true
+MANIFEST_CLI_LOG_LEVEL="DEBUG"
+MANIFEST_CLI_LOG_FILE="manifest-cli.log"
+
+# Example versions: 1.0.0, 1.1.0, 2.0.0
 ```
 
 ## 🚀 Quick Start Templates
 
-## Minimal Configuration
+### Minimal Configuration
 ```bash
-# Copy and customize for immediate use
-cp env.example .env
-
-# Essential variables only
-MANIFEST_DEFAULT_BRANCH="main"
-MANIFEST_VERSION_FORMAT="X.X.X"
-MANIFEST_GIT_TAG_PREFIX="v"
-MANIFEST_NTP_SERVERS="time.nist.gov,time.google.com"
-MANIFEST_BREW_OPTION=enabled
+# Minimal setup for quick testing
+MANIFEST_CLI_VERSION_FORMAT="XX.XX.XX"
+MANIFEST_CLI_GIT_DEFAULT_BRANCH="main"
+MANIFEST_CLI_DOCS_FOLDER="docs"
+MANIFEST_CLI_DOCS_ARCHIVE_FOLDER="docs/zArchive"
 ```
 
-## Development Team Configuration
+### Production Configuration
 ```bash
-# For development teams
-MANIFEST_DEFAULT_BRANCH="develop"
-MANIFEST_FEATURE_BRANCH_PREFIX="feature/"
-MANIFEST_HOTFIX_BRANCH_PREFIX="hotfix/"
-MANIFEST_RELEASE_BRANCH_PREFIX="release/"
-MANIFEST_DEVELOPMENT_BRANCH="main"
-MANIFEST_STAGING_BRANCH="staging"
-MANIFEST_GIT_PULL_STRATEGY="rebase"
-MANIFEST_DEBUG=true
-MANIFEST_VERBOSE=true
+# Production-ready setup
+MANIFEST_CLI_VERSION_FORMAT="XX.XX.XX"
+MANIFEST_CLI_GIT_DEFAULT_BRANCH="main"
+MANIFEST_CLI_GIT_TAG_PREFIX="v"
+MANIFEST_CLI_DOCS_FOLDER="docs"
+MANIFEST_CLI_DOCS_ARCHIVE_FOLDER="docs/zArchive"
+MANIFEST_CLI_NTP_SERVER1="time.apple.com"
+MANIFEST_CLI_NTP_TIMEOUT=10
+MANIFEST_CLI_NTP_RETRIES=3
+MANIFEST_CLI_DEBUG=false
 ```
 
-## Production Environment Configuration
+### Development Configuration
 ```bash
-# For production environments
-MANIFEST_DEFAULT_BRANCH="main"
-MANIFEST_GIT_PUSH_STRATEGY="simple"
-MANIFEST_GIT_PULL_STRATEGY="fast-forward-only"
-MANIFEST_DEBUG=false
-MANIFEST_VERBOSE=false
-MANIFEST_INTERACTIVE=false
-MANIFEST_DOCS_AUTO_GENERATE=true
+# Development-friendly setup
+MANIFEST_CLI_VERSION_FORMAT="XX.XX.XX"
+MANIFEST_CLI_GIT_DEFAULT_BRANCH="main"
+MANIFEST_CLI_DOCS_FOLDER="docs"
+MANIFEST_CLI_DOCS_ARCHIVE_FOLDER="docs/zArchive"
+MANIFEST_CLI_DEBUG=true
+MANIFEST_CLI_INTERACTIVE_MODE=true
+MANIFEST_CLI_AUTO_UPDATE=true
 ```
 
-## 🔧 Configuration Validation
+## 📋 Variable Reference
 
-After creating your `.env` file, validate the configuration:
+### Core Configuration
+- `MANIFEST_CLI_VERSION_FORMAT` - Version format pattern
+- `MANIFEST_CLI_VERSION_SEPARATOR` - Separator between version components
+- `MANIFEST_CLI_VERSION_COMPONENTS` - Version component names
+- `MANIFEST_CLI_VERSION_MAX_VALUES` - Maximum values for each component
 
-```bash
-# Show current configuration
-manifest config
+### Git Configuration
+- `MANIFEST_CLI_GIT_DEFAULT_BRANCH` - Default Git branch
+- `MANIFEST_CLI_GIT_FEATURE_BRANCH_PREFIX` - Feature branch prefix
+- `MANIFEST_CLI_GIT_HOTFIX_BRANCH_PREFIX` - Hotfix branch prefix
+- `MANIFEST_CLI_GIT_RELEASE_BRANCH_PREFIX` - Release branch prefix
+- `MANIFEST_CLI_GIT_BUGFIX_BRANCH_PREFIX` - Bugfix branch prefix
+- `MANIFEST_CLI_GIT_DEVELOPMENT_BRANCH` - Development branch name
+- `MANIFEST_CLI_GIT_STAGING_BRANCH` - Staging branch name
+- `MANIFEST_CLI_GIT_TAG_PREFIX` - Git tag prefix
+- `MANIFEST_CLI_GIT_TAG_SUFFIX` - Git tag suffix
+- `MANIFEST_CLI_GIT_COMMIT_TEMPLATE` - Commit message template
+- `MANIFEST_CLI_GIT_PUSH_STRATEGY` - Git push strategy
+- `MANIFEST_CLI_GIT_PULL_STRATEGY` - Git pull strategy
+- `MANIFEST_CLI_GIT_TIMEOUT` - Git operation timeout
+- `MANIFEST_CLI_GIT_RETRIES` - Git operation retry count
 
-# Test version parsing
-manifest test versions
+### Documentation Configuration
+- `MANIFEST_CLI_DOCS_FOLDER` - Documentation folder
+- `MANIFEST_CLI_DOCS_ARCHIVE_FOLDER` - Documentation archive folder
+- `MANIFEST_CLI_DOCS_AUTO_GENERATE` - Auto-generate documentation
+- `MANIFEST_CLI_DOCS_FILENAME_PATTERN` - Documentation filename pattern
+- `MANIFEST_CLI_DOCS_HISTORICAL_LIMIT` - Historical documentation limit
 
-# Validate NTP configuration
-manifest ntp
-```
+### NTP Configuration
+- `MANIFEST_CLI_NTP_SERVER1` - Primary NTP server
+- `MANIFEST_CLI_NTP_SERVER2` - Secondary NTP server
+- `MANIFEST_CLI_NTP_SERVER3` - Tertiary NTP server
+- `MANIFEST_CLI_NTP_TIMEOUT` - NTP query timeout
+- `MANIFEST_CLI_NTP_RETRIES` - NTP query retry count
+- `MANIFEST_CLI_NTP_VERIFY` - Verify NTP timestamps
 
-## 📚 Advanced Configuration
-
-## Custom Version Parsing
-```bash
-# Custom regex for version parsing
-MANIFEST_VERSION_REGEX="^v?([0-9]+)\\.([0-9]+)\\.([0-9]+)(?:-([0-9A-Za-z-]+))?$"
-
-# Custom validation rules
-MANIFEST_VERSION_VALIDATION="major > 0, minor >= 0, patch >= 0"
-```
-
-## Environment-Specific Overrides
-```bash
-# .env.development
-MANIFEST_DEBUG=true
-MANIFEST_VERBOSE=true
-MANIFEST_DEFAULT_BRANCH="develop"
-
-# .env.production
-MANIFEST_DEBUG=false
-MANIFEST_VERBOSE=false
-MANIFEST_DEFAULT_BRANCH="main"
-```
-
-## Multi-Repository Configuration
-```bash
-# Git Configuration
-MANIFEST_GIT_PUSH_STRATEGY="simple"
-MANIFEST_GIT_PULL_STRATEGY="rebase"
-
-# Note: Manifest CLI automatically uses all configured git remotes
-# To set up multiple remotes, use standard git commands:
-# git remote add upstream <upstream-url>
-# git remote add staging <staging-url>
-# git remote add archive <archive-url>
-```
+### System Configuration
+- `MANIFEST_CLI_DEBUG` - Enable debug mode
+- `MANIFEST_CLI_LOG_LEVEL` - Logging level
+- `MANIFEST_CLI_LOG_FILE` - Log file path
+- `MANIFEST_CLI_INTERACTIVE_MODE` - Enable interactive mode
+- `MANIFEST_CLI_AUTO_UPDATE` - Enable auto-update
+- `MANIFEST_CLI_UPDATE_COOLDOWN` - Update cooldown period
+- `MANIFEST_CLI_BREW_OPTION` - Enable Homebrew integration
+- `MANIFEST_CLI_BREW_INTERACTIVE` - Homebrew interactive mode
 
 ## 🎯 Best Practices
 
-1. **Start Simple**: Begin with basic configuration and add complexity as needed
-2. **Document Changes**: Keep track of configuration changes in your project
-3. **Test Thoroughly**: Validate configuration before using in production
-4. **Version Control**: Consider versioning your configuration files
-5. **Team Alignment**: Ensure all team members understand the configuration
-6. **Regular Review**: Periodically review and update configuration
+1. **Start Simple**: Begin with minimal configuration and add complexity as needed
+2. **Environment-Specific**: Use different configurations for different environments
+3. **Documentation**: Keep your configuration documented and version-controlled
+4. **Testing**: Test your configuration in a safe environment before production
+5. **Backup**: Always backup your configuration before making changes
+6. **Validation**: Use `manifest config` to validate your configuration
+7. **Incremental**: Make changes incrementally and test each change
 
-## 🚨 Common Pitfalls
+## 🔧 Troubleshooting
 
-1. **Missing Separators**: Ensure version format contains the specified separator
-2. **Invalid Patterns**: Test version patterns with your actual version numbers
-3. **Branch Conflicts**: Avoid conflicts between configured and actual branch names
-4. **Permission Issues**: Ensure proper file permissions for `.env` files
-5. **Environment Conflicts**: Be careful with environment-specific overrides
+### Common Issues
+1. **Variable Not Found**: Ensure all variables are properly exported
+2. **Invalid Format**: Check version format patterns and separators
+3. **Git Errors**: Verify Git configuration and permissions
+4. **NTP Timeouts**: Check network connectivity and NTP server availability
+5. **Documentation Errors**: Ensure documentation paths are valid and writable
 
-## 🔍 Troubleshooting
-
-## Configuration Not Loading
+### Debug Commands
 ```bash
-# Check file permissions
-ls -la .env*
+# Check current configuration
+manifest config
 
-# Verify file syntax
-grep -v "^#" .env | grep -v "^$"
+# Validate configuration
+manifest config --validate
 
-# Test configuration loading
-source .env && echo "Configuration loaded"
-```
+# Test NTP connectivity
+manifest ntp
 
-## Version Parsing Issues
-```bash
-# Test version format
-echo "1.2.3" | cut -d"." -f1
+# Check Git status
+manifest git status
 
-# Validate separator
-echo "$MANIFEST_VERSION_SEPARATOR"
-
-# Check format pattern
-echo "$MANIFEST_VERSION_FORMAT"
-```
-
-## Branch Name Conflicts
-```bash
-# List actual branches
-git branch -a
-
-# Check configured default
-echo "$MANIFEST_DEFAULT_BRANCH"
-
-# Verify remote branches
-git remote show origin
+# View help
+manifest --help
 ```
 
 ---
 
-*These examples demonstrate the flexibility of Manifest CLI's configuration system. Customize them for your specific needs and requirements.*
+*This document is automatically generated and updated with the latest Manifest CLI variable naming conventions.*
