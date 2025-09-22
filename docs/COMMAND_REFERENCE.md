@@ -553,7 +553,7 @@ manifest go --quiet
 Enable debug mode for detailed troubleshooting:
 
 ```bash
-export MANIFEST_DEBUG=true
+export MANIFEST_CLI_DEBUG=true
 manifest go
 ```
 
@@ -596,9 +596,9 @@ fi
 manifest docs homebrew
 
 # Control Homebrew behavior
-export MANIFEST_BREW_OPTION=enabled
-export MANIFEST_BREW_INTERACTIVE=no
-export MANIFEST_TAP_REPO="https://github.com/your-org/your-tap.git"
+export MANIFEST_CLI_BREW_OPTION=enabled
+export MANIFEST_CLI_BREW_INTERACTIVE=no
+export MANIFEST_CLI_TAP_REPO="https://github.com/your-org/your-tap.git"
 ```
 
 ## 🌟 Advanced Features
@@ -621,11 +621,11 @@ Manifest CLI is designed with extensibility in mind. Future versions will includ
 ## Custom NTP Servers
 ```bash
 # Set custom NTP servers
-export MANIFEST_NTP_SERVERS="time.nist.gov,time.google.com,pool.ntp.org"
+export MANIFEST_CLI_NTP_SERVERS="time.nist.gov,time.google.com,pool.ntp.org"
 
 # Set timeout and retry values
-export MANIFEST_NTP_TIMEOUT=5
-export MANIFEST_NTP_RETRIES=3
+export MANIFEST_CLI_NTP_TIMEOUT=5
+export MANIFEST_CLI_NTP_RETRIES=3
 ```
 
 ## Custom Documentation Templates
@@ -654,11 +654,11 @@ EOF
 ## Git Workflow Customization
 ```bash
 # Custom commit templates
-export MANIFEST_GIT_COMMIT_TEMPLATE="Release v{version} - {timestamp}"
+export MANIFEST_CLI_GIT_COMMIT_TEMPLATE="Release v{version} - {timestamp}"
 
 # Author information
-export MANIFEST_GIT_AUTHOR_NAME="Your Name"
-export MANIFEST_GIT_AUTHOR_EMAIL="your.email@example.com"
+export MANIFEST_CLI_GIT_AUTHOR_NAME="Your Name"
+export MANIFEST_CLI_GIT_AUTHOR_EMAIL="your.email@example.com"
 ```
 
 ## 📋 Examples

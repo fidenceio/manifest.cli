@@ -61,7 +61,7 @@ test_bash_detection_in_zsh() {
     test_start "Bash Detection in Zsh Environment"
     
     # Run bash detection in zsh
-    local result=$(zsh -c 'source modules/system/manifest-os.sh && echo "Bash: $MANIFEST_BASH_VERSION, [[ ]]: $MANIFEST_BASH_SUPPORTS_DOUBLE_BRACKETS, Arrays: $MANIFEST_BASH_SUPPORTS_ASSOCIATIVE_ARRAYS"' 2>&1)
+    local result=$(zsh -c 'source modules/system/manifest-os.sh && echo "Bash: $MANIFEST_CLI_OS_BASH_VERSION, [[ ]]: $MANIFEST_CLI_OS_BASH_SUPPORTS_DOUBLE_BRACKETS, Arrays: $MANIFEST_CLI_OS_BASH_SUPPORTS_ASSOCIATIVE_ARRAYS"' 2>&1)
     
     if echo "$result" | grep -q "Bash:"; then
         echo "   Result: $result"
@@ -189,7 +189,7 @@ test_environment_variables() {
     test_start "Environment Variable Handling"
     
     # Test environment variable detection and usage
-    local result=$(zsh -c "source modules/system/manifest-os.sh >/dev/null 2>&1 && echo \"OS: \$MANIFEST_OS, Bash: \$MANIFEST_BASH_VERSION\"" 2>&1)
+    local result=$(zsh -c "source modules/system/manifest-os.sh >/dev/null 2>&1 && echo \"OS: \$MANIFEST_CLI_OS_OS, Bash: \$MANIFEST_CLI_OS_BASH_VERSION\"" 2>&1)
     
     if echo "$result" | grep -q "OS:" && echo "$result" | grep -q "Bash:"; then
         echo "   Result: $result"
@@ -226,8 +226,8 @@ test_cross_shell_compatibility() {
     test_start "Cross-Shell Compatibility"
     
     # Test that functions work the same in both bash and zsh
-    local bash_result=$(bash -c "source modules/system/manifest-os.sh >/dev/null 2>&1 && echo \"Bash: \$MANIFEST_BASH_VERSION\"" 2>&1)
-    local zsh_result=$(zsh -c "source modules/system/manifest-os.sh >/dev/null 2>&1 && echo \"Bash: \$MANIFEST_BASH_VERSION\"" 2>&1)
+    local bash_result=$(bash -c "source modules/system/manifest-os.sh >/dev/null 2>&1 && echo \"Bash: \$MANIFEST_CLI_OS_BASH_VERSION\"" 2>&1)
+    local zsh_result=$(zsh -c "source modules/system/manifest-os.sh >/dev/null 2>&1 && echo \"Bash: \$MANIFEST_CLI_OS_BASH_VERSION\"" 2>&1)
     
     if [ "$bash_result" = "$zsh_result" ]; then
         echo "   ✅ Consistent behavior between bash and zsh"

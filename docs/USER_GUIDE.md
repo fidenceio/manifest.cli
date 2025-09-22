@@ -381,15 +381,15 @@ ssh_dispatch_run_fatal: Connection to github.com port 22: Operation timed out
 **Solutions:**
 - **Automatic Retry**: The CLI now includes retry logic (3 attempts by default)
 - **Check SSH Connectivity**: `ssh -T git@github.com`
-- **Adjust Timeout Settings**: Set `MANIFEST_GIT_TIMEOUT="600"` for longer timeouts
-- **Increase Retry Attempts**: Set `MANIFEST_GIT_RETRIES="5"` for more attempts
+- **Adjust Timeout Settings**: Set `MANIFEST_CLI_GIT_TIMEOUT="600"` for longer timeouts
+- **Increase Retry Attempts**: Set `MANIFEST_CLI_GIT_RETRIES="5"` for more attempts
 - **Test Network**: `ping github.com` to check basic connectivity
 
 **Configuration:**
 ```bash
 # In your .env file
-MANIFEST_GIT_TIMEOUT="300"    # 5 minutes timeout
-MANIFEST_GIT_RETRIES="3"      # 3 retry attempts
+MANIFEST_CLI_GIT_TIMEOUT="300"    # 5 minutes timeout
+MANIFEST_CLI_GIT_RETRIES="3"      # 3 retry attempts
 ```
 
 ## 3. Git Authentication Issues
@@ -433,7 +433,7 @@ MANIFEST_GIT_RETRIES="3"      # 3 retry attempts
 Enable debug mode for detailed troubleshooting:
 
 ```bash
-export MANIFEST_DEBUG=true
+export MANIFEST_CLI_DEBUG=true
 manifest go
 ```
 
@@ -562,33 +562,33 @@ cat docs/RELEASE_v$(cat VERSION).md
 
 ```bash
 # Set custom NTP servers
-export MANIFEST_NTP_SERVERS="time.nist.gov,time.google.com,pool.ntp.org"
+export MANIFEST_CLI_NTP_SERVERS="time.nist.gov,time.google.com,pool.ntp.org"
 
 # Set timeout and retry values
-export MANIFEST_NTP_TIMEOUT=5
-export MANIFEST_NTP_RETRIES=3
+export MANIFEST_CLI_NTP_TIMEOUT=5
+export MANIFEST_CLI_NTP_RETRIES=3
 ```
 
 ## Homebrew Integration
 
 ```bash
 # Control Homebrew functionality
-export MANIFEST_BREW_OPTION=enabled
-export MANIFEST_BREW_INTERACTIVE=no
+export MANIFEST_CLI_BREW_OPTION=enabled
+export MANIFEST_CLI_BREW_INTERACTIVE=no
 
 # Custom tap repository
-export MANIFEST_TAP_REPO="https://github.com/your-org/your-tap.git"
+export MANIFEST_CLI_TAP_REPO="https://github.com/your-org/your-tap.git"
 ```
 
 ## Git Configuration
 
 ```bash
 # Custom commit templates
-export MANIFEST_GIT_COMMIT_TEMPLATE="Release v{version} - {timestamp}"
+export MANIFEST_CLI_GIT_COMMIT_TEMPLATE="Release v{version} - {timestamp}"
 
 # Author information
-export MANIFEST_GIT_AUTHOR_NAME="Your Name"
-export MANIFEST_GIT_AUTHOR_EMAIL="your.email@example.com"
+export MANIFEST_CLI_GIT_AUTHOR_NAME="Your Name"
+export MANIFEST_CLI_GIT_AUTHOR_EMAIL="your.email@example.com"
 ```
 
 ## 🎉 Next Steps

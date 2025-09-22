@@ -83,21 +83,21 @@ install_cli() {
     mkdir -p "$local_bin"
     
     # Copy CLI wrapper
-    if [ -f "$PROJECT_ROOT/src/cli/manifest-cli-wrapper.sh" ]; then
-        cp "$PROJECT_ROOT/src/cli/manifest-cli-wrapper.sh" "$local_bin/$cli_name"
+    if [ -f "$PROJECT_ROOT/manifest-cli-wrapper.sh" ]; then
+        cp "$PROJECT_ROOT/manifest-cli-wrapper.sh" "$local_bin/$cli_name"
         chmod +x "$local_bin/$cli_name"
         log_success "CLI wrapper installed"
     else
-        log_error "CLI wrapper not found"
+        log_error "CLI wrapper not found at $PROJECT_ROOT/manifest-cli-wrapper.sh"
         return 1
     fi
     
     # Copy source modules
-    if [ -d "$PROJECT_ROOT/src" ]; then
-        cp -r "$PROJECT_ROOT/src" "$install_dir/"
+    if [ -d "$PROJECT_ROOT/modules" ]; then
+        cp -r "$PROJECT_ROOT/modules" "$install_dir/"
         log_success "Source modules copied"
     else
-        log_error "Source directory not found"
+        log_error "Modules directory not found at $PROJECT_ROOT/modules"
         return 1
     fi
     

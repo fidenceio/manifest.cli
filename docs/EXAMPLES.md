@@ -270,7 +270,7 @@ echo "Release: v$(cat VERSION)"
 
 echo "Timestamp: $(manifest ntp --format='%Y-%m-%d %H:%M:%S UTC')"
 
-echo "NTP Source: $(env | grep MANIFEST_NTP_SERVER)"
+echo "NTP Source: $(env | grep MANIFEST_CLI_NTP_SERVER)"
 
 ```
 
@@ -822,13 +822,13 @@ case $ENVIRONMENT in
 
     echo "🔧 Setting up development environment..."
 
-    export MANIFEST_DEBUG=true
+    export MANIFEST_CLI_DEBUG=true
 
-    export MANIFEST_VERBOSE=true
+    export MANIFEST_CLI_VERBOSE=true
 
-    export MANIFEST_LOG_LEVEL="DEBUG"
+    export MANIFEST_CLI_LOG_LEVEL="DEBUG"
 
-    export MANIFEST_INTERACTIVE=true
+    export MANIFEST_CLI_INTERACTIVE=true
 
     ;;
 
@@ -836,13 +836,13 @@ case $ENVIRONMENT in
 
     echo "🔧 Setting up staging environment..."
 
-    export MANIFEST_DEBUG=false
+    export MANIFEST_CLI_DEBUG=false
 
-    export MANIFEST_VERBOSE=true
+    export MANIFEST_CLI_VERBOSE=true
 
-    export MANIFEST_LOG_LEVEL="INFO"
+    export MANIFEST_CLI_LOG_LEVEL="INFO"
 
-    export MANIFEST_INTERACTIVE=false
+    export MANIFEST_CLI_INTERACTIVE=false
 
     ;;
 
@@ -850,15 +850,15 @@ case $ENVIRONMENT in
 
     echo "🔧 Setting up production environment..."
 
-    export MANIFEST_DEBUG=false
+    export MANIFEST_CLI_DEBUG=false
 
-    export MANIFEST_VERBOSE=false
+    export MANIFEST_CLI_VERBOSE=false
 
-    export MANIFEST_LOG_LEVEL="WARN"
+    export MANIFEST_CLI_LOG_LEVEL="WARN"
 
-    export MANIFEST_INTERACTIVE=false
+    export MANIFEST_CLI_INTERACTIVE=false
 
-    export MANIFEST_BREW_OPTION=enabled
+    export MANIFEST_CLI_BREW_OPTION=enabled
 
     ;;
 
@@ -883,15 +883,15 @@ COMMIT_TEMPLATE="Release v{version} - {timestamp} [$ENVIRONMENT]"
 
 DOCS_TEMPLATE_DIR="./templates"
 
-DEBUG=$MANIFEST_DEBUG
+DEBUG=$MANIFEST_CLI_DEBUG
 
-INTERACTIVE=$MANIFEST_INTERACTIVE
+INTERACTIVE=$MANIFEST_CLI_INTERACTIVE
 
-VERBOSE=$MANIFEST_VERBOSE
+VERBOSE=$MANIFEST_CLI_VERBOSE
 
-LOG_LEVEL="$MANIFEST_LOG_LEVEL"
+LOG_LEVEL="$MANIFEST_CLI_LOG_LEVEL"
 
-BREW_OPTION=$MANIFEST_BREW_OPTION
+BREW_OPTION=$MANIFEST_CLI_BREW_OPTION
 
 EOF
 

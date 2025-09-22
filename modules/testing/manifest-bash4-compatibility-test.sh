@@ -65,7 +65,7 @@ test_bash4_capabilities() {
     test_start "Bash 4+ Capability Detection"
     
     # Test double bracket support (should be true for bash 4+)
-    local result=$(bash -c 'source modules/system/manifest-os.sh >/dev/null 2>&1 && echo "[[ ]]: $MANIFEST_BASH_SUPPORTS_DOUBLE_BRACKETS, Arrays: $MANIFEST_BASH_SUPPORTS_ASSOCIATIVE_ARRAYS"' 2>&1)
+    local result=$(bash -c 'source modules/system/manifest-os.sh >/dev/null 2>&1 && echo "[[ ]]: $MANIFEST_CLI_OS_BASH_SUPPORTS_DOUBLE_BRACKETS, Arrays: $MANIFEST_CLI_OS_BASH_SUPPORTS_ASSOCIATIVE_ARRAYS"' 2>&1)
     
     if echo "$result" | grep -q "\[\[ \]\]: true" && echo "$result" | grep -q "Arrays: true"; then
         echo "   Result: $result"
@@ -193,7 +193,7 @@ test_environment_variables_bash4() {
     test_start "Environment Variable Handling with Bash 4+"
     
     # Test environment variable detection and usage
-    local result=$(bash -c "source modules/system/manifest-os.sh >/dev/null 2>&1 && echo \"OS: \$MANIFEST_OS, Bash: \$MANIFEST_BASH_VERSION\"" 2>&1)
+    local result=$(bash -c "source modules/system/manifest-os.sh >/dev/null 2>&1 && echo \"OS: \$MANIFEST_CLI_OS_OS, Bash: \$MANIFEST_CLI_OS_BASH_VERSION\"" 2>&1)
     
     if echo "$result" | grep -q "OS:" && echo "$result" | grep -q "Bash:"; then
         echo "   Result: $result"
