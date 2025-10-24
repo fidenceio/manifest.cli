@@ -1,5 +1,7 @@
 # Git Hooks - Sensitive Data Protection
 
+> **TL;DR**: Run `./install-cli.sh` to install Manifest CLI and automatically set up git hooks to protect your commits from sensitive data leaks.
+
 ## Overview
 
 The Manifest CLI includes a robust git hooks system that prevents developers from accidentally committing sensitive data like API keys, passwords, tokens, and private configuration files. This system integrates seamlessly with the existing Manifest CLI security module to provide comprehensive protection.
@@ -12,6 +14,7 @@ The Manifest CLI includes a robust git hooks system that prevents developers fro
 - [How It Works](#how-it-works)
 - [Security Checks Performed](#security-checks-performed)
 - [Handling Blocked Commits](#handling-blocked-commits)
+- [Common Scenarios](#common-scenarios)
 - [Bypassing the Hook (Use with Caution)](#bypassing-the-hook-use-with-caution)
 - [Testing the Hook](#testing-the-hook)
 - [Updating Hooks](#updating-hooks)
@@ -23,25 +26,28 @@ The Manifest CLI includes a robust git hooks system that prevents developers fro
 
 ## Quick Start
 
-### Automatic Installation (Recommended)
-
-Git hooks are automatically installed when you run the main installation script:
+### 30-Second Setup
 
 ```bash
+# Clone the repo
+git clone git@github.com:fidenceio/manifest.cli.git
+cd manifest.cli
+
+# Install Manifest CLI (includes git hooks)
 ./install-cli.sh
+
+# Done! You're protected.
 ```
 
-The installation script will detect if you're in a git repository and automatically install the pre-commit hooks.
+The installation script automatically detects if you're in a git repository and installs the pre-commit hooks. That's it! The pre-commit hook is now active and will automatically check all commits for sensitive data.
 
-### Manual Installation
+### What You Get
 
-If you need to reinstall or update the hooks:
-
-```bash
-./install-git-hooks.sh
-```
-
-That's it! The pre-commit hook is now active and will automatically check all commits for sensitive data.
+✅ **Automatic blocking** of commits containing:
+- API keys, tokens, passwords
+- `.env` files and other private configs
+- SSH keys, certificates, credentials
+- Large files (>10MB warning)
 
 ---
 
@@ -86,32 +92,25 @@ The git hooks system prevents committing:
 
 ## Installation
 
-### For New Developers
+### Automatic Installation (Recommended)
 
-When you first clone the repository, run:
+Git hooks are automatically installed when you run:
 
 ```bash
-./install-git-hooks.sh
+./install-cli.sh
 ```
 
 This will:
-1. Copy the pre-commit hook from `.git-hooks/` to `.git/hooks/`
-2. Make the hook executable
-3. Verify the installation
-4. Display helpful information
-
-### Automated Installation
-
-You can add hook installation to your onboarding process:
-
-```bash
-# In your setup script
-./install-git-hooks.sh --quiet
-```
+1. Install the Manifest CLI
+2. Detect if you're in a git repository
+3. Copy the pre-commit hook from `.git-hooks/` to `.git/hooks/`
+4. Make the hook executable
+5. Verify the installation
+6. Display helpful information
 
 ### Manual Installation
 
-If you prefer manual installation:
+If you need to reinstall the hooks manually:
 
 ```bash
 cp .git-hooks/pre-commit .git/hooks/pre-commit
@@ -234,6 +233,41 @@ git commit -m "Add config"
 - PII (Personally Identifiable Information)
 - Environment file security
 - Hardcoded credentials
+
+---
+
+## Common Scenarios
+
+### Scenario 1: Your commit is blocked
+
+```bash
+# You see this:
+❌ COMMIT BLOCKED: 1 critical issue(s) found!
+
+# Quick fix:
+git reset HEAD <problematic-file>
+# Remove the sensitive data or move to .env.local
+git commit -m "your message"
+```
+
+### Scenario 2: You need to commit example configs
+
+```bash
+# DON'T commit real credentials:
+❌ git add .env.local
+
+# DO commit example files:
+✅ cp .env.local env.manifest.local.example
+   # Edit to replace real values with "your-key-here"
+   git add env.manifest.local.example
+```
+
+### Scenario 3: Emergency bypass (use rarely!)
+
+```bash
+# Only if absolutely necessary:
+git commit --no-verify -m "Emergency fix (reviewed by @security)"
+```
 
 ---
 
@@ -415,13 +449,20 @@ Update hooks when:
 Simply re-run the installation script:
 
 ```bash
-./install-git-hooks.sh
+./install-cli.sh
 ```
 
 The script will:
 1. Backup your existing hook (if you customized it)
 2. Install the latest version
 3. Verify the installation
+
+Or manually copy the hook:
+
+```bash
+cp .git-hooks/pre-commit .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+```
 
 ### Checking Hook Version
 
@@ -504,7 +545,10 @@ chmod +x .git/hooks/pre-commit
 
 4. **Reinstall the hook**:
    ```bash
-   ./install-git-hooks.sh
+   ./install-cli.sh
+   # Or manually:
+   cp .git-hooks/pre-commit .git/hooks/pre-commit
+   chmod +x .git/hooks/pre-commit
    ```
 
 ### Issue: False Positives
@@ -634,9 +678,9 @@ git commit -m "Add example environment configuration"
 ### 4. Keep Hooks Updated
 
 ```bash
-# Regularly update hooks
+# Regularly update hooks after pulling changes
 git pull
-./install-git-hooks.sh
+./install-cli.sh
 ```
 
 ### 5. Educate Your Team
@@ -737,7 +781,7 @@ If you encounter issues with the git hooks:
 
 1. **Check this documentation** for troubleshooting steps
 2. **Run the security audit**: `manifest security`
-3. **Reinstall hooks**: `./install-git-hooks.sh`
+3. **Reinstall hooks**: `./install-cli.sh` or manually copy from `.git-hooks/`
 4. **Review logs**: Check `.git/hooks/pre-commit` output
 5. **Open an issue**: If the problem persists
 

@@ -566,7 +566,7 @@ display_post_install_info() {
         echo
         print_status "🔒 Git Hooks Installed:"
         echo "   • Pre-commit hook is active and protecting your commits"
-        echo "   • To update hooks: ./install-git-hooks.sh"
+        echo "   • To update hooks: Re-run ./install-cli.sh"
         echo "   • Documentation: docs/GIT_HOOKS.md"
     fi
     
