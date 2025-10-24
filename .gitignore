@@ -11,11 +11,44 @@ manifest.config
 .env.*.local
 .env.*.backup
 .env.*.tmp
+*.env
+*.env.local
 
 # User-specific configuration
 .manifestrc
 .manifestrc.local
 .manifestrc.*.local
+
+# Secrets and credentials
+secrets/
+secrets.yml
+secrets.yaml
+secrets.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+*.ppk
+
+# Cloud provider credentials
+.aws/
+.azure/
+.gcloud/
+gcloud-credentials.json
+aws-credentials.json
+azure-credentials.json
+
+# API keys and tokens
+.api-keys
+api-keys.json
+*.token
+token.txt
 
 # OS-generated files
 .DS_Store
