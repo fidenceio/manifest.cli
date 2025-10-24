@@ -1,7 +1,7 @@
 # Release v25.0.0
 
-**Release Date:** 2025-10-24 18:11:38 UTC
-**Release Type:** major
+**Release Date:** 2025-10-24 18:12:35 UTC
+**Release Type:** patch
 
 ## 🎯 What's New
 
@@ -59,12 +59,18 @@ manifest docs
 
 ## New Features
 
+
 ## Improvements
+Update main CHANGELOG.md to v25.0.0
+Bump version to 25.0.0 [NTP: 2025-10-24 18:11:38 UTC]
 Integrate git hooks installation into main install script
 
 ## Bug Fixes
 
+
 ## Breaking Changes
+
 
 ## Documentation
 Remove standalone install-git-hooks.sh and consolidate documentation
+
