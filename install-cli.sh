@@ -560,6 +560,15 @@ display_post_install_info() {
     echo "   3. Check the generated documentation in the docs/ folder"
     echo "   4. Review and customize $MANIFEST_CLI_INSTALL_LOCATION/.env.manifest.global"
     echo "   5. Copy env.manifest.global.example to your project root as .env.manifest.global"
+
+    # Add git hooks info if they were installed
+    if [ -f ".git/hooks/pre-commit" ] && grep -q "Manifest CLI Pre-Commit Hook" ".git/hooks/pre-commit" 2>/dev/null; then
+        echo
+        print_status "🔒 Git Hooks Installed:"
+        echo "   • Pre-commit hook is active and protecting your commits"
+        echo "   • To update hooks: ./install-git-hooks.sh"
+        echo "   • Documentation: docs/GIT_HOOKS.md"
+    fi
     
     echo
     print_status "📚 Documentation:"
@@ -585,6 +594,78 @@ display_post_install_info() {
 }
 
 # =============================================================================
+# Git Hooks Installation
+# =============================================================================
+
+install_git_hooks() {
+    print_subheader "🔒 Installing Git Hooks"
+
+    # Check if we're in a git repository
+    if [ ! -d ".git" ]; then
+        print_warning "⚠️  Not in a Git repository, skipping git hooks installation"
+        print_warning "   Run './install-git-hooks.sh' manually when in a git repository"
+        return 0
+    fi
+
+    local GIT_HOOKS_SOURCE_DIR=".git-hooks"
+    local GIT_HOOKS_TARGET_DIR=".git/hooks"
+    local PRE_COMMIT_SOURCE="$GIT_HOOKS_SOURCE_DIR/pre-commit"
+    local PRE_COMMIT_TARGET="$GIT_HOOKS_TARGET_DIR/pre-commit"
+
+    # Check if git hooks source directory exists
+    if [ ! -d "$GIT_HOOKS_SOURCE_DIR" ]; then
+        print_warning "⚠️  Git hooks source directory not found: $GIT_HOOKS_SOURCE_DIR"
+        print_warning "   Skipping git hooks installation"
+        return 0
+    fi
+
+    # Create hooks directory if it doesn't exist
+    if [ ! -d "$GIT_HOOKS_TARGET_DIR" ]; then
+        mkdir -p "$GIT_HOOKS_TARGET_DIR"
+        print_success "✅ Created git hooks directory"
+    fi
+
+    # Check if pre-commit hook source exists
+    if [ ! -f "$PRE_COMMIT_SOURCE" ]; then
+        print_warning "⚠️  Pre-commit hook source not found: $PRE_COMMIT_SOURCE"
+        print_warning "   Skipping git hooks installation"
+        return 0
+    fi
+
+    # Backup existing hook if it exists
+    if [ -f "$PRE_COMMIT_TARGET" ]; then
+        local BACKUP_FILE="$PRE_COMMIT_TARGET.backup.$(date +%Y%m%d_%H%M%S)"
+        print_warning "⚠️  Existing pre-commit hook found"
+        print_warning "   Creating backup: $BACKUP_FILE"
+        cp "$PRE_COMMIT_TARGET" "$BACKUP_FILE"
+    fi
+
+    # Copy and install the hook
+    cp "$PRE_COMMIT_SOURCE" "$PRE_COMMIT_TARGET"
+    chmod +x "$PRE_COMMIT_TARGET"
+
+    # Verify installation
+    if [ -f "$PRE_COMMIT_TARGET" ] && [ -x "$PRE_COMMIT_TARGET" ]; then
+        if grep -q "Manifest CLI Pre-Commit Hook" "$PRE_COMMIT_TARGET" 2>/dev/null; then
+            print_success "✅ Git hooks installed successfully"
+            echo
+            print_success "🔒 Security features enabled:"
+            print_success "   • Blocks commits with private environment files"
+            print_success "   • Scans for sensitive data patterns (API keys, tokens, passwords)"
+            print_success "   • Verifies .gitignore configuration"
+            print_success "   • Detects large files (>10MB)"
+            print_success "   • Integrates with Manifest CLI security module"
+        else
+            print_warning "⚠️  Git hooks installed but content verification failed"
+        fi
+    else
+        print_warning "⚠️  Git hooks installation failed"
+    fi
+
+    echo
+}
+
+# =============================================================================
 # Main Installation Flow
 # =============================================================================
 
@@ -595,16 +676,16 @@ main() {
     print_header "🚀 Manifest CLI Installation Script"
     print_header "============================================================================="
     echo
-    
+
     print_status "Welcome to the Manifest CLI installation!"
     print_status "This script will install a powerful CLI tool for versioning,"
     print_status "AI documenting, and repository operations."
     echo
-    
+
     # System validation
     get_system_info
     validate_system
-    
+
     # Installation process
     cleanup_environment_variables
     cleanup_old_installation
@@ -613,9 +694,12 @@ main() {
     create_configuration
     setup_environment_variables
     configure_path
-    
+
     # Verification
     if verify_installation; then
+        # Install git hooks if in a git repository
+        install_git_hooks
+
         display_post_install_info
     else
         print_error "❌ Installation verification failed"

@@ -23,7 +23,19 @@ The Manifest CLI includes a robust git hooks system that prevents developers fro
 
 ## Quick Start
 
-Install the git hooks with one command:
+### Automatic Installation (Recommended)
+
+Git hooks are automatically installed when you run the main installation script:
+
+```bash
+./install-cli.sh
+```
+
+The installation script will detect if you're in a git repository and automatically install the pre-commit hooks.
+
+### Manual Installation
+
+If you need to reinstall or update the hooks:
 
 ```bash
 ./install-git-hooks.sh

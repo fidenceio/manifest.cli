@@ -1,6 +1,6 @@
 # Git Hooks Quick Start Guide
 
-> **TL;DR**: Run `./install-git-hooks.sh` to protect your commits from sensitive data leaks.
+> **TL;DR**: Run `./install-cli.sh` to install Manifest CLI and automatically set up git hooks to protect your commits from sensitive data leaks.
 
 ## 30-Second Setup
 
@@ -9,11 +9,13 @@
 git clone git@github.com:fidenceio/manifest.cli.git
 cd manifest.cli
 
-# Install git hooks
-./install-git-hooks.sh
+# Install Manifest CLI (includes git hooks)
+./install-cli.sh
 
 # Done! You're protected.
 ```
+
+**Note**: Git hooks are automatically installed if you're in a git repository. To reinstall or update hooks later, run `./install-git-hooks.sh`.
 
 ## What You Get
 
