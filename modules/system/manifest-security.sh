@@ -348,13 +348,18 @@ generate_security_report() {
     local project_root="$1"
     local critical_issues="$2"
     local warnings="$3"
-    
+
+    # Skip report generation if MANIFEST_CLI_SKIP_SECURITY_REPORT is set (for automated workflows)
+    if [[ "${MANIFEST_CLI_SKIP_SECURITY_REPORT}" == "true" ]]; then
+        return 0
+    fi
+
     # Ensure docs directory exists
     local docs_dir="$project_root/docs"
     if [ ! -d "$docs_dir" ]; then
         mkdir -p "$docs_dir"
     fi
-    
+
     # Generate report filename with version
     local version_suffix=""
     if [ -f "$project_root/VERSION" ]; then
@@ -362,6 +367,12 @@ generate_security_report() {
         version_suffix="_v${current_version}"
     fi
     local report_file="$docs_dir/SECURITY_ANALYSIS_REPORT${version_suffix}.md"
+
+    # Skip if versioned report already exists (don't regenerate with new timestamps)
+    if [[ -f "$report_file" ]] && [[ "$version_suffix" != "" ]]; then
+        echo "📄 Security report already exists: $report_file (skipping regeneration)"
+        return 0
+    fi
     
     # Get current version
     local current_version="22.0.0"
