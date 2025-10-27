@@ -160,7 +160,7 @@ check_auto_update_internal() {
         return 0
     fi
     
-    local last_check_file="$PROJECT_ROOT/.last_update_check"
+    local last_check_file="$PROJECT_ROOT/.manifest_last_update"
     local cooldown_minutes="${MANIFEST_CLI_UPDATE_COOLDOWN:-30}"
     local current_time=$(date +%s)
     local last_check_time=0
