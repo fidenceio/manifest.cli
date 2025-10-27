@@ -1,5 +1,6 @@
 # Manifest CLI Configuration
 manifest.config
+.manifest_last_update
 
 # Private Environment Files (NEVER commit these!)
 .env
