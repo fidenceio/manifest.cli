@@ -15,7 +15,7 @@ A powerful command-line tool for automating Git workflows, version management, a
 ### 📚 Documentation Files
 
 - **Version Info**: [VERSION](VERSION)
-- **CLI Source**: [src/cli/](src/cli/)
+- **CLI Modules**: [modules/](modules/)
 - **Install Script**: [install-cli.sh](install-cli.sh)
 ## 🚀 Features
 

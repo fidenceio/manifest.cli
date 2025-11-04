@@ -212,7 +212,13 @@ EOF
 generate_readme_version_section() {
     local version="$1"
     local timestamp="$2"
-    
+
+    # Check if we're in the Manifest CLI repo by looking for CLI-specific files
+    local is_manifest_cli_repo=false
+    if [[ -f "$PROJECT_ROOT/install-cli.sh" ]] && [[ -f "$PROJECT_ROOT/manifest-cli-wrapper.sh" ]] && [[ -d "$PROJECT_ROOT/modules" ]]; then
+        is_manifest_cli_repo=true
+    fi
+
     cat << EOF
 ## 📋 Version Information
 
@@ -224,13 +230,19 @@ generate_readme_version_section() {
 | **Branch** | \`main\` |
 | **Last Updated** | \`${timestamp}\` |
 | **CLI Version** | \`${version}\` |
+EOF
+
+    # Only include Documentation Files section for the Manifest CLI repo itself
+    if [[ "$is_manifest_cli_repo" == true ]]; then
+        cat << EOF
 
 ### 📚 Documentation Files
 
 - **Version Info**: [VERSION](VERSION)
-- **CLI Source**: [src/cli/](src/cli/)
+- **CLI Modules**: [modules/](modules/)
 - **Install Script**: [install-cli.sh](install-cli.sh)
 EOF
+    fi
 }
 
 # Template for command help sections
