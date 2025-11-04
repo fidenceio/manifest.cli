@@ -242,6 +242,13 @@ EOF
 - **CLI Modules**: [modules/](modules/)
 - **Install Script**: [install-cli.sh](install-cli.sh)
 EOF
+    else
+        # For non-Manifest CLI repos, add a footer with link
+        cat << EOF
+
+---
+*This repo is versioned and documented by [Manifest CLI](https://github.com/fidenceio/manifest.cli).*
+EOF
     fi
 }
 
