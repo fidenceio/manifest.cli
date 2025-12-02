@@ -68,6 +68,46 @@ load_configuration() {
         done
     fi
     
+    # Then try the user's home directory for global user preferences
+    if [ -f "$HOME/.env.manifest.global" ]; then
+        echo "🔧 Loading user configuration from: $HOME/.env.manifest.global"
+        if [ -r "$HOME/.env.manifest.global" ]; then
+            while IFS= read -r line || [ -n "$line" ]; do
+                # Skip comments and empty lines
+                if [[ "$line" =~ ^[[:space:]]*# ]] || [[ -z "${line// }" ]]; then
+                    continue
+                fi
+
+                # Skip lines that don't look like variable assignments
+                if [[ "$line" =~ ^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*= ]]; then
+                    local var_name="${line%%=*}"
+                    local var_value="${line#*=}"
+
+                    # Remove inline comments
+                    var_value="${var_value%%\#*}"
+
+                    # Trim whitespace
+                    var_value=$(echo "$var_value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+                    # Remove quotes if present
+                    if [[ "$var_value" =~ ^\".*\"$ ]]; then
+                        var_value="${var_value#\"}"
+                        var_value="${var_value%\"}"
+                    elif [[ "$var_value" =~ ^\'.*\'$ ]]; then
+                        var_value="${var_value#\'}"
+                        var_value="${var_value%\'}"
+                    fi
+
+                    # Trim whitespace again after quote removal
+                    var_value=$(echo "$var_value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+                    # Export the variable
+                    export "$var_name=$var_value"
+                fi
+            done < "$HOME/.env.manifest.global"
+        fi
+    fi
+
     # Then try the project root for local overrides
     for config_file in "${MANIFEST_CLI_CONFIG_FILES[@]}"; do
         local full_path="$project_root/$config_file"

@@ -383,20 +383,23 @@ copy_cli_files() {
 # Create configuration files
 create_configuration() {
     print_subheader "⚙️  Creating Configuration Files"
-    
-    # Copy global configuration template
-    if [ -f "env.manifest.global.example" ]; then
-        cp "env.manifest.global.example" "$MANIFEST_CLI_INSTALL_LOCATION/.env.manifest.global"
-        print_success "✅ Global configuration template copied: $MANIFEST_CLI_INSTALL_LOCATION/.env.manifest.global"
-    else
-        print_warning "⚠️  env.manifest.global.example not found, creating basic configuration"
-        # Create minimal configuration if template not found
-        cat > "$MANIFEST_CLI_INSTALL_LOCATION/.env.manifest.global" << 'EOF'
+
+    # Create user's global configuration in home directory if it doesn't exist
+    if [ ! -f "$HOME/.env.manifest.global" ]; then
+        if [ -f "env.manifest.global.example" ]; then
+            cp "env.manifest.global.example" "$HOME/.env.manifest.global"
+            print_success "✅ Global configuration created: $HOME/.env.manifest.global"
+        else
+            print_warning "⚠️  env.manifest.global.example not found, creating basic configuration"
+            cat > "$HOME/.env.manifest.global" << 'EOF'
 # =============================================================================
-# Manifest CLI Configuration
+# Manifest CLI Global Configuration
 # =============================================================================
-# Copy env.manifest.global.example to customize this file
+# Customize your global Manifest CLI settings here
 # =============================================================================
+
+# Timezone (IANA format, e.g., America/New_York, Europe/London, Asia/Tokyo)
+MANIFEST_CLI_TIMEZONE=UTC
 
 # NTP Configuration
 MANIFEST_CLI_NTP_SERVER1=time.apple.com
@@ -420,36 +423,39 @@ MANIFEST_CLI_DOCS_AUTO_GENERATE=true
 # Interactive Mode
 MANIFEST_CLI_INTERACTIVE_MODE=false
 EOF
+            print_success "✅ Global configuration created: $HOME/.env.manifest.global"
+        fi
+    else
+        print_status "ℹ️  Global configuration already exists: $HOME/.env.manifest.global (preserved)"
     fi
 
-    print_success "✅ Configuration file created: $MANIFEST_CLI_INSTALL_LOCATION/.env.manifest.global"
     echo ""
 }
 
 # Set up environment variables
 setup_environment_variables() {
     print_subheader "🌍 Setting Up Environment Variables"
-    
+
     # Source the environment management module
     if ! source_manifest_env_management; then
         print_error "❌ Failed to load environment management module"
         return 1
     fi
-    
-    # Export environment variables from the configuration file
-    if [ -f "$MANIFEST_CLI_INSTALL_LOCATION/.env.manifest.global" ]; then
-        export_env_from_config "$MANIFEST_CLI_INSTALL_LOCATION/.env.manifest.global"
-        print_success "✅ Environment variables loaded from configuration"
+
+    # Export environment variables from the user's global configuration
+    if [ -f "$HOME/.env.manifest.global" ]; then
+        export_env_from_config "$HOME/.env.manifest.global"
+        print_success "✅ Environment variables loaded from $HOME/.env.manifest.global"
     else
         print_warning "⚠️  Configuration file not found, using defaults"
     fi
-    
+
     # Set essential installation variables
     export MANIFEST_CLI_INSTALL_DIR="$MANIFEST_CLI_INSTALL_LOCATION"
     export MANIFEST_CLI_BIN_DIR="$MANIFEST_CLI_LOCAL_BIN"
     export MANIFEST_CLI_VERSION_FILE="VERSION"
     export MANIFEST_CLI_GITIGNORE_FILE=".gitignore"
-    
+
     print_success "✅ Environment variables configured"
     echo ""
 }
@@ -557,9 +563,8 @@ display_post_install_info() {
     print_status "💡 Next Steps:"
     echo "   1. Configure your Git credentials if not already set"
     echo "   2. Run '$MANIFEST_CLI_NAME test' to verify everything works"
-    echo "   3. Check the generated documentation in the docs/ folder"
-    echo "   4. Review and customize $MANIFEST_CLI_INSTALL_LOCATION/.env.manifest.global"
-    echo "   5. Copy env.manifest.global.example to your project root as .env.manifest.global"
+    echo "   3. Customize your global settings in ~/.env.manifest.global (e.g., timezone)"
+    echo "   4. For project-specific overrides, copy env.manifest.local.example to .env.manifest.local"
 
     # Add git hooks info if they were installed
     if [ -f ".git/hooks/pre-commit" ] && grep -q "Manifest CLI Pre-Commit Hook" ".git/hooks/pre-commit" 2>/dev/null; then
