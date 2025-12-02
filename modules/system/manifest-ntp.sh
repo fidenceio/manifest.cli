@@ -339,9 +339,10 @@ get_ntp_timestamp() {
     export MANIFEST_CLI_NTP_SERVER_IP="$server_ip"
     export MANIFEST_CLI_NTP_METHOD="$method"
     
-    # Display timestamp info
-    local formatted_time=$(format_timestamp "$timestamp" '+%Y-%m-%d %H:%M:%S UTC')
-    echo "   🕐 Timestamp: $formatted_time"
+    # Display timestamp info with timezone
+    local tz_display=$(get_timezone_display "$timestamp")
+    local formatted_time=$(format_timestamp "$timestamp" '+%Y-%m-%d %H:%M:%S')
+    echo "   🕐 Timestamp: $formatted_time $tz_display"
     echo "   🎯 Method: $method"
     echo ""
 }
@@ -365,7 +366,8 @@ display_ntp_info() {
     get_ntp_timestamp
     
     echo "📊 Timestamp Details:"
-    echo "   🕐 Time: $(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')"
+    local tz_display=$(get_timezone_display "$MANIFEST_CLI_NTP_TIMESTAMP")
+    echo "   🕐 Time: $(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S') $tz_display"
     echo "   📊 Offset: $MANIFEST_CLI_NTP_OFFSET seconds"
     echo "   🎯 Uncertainty: ±$MANIFEST_CLI_NTP_UNCERTAINTY seconds"
     echo "   🌐 Source: $MANIFEST_CLI_NTP_SERVER ($MANIFEST_CLI_NTP_SERVER_IP)"
@@ -417,10 +419,11 @@ get_timestamp() {
     echo "$MANIFEST_CLI_NTP_TIMESTAMP"
 }
 
-# Get formatted timestamp string
+# Get formatted timestamp string with timezone
 get_formatted_timestamp() {
     get_ntp_timestamp >/dev/null
-    format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC'
+    local tz_display=$(get_timezone_display "$MANIFEST_CLI_NTP_TIMESTAMP")
+    echo "$(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S') $tz_display"
 }
 
 # Display OS compatibility information

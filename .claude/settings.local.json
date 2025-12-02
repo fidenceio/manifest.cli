@@ -8,7 +8,8 @@
       "Bash([[ -d \"src/cli\" ]])",
       "Bash([[ -f \"manifest-cli-wrapper.sh\" ]])",
       "Bash([[ -d \"modules\" ]])",
-      "Bash(manifest go:*)"
+      "Bash(manifest go:*)",
+      "Bash(./install-cli.sh)"
     ],
     "deny": [],
     "ask": []

@@ -168,6 +168,11 @@ set_default_configuration() {
     export MANIFEST_CLI_NTP_TIMEOUT="${MANIFEST_CLI_NTP_TIMEOUT:-5}"
     export MANIFEST_CLI_NTP_RETRIES="${MANIFEST_CLI_NTP_RETRIES:-3}"
     export MANIFEST_CLI_NTP_VERIFY="${MANIFEST_CLI_NTP_VERIFY:-true}"
+
+    # Timezone Configuration (defaults to UTC)
+    # Can be overridden in .env.manifest.local with IANA timezone names like:
+    # America/New_York, America/Los_Angeles, Europe/London, Asia/Tokyo, etc.
+    export MANIFEST_CLI_TIMEZONE="${MANIFEST_CLI_TIMEZONE:-UTC}"
     
     # Git Operations
     export MANIFEST_CLI_GIT_COMMIT_TEMPLATE="${MANIFEST_CLI_GIT_COMMIT_TEMPLATE:-Release v{version} - {timestamp}}"

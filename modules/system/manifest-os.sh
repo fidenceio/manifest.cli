@@ -188,33 +188,86 @@ timeout_fallback() {
 }
 
 # Cross-platform date formatting function
+# Uses MANIFEST_CLI_TIMEZONE for timezone support (defaults to UTC)
 format_timestamp_cross_platform() {
     local timestamp="$1"
     local format="$2"
-    
+    local timezone="${MANIFEST_CLI_TIMEZONE:-UTC}"
+
+    # For UTC, use the -u flag for simplicity and accuracy
+    if [ "$timezone" = "UTC" ]; then
+        case "$MANIFEST_CLI_OS_OS" in
+            "macOS"|"FreeBSD"|"OpenBSD"|"NetBSD")
+                date -u -r "$timestamp" "$format"
+                ;;
+            "Linux"|"Windows")
+                date -u -d "@$timestamp" "$format"
+                ;;
+            *)
+                # Fallback for unknown platforms
+                if [[ "$timestamp" =~ ^[0-9]+$ ]]; then
+                    if date -u -d "@$timestamp" "$format" 2>/dev/null; then
+                        return 0
+                    fi
+                    if date -u -r "$timestamp" "$format" 2>/dev/null; then
+                        return 0
+                    fi
+                fi
+                date -u "$format"
+                ;;
+        esac
+    else
+        # Use TZ environment variable for non-UTC timezones
+        case "$MANIFEST_CLI_OS_OS" in
+            "macOS"|"FreeBSD"|"OpenBSD"|"NetBSD")
+                TZ="$timezone" date -r "$timestamp" "$format"
+                ;;
+            "Linux"|"Windows")
+                TZ="$timezone" date -d "@$timestamp" "$format"
+                ;;
+            *)
+                # Fallback for unknown platforms
+                if [[ "$timestamp" =~ ^[0-9]+$ ]]; then
+                    if TZ="$timezone" date -d "@$timestamp" "$format" 2>/dev/null; then
+                        return 0
+                    fi
+                    if TZ="$timezone" date -r "$timestamp" "$format" 2>/dev/null; then
+                        return 0
+                    fi
+                fi
+                TZ="$timezone" date "$format"
+                ;;
+        esac
+    fi
+}
+
+# Get the timezone abbreviation/offset for display
+# Returns the timezone abbreviation (e.g., "EST", "PST") or offset (e.g., "+0530")
+get_timezone_display() {
+    local timestamp="${1:-$(date +%s)}"
+    local timezone="${MANIFEST_CLI_TIMEZONE:-UTC}"
+
+    if [ "$timezone" = "UTC" ]; then
+        echo "UTC"
+        return 0
+    fi
+
+    # Get the timezone abbreviation at the given timestamp
     case "$MANIFEST_CLI_OS_OS" in
         "macOS"|"FreeBSD"|"OpenBSD"|"NetBSD")
-            # Unix timestamp format for macOS/BSD
-            date -u -r "$timestamp" "$format"
+            TZ="$timezone" date -r "$timestamp" '+%Z'
             ;;
         "Linux"|"Windows")
-            # Unix timestamp format for Linux/Windows
-            date -u -d "@$timestamp" "$format"
+            TZ="$timezone" date -d "@$timestamp" '+%Z'
             ;;
         *)
-            # Fallback for unknown platforms
-            if [[ "$timestamp" =~ ^[0-9]+$ ]]; then
-                # Try Linux format first
-                if date -u -d "@$timestamp" "$format" 2>/dev/null; then
-                    return 0
-                fi
-                # Try macOS format
-                if date -u -r "$timestamp" "$format" 2>/dev/null; then
-                    return 0
-                fi
+            if TZ="$timezone" date -d "@$timestamp" '+%Z' 2>/dev/null; then
+                return 0
             fi
-            # Last resort: use current time
-            date -u "$format"
+            if TZ="$timezone" date -r "$timestamp" '+%Z' 2>/dev/null; then
+                return 0
+            fi
+            echo "$timezone"
             ;;
     esac
 }
