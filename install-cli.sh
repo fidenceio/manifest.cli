@@ -374,6 +374,16 @@ copy_cli_files() {
         print_success "✅ Copied documentation"
     fi
 
+    # Copy example configuration files
+    if [ -f "env.manifest.global.example" ]; then
+        cp "env.manifest.global.example" "$MANIFEST_CLI_INSTALL_LOCATION/"
+        print_success "✅ Copied env.manifest.global.example"
+    fi
+    if [ -f "env.manifest.local.example" ]; then
+        cp "env.manifest.local.example" "$MANIFEST_CLI_INSTALL_LOCATION/"
+        print_success "✅ Copied env.manifest.local.example"
+    fi
+
     print_success "✅ All CLI files copied successfully"
     echo ""
 }
@@ -582,9 +592,9 @@ display_post_install_info() {
     
     echo
     print_status "🔧 Configuration:"
-    echo "   • Environment: $MANIFEST_CLI_INSTALL_LOCATION/.env.manifest.global"
-    echo "   • Global Template: env.manifest.global.example (copy to .env.manifest.global)"
-    echo "   • Customize the .env.manifest.global file for your specific needs"
+    echo "   • Global Config: ~/.env.manifest.global"
+    echo "   • Example Templates: $MANIFEST_CLI_INSTALL_LOCATION/env.manifest.*.example"
+    echo "   • For project overrides, copy env.manifest.local.example to your project root"
     
     echo
     print_status "🌐 Community & Support:"
