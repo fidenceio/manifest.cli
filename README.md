@@ -62,8 +62,8 @@ The CLI will be installed to `~/.local/bin/manifest` and added to your PATH.
 
 ```bash
 # Create installation directory
-mkdir -p /usr/local/share/manifest-cli
-cd /usr/local/share/manifest-cli
+mkdir -p ~/.manifest-cli
+cd ~/.manifest-cli
 
 # Copy source files
 cp -r /path/to/manifest.cli/src ./
@@ -77,7 +77,7 @@ chmod +x src/cli/manifest-cli.sh
 mkdir -p ~/.local/bin
 cat > ~/.local/bin/manifest << 'EOF'
 #!/bin/bash
-cd /usr/local/share/manifest-cli
+cd ~/.manifest-cli
 bash src/cli/manifest-cli.sh "$@"
 EOF
 chmod +x ~/.local/bin/manifest
@@ -217,7 +217,7 @@ Show help information.
 
 ### Environment Variables
 
-Create `/usr/local/share/manifest-cli/.env` for cloud integration:
+Create `~/.manifest-cli/.env` for cloud integration:
 
 ```bash
 # Manifest Cloud Service
@@ -241,7 +241,7 @@ git config --global user.email "your.email@example.com"
 ## 🏗️ Project Structure
 
 ```
-/usr/local/share/manifest-cli/
+~/.manifest-cli/
 ├── src/
 │   └── cli/
 │       ├── manifest-cli.sh    # Main CLI entry point
@@ -349,7 +349,7 @@ The Manifest CLI can optionally integrate with Manifest Cloud for enhanced featu
 - **API Change Detection**: Automatically identify breaking changes
 
 ### Setup
-1. Configure environment variables in `/usr/local/share/manifest-cli/.env`
+1. Configure environment variables in `~/.manifest-cli/.env`
 2. Use `manifest analyze` and `manifest changelog` commands
 3. Enhanced `manifest go` workflow with intelligent recommendations
 

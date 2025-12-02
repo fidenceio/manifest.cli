@@ -7,12 +7,10 @@ set -e
 
 # Function to find the CLI installation directory
 find_cli_dir() {
-    # Try multiple possible locations
+    # Try installation locations (primary: ~/.manifest-cli)
     local possible_dirs=(
+        "${MANIFEST_CLI_INSTALL_DIR:-$HOME/.manifest-cli}"
         "$HOME/.manifest-cli"
-        "$HOME/.local/share/manifest-cli"
-        "${MANIFEST_CLI_INSTALL_DIR:-/usr/local/share/manifest-cli}"
-        "/opt/manifest-cli"
         # Check if we're running from a development directory
         "$(dirname "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")")"
     )

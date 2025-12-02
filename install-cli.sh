@@ -63,17 +63,9 @@ get_install_location() {
         echo "$MANIFEST_CLI_INSTALL_LOCATION"
         return 0
     fi
-    
-    # Try different locations based on system capabilities
-    if [ -w "/usr/local/share" ]; then
-        echo "/usr/local/share/manifest-cli"
-    elif [ -w "/opt" ]; then
-        echo "/opt/manifest-cli"
-    elif [ -w "$HOME/.local/share" ]; then
-        echo "$HOME/.local/share/manifest-cli"
-    else
-        echo "$HOME/.manifest-cli"
-    fi
+
+    # Default to ~/.manifest-cli (user's home directory, no sudo required)
+    echo "$HOME/.manifest-cli"
 }
 
 # Set the actual installation directory
@@ -288,17 +280,42 @@ cleanup_environment_variables() {
     print_success "✅ Environment variable cleanup completed"
 }
 
+# Clean up legacy installation locations
+cleanup_legacy_locations() {
+    print_subheader "🧹 Cleaning Up Legacy Installation Locations"
+
+    # Only check for the previous default location
+    local legacy_location="/usr/local/share/manifest-cli"
+
+    if [ -d "$legacy_location" ]; then
+        print_status "Found legacy installation at: $legacy_location"
+        # Try with sudo since it's a system location
+        if sudo rm -rf "$legacy_location" 2>/dev/null; then
+            print_success "✅ Removed legacy installation: $legacy_location"
+        else
+            print_warning "⚠️  Could not remove $legacy_location (may need manual cleanup)"
+        fi
+    else
+        print_status "No legacy installations found"
+    fi
+
+    print_success "✅ Legacy location cleanup completed"
+}
+
 # Clean up old installation using the uninstall module
 cleanup_old_installation() {
     print_subheader "🧹 Cleaning Up Old Installation"
-    
+
+    # First, clean up any legacy installation locations
+    cleanup_legacy_locations
+
     # Source the uninstall module
     if ! source_manifest_uninstall; then
         print_error "❌ Failed to load uninstall module"
         print_error "❌ Cannot proceed with installation without cleanup capability"
         return 1
     fi
-    
+
     # Use the uninstall module for comprehensive cleanup
     # Parameters: skip_confirmations=true, non_interactive=true
     uninstall_manifest "true" "true"

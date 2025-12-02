@@ -9,12 +9,10 @@
 find_installation_locations() {
     local locations=()
     
-    # Check common installation locations
+    # Check installation locations (primary: ~/.manifest-cli, plus legacy for cleanup)
     local common_locations=(
-        "/usr/local/share/manifest-cli"
-        "/opt/manifest-cli"
-        "$HOME/.local/share/manifest-cli"
         "$HOME/.manifest-cli"
+        "/usr/local/share/manifest-cli"
     )
     
     # Add user-specified location if set

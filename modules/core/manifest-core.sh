@@ -21,7 +21,7 @@ if [ -n "$PWD" ] && git -C "$PWD" rev-parse --git-dir > /dev/null 2>&1; then
     # We're in a git repository, use current working directory
     PROJECT_ROOT="$PWD"
     # When in a git repo, INSTALL_LOCATION is where the CLI files are installed
-    INSTALL_LOCATION="${MANIFEST_CLI_INSTALL_DIR:-/usr/local/share/manifest-cli}"
+    INSTALL_LOCATION="${MANIFEST_CLI_INSTALL_DIR:-$HOME/.manifest-cli}"
 else
     # Not in a git repository, use installation location for both
     INSTALL_LOCATION="${MANIFEST_CLI_CORE_MODULES_DIR%/*/*/*}"
@@ -66,13 +66,9 @@ get_cli_dir() {
         return 0
     fi
     
-    # Try to find installed CLI in common locations
+    # Try to find installed CLI (primary: ~/.manifest-cli)
     local possible_dirs=(
         "$HOME/.manifest-cli"
-        "$HOME/.local/share/manifest-cli"
-        "/usr/local/share/manifest-cli"
-        "/opt/manifest-cli"
-        "/usr/share/manifest-cli"
     )
     
     for dir in "${possible_dirs[@]}"; do
@@ -192,13 +188,13 @@ check_auto_update() {
 # Main command dispatcher
 main() {
     # Set INSTALL_LOCATION early for security checks
-    INSTALL_LOCATION="${MANIFEST_CLI_INSTALL_DIR:-/usr/local/share/manifest-cli}"
+    INSTALL_LOCATION="${MANIFEST_CLI_INSTALL_DIR:-$HOME/.manifest}"
     export INSTALL_LOCATION
-    
+
     # SECURITY: Early check to prevent running from installation directory
     if is_installation_directory "$(pwd)"; then
         log_error "❌ SECURITY ERROR: Cannot run Manifest CLI from installation directory"
-        log_error "   Installation directory: ${INSTALL_LOCATION:-/usr/local/share/manifest-cli}"
+        log_error "   Installation directory: ${INSTALL_LOCATION:-$HOME/.manifest-cli}"
         log_error "   Current directory: $(pwd)"
         log_error ""
         log_error "💡 Please run Manifest CLI from your project directory instead:"

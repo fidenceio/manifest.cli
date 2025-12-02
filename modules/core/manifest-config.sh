@@ -246,7 +246,7 @@ set_default_configuration() {
     export MANIFEST_CLI_MARKDOWN_EXT="${MANIFEST_CLI_MARKDOWN_EXT:-*.md}"
     
     # Installation paths
-    export MANIFEST_CLI_INSTALL_DIR="${MANIFEST_CLI_INSTALL_DIR:-/usr/local/share/manifest-cli}"
+    export MANIFEST_CLI_INSTALL_DIR="${MANIFEST_CLI_INSTALL_DIR:-$HOME/.manifest-cli}"
     export MANIFEST_CLI_BIN_DIR="${MANIFEST_CLI_BIN_DIR:-~/.local/bin}"
     
     # Temporary file paths

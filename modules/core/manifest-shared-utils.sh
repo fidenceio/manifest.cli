@@ -118,37 +118,28 @@ get_project_root() {
 # Check if we're running from the installation directory
 is_installation_directory() {
     local current_dir="$1"
-    local install_location="${INSTALL_LOCATION:-/usr/local/share/manifest-cli}"
-    
+    local install_location="${INSTALL_LOCATION:-$HOME/.manifest-cli}"
+
     if [ -z "$current_dir" ]; then
         current_dir="$(pwd)"
     fi
-    
+
     # Check if current directory is the installation directory
     if [[ "$current_dir" == "$install_location" ]]; then
         return 0
     fi
-    
+
     # Check if current directory is a subdirectory of installation directory
     if [[ "$current_dir" == "$install_location"/* ]]; then
         return 0
     fi
-    
-    # Additional check: if INSTALL_LOCATION is not set, check common installation paths
-    if [[ -z "${INSTALL_LOCATION:-}" ]]; then
-        local common_install_paths=(
-            "/usr/local/share/manifest-cli"
-            "/opt/manifest-cli"
-            "/usr/share/manifest-cli"
-        )
-        
-        for path in "${common_install_paths[@]}"; do
-            if [[ "$current_dir" == "$path" ]] || [[ "$current_dir" == "$path"/* ]]; then
-                return 0
-            fi
-        done
+
+    # Also check legacy location for security
+    local legacy_path="/usr/local/share/manifest-cli"
+    if [[ "$current_dir" == "$legacy_path" ]] || [[ "$current_dir" == "$legacy_path"/* ]]; then
+        return 0
     fi
-    
+
     return 1
 }
 
@@ -160,7 +151,7 @@ validate_repository_root() {
     # SECURITY: Prevent running from installation directory
     if is_installation_directory "$current_dir"; then
         log_error "❌ SECURITY ERROR: Cannot run Manifest CLI from installation directory"
-        log_error "   Installation directory: ${INSTALL_LOCATION:-/usr/local/share/manifest-cli}"
+        log_error "   Installation directory: ${INSTALL_LOCATION:-$HOME/.manifest-cli}"
         log_error "   Current directory: $current_dir"
         log_error ""
         log_error "💡 Please run Manifest CLI from your project directory instead:"
