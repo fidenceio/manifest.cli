@@ -342,8 +342,6 @@ create_directories() {
     fi
     
     # Create subdirectories
-    mkdir -p "$MANIFEST_CLI_INSTALL_LOCATION/src"
-    mkdir -p "$MANIFEST_CLI_INSTALL_LOCATION/scripts"
     mkdir -p "$MANIFEST_CLI_INSTALL_LOCATION/docs"
     
     print_success "✅ Directory structure created"
@@ -369,30 +367,13 @@ copy_cli_files() {
         cp -r "modules" "$MANIFEST_CLI_INSTALL_LOCATION/"
         print_success "✅ Copied source modules"
     fi
-    
-    # Copy essential project files
-    local essential_files=("$MANIFEST_CLI_VERSION_FILE" "$MANIFEST_CLI_GITIGNORE_FILE")
-    for file in "${essential_files[@]}"; do
-        if [ -f "$file" ]; then
-            cp "$file" "$MANIFEST_CLI_INSTALL_LOCATION/"
-            print_success "✅ Copied $file"
-        else
-            print_warning "⚠️  $file not found (skipping)"
-        fi
-    done
-    
+
     # Copy documentation
     if [ -d "docs" ]; then
         cp -r "docs" "$MANIFEST_CLI_INSTALL_LOCATION/"
         print_success "✅ Copied documentation"
     fi
-    
-    # Copy scripts
-    if [ -d "scripts" ]; then
-        cp -r "scripts" "$MANIFEST_CLI_INSTALL_LOCATION/"
-        print_success "✅ Copied utility scripts"
-    fi
-    
+
     print_success "✅ All CLI files copied successfully"
     echo ""
 }
