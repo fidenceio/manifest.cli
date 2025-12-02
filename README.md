@@ -5,17 +5,17 @@ A powerful command-line tool for automating Git workflows, version management, a
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `25.5.0` |
-| **Release Date** | `2025-11-04 16:43:14 UTC` |
-| **Git Tag** | `v25.5.0` |
+| **Current Version** | `26.0.0` |
+| **Release Date** | `2025-12-02 19:39:42 UTC` |
+| **Git Tag** | `v26.0.0` |
 | **Branch** | `main` |
-| **Last Updated** | `2025-11-04 16:43:14 UTC` |
-| **CLI Version** | `25.5.0` |
+| **Last Updated** | `2025-12-02 19:39:42 UTC` |
+| **CLI Version** | `26.0.0` |
 
 ### 📚 Documentation Files
 
 - **Version Info**: [VERSION](VERSION)
-- **CLI Source**: [src/cli/](src/cli/)
+- **CLI Modules**: [modules/](modules/)
 - **Install Script**: [install-cli.sh](install-cli.sh)
 ## 🚀 Features
 
