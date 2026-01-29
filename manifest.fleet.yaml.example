@@ -1,0 +1,355 @@
+# =============================================================================
+# MANIFEST FLEET CONFIGURATION
+# =============================================================================
+# This file defines a collection of related repositories (a "fleet") that
+# Manifest CLI can manage together for coordinated versioning and releases.
+#
+# USAGE:
+#   1. Copy this file: cp manifest.fleet.yaml.example manifest.fleet.yaml
+#   2. Customize for your microservices/polyrepo setup
+#   3. Run: manifest fleet status
+#
+# This file SHOULD be committed to version control.
+# Service-specific overrides go in each service's .env.manifest.local (git-ignored)
+# =============================================================================
+
+# =============================================================================
+# FLEET METADATA
+# =============================================================================
+fleet:
+  # Human-readable fleet name (used in changelogs and tags)
+  name: "acme-platform"
+
+  # Optional description
+  description: "ACME Corp Microservices Platform"
+
+  # -----------------------------------------------------------------------------
+  # FLEET VERSIONING STRATEGY
+  # -----------------------------------------------------------------------------
+  # How to version the fleet as a whole (independent of service versions)
+  #
+  # Options:
+  #   "none"      - No fleet-level version (services versioned independently)
+  #   "date"      - Date-based: 2026.01.28 (recommended for frequent releases)
+  #   "semver"    - Semantic: 1.0.0 (must be bumped manually or via rules)
+  #   "increment" - Simple counter: 1, 2, 3...
+  #
+  versioning: "date"
+
+  # Fleet version file (only created if versioning != "none")
+  version_file: "FLEET_VERSION"
+
+# =============================================================================
+# SERVICES / REPOSITORIES
+# =============================================================================
+# Define each service/repo in your fleet
+#
+# Services can be:
+#   - Local paths (already cloned)
+#   - Remote URLs (will be cloned on `manifest fleet sync`)
+#   - Git submodules (special handling)
+#
+services:
+  # ---------------------------------------------------------------------------
+  # EXAMPLE: Local service (already cloned)
+  # ---------------------------------------------------------------------------
+  user-service:
+    # Path relative to this manifest.fleet.yaml file
+    path: "./services/user-service"
+
+    # Optional metadata
+    description: "User authentication and profile management"
+    type: "service"           # service | library | infrastructure | tool
+    team: "auth-team"         # Team ownership for attribution
+
+    # Optional: Override default branch (defaults to main)
+    branch: "main"
+
+    # Optional: Custom version file location (defaults to VERSION)
+    version_file: "VERSION"
+
+    # Optional: Exclude from `manifest fleet go` operations
+    # Use case: Service is deprecated or managed separately
+    exclude_from_fleet_bump: false
+
+  # ---------------------------------------------------------------------------
+  # EXAMPLE: Remote service (will be cloned)
+  # ---------------------------------------------------------------------------
+  order-service:
+    # Git URL - will be cloned to path on `manifest fleet sync`
+    url: "git@github.com:acme/order-service.git"
+    path: "./services/order-service"
+
+    description: "Order processing and fulfillment"
+    type: "service"
+    team: "commerce-team"
+    branch: "main"
+
+  # ---------------------------------------------------------------------------
+  # EXAMPLE: Shared library (gets special treatment)
+  # ---------------------------------------------------------------------------
+  # Libraries are special because:
+  #   - Breaking changes affect multiple services
+  #   - Major bumps trigger cascade notifications
+  #   - Compatibility matrix tracks library versions
+  #
+  shared-lib:
+    path: "./libs/shared"
+    description: "Shared utilities and types"
+    type: "library"
+    team: "platform-team"
+
+  # ---------------------------------------------------------------------------
+  # EXAMPLE: Git submodule
+  # ---------------------------------------------------------------------------
+  infra-config:
+    path: "./infrastructure"
+    description: "Infrastructure as Code configurations"
+    type: "infrastructure"
+    team: "devops"
+
+    # Mark as submodule for special handling
+    submodule: true
+
+    # How to update submodule during sync
+    # Options: "checkout" | "rebase" | "merge"
+    submodule_update: "checkout"
+
+  # ---------------------------------------------------------------------------
+  # EXAMPLE: External dependency (read-only, not bumped)
+  # ---------------------------------------------------------------------------
+  # third-party-sdk:
+  #   url: "git@github.com:vendor/sdk.git"
+  #   path: "./vendor/sdk"
+  #   type: "external"
+  #   exclude_from_fleet_bump: true  # Never bump, just track version
+
+# =============================================================================
+# DEPENDENCIES
+# =============================================================================
+# Define version constraints between services
+#
+# Format: service-name: [list of {dependency: "constraint"}]
+#
+# Constraints follow semver:
+#   "^1.0.0"  - Compatible with 1.x.x (>=1.0.0 <2.0.0)
+#   "~1.0.0"  - Patch-level changes (>=1.0.0 <1.1.0)
+#   ">=1.0.0" - At least this version
+#   "1.0.0"   - Exact version
+#   "*"       - Any version
+#
+# Dependencies are used for:
+#   1. Compatibility matrix in unified changelog
+#   2. Breaking change impact analysis
+#   3. Validation during fleet operations
+#
+dependencies:
+  user-service:
+    - shared-lib: "^3.0.0"
+
+  order-service:
+    - shared-lib: "^3.0.0"
+    - user-service: ">=2.0.0"    # Calls user-service API
+
+  # gateway:
+  #   - shared-lib: "^3.0.0"
+  #   - user-service: ">=2.1.0"
+  #   - order-service: ">=1.5.0"
+
+# =============================================================================
+# CHANGELOG CONFIGURATION
+# =============================================================================
+changelog:
+  # ---------------------------------------------------------------------------
+  # UNIFIED FLEET CHANGELOG
+  # ---------------------------------------------------------------------------
+  unified:
+    enabled: true
+    file: "CHANGELOG_FLEET.md"
+
+    # What to include in unified changelog
+    include:
+      summary_table: true         # Version summary table at top
+      breaking_changes: true      # Highlighted breaking changes section
+      per_service_sections: true  # Collapsible per-service details
+      compatibility_matrix: true  # Dependency compatibility table
+      migration_guides: true      # For major version bumps
+      ntp_verification: true      # Timestamp verification details
+
+    # Detail level for per-service sections
+    # "full"    - Include entire changelog
+    # "summary" - Key sections only (recommended)
+    # "minimal" - Just version and one-line summary
+    detail_level: "summary"
+
+  # ---------------------------------------------------------------------------
+  # PER-SERVICE CHANGELOGS
+  # ---------------------------------------------------------------------------
+  per_service:
+    enabled: true                 # Each service keeps its own changelog
+
+    # Optional: Also copy service changelogs to central location
+    sync_to_fleet: false
+    sync_path: "./changelogs/"
+
+# =============================================================================
+# FLEET OPERATIONS
+# =============================================================================
+operations:
+  # Default version bump type for `manifest fleet go`
+  default_bump: "patch"
+
+  # ---------------------------------------------------------------------------
+  # PARALLELIZATION
+  # ---------------------------------------------------------------------------
+  parallel: true                  # Run operations in parallel
+  max_parallel: 4                 # Max concurrent operations
+
+  # ---------------------------------------------------------------------------
+  # COMMIT STRATEGY
+  # ---------------------------------------------------------------------------
+  commit:
+    # "per-service" - One commit per service (default, cleaner history)
+    # "atomic"      - Single commit referencing all changes (for monorepo-like behavior)
+    strategy: "per-service"
+
+    # Include fleet version in service commit messages
+    # e.g., "Bump to v2.1.0 [Fleet: 2026.01.28]"
+    include_fleet_version: true
+
+    # Custom commit message template (optional)
+    # Placeholders: {version}, {fleet_version}, {timestamp}, {service}
+    # template: "Release {service} v{version} [Fleet: {fleet_version}]"
+
+  # ---------------------------------------------------------------------------
+  # PUSH STRATEGY
+  # ---------------------------------------------------------------------------
+  push:
+    # "immediate" - Push each service as it completes
+    # "batched"   - Push all services at end (default, safer)
+    # "manual"    - Don't push, user will push manually
+    strategy: "batched"
+
+  # ---------------------------------------------------------------------------
+  # TAG STRATEGY
+  # ---------------------------------------------------------------------------
+  tags:
+    # Create per-service tags (e.g., user-service-v2.1.0)
+    per_service: true
+
+    # Create fleet-level tag (e.g., fleet-2026.01.28)
+    fleet_tag: true
+
+    # Custom tag format (optional)
+    # Placeholders: {service}, {version}, {fleet_version}
+    # per_service_format: "{service}-v{version}"
+    # fleet_format: "fleet-{fleet_version}"
+
+# =============================================================================
+# VALIDATION RULES
+# =============================================================================
+validation:
+  # Require all services to have clean git status before operations
+  require_clean_status: true
+
+  # Enforce dependency version constraints
+  # If user-service requires shared-lib@^3.0.0, fail if shared-lib is 2.x
+  enforce_dependencies: true
+
+  # Require all services to be on their expected branch
+  require_expected_branch: true
+
+  # Allow fleet operations on non-default branches (e.g., release branches)
+  allow_non_default_branch: false
+
+  # Require all services to have a VERSION file
+  require_version_file: true
+
+  # Strict mode: Fail on any warning (not just errors)
+  strict: false
+
+# =============================================================================
+# NOTIFICATIONS (Future)
+# =============================================================================
+notifications:
+  # Alert when a library has a breaking change (major bump)
+  breaking_changes:
+    enabled: true
+    method: "console"             # console | slack | github-issue | email
+
+  # Alert services that depend on a bumped library
+  cascade_alerts:
+    enabled: true
+    method: "console"
+
+  # Slack webhook URL (if method: slack)
+  # slack_webhook: "https://hooks.slack.com/services/..."
+
+  # GitHub repo for issues (if method: github-issue)
+  # github_repo: "acme/fleet-notifications"
+
+# =============================================================================
+# ADVANCED OPTIONS
+# =============================================================================
+advanced:
+  # State file for tracking partial operations
+  state_file: ".manifest-fleet-state.json"
+
+  # Lock file to prevent concurrent fleet operations
+  lock_file: ".manifest-fleet.lock"
+
+  # Timeout for per-service operations (seconds)
+  operation_timeout: 300
+
+  # Retry failed operations
+  retry_count: 2
+  retry_delay: 5
+
+# =============================================================================
+# EXAMPLES
+# =============================================================================
+#
+# MINIMAL CONFIGURATION (just services):
+#
+#   fleet:
+#     name: "my-platform"
+#   services:
+#     api:
+#       path: "./api"
+#     web:
+#       path: "./web"
+#     shared:
+#       path: "./shared"
+#       type: "library"
+#
+# -----------------------------------------------------------------------------
+#
+# MONOREPO-STYLE (atomic commits, strict validation):
+#
+#   fleet:
+#     name: "my-monorepo"
+#     versioning: "semver"
+#   services:
+#     # ... services ...
+#   operations:
+#     commit:
+#       strategy: "atomic"
+#   validation:
+#     strict: true
+#
+# -----------------------------------------------------------------------------
+#
+# MICROSERVICES WITH LOOSE COUPLING (independent releases):
+#
+#   fleet:
+#     name: "microservices"
+#     versioning: "none"          # No fleet version, services are independent
+#   services:
+#     # ... services ...
+#   operations:
+#     push:
+#       strategy: "immediate"     # Push each as it's done
+#   validation:
+#     enforce_dependencies: false # Services manage their own compatibility
+#
+# =============================================================================

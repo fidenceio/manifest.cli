@@ -58,6 +58,9 @@ source "$MANIFEST_CLI_CORE_MODULES_DIR/cloud/manifest-agent-containerized.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/cloud/manifest-mcp-utils.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/cloud/manifest-mcp-connector.sh"
 
+# Source Fleet module for polyrepo management
+source "$MANIFEST_CLI_CORE_MODULES_DIR/fleet/manifest-fleet.sh"
+
 # Function to get the CLI installation directory dynamically
 get_cli_dir() {
     # If we're in a development environment, use the current project root
@@ -424,6 +427,10 @@ main() {
         "agent")
             agent_main "${@}"
             ;;
+        "fleet")
+            # Fleet commands for polyrepo management
+            fleet_main "$@"
+            ;;
         "help"|*)
             display_help
             ;;
@@ -472,6 +479,14 @@ display_help() {
   echo "    agent logs                        # Show agent operation logs"
   echo "    agent test                        # Test agent functionality"
   echo "    agent uninstall                   # Remove agent completely"
+  echo "  fleet       - 🚢 Polyrepo/microservices fleet management"
+  echo "    fleet init                        # Initialize a new fleet"
+  echo "    fleet status                      # Show fleet status overview"
+  echo "    fleet discover                    # Discover repos in workspace"
+  echo "    fleet sync                        # Clone missing, pull existing repos"
+  echo "    fleet add <path|url>              # Add a service to fleet"
+  echo "    fleet validate                    # Validate fleet configuration"
+  echo "    fleet go [patch|minor|major]      # Coordinated version bump (coming soon)"
   # Registry commands removed - not compatible with macOS default Bash 3.2
   echo "  help        - Show this help"
     echo ""
