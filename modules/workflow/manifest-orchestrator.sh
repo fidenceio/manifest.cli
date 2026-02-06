@@ -30,7 +30,8 @@ manifest_go() {
     echo "🚀 Starting automated Manifest process..."
     echo ""
     echo "   git repo:          $(git remote get-url origin 2>/dev/null || echo 'none')"
-    echo "   git branch:        $(git branch --show-current 2>/dev/null || echo 'unknown')"
+    echo "   git branch (remote): $(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo 'none')"
+    echo "   git branch (local):  $(git branch --show-current 2>/dev/null || echo 'unknown')"
     echo "   working folder:    $PROJECT_ROOT"
     echo "   docs folder:       $(get_docs_folder "$PROJECT_ROOT")"
     echo "   archive folder:    $(get_zarchive_dir)"
@@ -264,7 +265,15 @@ manifest_test_dry_run() {
     echo "🧪 Manifest Test/Dry-Run Mode"
     echo "============================="
     echo ""
-    
+    echo "   git repo:          $(git remote get-url origin 2>/dev/null || echo 'none')"
+    echo "   git branch (remote): $(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo 'none')"
+    echo "   git branch (local):  $(git branch --show-current 2>/dev/null || echo 'unknown')"
+    echo "   working folder:    $PROJECT_ROOT"
+    echo "   docs folder:       $(get_docs_folder "$PROJECT_ROOT")"
+    echo "   archive folder:    $(get_zarchive_dir)"
+    echo "   previous version:  $(cat "$PROJECT_ROOT/VERSION" 2>/dev/null || echo 'unknown')"
+    echo ""
+
     # Test file requirements
     echo "📁 File Requirements Testing:"
     if ensure_required_files "$PROJECT_ROOT"; then
