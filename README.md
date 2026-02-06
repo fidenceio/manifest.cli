@@ -45,43 +45,27 @@ A powerful command-line tool for automating Git workflows, version management, a
 
 ## 📦 Installation
 
-### Quick Install (Recommended)
+### Homebrew (Recommended)
 
 ```bash
-# Clone the repository
-git clone https://github.com/fidenceio/manifest.cli.git
-cd manifest.cli
-
-# Install the CLI
-./install-cli.sh
+# Add the Fidence.io tap and install
+brew tap fidenceio/manifest
+brew install manifest
 ```
 
-The CLI will be installed to `~/.local/bin/manifest` and added to your PATH.
-
-### Manual Installation
+### Update
 
 ```bash
-# Create installation directory
-mkdir -p ~/.manifest-cli
-cd ~/.manifest-cli
-
-# Copy source files
-cp -r /path/to/manifest.cli/src ./
-cp /path/to/manifest.cli/VERSION ./
-cp /path/to/manifest.cli/README.md ./
-
-# Set permissions
-chmod +x src/cli/manifest-cli.sh
-
-# Create executable
-mkdir -p ~/.local/bin
-cat > ~/.local/bin/manifest << 'EOF'
-#!/bin/bash
-cd ~/.manifest-cli
-bash src/cli/manifest-cli.sh "$@"
-EOF
-chmod +x ~/.local/bin/manifest
+brew upgrade manifest
 ```
+
+### Install Script (auto-detects Homebrew)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fidenceio/manifest.cli/main/install-cli.sh | bash
+```
+
+For detailed installation instructions (Linux, CI/CD, manual install), see the [Installation Guide](docs/INSTALLATION.md).
 
 ## 🎯 Quick Start
 
@@ -217,12 +201,13 @@ Show help information.
 
 ### Environment Variables
 
-Create `~/.manifest-cli/.env` for cloud integration:
+Create `.env.manifest.global` in your project root for configuration:
 
 ```bash
-# Manifest Cloud Service
-MANIFEST_CLI_CLOUD_URL=http://localhost:3001
-MANIFEST_CLI_CLOUD_API_KEY=your-api-key-here
+# See env.manifest.global.example for all options
+MANIFEST_CLI_DEBUG=false
+MANIFEST_CLI_VERBOSE=false
+MANIFEST_CLI_NTP_SERVER1=time.apple.com
 ```
 
 #### Git Configuration
@@ -241,19 +226,17 @@ git config --global user.email "your.email@example.com"
 ## 🏗️ Project Structure
 
 ```
-~/.manifest-cli/
-├── src/
-│   └── cli/
-│       ├── manifest-cli.sh    # Main CLI entry point
-│       └── modules/           # Modular CLI functionality
-│           ├── manifest-core.sh
-│           ├── manifest-docs.sh
-│           ├── manifest-git.sh
-│           └── ...
-├── examples/
-│   └── test-manifest-cloud-client.js
-├── VERSION
-├── .env                        # Cloud service configuration
+manifest.cli/
+├── manifest-cli.sh            # Main CLI entry point
+├── modules/                   # Modular CLI functionality
+│   ├── core/                  # Core modules (config, env, git)
+│   ├── docs/                  # Documentation generation
+│   ├── system/                # System modules (install, uninstall, security)
+│   └── workflow/              # Workflow orchestration
+├── Formula/                   # Homebrew formula
+├── VERSION                    # Current version
+├── install-cli.sh             # Installation script
+├── env.manifest.global.example # Configuration template
 └── README.md
 ```
 
@@ -349,7 +332,7 @@ The Manifest CLI can optionally integrate with Manifest Cloud for enhanced featu
 - **API Change Detection**: Automatically identify breaking changes
 
 ### Setup
-1. Configure environment variables in `~/.manifest-cli/.env`
+1. Configure environment variables in `.env.manifest.global` or `.env.manifest.local`
 2. Use `manifest analyze` and `manifest changelog` commands
 3. Enhanced `manifest go` workflow with intelligent recommendations
 

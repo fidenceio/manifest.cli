@@ -6,7 +6,7 @@ This document provides a complete reference for all commands, options, and funct
 
 ## 🎯 About This Reference
 
-This reference covers the current capabilities of Manifest CLI (version 8.6.7+) and outlines planned features for future versions. The tool is designed with extensibility in mind, allowing for continuous improvement and new functionality.
+This reference covers the current capabilities of Manifest CLI (version 31.0.0+) and outlines planned features for future versions. The tool is designed with extensibility in mind, allowing for continuous improvement and new functionality.
 
 ## 🎯 Command Overview
 
@@ -73,8 +73,8 @@ manifest go --dry-run
 3. **🔄 Remote Sync**: Pull latest changes from remote
 4. **📦 Version Bump**: Increment version according to type
 5. **🤖 AI Documentation**: Generate intelligent release notes and changelog
-6. **🏷️ Git Operations**: Commit, tag, and push to all remotes
-7. **🍺 Homebrew Update**: Update formula if applicable
+6. **📁 Archive**: Archive previous version documentation
+7. **🏷️ Git Operations**: Commit, tag, and push to all remotes
 
 ## `manifest test` - Testing Framework
 
@@ -473,7 +473,7 @@ MANIFEST_CLI_DOCS_OUTPUT_DIR="./docs"
 # Homebrew configuration
 MANIFEST_CLI_BREW_OPTION="enabled"
 MANIFEST_CLI_BREW_INTERACTIVE="no"
-MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/fidenceio-homebrew-tap.git"
+MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/homebrew-manifest.git"
 
 # Cloud configuration
 MANIFEST_CLI_CLOUD_API_KEY="your-api-key-here"
@@ -592,13 +592,16 @@ fi
 
 ## Homebrew Integration
 ```bash
-# Update Homebrew formula
-manifest docs homebrew
+# Install via Homebrew
+brew tap fidenceio/manifest
+brew install manifest
 
-# Control Homebrew behavior
+# Upgrade to latest version
+brew upgrade manifest
+
+# Homebrew configuration variables
 export MANIFEST_CLI_BREW_OPTION=enabled
-export MANIFEST_CLI_BREW_INTERACTIVE=no
-export MANIFEST_CLI_TAP_REPO="https://github.com/your-org/your-tap.git"
+export MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/homebrew-manifest.git"
 ```
 
 ## 🌟 Advanced Features

@@ -13,7 +13,7 @@ The tool is built with a modular architecture that handles:
 - **AI Documentation**: Intelligent generation of release notes and changelogs
 - **Repository Operations**: Git workflow automation and synchronization
 - **Timestamp Verification**: Trusted NTP-based timestamps for compliance
-- **Homebrew Integration**: Automatic formula updates and maintenance
+- **Homebrew Distribution**: Easy install and upgrade via `brew tap fidenceio/manifest && brew install manifest`
 
 ## **Current Capabilities**
 - **Core Workflow Automation**: Complete release process from version bump to deployment
@@ -25,7 +25,7 @@ The tool is built with a modular architecture that handles:
 - **Advanced Security**: Input validation, command injection protection, and path traversal prevention
 - **Comprehensive Testing Suite**: Bash 3.2, Bash 4+, and Zsh 5.9 compatibility testing
 - **NTP Timestamp Verification**: Trusted timestamps from multiple servers for compliance
-- **Homebrew Integration**: Automatic formula updates and maintenance
+- **Homebrew Distribution**: Install and upgrade via Homebrew (`brew upgrade manifest`)
 - **Git Retry Logic**: Robust handling of network issues with configurable timeouts and retries
 
 ## **Future Capabilities**
@@ -81,8 +81,8 @@ manifest go revision   # 1.0.0 → 1.0.0.1
 3. **🔄 Remote Sync**: Pulls latest changes from remote repository
 4. **📦 Version Bump**: Increments version according to specified type
 5. **🤖 AI Documentation**: Generates intelligent release notes and changelog
-6. **🏷️ Git Operations**: Creates commit, tag, and pushes to all remotes
-7. **🍺 Homebrew Update**: Updates Homebrew formula if applicable
+6. **📁 Archive**: Archives previous version documentation
+7. **🏷️ Git Operations**: Creates commit, tag, and pushes to all remotes
 
 ## Interactive Mode
 
@@ -285,7 +285,7 @@ export MANIFEST_CLI_DOCS_OUTPUT_DIR="./docs"
 # Homebrew integration
 export MANIFEST_CLI_BREW_OPTION="enabled"
 export MANIFEST_CLI_BREW_INTERACTIVE="no"
-export MANIFEST_CLI_TAP_REPO="https://github.com/your-org/your-tap.git"
+export MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/homebrew-manifest.git"
 
 # Auto-update configuration
 export MANIFEST_CLI_AUTO_UPDATE=true
@@ -321,7 +321,7 @@ MANIFEST_CLI_DOCS_OUTPUT_DIR="./docs"
 # Homebrew configuration
 MANIFEST_CLI_BREW_OPTION="enabled"
 MANIFEST_CLI_BREW_INTERACTIVE="no"
-MANIFEST_CLI_TAP_REPO="https://github.com/your-org/your-tap.git"
+MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/homebrew-manifest.git"
 ```
 
 ## Custom Documentation Templates
@@ -441,14 +441,12 @@ This will show detailed information about each step of the process.
 
 ## Log Files
 
-Check log files for detailed error information:
+Enable debug mode and check terminal output for detailed error information:
 
 ```bash
-# View recent logs
-tail -f ~/.manifest-cli/logs/manifest.log
-
-# Search for specific errors
-grep "ERROR" ~/.manifest-cli/logs/manifest.log
+# Run with debug output
+export MANIFEST_CLI_DEBUG=true
+manifest go
 ```
 
 ## 🔄 Workflow Examples
@@ -571,13 +569,18 @@ export MANIFEST_CLI_NTP_RETRIES=3
 
 ## Homebrew Integration
 
-```bash
-# Control Homebrew functionality
-export MANIFEST_CLI_BREW_OPTION=enabled
-export MANIFEST_CLI_BREW_INTERACTIVE=no
+Manifest CLI is distributed via Homebrew for easy installation and upgrades:
 
-# Custom tap repository
-export MANIFEST_CLI_TAP_REPO="https://github.com/your-org/your-tap.git"
+```bash
+# Install
+brew tap fidenceio/manifest
+brew install manifest
+
+# Upgrade to latest version
+brew upgrade manifest
+
+# Configuration (in .env.manifest.global)
+MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/homebrew-manifest.git"
 ```
 
 ## Git Configuration

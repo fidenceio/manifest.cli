@@ -30,7 +30,6 @@ git tag --list -3
 - Version: 1.0.0 → 1.0.1
 - Documentation: Auto-generated release notes and changelog
 - Git: Committed, tagged, and pushed to remote
-- Homebrew: Formula updated (if applicable)
 - Security: Input validation and path security checks
 - NTP: Trusted timestamp for compliance
 
@@ -72,8 +71,6 @@ git branch -d feature/user-authentication
 
 - Git: Complete workflow with proper tagging
 
-- Homebrew: Formula updated with new version
-
 ## Major Release
 
 For breaking changes or significant rewrites:
@@ -106,8 +103,6 @@ cat docs/RELEASE_v$(cat VERSION).md
 - Documentation: Comprehensive release notes with breaking changes
 
 - Git: Full workflow execution
-
-- Homebrew: Formula updated for major version
 
 ## 🔄 Workflow Examples
 
@@ -210,14 +205,6 @@ jobs:
     steps:
 
       - uses: actions/checkout@v3
-
-      - name: Setup Node.js
-
-        uses: actions/setup-node@v3
-
-        with:
-
-          node-version: '18'
 
       - name: Install Manifest CLI
 
@@ -593,7 +580,7 @@ export MANIFEST_CLI_DOCS_AUTO_GENERATE=true
 # Homebrew configuration
 export MANIFEST_CLI_BREW_OPTION="enabled"
 export MANIFEST_CLI_BREW_INTERACTIVE="no"
-export MANIFEST_CLI_TAP_REPO="https://github.com/your-org/your-tap.git"
+export MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/homebrew-manifest.git"
 
 # Cloud configuration
 export MANIFEST_CLI_CLOUD_API_KEY="your-api-key-here"
@@ -930,12 +917,6 @@ jobs:
 
       - uses: actions/checkout@v3
 
-      - uses: actions/setup-node@v3
-
-        with:
-
-          node-version: '18'
-
       - run: |
 
           curl -fsSL https://raw.githubusercontent.com/fidenceio/manifest.cli/main/install-cli.sh | bash
@@ -957,12 +938,6 @@ jobs:
         with:
 
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: actions/setup-node@v3
-
-        with:
-
-          node-version: '18'
 
       - run: |
 
