@@ -224,7 +224,24 @@ manifest_go() {
     # Push changes
     push_changes "$new_version"
     echo ""
-    
+
+    # Update Homebrew formula (only if this repo has one)
+    if [ -f "$PROJECT_ROOT/formula/manifest.rb" ]; then
+        echo "🍺 Updating Homebrew formula..."
+        if update_homebrew_formula; then
+            # Commit the formula change to this repo
+            if [ -n "$(git status --porcelain formula/manifest.rb 2>/dev/null)" ]; then
+                git add formula/manifest.rb
+                git commit -m "Update Homebrew formula to v$new_version"
+                git push origin main
+            fi
+            echo "✅ Homebrew formula updated"
+        else
+            echo "⚠️  Homebrew formula update failed, continuing..."
+        fi
+        echo ""
+    fi
+
     # Update repository metadata
     update_repository_metadata
     echo ""

@@ -98,6 +98,70 @@ archive_old_docs() {
 
 # Main workflow function is now handled by manifest-orchestrator.sh
 
+# Update Homebrew formula in both this repo and the tap repo
+update_homebrew_formula() {
+    local version
+    version=$(cat "$PROJECT_ROOT/VERSION" 2>/dev/null)
+    if [ -z "$version" ]; then
+        log_error "Could not read VERSION file"
+        return 1
+    fi
+
+    local tag="v${version}"
+    local tarball_url="https://github.com/fidenceio/manifest.cli/archive/refs/tags/${tag}.tar.gz"
+    local formula_file="$PROJECT_ROOT/formula/manifest.rb"
+
+    echo "🍺 Updating Homebrew formula to ${tag}..."
+
+    # Get SHA256 of the release tarball
+    echo "   Fetching SHA256 for ${tag}..."
+    local sha256
+    sha256=$(curl -fsSL "$tarball_url" | shasum -a 256 | cut -d' ' -f1)
+    if [ -z "$sha256" ]; then
+        log_error "Failed to fetch tarball SHA256 for ${tag}"
+        return 1
+    fi
+    echo "   SHA256: ${sha256}"
+
+    # Update formula in this repo
+    if [ -f "$formula_file" ]; then
+        # Cross-platform in-place sed (BSD on macOS requires -i '', GNU requires -i)
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' "s|url \"https://github.com/fidenceio/manifest.cli/archive/refs/tags/v.*\.tar\.gz\"|url \"${tarball_url}\"|" "$formula_file"
+            sed -i '' "s|sha256 \"[a-f0-9]*\"|sha256 \"${sha256}\"|" "$formula_file"
+        else
+            sed -i "s|url \"https://github.com/fidenceio/manifest.cli/archive/refs/tags/v.*\.tar\.gz\"|url \"${tarball_url}\"|" "$formula_file"
+            sed -i "s|sha256 \"[a-f0-9]*\"|sha256 \"${sha256}\"|" "$formula_file"
+        fi
+        echo "   ✅ Updated ${formula_file}"
+    else
+        log_error "Formula file not found: ${formula_file}"
+        return 1
+    fi
+
+    # Sync to the Homebrew tap repo
+    local tap_dir
+    if command -v brew &>/dev/null; then
+        tap_dir="$(brew --prefix)/Library/Taps/fidenceio/homebrew-manifest"
+    fi
+
+    if [ -d "$tap_dir/Formula" ]; then
+        cp "$formula_file" "$tap_dir/Formula/manifest.rb"
+        (
+            cd "$tap_dir" &&
+            git add Formula/manifest.rb &&
+            git commit -m "Update formula to ${tag}" &&
+            git push origin main
+        )
+        echo "   ✅ Pushed to homebrew-manifest tap"
+    else
+        echo "   ⚠️  Homebrew tap not found locally — formula updated in this repo only"
+        echo "   Push formula/manifest.rb to the homebrew-manifest repo manually"
+    fi
+
+    echo "🍺 Homebrew formula update complete"
+}
+
 # Update CLI function
 update_cli() {
     # Source the auto-update module
@@ -310,8 +374,7 @@ main() {
                     update_repository_metadata
                     ;;
                 "homebrew")
-                    echo "🍺 Homebrew functionality is now handled by the orchestrator"
-                    echo "   Use 'manifest go' for the complete workflow including Homebrew updates"
+                    echo "🍺 Homebrew formula is updated automatically by 'manifest go'"
                     ;;
                 "cleanup")
                     echo "📁 Moving historical documentation to zArchive..."
