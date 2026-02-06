@@ -23,6 +23,22 @@ class Manifest < Formula
     EOS
   end
 
+  def post_install
+    # Clean up legacy manual installations
+    legacy_bin = Pathname.new(Dir.home)/".local"/"bin"/"manifest"
+    legacy_dir = Pathname.new(Dir.home)/".manifest-cli"
+
+    if legacy_bin.exist?
+      legacy_bin.unlink
+      ohai "Removed legacy manual install: #{legacy_bin}"
+    end
+
+    if legacy_dir.exist?
+      legacy_dir.rmtree
+      ohai "Removed legacy install directory: #{legacy_dir}"
+    end
+  end
+
   test do
     system bin/"manifest", "--help"
   end

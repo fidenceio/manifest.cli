@@ -108,6 +108,18 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Cross-platform in-place sed
+# BSD sed (macOS, FreeBSD, OpenBSD, NetBSD) requires -i ''
+# GNU sed (Linux, WSL2, Git Bash/MSYS2, Cygwin) requires -i without argument
+sed_inplace() {
+    case "$OSTYPE" in
+        darwin*|freebsd*|openbsd*|netbsd*)
+            sed -i '' "$@" ;;
+        *)
+            sed -i "$@" ;;
+    esac
+}
+
 # Get system information
 get_system_info() {
     print_subheader "🔍 System Information"
@@ -731,7 +743,7 @@ cleanup_legacy_manual_install() {
     for profile in "${shell_profiles[@]}"; do
         if [ -f "$profile" ] && grep -q '\.local/bin' "$profile" 2>/dev/null; then
             # Remove the manifest-specific PATH export line
-            sed -i '' '/export PATH=.*\.local\/bin.*PATH/d' "$profile" 2>/dev/null && \
+            sed_inplace '/export PATH=.*\.local\/bin.*PATH/d' "$profile" 2>/dev/null && \
                 print_success "✅ Cleaned PATH entry from $(basename "$profile")"
         fi
     done
