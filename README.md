@@ -235,7 +235,7 @@ manifest.cli/
 │   ├── system/                # System modules (install, uninstall, security)
 │   └── workflow/              # Workflow orchestration
 ├── examples/                  # Configuration templates
-├── Formula/                   # Homebrew formula
+├── formula/                   # Homebrew formula
 ├── docs/                      # Documentation
 └── README.md
 ```
