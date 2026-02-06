@@ -23,7 +23,16 @@
       "Bash(manifest --help:*)",
       "Bash(/opt/homebrew/bin/manifest:*)",
       "Bash(brew info:*)",
-      "Bash(brew uninstall:*)"
+      "Bash(brew uninstall:*)",
+      "Bash(git -C /Users/william/coderepos/fidenceio.manifest.cli log --all --full-history --format=\"%H\" -- \"src/\")",
+      "Bash(git -C /Users/william/coderepos/fidenceio.manifest.cli log --all --full-history --diff-filter=D --summary -- \"src/\")",
+      "Bash(git -C /Users/william/coderepos/fidenceio.manifest.cli log --oneline --all -- \"src/\")",
+      "Bash(git -C /Users/william/coderepos/fidenceio.manifest.cli show 3b2b24136a7c2710433b22adf2388c86fdf30f2c:src/)",
+      "Bash(git -C /Users/william/coderepos/fidenceio.manifest.cli show 1210c0a:src/cli/)",
+      "Bash(git -C /Users/william/coderepos/fidenceio.manifest.cli log --oneline --all -- \"manifest-cli-wrapper.sh\")",
+      "Bash(git -C /Users/william/coderepos/fidenceio.manifest.cli log --oneline --all -- \"manifest-cli.sh\")",
+      "Bash(git -C /Users/william/coderepos/fidenceio.manifest.cli show ce682b8:manifest-cli-wrapper.sh)",
+      "Bash(git -C /Users/william/coderepos/fidenceio.manifest.cli log --all --oneline --grep=\"wrapper\")"
     ],
     "deny": [],
     "ask": []

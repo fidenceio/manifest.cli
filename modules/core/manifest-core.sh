@@ -75,7 +75,7 @@ get_cli_dir() {
     )
     
     for dir in "${possible_dirs[@]}"; do
-        if [ -d "$dir" ] && [ -f "$dir/$MANIFEST_CLI_VERSION_FILE" ] && [ -f "$dir/src/cli/manifest-cli-wrapper.sh" ]; then
+        if [ -d "$dir" ] && [ -f "$dir/$MANIFEST_CLI_VERSION_FILE" ] && [ -f "$dir/manifest-cli-wrapper.sh" ]; then
             echo "$dir"
             return 0
         fi
