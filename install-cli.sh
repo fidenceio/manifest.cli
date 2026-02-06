@@ -804,22 +804,30 @@ main() {
     # System validation
     get_system_info
 
-    # On macOS, install Homebrew if not present
+    # On macOS, offer to install Homebrew if not present
     if [[ "$OSTYPE" == "darwin"* ]] && ! command_exists brew; then
         print_status "🍺 macOS detected but Homebrew is not installed"
-        print_status "Installing Homebrew (the standard macOS package manager)..."
+        print_status "Homebrew is the recommended way to install, update, manage, and cleanly remove Manifest CLI on macOS. Plus, it offers thousands of other packages."
         echo ""
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-        # Add Homebrew to PATH for this session (Apple Silicon vs Intel)
-        if [ -f "/opt/homebrew/bin/brew" ]; then
-            eval "$(/opt/homebrew/bin/brew shellenv)"
-        elif [ -f "/usr/local/bin/brew" ]; then
-            eval "$(/usr/local/bin/brew shellenv)"
-        fi
-        if command_exists brew; then
-            print_success "✅ Homebrew installed successfully"
+        read -p "   Would you like to install Homebrew? (Y/n): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            print_status "Installing Homebrew..."
+            echo ""
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            # Add Homebrew to PATH for this session (Apple Silicon vs Intel)
+            if [ -f "/opt/homebrew/bin/brew" ]; then
+                eval "$(/opt/homebrew/bin/brew shellenv)"
+            elif [ -f "/usr/local/bin/brew" ]; then
+                eval "$(/usr/local/bin/brew shellenv)"
+            fi
+            if command_exists brew; then
+                print_success "✅ Homebrew installed successfully"
+            else
+                print_error "❌ Homebrew installation failed — falling back to manual install"
+            fi
         else
-            print_error "❌ Homebrew installation failed — falling back to manual install"
+            print_status "Skipping Homebrew — will use manual installation"
         fi
         echo ""
     fi

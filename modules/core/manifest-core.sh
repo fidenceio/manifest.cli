@@ -437,15 +437,22 @@ main() {
             # Uninstall everything (force, non-interactive)
             uninstall_manifest "true" "true"
             echo ""
-            # On macOS, install Homebrew if not present
+            # On macOS, offer to install Homebrew if not present
             if [[ "$OSTYPE" == "darwin"* ]] && ! command -v brew &>/dev/null; then
                 echo "🍺 macOS detected but Homebrew is not installed"
-                echo "   Installing Homebrew..."
-                /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-                if [ -f "/opt/homebrew/bin/brew" ]; then
-                    eval "$(/opt/homebrew/bin/brew shellenv)"
-                elif [ -f "/usr/local/bin/brew" ]; then
-                    eval "$(/usr/local/bin/brew shellenv)"
+                echo "   Homebrew is the recommended way to install, update, manage, and cleanly remove Manifest CLI on macOS. Plus, it offers thousands of other packages."
+                read -p "   Would you like to install Homebrew? (Y/n): " -n 1 -r
+                echo
+                if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+                    echo "   Installing Homebrew..."
+                    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+                    if [ -f "/opt/homebrew/bin/brew" ]; then
+                        eval "$(/opt/homebrew/bin/brew shellenv)"
+                    elif [ -f "/usr/local/bin/brew" ]; then
+                        eval "$(/usr/local/bin/brew shellenv)"
+                    fi
+                else
+                    echo "   Skipping Homebrew — will use manual installation"
                 fi
             fi
             # Reinstall using the appropriate method
