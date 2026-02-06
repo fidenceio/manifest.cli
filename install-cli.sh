@@ -804,6 +804,26 @@ main() {
     # System validation
     get_system_info
 
+    # On macOS, install Homebrew if not present
+    if [[ "$OSTYPE" == "darwin"* ]] && ! command_exists brew; then
+        print_status "🍺 macOS detected but Homebrew is not installed"
+        print_status "Installing Homebrew (the standard macOS package manager)..."
+        echo ""
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        # Add Homebrew to PATH for this session (Apple Silicon vs Intel)
+        if [ -f "/opt/homebrew/bin/brew" ]; then
+            eval "$(/opt/homebrew/bin/brew shellenv)"
+        elif [ -f "/usr/local/bin/brew" ]; then
+            eval "$(/usr/local/bin/brew shellenv)"
+        fi
+        if command_exists brew; then
+            print_success "✅ Homebrew installed successfully"
+        else
+            print_error "❌ Homebrew installation failed — falling back to manual install"
+        fi
+        echo ""
+    fi
+
     # Route through Homebrew when available
     if command_exists brew; then
         print_status "🍺 Homebrew detected — installing via Homebrew"

@@ -368,6 +368,34 @@ main() {
             # Parameters: skip_confirmations (from --force flag), non_interactive=true (non-interactive by default)
             uninstall_manifest "$force_flag" "true"
             ;;
+        "reinstall")
+            echo "🔄 Reinstalling Manifest CLI..."
+            echo ""
+            # Uninstall everything (force, non-interactive)
+            uninstall_manifest "true" "true"
+            echo ""
+            # On macOS, install Homebrew if not present
+            if [[ "$OSTYPE" == "darwin"* ]] && ! command -v brew &>/dev/null; then
+                echo "🍺 macOS detected but Homebrew is not installed"
+                echo "   Installing Homebrew..."
+                /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+                if [ -f "/opt/homebrew/bin/brew" ]; then
+                    eval "$(/opt/homebrew/bin/brew shellenv)"
+                elif [ -f "/usr/local/bin/brew" ]; then
+                    eval "$(/usr/local/bin/brew shellenv)"
+                fi
+            fi
+            # Reinstall using the appropriate method
+            if command -v brew &>/dev/null; then
+                echo "🍺 Reinstalling via Homebrew..."
+                brew tap fidenceio/manifest 2>/dev/null
+                brew install fidenceio/manifest/manifest
+            else
+                echo "📦 Reinstalling via manual install..."
+                source "$MANIFEST_CLI_CORE_MODULES_DIR/workflow/manifest-auto-update.sh"
+                install_cli "true"
+            fi
+            ;;
         # Registry commands removed - not compatible with macOS default Bash 3.2
         "cloud")
             local subcommand="$1"
@@ -466,6 +494,7 @@ display_help() {
   echo "    update [--force] [--check]        # Update options: force update or check only"
   echo "  uninstall   - 🗑️  Remove Manifest CLI completely"
   echo "    uninstall [--force]               # Uninstall options: force uninstall without confirmation"
+  echo "  reinstall   - 🔄 Uninstall and reinstall Manifest CLI (detects OS and install method)"
   echo "  cloud       - ☁️  Manifest Cloud MCP connector"
   echo "    cloud test                        # Test connectivity to Manifest Cloud"
   echo "    cloud config                      # Configure API key and connection"

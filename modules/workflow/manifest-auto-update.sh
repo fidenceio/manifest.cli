@@ -239,7 +239,18 @@ update_cli_internal() {
     
     # Perform update
     log_info "Updating Manifest CLI..."
-    if install_cli "$force_update"; then
+
+    # Route through Homebrew if that's how it was installed
+    if is_homebrew_installed; then
+        log_info "🍺 Homebrew installation detected — upgrading via Homebrew..."
+        brew update && brew upgrade fidenceio/manifest/manifest
+        if [ $? -eq 0 ]; then
+            log_success "Update completed successfully via Homebrew!"
+        else
+            log_error "Homebrew upgrade failed"
+            return 1
+        fi
+    elif install_cli "$force_update"; then
         log_success "Update completed successfully!"
         log_info "You may need to restart your terminal or run 'hash -r' to use the updated CLI"
     else

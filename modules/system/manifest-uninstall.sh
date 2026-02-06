@@ -5,6 +5,11 @@
 
 # Uninstall module - uses PROJECT_ROOT from core module
 
+# Check if manifest was installed via Homebrew
+is_homebrew_installed() {
+    command -v brew &>/dev/null && brew list fidenceio/manifest/manifest &>/dev/null
+}
+
 # Function to find all possible installation locations
 find_installation_locations() {
     local locations=()
@@ -188,7 +193,23 @@ uninstall_manifest() {
     fi
     
     local errors=0
-    
+
+    # Uninstall via Homebrew if that's how it was installed
+    if is_homebrew_installed; then
+        echo "🍺 Homebrew installation detected — uninstalling via Homebrew..."
+        if brew uninstall manifest 2>/dev/null; then
+            echo "✅ Homebrew package removed"
+        else
+            echo "⚠️  brew uninstall failed"
+            ((errors++))
+        fi
+        if brew untap fidenceio/manifest 2>/dev/null; then
+            echo "✅ Homebrew tap removed"
+        else
+            echo "⚠️  brew untap failed (may already be untapped)"
+        fi
+    fi
+
     # Remove installation directories
     for location in "${install_locations[@]}"; do
         if ! remove_installation_directory "$location"; then
