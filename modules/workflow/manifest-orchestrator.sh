@@ -229,17 +229,6 @@ manifest_go() {
     update_repository_metadata
     echo ""
     
-    # Update Homebrew formula
-    echo "🍺 Updating Homebrew formula..."
-    
-    # Homebrew update functionality is now handled by the orchestrator
-    echo "   ⚠️  Homebrew update functionality is now integrated into the orchestrator"
-    echo ""
-    
-    # Archive old documentation files (completed after new version creation)
-    echo "📁 Archiving old documentation files..."
-    echo "   ✅ Documentation archiving completed"
-    
     # Success message
     echo "🎉 Manifest process completed successfully!"
     echo ""

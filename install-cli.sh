@@ -679,6 +679,104 @@ install_git_hooks() {
 }
 
 # =============================================================================
+# Legacy Manual Install Cleanup
+# =============================================================================
+
+# Detect and remove previous manual installations so only Homebrew remains
+cleanup_legacy_manual_install() {
+    local found_legacy=false
+
+    # Check for manual install binary
+    if [ -f "$HOME/.local/bin/manifest" ]; then
+        found_legacy=true
+    fi
+
+    # Check for manual install directory
+    if [ -d "$HOME/.manifest-cli" ]; then
+        found_legacy=true
+    fi
+
+    # Check for legacy system location
+    if [ -d "/usr/local/share/manifest-cli" ]; then
+        found_legacy=true
+    fi
+
+    if [ "$found_legacy" = "false" ]; then
+        return 0
+    fi
+
+    print_subheader "🧹 Cleaning up previous manual installation"
+
+    # Remove manual install binary
+    if [ -f "$HOME/.local/bin/manifest" ]; then
+        rm -f "$HOME/.local/bin/manifest"
+        print_success "✅ Removed $HOME/.local/bin/manifest"
+    fi
+
+    # Remove manual install directory
+    if [ -d "$HOME/.manifest-cli" ]; then
+        rm -rf "$HOME/.manifest-cli"
+        print_success "✅ Removed $HOME/.manifest-cli"
+    fi
+
+    # Remove legacy system location
+    if [ -d "/usr/local/share/manifest-cli" ]; then
+        sudo rm -rf "/usr/local/share/manifest-cli" 2>/dev/null && \
+            print_success "✅ Removed /usr/local/share/manifest-cli" || \
+            print_warning "⚠️  Could not remove /usr/local/share/manifest-cli (may need manual cleanup)"
+    fi
+
+    # Remove PATH entries for ~/.local/bin added by previous installer
+    local shell_profiles=("$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.bashrc")
+    for profile in "${shell_profiles[@]}"; do
+        if [ -f "$profile" ] && grep -q '\.local/bin' "$profile" 2>/dev/null; then
+            # Remove the manifest-specific PATH export line
+            sed -i '' '/export PATH=.*\.local\/bin.*PATH/d' "$profile" 2>/dev/null && \
+                print_success "✅ Cleaned PATH entry from $(basename "$profile")"
+        fi
+    done
+
+    # Clean up manifest environment variables from shell profiles
+    if source_manifest_env_management 2>/dev/null; then
+        cleanup_all_manifest_env_vars 2>/dev/null
+        remove_manifest_from_shell_profiles 2>/dev/null
+    fi
+
+    echo ""
+}
+
+# =============================================================================
+# Homebrew Installation
+# =============================================================================
+
+MANIFEST_CLI_TAP="fidenceio/manifest"
+
+install_via_homebrew() {
+    print_subheader "🍺 Installing via Homebrew"
+
+    # Tap the repository
+    if ! brew tap "$MANIFEST_CLI_TAP" 2>/dev/null; then
+        print_error "❌ Failed to tap $MANIFEST_CLI_TAP"
+        return 1
+    fi
+    print_success "✅ Tapped $MANIFEST_CLI_TAP"
+
+    # Install or upgrade
+    if brew list "$MANIFEST_CLI_TAP/manifest" &>/dev/null; then
+        print_status "Manifest CLI already installed via Homebrew, upgrading..."
+        brew upgrade "$MANIFEST_CLI_TAP/manifest" 2>/dev/null || true
+    else
+        if ! brew install "$MANIFEST_CLI_TAP/manifest"; then
+            print_error "❌ brew install failed"
+            return 1
+        fi
+    fi
+
+    print_success "✅ Manifest CLI installed via Homebrew"
+    echo ""
+}
+
+# =============================================================================
 # Main Installation Flow
 # =============================================================================
 
@@ -697,26 +795,70 @@ main() {
 
     # System validation
     get_system_info
-    validate_system
 
-    # Installation process
-    cleanup_environment_variables
-    cleanup_old_installation
-    create_directories
-    copy_cli_files
-    create_configuration
-    setup_environment_variables
-    configure_path
+    # Route through Homebrew when available
+    if command_exists brew; then
+        print_status "🍺 Homebrew detected — installing via Homebrew"
+        echo ""
 
-    # Verification
-    if verify_installation; then
-        # Install git hooks if in a git repository
-        install_git_hooks
+        # Remove any previous manual installation before Homebrew install
+        cleanup_legacy_manual_install
 
-        display_post_install_info
+        if install_via_homebrew; then
+            # Set up configuration (shared by both paths)
+            create_configuration
+
+            # Install git hooks if in a git repository
+            install_git_hooks
+
+            # Verify
+            print_subheader "🔍 Verifying Installation"
+            local brew_manifest
+            brew_manifest="$(brew --prefix)/bin/manifest"
+            if [ -x "$brew_manifest" ] && "$brew_manifest" --help >/dev/null 2>&1; then
+                print_success "✅ Manifest CLI installed successfully!"
+                print_status "📍 Location: $brew_manifest"
+                echo ""
+                print_subheader "🎉 Installation Complete!"
+                echo ""
+                print_success "🚀 You can now use the Manifest CLI:"
+                echo "   manifest --help          # Show comprehensive help"
+                echo "   manifest go              # Run complete workflow"
+                echo "   manifest test            # Test functionality"
+                echo "   manifest ntp             # Get NTP timestamp"
+                echo ""
+                print_status "💡 To update:  brew update && brew upgrade manifest"
+                echo ""
+            else
+                print_error "❌ Homebrew installation verification failed"
+                exit 1
+            fi
+        else
+            print_error "❌ Homebrew installation failed"
+            exit 1
+        fi
     else
-        print_error "❌ Installation verification failed"
-        exit 1
+        # Fallback: manual installation (Linux, CI, no Homebrew)
+        print_status "Homebrew not found — using manual installation"
+        echo ""
+
+        validate_system
+
+        cleanup_environment_variables
+        cleanup_old_installation
+        create_directories
+        copy_cli_files
+        create_configuration
+        setup_environment_variables
+        configure_path
+
+        if verify_installation; then
+            install_git_hooks
+            display_post_install_info
+        else
+            print_error "❌ Installation verification failed"
+            exit 1
+        fi
     fi
 }
 
