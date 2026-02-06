@@ -178,7 +178,7 @@ validate_system() {
     local errors=0
     
     # Check if we're in the right directory
-    if [ ! -f "manifest-cli.sh" ]; then
+    if [ ! -f "scripts/manifest-cli.sh" ]; then
         print_error "❌ This script must be run from the manifest.cli project root directory"
         print_error "   Please navigate to the project root and try again"
         errors=$((errors + 1))
@@ -365,8 +365,8 @@ copy_cli_files() {
     print_subheader "📦 Copying CLI Files"
     
     # Copy main CLI script
-    if [ -f "manifest-cli-wrapper.sh" ]; then
-        cp "manifest-cli-wrapper.sh" "$MANIFEST_CLI_LOCAL_BIN/$MANIFEST_CLI_NAME"
+    if [ -f "scripts/manifest-cli-wrapper.sh" ]; then
+        cp "scripts/manifest-cli-wrapper.sh" "$MANIFEST_CLI_LOCAL_BIN/$MANIFEST_CLI_NAME"
         chmod +x "$MANIFEST_CLI_LOCAL_BIN/$MANIFEST_CLI_NAME"
         print_success "✅ Copied CLI script to $MANIFEST_CLI_LOCAL_BIN/$MANIFEST_CLI_NAME"
     else
@@ -387,13 +387,9 @@ copy_cli_files() {
     fi
 
     # Copy example configuration files
-    if [ -f "env.manifest.global.example" ]; then
-        cp "env.manifest.global.example" "$MANIFEST_CLI_INSTALL_LOCATION/"
-        print_success "✅ Copied env.manifest.global.example"
-    fi
-    if [ -f "env.manifest.local.example" ]; then
-        cp "env.manifest.local.example" "$MANIFEST_CLI_INSTALL_LOCATION/"
-        print_success "✅ Copied env.manifest.local.example"
+    if [ -d "examples" ]; then
+        cp -r "examples" "$MANIFEST_CLI_INSTALL_LOCATION/"
+        print_success "✅ Copied example configuration files"
     fi
 
     print_success "✅ All CLI files copied successfully"
@@ -406,8 +402,8 @@ create_configuration() {
 
     # Create user's global configuration in home directory if it doesn't exist
     if [ ! -f "$HOME/.env.manifest.global" ]; then
-        if [ -f "env.manifest.global.example" ]; then
-            cp "env.manifest.global.example" "$HOME/.env.manifest.global"
+        if [ -f "examples/env.manifest.global.example" ]; then
+            cp "examples/env.manifest.global.example" "$HOME/.env.manifest.global"
             print_success "✅ Global configuration created: $HOME/.env.manifest.global"
         else
             print_warning "⚠️  env.manifest.global.example not found, creating basic configuration"
@@ -584,7 +580,7 @@ display_post_install_info() {
     echo "   1. Configure your Git credentials if not already set"
     echo "   2. Run '$MANIFEST_CLI_NAME test' to verify everything works"
     echo "   3. Customize your global settings in ~/.env.manifest.global (e.g., timezone)"
-    echo "   4. For project-specific overrides, copy env.manifest.local.example to .env.manifest.local"
+    echo "   4. For project-specific overrides, copy examples/env.manifest.local.example to .env.manifest.local"
 
     # Add git hooks info if they were installed
     if [ -f ".git/hooks/pre-commit" ] && grep -q "Manifest CLI Pre-Commit Hook" ".git/hooks/pre-commit" 2>/dev/null; then
@@ -605,8 +601,8 @@ display_post_install_info() {
     echo
     print_status "🔧 Configuration:"
     echo "   • Global Config: ~/.env.manifest.global"
-    echo "   • Example Templates: $MANIFEST_CLI_INSTALL_LOCATION/env.manifest.*.example"
-    echo "   • For project overrides, copy env.manifest.local.example to your project root"
+    echo "   • Example Templates: $MANIFEST_CLI_INSTALL_LOCATION/examples/"
+    echo "   • For project overrides, copy examples/env.manifest.local.example to your project root"
     
     echo
     print_status "🌐 Community & Support:"

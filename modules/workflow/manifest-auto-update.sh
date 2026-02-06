@@ -83,12 +83,12 @@ install_cli() {
     mkdir -p "$local_bin"
     
     # Copy CLI wrapper
-    if [ -f "$PROJECT_ROOT/manifest-cli-wrapper.sh" ]; then
-        cp "$PROJECT_ROOT/manifest-cli-wrapper.sh" "$local_bin/$cli_name"
+    if [ -f "$PROJECT_ROOT/scripts/manifest-cli-wrapper.sh" ]; then
+        cp "$PROJECT_ROOT/scripts/manifest-cli-wrapper.sh" "$local_bin/$cli_name"
         chmod +x "$local_bin/$cli_name"
         log_success "CLI wrapper installed"
     else
-        log_error "CLI wrapper not found at $PROJECT_ROOT/manifest-cli-wrapper.sh"
+        log_error "CLI wrapper not found at $PROJECT_ROOT/scripts/manifest-cli-wrapper.sh"
         return 1
     fi
     

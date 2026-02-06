@@ -32,7 +32,10 @@
       "Bash(git -C /Users/william/coderepos/fidenceio.manifest.cli log --oneline --all -- \"manifest-cli-wrapper.sh\")",
       "Bash(git -C /Users/william/coderepos/fidenceio.manifest.cli log --oneline --all -- \"manifest-cli.sh\")",
       "Bash(git -C /Users/william/coderepos/fidenceio.manifest.cli show ce682b8:manifest-cli-wrapper.sh)",
-      "Bash(git -C /Users/william/coderepos/fidenceio.manifest.cli log --all --oneline --grep=\"wrapper\")"
+      "Bash(git -C /Users/william/coderepos/fidenceio.manifest.cli log --all --oneline --grep=\"wrapper\")",
+      "Bash(grep:*)",
+      "Bash(ls:*)",
+      "Bash(git mv:*)"
     ],
     "deny": [],
     "ask": []

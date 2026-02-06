@@ -11,8 +11,8 @@ find_cli_dir() {
     local possible_dirs=(
         "${MANIFEST_CLI_INSTALL_DIR:-$HOME/.manifest-cli}"
         "$HOME/.manifest-cli"
-        # Check if we're running from a development directory
-        "$(dirname "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")")"
+        # Check if we're running from a development directory (scripts/ subdir)
+        "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")"
     )
     
     for dir in "${possible_dirs[@]}"; do
@@ -24,7 +24,7 @@ find_cli_dir() {
     
     # If not found, try to find it relative to this script
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local project_root="$(dirname "$(dirname "$(dirname "$script_dir")")")"
+    local project_root="$(dirname "$script_dir")"
     
     if [ -f "$project_root/modules/core/manifest-core.sh" ]; then
         echo "$project_root"

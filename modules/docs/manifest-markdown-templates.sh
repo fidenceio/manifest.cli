@@ -215,7 +215,7 @@ generate_readme_version_section() {
 
     # Check if we're in the Manifest CLI repo by looking for CLI-specific files
     local is_manifest_cli_repo=false
-    if [[ -f "$PROJECT_ROOT/install-cli.sh" ]] && [[ -f "$PROJECT_ROOT/manifest-cli-wrapper.sh" ]] && [[ -d "$PROJECT_ROOT/modules" ]]; then
+    if [[ -f "$PROJECT_ROOT/install-cli.sh" ]] && [[ -f "$PROJECT_ROOT/scripts/manifest-cli-wrapper.sh" ]] && [[ -d "$PROJECT_ROOT/modules" ]]; then
         is_manifest_cli_repo=true
     fi
 

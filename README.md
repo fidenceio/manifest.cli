@@ -204,7 +204,7 @@ Show help information.
 Create `.env.manifest.global` in your project root for configuration:
 
 ```bash
-# See env.manifest.global.example for all options
+# See examples/env.manifest.global.example for all options
 MANIFEST_CLI_DEBUG=false
 MANIFEST_CLI_VERBOSE=false
 MANIFEST_CLI_NTP_SERVER1=time.apple.com
@@ -227,16 +227,19 @@ git config --global user.email "your.email@example.com"
 
 ```
 manifest.cli/
-├── manifest-cli.sh            # Main CLI entry point
+├── install-cli.sh             # Installation script
+├── VERSION                    # Current version
+├── scripts/                   # CLI entry points
+│   ├── manifest-cli.sh        # Main CLI script
+│   └── manifest-cli-wrapper.sh # Installed wrapper
 ├── modules/                   # Modular CLI functionality
 │   ├── core/                  # Core modules (config, env, git)
 │   ├── docs/                  # Documentation generation
 │   ├── system/                # System modules (install, uninstall, security)
 │   └── workflow/              # Workflow orchestration
+├── examples/                  # Configuration templates
 ├── Formula/                   # Homebrew formula
-├── VERSION                    # Current version
-├── install-cli.sh             # Installation script
-├── env.manifest.global.example # Configuration template
+├── docs/                      # Documentation
 └── README.md
 ```
 

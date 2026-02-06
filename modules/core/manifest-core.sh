@@ -64,7 +64,7 @@ source "$MANIFEST_CLI_CORE_MODULES_DIR/fleet/manifest-fleet.sh"
 # Function to get the CLI installation directory dynamically
 get_cli_dir() {
     # If we're in a development environment, use the current project root
-    if [ -f "$PROJECT_ROOT/$MANIFEST_CLI_VERSION_FILE" ] && [ -f "$PROJECT_ROOT/manifest-cli-wrapper.sh" ]; then
+    if [ -f "$PROJECT_ROOT/$MANIFEST_CLI_VERSION_FILE" ] && [ -f "$PROJECT_ROOT/scripts/manifest-cli-wrapper.sh" ]; then
         echo "$PROJECT_ROOT"
         return 0
     fi
@@ -75,7 +75,7 @@ get_cli_dir() {
     )
     
     for dir in "${possible_dirs[@]}"; do
-        if [ -d "$dir" ] && [ -f "$dir/$MANIFEST_CLI_VERSION_FILE" ] && [ -f "$dir/manifest-cli-wrapper.sh" ]; then
+        if [ -d "$dir" ] && [ -f "$dir/$MANIFEST_CLI_VERSION_FILE" ] && [ -f "$dir/scripts/manifest-cli-wrapper.sh" ]; then
             echo "$dir"
             return 0
         fi
@@ -479,14 +479,7 @@ display_help() {
   echo "    agent logs                        # Show agent operation logs"
   echo "    agent test                        # Test agent functionality"
   echo "    agent uninstall                   # Remove agent completely"
-  echo "  fleet       - 🚢 Polyrepo/microservices fleet management"
-  echo "    fleet init                        # Initialize a new fleet"
-  echo "    fleet status                      # Show fleet status overview"
-  echo "    fleet discover                    # Discover repos in workspace"
-  echo "    fleet sync                        # Clone missing, pull existing repos"
-  echo "    fleet add <path|url>              # Add a service to fleet"
-  echo "    fleet validate                    # Validate fleet configuration"
-  echo "    fleet go [patch|minor|major]      # Coordinated version bump (coming soon)"
+  echo "  fleet       - 🚢 Coordinate versioning across multiple repos (run 'manifest fleet' for details)"
   # Registry commands removed - not compatible with macOS default Bash 3.2
   echo "  help        - Show this help"
     echo ""

@@ -9,7 +9,7 @@ set -eo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source the core module (which sources all other modules)
-source "$SCRIPT_DIR/modules/core/manifest-core.sh"
+source "$SCRIPT_DIR/../modules/core/manifest-core.sh"
 
 # Main entry point
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
