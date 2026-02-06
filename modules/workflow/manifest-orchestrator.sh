@@ -29,7 +29,14 @@ manifest_go() {
     
     echo "🚀 Starting automated Manifest process..."
     echo ""
-    
+    echo "   git repo:          $(git remote get-url origin 2>/dev/null || echo 'none')"
+    echo "   git branch:        $(git branch --show-current 2>/dev/null || echo 'unknown')"
+    echo "   working folder:    $PROJECT_ROOT"
+    echo "   docs folder:       $(get_docs_folder "$PROJECT_ROOT")"
+    echo "   archive folder:    $(get_zarchive_dir)"
+    echo "   previous version:  $(cat "$PROJECT_ROOT/VERSION" 2>/dev/null || echo 'unknown')"
+    echo ""
+
     # Ensure required files exist before proceeding
     echo "🔍 Checking for required files..."
     if ! ensure_required_files "$PROJECT_ROOT"; then

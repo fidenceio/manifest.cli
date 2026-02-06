@@ -143,8 +143,8 @@ main_cleanup() {
                 local filename="$(basename "$file")"
                 local dest="$(get_zarchive_dir)/$filename"
                 
-                # Skip if already in zArchive
-                if [[ "$file" == *"/zArchive/"* ]]; then
+                # Skip if already in archive directory
+                if [[ "$file" == "$(get_zarchive_dir)"/* ]]; then
                     skipped_count=$((skipped_count + 1))
                     continue
                 fi
@@ -163,7 +163,7 @@ main_cleanup() {
                     log_warning "Failed to move: $filename"
                 fi
             fi
-        done < <(find "$(get_docs_folder "$PROJECT_ROOT")" -name "CHANGELOG_v*.md" -o -name "RELEASE_v*.md" -o -name "SECURITY_ANALYSIS_REPORT_v*.md" | grep -v "$(basename "$(get_zarchive_dir)")")
+        done < <(find "$(get_docs_folder "$PROJECT_ROOT")" -name "CHANGELOG_v*.md" -o -name "RELEASE_v*.md" -o -name "SECURITY_ANALYSIS_REPORT_v*.md" | grep -v "$(get_zarchive_dir)")
         
         log_success "Archived $moved_count files, skipped $skipped_count files"
     fi
