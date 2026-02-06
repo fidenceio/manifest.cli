@@ -5,12 +5,12 @@ A powerful command-line tool for automating Git workflows, version management, a
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `31.5.1` |
-| **Release Date** | `2026-02-06 23:09:43 UTC` |
-| **Git Tag** | `v31.5.1` |
+| **Current Version** | `31.5.2` |
+| **Release Date** | `2026-02-06 23:10:05 UTC` |
+| **Git Tag** | `v31.5.2` |
 | **Branch** | `main` |
-| **Last Updated** | `2026-02-06 23:09:43 UTC` |
-| **CLI Version** | `31.5.1` |
+| **Last Updated** | `2026-02-06 23:10:05 UTC` |
+| **CLI Version** | `31.5.2` |
 
 ---
 *This repo is versioned and documented by [Manifest CLI](https://github.com/fidenceio/manifest.cli).*
