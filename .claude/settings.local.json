@@ -36,7 +36,13 @@
       "Bash(grep:*)",
       "Bash(ls:*)",
       "Bash(git mv:*)",
-      "Bash(manifest uninstall:*)"
+      "Bash(manifest uninstall:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(brew tap-info:*)",
+      "Bash(git remote set-url:*)",
+      "Bash(brew search:*)"
     ],
     "deny": [],
     "ask": []

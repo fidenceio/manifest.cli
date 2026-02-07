@@ -270,24 +270,34 @@ main() {
         return 1
     fi
     
-    # Ensure we're running from repository root for all commands
-    if ! ensure_repository_root; then
-        log_error "Repository root validation failed"
-        return 1
-    fi
-    
-    # Update PROJECT_ROOT to the actual current directory (in case we changed)
-    PROJECT_ROOT="$(pwd)"
-    export PROJECT_ROOT
-    
-    # Load configuration now that all variables are properly set
-    load_configuration "$PROJECT_ROOT"
-    
-    # Check for updates in background (with cooldown)
-    check_auto_update
-    
-    local command="$1"
-    shift
+    local command="${1:-}"
+    [[ $# -gt 0 ]] && shift
+
+    # Commands that do NOT require a Git repository
+    case "$command" in
+        "help"|"-help"|"--help"|"-h"|"uninstall"|"reinstall"|"update")
+            ;;
+        "")
+            # No command given — will fall through to display_help
+            ;;
+        *)
+            # All other commands require a Git repository
+            if ! ensure_repository_root; then
+                log_error "Repository root validation failed"
+                return 1
+            fi
+
+            # Update PROJECT_ROOT to the actual current directory (in case we changed)
+            PROJECT_ROOT="$(pwd)"
+            export PROJECT_ROOT
+
+            # Load configuration now that all variables are properly set
+            load_configuration "$PROJECT_ROOT"
+
+            # Check for updates in background (with cooldown)
+            check_auto_update
+            ;;
+    esac
     
     case "$command" in
         "ntp")
@@ -529,7 +539,7 @@ main() {
             # Fleet commands for polyrepo management
             fleet_main "$@"
             ;;
-        "help"|*)
+        "help"|"-help"|"--help"|"-h"|*)
             display_help
             ;;
     esac
