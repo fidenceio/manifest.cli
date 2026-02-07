@@ -5,15 +5,18 @@ A powerful command-line tool for automating Git workflows, version management, a
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `31.5.2` |
-| **Release Date** | `2026-02-06 23:10:05 UTC` |
-| **Git Tag** | `v31.5.2` |
+| **Current Version** | `33.0.0` |
+| **Release Date** | `2026-02-07 21:14:32 UTC` |
+| **Git Tag** | `v33.0.0` |
 | **Branch** | `main` |
-| **Last Updated** | `2026-02-06 23:10:05 UTC` |
-| **CLI Version** | `31.5.2` |
+| **Last Updated** | `2026-02-07 21:14:32 UTC` |
+| **CLI Version** | `33.0.0` |
 
----
-*This repo is versioned and documented by [Manifest CLI](https://github.com/fidenceio/manifest.cli).*
+### 📚 Documentation Files
+
+- **Version Info**: [VERSION](VERSION)
+- **CLI Modules**: [modules/](modules/)
+- **Install Script**: [install-cli.sh](install-cli.sh)
 ## 🚀 Features
 
 ### Core Git Operations
