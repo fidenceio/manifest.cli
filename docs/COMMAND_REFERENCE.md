@@ -473,7 +473,7 @@ MANIFEST_CLI_DOCS_OUTPUT_DIR="./docs"
 # Homebrew configuration
 MANIFEST_CLI_BREW_OPTION="enabled"
 MANIFEST_CLI_BREW_INTERACTIVE="no"
-MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/homebrew-manifest.git"
+MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/homebrew-tap.git"
 
 # Cloud configuration
 MANIFEST_CLI_CLOUD_API_KEY="your-api-key-here"
@@ -601,7 +601,7 @@ brew upgrade manifest
 
 # Homebrew configuration variables
 export MANIFEST_CLI_BREW_OPTION=enabled
-export MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/homebrew-manifest.git"
+export MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/homebrew-tap.git"
 ```
 
 ## 🌟 Advanced Features

@@ -142,7 +142,7 @@ update_homebrew_formula() {
     # Sync to the Homebrew tap repo
     local tap_dir
     if command -v brew &>/dev/null; then
-        tap_dir="$(brew --prefix)/Library/Taps/fidenceio/homebrew-manifest"
+        tap_dir="$(brew --prefix)/Library/Taps/fidenceio/homebrew-tap"
     fi
 
     if [ -d "$tap_dir/Formula" ]; then
@@ -153,10 +153,10 @@ update_homebrew_formula() {
             git commit -m "Update formula to ${tag}" &&
             git push origin main
         )
-        echo "   ✅ Pushed to homebrew-manifest tap"
+        echo "   ✅ Pushed to homebrew-tap repo"
     else
         echo "   ⚠️  Homebrew tap not found locally — formula updated in this repo only"
-        echo "   Push formula/manifest.rb to the homebrew-manifest repo manually"
+        echo "   Push formula/manifest.rb to the homebrew-tap repo manually"
     fi
 
     echo "🍺 Homebrew formula update complete"
@@ -458,8 +458,8 @@ main() {
             # Reinstall using the appropriate method
             if command -v brew &>/dev/null; then
                 echo "🍺 Reinstalling via Homebrew..."
-                brew tap fidenceio/manifest 2>/dev/null
-                brew install fidenceio/manifest/manifest
+                brew tap fidenceio/tap 2>/dev/null
+                brew install fidenceio/tap/manifest
             else
                 echo "📦 Reinstalling via manual install..."
                 source "$MANIFEST_CLI_CORE_MODULES_DIR/workflow/manifest-auto-update.sh"

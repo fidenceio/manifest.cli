@@ -7,7 +7,7 @@
 
 # Check if manifest was installed via Homebrew
 is_homebrew_installed() {
-    command -v brew &>/dev/null && brew list fidenceio/manifest/manifest &>/dev/null
+    command -v brew &>/dev/null && brew list fidenceio/tap/manifest &>/dev/null
 }
 
 # Function to find all possible installation locations
@@ -203,7 +203,7 @@ uninstall_manifest() {
             echo "⚠️  brew uninstall failed"
             ((errors++))
         fi
-        if brew untap fidenceio/manifest 2>/dev/null; then
+        if brew untap fidenceio/tap 2>/dev/null; then
             echo "✅ Homebrew tap removed"
         else
             echo "⚠️  brew untap failed (may already be untapped)"

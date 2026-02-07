@@ -67,7 +67,7 @@ curl -fsSL https://raw.githubusercontent.com/fidenceio/manifest.cli/main/install
 **What this script does:**
 
 1. Detects if Homebrew is installed
-2. If Homebrew is available: runs `brew tap fidenceio/manifest && brew install manifest`
+2. If Homebrew is available: runs `brew tap fidenceio/tap && brew install manifest`
 3. If Homebrew is not available: installs manually to `~/.manifest-cli/` with a symlink in `~/.local/bin/`
 4. Cleans up any legacy manual installations if upgrading to Homebrew
 5. Verifies installation
@@ -263,7 +263,7 @@ MANIFEST_CLI_DOCS_OUTPUT_DIR="./docs"
 # Homebrew configuration
 MANIFEST_CLI_BREW_OPTION="enabled"
 MANIFEST_CLI_BREW_INTERACTIVE="no"
-MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/homebrew-manifest.git"
+MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/homebrew-tap.git"
 
 # Cloud configuration
 MANIFEST_CLI_CLOUD_API_KEY="your-api-key-here"

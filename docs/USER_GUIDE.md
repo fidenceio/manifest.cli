@@ -13,7 +13,7 @@ The tool is built with a modular architecture that handles:
 - **AI Documentation**: Intelligent generation of release notes and changelogs
 - **Repository Operations**: Git workflow automation and synchronization
 - **Timestamp Verification**: Trusted NTP-based timestamps for compliance
-- **Homebrew Distribution**: Easy install and upgrade via `brew tap fidenceio/manifest && brew install manifest`
+- **Homebrew Distribution**: Easy install and upgrade via `brew install fidenceio/tap/manifest`
 
 ## **Current Capabilities**
 - **Core Workflow Automation**: Complete release process from version bump to deployment
@@ -285,7 +285,7 @@ export MANIFEST_CLI_DOCS_OUTPUT_DIR="./docs"
 # Homebrew integration
 export MANIFEST_CLI_BREW_OPTION="enabled"
 export MANIFEST_CLI_BREW_INTERACTIVE="no"
-export MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/homebrew-manifest.git"
+export MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/homebrew-tap.git"
 
 # Auto-update configuration
 export MANIFEST_CLI_AUTO_UPDATE=true
@@ -321,7 +321,7 @@ MANIFEST_CLI_DOCS_OUTPUT_DIR="./docs"
 # Homebrew configuration
 MANIFEST_CLI_BREW_OPTION="enabled"
 MANIFEST_CLI_BREW_INTERACTIVE="no"
-MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/homebrew-manifest.git"
+MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/homebrew-tap.git"
 ```
 
 ## Custom Documentation Templates
@@ -580,7 +580,7 @@ brew install manifest
 brew upgrade manifest
 
 # Configuration (in .env.manifest.global)
-MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/homebrew-manifest.git"
+MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/homebrew-tap.git"
 ```
 
 ## Git Configuration

@@ -580,7 +580,7 @@ export MANIFEST_CLI_DOCS_AUTO_GENERATE=true
 # Homebrew configuration
 export MANIFEST_CLI_BREW_OPTION="enabled"
 export MANIFEST_CLI_BREW_INTERACTIVE="no"
-export MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/homebrew-manifest.git"
+export MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/homebrew-tap.git"
 
 # Cloud configuration
 export MANIFEST_CLI_CLOUD_API_KEY="your-api-key-here"

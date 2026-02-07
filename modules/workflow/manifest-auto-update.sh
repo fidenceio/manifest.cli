@@ -243,7 +243,7 @@ update_cli_internal() {
     # Route through Homebrew if that's how it was installed
     if is_homebrew_installed; then
         log_info "🍺 Homebrew installation detected — upgrading via Homebrew..."
-        brew update && brew upgrade fidenceio/manifest/manifest
+        brew update && brew upgrade fidenceio/tap/manifest
         if [ $? -eq 0 ]; then
             log_success "Update completed successfully via Homebrew!"
         else

@@ -757,7 +757,7 @@ cleanup_legacy_manual_install() {
 # Homebrew Installation
 # =============================================================================
 
-MANIFEST_CLI_TAP="fidenceio/manifest"
+MANIFEST_CLI_TAP="fidenceio/tap"
 
 install_via_homebrew() {
     print_subheader "🍺 Installing via Homebrew"
