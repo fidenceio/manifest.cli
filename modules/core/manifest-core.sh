@@ -275,7 +275,7 @@ main() {
 
     # Commands that do NOT require a Git repository
     case "$command" in
-        "help"|"-help"|"--help"|"-h"|"uninstall"|"reinstall"|"update")
+        "help"|"-help"|"--help"|"-h"|"uninstall"|"reinstall"|"update"|"fleet")
             ;;
         "")
             # No command given — will fall through to display_help

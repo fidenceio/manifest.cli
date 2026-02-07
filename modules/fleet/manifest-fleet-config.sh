@@ -743,7 +743,9 @@ load_fleet_config() {
         _load_service_config "$service"
     done
 
-    log_success "Fleet configuration loaded: $MANIFEST_FLEET_NAME (${#MANIFEST_FLEET_SERVICES[@]} services)"
+    local _svc_count=0
+    for _ in $MANIFEST_FLEET_SERVICES; do _svc_count=$((_svc_count + 1)); done
+    log_success "Fleet configuration loaded: $MANIFEST_FLEET_NAME ($_svc_count services)"
     return 0
 }
 
@@ -769,21 +771,23 @@ _load_service_config() {
     local service="$1"
 
     # Sanitize service name for use in variable names
-    # Replace hyphens with underscores, convert to uppercase
+    # Replace hyphens and dots with underscores, convert to uppercase
     local var_name
-    var_name=$(echo "$service" | tr '[:lower:]-' '[:upper:]_')
+    var_name=$(echo "$service" | tr '[:lower:]-.' '[:upper:]__')
 
     # Load service properties
+    # Use bracket notation for service name to handle dots in names
+    local svc_prefix=".services[\"${service}\"]"
     local path url type branch team excluded submodule description
 
-    path=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" ".services.${service}.path" "")
-    url=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" ".services.${service}.url" "")
-    type=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" ".services.${service}.type" "service")
-    branch=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" ".services.${service}.branch" "${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}")
-    team=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" ".services.${service}.team" "")
-    excluded=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" ".services.${service}.exclude_from_fleet_bump" "false")
-    submodule=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" ".services.${service}.submodule" "false")
-    description=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" ".services.${service}.description" "")
+    path=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" "${svc_prefix}.path" "")
+    url=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" "${svc_prefix}.url" "")
+    type=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" "${svc_prefix}.type" "service")
+    branch=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" "${svc_prefix}.branch" "${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}")
+    team=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" "${svc_prefix}.team" "")
+    excluded=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" "${svc_prefix}.exclude_from_fleet_bump" "false")
+    submodule=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" "${svc_prefix}.submodule" "false")
+    description=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" "${svc_prefix}.description" "")
 
     # Resolve relative path to absolute
     if [[ -n "$path" ]] && [[ ! "$path" = /* ]]; then
@@ -828,7 +832,7 @@ _load_service_config() {
 get_fleet_service_path() {
     local service="$1"
     local var_name
-    var_name=$(echo "$service" | tr '[:lower:]-' '[:upper:]_')
+    var_name=$(echo "$service" | tr '[:lower:]-.' '[:upper:]__')
 
     local path_var="MANIFEST_FLEET_SERVICE_${var_name}_PATH"
     local path="${!path_var:-}"
@@ -863,7 +867,7 @@ get_fleet_service_property() {
     local default="${3:-}"
 
     local var_name
-    var_name=$(echo "$service" | tr '[:lower:]-' '[:upper:]_')
+    var_name=$(echo "$service" | tr '[:lower:]-.' '[:upper:]__')
 
     local prop_upper
     prop_upper=$(echo "$property" | tr '[:lower:]' '[:upper:]')

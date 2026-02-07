@@ -197,7 +197,7 @@ fleet_status() {
     # Service count
     local service_count=0
     for _ in $MANIFEST_FLEET_SERVICES; do
-        ((service_count++))
+        service_count=$((service_count + 1))
     done
     echo "Services: $service_count"
     echo ""
