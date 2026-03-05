@@ -1,7 +1,7 @@
 # Manifest North Star (CLI Anchor)
 
-**Status:** Active  
-**Last Updated:** 2026-03-05  
+**Status:** Active
+**Last Updated:** 2026-03-05
 **Repository Role:** Workflow and release orchestration layer
 
 ## North Star Companion Documents
@@ -97,5 +97,5 @@ Enable a thin-client ecosystem where applications self-update across internet-co
 
 ## Review Cadence
 
-Review strategy monthly or at each major release.  
+Review strategy monthly or at each major release.
 Update companion documents when scope, interfaces, or priorities change.
