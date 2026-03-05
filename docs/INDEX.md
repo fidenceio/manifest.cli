@@ -10,6 +10,7 @@
 - [Command Reference](COMMAND_REFERENCE.md) - All commands and options
 - [Examples](EXAMPLES.md) - Usage examples and workflows
 - [Installation Guide](INSTALLATION.md) - Installation instructions
+- [North Star](NORTH_STAR.md) - Shared strategy and roadmap
 
 ### Release Information
 - [Latest Release](RELEASE_v33.0.1.md) - Current release notes
