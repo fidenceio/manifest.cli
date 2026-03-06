@@ -7,8 +7,8 @@
 
 # Orchestrator module - modules are already sourced by manifest-core.sh
 
-# Main workflow function
-manifest_go() {
+# Main prep workflow function
+manifest_prep_workflow() {
     local increment_type="$1"
     local interactive="$2"
     
@@ -30,7 +30,7 @@ manifest_go() {
     echo "🚀 Starting automated Manifest process..."
     echo ""
     echo "   git repo:          $(git remote get-url origin 2>/dev/null || echo 'none')"
-    echo "   git branch (remote): $(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo 'none')"
+    echo "   git branch (remote): $(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || echo 'none')"
     echo "   git branch (local):  $(git branch --show-current 2>/dev/null || echo 'unknown')"
     echo "   working folder:    $PROJECT_ROOT"
     echo "   docs folder:       $(get_docs_folder "$PROJECT_ROOT")"
@@ -49,8 +49,8 @@ manifest_go() {
     # Interactive confirmation for safety
     local interactive_mode=false
     
-    # Enable interactive mode with -i flag
-    if [ "$interactive" = "-i" ]; then
+    # Enable interactive mode with explicit flag values.
+    if [ "$interactive" = "-i" ] || [ "$interactive" = "--interactive" ] || [ "$interactive" = "true" ] || [ "$interactive" = "1" ]; then
         interactive_mode=true
     fi
     
@@ -87,7 +87,7 @@ manifest_go() {
         echo ""
         
         while true; do
-            read -p "   Enter your choice (1-3): " choice
+            read -r -p "   Enter your choice (1-3): " choice
             case $choice in
                 1)
                     echo ""
@@ -96,7 +96,7 @@ manifest_go() {
                     manifest_test_dry_run "$increment_type"
                     echo ""
                     echo "🤔 Test completed. Would you like to proceed with the actual version bump?"
-                    read -p "   Proceed with $increment_type version bump? (y/N): " proceed
+                    read -r -p "   Proceed with $increment_type version bump? (y/N): " proceed
                     case $proceed in
                         [Yy]|[Yy][Ee][Ss])
                             echo ""
@@ -272,7 +272,7 @@ manifest_test_dry_run() {
     echo "============================="
     echo ""
     echo "   git repo:          $(git remote get-url origin 2>/dev/null || echo 'none')"
-    echo "   git branch (remote): $(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo 'none')"
+    echo "   git branch (remote): $(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || echo 'none')"
     echo "   git branch (local):  $(git branch --show-current 2>/dev/null || echo 'unknown')"
     echo "   working folder:    $PROJECT_ROOT"
     echo "   docs folder:       $(get_docs_folder "$PROJECT_ROOT")"
@@ -388,10 +388,10 @@ manifest_test_dry_run() {
 # Main function for command-line usage
 main() {
     case "${1:-help}" in
-        "go")
+        "prep")
             local increment_type="${2:-patch}"
             local interactive="${3:-false}"
-            manifest_go "$increment_type" "$interactive"
+            manifest_prep_workflow "$increment_type" "$interactive"
             ;;
         "test")
             local increment_type="${2:-patch}"
@@ -404,7 +404,7 @@ main() {
             echo "Usage: $0 [command] [options]"
             echo ""
             echo "Commands:"
-            echo "  go [type] [interactive]  - Complete manifest workflow"
+            echo "  prep [type] [interactive]  - Complete manifest workflow"
             echo "  test [type]              - Test/dry-run mode"
             echo "  help                     - Show this help"
             echo ""
@@ -413,8 +413,8 @@ main() {
             echo "  interactive: -i for interactive mode"
             echo ""
             echo "Examples:"
-            echo "  $0 go minor"
-            echo "  $0 go patch -i"
+            echo "  $0 prep minor"
+            echo "  $0 prep patch -i"
             echo "  $0 test major"
             ;;
         *)

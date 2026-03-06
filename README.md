@@ -6,10 +6,10 @@ A powerful command-line tool for automating Git workflows, version management, a
 | Property | Value |
 |----------|-------|
 | **Current Version** | `33.2.0` |
-| **Release Date** | `2026-03-05 23:23:11 UTC` |
+| **Release Date** | `2026-03-06 20:01:51 UTC` |
 | **Git Tag** | `v33.2.0` |
 | **Branch** | `main` |
-| **Last Updated** | `2026-03-05 23:23:11 UTC` |
+| **Last Updated** | `2026-03-06 20:01:51 UTC` |
 | **CLI Version** | `33.2.0` |
 
 ### 📚 Documentation Files
@@ -32,7 +32,7 @@ A powerful command-line tool for automating Git workflows, version management, a
 - **VERSION File Management**: Maintain a simple VERSION file for version tracking
 
 ### Advanced Workflows
-- **One-Command Automation**: `manifest go` for complete version bump → commit → tag → push workflow
+- **One-Command Automation**: `manifest prep` for complete version bump → commit → tag → push workflow
 - **Version Reversion**: Safely revert to previous versions with interactive selection
 - **Conflict Resolution**: Automatic handling of common Git conflicts and sync issues
 - **Health Diagnostics**: Built-in troubleshooting with `manifest diagnose`
@@ -89,10 +89,10 @@ manifest version major
 
 ```bash
 # Complete automated process (recommended)
-manifest go major    # Major version bump
-manifest go minor    # Minor version bump
-manifest go patch    # Patch version bump
-manifest go          # Auto-detect increment type
+manifest prep major    # Major version bump
+manifest prep minor    # Minor version bump
+manifest prep patch    # Patch version bump
+manifest prep          # Auto-detect increment type
 ```
 
 ### 3. Documentation Generation
@@ -112,15 +112,15 @@ manifest revert
 
 ### Core Commands
 
-#### `manifest go [type]`
+#### `manifest prep [type]`
 The main command for automated workflows. Automatically handles version bumping, committing, tagging, and pushing.
 
 ```bash
-manifest go major     # Increment major version
-manifest go minor     # Increment minor version
-manifest go patch     # Increment patch version
-manifest go revision  # Increment revision version
-manifest go           # Auto-detect increment type
+manifest prep major     # Increment major version
+manifest prep minor     # Increment minor version
+manifest prep patch     # Increment patch version
+manifest prep revision  # Increment revision version
+manifest prep           # Auto-detect increment type
 ```
 
 **What it does:**
@@ -157,15 +157,6 @@ manifest revert
 # Shows available versions and prompts for selection
 # Updates VERSION file and README.md
 # Commits changes and creates tag
-```
-
-#### `manifest push [type]`
-Legacy command for version bumping and pushing.
-
-```bash
-manifest push patch   # Bump patch version and push
-manifest push minor   # Bump minor version and push
-manifest push major   # Bump major version and push
 ```
 
 #### `manifest commit <message>`
@@ -255,7 +246,7 @@ manifest docs
 manifest commit "Add documentation for v2.1.0"
 
 # 3. Automated release
-manifest go minor
+manifest prep minor
 
 # Result: Version bumped, committed, tagged, and pushed
 ```
@@ -264,7 +255,7 @@ manifest go minor
 
 ```bash
 # Quick patch release
-manifest go patch
+manifest prep patch
 
 # Result: 2.1.0 → 2.1.1, committed, tagged, and pushed
 ```
@@ -273,7 +264,7 @@ manifest go patch
 
 ```bash
 # Major version with full workflow
-manifest go major
+manifest prep major
 
 # Result: 2.1.1 → 3.0.0, committed, tagged, and pushed
 ```
@@ -337,7 +328,7 @@ The Manifest CLI can optionally integrate with Manifest Cloud for enhanced featu
 ### Setup
 1. Configure environment variables in `.env.manifest.global` or `.env.manifest.local`
 2. Use `manifest analyze` and `manifest changelog` commands
-3. Enhanced `manifest go` workflow with intelligent recommendations
+3. Enhanced `manifest prep` workflow with intelligent recommendations
 
 ### Fallback Behavior
 If Manifest Cloud is not configured or unavailable, the CLI gracefully falls back to basic functionality:
@@ -386,7 +377,7 @@ This project is open source and available under the MIT License.
 
 ### [v3.0.0] - 2025-08-11
 - **Major Release**: Complete CLI rewrite with enhanced automation
-- **New Commands**: `manifest go`, `manifest docs`, `manifest diagnose`
+- **New Commands**: `manifest prep`, `manifest docs`, `manifest diagnose`
 - **VERSION File**: Automatic VERSION file management
 - **Conflict Resolution**: Automatic handling of common Git conflicts
 - **Cloud Integration**: Optional Manifest Cloud service integration

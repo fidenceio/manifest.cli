@@ -52,6 +52,7 @@ source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-uninstall.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/workflow/manifest-orchestrator.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/docs/manifest-cleanup-docs.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/testing/manifest-test.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/pr/manifest-pr.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/cloud/manifest-agent-containerized.sh"
 
 # Source MCP utilities and connector for Manifest Cloud
@@ -253,6 +254,12 @@ check_auto_update() {
 }
 
 # Main command dispatcher
+manifest_prep() {
+    local increment_type="${1:-patch}"
+    local interactive="${2:-false}"
+    manifest_prep_workflow "$increment_type" "$interactive"
+}
+
 main() {
     # Set INSTALL_LOCATION early for security checks
     INSTALL_LOCATION="${MANIFEST_CLI_INSTALL_DIR:-$HOME/.manifest}"
@@ -306,7 +313,7 @@ main() {
         "ntp-config")
             display_ntp_config
             ;;
-        "go")
+        "prep")
             local increment_type=""
             local interactive=false
             
@@ -316,6 +323,12 @@ main() {
                     "patch"|"minor"|"major"|"revision")
                         increment_type="$1"
                         shift
+                        ;;
+                    "-h"|"--help")
+                        echo "Usage: manifest prep [patch|minor|major|revision] [-i|--interactive]"
+                        echo "Prepare changes only (version/docs/commit/push)."
+                        echo "Use 'manifest ship' for end-to-end landing."
+                        return 0
                         ;;
                     "-i"|"--interactive")
                         interactive=true
@@ -339,32 +352,23 @@ main() {
                         ;;
                     *)
                         log_error "Unknown option: $1"
-                        echo "Usage: manifest go [patch|minor|major|revision] [-i|--interactive]"
+                        echo "Usage: manifest prep [patch|minor|major|revision] [-i|--interactive]"
                         return 1
                         ;;
                 esac
             done
             
-            # Call the orchestrator's manifest_go function
-            manifest_go "$increment_type" "$interactive"
+            # Route through prep entrypoint for consistency with ship.
+            manifest_prep "$increment_type" "$interactive"
+            ;;
+        "ship")
+            manifest_ship "$@"
             ;;
         "sync")
             sync_repository
             ;;
         "revert")
             revert_version
-            ;;
-        "push")
-            local increment_type="${1:-patch}"
-            # Get NTP timestamp for accurate versioning
-            get_ntp_timestamp >/dev/null
-            local timestamp=$(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
-            
-            bump_version "$increment_type"
-            local new_version=$(cat "$MANIFEST_CLI_VERSION_FILE" 2>/dev/null)
-            commit_changes "Bump version to $new_version" "$timestamp"
-            create_tag "$new_version"
-            push_changes "$new_version"
             ;;
         "commit")
             local message="$1"
@@ -384,7 +388,7 @@ main() {
                     update_repository_metadata
                     ;;
                 "homebrew")
-                    echo "🍺 Homebrew formula is updated automatically by 'manifest go'"
+                    echo "🍺 Homebrew formula is updated automatically by 'manifest prep'"
                     ;;
                 "cleanup")
                     echo "📁 Moving historical documentation to zArchive..."
@@ -539,6 +543,55 @@ main() {
             # Fleet commands for polyrepo management
             fleet_main "$@"
             ;;
+        "pr")
+            local subcommand="${1:-help}"
+            shift || true
+            case "$subcommand" in
+                "create")
+                    manifest_pr_create "$@"
+                    ;;
+                "update")
+                    manifest_pr_update "$@"
+                    ;;
+                "status")
+                    manifest_pr_status "$@"
+                    ;;
+                "ready")
+                    manifest_pr_ready "$@"
+                    ;;
+                "checks")
+                    manifest_pr_checks "$@"
+                    ;;
+                "queue")
+                    manifest_pr_queue "$@"
+                    ;;
+                "policy")
+                    local policy_subcommand="${1:-show}"
+                    shift || true
+                    case "$policy_subcommand" in
+                        "show")
+                            manifest_pr_policy_show "$@"
+                            ;;
+                        "validate")
+                            manifest_pr_policy_validate "$@"
+                            ;;
+                        *)
+                            log_error "Unknown pr policy command: $policy_subcommand"
+                            echo "Run 'manifest pr help' for usage."
+                            return 1
+                            ;;
+                    esac
+                    ;;
+                "help"|"-h"|"--help")
+                    manifest_pr_help
+                    ;;
+                *)
+                    log_error "Unknown pr command: $subcommand"
+                    echo "Run 'manifest pr help' for usage."
+                    return 1
+                    ;;
+            esac
+            ;;
         "help"|"-help"|"--help"|"-h"|*)
             display_help
             ;;
@@ -554,13 +607,14 @@ display_help() {
     echo "Commands:"
     echo "  ntp         - 🕐 Get trusted timestamp for manifest operations"
     echo "  ntp-config  - ⚙️  Show and configure timestamp settings"
-    echo "  go          - 🚀 Complete automated Manifest workflow (recommended)"
-    echo "    go [patch|minor|major|revision] [-i]       # Complete workflow: sync, docs, version, commit, push, metadata"
-    echo "    go -p|-m|-M|-r [-i]                        # Short form options with interactive mode"
+  echo "  ship        - 🚢 Highest-level release command (recommended)"
+  echo "    ship [patch|minor|major|revision] [--safe] [--method <merge|squash|rebase>] [--force]"
+    echo "  prep        - 🧰 Prepare changes before shipping"
+    echo "    prep [patch|minor|major|revision] [-i]       # Sync, docs, version, commit, push"
+    echo "    prep -p|-m|-M|-r [-i]                        # Short form options with interactive mode"
     echo "    Note: Use -i flag to enable interactive safety prompts (default: non-interactive)"
     echo "  sync        - 🔄 Sync local repo with remote (pull latest changes)"
     echo "  revert      - 🔄 Revert to previous version"
-    echo "  push        - Version bump, commit, and push changes"
     echo "  commit      - Commit changes with custom message"
     echo "  version     - Bump version (patch/minor/major)"
       echo "  docs        - 📚 Create documentation and release notes"
@@ -588,13 +642,21 @@ display_help() {
   echo "    agent logs                        # Show agent operation logs"
   echo "    agent test                        # Test agent functionality"
   echo "    agent uninstall                   # Remove agent completely"
+  echo "  pr          - 🔀 Pull request operations"
+  echo "    pr create [options]               # Create PR with optional labels/reviewers"
+  echo "    pr update [options]               # Update PR metadata/reviewers/labels"
+  echo "    pr status [--pr <selector>]       # Show resolved PR status"
+  echo "    pr ready [--pr <selector>]        # Evaluate merge readiness"
+  echo "    pr checks [--pr <selector>]       # Show CI checks (optional watch)"
+  echo "    pr queue [--pr <selector>]        # Preferred: queue policy-aware auto-merge"
+  echo "    pr policy show|validate           # Show/validate PR policy profile"
   echo "  fleet       - 🚢 Coordinate versioning across multiple repos (run 'manifest fleet' for details)"
   # Registry commands removed - not compatible with macOS default Bash 3.2
   echo "  help        - Show this help"
     echo ""
     echo "This CLI provides comprehensive Git operations and version management."
 echo ""
-echo "The 'go' command performs a complete workflow: sync → docs → version → commit → push → metadata"
+echo "The 'ship' command is the top-level workflow and runs prep before PR landing."
 echo ""
 echo "Environment Variables:"
 echo "  • MANIFEST_CLI_INTERACTIVE_MODE  - Interactive safety prompts (true/false, default: false)"

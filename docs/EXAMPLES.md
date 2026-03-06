@@ -19,7 +19,7 @@ git commit -m "Fix: resolve authentication issue with SSH keys"
 manifest test
 
 # 3. Release with patch version bump
-manifest go
+manifest prep
 
 # 4. Verify the release
 git log --oneline -3
@@ -55,7 +55,7 @@ git merge feature/user-authentication
 
 # 3. Release with minor version bump
 
-manifest go minor
+manifest prep minor
 
 # 4. Clean up feature branch
 
@@ -86,7 +86,7 @@ git log --oneline $(git describe --tags --abbrev=0)..HEAD
 
 # 3. Major version bump
 
-manifest go major
+manifest prep major
 
 # 4. Verify release documentation
 
@@ -132,7 +132,7 @@ git commit -m "Improve: enhance error handling in CLI"
 
 manifest test all
 
-manifest go
+manifest prep
 
 # Evening: Verify and clean up
 
@@ -169,7 +169,7 @@ manifest test all
 
 # 4. Release
 
-manifest go minor
+manifest prep minor
 
 # 5. Clean up
 
@@ -228,7 +228,7 @@ jobs:
 
           git config --local user.name "GitHub Action"
 
-          manifest go patch
+          manifest prep patch
 
 ```
 
@@ -249,7 +249,7 @@ manifest test all
 
 # 3. Generate audit trail
 
-manifest go --interactive
+manifest prep --interactive
 
 # 4. Verify audit trail
 
@@ -281,7 +281,7 @@ case $ENVIRONMENT in
 
     manifest test all
 
-    manifest go patch
+    manifest prep patch
 
     # Deploy to staging
 
@@ -293,7 +293,7 @@ case $ENVIRONMENT in
 
     manifest test all
 
-    manifest go minor
+    manifest prep minor
 
     # Deploy to production
 
@@ -351,7 +351,7 @@ fi
 
 echo "🚀 Executing release..."
 
-manifest go $RELEASE_TYPE
+manifest prep $RELEASE_TYPE
 
 # 4. Team notification
 
@@ -401,7 +401,7 @@ manifest security
 
 # 5. Integration tests
 echo "📋 Testing complete workflow..."
-manifest go --dry-run
+manifest prep --dry-run
 
 # 6. Performance tests
 echo "📋 Testing performance..."
@@ -949,7 +949,7 @@ jobs:
 
           git config --local user.name "GitHub Action"
 
-      - run: manifest go patch
+      - run: manifest prep patch
 
       - run: manifest docs
 
@@ -1003,7 +1003,7 @@ for repo in "${REPOS[@]}"; do
 
                 echo "   🚀 Releasing..."
 
-                manifest go $VERSION_TYPE
+                manifest prep $VERSION_TYPE
 
                 echo "   ✅ Release completed"
 
@@ -1093,7 +1093,7 @@ fi
 
 echo "🚀 Executing release..."
 
-manifest go $RELEASE_TYPE
+manifest prep $RELEASE_TYPE
 
 # 6. Post-release tasks
 

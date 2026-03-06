@@ -59,22 +59,22 @@ This will show you all available commands and options.
 
 ## 📚 Core Commands Deep Dive
 
-## 1. `manifest go` - The Main Workflow
+## 1. `manifest prep` - The Main Workflow
 
-The `manifest go` command is the heart of the CLI. It orchestrates the entire release process with intelligent automation:
+The `manifest prep` command is the heart of the CLI. It orchestrates the entire release process with intelligent automation:
 
 ```bash
 # Basic usage (patch version bump)
-manifest go
+manifest prep
 
 # Specific version bump types
-manifest go patch      # 1.0.0 → 1.0.1
-manifest go minor      # 1.0.0 → 1.1.0
-manifest go major      # 1.0.0 → 2.0.0
-manifest go revision   # 1.0.0 → 1.0.0.1
+manifest prep patch      # 1.0.0 → 1.0.1
+manifest prep minor      # 1.0.0 → 1.1.0
+manifest prep major      # 1.0.0 → 2.0.0
+manifest prep revision   # 1.0.0 → 1.0.0.1
 ```
 
-## What Happens During `manifest go`:
+## What Happens During `manifest prep`:
 
 1. **🕐 NTP Timestamp**: Gets a trusted timestamp from multiple NTP servers
 2. **📝 Change Detection**: Checks for uncommitted changes and auto-commits them
@@ -89,7 +89,7 @@ manifest go revision   # 1.0.0 → 1.0.0.1
 For more control, you can run in interactive mode:
 
 ```bash
-manifest go --interactive
+manifest prep --interactive
 ```
 
 This will prompt you for confirmation at each step of the workflow.
@@ -434,7 +434,7 @@ Enable debug mode for detailed troubleshooting:
 
 ```bash
 export MANIFEST_CLI_DEBUG=true
-manifest go
+manifest prep
 ```
 
 This will show detailed information about each step of the process.
@@ -446,7 +446,7 @@ Enable debug mode and check terminal output for detailed error information:
 ```bash
 # Run with debug output
 export MANIFEST_CLI_DEBUG=true
-manifest go
+manifest prep
 ```
 
 ## 🔄 Workflow Examples
@@ -462,7 +462,7 @@ git commit -m "Feature: Add new functionality"
 manifest test
 
 # 3. Release with patch version
-manifest go
+manifest prep
 
 # 4. Verify release
 git log --oneline -5
@@ -483,7 +483,7 @@ git checkout main
 git merge feature/new-feature
 
 # 3. Release with minor version
-manifest go minor
+manifest prep minor
 
 # 4. Clean up
 git branch -d feature/new-feature
@@ -499,7 +499,7 @@ manifest test all
 git log --oneline $(git describe --tags --abbrev=0)..HEAD
 
 # 3. Major version bump
-manifest go major
+manifest prep major
 
 # 4. Verify release
 manifest docs
@@ -513,7 +513,7 @@ cat docs/RELEASE_v$(cat VERSION).md
 - name: Release
   run: |
     manifest test all
-    manifest go patch
+    manifest prep patch
     manifest docs
 ```
 

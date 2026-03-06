@@ -1,7 +1,7 @@
 # Release v33.2.0
 
-**Release Date:** 2026-03-05 23:23:11 UTC
-**Release Type:** minor
+**Release Date:** 2026-03-06 20:01:51 UTC
+**Release Type:** patch
 
 ## 🎯 What's New
 
@@ -59,11 +59,15 @@ manifest docs
 
 ## New Features
 
+
 ## Improvements
-Update Homebrew formula to v33.1.0
+Update Homebrew formula to v33.2.0
 
 ## Bug Fixes
 
+
 ## Breaking Changes
 
+
 ## Documentation
+

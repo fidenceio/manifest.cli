@@ -68,7 +68,7 @@ services:
     # Optional: Custom version file location (defaults to VERSION)
     version_file: "VERSION"
 
-    # Optional: Exclude from `manifest fleet go` operations
+    # Optional: Exclude from `manifest fleet prep` operations
     # Use case: Service is deprecated or managed separately
     exclude_from_fleet_bump: false
 
@@ -196,7 +196,7 @@ changelog:
 # FLEET OPERATIONS
 # =============================================================================
 operations:
-  # Default version bump type for `manifest fleet go`
+  # Default version bump type for `manifest fleet prep`
   default_bump: "patch"
 
   # ---------------------------------------------------------------------------

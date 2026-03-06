@@ -522,10 +522,10 @@ show_configuration() {
     echo "   • LEFT components = More MAJOR changes (bigger impact)"
     echo "   • RIGHT components = More MINOR changes (smaller impact)"
     echo "   • More digits after last dot = More specific/precise changes"
-    echo "   • 'manifest go major' increments component ${MANIFEST_CLI_MAJOR_INCREMENT_TARGET}"
-    echo "   • 'manifest go minor' increments component ${MANIFEST_CLI_MINOR_INCREMENT_TARGET}"
-    echo "   • 'manifest go patch' increments component ${MANIFEST_CLI_PATCH_INCREMENT_TARGET}"
-    echo "   • 'manifest go revision' increments component ${MANIFEST_CLI_REVISION_INCREMENT_TARGET}"
+    echo "   • 'manifest prep major' increments component ${MANIFEST_CLI_MAJOR_INCREMENT_TARGET}"
+    echo "   • 'manifest prep minor' increments component ${MANIFEST_CLI_MINOR_INCREMENT_TARGET}"
+    echo "   • 'manifest prep patch' increments component ${MANIFEST_CLI_PATCH_INCREMENT_TARGET}"
+    echo "   • 'manifest prep revision' increments component ${MANIFEST_CLI_REVISION_INCREMENT_TARGET}"
 }
 
 # Get documentation folder path

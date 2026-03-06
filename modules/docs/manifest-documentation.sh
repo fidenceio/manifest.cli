@@ -183,7 +183,7 @@ generate_docs_index() {
 curl -fsSL https://raw.githubusercontent.com/fidenceio/manifest.cli/main/install-cli.sh | bash
 
 # Run complete workflow
-manifest go
+manifest prep
 
 # Get help
 manifest --help

@@ -40,7 +40,7 @@
 #   manifest fleet add       - Add a service to fleet
 #   manifest fleet remove    - Remove a service from fleet
 #   manifest fleet sync      - Clone/pull all services
-#   manifest fleet go        - Coordinated version bump
+#   manifest fleet prep        - Coordinated version bump
 #   manifest fleet docs      - Generate unified documentation
 #   manifest fleet validate  - Validate configuration
 #
@@ -270,7 +270,7 @@ fleet_status() {
     # Quick actions
     echo "Quick actions:"
     echo "  manifest fleet sync       - Clone missing, pull existing"
-    echo "  manifest fleet go patch   - Bump all services"
+    echo "  manifest fleet prep patch   - Bump all services"
     echo "  manifest fleet discover   - Find new repos"
 }
 
@@ -344,7 +344,12 @@ fleet_init() {
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -n|--name) fleet_name="$2"; shift 2 ;;
+            -n|--name)
+                if [ -z "${2:-}" ] || [[ "${2:-}" == --* ]]; then
+                    log_error "--name requires a value"
+                    return 1
+                fi
+                fleet_name="$2"; shift 2 ;;
             -d|--discover) auto_discover=true; shift ;;
             -t|--template) minimal_template=true; shift ;;
             -f|--force) force=true; shift ;;
@@ -432,7 +437,7 @@ EOF
             echo "  1. Review manifest.fleet.yaml and adjust service configuration"
             echo "  2. Run 'manifest fleet status' to see fleet overview"
             echo "  3. Run 'manifest fleet sync' to clone/pull all services"
-            echo "  4. Run 'manifest fleet go patch' for first coordinated release"
+            echo "  4. Run 'manifest fleet prep patch' for first coordinated release"
             echo ""
         fi
     fi
@@ -598,7 +603,12 @@ fleet_discover() {
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --depth) depth="$2"; shift 2 ;;
+            --depth)
+                if [ -z "${2:-}" ] || [[ "${2:-}" == --* ]]; then
+                    log_error "--depth requires a numeric value"
+                    return 1
+                fi
+                depth="$2"; shift 2 ;;
             --json) json_output=true; shift ;;
             -q|--quiet) quiet=true; shift ;;
             *) shift ;;
@@ -606,6 +616,10 @@ fleet_discover() {
     done
 
     local root_dir="${MANIFEST_FLEET_ROOT:-$(pwd)}"
+    if ! [[ "$depth" =~ ^[0-9]+$ ]]; then
+        log_error "--depth must be a non-negative integer"
+        return 1
+    fi
 
     if [[ "$json_output" == "true" ]]; then
         quick_discover "$root_dir"
@@ -739,6 +753,156 @@ fleet_sync() {
 }
 
 # =============================================================================
+# COMMAND: fleet ship
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Function: fleet_ship
+# -----------------------------------------------------------------------------
+# Highest-level coordinated fleet workflow:
+#   (optional) prep -> fleet pr create -> (optional checks/ready) -> fleet pr queue
+# -----------------------------------------------------------------------------
+fleet_ship() {
+    if ! _fleet_require_initialized "ship"; then
+        return 1
+    fi
+
+    local increment_type="patch"
+    local run_prep=true
+    local safe=false
+    local method="squash"
+    local force=false
+    local no_delete_branch=false
+    local draft=false
+    local any_failures=0
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            patch|minor|major|revision)
+                increment_type="$1"
+                shift
+                ;;
+            --noprep)
+                run_prep=false
+                shift
+                ;;
+            --safe)
+                safe=true
+                shift
+                ;;
+            --method)
+                if [ -z "${2:-}" ] || [[ "${2:-}" == --* ]]; then
+                    log_error "--method requires a value: merge|squash|rebase"
+                    return 1
+                fi
+                method="$2"
+                shift 2
+                ;;
+            --force)
+                force=true
+                shift
+                ;;
+            --no-delete-branch)
+                no_delete_branch=true
+                shift
+                ;;
+            --draft)
+                draft=true
+                shift
+                ;;
+            -h|--help)
+                cat << 'EOF'
+Usage: manifest fleet ship [patch|minor|major|revision] [options]
+
+Options:
+  --noprep                  Skip per-service prep step
+  --safe                    Run checks/ready gate before queueing
+  --method <merge|squash|rebase>
+  --force                   Bypass readiness gate during queue
+  --no-delete-branch        Keep source branches after queue
+  --draft                   Create draft PRs
+
+Flow:
+  default: fleet prep -> fleet pr create -> fleet pr queue
+  --safe:  fleet prep -> fleet pr create -> fleet pr checks -> fleet pr ready -> fleet pr queue
+EOF
+                return 0
+                ;;
+            *)
+                log_error "Unknown option for 'manifest fleet ship': $1"
+                return 1
+                ;;
+        esac
+    done
+
+    if [[ ! "$method" =~ ^(merge|squash|rebase)$ ]]; then
+        log_error "Invalid --method value: '$method' (expected merge|squash|rebase)"
+        return 1
+    fi
+
+    echo "🚢 Starting fleet ship workflow ($increment_type)"
+
+    if [ "$run_prep" = "true" ]; then
+        echo "🔧 Step 1/4: Running prep across fleet services..."
+        for service in $MANIFEST_FLEET_SERVICES; do
+            local path
+            path=$(get_fleet_service_property "$service" "path")
+            if [ ! -d "$path/.git" ]; then
+                echo "  - $service: skipped (not a git repo)"
+                continue
+            fi
+            (
+                cd "$path" || exit 1
+                manifest_prep "$increment_type" "false"
+            ) || {
+                echo "  - $service: ❌ prep failed"
+                any_failures=1
+            }
+        done
+        if [ "$any_failures" -eq 1 ]; then
+            log_error "Fleet prep failed for one or more services."
+            return 1
+        fi
+    else
+        echo "⏭️  Skipping fleet prep (--noprep)."
+        for service in $MANIFEST_FLEET_SERVICES; do
+            local path
+            path=$(get_fleet_service_property "$service" "path")
+            if [ ! -d "$path/.git" ]; then
+                continue
+            fi
+            if [ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]; then
+                echo "  - $service: ❌ has uncommitted changes; cannot use --noprep"
+                any_failures=1
+            fi
+        done
+        if [ "$any_failures" -eq 1 ]; then
+            log_error "Cannot continue fleet ship --noprep with dirty repositories."
+            return 1
+        fi
+    fi
+
+    echo "🔀 Step 2/4: Creating or reusing PRs across fleet..."
+    local create_args=()
+    [ "$draft" = "true" ] && create_args+=("--draft")
+    manifest_fleet_pr_dispatch create "${create_args[@]}" || return 1
+
+    if [ "$safe" = "true" ]; then
+        echo "🧪 Step 3/4: Verifying checks and readiness across fleet..."
+        manifest_fleet_pr_dispatch checks || return 1
+        manifest_fleet_pr_dispatch ready || return 1
+    fi
+
+    echo "📥 Step 4/4: Queueing PRs across fleet..."
+    local queue_args=(--method "$method")
+    [ "$force" = "true" ] && queue_args+=("--force")
+    [ "$no_delete_branch" = "true" ] && queue_args+=("--no-delete-branch")
+    manifest_fleet_pr_dispatch queue "${queue_args[@]}" || return 1
+
+    echo "✅ Fleet ship workflow complete."
+}
+
+# =============================================================================
 # COMMAND: fleet validate
 # =============================================================================
 
@@ -788,8 +952,18 @@ fleet_add() {
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --name) service_name="$2"; shift 2 ;;
-            --type) service_type="$2"; shift 2 ;;
+            --name)
+                if [ -z "${2:-}" ] || [[ "${2:-}" == --* ]]; then
+                    log_error "--name requires a value"
+                    return 1
+                fi
+                service_name="$2"; shift 2 ;;
+            --type)
+                if [ -z "${2:-}" ] || [[ "${2:-}" == --* ]]; then
+                    log_error "--type requires a value"
+                    return 1
+                fi
+                service_type="$2"; shift 2 ;;
             *)
                 if [[ -z "$path_or_url" ]]; then
                     path_or_url="$1"
@@ -851,7 +1025,7 @@ fleet_add() {
         echo "    url: \"$path_or_url\""
         echo "    path: \"./$service_name\""
     else
-        local rel_path="${path_or_url#$MANIFEST_FLEET_ROOT/}"
+        local rel_path="${path_or_url#"$MANIFEST_FLEET_ROOT"/}"
         rel_path="${rel_path#./}"
         echo "    path: \"./$rel_path\""
     fi
@@ -893,16 +1067,33 @@ fleet_main() {
         sync)
             fleet_sync "$@"
             ;;
+        ship)
+            fleet_ship "$@"
+            ;;
         validate)
             fleet_validate "$@"
             ;;
         add)
             fleet_add "$@"
             ;;
-        go)
+        pr)
+            local pr_subcommand="${1:-}"
+            shift || true
+            if [ -z "$pr_subcommand" ]; then
+                log_error "Usage: manifest fleet pr <create|status|checks|ready|queue> [options]"
+                return 1
+            fi
+            if declare -F manifest_fleet_pr_dispatch >/dev/null 2>&1; then
+                manifest_fleet_pr_dispatch "$pr_subcommand" "$@"
+            else
+                log_error "Fleet PR module unavailable"
+                return 1
+            fi
+            ;;
+        prep)
             # TODO: Implement coordinated version bump
-            log_warning "fleet go is not yet implemented"
-            echo "For now, run 'manifest go' in each service directory"
+            log_warning "fleet prep is not yet implemented"
+            echo "For now, run 'manifest prep' in each service directory"
             ;;
         docs)
             # TODO: Implement unified documentation
@@ -970,7 +1161,27 @@ COMMANDS:
       --name NAME        Service name
       --type TYPE        Service type (service|library|infrastructure|tool)
 
-  manifest fleet go [patch|minor|major]
+  manifest fleet pr <create|status|checks|ready|queue> [options]
+    Coordinate PR operations across fleet services.
+    Examples:
+      manifest fleet pr create
+      manifest fleet pr status
+      manifest fleet pr checks
+      manifest fleet pr ready
+      manifest fleet pr queue --method squash   # Preferred team path
+      manifest fleet pr queue --method merge    # Explicit merge strategy while queueing
+
+  manifest fleet ship [patch|minor|major|revision] [options]
+    Highest-level coordinated fleet workflow.
+    Options:
+      --noprep
+      --safe
+      --method <merge|squash|rebase>
+      --force
+      --no-delete-branch
+      --draft
+
+  manifest fleet prep [patch|minor|major]
     Coordinated version bump across all services.
     (Coming soon)
 

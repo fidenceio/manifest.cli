@@ -28,7 +28,7 @@ Make software release operations simple, trusted, and portable through one-comma
 
 ### Goal 1: Developer Experience First
 
-Continuously improve solo and team workflows using simple commands, especially `manifest go [patch|minor|major|revision]`.
+Continuously improve solo and team workflows using simple commands, especially `manifest prep [patch|minor|major|revision]`.
 
 Key outcomes:
 
@@ -65,7 +65,7 @@ Enable a thin-client ecosystem where applications self-update across internet-co
 
 ### P1: Workflow Reliability
 
-- harden `manifest go` safety and failure recovery paths
+- harden `manifest prep` safety and failure recovery paths
 - standardize PR automation defaults and behavior
 - improve diagnostics and dry-run confidence
 
@@ -77,7 +77,7 @@ Enable a thin-client ecosystem where applications self-update across internet-co
 
 ### P3: Fleet and Edge Readiness
 
-- complete `manifest fleet go` and unified fleet docs workflows
+- complete `manifest fleet prep` and unified fleet docs workflows
 - add dependency-aware compatibility and impact reporting
 - define update contracts for thin-client rollout patterns
 
@@ -90,7 +90,7 @@ Enable a thin-client ecosystem where applications self-update across internet-co
 ## Success Metrics
 
 - time from code-complete to pull-request-opened
-- percentage of releases completed through `manifest go*`
+- percentage of releases completed through `manifest prep*`
 - documentation freshness and post-release consistency
 - recovery time after failed release workflows
 - number of coordinated updates executed across fleets/services/devices

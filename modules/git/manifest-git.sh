@@ -355,3 +355,5 @@ revert_version() {
         return 1
     fi
 }
+
+# PR workflows moved to modules/pr/manifest-pr.sh

@@ -333,7 +333,7 @@ manifest security --paths
 
 ```bash
 # Test complete workflow (dry run)
-manifest go --dry-run
+manifest prep --dry-run
 ```
 
 ## 🚨 Troubleshooting

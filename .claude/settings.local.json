@@ -8,7 +8,7 @@
       "Bash([[ -d \"src/cli\" ]])",
       "Bash([[ -f \"manifest-cli-wrapper.sh\" ]])",
       "Bash([[ -d \"modules\" ]])",
-      "Bash(manifest go:*)",
+      "Bash(manifest prep:*)",
       "Bash(./install-cli.sh)",
       "Bash(bash:*)",
       "Bash(gh repo view:*)",

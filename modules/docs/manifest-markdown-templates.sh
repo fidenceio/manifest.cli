@@ -135,10 +135,10 @@ cd manifest.cli
 
 \`\`\`bash
 # Complete workflow
-manifest go
+manifest prep
 
 # Version bump
-manifest go patch
+manifest prep patch
 
 # Documentation
 manifest docs

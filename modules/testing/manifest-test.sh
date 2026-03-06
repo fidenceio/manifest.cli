@@ -398,7 +398,7 @@ test_integration_workflows() {
     echo "🧪 Testing integration workflows..."
     
     # Test basic workflow commands by checking if they exist in the help text
-    local workflow_commands=("sync" "version" "commit" "push" "cleanup")
+    local workflow_commands=("sync" "version" "commit" "cleanup")
     
     for cmd in "${workflow_commands[@]}"; do
         # Check if the command exists in the help text
@@ -411,13 +411,13 @@ test_integration_workflows() {
         fi
     done
     
-    # Test go command
+    # Test prep command
     local help_output
     help_output=$(manifest --help 2>/dev/null)
-    if echo "$help_output" | grep -q "go.*workflow\|Complete automated Manifest workflow"; then
-        echo "   ✅ Go workflow command available"
+    if echo "$help_output" | grep -q "ship.*release command\|prep.*Prepare changes before shipping"; then
+        echo "   ✅ Ship/prep workflow commands available"
     else
-        echo "   ❌ Go workflow command missing"
+        echo "   ❌ Ship/prep workflow commands missing"
     fi
     
     echo "   ✅ Integration workflow testing completed"

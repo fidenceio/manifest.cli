@@ -340,7 +340,7 @@ show_required_arg_error() {
     local usage="$2"
     log_error "$arg_name is required"
     echo "Usage: $0 $usage"
-    exit 1
+    return 1
 }
 
 # create_main_function() - Removed: unused function that generated boilerplate code

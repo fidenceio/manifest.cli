@@ -569,7 +569,7 @@ display_post_install_info() {
     echo
     print_success "🚀 You can now use the Manifest CLI:"
     echo "   $MANIFEST_CLI_NAME --help          # Show comprehensive help"
-    echo "   $MANIFEST_CLI_NAME go              # Run complete workflow"
+    echo "   $MANIFEST_CLI_NAME prep            # Run complete workflow"
     echo "   $MANIFEST_CLI_NAME test            # Test functionality"
     echo "   $MANIFEST_CLI_NAME ntp             # Get NTP timestamp"
     echo "   $MANIFEST_CLI_NAME sync            # Sync with remote"
@@ -859,7 +859,7 @@ main() {
                 echo ""
                 print_success "🚀 You can now use the Manifest CLI:"
                 echo "   manifest --help          # Show comprehensive help"
-                echo "   manifest go              # Run complete workflow"
+                echo "   manifest prep              # Run complete workflow"
                 echo "   manifest test            # Test functionality"
                 echo "   manifest ntp             # Get NTP timestamp"
                 echo ""

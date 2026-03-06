@@ -222,7 +222,7 @@ changelog:
 # FLEET OPERATIONS CONFIGURATION
 # =============================================================================
 operations:
-  # What happens on `manifest fleet go`
+  # What happens on `manifest fleet prep`
   default_bump: "patch"                 # Default version increment
 
   # Parallel vs sequential operations
@@ -384,7 +384,7 @@ MANIFEST_CLI_FLEET_ALERT_METHOD="console"
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    manifest go patch                         │
+│                    manifest prep patch                         │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -415,7 +415,7 @@ MANIFEST_CLI_FLEET_ALERT_METHOD="console"
 
 | Operation | Single Repo | Fleet Mode |
 |-----------|-------------|------------|
-| `manifest go patch` | Bump this repo | Bump all services in fleet |
+| `manifest prep patch` | Bump this repo | Bump all services in fleet |
 | `manifest version` | Show this repo version | Show fleet + all service versions |
 | `manifest docs` | Generate repo docs | Generate per-repo + unified docs |
 | `manifest sync` | Sync this repo | Sync all repos in fleet |
@@ -427,12 +427,12 @@ When inside a fleet, you can still operate on a single service:
 
 ```bash
 # Operate on fleet (default when fleet detected)
-manifest go patch
+manifest prep patch
 
 # Operate on just this service (escape fleet mode)
-manifest go patch --single
+manifest prep patch --single
 # or
-cd user-service && MANIFEST_CLI_FLEET_MODE=false manifest go patch
+cd user-service && MANIFEST_CLI_FLEET_MODE=false manifest prep patch
 ```
 
 ---
@@ -582,7 +582,7 @@ sed -i 's/\.name/.displayName/g' src/**/*.ts
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                  manifest fleet go minor                     │
+│                  manifest fleet prep minor                     │
 └─────────────────────────────────────────────────────────────┘
                               │
           ┌───────────────────┼───────────────────┐
@@ -624,21 +624,21 @@ sed -i 's/\.name/.displayName/g' src/**/*.ts
 
 ### 1. Partial Fleet Operations
 
-**Scenario:** 3 of 5 services fail during `manifest fleet go`
+**Scenario:** 3 of 5 services fail during `manifest fleet prep`
 
 **Handling:**
 ```
 1. Complete successful operations (don't rollback)
 2. Report which services failed and why
 3. Save state to .manifest-fleet-state.json
-4. Allow resume: `manifest fleet go --resume`
-5. Allow selective retry: `manifest fleet go --only user-service,order-service
+4. Allow resume: `manifest fleet prep --resume`
+5. Allow selective retry: `manifest fleet prep --only user-service,order-service
 ```
 
 **State File:**
 ```json
 {
-  "operation": "fleet-go-minor",
+  "operation": "fleet-prep-minor",
   "started_at": "2026-01-28T14:30:00Z",
   "status": "partial",
   "services": {
@@ -670,7 +670,7 @@ sed -i 's/\.name/.displayName/g' src/**/*.ts
 **Handling:**
 ```
 1. Warn during `manifest fleet status`
-2. Block `manifest fleet go` unless:
+2. Block `manifest fleet prep` unless:
    - shared-lib is also being bumped to satisfy constraint
    - User passes --ignore-constraints
 3. Suggest: "Bump shared-lib to 3.0.0 first, or update constraint in user-service"
@@ -719,7 +719,7 @@ services:
 
 **Handling:**
 ```
-1. `manifest fleet go` checks all services first
+1. `manifest fleet prep` checks all services first
 2. If any dirty:
    - List which services have uncommitted changes
    - Offer options:
@@ -771,7 +771,7 @@ services:
 **Handling:**
 ```
 1. During `manifest fleet status`: Warn "service 'x' missing VERSION file"
-2. During `manifest fleet go`:
+2. During `manifest fleet prep`:
    - Create VERSION file with "1.0.0" (with confirmation)
    - Or error if --strict mode
 ```
@@ -842,7 +842,7 @@ manifest fleet sync [--parallel] [--include-submodules]
 manifest fleet status [--verbose]
 
 # Bump versions across fleet
-manifest fleet go [patch|minor|major] [options]
+manifest fleet prep [patch|minor|major] [options]
 #   --single              # Only bump current service (escape fleet mode)
 #   --only <services>     # Comma-separated list of services to bump
 #   --exclude <services>  # Comma-separated list to skip
@@ -855,7 +855,7 @@ manifest fleet go [patch|minor|major] [options]
 manifest fleet docs [--unified-only | --per-service-only]
 
 # Push pending changes (after --no-push or network failure)
-manifest fleet push [--pending]
+# Use regular git push in the affected service repos.
 
 # -----------------------------------------------------------------------------
 # FLEET INSPECTION
@@ -886,7 +886,7 @@ manifest fleet config
 ```bash
 # These commands gain fleet-awareness:
 
-manifest go patch
+manifest prep patch
 # In fleet: Bumps all services
 # --single flag: Only bump current service
 
@@ -930,8 +930,8 @@ manifest fleet deps add user-service shared-lib "^3.0.0"
 manifest fleet validate
 
 # 6. First fleet operation
-manifest fleet go patch --dry-run
-manifest fleet go patch
+manifest fleet prep patch --dry-run
+manifest fleet prep patch
 ```
 
 ### From Submodules to Fleet
@@ -955,7 +955,7 @@ Teams can adopt fleet features gradually:
 1. **Week 1:** Just use `manifest fleet status` for visibility
 2. **Week 2:** Use `manifest fleet sync` for easier cloning
 3. **Week 3:** Use `manifest fleet docs` for unified changelogs
-4. **Week 4:** Use `manifest fleet go` for coordinated releases
+4. **Week 4:** Use `manifest fleet prep` for coordinated releases
 
 Each step is independently valuable.
 
@@ -977,7 +977,7 @@ Each step is independently valuable.
 - [ ] Submodule handling
 
 ### Phase 3: Coordinated Operations
-- [ ] `manifest fleet go`
+- [ ] `manifest fleet prep`
 - [ ] Parallel execution
 - [ ] State tracking & resume
 - [ ] Per-service + unified changelogs

@@ -12,7 +12,7 @@ This reference covers the current capabilities of Manifest CLI (version 31.0.0+)
 
 | Command | Description | Usage |
 |---------|-------------|-------|
-| `manifest go` | Main workflow command | `manifest go [type] [options]` |
+| `manifest prep` | Main workflow command | `manifest prep [type] [options]` |
 | `manifest test` | Run tests | `manifest test [component] [options]` |
 | `manifest ntp` | Get NTP timestamp | `manifest ntp [options]` |
 | `manifest docs` | Generate documentation | `manifest docs [type] [options]` |
@@ -29,13 +29,13 @@ This reference covers the current capabilities of Manifest CLI (version 31.0.0+)
 
 ## 🚀 Core Commands
 
-## `manifest go` - Main Workflow
+## `manifest prep` - Main Workflow
 
 The primary command that orchestrates the entire release process with intelligent automation.
 
 ## Syntax
 ```bash
-manifest go [type] [options]
+manifest prep [type] [options]
 ```
 
 ## Parameters
@@ -55,16 +55,16 @@ manifest go [type] [options]
 ## Examples
 ```bash
 # Basic patch version bump
-manifest go
+manifest prep
 
 # Minor version bump
-manifest go minor
+manifest prep minor
 
 # Interactive major version bump
-manifest go major --interactive
+manifest prep major --interactive
 
 # Dry run to see what would happen
-manifest go --dry-run
+manifest prep --dry-run
 ```
 
 ## Workflow Steps
@@ -531,7 +531,7 @@ manifest ntp --json
 Minimal output for scripting:
 
 ```bash
-manifest go --quiet
+manifest prep --quiet
 ```
 
 ## 🚨 Error Handling
@@ -554,7 +554,7 @@ Enable debug mode for detailed troubleshooting:
 
 ```bash
 export MANIFEST_CLI_DEBUG=true
-manifest go
+manifest prep
 ```
 
 ## 🔗 Integration
@@ -565,7 +565,7 @@ manifest go
 - name: Release
   run: |
     manifest test all
-    manifest go patch
+    manifest prep patch
     manifest docs
 ```
 
@@ -574,7 +574,7 @@ manifest go
 #!/bin/bash
 # Release script
 manifest test all
-manifest go minor
+manifest prep minor
 manifest docs
 ```
 
@@ -582,7 +582,7 @@ manifest docs
 ```bash
 # Automated release
 if manifest test; then
-  manifest go patch
+  manifest prep patch
   echo "Release successful"
 else
   echo "Tests failed"
@@ -672,7 +672,7 @@ export MANIFEST_CLI_GIT_AUTHOR_EMAIL="your.email@example.com"
 manifest test all
 
 # 2. Run complete workflow
-manifest go
+manifest prep
 
 # 3. Verify release
 git log --oneline -5
@@ -692,7 +692,7 @@ git checkout main
 git merge feature/new-feature
 
 # 3. Release with minor version
-manifest go minor
+manifest prep minor
 ```
 
 ## Major Release
@@ -704,7 +704,7 @@ manifest test all
 git log --oneline $(git describe --tags --abbrev=0)..HEAD
 
 # 3. Major version bump
-manifest go major
+manifest prep major
 
 # 4. Verify release
 manifest docs
