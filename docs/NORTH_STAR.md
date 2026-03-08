@@ -1,101 +1,33 @@
-# Manifest North Star (CLI Anchor)
+# Manifest North Star (CLI)
 
-**Status:** Active
-**Last Updated:** 2026-03-05
-**Repository Role:** Workflow and release orchestration layer
-
-## North Star Companion Documents
-
-- `manifest.cli`: `docs/NORTH_STAR.md` (this document)
-- `manifest.cloud`: `docs/NORTH_STAR.md`
-- `homebrew.tap`: `NORTH_STAR.md`
-
-## Ecosystem Context
-
-Manifest operates as one coordinated system across three repositories:
-
-- `manifest.cli` provides command-line release workflows
-- `manifest.cloud` provides AI analysis and recommendation services
-- `homebrew.tap` provides installation and upgrade delivery
-
-This document is the anchor strategy for the full system.
+Status: Active  
+Repository role: Workflow and release orchestration
 
 ## Mission
 
-Make software release operations simple, trusted, and portable through one-command workflows, intelligent automation, and strong release traceability.
+Provide a reliable, explicit, and automatable release control plane for Git repos.
 
-## Strategic Goals
+## Strategic Direction
 
-### Goal 1: Developer Experience First
+- Keep release mechanics deterministic (`prep` vs `ship` split).
+- Preserve strong local/offline behavior with optional cloud augmentation.
+- Make PR and fleet workflows first-class without breaking single-repo usage.
 
-Continuously improve solo and team workflows using simple commands, especially `manifest prep [patch|minor|major|revision]`.
+## Current Product Truth
 
-Key outcomes:
+- `manifest prep <type>`: local release preparation.
+- `manifest ship <type>`: publish path.
+- `manifest pr ...`: explicit PR lifecycle operations.
+- `manifest fleet ...`: multi-repo coordination with some scaffolded commands.
 
-- one command handles sync, version bump, docs, archive, commit, tag, push, and optional PR creation
-- lower manual overhead and fewer release mistakes
-- consistent behavior from local development to CI
+## 12-Month Priorities
 
-### Goal 2: Near-Term Product Value
+1. Reliability hardening for prep/ship and rollback safety.
+2. Documentation quality and consistency of generated artifacts.
+3. Fleet maturity (`fleet prep`/`fleet docs`) and dependency-aware operations.
 
-Deliver immediate user value through release intelligence and documentation quality:
+## Cross-Repo Contract
 
-- smart, overrideable version recommendations
-- AI-assisted changelog and release-note improvements
-- consistent archiving of previous version documentation
-
-### Goal 3: Long-Term Thin-Client Ecosystem
-
-Enable a thin-client ecosystem where applications self-update across internet-connected edge devices:
-
-- machine-actionable version and change metadata
-- coordinated updates across fleets and dependent services
-- secure, observable, rollback-capable release channels
-
-## Repo Responsibilities (CLI)
-
-`manifest.cli` is responsible for:
-
-- reliable orchestration of release workflows
-- deterministic local behavior with safe cloud fallback
-- fleet-aware command behavior as team scale increases
-- preserving auditability in version, docs, and git history
-
-## 12-Month Priority Plan
-
-### P1: Workflow Reliability
-
-- harden `manifest prep` safety and failure recovery paths
-- standardize PR automation defaults and behavior
-- improve diagnostics and dry-run confidence
-
-### P2: Intelligence and Documentation
-
-- improve recommendation accuracy and explainability
-- tighten docs generation quality and consistency checks
-- enforce archive lifecycle and naming conventions
-
-### P3: Fleet and Edge Readiness
-
-- complete `manifest fleet prep` and unified fleet docs workflows
-- add dependency-aware compatibility and impact reporting
-- define update contracts for thin-client rollout patterns
-
-## Cross-Repo Contracts
-
-- **CLI <-> Cloud:** cloud augments decisions; CLI remains operational when cloud is unavailable
-- **CLI <-> Tap:** tap should publish updates quickly so workflow improvements reach users rapidly
-- **Cloud <-> Tap:** release intelligence and package delivery timelines should remain aligned
-
-## Success Metrics
-
-- time from code-complete to pull-request-opened
-- percentage of releases completed through `manifest prep*`
-- documentation freshness and post-release consistency
-- recovery time after failed release workflows
-- number of coordinated updates executed across fleets/services/devices
-
-## Review Cadence
-
-Review strategy monthly or at each major release.
-Update companion documents when scope, interfaces, or priorities change.
+- CLI is the operator-facing entry point.
+- Cloud enriches decisions but should not be a hard runtime requirement.
+- Tap distributes updates quickly enough to keep CLI and docs current.
