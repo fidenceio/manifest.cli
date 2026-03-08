@@ -1263,7 +1263,7 @@ manifest_ship() {
 
     echo "🚢 Starting ship workflow ($increment_type)..."
 
-    if ! manifest_prep "$increment_type" "$interactive_prep"; then
+    if ! manifest_prep "$increment_type" "$interactive_prep" "true"; then
         log_error "Prep step failed; aborting ship workflow."
         return 1
     fi

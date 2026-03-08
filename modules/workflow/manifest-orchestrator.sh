@@ -11,6 +11,7 @@
 manifest_prep_workflow() {
     local increment_type="$1"
     local interactive="$2"
+    local publish_release="${3:-false}"
     
     # Ensure we're running from repository root
     if ! ensure_repository_root; then
@@ -76,8 +77,13 @@ manifest_prep_workflow() {
         echo "   • Sync with remote repository"
         echo "   • Bump version to next $increment_type"
         echo "   • Generate documentation and release notes"
-        echo "   • Commit changes and create Git tag"
-        echo "   • Push to remote repository"
+        echo "   • Commit local changes"
+        if [ "$publish_release" = "true" ]; then
+            echo "   • Create Git tag and push to remote repository"
+            echo "   • Update Homebrew formula"
+        else
+            echo "   • No remote pushes/tags (local-only prep mode)"
+        fi
         echo ""
         echo "🤔 What would you like to do?"
         echo ""
@@ -217,28 +223,33 @@ manifest_prep_workflow() {
     validate_repository || true
     echo ""
     
-    # Create git tag
-    create_tag "$new_version"
-    echo ""
-    
-    # Push changes
-    push_changes "$new_version"
-    echo ""
+    if [ "$publish_release" = "true" ]; then
+        # Create git tag
+        create_tag "$new_version"
+        echo ""
+        
+        # Push changes
+        push_changes "$new_version"
+        echo ""
 
-    # Update Homebrew formula (only if this repo has one)
-    if [ -f "$PROJECT_ROOT/formula/manifest.rb" ]; then
-        echo "🍺 Updating Homebrew formula..."
-        if update_homebrew_formula; then
-            # Commit the formula change to this repo
-            if [ -n "$(git status --porcelain formula/manifest.rb 2>/dev/null)" ]; then
-                git add formula/manifest.rb
-                git commit -m "Update Homebrew formula to v$new_version"
-                git push origin main
+        # Update Homebrew formula (only if this repo has one)
+        if [ -f "$PROJECT_ROOT/formula/manifest.rb" ]; then
+            echo "🍺 Updating Homebrew formula..."
+            if update_homebrew_formula; then
+                # Commit the formula change to this repo
+                if [ -n "$(git status --porcelain formula/manifest.rb 2>/dev/null)" ]; then
+                    git add formula/manifest.rb
+                    git commit -m "Update Homebrew formula to v$new_version"
+                    git push origin main
+                fi
+                echo "✅ Homebrew formula updated"
+            else
+                echo "⚠️  Homebrew formula update failed, continuing..."
             fi
-            echo "✅ Homebrew formula updated"
-        else
-            echo "⚠️  Homebrew formula update failed, continuing..."
+            echo ""
         fi
+    else
+        echo "🧰 Prep mode complete: skipped tag/push/Homebrew publish steps."
         echo ""
     fi
 
@@ -253,8 +264,13 @@ manifest_prep_workflow() {
     # Summary
     echo "📋 Summary:"
     echo "   - Version: $new_version"
-    echo "   - Tag: v$new_version"
-    echo "   - Remotes: All pushed successfully"
+    if [ "$publish_release" = "true" ]; then
+        echo "   - Tag: v$new_version"
+        echo "   - Remotes: All pushed successfully"
+    else
+        echo "   - Tag: (not created in prep mode)"
+        echo "   - Remotes: (no pushes in prep mode)"
+    fi
     echo "   - Timestamp: $timestamp"
     echo "   - Source: $MANIFEST_NTP_SERVER ($MANIFEST_NTP_SERVER_IP)"
     echo "   - Offset: $MANIFEST_NTP_OFFSET seconds"
@@ -391,7 +407,7 @@ main() {
         "prep")
             local increment_type="${2:-patch}"
             local interactive="${3:-false}"
-            manifest_prep_workflow "$increment_type" "$interactive"
+            manifest_prep_workflow "$increment_type" "$interactive" "false"
             ;;
         "test")
             local increment_type="${2:-patch}"

@@ -257,13 +257,14 @@ check_auto_update() {
 manifest_prep() {
     local increment_type="${1:-}"
     local interactive="${2:-false}"
+    local publish_release="${3:-false}"
     if [ -z "$increment_type" ]; then
         log_error "prep requires a release type subcommand"
         echo "Usage: manifest prep <patch|minor|major|revision> [-i|--interactive]"
         echo "Release type options: patch, minor, major, revision"
         return 1
     fi
-    manifest_prep_workflow "$increment_type" "$interactive"
+    manifest_prep_workflow "$increment_type" "$interactive" "$publish_release"
 }
 
 main() {
@@ -369,7 +370,7 @@ main() {
             fi
             
             # Route through prep entrypoint for consistency with ship.
-            manifest_prep "$increment_type" "$interactive"
+            manifest_prep "$increment_type" "$interactive" "false"
             ;;
         "ship")
             manifest_ship "$@"
@@ -666,10 +667,10 @@ display_help() {
     echo ""
     echo "Commands:"
     echo "  ntp         - 🕐 Get trusted timestamp for manifest operations"
-  echo "  ship        - 🚢 Publish release artifacts only (no PR operations)"
-  echo "    ship <patch|minor|major|revision> [-i]       # Runs prep workflow in ship mode"
+  echo "  ship        - 🚢 Publish release artifacts (remote push path)"
+  echo "    ship <patch|minor|major|revision> [-i]       # Runs prep + tag/push/homebrew publish"
     echo "  prep        - 🧰 Prepare changes before shipping"
-  echo "    prep <patch|minor|major|revision> [-i]       # Sync, docs, version, commit, push"
+  echo "    prep <patch|minor|major|revision> [-i]       # Local-only: sync, docs, version, commit"
     echo "    prep -p|-m|-M|-r [-i]                        # Short form options with interactive mode"
     echo "    Note: Use -i flag to enable interactive safety prompts (default: non-interactive)"
     echo "  sync        - 🔄 Sync local repo with remote (pull latest changes)"
@@ -704,7 +705,7 @@ display_help() {
   echo "    agent logs                        # Show agent operation logs"
   echo "    agent uninstall                   # Remove agent completely"
   echo "  pr          - 🔀 Pull request operations"
-  echo "    pr [options]                      # Interactive PR wizard (default)"
+  echo "    pr [options]                      # Interactive PR wizard (remote push path via PR create)"
   echo "    pr create [options]               # Create PR with optional labels/reviewers"
   echo "    pr update [options]               # Update PR metadata/reviewers/labels"
   echo "    pr status [--pr <selector>]       # Show resolved PR status"
