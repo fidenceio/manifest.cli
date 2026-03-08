@@ -135,7 +135,7 @@ cd manifest.cli
 
 \`\`\`bash
 # Complete workflow
-manifest prep
+manifest prep patch
 
 # Version bump
 manifest prep patch

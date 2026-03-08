@@ -824,17 +824,8 @@ manifest_pr_queue() {
 }
 
 manifest_ship() {
-    local increment_type="patch"
+    local increment_type=""
     local interactive_prep=false
-    local run_prep=true
-    local safe=false
-    local method="squash"
-    local draft=false
-    local no_delete_branch=false
-    local queue_force=false
-    local non_interactive=true
-    local checks_timeout_sec="${MANIFEST_CLI_SHIP_TIMEOUT_SECONDS:-1800}"
-    local checks_interval_sec="${MANIFEST_CLI_SHIP_CHECK_INTERVAL_SECONDS:-10}"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -850,161 +841,42 @@ manifest_ship() {
                 interactive_prep=true
                 shift
                 ;;
-            --noprep)
-                run_prep=false
-                shift
-                ;;
-            --safe)
-                safe=true
-                shift
-                ;;
-            --draft)
-                draft=true
-                shift
-                ;;
-            --method)
-                _manifest_pr_require_option_value "--method" "${2:-}" "manifest ship --method <merge|squash|rebase>" || return 1
-                method="$2"
-                shift 2
-                ;;
-            --force)
-                queue_force=true
-                shift
-                ;;
-            --no-delete-branch)
-                no_delete_branch=true
-                shift
-                ;;
-            --timeout)
-                _manifest_pr_require_option_value "--timeout" "${2:-}" "manifest ship --timeout <sec>" || return 1
-                checks_timeout_sec="$2"
-                shift 2
-                ;;
-            --interval)
-                _manifest_pr_require_option_value "--interval" "${2:-}" "manifest ship --interval <sec>" || return 1
-                checks_interval_sec="$2"
-                shift 2
-                ;;
-            --interactive-pr)
-                non_interactive=false
-                shift
-                ;;
-            --non-interactive)
-                non_interactive=true
-                shift
-                ;;
             -h|--help)
-                echo "Usage: manifest ship [patch|minor|major|revision] [options]"
+                echo "Usage: manifest ship <patch|minor|major|revision> [-i|--interactive]"
                 echo ""
                 echo "Options:"
-                echo "  --noprep               Skip prep step and only run PR landing flow"
-                echo "  --safe                 Wait for checks, enforce ready, then queue"
-                echo "  --draft                Create PR as draft"
-                echo "  --method <type>        Merge method: merge|squash|rebase (default: squash)"
-                echo "  --force                Force queue even if readiness gate fails"
-                echo "  --no-delete-branch     Keep source branch after merge/queue"
-                echo "  --timeout <sec>        Safe mode check timeout (default: 1800)"
-                echo "  --interval <sec>       Safe mode poll interval (default: 10)"
-                echo "  --interactive-pr       Allow interactive PR selection prompts"
+                echo "  <patch|minor|major|revision>   Required release type subcommand"
+                echo "  -p|-m|-M|-r                    Short form release type"
+                echo "  -i|--interactive               Enable interactive prep prompts"
                 echo ""
                 echo "Flow:"
-                echo "  default: prep -> pr create -> pr queue"
-                echo "  --safe:  prep -> pr create -> wait checks -> pr ready -> pr queue"
-                echo "  --noprep: pr create -> pr queue (or safe flow if --safe)"
+                echo "  ship -> prep workflow (sync, docs, version, commit, push)"
+                echo "  PR operations are intentionally not part of ship."
                 return 0
                 ;;
             *)
                 show_validation_error "Unknown option for 'manifest ship': $1"
+                echo "Usage: manifest ship <patch|minor|major|revision> [-i|--interactive]"
                 return 1
                 ;;
         esac
     done
 
-    if [[ ! "$method" =~ ^(merge|squash|rebase)$ ]]; then
-        show_validation_error "Invalid --method value: '$method' (expected merge|squash|rebase)"
-        return 1
-    fi
-
-    if ! [[ "$checks_timeout_sec" =~ ^[0-9]+$ ]] || ! [[ "$checks_interval_sec" =~ ^[0-9]+$ ]]; then
-        log_error "--timeout and --interval must be non-negative integers"
+    if [ -z "$increment_type" ]; then
+        log_error "ship requires a release type subcommand"
+        echo "Usage: manifest ship <patch|minor|major|revision> [-i|--interactive]"
+        echo "Release type options: patch, minor, major, revision"
         return 1
     fi
 
     echo "🚢 Starting ship workflow ($increment_type)..."
 
-    # Step 1: Run prep workflow unless explicitly skipped.
-    if [ "$run_prep" = "true" ]; then
-        if ! manifest_prep "$increment_type" "$interactive_prep"; then
-            log_error "Prep step failed; aborting ship workflow."
-            return 1
-        fi
-    else
-        echo "⏭️  Skipping prep step (--noprep)."
-        if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-            log_error "Cannot use --noprep with uncommitted changes."
-            log_error "Commit/stash changes first, or run 'manifest prep' without --noprep."
-            return 1
-        fi
-    fi
-
-    # Step 2: Create (or reuse) PR for current branch.
-    local create_args=()
-    [ "$draft" = "true" ] && create_args+=("--draft")
-    [ "$non_interactive" = "true" ] && create_args+=("--non-interactive")
-    if ! manifest_pr_create "${create_args[@]}"; then
-        log_error "PR create step failed; aborting ship workflow."
+    if ! manifest_prep "$increment_type" "$interactive_prep"; then
+        log_error "Prep step failed; aborting ship workflow."
         return 1
     fi
 
-    # Resolve the target PR for subsequent actions.
-    local resolved
-    resolved=$(_manifest_pr_resolve_target "" "$non_interactive") || return 1
-    local target="${resolved%%|*}"
-
-    # Step 3: Fast path queues auto-merge; safe path waits then queues.
-    if [ "$safe" = "true" ]; then
-        _manifest_pr_require_gh_auth || return 1
-
-        echo "⏳ Safe mode: waiting for checks on PR '$target'..."
-        local elapsed=0
-        while true; do
-            if gh pr checks "$target" >/dev/null 2>&1; then
-                echo "✅ Checks passing"
-                break
-            fi
-
-            local checks_exit=$?
-            if [ "$checks_exit" -eq 1 ]; then
-                if [ "$elapsed" -ge "$checks_timeout_sec" ]; then
-                    log_error "Timed out waiting for checks (${checks_timeout_sec}s)"
-                    return 1
-                fi
-                sleep "$checks_interval_sec"
-                elapsed=$((elapsed + checks_interval_sec))
-                continue
-            fi
-
-            log_error "Checks failed (or unavailable) for PR '$target'"
-            return 1
-        done
-
-        if ! manifest_pr_ready --pr "$target" --non-interactive; then
-            log_error "PR is not ready; aborting ship workflow."
-            return 1
-        fi
-
-        local queue_args=(--pr "$target" --method "$method" --non-interactive)
-        [ "$no_delete_branch" = "true" ] && queue_args+=("--no-delete-branch")
-        [ "$queue_force" = "true" ] && queue_args+=("--force")
-        manifest_pr_queue "${queue_args[@]}" || return 1
-    else
-        local queue_args=(--pr "$target" --method "$method" --non-interactive)
-        [ "$no_delete_branch" = "true" ] && queue_args+=("--no-delete-branch")
-        [ "$queue_force" = "true" ] && queue_args+=("--force")
-        manifest_pr_queue "${queue_args[@]}" || return 1
-    fi
-
-    echo "✅ Ship workflow complete."
+    echo "✅ Ship workflow complete (no PR actions)."
 }
 
 manifest_pr_help() {
@@ -1012,14 +884,8 @@ manifest_pr_help() {
 Manifest PR Commands
 ====================
 
-  manifest pr [options]
-    Preferred shorthand for: manifest pr queue [options]
-    (queues policy-aware auto-merge after gates pass)
-    Options:
-      --pr <number|url|branch>
-      --method <merge|squash|rebase>
-      --force
-      --no-delete-branch
+  manifest pr <subcommand> [options]
+    Subcommand is required; no implicit default action.
 
   manifest pr create [options]
     Create PR from current branch (or --head) to --base.

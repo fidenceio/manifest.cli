@@ -255,8 +255,14 @@ check_auto_update() {
 
 # Main command dispatcher
 manifest_prep() {
-    local increment_type="${1:-patch}"
+    local increment_type="${1:-}"
     local interactive="${2:-false}"
+    if [ -z "$increment_type" ]; then
+        log_error "prep requires a release type subcommand"
+        echo "Usage: manifest prep <patch|minor|major|revision> [-i|--interactive]"
+        echo "Release type options: patch, minor, major, revision"
+        return 1
+    fi
     manifest_prep_workflow "$increment_type" "$interactive"
 }
 
@@ -322,9 +328,9 @@ main() {
                         shift
                         ;;
                     "-h"|"--help")
-                        echo "Usage: manifest prep [patch|minor|major|revision] [-i|--interactive]"
+                        echo "Usage: manifest prep <patch|minor|major|revision> [-i|--interactive]"
                         echo "Prepare changes only (version/docs/commit/push)."
-                        echo "Use 'manifest ship' for end-to-end landing."
+                        echo "Use 'manifest ship <release-type>' to run this in ship mode."
                         return 0
                         ;;
                     "-i"|"--interactive")
@@ -349,11 +355,18 @@ main() {
                         ;;
                     *)
                         log_error "Unknown option: $1"
-                        echo "Usage: manifest prep [patch|minor|major|revision] [-i|--interactive]"
+                        echo "Usage: manifest prep <patch|minor|major|revision> [-i|--interactive]"
                         return 1
                         ;;
                 esac
             done
+
+            if [ -z "$increment_type" ]; then
+                log_error "prep requires a release type subcommand"
+                echo "Usage: manifest prep <patch|minor|major|revision> [-i|--interactive]"
+                echo "Release type options: patch, minor, major, revision"
+                return 1
+            fi
             
             # Route through prep entrypoint for consistency with ship.
             manifest_prep "$increment_type" "$interactive"
@@ -572,25 +585,24 @@ main() {
             ;;
         "pr")
             local subcommand=""
-            local implicit_queue=false
             case "${1:-}" in
                 "create"|"update"|"status"|"ready"|"checks"|"queue"|"policy"|"help"|"-h"|"--help")
                     subcommand="${1:-help}"
                     shift || true
                     ;;
                 "")
-                    subcommand="queue"
-                    implicit_queue=true
+                    log_error "pr requires a subcommand"
+                    echo "Usage: manifest pr <create|update|status|ready|checks|queue|policy|help> [options]"
+                    echo "Run 'manifest pr help' for detailed usage."
+                    return 1
                     ;;
                 *)
-                    # Treat unknown first token as queue option payload.
-                    subcommand="queue"
-                    implicit_queue=true
+                    log_error "Unknown pr subcommand: ${1:-}"
+                    echo "Usage: manifest pr <create|update|status|ready|checks|queue|policy|help> [options]"
+                    echo "Run 'manifest pr help' for detailed usage."
+                    return 1
                     ;;
             esac
-            if [ "$implicit_queue" = "true" ]; then
-                echo "ℹ️  Default PR action: queue (use 'manifest pr help' for all subcommands)."
-            fi
             case "$subcommand" in
                 "create")
                     manifest_pr_create "$@"
@@ -651,10 +663,10 @@ display_help() {
     echo ""
     echo "Commands:"
     echo "  ntp         - 🕐 Get trusted timestamp for manifest operations"
-  echo "  ship        - 🚢 Highest-level release command (recommended)"
-  echo "    ship [patch|minor|major|revision] [--safe] [--method <merge|squash|rebase>] [--force]"
+  echo "  ship        - 🚢 Publish release artifacts only (no PR operations)"
+  echo "    ship <patch|minor|major|revision> [-i]       # Runs prep workflow in ship mode"
     echo "  prep        - 🧰 Prepare changes before shipping"
-    echo "    prep [patch|minor|major|revision] [-i]       # Sync, docs, version, commit, push"
+  echo "    prep <patch|minor|major|revision> [-i]       # Sync, docs, version, commit, push"
     echo "    prep -p|-m|-M|-r [-i]                        # Short form options with interactive mode"
     echo "    Note: Use -i flag to enable interactive safety prompts (default: non-interactive)"
     echo "  sync        - 🔄 Sync local repo with remote (pull latest changes)"
@@ -689,7 +701,7 @@ display_help() {
   echo "    agent logs                        # Show agent operation logs"
   echo "    agent uninstall                   # Remove agent completely"
   echo "  pr          - 🔀 Pull request operations"
-  echo "    pr [options]                      # Preferred shorthand for 'pr queue'"
+  echo "    pr <subcommand> [options]         # Subcommand is required"
   echo "    pr create [options]               # Create PR with optional labels/reviewers"
   echo "    pr update [options]               # Update PR metadata/reviewers/labels"
   echo "    pr status [--pr <selector>]       # Show resolved PR status"
@@ -703,7 +715,7 @@ display_help() {
     echo ""
     echo "This CLI provides comprehensive Git operations and version management."
 echo ""
-echo "The 'ship' command is the top-level workflow and runs prep before PR landing."
+echo "The 'ship' command runs release prep/publish only; PR operations are explicit via 'manifest pr ...'."
 echo ""
 echo "Environment Variables:"
 echo "  • MANIFEST_CLI_INTERACTIVE_MODE  - Interactive safety prompts (true/false, default: false)"
