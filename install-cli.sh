@@ -178,7 +178,7 @@ validate_system() {
     local errors=0
     
     # Check if we're in the right directory
-    if [ ! -f "scripts/manifest-cli.sh" ]; then
+    if [ ! -f "scripts/manifest-cli-wrapper.sh" ]; then
         print_error "❌ This script must be run from the manifest.cli project root directory"
         print_error "   Please navigate to the project root and try again"
         errors=$((errors + 1))
@@ -569,8 +569,12 @@ display_post_install_info() {
     echo
     print_success "🚀 You can now use the Manifest CLI:"
     echo "   $MANIFEST_CLI_NAME --help          # Show comprehensive help"
-    echo "   $MANIFEST_CLI_NAME prep            # Run complete workflow"
+    echo "   $MANIFEST_CLI_NAME ship            # Run top-level workflow (prep + PR landing)"
+    echo "   $MANIFEST_CLI_NAME prep            # Prepare changes only"
+    echo "   $MANIFEST_CLI_NAME config setup    # Run interactive configuration wizard"
     echo "   $MANIFEST_CLI_NAME test            # Test functionality"
+    echo "   $MANIFEST_CLI_NAME test cloud      # Test Manifest Cloud connectivity"
+    echo "   $MANIFEST_CLI_NAME test agent      # Test Manifest Agent functionality"
     echo "   $MANIFEST_CLI_NAME ntp             # Get NTP timestamp"
     echo "   $MANIFEST_CLI_NAME sync            # Sync with remote"
     echo "   $MANIFEST_CLI_NAME cleanup         # Manage historical docs"
@@ -690,8 +694,8 @@ install_git_hooks() {
 # Legacy Manual Install Cleanup
 # =============================================================================
 
-# Detect and remove previous manual installations so only Homebrew remains
-cleanup_legacy_manual_install() {
+# Cleanup step used before Homebrew install
+cleanup_homebrew_install() {
     local found_legacy=false
 
     # Check for manual install binary
@@ -838,7 +842,7 @@ main() {
         echo ""
 
         # Remove any previous manual installation before Homebrew install
-        cleanup_legacy_manual_install
+        cleanup_homebrew_install
 
         if install_via_homebrew; then
             # Set up configuration (shared by both paths)
@@ -859,8 +863,11 @@ main() {
                 echo ""
                 print_success "🚀 You can now use the Manifest CLI:"
                 echo "   manifest --help          # Show comprehensive help"
-                echo "   manifest prep              # Run complete workflow"
+                echo "   manifest ship              # Run top-level workflow (prep + PR landing)"
+                echo "   manifest prep              # Prepare changes only"
                 echo "   manifest test            # Test functionality"
+                echo "   manifest test cloud      # Test Manifest Cloud connectivity"
+                echo "   manifest test agent      # Test Manifest Agent functionality"
                 echo "   manifest ntp             # Get NTP timestamp"
                 echo ""
                 print_status "💡 To update:  brew update && brew upgrade manifest"
