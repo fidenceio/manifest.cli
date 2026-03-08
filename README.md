@@ -1,3 +1,20 @@
+## 📋 Version Information
+
+| Property | Value |
+|----------|-------|
+| **Current Version** | `35.3.0` |
+| **Release Date** | `2026-03-08 03:10:22 UTC` |
+| **Git Tag** | `v35.3.0` |
+| **Branch** | `main` |
+| **Last Updated** | `2026-03-08 03:10:22 UTC` |
+| **CLI Version** | `35.3.0` |
+
+### 📚 Documentation Files
+
+- **Version Info**: [VERSION](VERSION)
+- **CLI Modules**: [modules/](modules/)
+- **Install Script**: [install-cli.sh](install-cli.sh)
+
 # Manifest CLI
 
 Manifest CLI is a Bash-based release orchestration tool for Git repositories. It automates versioning, documentation generation, sync/commit/tag workflows, PR operations, and optional cloud-assisted analysis.

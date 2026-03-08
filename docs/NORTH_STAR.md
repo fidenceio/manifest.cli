@@ -1,6 +1,6 @@
 # Manifest North Star (CLI)
 
-Status: Active  
+Status: Active
 Repository role: Workflow and release orchestration
 
 ## Mission

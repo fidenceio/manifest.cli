@@ -1,6 +1,6 @@
 # Manifest Fleet Design Spec
 
-Status: Active design reference  
+Status: Active design reference
 Scope: polyrepo orchestration behavior in `manifest fleet`
 
 ## Objectives
