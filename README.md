@@ -3,10 +3,10 @@
 | Property | Value |
 |----------|-------|
 | **Current Version** | `35.3.0` |
-| **Release Date** | `2026-03-08 23:27:38 UTC` |
+| **Release Date** | `2026-03-08 23:38:06 UTC` |
 | **Git Tag** | `v35.3.0` |
 | **Branch** | `main` |
-| **Last Updated** | `2026-03-08 23:27:38 UTC` |
+| **Last Updated** | `2026-03-08 23:38:06 UTC` |
 | **CLI Version** | `35.3.0` |
 
 ### 📚 Documentation Files

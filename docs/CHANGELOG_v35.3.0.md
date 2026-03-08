@@ -1,6 +1,6 @@
 # Changelog v35.3.0
 
-**Release Date:** 2026-03-08 23:27:38 UTC
+**Release Date:** 2026-03-08 23:38:06 UTC
 **Release Type:** patch
 
 ## 🆕 New Features
@@ -53,4 +53,5 @@ Update Homebrew formula to v35.3.0
 
 
 ## Documentation
+Improve NTP resilience defaults and refresh generated docs
 

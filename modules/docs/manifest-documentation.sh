@@ -119,7 +119,7 @@ update_readme_version() {
         echo "$version_section" > "$version_section_file"
         
         # Find the start and end of the version section
-        local start_line=$(grep -n "## 📋 Version Information" "$readme_file" | cut -d: -f1)
+        local start_line=$(grep -n "## 📋 Version Information" "$readme_file" | head -1 | cut -d: -f1)
         local end_line=$(tail -n +$((start_line + 1)) "$readme_file" | grep -n "^## " | head -1 | cut -d: -f1)
         
         if [[ -n "$end_line" ]]; then
@@ -128,8 +128,13 @@ update_readme_version() {
             end_line=$(wc -l < "$readme_file")
         fi
         
-        # Create new file with replacement
-        head -n $((start_line - 1)) "$readme_file" > "$temp_file"
+        # Create new file with replacement.
+        # BSD/macOS head errors on "head -n 0", so guard for section at top of file.
+        if [[ "$start_line" -gt 1 ]]; then
+            head -n $((start_line - 1)) "$readme_file" > "$temp_file"
+        else
+            : > "$temp_file"
+        fi
         cat "$version_section_file" >> "$temp_file"
         tail -n +$((end_line + 1)) "$readme_file" >> "$temp_file"
         
