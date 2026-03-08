@@ -13,12 +13,14 @@ This reference covers the current capabilities of Manifest CLI (version 31.0.0+)
 | Command | Description | Usage |
 |---------|-------------|-------|
 | `manifest prep` | Main workflow command | `manifest prep [type] [options]` |
+| `manifest pr` | Preferred PR landing command | `manifest pr [queue-options]` |
+| `manifest fleet pr` | Preferred fleet PR landing command | `manifest fleet pr [queue-options]` |
 | `manifest test` | Run tests | `manifest test [component] [options]` |
 | `manifest ntp` | Get NTP timestamp | `manifest ntp [options]` |
 | `manifest docs` | Generate documentation | `manifest docs [type] [options]` |
 | `manifest sync` | Sync repository | `manifest sync [options]` |
 | `manifest security` | Security audit | `manifest security [options]` |
-| `manifest config` | Show configuration | `manifest config [options]` |
+| `manifest config` | Interactive configuration wizard | `manifest config [show|ntp|setup]` |
 | `manifest cleanup` | Clean repository | `manifest cleanup [options]` |
 | `manifest update` | Update CLI | `manifest update [options]` |
 | `manifest uninstall` | Remove CLI | `manifest uninstall [options]` |
@@ -76,6 +78,59 @@ manifest prep --dry-run
 6. **📁 Archive**: Archive previous version documentation
 7. **🏷️ Git Operations**: Commit, tag, and push to all remotes
 
+## `manifest pr` - Preferred PR Landing
+
+The default PR command is now `manifest pr`, which behaves as shorthand for `manifest pr queue`.
+
+## Syntax
+```bash
+manifest pr [options]
+```
+
+## Options
+- `--pr <number|url|branch>`: Select an explicit PR target
+- `--method <merge|squash|rebase>`: Choose merge strategy (default: `squash`)
+- `--force`: Bypass readiness gate
+- `--no-delete-branch`: Keep source branch after merge
+
+## Examples
+```bash
+# Queue resolved PR with default method (squash)
+manifest pr
+
+# Queue specific PR with explicit method
+manifest pr --pr 123 --method rebase
+
+# Legacy equivalent (still supported)
+manifest pr queue --method squash
+```
+
+## `manifest fleet pr` - Preferred Fleet PR Landing
+
+For multi-repo fleets, `manifest fleet pr` now defaults to `manifest fleet pr queue`.
+
+## Syntax
+```bash
+manifest fleet pr [options]
+```
+
+## Options
+- `--method <merge|squash|rebase>`: Choose merge strategy for queued fleet PRs (default: `squash`)
+- `--force`: Bypass readiness gate for fleet queueing
+- `--no-delete-branch`: Keep source branches after merge
+
+## Examples
+```bash
+# Queue fleet PRs with default method (squash)
+manifest fleet pr
+
+# Queue fleet PRs with explicit method
+manifest fleet pr --method merge
+
+# Explicit equivalent
+manifest fleet pr queue --method merge
+```
+
 ## `manifest test` - Testing Framework
 
 Comprehensive testing suite for validating CLI functionality and workflow integrity.
@@ -93,6 +148,8 @@ manifest test [component] [options]
   - `git`: Test Git operations
   - `docs`: Test documentation generation
   - `os`: Test OS detection
+  - `cloud`: Test Manifest Cloud MCP connectivity
+  - `agent`: Test Manifest Agent functionality
 
 ## Options
 - `--verbose` or `-v`: Show detailed test output
@@ -108,12 +165,24 @@ manifest test
 # Test specific component
 manifest test ntp
 
+# Test cloud and agent paths
+manifest test cloud
+manifest test agent
+
 # Verbose testing
 manifest test --verbose
 
 # Test with timeout
 manifest test --timeout 30
 ```
+
+## Test Logs and Issue Flow
+- Every run writes logs to `~/.manifest-cli/logs/tests/<run-id>/`
+- `raw.log`: full output
+- `sanitized.log`: redacted output suitable for sharing (strict redaction by default)
+- Use `--no-strict-redact` to relax sanitization
+- Interactive runs prompt to optionally create a GitHub Issue from the sanitized log
+- Issues are created in the main Manifest repository: `fidenceio/fidenceio.manifest.cli`
 
 ## Test Components
 
@@ -234,6 +303,12 @@ manifest ntp --json
 - `time.apple.com` (Apple)
 - `time.google.com` (Google)
 - `pool.ntp.org` (NTP Pool)
+
+## NTP Configuration Views
+```bash
+# NTP-only configuration
+manifest config ntp
+```
 
 ## Output Format
 ```bash

@@ -310,9 +310,6 @@ main() {
         "ntp")
             display_ntp_info
             ;;
-        "ntp-config")
-            display_ntp_config
-            ;;
         "prep")
             local increment_type=""
             local interactive=false
@@ -425,13 +422,46 @@ main() {
             main_cleanup "$current_version" "$timestamp"
             ;;
         "config")
-            show_configuration
+            case "${1:-}" in
+                "show")
+                    show_configuration
+                    ;;
+                "ntp")
+                    display_ntp_config
+                    ;;
+                "")
+                    if [ -t 0 ]; then
+                        configure_interactive
+                    else
+                        show_configuration
+                    fi
+                    ;;
+                "-h"|"--help")
+                    echo "Usage: manifest config [show|ntp|setup]"
+                    echo ""
+                    echo "  (no args)  Run interactive wizard (TTY) or show config (non-interactive)"
+                    echo "  show       Print full effective configuration"
+                    echo "  ntp        Print NTP-only configuration"
+                    echo "  setup      Force interactive configuration wizard"
+                    ;;
+                "setup")
+                    configure_interactive
+                    ;;
+                "--non-interactive")
+                    show_configuration
+                    ;;
+                *)
+                    log_error "Unknown config view: $1"
+                    echo "Usage: manifest config [show|ntp|setup]"
+                    return 1
+                    ;;
+            esac
             ;;
         "security")
             manifest_security
             ;;
         "test")
-            test_command "$@"
+            run_manifest_test "$@"
             ;;
         "update")
             update_cli "$@"
@@ -484,9 +514,6 @@ main() {
         "cloud")
             local subcommand="$1"
             case "$subcommand" in
-                "test")
-                    test_mcp_connectivity
-                    ;;
                 "config")
                     configure_mcp_connection
                     ;;
@@ -518,17 +545,17 @@ main() {
                     echo "========================="
                     echo ""
                     echo "Commands:"
-                    echo "  cloud test                    - Test MCP connectivity to Manifest Cloud"
                     echo "  cloud config                  - Configure API key and connection"
                     echo "  cloud status                  - Show connection status"
                     echo "  cloud generate <version> [opts] - Generate documentation via Manifest Cloud"
+                    echo "  (use 'manifest test cloud' for MCP connectivity tests)"
                     echo ""
                     echo "Configuration:"
                     echo "  MANIFEST_CLI_CLOUD_API_KEY       - Your Manifest Cloud API key"
                     echo "  MANIFEST_CLI_CLOUD_ENDPOINT      - Manifest Cloud endpoint (optional)"
                     echo ""
                     echo "Examples:"
-                    echo "  manifest cloud test"
+                    echo "  manifest test cloud"
                     echo "  manifest cloud config"
                     echo "  manifest cloud generate 1.2.3 '2025-01-27 10:00:00 UTC' patch"
                     echo ""
@@ -544,8 +571,26 @@ main() {
             fleet_main "$@"
             ;;
         "pr")
-            local subcommand="${1:-help}"
-            shift || true
+            local subcommand=""
+            local implicit_queue=false
+            case "${1:-}" in
+                "create"|"update"|"status"|"ready"|"checks"|"queue"|"policy"|"help"|"-h"|"--help")
+                    subcommand="${1:-help}"
+                    shift || true
+                    ;;
+                "")
+                    subcommand="queue"
+                    implicit_queue=true
+                    ;;
+                *)
+                    # Treat unknown first token as queue option payload.
+                    subcommand="queue"
+                    implicit_queue=true
+                    ;;
+            esac
+            if [ "$implicit_queue" = "true" ]; then
+                echo "ℹ️  Default PR action: queue (use 'manifest pr help' for all subcommands)."
+            fi
             case "$subcommand" in
                 "create")
                     manifest_pr_create "$@"
@@ -606,7 +651,6 @@ display_help() {
     echo ""
     echo "Commands:"
     echo "  ntp         - 🕐 Get trusted timestamp for manifest operations"
-    echo "  ntp-config  - ⚙️  Show and configure timestamp settings"
   echo "  ship        - 🚢 Highest-level release command (recommended)"
   echo "    ship [patch|minor|major|revision] [--safe] [--method <merge|squash|rebase>] [--force]"
     echo "  prep        - 🧰 Prepare changes before shipping"
@@ -621,16 +665,19 @@ display_help() {
   echo "    docs metadata  - 🏷️  Update repository metadata (description, topics, etc.)"
   echo "    docs homebrew  - 🍺 Update Homebrew formula"
   echo "  cleanup     - 📁 Clean repository files and archive old docs"
-  echo "  config      - ⚙️  Show current configuration and environment variables"
+  echo "  config      - ⚙️  Interactive config wizard (use 'manifest config show' for full view)"
   echo "  security    - 🔒 Security audit for vulnerabilities and privacy protection"
-  echo "  test        - 🧪 Test CLI functionality and workflows"
+  echo "  test        - 🧪 Unified test group (cli/cloud/agent and workflows)"
+  echo "    test cloud                       # Test Manifest Cloud MCP connectivity"
+  echo "    test agent                       # Test Manifest Agent functionality"
+  echo "    test ... --strict-redact         # Default redaction mode for shareable logs"
+  echo "    (writes raw + sanitized logs to ~/.manifest-cli/logs/tests/<run-id>/)"
   echo "  update      - 🔄 Check for and install CLI updates"
   echo "    update [--force] [--check]        # Update options: force update or check only"
   echo "  uninstall   - 🗑️  Remove Manifest CLI completely"
   echo "    uninstall [--force]               # Uninstall options: force uninstall without confirmation"
   echo "  reinstall   - 🔄 Uninstall and reinstall Manifest CLI (detects OS and install method)"
   echo "  cloud       - ☁️  Manifest Cloud MCP connector"
-  echo "    cloud test                        # Test connectivity to Manifest Cloud"
   echo "    cloud config                      # Configure API key and connection"
   echo "    cloud status                      # Show connection status"
   echo "    cloud generate <version> [opts]   # Generate documentation via Manifest Cloud"
@@ -640,9 +687,9 @@ display_help() {
   echo "    agent auth manifest               # Set up Manifest Cloud subscription"
   echo "    agent status                      # Show agent status and configuration"
   echo "    agent logs                        # Show agent operation logs"
-  echo "    agent test                        # Test agent functionality"
   echo "    agent uninstall                   # Remove agent completely"
   echo "  pr          - 🔀 Pull request operations"
+  echo "    pr [options]                      # Preferred shorthand for 'pr queue'"
   echo "    pr create [options]               # Create PR with optional labels/reviewers"
   echo "    pr update [options]               # Update PR metadata/reviewers/labels"
   echo "    pr status [--pr <selector>]       # Show resolved PR status"

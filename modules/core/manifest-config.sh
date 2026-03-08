@@ -293,6 +293,180 @@ get_config() {
     fi
 }
 
+_manifest_config_git_infer_default_branch() {
+    local branch=""
+    branch=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')
+    if [ -n "$branch" ]; then
+        echo "$branch"
+        return 0
+    fi
+
+    branch=$(git config --get init.defaultBranch 2>/dev/null || echo "")
+    if [ -n "$branch" ]; then
+        echo "$branch"
+        return 0
+    fi
+
+    echo "main"
+}
+
+_manifest_config_git_infer_repo_name() {
+    local remote_url=""
+    remote_url=$(git remote get-url origin 2>/dev/null || echo "")
+    if [ -n "$remote_url" ]; then
+        basename "$remote_url" .git
+        return 0
+    fi
+
+    basename "$(pwd)"
+}
+
+_manifest_config_git_infer_org() {
+    local remote_url=""
+    remote_url=$(git remote get-url origin 2>/dev/null || echo "")
+    if [ -z "$remote_url" ]; then
+        echo ""
+        return 0
+    fi
+
+    if [[ "$remote_url" =~ ^git@[^:]+:([^/]+)/([^/]+)\.git$ ]]; then
+        echo "${BASH_REMATCH[1]}"
+        return 0
+    fi
+    if [[ "$remote_url" =~ ^https?://[^/]+/([^/]+)/([^/]+)(\.git)?$ ]]; then
+        echo "${BASH_REMATCH[1]}"
+        return 0
+    fi
+    echo ""
+}
+
+_manifest_config_prompt_value() {
+    local prompt="$1"
+    local default_value="${2:-}"
+    local user_input=""
+
+    if [ -n "$default_value" ]; then
+        read -r -p "$prompt [$default_value]: " user_input
+    else
+        read -r -p "$prompt: " user_input
+    fi
+    echo "${user_input:-$default_value}"
+}
+
+_manifest_config_write_key() {
+    local config_file="$1"
+    local key="$2"
+    local value="$3"
+    set_config_value "$key" "$value" "$config_file"
+}
+
+configure_interactive() {
+    if [ ! -t 0 ]; then
+        log_error "Interactive config requires a TTY. Use: manifest config show"
+        return 1
+    fi
+
+    local config_file="$PROJECT_ROOT/.env.manifest.local"
+    local inferred_repo_name inferred_org inferred_default_branch
+    inferred_repo_name=$(_manifest_config_git_infer_repo_name)
+    inferred_org=$(_manifest_config_git_infer_org)
+    inferred_default_branch=$(_manifest_config_git_infer_default_branch)
+
+    echo "🛠️  Manifest Config Setup"
+    echo "========================="
+    echo "This writes overrides to: $config_file"
+    echo ""
+    echo "Press Enter to keep each default."
+    echo ""
+
+    local project_name project_description organization
+    local default_branch feature_prefix hotfix_prefix release_prefix bugfix_prefix
+    local ntp_server1 ntp_server2 ntp_server3 ntp_server4 ntp_timeout ntp_retries ntp_verify timezone
+    local docs_folder docs_archive docs_limit
+    local auto_update update_cooldown pr_profile pr_enforce_ready
+
+    project_name=$(_manifest_config_prompt_value "Project name" "${MANIFEST_CLI_PROJECT_NAME:-$inferred_repo_name}")
+    project_description=$(_manifest_config_prompt_value "Project description" "${MANIFEST_CLI_PROJECT_DESCRIPTION:-A powerful CLI tool for versioning, AI documenting, and repository operations}")
+    organization=$(_manifest_config_prompt_value "Organization" "${MANIFEST_CLI_ORGANIZATION:-$inferred_org}")
+
+    echo ""
+    echo "Git settings:"
+    default_branch=$(_manifest_config_prompt_value "Default branch" "${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-$inferred_default_branch}")
+    feature_prefix=$(_manifest_config_prompt_value "Feature branch prefix" "${MANIFEST_CLI_GIT_FEATURE_BRANCH_PREFIX:-feature/}")
+    hotfix_prefix=$(_manifest_config_prompt_value "Hotfix branch prefix" "${MANIFEST_CLI_GIT_HOTFIX_BRANCH_PREFIX:-hotfix/}")
+    release_prefix=$(_manifest_config_prompt_value "Release branch prefix" "${MANIFEST_CLI_GIT_RELEASE_BRANCH_PREFIX:-release/}")
+    bugfix_prefix=$(_manifest_config_prompt_value "Bugfix branch prefix" "${MANIFEST_CLI_GIT_BUGFIX_BRANCH_PREFIX:-bugfix/}")
+
+    echo ""
+    echo "NTP settings:"
+    ntp_server1=$(_manifest_config_prompt_value "NTP server 1" "${MANIFEST_CLI_NTP_SERVER1:-time.apple.com}")
+    ntp_server2=$(_manifest_config_prompt_value "NTP server 2" "${MANIFEST_CLI_NTP_SERVER2:-time.google.com}")
+    ntp_server3=$(_manifest_config_prompt_value "NTP server 3" "${MANIFEST_CLI_NTP_SERVER3:-pool.ntp.org}")
+    ntp_server4=$(_manifest_config_prompt_value "NTP server 4" "${MANIFEST_CLI_NTP_SERVER4:-time.nist.gov}")
+    ntp_timeout=$(_manifest_config_prompt_value "NTP timeout (seconds)" "${MANIFEST_CLI_NTP_TIMEOUT:-5}")
+    ntp_retries=$(_manifest_config_prompt_value "NTP retries" "${MANIFEST_CLI_NTP_RETRIES:-3}")
+    ntp_verify=$(_manifest_config_prompt_value "Verify NTP responses (true/false)" "${MANIFEST_CLI_NTP_VERIFY:-true}")
+    timezone=$(_manifest_config_prompt_value "Timezone (IANA, e.g. UTC, America/New_York)" "${MANIFEST_CLI_TIMEZONE:-UTC}")
+
+    echo ""
+    echo "Docs + automation:"
+    docs_folder=$(_manifest_config_prompt_value "Docs folder" "${MANIFEST_CLI_DOCS_FOLDER:-docs}")
+    docs_archive=$(_manifest_config_prompt_value "Docs archive folder" "${MANIFEST_CLI_DOCS_ARCHIVE_FOLDER:-docs/zArchive}")
+    docs_limit=$(_manifest_config_prompt_value "Historical docs limit" "${MANIFEST_CLI_DOCS_HISTORICAL_LIMIT:-20}")
+    auto_update=$(_manifest_config_prompt_value "Auto-update enabled (true/false)" "${MANIFEST_CLI_AUTO_UPDATE:-true}")
+    update_cooldown=$(_manifest_config_prompt_value "Update cooldown (minutes)" "${MANIFEST_CLI_UPDATE_COOLDOWN:-30}")
+
+    echo ""
+    echo "PR policy:"
+    pr_profile=$(_manifest_config_prompt_value "PR profile (solo|team|regulated)" "${MANIFEST_CLI_PR_PROFILE:-solo}")
+    pr_enforce_ready=$(_manifest_config_prompt_value "Enforce PR ready gate (true/false)" "${MANIFEST_CLI_PR_ENFORCE_READY:-true}")
+
+    if ! [[ "$ntp_timeout" =~ ^[0-9]+$ ]]; then
+        log_warning "Invalid NTP timeout '$ntp_timeout'; using existing/default value."
+        ntp_timeout="${MANIFEST_CLI_NTP_TIMEOUT:-5}"
+    fi
+    if ! [[ "$ntp_retries" =~ ^[0-9]+$ ]]; then
+        log_warning "Invalid NTP retries '$ntp_retries'; using existing/default value."
+        ntp_retries="${MANIFEST_CLI_NTP_RETRIES:-3}"
+    fi
+    if ! [[ "$docs_limit" =~ ^[0-9]+$ ]]; then
+        log_warning "Invalid docs limit '$docs_limit'; using existing/default value."
+        docs_limit="${MANIFEST_CLI_DOCS_HISTORICAL_LIMIT:-20}"
+    fi
+    if ! [[ "$update_cooldown" =~ ^[0-9]+$ ]]; then
+        log_warning "Invalid update cooldown '$update_cooldown'; using existing/default value."
+        update_cooldown="${MANIFEST_CLI_UPDATE_COOLDOWN:-30}"
+    fi
+
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_PROJECT_NAME" "$project_name"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_PROJECT_DESCRIPTION" "$project_description"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_ORGANIZATION" "$organization"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_GIT_DEFAULT_BRANCH" "$default_branch"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_GIT_FEATURE_BRANCH_PREFIX" "$feature_prefix"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_GIT_HOTFIX_BRANCH_PREFIX" "$hotfix_prefix"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_GIT_RELEASE_BRANCH_PREFIX" "$release_prefix"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_GIT_BUGFIX_BRANCH_PREFIX" "$bugfix_prefix"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_NTP_SERVER1" "$ntp_server1"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_NTP_SERVER2" "$ntp_server2"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_NTP_SERVER3" "$ntp_server3"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_NTP_SERVER4" "$ntp_server4"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_NTP_TIMEOUT" "$ntp_timeout"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_NTP_RETRIES" "$ntp_retries"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_NTP_VERIFY" "$ntp_verify"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_TIMEZONE" "$timezone"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_DOCS_FOLDER" "$docs_folder"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_DOCS_ARCHIVE_FOLDER" "$docs_archive"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_DOCS_HISTORICAL_LIMIT" "$docs_limit"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_AUTO_UPDATE" "$auto_update"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_UPDATE_COOLDOWN" "$update_cooldown"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_PR_PROFILE" "$pr_profile"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_PR_ENFORCE_READY" "$pr_enforce_ready"
+
+    echo ""
+    echo "✅ Saved configuration to $config_file"
+    echo "ℹ️  Run 'manifest config show' to review effective values."
+}
+
 # Validate version format configuration
 validate_version_config() {
     local format="$MANIFEST_CLI_VERSION_FORMAT"
@@ -488,6 +662,19 @@ show_configuration() {
     echo "   Retries: ${MANIFEST_CLI_GIT_RETRIES} attempts"
     echo "   Remotes: Uses all configured git remotes automatically"
     echo ""
+
+    echo "🕐 NTP Configuration:"
+    echo "   Server 1: ${MANIFEST_CLI_NTP_SERVER1}"
+    echo "   Server 2: ${MANIFEST_CLI_NTP_SERVER2}"
+    echo "   Server 3: ${MANIFEST_CLI_NTP_SERVER3}"
+    echo "   Server 4: ${MANIFEST_CLI_NTP_SERVER4}"
+    if [ -n "${MANIFEST_CLI_NTP_SERVERS:-}" ]; then
+        echo "   Legacy Server List: ${MANIFEST_CLI_NTP_SERVERS}"
+    fi
+    echo "   Timeout: ${MANIFEST_CLI_NTP_TIMEOUT} seconds"
+    echo "   Retries: ${MANIFEST_CLI_NTP_RETRIES} attempts"
+    echo "   Verify: ${MANIFEST_CLI_NTP_VERIFY}"
+    echo ""
     
     echo "📚 Documentation Configuration:"
     echo "   Docs Folder: ${MANIFEST_CLI_DOCS_FOLDER}"
@@ -526,6 +713,11 @@ show_configuration() {
     echo "   • 'manifest prep minor' increments component ${MANIFEST_CLI_MINOR_INCREMENT_TARGET}"
     echo "   • 'manifest prep patch' increments component ${MANIFEST_CLI_PATCH_INCREMENT_TARGET}"
     echo "   • 'manifest prep revision' increments component ${MANIFEST_CLI_REVISION_INCREMENT_TARGET}"
+    echo ""
+    echo "Quick views:"
+    echo "   • manifest config          # Interactive setup wizard"
+    echo "   • manifest config show     # Full effective configuration"
+    echo "   • manifest config ntp      # NTP-only configuration view"
 }
 
 # Get documentation folder path
@@ -564,6 +756,7 @@ export -f validate_version_config
 export -f parse_version_components
 export -f generate_next_version
 export -f show_configuration
+export -f configure_interactive
 export -f get_docs_folder
 export -f get_docs_archive_folder
 

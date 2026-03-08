@@ -1012,6 +1012,15 @@ manifest_pr_help() {
 Manifest PR Commands
 ====================
 
+  manifest pr [options]
+    Preferred shorthand for: manifest pr queue [options]
+    (queues policy-aware auto-merge after gates pass)
+    Options:
+      --pr <number|url|branch>
+      --method <merge|squash|rebase>
+      --force
+      --no-delete-branch
+
   manifest pr create [options]
     Create PR from current branch (or --head) to --base.
     Options:
@@ -1092,6 +1101,13 @@ manifest_fleet_pr_dispatch() {
             cat << 'EOF'
 Fleet PR Commands
 =================
+
+  manifest fleet pr [options]
+    Preferred shorthand for: manifest fleet pr queue [options]
+    Options:
+      --method <merge|squash|rebase>
+      --force
+      --no-delete-branch
 
   manifest fleet pr create
   manifest fleet pr status

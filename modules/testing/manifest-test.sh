@@ -6,6 +6,7 @@
 # Test configuration
 TEST_TIMEOUT=30
 TEST_VERBOSE=false
+MANIFEST_CLI_TEST_ISSUES_REPO="${MANIFEST_CLI_TEST_ISSUES_REPO:-fidenceio/fidenceio.manifest.cli}"
 
 # Source the compatibility test modules
 if [ -f "$(dirname "${BASH_SOURCE[0]}")/manifest-zsh-compatibility-test.sh" ]; then
@@ -170,6 +171,24 @@ test_command() {
         "integration")
             test_integration_workflows
             ;;
+        "cloud")
+            echo "☁️  Testing Manifest Cloud MCP connectivity..."
+            if declare -F test_mcp_connectivity >/dev/null 2>&1; then
+                test_mcp_connectivity
+            else
+                echo "   ❌ Cloud test module not available"
+                return 1
+            fi
+            ;;
+        "agent")
+            echo "🤖 Testing Manifest Agent functionality..."
+            if declare -F test_agent >/dev/null 2>&1; then
+                test_agent
+            else
+                echo "   ❌ Agent test module not available"
+                return 1
+            fi
+            ;;
         "zsh")
             echo "🐚 Running zsh 5.9 compatibility tests..."
             run_zsh_compatibility_tests
@@ -203,6 +222,230 @@ test_command() {
             test_all_functionality
             ;;
     esac
+}
+
+_manifest_test_logs_dir() {
+    echo "$HOME/.manifest-cli/logs/tests"
+}
+
+_manifest_test_run_id() {
+    date -u +"%Y%m%dT%H%M%SZ"
+}
+
+_manifest_test_sanitize_log() {
+    local input_file="$1"
+    local output_file="$2"
+    local strict_redact="${3:-true}"
+
+    if [ ! -f "$input_file" ]; then
+        return 1
+    fi
+
+    sed -E \
+        -e "s#${HOME}#~#g" \
+        -e 's#[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}#<redacted-email>#g' \
+        -e 's#(Authorization:[[:space:]]*Bearer[[:space:]]+)[^[:space:]]+#\1<redacted-token>#gI' \
+        -e 's#(MANIFEST_CLI_CLOUD_API_KEY=)[^[:space:]]+#\1<redacted>#g' \
+        -e 's#(GH_TOKEN=|GITHUB_TOKEN=)[^[:space:]]+#\1<redacted>#g' \
+        -e 's#(ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]+#<redacted-github-token>#g' \
+        -e 's#/Users/[^/[:space:]]+#/Users/<user>#g' \
+        "$input_file" > "$output_file"
+
+    if [ "$strict_redact" = "true" ]; then
+        sed -E -i.bak \
+            -e 's#([0-9]{1,3}\.){3}[0-9]{1,3}#<redacted-ip>#g' \
+            -e 's#(https?://)github\.com/[^/[:space:]]+/[^/[:space:]]+#\1github.com/<redacted-org>/<redacted-repo>#g' \
+            -e 's#([Hh]ostname:[[:space:]]*)[^[:space:]]+#\1<redacted-host>#g' \
+            -e 's#([Uu]ser:[[:space:]]*)[^[:space:]]+#\1<redacted-user>#g' \
+            "$output_file"
+        rm -f "$output_file.bak"
+    fi
+}
+
+_manifest_test_repo_slug() {
+    local repo_url
+    repo_url=$(git remote get-url origin 2>/dev/null || echo "")
+
+    if [[ "$repo_url" =~ ^git@[^:]+:([^/]+)/([^/]+)\.git$ ]]; then
+        echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+        return 0
+    fi
+    if [[ "$repo_url" =~ ^https?://[^/]+/([^/]+)/([^/]+)(\.git)?$ ]]; then
+        echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+        return 0
+    fi
+
+    echo ""
+    return 1
+}
+
+_manifest_test_create_issue_body() {
+    local body_file="$1"
+    local suite="$2"
+    local run_id="$3"
+    local sanitized_log="$4"
+    local exit_code="$5"
+
+    local repo_slug branch commit_sha cli_version
+    repo_slug=$(_manifest_test_repo_slug || echo "unknown/unknown")
+    branch=$(git branch --show-current 2>/dev/null || echo "unknown")
+    commit_sha=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    cli_version=$(cat "$MANIFEST_CLI_VERSION_FILE" 2>/dev/null || echo "unknown")
+
+    {
+        echo "## Test Failure Report"
+        echo ""
+        echo "- **Command:** \`manifest test ${suite}\`"
+        echo "- **Run ID:** \`${run_id}\`"
+        echo "- **Exit Code:** \`${exit_code}\`"
+        echo "- **Repository:** \`${repo_slug}\`"
+        echo "- **Branch:** \`${branch}\`"
+        echo "- **Commit:** \`${commit_sha}\`"
+        echo "- **CLI Version:** \`${cli_version}\`"
+        echo "- **Timestamp (UTC):** \`$(date -u +"%Y-%m-%d %H:%M:%S UTC")\`"
+        echo ""
+        echo "## Reproduction"
+        echo ""
+        echo '```bash'
+        echo "manifest test ${suite}"
+        echo '```'
+        echo ""
+        echo "## Sanitized Log (truncated)"
+        echo ""
+        echo '```text'
+        sed -n '1,250p' "$sanitized_log"
+        echo '```'
+        echo ""
+        echo "_Full sanitized log path on local machine: \`${sanitized_log}\`_"
+    } > "$body_file"
+}
+
+_manifest_test_offer_issue_upload() {
+    local suite="$1"
+    local run_id="$2"
+    local sanitized_log="$3"
+    local exit_code="$4"
+
+    if [ ! -t 0 ]; then
+        return 0
+    fi
+
+    local upload_choice=""
+    read -r -p "Create GitHub issue from sanitized test log? [y/N]: " upload_choice
+    case "${upload_choice}" in
+        y|Y|yes|YES)
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+
+    if ! command -v gh >/dev/null 2>&1; then
+        echo "⚠️  GitHub CLI ('gh') is not installed; cannot create issue."
+        return 1
+    fi
+    if ! gh auth status >/dev/null 2>&1; then
+        echo "⚠️  GitHub CLI is not authenticated. Run: gh auth login"
+        return 1
+    fi
+
+    local title body_file
+    title="Test report: manifest test ${suite} (${run_id})"
+    body_file="$(mktemp)"
+
+    _manifest_test_create_issue_body "$body_file" "$suite" "$run_id" "$sanitized_log" "$exit_code"
+
+    if gh issue create -R "$MANIFEST_CLI_TEST_ISSUES_REPO" --title "$title" --body-file "$body_file"; then
+        echo "✅ GitHub issue created in ${MANIFEST_CLI_TEST_ISSUES_REPO} from sanitized log."
+    else
+        echo "❌ Failed to create GitHub issue."
+        rm -f "$body_file"
+        return 1
+    fi
+
+    rm -f "$body_file"
+    return 0
+}
+
+run_manifest_test() {
+    local suite=""
+    local strict_redact="true"
+    local passthrough_args=()
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --strict-redact)
+                strict_redact="true"
+                shift
+                ;;
+            --no-strict-redact)
+                strict_redact="false"
+                shift
+                ;;
+            -h|--help)
+                echo "Usage: manifest test [suite] [--strict-redact|--no-strict-redact]"
+                echo ""
+                echo "Suites include: all, versions, security, config, docs, git, ntp, os, modules,"
+                echo "                integration, cloud, agent, zsh, bash32, bash4, bash"
+                echo ""
+                echo "Redaction:"
+                echo "  --strict-redact     Enable strict redaction (default)"
+                echo "  --no-strict-redact  Use basic redaction only"
+                return 0
+                ;;
+            --*)
+                passthrough_args+=("$1")
+                shift
+                ;;
+            *)
+                if [ -z "$suite" ]; then
+                    suite="$1"
+                else
+                    passthrough_args+=("$1")
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    suite="${suite:-all}"
+
+    local run_id log_dir run_dir raw_log sanitized_log
+    run_id=$(_manifest_test_run_id)
+    log_dir=$(_manifest_test_logs_dir)
+    run_dir="$log_dir/$run_id"
+    raw_log="$run_dir/raw.log"
+    sanitized_log="$run_dir/sanitized.log"
+
+    mkdir -p "$run_dir"
+    echo "🧾 Test run ID: $run_id"
+
+    local test_exit=0
+    if [ -t 1 ]; then
+        set +e
+        test_command "$suite" "${passthrough_args[@]}" 2>&1 | tee "$raw_log"
+        test_exit=${PIPESTATUS[0]}
+        set -e
+    else
+        set +e
+        test_command "$suite" "${passthrough_args[@]}" > "$raw_log" 2>&1
+        test_exit=$?
+        set -e
+        sed -n '1,$p' "$raw_log"
+    fi
+
+    if _manifest_test_sanitize_log "$raw_log" "$sanitized_log" "$strict_redact"; then
+        echo ""
+        echo "🗂️  Test logs saved:"
+        echo "   raw:       $raw_log"
+        echo "   sanitized: $sanitized_log"
+        echo "   redaction: $( [ "$strict_redact" = "true" ] && echo "strict" || echo "basic" )"
+    else
+        echo "⚠️  Failed to generate sanitized test log."
+    fi
+
+    _manifest_test_offer_issue_upload "$suite" "$run_id" "$sanitized_log" "$test_exit" || true
+    return "$test_exit"
 }
 
 # Test version increment functionality
@@ -418,6 +661,22 @@ test_integration_workflows() {
         echo "   ✅ Ship/prep workflow commands available"
     else
         echo "   ❌ Ship/prep workflow commands missing"
+    fi
+
+    # Test default PR queue shorthand help exposure
+    if echo "$help_output" | grep -q "pr \[options\].*shorthand\|pr queue.*auto-merge"; then
+        echo "   ✅ PR shorthand/queue commands available"
+    else
+        echo "   ❌ PR shorthand/queue commands missing"
+    fi
+
+    # Test fleet PR queue shorthand help exposure
+    local fleet_help_output
+    fleet_help_output=$(manifest fleet --help 2>/dev/null)
+    if echo "$fleet_help_output" | grep -q "fleet pr \[options\].*shorthand\|fleet pr queue"; then
+        echo "   ✅ Fleet PR shorthand/queue commands available"
+    else
+        echo "   ❌ Fleet PR shorthand/queue commands missing"
     fi
     
     echo "   ✅ Integration workflow testing completed"

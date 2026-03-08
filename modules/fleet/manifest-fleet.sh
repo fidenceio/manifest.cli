@@ -1077,11 +1077,25 @@ fleet_main() {
             fleet_add "$@"
             ;;
         pr)
-            local pr_subcommand="${1:-}"
-            shift || true
-            if [ -z "$pr_subcommand" ]; then
-                log_error "Usage: manifest fleet pr <create|status|checks|ready|queue> [options]"
-                return 1
+            local pr_subcommand=""
+            local implicit_queue=false
+            case "${1:-}" in
+                create|status|checks|ready|queue|help|-h|--help)
+                    pr_subcommand="${1:-help}"
+                    shift || true
+                    ;;
+                "")
+                    pr_subcommand="queue"
+                    implicit_queue=true
+                    ;;
+                *)
+                    # Treat unknown first token as queue option payload.
+                    pr_subcommand="queue"
+                    implicit_queue=true
+                    ;;
+            esac
+            if [ "$implicit_queue" = "true" ]; then
+                echo "ℹ️  Default fleet PR action: queue (use 'manifest fleet pr help' for all subcommands)."
             fi
             if declare -F manifest_fleet_pr_dispatch >/dev/null 2>&1; then
                 manifest_fleet_pr_dispatch "$pr_subcommand" "$@"
@@ -1161,15 +1175,23 @@ COMMANDS:
       --name NAME        Service name
       --type TYPE        Service type (service|library|infrastructure|tool)
 
-  manifest fleet pr <create|status|checks|ready|queue> [options]
-    Coordinate PR operations across fleet services.
+  manifest fleet pr [options]
+    Preferred shorthand for: manifest fleet pr queue [options]
+    (queues policy-aware auto-merge across fleet PRs after gates pass)
+    Queue options:
+      --method <merge|squash|rebase>
+      --force
+      --no-delete-branch
+    Explicit subcommands:
+      create | status | checks | ready | queue
     Examples:
+      manifest fleet pr
       manifest fleet pr create
       manifest fleet pr status
       manifest fleet pr checks
       manifest fleet pr ready
-      manifest fleet pr queue --method squash   # Preferred team path
-      manifest fleet pr queue --method merge    # Explicit merge strategy while queueing
+      manifest fleet pr --method squash         # Preferred team path
+      manifest fleet pr queue --method merge    # Explicit equivalent
 
   manifest fleet ship [patch|minor|major|revision] [options]
     Highest-level coordinated fleet workflow.

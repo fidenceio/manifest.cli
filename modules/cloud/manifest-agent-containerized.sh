@@ -566,9 +566,6 @@ agent_main() {
         "logs")
             show_agent_logs
             ;;
-        "test")
-            test_agent
-            ;;
         "uninstall")
             uninstall_agent
             ;;
@@ -584,8 +581,8 @@ agent_main() {
             echo "  auth manifest               - Set up Manifest Cloud subscription"
             echo "  status                      - Show agent status and configuration"
             echo "  logs                        - Show agent operation logs"
-            echo "  test                        - Test agent functionality"
             echo "  uninstall                   - Remove agent completely"
+            echo "  (use 'manifest test agent' for agent functionality tests)"
             echo ""
             echo "Security Features:"
             echo "  ✅ No persistent services"
@@ -598,6 +595,7 @@ agent_main() {
             echo "  manifest agent init docker"
             echo "  manifest agent auth github"
             echo "  manifest agent status"
+            echo "  manifest test agent"
             ;;
     esac
 }

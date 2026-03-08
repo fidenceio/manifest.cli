@@ -94,6 +94,55 @@ manifest prep --interactive
 
 This will prompt you for confirmation at each step of the workflow.
 
+## 1.1 `manifest pr` - Default PR Queue Action
+
+For PR landing, use `manifest pr` as the default command. It maps directly to `manifest pr queue` with the same queue options.
+
+```bash
+# Preferred shorthand
+manifest pr
+
+# Explicit equivalent
+manifest pr queue
+
+# Queue with explicit merge method
+manifest pr --method merge
+```
+
+Use explicit subcommands when needed:
+
+```bash
+manifest pr status
+manifest pr checks
+manifest pr ready
+manifest pr create
+manifest pr update
+```
+
+## 1.2 `manifest fleet pr` - Default Fleet PR Queue Action
+
+For fleet landing, use `manifest fleet pr` as the default command. It maps directly to `manifest fleet pr queue` with the same queue options.
+
+```bash
+# Preferred shorthand
+manifest fleet pr
+
+# Explicit equivalent
+manifest fleet pr queue
+
+# Queue fleet PRs with explicit merge method
+manifest fleet pr --method rebase
+```
+
+Use explicit fleet subcommands when needed:
+
+```bash
+manifest fleet pr status
+manifest fleet pr checks
+manifest fleet pr ready
+manifest fleet pr create
+```
+
 ## 2. `manifest test` - Testing Your Setup
 
 The testing framework helps ensure everything is working correctly before you release:
@@ -108,6 +157,8 @@ manifest test ntp         # Test NTP connectivity
 manifest test git         # Test Git operations
 manifest test docs        # Test documentation generation
 manifest test os          # Test OS detection
+manifest test cloud       # Test Manifest Cloud MCP connectivity
+manifest test agent       # Test Manifest Agent functionality
 
 # Cross-shell compatibility testing
 manifest test zsh         # Test Zsh 5.9 compatibility
@@ -115,6 +166,20 @@ manifest test bash32      # Test Bash 3.2 compatibility
 manifest test bash4       # Test Bash 4+ compatibility
 manifest test bash        # Auto-detect and test current Bash version
 ```
+
+Each test run also saves logs to:
+
+```bash
+~/.manifest-cli/logs/tests/<run-id>/
+```
+
+Including:
+- `raw.log` (full terminal output)
+- `sanitized.log` (strictly redacted by default for safer sharing)
+
+Use `--no-strict-redact` if you need lighter redaction.
+
+When running interactively, Manifest prompts at the end of the run to optionally create a GitHub Issue from the sanitized log in the main Manifest repository.
 
 ## Test Output Example
 
@@ -185,6 +250,13 @@ manifest ntp --verify
 ⏱️  Accuracy: ±0.001 seconds
 🎯 Method: external
 📊 Offset: +0.002 seconds
+```
+
+## NTP Configuration Quick View
+
+```bash
+# NTP-only view
+manifest config ntp
 ```
 
 ## 4. `manifest docs` - AI-Powered Documentation
