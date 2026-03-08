@@ -201,13 +201,16 @@ set_default_configuration() {
     export MANIFEST_CLI_GIT_STAGING_BRANCH="${MANIFEST_CLI_GIT_STAGING_BRANCH:-staging}"
     
     # NTP Configuration
-    export MANIFEST_CLI_NTP_SERVER1="${MANIFEST_CLI_NTP_SERVER1:-time.apple.com}"
-    export MANIFEST_CLI_NTP_SERVER2="${MANIFEST_CLI_NTP_SERVER2:-time.google.com}"
-    export MANIFEST_CLI_NTP_SERVER3="${MANIFEST_CLI_NTP_SERVER3:-pool.ntp.org}"
-    export MANIFEST_CLI_NTP_SERVER4="${MANIFEST_CLI_NTP_SERVER4:-time.nist.gov}"
+    export MANIFEST_CLI_NTP_SERVER1="${MANIFEST_CLI_NTP_SERVER1:-216.239.35.0}"
+    export MANIFEST_CLI_NTP_SERVER2="${MANIFEST_CLI_NTP_SERVER2:-216.239.35.4}"
+    export MANIFEST_CLI_NTP_SERVER3="${MANIFEST_CLI_NTP_SERVER3:-}"
+    export MANIFEST_CLI_NTP_SERVER4="${MANIFEST_CLI_NTP_SERVER4:-}"
     export MANIFEST_CLI_NTP_TIMEOUT="${MANIFEST_CLI_NTP_TIMEOUT:-5}"
     export MANIFEST_CLI_NTP_RETRIES="${MANIFEST_CLI_NTP_RETRIES:-3}"
     export MANIFEST_CLI_NTP_VERIFY="${MANIFEST_CLI_NTP_VERIFY:-true}"
+    export MANIFEST_CLI_NTP_CACHE_TTL="${MANIFEST_CLI_NTP_CACHE_TTL:-120}"
+    export MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD="${MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD:-3600}"
+    export MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE="${MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE:-21600}"
 
     # Timezone Configuration (defaults to UTC)
     # Can be overridden in .env.manifest.local with IANA timezone names like:
@@ -399,10 +402,10 @@ configure_interactive() {
 
     echo ""
     echo "NTP settings:"
-    ntp_server1=$(_manifest_config_prompt_value "NTP server 1" "${MANIFEST_CLI_NTP_SERVER1:-time.apple.com}")
-    ntp_server2=$(_manifest_config_prompt_value "NTP server 2" "${MANIFEST_CLI_NTP_SERVER2:-time.google.com}")
-    ntp_server3=$(_manifest_config_prompt_value "NTP server 3" "${MANIFEST_CLI_NTP_SERVER3:-pool.ntp.org}")
-    ntp_server4=$(_manifest_config_prompt_value "NTP server 4" "${MANIFEST_CLI_NTP_SERVER4:-time.nist.gov}")
+    ntp_server1=$(_manifest_config_prompt_value "NTP server 1" "${MANIFEST_CLI_NTP_SERVER1:-216.239.35.0}")
+    ntp_server2=$(_manifest_config_prompt_value "NTP server 2" "${MANIFEST_CLI_NTP_SERVER2:-216.239.35.4}")
+    ntp_server3=$(_manifest_config_prompt_value "NTP server 3" "${MANIFEST_CLI_NTP_SERVER3:-}")
+    ntp_server4=$(_manifest_config_prompt_value "NTP server 4" "${MANIFEST_CLI_NTP_SERVER4:-}")
     ntp_timeout=$(_manifest_config_prompt_value "NTP timeout (seconds)" "${MANIFEST_CLI_NTP_TIMEOUT:-5}")
     ntp_retries=$(_manifest_config_prompt_value "NTP retries" "${MANIFEST_CLI_NTP_RETRIES:-3}")
     ntp_verify=$(_manifest_config_prompt_value "Verify NTP responses (true/false)" "${MANIFEST_CLI_NTP_VERIFY:-true}")

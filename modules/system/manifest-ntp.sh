@@ -10,6 +10,9 @@
 # Configuration with sensible defaults
 MANIFEST_CLI_NTP_TIMEOUT=${MANIFEST_CLI_NTP_TIMEOUT:-3}
 MANIFEST_CLI_NTP_RETRIES=${MANIFEST_CLI_NTP_RETRIES:-2}
+MANIFEST_CLI_NTP_CACHE_TTL=${MANIFEST_CLI_NTP_CACHE_TTL:-120}
+MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD=${MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD:-3600}
+MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE=${MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE:-21600}
 
 # Global timestamp variables
 MANIFEST_CLI_NTP_TIMESTAMP=""
@@ -21,6 +24,134 @@ MANIFEST_CLI_NTP_METHOD=""
 
 # Use the centralized timeout function from manifest-os.sh
 # The run_with_timeout function is now provided by the OS module
+
+# Build deterministic cache paths.
+_manifest_ntp_cache_paths() {
+    local cache_root="${MANIFEST_CLI_CACHE_DIR:-${TMPDIR:-/tmp}/manifest-cli}"
+    local cache_dir="${cache_root}/ntp"
+    local cache_file="${cache_dir}/timestamp.cache"
+    local cleanup_marker="${cache_dir}/cleanup.last"
+    echo "${cache_dir}|${cache_file}|${cleanup_marker}"
+}
+
+# Delete stale cache files on a fixed cadence.
+_manifest_ntp_maybe_cleanup_cache() {
+    local path_data=""
+    path_data=$(_manifest_ntp_cache_paths)
+    IFS='|' read -r cache_dir _cache_file cleanup_marker <<< "$path_data"
+
+    local cleanup_period="${MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD:-3600}"
+    if ! [[ "$cleanup_period" =~ ^[0-9]+$ ]] || [ "$cleanup_period" -lt 60 ]; then
+        cleanup_period=3600
+    fi
+
+    local now
+    now=$(date -u +%s)
+    local last_cleanup=0
+
+    if [ -f "$cleanup_marker" ]; then
+        last_cleanup=$(tr -d '[:space:]' < "$cleanup_marker" 2>/dev/null || echo "0")
+        if ! [[ "$last_cleanup" =~ ^[0-9]+$ ]]; then
+            last_cleanup=0
+        fi
+    fi
+
+    if [ $((now - last_cleanup)) -lt "$cleanup_period" ]; then
+        return 0
+    fi
+
+    mkdir -p "$cache_dir" 2>/dev/null || return 0
+    # Keep cache folder clean by deleting stale cache artifacts older than cleanup period.
+    find "$cache_dir" -type f -name "*.cache*" -mmin +"$((cleanup_period / 60))" -delete 2>/dev/null || true
+    printf '%s\n' "$now" > "$cleanup_marker" 2>/dev/null || true
+}
+
+_manifest_ntp_read_cache_data() {
+    local cache_mode="${1:-fresh}"
+    local path_data=""
+    path_data=$(_manifest_ntp_cache_paths)
+    IFS='|' read -r _cache_dir cache_file _cleanup_marker <<< "$path_data"
+
+    [ -f "$cache_file" ] || return 1
+
+    # shellcheck disable=SC1090
+    . "$cache_file" 2>/dev/null || return 1
+
+    local now
+    now=$(date -u +%s)
+    local cached_at="${MANIFEST_CLI_NTP_CACHE_SAVED_AT:-0}"
+    local cached_timestamp="${MANIFEST_CLI_NTP_CACHE_TIMESTAMP:-0}"
+    local cached_offset="${MANIFEST_CLI_NTP_CACHE_OFFSET:-0.000000}"
+    local cached_uncertainty="${MANIFEST_CLI_NTP_CACHE_UNCERTAINTY:-0.000000}"
+    local cached_server="${MANIFEST_CLI_NTP_CACHE_SERVER:-cache}"
+    local cached_server_ip="${MANIFEST_CLI_NTP_CACHE_SERVER_IP:-127.0.0.1}"
+
+    if ! [[ "$cached_at" =~ ^[0-9]+$ ]] || ! [[ "$cached_timestamp" =~ ^[0-9]+$ ]]; then
+        return 1
+    fi
+
+    local age=$((now - cached_at))
+    if [ "$age" -lt 0 ]; then
+        return 1
+    fi
+
+    local max_age=0
+    case "$cache_mode" in
+        "fresh")
+            max_age="${MANIFEST_CLI_NTP_CACHE_TTL:-120}"
+            ;;
+        "stale")
+            max_age="${MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE:-21600}"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+
+    if ! [[ "$max_age" =~ ^[0-9]+$ ]] || [ "$max_age" -lt 1 ]; then
+        return 1
+    fi
+
+    if [ "$age" -gt "$max_age" ]; then
+        return 1
+    fi
+
+    local adjusted_timestamp=$((cached_timestamp + age))
+    local cache_method="cache"
+    if [ "$cache_mode" = "stale" ]; then
+        cache_method="cache-stale"
+    fi
+
+    echo "${adjusted_timestamp}|${cached_offset}|${cached_uncertainty}|${cached_server}|${cached_server_ip}|${cache_method}"
+}
+
+_manifest_ntp_write_cache_data() {
+    local timestamp="$1"
+    local offset="$2"
+    local uncertainty="$3"
+    local server="$4"
+    local server_ip="$5"
+
+    [ -n "$timestamp" ] || return 1
+
+    local path_data=""
+    path_data=$(_manifest_ntp_cache_paths)
+    IFS='|' read -r cache_dir cache_file _cleanup_marker <<< "$path_data"
+
+    mkdir -p "$cache_dir" 2>/dev/null || return 1
+
+    local now
+    now=$(date -u +%s)
+    umask 077
+    {
+        echo "MANIFEST_CLI_NTP_CACHE_SAVED_AT=${now}"
+        echo "MANIFEST_CLI_NTP_CACHE_TIMESTAMP=${timestamp}"
+        echo "MANIFEST_CLI_NTP_CACHE_OFFSET=${offset}"
+        echo "MANIFEST_CLI_NTP_CACHE_UNCERTAINTY=${uncertainty}"
+        echo "MANIFEST_CLI_NTP_CACHE_SERVER=${server}"
+        echo "MANIFEST_CLI_NTP_CACHE_SERVER_IP=${server_ip}"
+    } > "$cache_file" 2>/dev/null || return 1
+}
 
 # Build effective NTP server list from canonical variables (SERVER1..SERVER4),
 # with fallback support for legacy MANIFEST_CLI_NTP_SERVERS.
@@ -49,7 +180,8 @@ _manifest_ntp_effective_servers() {
     fi
 
     if [ ${#servers[@]} -eq 0 ]; then
-        servers=("time.apple.com" "time.google.com" "pool.ntp.org" "time.nist.gov")
+        # Google Public NTP anycast IPv4 endpoints.
+        servers=("216.239.35.0" "216.239.35.4")
     fi
 
     local idx=0
@@ -290,6 +422,32 @@ get_ntp_timestamp() {
     local server_ip=""
     local method=""
     
+    # Keep cache folder tidy and try cache before external lookups.
+    _manifest_ntp_maybe_cleanup_cache
+
+    local cached_result=""
+    if cached_result=$(_manifest_ntp_read_cache_data "fresh"); then
+        IFS='|' read -r timestamp offset uncertainty server server_ip method <<< "$cached_result"
+        echo "   ⚡ Using cached trusted timestamp"
+        echo "   📊 Offset: $offset seconds (±$uncertainty)"
+
+        export MANIFEST_CLI_NTP_TIMESTAMP="$timestamp"
+        export MANIFEST_CLI_NTP_OFFSET="$offset"
+        export MANIFEST_CLI_NTP_UNCERTAINTY="$uncertainty"
+        export MANIFEST_CLI_NTP_SERVER="$server"
+        export MANIFEST_CLI_NTP_SERVER_IP="$server_ip"
+        export MANIFEST_CLI_NTP_METHOD="$method"
+
+        local tz_display_cached
+        tz_display_cached=$(get_timezone_display "$timestamp")
+        local formatted_time_cached
+        formatted_time_cached=$(format_timestamp "$timestamp" '+%Y-%m-%d %H:%M:%S')
+        echo "   🕐 Timestamp: $formatted_time_cached $tz_display_cached"
+        echo "   🎯 Method: $method"
+        echo ""
+        return 0
+    fi
+
     # Build array of effective NTP servers.
     local ntp_servers=()
     while IFS= read -r server_line; do
@@ -340,6 +498,7 @@ get_ntp_timestamp() {
                 server="$ntp_server"
                 method="external"
 
+                _manifest_ntp_write_cache_data "$timestamp" "$offset" "$uncertainty" "$server" "$server_ip" || true
                 echo "   ✅ NTP timestamp from $ntp_server"
                 echo "   📊 Offset: $offset seconds (±$uncertainty)"
                 break 2
@@ -358,15 +517,22 @@ get_ntp_timestamp() {
         done
     done
     
-    # Fallback to system time if no NTP servers responded
+    # Fallback to stale cache first, then system time if needed.
     if [ -z "$timestamp" ]; then
-        echo "   🔄 No NTP servers responded, using system time"
-        timestamp=$(date -u +%s)
-        offset="0.000000"
-        uncertainty="0.000000"
-        server="system"
-        server_ip="127.0.0.1"
-        method="system"
+        local stale_cached_result=""
+        if stale_cached_result=$(_manifest_ntp_read_cache_data "stale"); then
+            IFS='|' read -r timestamp offset uncertainty server server_ip method <<< "$stale_cached_result"
+            echo "   🔄 No live NTP response; using stale trusted cache"
+            echo "   📊 Offset: $offset seconds (±$uncertainty)"
+        else
+            echo "   🔄 No NTP servers responded, using system time"
+            timestamp=$(date -u +%s)
+            offset="0.000000"
+            uncertainty="0.000000"
+            server="system"
+            server_ip="127.0.0.1"
+            method="system"
+        fi
     fi
     
     # Export variables for use in other functions
@@ -431,17 +597,14 @@ display_ntp_config() {
     local server=""
     for server in "${ntp_servers[@]}"; do
         case "$server" in
-            "time.apple.com")
-                echo "   • $server (Apple)"
+            "216.239.35.0")
+                echo "   • $server (Google Public NTP primary)"
                 ;;
-            "time.google.com")
+            "216.239.35.4")
+                echo "   • $server (Google Public NTP secondary)"
+                ;;
+            "time.google.com"|"time1.google.com"|"time2.google.com"|"time3.google.com"|"time4.google.com")
                 echo "   • $server (Google)"
-                ;;
-            "pool.ntp.org")
-                echo "   • $server (NTP Pool)"
-                ;;
-            "time.nist.gov")
-                echo "   • $server (NIST)"
                 ;;
             *)
                 echo "   • $server"
@@ -451,14 +614,17 @@ display_ntp_config() {
     
     echo ""
     echo "💡 Customize with environment variables:"
-    echo "   export MANIFEST_CLI_NTP_SERVER1='time.apple.com'"
-    echo "   export MANIFEST_CLI_NTP_SERVER2='time.google.com'"
-    echo "   export MANIFEST_CLI_NTP_SERVER3='pool.ntp.org'"
-    echo "   export MANIFEST_CLI_NTP_SERVER4='time.nist.gov'"
+    echo "   export MANIFEST_CLI_NTP_SERVER1='216.239.35.0'"
+    echo "   export MANIFEST_CLI_NTP_SERVER2='216.239.35.4'"
+    echo "   export MANIFEST_CLI_NTP_SERVER3=''"
+    echo "   export MANIFEST_CLI_NTP_SERVER4=''"
     echo "   # Legacy fallback also supported:"
-    echo "   export MANIFEST_CLI_NTP_SERVERS='time.apple.com,time.google.com'"
+    echo "   export MANIFEST_CLI_NTP_SERVERS='216.239.35.0,216.239.35.4'"
     echo "   export MANIFEST_CLI_NTP_TIMEOUT=5"
     echo "   export MANIFEST_CLI_NTP_RETRIES=3"
+    echo "   export MANIFEST_CLI_NTP_CACHE_TTL=120"
+    echo "   export MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD=3600"
+    echo "   export MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE=21600"
 }
 
 # Quick timestamp function for simple operations

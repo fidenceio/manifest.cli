@@ -32,7 +32,8 @@ MANIFEST_CLI_VERSION_FORMAT="XX.XX.XX"
 MANIFEST_CLI_GIT_DEFAULT_BRANCH="main"
 MANIFEST_CLI_DOCS_FOLDER="docs"
 MANIFEST_CLI_DOCS_ARCHIVE_FOLDER="docs/zArchive"
-MANIFEST_CLI_NTP_SERVER1="time.apple.com"
+MANIFEST_CLI_NTP_SERVER1="216.239.35.0"
+MANIFEST_CLI_NTP_SERVER2="216.239.35.4"
 MANIFEST_CLI_NTP_TIMEOUT=10
 MANIFEST_CLI_NTP_RETRIES=3
 MANIFEST_CLI_DEBUG=false
@@ -62,7 +63,7 @@ MANIFEST_CLI_GIT_TAG_PREFIX="release-"
 MANIFEST_CLI_GIT_TAG_SUFFIX="-stable"
 MANIFEST_CLI_GIT_DEFAULT_BRANCH="production"
 MANIFEST_CLI_GIT_COMMIT_TEMPLATE="[MANUFACTURING] Release {version} - {timestamp}"
-MANIFEST_CLI_NTP_SERVER1="time.nist.gov"
+MANIFEST_CLI_NTP_SERVER1="216.239.35.0"
 MANIFEST_CLI_NTP_VERIFY=true
 # Example versions: 2024.03.15, 2024.03.16, 2024.04.01
 ```
@@ -76,7 +77,7 @@ MANIFEST_CLI_GIT_COMMIT_TEMPLATE="[HEALTHCARE] Release v{version} - {timestamp}"
 MANIFEST_CLI_DOCS_FOLDER="documentation"
 MANIFEST_CLI_DOCS_ARCHIVE_FOLDER="documentation/archive"
 MANIFEST_CLI_DOCS_HISTORICAL_LIMIT=200
-MANIFEST_CLI_NTP_SERVER1="time.nist.gov"
+MANIFEST_CLI_NTP_SERVER1="216.239.35.0"
 MANIFEST_CLI_NTP_VERIFY=true
 MANIFEST_CLI_DEBUG=true
 MANIFEST_CLI_LOG_LEVEL="INFO"
@@ -89,7 +90,7 @@ MANIFEST_CLI_GIT_COMMIT_TEMPLATE="[FINANCIAL] Release v{version} - {timestamp}"
 MANIFEST_CLI_DOCS_FOLDER="documentation"
 MANIFEST_CLI_DOCS_ARCHIVE_FOLDER="documentation/archive"
 MANIFEST_CLI_DOCS_HISTORICAL_LIMIT=500
-MANIFEST_CLI_NTP_SERVER1="time.nist.gov"
+MANIFEST_CLI_NTP_SERVER1="216.239.35.0"
 MANIFEST_CLI_NTP_TIMEOUT=20
 MANIFEST_CLI_NTP_RETRIES=10
 MANIFEST_CLI_NTP_VERIFY=true
@@ -125,7 +126,7 @@ MANIFEST_CLI_GIT_COMMIT_TEMPLATE="[RESEARCH] Release v{version} - {timestamp}"
 MANIFEST_CLI_DOCS_FOLDER="documentation"
 MANIFEST_CLI_DOCS_ARCHIVE_FOLDER="documentation/archive"
 MANIFEST_CLI_DOCS_HISTORICAL_LIMIT=200
-MANIFEST_CLI_NTP_SERVER1="time.nist.gov"
+MANIFEST_CLI_NTP_SERVER1="216.239.35.0"
 MANIFEST_CLI_NTP_VERIFY=true
 MANIFEST_CLI_DEBUG=true
 MANIFEST_CLI_LOG_LEVEL="DEBUG"
@@ -141,7 +142,7 @@ MANIFEST_CLI_LOG_LEVEL="DEBUG"
 - `MANIFEST_CLI_DOCS_ARCHIVE_FOLDER` - Archive folder location
 
 ### Security & Compliance
-- `MANIFEST_CLI_NTP_SERVER1` - Primary NTP server (time.nist.gov for compliance)
+- `MANIFEST_CLI_NTP_SERVER1` - Primary NTP server (default: 216.239.35.0)
 - `MANIFEST_CLI_NTP_VERIFY` - Verify NTP timestamps (true for compliance)
 - `MANIFEST_CLI_DEBUG` - Debug mode (false for production)
 - `MANIFEST_CLI_LOG_LEVEL` - Logging level (WARN for production, DEBUG for development)
@@ -155,7 +156,7 @@ MANIFEST_CLI_LOG_LEVEL="DEBUG"
 
 1. **Start Simple**: Use minimal configuration and add complexity as needed
 2. **Environment-Specific**: Different configs for dev/staging/production
-3. **Compliance First**: Use NIST time servers and verification for regulated industries
+3. **Compliance First**: Use organization-approved time servers and keep verification enabled
 4. **Documentation**: Keep configs documented and version-controlled
 5. **Testing**: Test configurations in safe environments first
 

@@ -1,7 +1,7 @@
 # Changelog v35.3.0
 
-**Release Date:** 2026-03-08 03:10:22 UTC
-**Release Type:** minor
+**Release Date:** 2026-03-08 23:27:38 UTC
+**Release Type:** patch
 
 ## 🆕 New Features
 
@@ -42,12 +42,15 @@
 
 ## New Features
 
+
 ## Improvements
-Update Homebrew formula to v35.2.1
+Update Homebrew formula to v35.3.0
 
 ## Bug Fixes
 
+
 ## Breaking Changes
 
+
 ## Documentation
-Refresh active CLI docs to match implemented behavior
+
