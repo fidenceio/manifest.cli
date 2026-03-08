@@ -445,6 +445,398 @@ manifest_pr_create() {
     fi
 }
 
+_manifest_pr_is_protected_head_branch() {
+    local branch="$1"
+    case "$branch" in
+        main|master|release/*)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+manifest_pr_interactive() {
+    local title=""
+    local body=""
+    local base="${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}"
+    local head=""
+    local draft=false
+    local fill=true
+    local reviewers=()
+    local labels=()
+    local assignees=()
+    local run_sync="ask"
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --title)
+                _manifest_pr_require_option_value "--title" "${2:-}" "manifest pr --title <text>" || return 1
+                title="$2"; shift 2 ;;
+            --body)
+                _manifest_pr_require_option_value "--body" "${2:-}" "manifest pr --body <text>" || return 1
+                body="$2"; shift 2 ;;
+            --base)
+                _manifest_pr_require_option_value "--base" "${2:-}" "manifest pr --base <branch>" || return 1
+                base="$2"; shift 2 ;;
+            --head)
+                _manifest_pr_require_option_value "--head" "${2:-}" "manifest pr --head <branch>" || return 1
+                head="$2"; shift 2 ;;
+            --draft) draft=true; shift ;;
+            --no-fill) fill=false; shift ;;
+            --reviewer)
+                _manifest_pr_require_option_value "--reviewer" "${2:-}" "manifest pr --reviewer <user>" || return 1
+                reviewers+=("$2"); shift 2 ;;
+            --label)
+                _manifest_pr_require_option_value "--label" "${2:-}" "manifest pr --label <label>" || return 1
+                labels+=("$2"); shift 2 ;;
+            --assignee)
+                _manifest_pr_require_option_value "--assignee" "${2:-}" "manifest pr --assignee <user>" || return 1
+                assignees+=("$2"); shift 2 ;;
+            --sync) run_sync="true"; shift ;;
+            --no-sync) run_sync="false"; shift ;;
+            --help|-h)
+                echo "Usage: manifest pr [interactive options]"
+                echo "       manifest pr create|update|status|ready|checks|queue|policy ..."
+                echo ""
+                echo "Interactive options:"
+                echo "  --base <branch>            Prefill target base branch (default: main)"
+                echo "  --head <branch>            Prefill source branch (default: current)"
+                echo "  --title <text>             Prefill PR title"
+                echo "  --body <text>              Prefill PR body"
+                echo "  --draft                    Start with draft PR selected"
+                echo "  --no-fill                  Disable auto-fill when title/body omitted"
+                echo "  --reviewer <user>          Add reviewer (repeatable)"
+                echo "  --label <label>            Add label (repeatable)"
+                echo "  --assignee <user>          Add assignee (repeatable)"
+                echo "  --sync                     Force safe sync before PR prep (fetch only)"
+                echo "  --no-sync                  Skip safe sync before PR prep"
+                return 0
+                ;;
+            *)
+                show_validation_error "Unknown option for 'manifest pr' interactive mode: $1"
+                return 1
+                ;;
+        esac
+    done
+
+    if [ ! -t 0 ]; then
+        log_error "'manifest pr' interactive mode requires a TTY"
+        echo "Use 'manifest pr create ...' in non-interactive contexts."
+        return 1
+    fi
+
+    _manifest_pr_require_gh_auth || return 1
+
+    if [ -z "$head" ]; then
+        head=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+    fi
+    if [ -z "$head" ] || [ "$head" = "HEAD" ]; then
+        log_error "Could not determine current branch for interactive PR creation"
+        return 1
+    fi
+
+    echo "🔀 Manifest PR Wizard"
+    echo "====================="
+    echo "Detected source branch: $head"
+    echo "Detected base branch:   $base"
+    echo ""
+
+    if [ "$run_sync" = "ask" ]; then
+        local sync_reply=""
+        read -r -p "Run safe sync first (fetch remotes/branches/tags)? [Y/n/q]: " sync_reply
+        if [ "$sync_reply" = "q" ] || [ "$sync_reply" = "Q" ]; then
+            echo "PR creation cancelled."
+            return 0
+        elif [ -z "$sync_reply" ] || [[ "$sync_reply" =~ ^[Yy]$ ]]; then
+            run_sync="true"
+        else
+            run_sync="false"
+        fi
+    fi
+
+    if [ "$run_sync" = "true" ]; then
+        echo "🔄 Running safe sync..."
+        if ! git fetch --all --prune --tags >/dev/null 2>&1; then
+            log_warning "Safe sync fetch failed; continuing with local state."
+        fi
+    fi
+
+    local input=""
+    local local_branches=()
+    local local_branch_list=""
+    local remote_branches=()
+    local remote_branch_list=""
+    local_branch_list=$(git for-each-ref --format='%(refname:short)' refs/heads 2>/dev/null || true)
+    if [ -n "$local_branch_list" ]; then
+        while IFS= read -r line; do
+            [ -n "$line" ] && local_branches+=("$line")
+        done <<< "$local_branch_list"
+    fi
+    remote_branch_list=$(git for-each-ref --format='%(refname:short)' refs/remotes/origin 2>/dev/null | sed 's#^origin/##' | rg -v '^HEAD$' || true)
+    if [ -n "$remote_branch_list" ]; then
+        while IFS= read -r line; do
+            [ -n "$line" ] && remote_branches+=("$line")
+        done <<< "$remote_branch_list"
+    fi
+
+    local head_options_all=("$head")
+    local hb
+    for hb in "${local_branches[@]}"; do
+        if [ "$hb" != "$head" ]; then
+            local exists=false
+            local existing
+            for existing in "${head_options_all[@]}"; do
+                if [ "$existing" = "$hb" ]; then
+                    exists=true
+                    break
+                fi
+            done
+            [ "$exists" = "false" ] && head_options_all+=("$hb")
+        fi
+    done
+    for hb in "${remote_branches[@]}"; do
+        if [ "$hb" != "$head" ]; then
+            local exists=false
+            local existing
+            for existing in "${head_options_all[@]}"; do
+                if [ "$existing" = "$hb" ]; then
+                    exists=true
+                    break
+                fi
+            done
+            [ "$exists" = "false" ] && head_options_all+=("$hb")
+        fi
+    done
+
+    local head_options=()
+    for hb in "${head_options_all[@]}"; do
+        if ! _manifest_pr_is_protected_head_branch "$hb"; then
+            head_options+=("$hb")
+        fi
+    done
+    if [ ${#head_options[@]} -eq 0 ]; then
+        head_options=("${head_options_all[@]}")
+    fi
+
+    echo ""
+    echo "Select source (head) branch:"
+    local show_all_heads=false
+    while true; do
+        local active_head_options=("${head_options[@]}")
+        if [ "$show_all_heads" = "true" ]; then
+            active_head_options=("${head_options_all[@]}")
+        fi
+
+        local idx=1
+        local max_options=15
+        local total_options="${#active_head_options[@]}"
+        local visible_options="$total_options"
+        if [ "$visible_options" -gt "$max_options" ]; then
+            visible_options="$max_options"
+        fi
+        while [ "$idx" -le "$visible_options" ]; do
+            echo "  $idx) ${active_head_options[$((idx-1))]}"
+            idx=$((idx+1))
+        done
+        if [ "$total_options" -gt "$max_options" ]; then
+            echo "  ... plus $((total_options - max_options)) more branch(es)"
+        fi
+        if [ "$show_all_heads" != "true" ]; then
+            echo "  a) show protected/all branches"
+        fi
+        echo "  c) custom branch name"
+        echo "  q) cancel"
+        read -r -p "Choose head [1]: " input
+        if [ "$input" = "q" ] || [ "$input" = "Q" ]; then
+            echo "PR creation cancelled."
+            return 0
+        elif [ "$input" = "a" ] || [ "$input" = "A" ]; then
+            show_all_heads=true
+            continue
+        elif [ -z "$input" ]; then
+            head="${active_head_options[0]}"
+            break
+        elif [[ "$input" =~ ^[0-9]+$ ]] && [ "$input" -ge 1 ] && [ "$input" -le "$visible_options" ]; then
+            head="${active_head_options[$((input-1))]}"
+            break
+        elif [ "$input" = "c" ] || [ "$input" = "C" ]; then
+            read -r -p "Enter head branch (or q to cancel): " input
+            if [ "$input" = "q" ] || [ "$input" = "Q" ]; then
+                echo "PR creation cancelled."
+                return 0
+            fi
+            if [ -n "$input" ]; then
+                head="$input"
+                break
+            fi
+        else
+            # Allow direct branch name entry for power users.
+            head="$input"
+            break
+        fi
+    done
+
+    local branch_options=("$base")
+    local rb
+    for rb in "${remote_branches[@]}"; do
+        if [ "$rb" != "$base" ]; then
+            branch_options+=("$rb")
+        fi
+    done
+
+    echo ""
+    echo "Select base branch:"
+    local idx=1
+    local max_options=15
+    local total_options="${#branch_options[@]}"
+    local visible_options="$total_options"
+    if [ "$visible_options" -gt "$max_options" ]; then
+        visible_options="$max_options"
+    fi
+    while [ "$idx" -le "$visible_options" ]; do
+        echo "  $idx) ${branch_options[$((idx-1))]}"
+        idx=$((idx+1))
+    done
+    if [ "$total_options" -gt "$max_options" ]; then
+        echo "  ... plus $((total_options - max_options)) more branch(es)"
+    fi
+    echo "  c) custom branch name"
+    echo "  q) cancel"
+    read -r -p "Choose base [1]: " input
+    if [ "$input" = "q" ] || [ "$input" = "Q" ]; then
+        echo "PR creation cancelled."
+        return 0
+    elif [ -z "$input" ]; then
+        base="${branch_options[0]}"
+    elif [[ "$input" =~ ^[0-9]+$ ]] && [ "$input" -ge 1 ] && [ "$input" -le "$visible_options" ]; then
+        base="${branch_options[$((input-1))]}"
+    elif [ "$input" = "c" ] || [ "$input" = "C" ]; then
+        read -r -p "Enter base branch (or q to cancel): " input
+        if [ "$input" = "q" ] || [ "$input" = "Q" ]; then
+            echo "PR creation cancelled."
+            return 0
+        fi
+        if [ -n "$input" ]; then
+            base="$input"
+        fi
+    else
+        # Allow direct branch name entry for power users.
+        base="$input"
+    fi
+
+    local existing_pr_json
+    existing_pr_json=$(gh pr list --state open --head "$head" --limit 1 --json number,url,title 2>/dev/null || echo "[]")
+    if [ "$(echo "$existing_pr_json" | jq 'length')" -gt 0 ]; then
+        echo "✅ Open PR already exists for '$head':"
+        echo "   #$(echo "$existing_pr_json" | jq -r '.[0].number') $(echo "$existing_pr_json" | jq -r '.[0].title')"
+        echo "   $(echo "$existing_pr_json" | jq -r '.[0].url')"
+        return 0
+    fi
+
+    if [ "$head" = "$base" ]; then
+        log_error "Head branch and base branch cannot be the same ($head)"
+        return 1
+    fi
+
+    local default_title=""
+    default_title=$(git log -1 --pretty=%s 2>/dev/null || echo "")
+    if [ -z "$title" ] && [ -n "$default_title" ]; then
+        read -r -p "PR title [$default_title]: " input
+        if [ -n "$input" ]; then
+            title="$input"
+        else
+            title="$default_title"
+        fi
+    fi
+
+    if [ -z "$body" ]; then
+        read -r -p "Add PR body now? [y/N]: " input
+        if [[ "$input" =~ ^[Yy]$ ]]; then
+            read -r -p "PR body: " body
+        fi
+    fi
+
+    if [ "$draft" = "false" ]; then
+        read -r -p "Create as draft? [y/N]: " input
+        if [[ "$input" =~ ^[Yy]$ ]]; then
+            draft=true
+        fi
+    fi
+
+    local reviewers_csv=""
+    local labels_csv=""
+    local assignees_csv=""
+    if [ ${#reviewers[@]} -eq 0 ]; then
+        read -r -p "Reviewers (comma-separated, optional): " reviewers_csv
+        if [ -n "$reviewers_csv" ]; then
+            local item
+            IFS=',' read -r -a _reviewers_split <<< "$reviewers_csv"
+            for item in "${_reviewers_split[@]}"; do
+                item="$(echo "$item" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+                [ -n "$item" ] && reviewers+=("$item")
+            done
+        fi
+    fi
+    if [ ${#labels[@]} -eq 0 ]; then
+        read -r -p "Labels (comma-separated, optional): " labels_csv
+        if [ -n "$labels_csv" ]; then
+            local item
+            IFS=',' read -r -a _labels_split <<< "$labels_csv"
+            for item in "${_labels_split[@]}"; do
+                item="$(echo "$item" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+                [ -n "$item" ] && labels+=("$item")
+            done
+        fi
+    fi
+    if [ ${#assignees[@]} -eq 0 ]; then
+        read -r -p "Assignees (comma-separated, optional): " assignees_csv
+        if [ -n "$assignees_csv" ]; then
+            local item
+            IFS=',' read -r -a _assignees_split <<< "$assignees_csv"
+            for item in "${_assignees_split[@]}"; do
+                item="$(echo "$item" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+                [ -n "$item" ] && assignees+=("$item")
+            done
+        fi
+    fi
+
+    echo ""
+    echo "Plan:"
+    echo "  head:  $head"
+    echo "  base:  $base"
+    echo "  draft: $draft"
+    if [ -n "$title" ]; then
+        echo "  title: $title"
+    fi
+    read -r -p "Proceed with these parameters? [y/N/q]: " input
+    if [ "$input" = "q" ] || [ "$input" = "Q" ] || [ -z "$input" ] || [[ ! "$input" =~ ^[Yy]$ ]]; then
+        echo "PR creation cancelled."
+        return 0
+    fi
+
+    echo "Final confirmation required before any write actions."
+    read -r -p "Type CREATE to push/create PR, or anything else to cancel: " input
+    if [ "$input" != "CREATE" ]; then
+        echo "PR creation cancelled."
+        return 0
+    fi
+
+    local create_args=(--head "$head" --base "$base")
+    [ "$draft" = "true" ] && create_args+=("--draft")
+    [ "$fill" = "false" ] && create_args+=("--no-fill")
+    [ -n "$title" ] && create_args+=("--title" "$title")
+    [ -n "$body" ] && create_args+=("--body" "$body")
+
+    local v
+    for v in "${reviewers[@]}"; do create_args+=("--reviewer" "$v"); done
+    for v in "${labels[@]}"; do create_args+=("--label" "$v"); done
+    for v in "${assignees[@]}"; do create_args+=("--assignee" "$v"); done
+
+    manifest_pr_create "${create_args[@]}"
+}
+
 manifest_pr_update() {
     local pr_selector=""
     local non_interactive=false
@@ -824,17 +1216,8 @@ manifest_pr_queue() {
 }
 
 manifest_ship() {
-    local increment_type="patch"
+    local increment_type=""
     local interactive_prep=false
-    local run_prep=true
-    local safe=false
-    local method="squash"
-    local draft=false
-    local no_delete_branch=false
-    local queue_force=false
-    local non_interactive=true
-    local checks_timeout_sec="${MANIFEST_CLI_SHIP_TIMEOUT_SECONDS:-1800}"
-    local checks_interval_sec="${MANIFEST_CLI_SHIP_CHECK_INTERVAL_SECONDS:-10}"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -850,161 +1233,42 @@ manifest_ship() {
                 interactive_prep=true
                 shift
                 ;;
-            --noprep)
-                run_prep=false
-                shift
-                ;;
-            --safe)
-                safe=true
-                shift
-                ;;
-            --draft)
-                draft=true
-                shift
-                ;;
-            --method)
-                _manifest_pr_require_option_value "--method" "${2:-}" "manifest ship --method <merge|squash|rebase>" || return 1
-                method="$2"
-                shift 2
-                ;;
-            --force)
-                queue_force=true
-                shift
-                ;;
-            --no-delete-branch)
-                no_delete_branch=true
-                shift
-                ;;
-            --timeout)
-                _manifest_pr_require_option_value "--timeout" "${2:-}" "manifest ship --timeout <sec>" || return 1
-                checks_timeout_sec="$2"
-                shift 2
-                ;;
-            --interval)
-                _manifest_pr_require_option_value "--interval" "${2:-}" "manifest ship --interval <sec>" || return 1
-                checks_interval_sec="$2"
-                shift 2
-                ;;
-            --interactive-pr)
-                non_interactive=false
-                shift
-                ;;
-            --non-interactive)
-                non_interactive=true
-                shift
-                ;;
             -h|--help)
-                echo "Usage: manifest ship [patch|minor|major|revision] [options]"
+                echo "Usage: manifest ship <patch|minor|major|revision> [-i|--interactive]"
                 echo ""
                 echo "Options:"
-                echo "  --noprep               Skip prep step and only run PR landing flow"
-                echo "  --safe                 Wait for checks, enforce ready, then queue"
-                echo "  --draft                Create PR as draft"
-                echo "  --method <type>        Merge method: merge|squash|rebase (default: squash)"
-                echo "  --force                Force queue even if readiness gate fails"
-                echo "  --no-delete-branch     Keep source branch after merge/queue"
-                echo "  --timeout <sec>        Safe mode check timeout (default: 1800)"
-                echo "  --interval <sec>       Safe mode poll interval (default: 10)"
-                echo "  --interactive-pr       Allow interactive PR selection prompts"
+                echo "  <patch|minor|major|revision>   Required release type subcommand"
+                echo "  -p|-m|-M|-r                    Short form release type"
+                echo "  -i|--interactive               Enable interactive prep prompts"
                 echo ""
                 echo "Flow:"
-                echo "  default: prep -> pr create -> pr queue"
-                echo "  --safe:  prep -> pr create -> wait checks -> pr ready -> pr queue"
-                echo "  --noprep: pr create -> pr queue (or safe flow if --safe)"
+                echo "  ship -> prep workflow (sync, docs, version, commit, push)"
+                echo "  PR operations are intentionally not part of ship."
                 return 0
                 ;;
             *)
                 show_validation_error "Unknown option for 'manifest ship': $1"
+                echo "Usage: manifest ship <patch|minor|major|revision> [-i|--interactive]"
                 return 1
                 ;;
         esac
     done
 
-    if [[ ! "$method" =~ ^(merge|squash|rebase)$ ]]; then
-        show_validation_error "Invalid --method value: '$method' (expected merge|squash|rebase)"
-        return 1
-    fi
-
-    if ! [[ "$checks_timeout_sec" =~ ^[0-9]+$ ]] || ! [[ "$checks_interval_sec" =~ ^[0-9]+$ ]]; then
-        log_error "--timeout and --interval must be non-negative integers"
+    if [ -z "$increment_type" ]; then
+        log_error "ship requires a release type subcommand"
+        echo "Usage: manifest ship <patch|minor|major|revision> [-i|--interactive]"
+        echo "Release type options: patch, minor, major, revision"
         return 1
     fi
 
     echo "🚢 Starting ship workflow ($increment_type)..."
 
-    # Step 1: Run prep workflow unless explicitly skipped.
-    if [ "$run_prep" = "true" ]; then
-        if ! manifest_prep "$increment_type" "$interactive_prep"; then
-            log_error "Prep step failed; aborting ship workflow."
-            return 1
-        fi
-    else
-        echo "⏭️  Skipping prep step (--noprep)."
-        if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-            log_error "Cannot use --noprep with uncommitted changes."
-            log_error "Commit/stash changes first, or run 'manifest prep' without --noprep."
-            return 1
-        fi
-    fi
-
-    # Step 2: Create (or reuse) PR for current branch.
-    local create_args=()
-    [ "$draft" = "true" ] && create_args+=("--draft")
-    [ "$non_interactive" = "true" ] && create_args+=("--non-interactive")
-    if ! manifest_pr_create "${create_args[@]}"; then
-        log_error "PR create step failed; aborting ship workflow."
+    if ! manifest_prep "$increment_type" "$interactive_prep"; then
+        log_error "Prep step failed; aborting ship workflow."
         return 1
     fi
 
-    # Resolve the target PR for subsequent actions.
-    local resolved
-    resolved=$(_manifest_pr_resolve_target "" "$non_interactive") || return 1
-    local target="${resolved%%|*}"
-
-    # Step 3: Fast path queues auto-merge; safe path waits then queues.
-    if [ "$safe" = "true" ]; then
-        _manifest_pr_require_gh_auth || return 1
-
-        echo "⏳ Safe mode: waiting for checks on PR '$target'..."
-        local elapsed=0
-        while true; do
-            if gh pr checks "$target" >/dev/null 2>&1; then
-                echo "✅ Checks passing"
-                break
-            fi
-
-            local checks_exit=$?
-            if [ "$checks_exit" -eq 1 ]; then
-                if [ "$elapsed" -ge "$checks_timeout_sec" ]; then
-                    log_error "Timed out waiting for checks (${checks_timeout_sec}s)"
-                    return 1
-                fi
-                sleep "$checks_interval_sec"
-                elapsed=$((elapsed + checks_interval_sec))
-                continue
-            fi
-
-            log_error "Checks failed (or unavailable) for PR '$target'"
-            return 1
-        done
-
-        if ! manifest_pr_ready --pr "$target" --non-interactive; then
-            log_error "PR is not ready; aborting ship workflow."
-            return 1
-        fi
-
-        local queue_args=(--pr "$target" --method "$method" --non-interactive)
-        [ "$no_delete_branch" = "true" ] && queue_args+=("--no-delete-branch")
-        [ "$queue_force" = "true" ] && queue_args+=("--force")
-        manifest_pr_queue "${queue_args[@]}" || return 1
-    else
-        local queue_args=(--pr "$target" --method "$method" --non-interactive)
-        [ "$no_delete_branch" = "true" ] && queue_args+=("--no-delete-branch")
-        [ "$queue_force" = "true" ] && queue_args+=("--force")
-        manifest_pr_queue "${queue_args[@]}" || return 1
-    fi
-
-    echo "✅ Ship workflow complete."
+    echo "✅ Ship workflow complete (no PR actions)."
 }
 
 manifest_pr_help() {
@@ -1013,13 +1277,18 @@ Manifest PR Commands
 ====================
 
   manifest pr [options]
-    Preferred shorthand for: manifest pr queue [options]
-    (queues policy-aware auto-merge after gates pass)
+    Launch interactive PR wizard (default). Detects branch info and can run safe sync.
     Options:
-      --pr <number|url|branch>
-      --method <merge|squash|rebase>
-      --force
-      --no-delete-branch
+      --head <branch>
+      --base <branch>
+      --title <text>
+      --body <text>
+      --draft
+      --no-fill
+      --reviewer <user>          (repeatable)
+      --label <label>            (repeatable)
+      --assignee <user>          (repeatable)
+      --sync | --no-sync         (--sync fetches remotes/branches/tags before prompts)
 
   manifest pr create [options]
     Create PR from current branch (or --head) to --base.
