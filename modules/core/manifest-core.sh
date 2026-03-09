@@ -148,13 +148,21 @@ update_homebrew_formula() {
 
     if [ -d "$tap_dir/Formula" ]; then
         cp "$formula_file" "$tap_dir/Formula/manifest.rb"
-        (
-            cd "$tap_dir" &&
-            git add Formula/manifest.rb &&
-            git commit -m "Update formula to ${tag}" &&
+        if (
+            set -e
+            cd "$tap_dir"
+            git pull --rebase origin main
+            git add Formula/manifest.rb
+            if ! git diff --cached --quiet; then
+                git commit -m "Update formula to ${tag}"
+            fi
             git push origin main
-        )
-        echo "   ✅ Pushed to homebrew-tap repo"
+        ); then
+            echo "   ✅ Pushed to homebrew-tap repo"
+        else
+            log_error "Failed to push formula to homebrew-tap repo"
+            return 1
+        fi
     else
         echo "   ⚠️  Homebrew tap not found locally — formula updated in this repo only"
         echo "   Push formula/manifest.rb to the homebrew-tap repo manually"
