@@ -1,7 +1,7 @@
 # Release v36.1.0
 
-**Release Date:** 2026-03-09 01:41:43 UTC
-**Release Type:** minor
+**Release Date:** 2026-03-09 01:53:08 UTC
+**Release Type:** patch
 
 ## 🎯 What's New
 
@@ -59,11 +59,17 @@ manifest docs
 
 ## New Features
 
+
 ## Improvements
-Update Homebrew formula to v36.0.0
+Allow config and ntp outside git repositories.
+Harden Homebrew formula publish in ship workflow.
+Update Homebrew formula to v36.1.0
 
 ## Bug Fixes
 
+
 ## Breaking Changes
 
+
 ## Documentation
+

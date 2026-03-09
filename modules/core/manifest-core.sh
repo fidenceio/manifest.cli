@@ -301,7 +301,7 @@ main() {
             # Commands that can run outside repos still need configuration loaded.
             case "$command" in
                 "config"|"ntp")
-                    load_configuration "$(pwd)"
+                    load_configuration "$(pwd)" "false"
                     ;;
             esac
             ;;

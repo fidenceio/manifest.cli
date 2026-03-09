@@ -373,6 +373,7 @@ config_doctor() {
 # Load configuration from environment files
 load_configuration() {
     local project_root="$1"
+    local include_project_overrides="${2:-true}"
     
     if [ -z "$project_root" ]; then
         project_root="."
@@ -462,51 +463,54 @@ load_configuration() {
         fi
     fi
 
-    # Then try the project root for local overrides
-    for config_file in "${MANIFEST_CLI_CONFIG_FILES[@]}"; do
-        local full_path="$project_root/$config_file"
-        if [ -f "$full_path" ]; then
-            echo "🔧 Loading project configuration from: $config_file (Project: $project_root)"
-            # Source the file to load variables
-            if [ -r "$full_path" ]; then
-                # Use a safe way to load env files
-                while IFS= read -r line || [ -n "$line" ]; do
-                    # Skip comments and empty lines
-                    if [[ "$line" =~ ^[[:space:]]*# ]] || [[ -z "${line// }" ]]; then
-                        continue
-                    fi
-                    
-                    # Skip lines that don't look like variable assignments
-                    if [[ "$line" =~ ^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*= ]]; then
-                        # Parse the line to handle quoted values properly
-                        local var_name="${line%%=*}"
-                        local var_value="${line#*=}"
-                        
-                        # Remove inline comments (everything after #)
-                        var_value="${var_value%%\#*}"
-                        
-                        # Trim whitespace first
-                        var_value=$(echo "$var_value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-                        
-                        # Remove quotes if present
-                        if [[ "$var_value" =~ ^\".*\"$ ]]; then
-                            var_value="${var_value#\"}"
-                            var_value="${var_value%\"}"
-                        elif [[ "$var_value" =~ ^\'.*\'$ ]]; then
-                            var_value="${var_value#\'}"
-                            var_value="${var_value%\'}"
+    # Then try the project root for local overrides.
+    # For out-of-repo invocations, callers can disable this scope.
+    if [ "$include_project_overrides" = "true" ]; then
+        for config_file in "${MANIFEST_CLI_CONFIG_FILES[@]}"; do
+            local full_path="$project_root/$config_file"
+            if [ -f "$full_path" ]; then
+                echo "🔧 Loading project configuration from: $config_file (Project: $project_root)"
+                # Source the file to load variables
+                if [ -r "$full_path" ]; then
+                    # Use a safe way to load env files
+                    while IFS= read -r line || [ -n "$line" ]; do
+                        # Skip comments and empty lines
+                        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ -z "${line// }" ]]; then
+                            continue
                         fi
                         
-                        # Trim whitespace again after quote removal
-                        var_value=$(echo "$var_value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-                        
-                        # Export the variable
-                        export "$var_name=$var_value"
-                    fi
-                done < "$full_path"
+                        # Skip lines that don't look like variable assignments
+                        if [[ "$line" =~ ^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*= ]]; then
+                            # Parse the line to handle quoted values properly
+                            local var_name="${line%%=*}"
+                            local var_value="${line#*=}"
+                            
+                            # Remove inline comments (everything after #)
+                            var_value="${var_value%%\#*}"
+                            
+                            # Trim whitespace first
+                            var_value=$(echo "$var_value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+                            
+                            # Remove quotes if present
+                            if [[ "$var_value" =~ ^\".*\"$ ]]; then
+                                var_value="${var_value#\"}"
+                                var_value="${var_value%\"}"
+                            elif [[ "$var_value" =~ ^\'.*\'$ ]]; then
+                                var_value="${var_value#\'}"
+                                var_value="${var_value%\'}"
+                            fi
+                            
+                            # Trim whitespace again after quote removal
+                            var_value=$(echo "$var_value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+                            
+                            # Export the variable
+                            export "$var_name=$var_value"
+                        fi
+                    done < "$full_path"
+                fi
             fi
-        fi
-    done
+        done
+    fi
     
     # Always set default values for critical variables (even if no config files found)
     set_default_configuration
