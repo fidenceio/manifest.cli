@@ -297,7 +297,13 @@ main() {
 
     # Commands that do NOT require a Git repository
     case "$command" in
-        "help"|"-help"|"--help"|"-h"|"uninstall"|"reinstall"|"update"|"upgrade"|"fleet")
+        "help"|"-help"|"--help"|"-h"|"uninstall"|"reinstall"|"update"|"upgrade"|"fleet"|"config"|"ntp")
+            # Commands that can run outside repos still need configuration loaded.
+            case "$command" in
+                "config"|"ntp")
+                    load_configuration "$(pwd)"
+                    ;;
+            esac
             ;;
         "")
             # No command given — will fall through to display_help
