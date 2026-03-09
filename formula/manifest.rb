@@ -27,6 +27,7 @@ class Manifest < Formula
     # Clean up legacy manual installations
     legacy_bin = Pathname.new(Dir.home)/".local"/"bin"/"manifest"
     legacy_dir = Pathname.new(Dir.home)/".manifest-cli"
+    user_global_config = Pathname.new(Dir.home)/".env.manifest.global"
 
     if legacy_bin.exist?
       legacy_bin.unlink
@@ -36,6 +37,25 @@ class Manifest < Formula
     if legacy_dir.exist?
       legacy_dir.rmtree
       ohai "Removed legacy install directory: #{legacy_dir}"
+    end
+
+    # Apply config migrations so `brew upgrade` is functionally equivalent
+    # to `manifest update --force` for user-global settings.
+    if user_global_config.exist?
+      migration_cmd = [
+        "#{bin}/manifest",
+        "config",
+        "doctor",
+        "--fix",
+        "--file",
+        user_global_config.to_s
+      ]
+
+      if system(*migration_cmd)
+        ohai "Migrated user config: #{user_global_config}"
+      else
+        opoo "Could not auto-migrate #{user_global_config}. Run: manifest config doctor --fix"
+      end
     end
   end
 
