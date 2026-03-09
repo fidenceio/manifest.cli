@@ -7,6 +7,63 @@
 
 # get_current_version() and get_latest_version() - Now available from manifest-shared-functions.sh
 
+manifest_update_sed_inplace() {
+    case "$OSTYPE" in
+        darwin*|freebsd*|openbsd*|netbsd*)
+            sed -i '' "$@" ;;
+        *)
+            sed -i "$@" ;;
+    esac
+}
+
+manifest_update_upsert_env_key() {
+    local file="$1"
+    local key="$2"
+    local value="$3"
+
+    [ -f "$file" ] || return 1
+
+    if grep -Eq "^[[:space:]]*${key}=" "$file"; then
+        manifest_update_sed_inplace "s|^[[:space:]]*${key}=.*|${key}=${value}|" "$file"
+    else
+        printf '%s=%s\n' "$key" "$value" >> "$file"
+    fi
+}
+
+migrate_user_global_config_internal() {
+    local config_file="$HOME/.env.manifest.global"
+    [ -f "$config_file" ] || return 0
+
+    local ntp1 ntp2 ntp3 ntp4 ntp_servers tap_repo
+    ntp1=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER1=/{print $2}' "$config_file" | tail -n1)
+    ntp2=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER2=/{print $2}' "$config_file" | tail -n1)
+    ntp3=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER3=/{print $2}' "$config_file" | tail -n1)
+    ntp4=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER4=/{print $2}' "$config_file" | tail -n1)
+    ntp_servers=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVERS=/{print $2}' "$config_file" | tail -n1)
+    tap_repo=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TAP_REPO=/{print $2}' "$config_file" | tail -n1)
+
+    # Safe migrations for known legacy defaults only.
+    [ "$ntp1" = "time.apple.com" ] && manifest_update_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER1" "216.239.35.0"
+    [ "$ntp2" = "time.google.com" ] && manifest_update_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER2" "216.239.35.4"
+    [ "$ntp3" = "pool.ntp.org" ] && manifest_update_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER3" ""
+    [ "$ntp4" = "time.nist.gov" ] && manifest_update_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER4" ""
+    [ "$tap_repo" = "https://github.com/fidenceio/fidenceio-homebrew-tap.git" ] && \
+        manifest_update_upsert_env_key "$config_file" "MANIFEST_CLI_TAP_REPO" "https://github.com/fidenceio/homebrew-tap.git"
+
+    # Add new cache keys if missing.
+    grep -Eq "^[[:space:]]*MANIFEST_CLI_NTP_CACHE_TTL=" "$config_file" || \
+        manifest_update_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_CACHE_TTL" "120"
+    grep -Eq "^[[:space:]]*MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD=" "$config_file" || \
+        manifest_update_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD" "3600"
+    grep -Eq "^[[:space:]]*MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE=" "$config_file" || \
+        manifest_update_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE" "21600"
+
+    if [ -n "$ntp_servers" ]; then
+        log_warning "Deprecated variable detected in ~/.env.manifest.global: MANIFEST_CLI_NTP_SERVERS"
+        log_warning "Use MANIFEST_CLI_NTP_SERVER1..4 instead (legacy value preserved)"
+    fi
+}
+
 # Check if update is available
 check_for_updates() {
     local current_version=$(get_current_version)
@@ -141,7 +198,7 @@ MANIFEST_CLI_INTERACTIVE_MODE=false
 # Homebrew settings
 MANIFEST_CLI_BREW_OPTION=enabled
 MANIFEST_CLI_BREW_INTERACTIVE=no
-MANIFEST_CLI_TAP_REPO="fidenceio/fidenceio-homebrew-tap"
+MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/homebrew-tap.git"
 
 # Repository settings
 MANIFEST_CLI_REPO_URL="https://api.github.com/repos/fidenceio/fidenceio.manifest.cli"
@@ -245,12 +302,14 @@ update_cli_internal() {
         log_info "🍺 Homebrew installation detected — upgrading via Homebrew..."
         brew update && brew upgrade fidenceio/tap/manifest
         if [ $? -eq 0 ]; then
+            migrate_user_global_config_internal
             log_success "Update completed successfully via Homebrew!"
         else
             log_error "Homebrew upgrade failed"
             return 1
         fi
     elif install_cli "$force_update"; then
+        migrate_user_global_config_internal
         log_success "Update completed successfully!"
         log_info "You may need to restart your terminal or run 'hash -r' to use the updated CLI"
     else

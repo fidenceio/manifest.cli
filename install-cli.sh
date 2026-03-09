@@ -120,6 +120,91 @@ sed_inplace() {
     esac
 }
 
+_manifest_cli_upsert_env_key() {
+    local file="$1"
+    local key="$2"
+    local value="$3"
+
+    [ -f "$file" ] || return 1
+
+    if grep -Eq "^[[:space:]]*${key}=" "$file"; then
+        sed_inplace "s|^[[:space:]]*${key}=.*|${key}=${value}|" "$file"
+    else
+        printf '%s=%s\n' "$key" "$value" >> "$file"
+    fi
+}
+
+migrate_user_global_configuration() {
+    local config_file="$HOME/.env.manifest.global"
+    [ -f "$config_file" ] || return 0
+
+    print_subheader "🧭 Migrating User Configuration (Safe Merge)"
+
+    local migrated=0
+    local warnings=0
+
+    local ntp1 ntp2 ntp3 ntp4 tap_repo ntp_servers
+    ntp1=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER1=/{print $2}' "$config_file" | tail -n1)
+    ntp2=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER2=/{print $2}' "$config_file" | tail -n1)
+    ntp3=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER3=/{print $2}' "$config_file" | tail -n1)
+    ntp4=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER4=/{print $2}' "$config_file" | tail -n1)
+    tap_repo=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TAP_REPO=/{print $2}' "$config_file" | tail -n1)
+    ntp_servers=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVERS=/{print $2}' "$config_file" | tail -n1)
+
+    # Migrate only known legacy defaults; preserve user custom values.
+    if [ "$ntp1" = "time.apple.com" ]; then
+        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER1" "216.239.35.0"
+        migrated=$((migrated + 1))
+    fi
+    if [ "$ntp2" = "time.google.com" ]; then
+        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER2" "216.239.35.4"
+        migrated=$((migrated + 1))
+    fi
+    if [ "$ntp3" = "pool.ntp.org" ]; then
+        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER3" ""
+        migrated=$((migrated + 1))
+    fi
+    if [ "$ntp4" = "time.nist.gov" ]; then
+        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER4" ""
+        migrated=$((migrated + 1))
+    fi
+    if [ "$tap_repo" = "https://github.com/fidenceio/fidenceio-homebrew-tap.git" ]; then
+        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_TAP_REPO" "https://github.com/fidenceio/homebrew-tap.git"
+        migrated=$((migrated + 1))
+    fi
+
+    # Ensure new cache controls exist.
+    if ! grep -Eq "^[[:space:]]*MANIFEST_CLI_NTP_CACHE_TTL=" "$config_file"; then
+        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_CACHE_TTL" "120"
+        migrated=$((migrated + 1))
+    fi
+    if ! grep -Eq "^[[:space:]]*MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD=" "$config_file"; then
+        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD" "3600"
+        migrated=$((migrated + 1))
+    fi
+    if ! grep -Eq "^[[:space:]]*MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE=" "$config_file"; then
+        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE" "21600"
+        migrated=$((migrated + 1))
+    fi
+
+    # Deprecated variable warning (preserve value; user may still rely on it).
+    if [ -n "$ntp_servers" ]; then
+        print_warning "⚠️  Deprecated variable detected: MANIFEST_CLI_NTP_SERVERS"
+        print_warning "   Prefer MANIFEST_CLI_NTP_SERVER1..4 (legacy value preserved)"
+        warnings=$((warnings + 1))
+    fi
+
+    if [ "$migrated" -gt 0 ]; then
+        print_success "✅ Migrated $migrated configuration setting(s) in $config_file"
+    else
+        print_status "ℹ️  No user config migrations needed"
+    fi
+    if [ "$warnings" -gt 0 ]; then
+        print_warning "⚠️  Found $warnings deprecated configuration setting(s)"
+    fi
+    echo ""
+}
+
 # Get system information
 get_system_info() {
     print_subheader "🔍 System Information"
@@ -433,6 +518,7 @@ MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE=21600
 MANIFEST_CLI_VERSION_FORMAT=XX.XX.XX
 MANIFEST_CLI_GIT_TAG_PREFIX=v
 MANIFEST_CLI_GIT_DEFAULT_BRANCH=main
+MANIFEST_CLI_CONFIG_SCHEMA_VERSION=2
 
 # Documentation Configuration
 MANIFEST_CLI_DOCS_FOLDER=docs
@@ -447,6 +533,9 @@ EOF
     else
         print_status "ℹ️  Global configuration already exists: $HOME/.env.manifest.global (preserved)"
     fi
+
+    # Apply safe key-level migrations on every install/upgrade run.
+    migrate_user_global_configuration
 
     echo ""
 }

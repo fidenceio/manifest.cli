@@ -443,6 +443,10 @@ main() {
                 "ntp")
                     display_ntp_config
                     ;;
+                "doctor")
+                    shift
+                    config_doctor "$@"
+                    ;;
                 "")
                     if [ -t 0 ]; then
                         configure_interactive
@@ -451,11 +455,12 @@ main() {
                     fi
                     ;;
                 "-h"|"--help")
-                    echo "Usage: manifest config [show|ntp|setup]"
+                    echo "Usage: manifest config [show|ntp|doctor|setup]"
                     echo ""
                     echo "  (no args)  Run interactive wizard (TTY) or show config (non-interactive)"
                     echo "  show       Print full effective configuration"
                     echo "  ntp        Print NTP-only configuration"
+                    echo "  doctor     Detect stale/deprecated config (use --fix/--dry-run)"
                     echo "  setup      Force interactive configuration wizard"
                     ;;
                 "setup")
@@ -466,7 +471,7 @@ main() {
                     ;;
                 *)
                     log_error "Unknown config view: $1"
-                    echo "Usage: manifest config [show|ntp|setup]"
+                    echo "Usage: manifest config [show|ntp|doctor|setup]"
                     return 1
                     ;;
             esac

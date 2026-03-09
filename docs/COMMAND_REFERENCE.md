@@ -13,7 +13,7 @@ This reference reflects the command dispatcher in `modules/core/manifest-core.sh
 - `manifest version [patch|minor|major|revision]`
 - `manifest docs [metadata|homebrew|cleanup]`
 - `manifest cleanup`
-- `manifest config [show|ntp|setup|--non-interactive]`
+- `manifest config [show|ntp|doctor|setup|--non-interactive]`
 - `manifest security`
 - `manifest test [suite] [--strict-redact|--no-strict-redact]`
 - `manifest update [--check|--force]`
@@ -63,6 +63,9 @@ manifest docs cleanup
 manifest config
 manifest config show
 manifest config ntp
+manifest config doctor
+manifest config doctor --dry-run
+manifest config doctor --fix
 manifest config setup
 manifest config --non-interactive
 ```

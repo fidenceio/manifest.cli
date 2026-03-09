@@ -9,11 +9,295 @@ MANIFEST_CLI_CONFIG_FILES=(
     ".env.manifest.local"
 )
 
+MANIFEST_CLI_CONFIG_SCHEMA_VERSION_CURRENT=2
+
 # Configuration validation
 validate_config() {
     # Temporarily disable validation to debug NTP issue
     log_debug "Configuration validation skipped for debugging"
     return 0
+}
+
+_manifest_config_warn() {
+    local message="$1"
+    if command -v log_warning >/dev/null 2>&1; then
+        log_warning "$message"
+    else
+        echo "⚠️  $message"
+    fi
+}
+
+_manifest_config_warning_state_file() {
+    local state_dir="$HOME/.manifest-cli"
+    if ! mkdir -p "$state_dir" 2>/dev/null; then
+        echo ""
+        return 0
+    fi
+    echo "$state_dir/config-warning.last"
+}
+
+_manifest_config_should_emit_warnings() {
+    local cooldown_minutes="${MANIFEST_CLI_CONFIG_WARNING_COOLDOWN_MINUTES:-1440}"
+    if ! [[ "$cooldown_minutes" =~ ^[0-9]+$ ]] || [ "$cooldown_minutes" -lt 0 ]; then
+        cooldown_minutes=1440
+    fi
+
+    [ "$cooldown_minutes" -eq 0 ] && return 0
+
+    local state_file
+    state_file=$(_manifest_config_warning_state_file)
+    [ -n "$state_file" ] || return 0
+    local now
+    now=$(date +%s)
+    local last=0
+
+    if [ -f "$state_file" ]; then
+        last=$(tr -d '[:space:]' < "$state_file" 2>/dev/null || echo "0")
+        if ! [[ "$last" =~ ^[0-9]+$ ]]; then
+            last=0
+        fi
+    fi
+
+    if [ $((now - last)) -lt $((cooldown_minutes * 60)) ]; then
+        return 1
+    fi
+
+    printf '%s\n' "$now" > "$state_file" 2>/dev/null || true
+    return 0
+}
+
+warn_deprecated_configuration() {
+    if ! _manifest_config_should_emit_warnings; then
+        return 0
+    fi
+
+    local warned=0
+
+    if [ -n "${MANIFEST_CLI_NTP_SERVERS:-}" ]; then
+        _manifest_config_warn "Deprecated variable detected: MANIFEST_CLI_NTP_SERVERS. Prefer MANIFEST_CLI_NTP_SERVER1..4."
+        warned=1
+    fi
+
+    if [ "${MANIFEST_CLI_NTP_SERVER1:-}" = "time.apple.com" ] || \
+       [ "${MANIFEST_CLI_NTP_SERVER2:-}" = "time.google.com" ] || \
+       [ "${MANIFEST_CLI_NTP_SERVER3:-}" = "pool.ntp.org" ] || \
+       [ "${MANIFEST_CLI_NTP_SERVER4:-}" = "time.nist.gov" ]; then
+        _manifest_config_warn "Legacy NTP defaults detected. Recommended defaults are 216.239.35.0 / 216.239.35.4 with empty SERVER3/4."
+        warned=1
+    fi
+
+    if [ "${MANIFEST_CLI_TAP_REPO:-}" = "https://github.com/fidenceio/fidenceio-homebrew-tap.git" ]; then
+        _manifest_config_warn "Legacy MANIFEST_CLI_TAP_REPO detected. Recommended value: https://github.com/fidenceio/homebrew-tap.git"
+        warned=1
+    fi
+
+    if [ "$warned" -eq 1 ]; then
+        _manifest_config_warn "Run 'manifest update --force' (or reinstall) to apply safe config migrations automatically."
+    fi
+}
+
+_manifest_config_detect_issues() {
+    local config_file="$1"
+    [ -f "$config_file" ] || return 1
+
+    local ntp1 ntp2 ntp3 ntp4 tap_repo ntp_servers
+    ntp1=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER1=/{print $2}' "$config_file" | tail -n1)
+    ntp2=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER2=/{print $2}' "$config_file" | tail -n1)
+    ntp3=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER3=/{print $2}' "$config_file" | tail -n1)
+    ntp4=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER4=/{print $2}' "$config_file" | tail -n1)
+    tap_repo=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TAP_REPO=/{print $2}' "$config_file" | tail -n1)
+    ntp_servers=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVERS=/{print $2}' "$config_file" | tail -n1)
+
+    [ "$ntp1" = "time.apple.com" ] && echo "legacy|MANIFEST_CLI_NTP_SERVER1|time.apple.com|216.239.35.0"
+    [ "$ntp2" = "time.google.com" ] && echo "legacy|MANIFEST_CLI_NTP_SERVER2|time.google.com|216.239.35.4"
+    [ "$ntp3" = "pool.ntp.org" ] && echo "legacy|MANIFEST_CLI_NTP_SERVER3|pool.ntp.org|"
+    [ "$ntp4" = "time.nist.gov" ] && echo "legacy|MANIFEST_CLI_NTP_SERVER4|time.nist.gov|"
+    [ "$tap_repo" = "https://github.com/fidenceio/fidenceio-homebrew-tap.git" ] && \
+        echo "legacy|MANIFEST_CLI_TAP_REPO|https://github.com/fidenceio/fidenceio-homebrew-tap.git|https://github.com/fidenceio/homebrew-tap.git"
+
+    [ -n "$ntp_servers" ] && echo "deprecated|MANIFEST_CLI_NTP_SERVERS|$ntp_servers|MANIFEST_CLI_NTP_SERVER1..4"
+
+    grep -Eq "^[[:space:]]*MANIFEST_CLI_NTP_CACHE_TTL=" "$config_file" || \
+        echo "missing|MANIFEST_CLI_NTP_CACHE_TTL||120"
+    grep -Eq "^[[:space:]]*MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD=" "$config_file" || \
+        echo "missing|MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD||3600"
+    grep -Eq "^[[:space:]]*MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE=" "$config_file" || \
+        echo "missing|MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE||21600"
+
+    grep -Eq "^[[:space:]]*MANIFEST_CLI_CONFIG_SCHEMA_VERSION=" "$config_file" || \
+        echo "missing|MANIFEST_CLI_CONFIG_SCHEMA_VERSION||${MANIFEST_CLI_CONFIG_SCHEMA_VERSION_CURRENT}"
+}
+
+_manifest_config_upsert_key() {
+    local file="$1"
+    local key="$2"
+    local value="$3"
+    [ -f "$file" ] || return 1
+
+    local dir tmp_file
+    dir="$(dirname "$file")"
+    tmp_file="$(mktemp "$dir/.env.manifest.global.tmp.XXXXXX")" || return 1
+
+    awk -v key="$key" -v value="$value" '
+        BEGIN { done=0 }
+        {
+            if ($0 ~ "^[[:space:]]*" key "=") {
+                if (done == 0) {
+                    print key "=" value
+                    done=1
+                }
+                next
+            }
+            print
+        }
+        END {
+            if (done == 0) print key "=" value
+        }
+    ' "$file" > "$tmp_file" && mv "$tmp_file" "$file"
+}
+
+_manifest_config_lock_acquire() {
+    local target_file="$1"
+    local lock_dir="${target_file}.lock.d"
+    local attempts=0
+    while ! mkdir "$lock_dir" 2>/dev/null; do
+        attempts=$((attempts + 1))
+        if [ "$attempts" -ge 50 ]; then
+            return 1
+        fi
+        sleep 0.1
+    done
+    echo "$lock_dir"
+}
+
+_manifest_config_lock_release() {
+    local lock_dir="$1"
+    [ -n "$lock_dir" ] && [ -d "$lock_dir" ] && rmdir "$lock_dir" 2>/dev/null || true
+}
+
+_manifest_config_apply_migrations() {
+    local config_file="$1"
+    local dry_run="$2"
+    local applied=0
+
+    while IFS='|' read -r issue_type key from to; do
+        [ -n "$issue_type" ] || continue
+        case "$issue_type" in
+            "legacy")
+                if [ "$dry_run" = "true" ]; then
+                    echo "would-update|$key|$from|$to"
+                else
+                    _manifest_config_upsert_key "$config_file" "$key" "$to" && applied=$((applied + 1))
+                    echo "updated|$key|$from|$to"
+                fi
+                ;;
+            "missing")
+                if [ "$dry_run" = "true" ]; then
+                    echo "would-add|$key||$to"
+                else
+                    _manifest_config_upsert_key "$config_file" "$key" "$to" && applied=$((applied + 1))
+                    echo "added|$key||$to"
+                fi
+                ;;
+        esac
+    done < <(_manifest_config_detect_issues "$config_file")
+
+    if [ "$dry_run" = "false" ] && [ "$applied" -gt 0 ]; then
+        _manifest_config_upsert_key "$config_file" "MANIFEST_CLI_CONFIG_SCHEMA_VERSION" "${MANIFEST_CLI_CONFIG_SCHEMA_VERSION_CURRENT}" >/dev/null 2>&1 || true
+    fi
+}
+
+config_doctor() {
+    local fix="false"
+    local dry_run="false"
+    local config_file="$HOME/.env.manifest.global"
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            "--fix")
+                fix="true"
+                shift
+                ;;
+            "--dry-run")
+                dry_run="true"
+                shift
+                ;;
+            "--file")
+                config_file="${2:-}"
+                shift 2
+                ;;
+            *)
+                echo "Unknown option for config doctor: $1"
+                echo "Usage: manifest config doctor [--fix] [--dry-run] [--file <path>]"
+                return 1
+                ;;
+        esac
+    done
+
+    if [ ! -f "$config_file" ]; then
+        echo "⚠️  Config file not found: $config_file"
+        return 1
+    fi
+
+    echo "🩺 Manifest Config Doctor"
+    echo "========================="
+    echo "   Config file: $config_file"
+    echo ""
+
+    local issues=()
+    while IFS= read -r line; do
+        [ -n "$line" ] && issues+=("$line")
+    done < <(_manifest_config_detect_issues "$config_file")
+
+    if [ ${#issues[@]} -eq 0 ]; then
+        echo "✅ No configuration drift detected."
+        return 0
+    fi
+
+    echo "Findings:"
+    local issue
+    for issue in "${issues[@]}"; do
+        IFS='|' read -r issue_type key from to <<< "$issue"
+        case "$issue_type" in
+            "legacy")
+                echo " - LEGACY: $key uses '$from' (recommended: '$to')"
+                ;;
+            "missing")
+                echo " - MISSING: $key is not set (recommended default: '$to')"
+                ;;
+            "deprecated")
+                echo " - DEPRECATED: $key is set ('$from'); use '$to'"
+                ;;
+        esac
+    done
+
+    if [ "$fix" = "true" ] || [ "$dry_run" = "true" ]; then
+        echo ""
+        echo "Migration plan:"
+        if [ "$dry_run" = "true" ]; then
+            _manifest_config_apply_migrations "$config_file" "$dry_run"
+        else
+            local lock_dir=""
+            lock_dir=$(_manifest_config_lock_acquire "$config_file") || {
+                echo "❌ Could not acquire config lock for migration: ${config_file}.lock.d"
+                return 1
+            }
+            _manifest_config_apply_migrations "$config_file" "$dry_run"
+            _manifest_config_lock_release "$lock_dir"
+        fi
+
+        if [ "$dry_run" = "true" ]; then
+            echo ""
+            echo "ℹ️  Dry-run complete. Re-run with --fix to apply."
+        else
+            echo ""
+            echo "✅ Safe migrations applied."
+        fi
+    else
+        echo ""
+        echo "ℹ️  Run 'manifest config doctor --fix' to apply safe migrations."
+        echo "ℹ️  Run 'manifest config doctor --dry-run' to preview changes."
+    fi
 }
 
 # Load configuration from environment files
@@ -156,6 +440,7 @@ load_configuration() {
     
     # Always set default values for critical variables (even if no config files found)
     set_default_configuration
+    warn_deprecated_configuration
     
     # Skip validation for now to debug NTP issue
     # validate_config
@@ -259,6 +544,7 @@ set_default_configuration() {
     # Configuration file names
     export MANIFEST_CLI_CONFIG_GLOBAL="${MANIFEST_CLI_CONFIG_GLOBAL:-.env.manifest.global}"
     export MANIFEST_CLI_CONFIG_LOCAL="${MANIFEST_CLI_CONFIG_LOCAL:-.env.manifest.local}"
+    export MANIFEST_CLI_CONFIG_SCHEMA_VERSION="${MANIFEST_CLI_CONFIG_SCHEMA_VERSION:-${MANIFEST_CLI_CONFIG_SCHEMA_VERSION_CURRENT}}"
     
     # Project Configuration
     export MANIFEST_CLI_PROJECT_NAME="${MANIFEST_CLI_PROJECT_NAME:-Manifest CLI}"
@@ -706,6 +992,7 @@ show_configuration() {
     echo "🔄 Auto-Update Configuration:"
     echo "   Auto-Update: ${MANIFEST_CLI_AUTO_UPDATE}"
     echo "   Update Cooldown: ${MANIFEST_CLI_UPDATE_COOLDOWN} minutes"
+    echo "   Config Schema Version: ${MANIFEST_CLI_CONFIG_SCHEMA_VERSION}"
     echo ""
     
     echo "💡 How This Works:"
@@ -721,6 +1008,7 @@ show_configuration() {
     echo "   • manifest config          # Interactive setup wizard"
     echo "   • manifest config show     # Full effective configuration"
     echo "   • manifest config ntp      # NTP-only configuration view"
+    echo "   • manifest config doctor   # Drift/deprecation diagnostics"
 }
 
 # Get documentation folder path
@@ -759,6 +1047,7 @@ export -f validate_version_config
 export -f parse_version_components
 export -f generate_next_version
 export -f show_configuration
+export -f config_doctor
 export -f configure_interactive
 export -f get_docs_folder
 export -f get_docs_archive_folder

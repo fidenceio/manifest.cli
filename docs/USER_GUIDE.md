@@ -105,6 +105,8 @@ Use:
 manifest config
 manifest config show
 manifest config ntp
+manifest config doctor --dry-run
+manifest config doctor --fix
 manifest config setup
 ```
 
