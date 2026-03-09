@@ -163,14 +163,14 @@ update_homebrew_formula() {
     echo "🍺 Homebrew formula update complete"
 }
 
-# Update CLI function
-update_cli() {
-    # Source the auto-update module
-    source "$MANIFEST_CLI_CORE_MODULES_DIR/workflow/manifest-auto-update.sh"
+# Upgrade CLI function
+upgrade_cli() {
+    # Source the auto-upgrade module
+    source "$MANIFEST_CLI_CORE_MODULES_DIR/workflow/manifest-auto-upgrade.sh"
     
-    # Call the update function from the auto-update module
+    # Call the upgrade function from the auto-upgrade module
     local args=("$@")
-    update_cli_internal "${args[@]}"
+    upgrade_cli_internal "${args[@]}"
 }
 
 # Test mode function
@@ -244,13 +244,13 @@ manifest_test() {
 
 # get_next_version() - Now available from manifest-shared-functions.sh
 
-# Auto-update check with cooldown
-check_auto_update() {
-    # Source the auto-update module
-    source "$MANIFEST_CLI_CORE_MODULES_DIR/workflow/manifest-auto-update.sh"
+# Auto-upgrade check with cooldown
+check_auto_upgrade() {
+    # Source the auto-upgrade module
+    source "$MANIFEST_CLI_CORE_MODULES_DIR/workflow/manifest-auto-upgrade.sh"
     
-    # Call the check function from the auto-update module
-    check_auto_update_internal
+    # Call the check function from the auto-upgrade module
+    check_auto_upgrade_internal
 }
 
 # Main command dispatcher
@@ -289,7 +289,7 @@ main() {
 
     # Commands that do NOT require a Git repository
     case "$command" in
-        "help"|"-help"|"--help"|"-h"|"uninstall"|"reinstall"|"update"|"fleet")
+        "help"|"-help"|"--help"|"-h"|"uninstall"|"reinstall"|"update"|"upgrade"|"fleet")
             ;;
         "")
             # No command given — will fall through to display_help
@@ -308,8 +308,8 @@ main() {
             # Load configuration now that all variables are properly set
             load_configuration "$PROJECT_ROOT"
 
-            # Check for updates in background (with cooldown)
-            check_auto_update
+            # Check for upgrades in background (with cooldown)
+            check_auto_upgrade
             ;;
     esac
     
@@ -482,8 +482,12 @@ main() {
         "test")
             run_manifest_test "$@"
             ;;
+        "upgrade")
+            upgrade_cli "$@"
+            ;;
         "update")
-            update_cli "$@"
+            log_warning "Deprecated alias used; prefer 'manifest upgrade'."
+            upgrade_cli "$@"
             ;;
         "uninstall")
             # Check for --force flag
@@ -503,7 +507,7 @@ main() {
             # On macOS, offer to install Homebrew if not present
             if [[ "$OSTYPE" == "darwin"* ]] && ! command -v brew &>/dev/null; then
                 echo "🍺 macOS detected but Homebrew is not installed"
-                echo "   Homebrew is the recommended way to install, update, manage, and cleanly remove Manifest CLI on macOS. Plus, it offers thousands of other packages."
+                echo "   Homebrew is the recommended way to install, upgrade, manage, and cleanly remove Manifest CLI on macOS. Plus, it offers thousands of other packages."
                 read -p "   Would you like to install Homebrew? (Y/n): " -n 1 -r
                 echo
                 if [[ ! $REPLY =~ ^[Nn]$ ]]; then
@@ -525,7 +529,7 @@ main() {
                 brew install fidenceio/tap/manifest
             else
                 echo "📦 Reinstalling via manual install..."
-                source "$MANIFEST_CLI_CORE_MODULES_DIR/workflow/manifest-auto-update.sh"
+                source "$MANIFEST_CLI_CORE_MODULES_DIR/workflow/manifest-auto-upgrade.sh"
                 install_cli "true"
             fi
             ;;
@@ -693,8 +697,9 @@ display_help() {
   echo "    test agent                       # Test Manifest Agent functionality"
   echo "    test ... --strict-redact         # Default redaction mode for shareable logs"
   echo "    (writes raw + sanitized logs to ~/.manifest-cli/logs/tests/<run-id>/)"
-  echo "  update      - 🔄 Check for and install CLI updates"
-  echo "    update [--force] [--check]        # Update options: force update or check only"
+  echo "  upgrade     - 🔄 Check for and install CLI upgrades"
+  echo "    upgrade [--force] [--check]       # Upgrade options: force upgrade or check only"
+  echo "  update      - 🔄 Deprecated alias for 'upgrade'"
   echo "  uninstall   - 🗑️  Remove Manifest CLI completely"
   echo "    uninstall [--force]               # Uninstall options: force uninstall without confirmation"
   echo "  reinstall   - 🔄 Uninstall and reinstall Manifest CLI (detects OS and install method)"
@@ -729,8 +734,8 @@ echo ""
 echo "Environment Variables:"
 echo "  • MANIFEST_CLI_INTERACTIVE_MODE  - Interactive safety prompts (true/false, default: false)"
 echo "  • MANIFEST_CLI_BREW_OPTION       - Control Homebrew functionality (enabled/disabled)"
-echo "  • MANIFEST_CLI_BREW_INTERACTIVE  - Interactive Homebrew updates (yes/true/1, default: no)"
-echo "  • MANIFEST_CLI_TAP_REPO          - Homebrew tap repository URL (default: fidenceio/fidenceio-homebrew-tap)"
+echo "  • MANIFEST_CLI_BREW_INTERACTIVE  - Interactive Homebrew upgrades (yes/true/1, default: no)"
+echo "  • MANIFEST_CLI_TAP_REPO          - Homebrew tap repository URL (default: https://github.com/fidenceio/homebrew-tap.git)"
 echo "  • MANIFEST_CLI_CLOUD_API_KEY     - Manifest Cloud API key (get from https://manifest.cloud/dashboard)"
 echo "  • MANIFEST_CLI_CLOUD_ENDPOINT    - Manifest Cloud endpoint (default: https://api.manifest.cloud)"
 echo "  • MANIFEST_CLI_CLOUD_SKIP        - Skip Manifest Cloud and use local docs (true/false)"

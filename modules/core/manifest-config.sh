@@ -36,6 +36,15 @@ _manifest_config_warning_state_file() {
     echo "$state_dir/config-warning.last"
 }
 
+_manifest_config_migration_state_file() {
+    local state_dir="$HOME/.manifest-cli"
+    if ! mkdir -p "$state_dir" 2>/dev/null; then
+        echo ""
+        return 0
+    fi
+    echo "$state_dir/config-migration.last"
+}
+
 _manifest_config_should_emit_warnings() {
     local cooldown_minutes="${MANIFEST_CLI_CONFIG_WARNING_COOLDOWN_MINUTES:-1440}"
     if ! [[ "$cooldown_minutes" =~ ^[0-9]+$ ]] || [ "$cooldown_minutes" -lt 0 ]; then
@@ -46,6 +55,36 @@ _manifest_config_should_emit_warnings() {
 
     local state_file
     state_file=$(_manifest_config_warning_state_file)
+    [ -n "$state_file" ] || return 0
+    local now
+    now=$(date +%s)
+    local last=0
+
+    if [ -f "$state_file" ]; then
+        last=$(tr -d '[:space:]' < "$state_file" 2>/dev/null || echo "0")
+        if ! [[ "$last" =~ ^[0-9]+$ ]]; then
+            last=0
+        fi
+    fi
+
+    if [ $((now - last)) -lt $((cooldown_minutes * 60)) ]; then
+        return 1
+    fi
+
+    printf '%s\n' "$now" > "$state_file" 2>/dev/null || true
+    return 0
+}
+
+_manifest_config_should_run_auto_migration() {
+    local cooldown_minutes="${MANIFEST_CLI_CONFIG_MIGRATION_COOLDOWN_MINUTES:-1440}"
+    if ! [[ "$cooldown_minutes" =~ ^[0-9]+$ ]] || [ "$cooldown_minutes" -lt 0 ]; then
+        cooldown_minutes=1440
+    fi
+
+    [ "$cooldown_minutes" -eq 0 ] && return 0
+
+    local state_file
+    state_file=$(_manifest_config_migration_state_file)
     [ -n "$state_file" ] || return 0
     local now
     now=$(date +%s)
@@ -92,7 +131,7 @@ warn_deprecated_configuration() {
     fi
 
     if [ "$warned" -eq 1 ]; then
-        _manifest_config_warn "Run 'manifest update --force' (or reinstall) to apply safe config migrations automatically."
+        _manifest_config_warn "Run 'manifest upgrade --force' (or reinstall) to apply safe config migrations automatically."
     fi
 }
 
@@ -204,6 +243,37 @@ _manifest_config_apply_migrations() {
 
     if [ "$dry_run" = "false" ] && [ "$applied" -gt 0 ]; then
         _manifest_config_upsert_key "$config_file" "MANIFEST_CLI_CONFIG_SCHEMA_VERSION" "${MANIFEST_CLI_CONFIG_SCHEMA_VERSION_CURRENT}" >/dev/null 2>&1 || true
+    fi
+}
+
+auto_migrate_user_global_configuration() {
+    local config_file="$HOME/.env.manifest.global"
+    [ -f "$config_file" ] || return 0
+    if ! _manifest_config_should_run_auto_migration; then
+        return 0
+    fi
+
+    local actionable=0
+    while IFS='|' read -r issue_type _key _from _to; do
+        case "$issue_type" in
+            "legacy"|"missing")
+                actionable=1
+                break
+                ;;
+        esac
+    done < <(_manifest_config_detect_issues "$config_file")
+
+    [ "$actionable" -eq 1 ] || return 0
+
+    local lock_dir=""
+    lock_dir=$(_manifest_config_lock_acquire "$config_file") || return 0
+    local migration_output=""
+    migration_output=$(_manifest_config_apply_migrations "$config_file" "false")
+    _manifest_config_lock_release "$lock_dir"
+
+    if [ -n "$migration_output" ]; then
+        _manifest_config_warn "Applied safe configuration migrations to $config_file."
+        _manifest_config_warn "Run 'manifest config doctor --dry-run' to review current drift status."
     fi
 }
 
@@ -440,6 +510,9 @@ load_configuration() {
     
     # Always set default values for critical variables (even if no config files found)
     set_default_configuration
+    auto_migrate_user_global_configuration
+    # Re-apply defaults in case auto-migration added missing values.
+    set_default_configuration
     warn_deprecated_configuration
     
     # Skip validation for now to debug NTP issue
@@ -549,7 +622,7 @@ set_default_configuration() {
     # Project Configuration
     export MANIFEST_CLI_PROJECT_NAME="${MANIFEST_CLI_PROJECT_NAME:-Manifest CLI}"
     
-    # Auto-Update Configuration
+    # Auto-Upgrade Configuration
     export MANIFEST_CLI_AUTO_UPDATE="${MANIFEST_CLI_AUTO_UPDATE:-true}"
     export MANIFEST_CLI_UPDATE_COOLDOWN="${MANIFEST_CLI_UPDATE_COOLDOWN:-30}"
     export MANIFEST_CLI_PROJECT_DESCRIPTION="${MANIFEST_CLI_PROJECT_DESCRIPTION:-A powerful CLI tool for versioning, AI documenting, and repository operations}"
@@ -702,8 +775,8 @@ configure_interactive() {
     docs_folder=$(_manifest_config_prompt_value "Docs folder" "${MANIFEST_CLI_DOCS_FOLDER:-docs}")
     docs_archive=$(_manifest_config_prompt_value "Docs archive folder" "${MANIFEST_CLI_DOCS_ARCHIVE_FOLDER:-docs/zArchive}")
     docs_limit=$(_manifest_config_prompt_value "Historical docs limit" "${MANIFEST_CLI_DOCS_HISTORICAL_LIMIT:-20}")
-    auto_update=$(_manifest_config_prompt_value "Auto-update enabled (true/false)" "${MANIFEST_CLI_AUTO_UPDATE:-true}")
-    update_cooldown=$(_manifest_config_prompt_value "Update cooldown (minutes)" "${MANIFEST_CLI_UPDATE_COOLDOWN:-30}")
+    auto_update=$(_manifest_config_prompt_value "Auto-upgrade enabled (true/false)" "${MANIFEST_CLI_AUTO_UPDATE:-true}")
+    update_cooldown=$(_manifest_config_prompt_value "Upgrade cooldown (minutes)" "${MANIFEST_CLI_UPDATE_COOLDOWN:-30}")
 
     echo ""
     echo "PR policy:"
@@ -723,7 +796,7 @@ configure_interactive() {
         docs_limit="${MANIFEST_CLI_DOCS_HISTORICAL_LIMIT:-20}"
     fi
     if ! [[ "$update_cooldown" =~ ^[0-9]+$ ]]; then
-        log_warning "Invalid update cooldown '$update_cooldown'; using existing/default value."
+        log_warning "Invalid upgrade cooldown '$update_cooldown'; using existing/default value."
         update_cooldown="${MANIFEST_CLI_UPDATE_COOLDOWN:-30}"
     fi
 
@@ -989,9 +1062,9 @@ show_configuration() {
     echo "   Version Validation: ${MANIFEST_CLI_VERSION_VALIDATION}"
     echo ""
     
-    echo "🔄 Auto-Update Configuration:"
-    echo "   Auto-Update: ${MANIFEST_CLI_AUTO_UPDATE}"
-    echo "   Update Cooldown: ${MANIFEST_CLI_UPDATE_COOLDOWN} minutes"
+    echo "🔄 Auto-Upgrade Configuration:"
+    echo "   Auto-Upgrade: ${MANIFEST_CLI_AUTO_UPDATE}"
+    echo "   Upgrade Cooldown: ${MANIFEST_CLI_UPDATE_COOLDOWN} minutes"
     echo "   Config Schema Version: ${MANIFEST_CLI_CONFIG_SCHEMA_VERSION}"
     echo ""
     

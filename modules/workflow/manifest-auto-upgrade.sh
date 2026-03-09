@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# Manifest Auto-Update Module
-# Handles CLI updates, installation cleanup, and version management
+# Manifest Auto-Upgrade Module
+# Handles CLI upgrades, installation cleanup, and version management
 
-# Auto-update module - uses PROJECT_ROOT from core module
+# Auto-upgrade module - uses PROJECT_ROOT from core module
 
 # get_current_version() and get_latest_version() - Now available from manifest-shared-functions.sh
 
-manifest_update_sed_inplace() {
+manifest_upgrade_sed_inplace() {
     case "$OSTYPE" in
         darwin*|freebsd*|openbsd*|netbsd*)
             sed -i '' "$@" ;;
@@ -16,7 +16,7 @@ manifest_update_sed_inplace() {
     esac
 }
 
-manifest_update_upsert_env_key() {
+manifest_upgrade_upsert_env_key() {
     local file="$1"
     local key="$2"
     local value="$3"
@@ -24,7 +24,7 @@ manifest_update_upsert_env_key() {
     [ -f "$file" ] || return 1
 
     if grep -Eq "^[[:space:]]*${key}=" "$file"; then
-        manifest_update_sed_inplace "s|^[[:space:]]*${key}=.*|${key}=${value}|" "$file"
+        manifest_upgrade_sed_inplace "s|^[[:space:]]*${key}=.*|${key}=${value}|" "$file"
     else
         printf '%s=%s\n' "$key" "$value" >> "$file"
     fi
@@ -43,20 +43,20 @@ migrate_user_global_config_internal() {
     tap_repo=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TAP_REPO=/{print $2}' "$config_file" | tail -n1)
 
     # Safe migrations for known legacy defaults only.
-    [ "$ntp1" = "time.apple.com" ] && manifest_update_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER1" "216.239.35.0"
-    [ "$ntp2" = "time.google.com" ] && manifest_update_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER2" "216.239.35.4"
-    [ "$ntp3" = "pool.ntp.org" ] && manifest_update_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER3" ""
-    [ "$ntp4" = "time.nist.gov" ] && manifest_update_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER4" ""
+    [ "$ntp1" = "time.apple.com" ] && manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER1" "216.239.35.0"
+    [ "$ntp2" = "time.google.com" ] && manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER2" "216.239.35.4"
+    [ "$ntp3" = "pool.ntp.org" ] && manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER3" ""
+    [ "$ntp4" = "time.nist.gov" ] && manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER4" ""
     [ "$tap_repo" = "https://github.com/fidenceio/fidenceio-homebrew-tap.git" ] && \
-        manifest_update_upsert_env_key "$config_file" "MANIFEST_CLI_TAP_REPO" "https://github.com/fidenceio/homebrew-tap.git"
+        manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_TAP_REPO" "https://github.com/fidenceio/homebrew-tap.git"
 
     # Add new cache keys if missing.
     grep -Eq "^[[:space:]]*MANIFEST_CLI_NTP_CACHE_TTL=" "$config_file" || \
-        manifest_update_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_CACHE_TTL" "120"
+        manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_CACHE_TTL" "120"
     grep -Eq "^[[:space:]]*MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD=" "$config_file" || \
-        manifest_update_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD" "3600"
+        manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD" "3600"
     grep -Eq "^[[:space:]]*MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE=" "$config_file" || \
-        manifest_update_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE" "21600"
+        manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE" "21600"
 
     if [ -n "$ntp_servers" ]; then
         log_warning "Deprecated variable detected in ~/.env.manifest.global: MANIFEST_CLI_NTP_SERVERS"
@@ -64,8 +64,8 @@ migrate_user_global_config_internal() {
     fi
 }
 
-# Check if update is available
-check_for_updates() {
+# Check if upgrade is available
+check_for_upgrades() {
     local current_version=$(get_current_version)
     local latest_version=$(get_latest_version)
     
@@ -75,7 +75,7 @@ check_for_updates() {
     fi
     
     if [ "$current_version" != "$latest_version" ]; then
-        log_info "Update available: $current_version → $latest_version"
+        log_info "Upgrade available: $current_version → $latest_version"
         return 0
     else
         log_success "Already up to date: $current_version"
@@ -123,9 +123,9 @@ cleanup_old_installation() {
     fi
 }
 
-# Install/update the CLI
+# Install/upgrade the CLI
 install_cli() {
-    local force_update="${1:-false}"
+    local force_upgrade="${1:-false}"
     local install_dir="${2:-$HOME/.manifest-cli}"
     local local_bin="$HOME/.local/bin"
     local cli_name="manifest"
@@ -180,7 +180,7 @@ install_cli() {
 # Manifest CLI Configuration
 # Generated on $(date)
 
-# Update settings
+# Upgrade settings
 MANIFEST_CLI_AUTO_UPDATE=true
 MANIFEST_CLI_UPDATE_COOLDOWN=30
 
@@ -210,9 +210,9 @@ EOF
     return 0
 }
 
-# Auto-update check with cooldown
-check_auto_update_internal() {
-    # Check if auto-update is disabled
+# Auto-upgrade check with cooldown
+check_auto_upgrade_internal() {
+    # Check if auto-upgrade is disabled
     if [ "${MANIFEST_CLI_AUTO_UPDATE:-true}" = "false" ]; then
         return 0
     fi
@@ -230,11 +230,11 @@ check_auto_update_internal() {
     # Calculate time difference in minutes
     local time_diff=$(( (current_time - last_check_time) / 60 ))
     
-    # Only check for updates if cooldown period has passed
+    # Only check for upgrades if cooldown period has passed
     if [ "$time_diff" -ge "$cooldown_minutes" ]; then
-        log_info "Checking for updates..."
-        if check_for_updates; then
-            log_info "Update available! Run 'manifest update' to install"
+        log_info "Checking for upgrades..."
+        if check_for_upgrades; then
+            log_info "Upgrade available! Run 'manifest upgrade' to install"
         fi
         
         # Update last check time
@@ -242,16 +242,17 @@ check_auto_update_internal() {
     fi
 }
 
-# Update CLI function
-update_cli_internal() {
-    local force_update="false"
+# Upgrade CLI function
+upgrade_cli_internal() {
+    local force_upgrade="false"
     local check_only="false"
+    local brew_formula_ref="fidenceio/tap/manifest"
     
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
             -f|--force)
-                force_update="true"
+                force_upgrade="true"
                 shift
                 ;;
             -c|--check)
@@ -259,34 +260,49 @@ update_cli_internal() {
                 shift
                 ;;
             -h|--help)
-                echo "Manifest CLI Update Command"
+                echo "Manifest CLI Upgrade Command"
                 echo ""
-                echo "Usage: manifest update [OPTIONS]"
+                echo "Usage: manifest upgrade [OPTIONS]"
                 echo ""
                 echo "Options:"
-                echo "  -f, --force    Force update regardless of current version"
-                echo "  -c, --check    Check for updates only (don't update)"
+                echo "  -f, --force    Force upgrade regardless of current version"
+                echo "  -c, --check    Check for upgrades only (don't upgrade)"
                 echo "  -h, --help     Show this help message"
                 echo ""
                 echo "Examples:"
-                echo "  manifest update              # Check and optionally update"
-                echo "  manifest update --force      # Force update to latest version"
-                echo "  manifest update --check      # Check version only"
+                echo "  manifest upgrade             # Check and optionally upgrade"
+                echo "  manifest upgrade --force     # Force upgrade to latest version"
+                echo "  manifest upgrade --check     # Check version only"
                 return 0
                 ;;
             *)
                 log_error "Unknown option: $1"
-                echo "Use 'manifest update --help' for usage information"
+                echo "Use 'manifest upgrade --help' for usage information"
                 return 1
                 ;;
         esac
     done
     
-    # Check for updates
-    if ! check_for_updates && [ "$force_update" = "false" ]; then
+    # Check for upgrades
+    if ! check_for_upgrades && [ "$force_upgrade" = "false" ]; then
         if [ "$check_only" = "true" ]; then
-            log_success "No updates available"
+            log_success "No upgrades available"
+            return 0
         fi
+
+        # Even on a no-op upgrade request, force Homebrew post-install hooks
+        # so migrations still run through the canonical upgrade pathway.
+        if is_homebrew_installed; then
+            if brew postinstall "$brew_formula_ref" || brew postinstall manifest; then
+                log_info "Ran Homebrew post-install migrations."
+            else
+                log_warning "Homebrew post-install hook failed; applying internal safe migrations instead."
+                migrate_user_global_config_internal
+            fi
+        else
+            migrate_user_global_config_internal
+        fi
+        log_success "Already up-to-date. Verified safe configuration migrations."
         return 0
     fi
     
@@ -294,26 +310,31 @@ update_cli_internal() {
         return 0
     fi
     
-    # Perform update
-    log_info "Updating Manifest CLI..."
+    # Perform upgrade
+    log_info "Upgrading Manifest CLI..."
 
     # Route through Homebrew if that's how it was installed
     if is_homebrew_installed; then
         log_info "🍺 Homebrew installation detected — upgrading via Homebrew..."
-        brew update && brew upgrade fidenceio/tap/manifest
+        brew update && brew upgrade "$brew_formula_ref"
         if [ $? -eq 0 ]; then
-            migrate_user_global_config_internal
-            log_success "Update completed successfully via Homebrew!"
+            if brew postinstall "$brew_formula_ref" || brew postinstall manifest; then
+                log_info "Ran Homebrew post-install migrations."
+            else
+                log_warning "Homebrew post-install hook failed; applying internal safe migrations instead."
+                migrate_user_global_config_internal
+            fi
+            log_success "Upgrade completed successfully via Homebrew!"
         else
             log_error "Homebrew upgrade failed"
             return 1
         fi
-    elif install_cli "$force_update"; then
+    elif install_cli "$force_upgrade"; then
         migrate_user_global_config_internal
-        log_success "Update completed successfully!"
-        log_info "You may need to restart your terminal or run 'hash -r' to use the updated CLI"
+        log_success "Upgrade completed successfully!"
+        log_info "You may need to restart your terminal or run 'hash -r' to use the upgraded CLI"
     else
-        log_error "Update failed"
+        log_error "Upgrade failed"
         return 1
     fi
 }
@@ -324,11 +345,11 @@ main() {
         "install")
             install_cli "${2:-false}" "${3:-$HOME/.manifest-cli}"
             ;;
-        "update")
-            update_cli_internal "${@:2}"
+        "update"|"upgrade")
+            upgrade_cli_internal "${@:2}"
             ;;
         "check")
-            check_for_updates
+            check_for_upgrades
             ;;
         "cleanup")
             cleanup_old_installation
@@ -338,28 +359,29 @@ main() {
             echo "Latest version: $(get_latest_version)"
             ;;
         "help"|"-h"|"--help")
-            echo "Manifest Auto-Update Module"
+            echo "Manifest Auto-Upgrade Module"
             echo "=========================="
             echo ""
             echo "Usage: $0 [command] [options]"
             echo ""
             echo "Commands:"
-            echo "  install [force] [dir]  - Install or update the CLI"
-            echo "  update [options]       - Update the CLI with options"
-            echo "  check                  - Check for available updates"
+            echo "  install [force] [dir]  - Install or upgrade the CLI"
+            echo "  upgrade [options]      - Upgrade the CLI with options"
+            echo "  update [options]       - Deprecated alias for upgrade"
+            echo "  check                  - Check for available upgrades"
             echo "  cleanup                - Clean up old installation files"
             echo "  version                - Show current and latest versions"
             echo "  help                   - Show this help"
             echo ""
-            echo "Update Options:"
-            echo "  -f, --force            - Force update regardless of version"
-            echo "  -c, --check            - Check for updates only"
+            echo "Upgrade Options:"
+            echo "  -f, --force            - Force upgrade regardless of version"
+            echo "  -c, --check            - Check for upgrades only"
             echo "  -h, --help             - Show help"
             echo ""
             echo "Examples:"
             echo "  $0 install                    # Install CLI"
-            echo "  $0 update --force             # Force update"
-            echo "  $0 check                      # Check for updates"
+            echo "  $0 upgrade --force            # Force upgrade"
+            echo "  $0 check                      # Check for upgrades"
             echo "  $0 cleanup                    # Clean old files"
             ;;
         *)

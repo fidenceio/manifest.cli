@@ -59,7 +59,7 @@ manifest config ntp
 ## Safe Maintenance
 
 ```bash
-manifest update --check
+manifest upgrade --check
 manifest security
 manifest cleanup
 ```

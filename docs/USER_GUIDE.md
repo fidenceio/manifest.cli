@@ -43,7 +43,7 @@ manifest docs
 
 ### `ship`
 
-`ship` runs prep in publish mode and then performs publish steps, including tag/push operations and formula update flow where applicable.
+`ship` runs prep in publish mode and then performs publish steps, including tag/push operations and formula upgrade flow where applicable.
 
 ## Pull Request Workflows
 
@@ -117,7 +117,7 @@ Config loading order is install-level, user-level, then project-level env files,
 ```bash
 manifest security
 manifest cleanup
-manifest update --check
+manifest upgrade --check
 manifest uninstall --force
 manifest reinstall
 ```

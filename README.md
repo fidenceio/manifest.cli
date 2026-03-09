@@ -26,7 +26,7 @@
 - Manages repository docs (`RELEASE_*`, `CHANGELOG_*`, `CHANGELOG.md`) and metadata updates.
 - Provides PR workflow helpers through `manifest pr`.
 - Supports fleet/polyrepo operations through `manifest fleet`.
-- Includes test suites, security checks, configuration wizard, and update/uninstall commands.
+- Includes test suites, security checks, configuration wizard, and upgrade/uninstall commands.
 
 ## Install
 
@@ -68,14 +68,14 @@ manifest test all
 - `version [patch|minor|major|revision]`
 - `docs [metadata|homebrew|cleanup]`
 - `sync`, `commit`, `revert`, `cleanup`
-- `config [show|ntp|setup|--non-interactive]`
+- `config [show|ntp|doctor|setup|--non-interactive]`
 - `security`
 - `test [suite] [--strict-redact|--no-strict-redact]`
 - `pr <subcommand>`
 - `fleet <subcommand>`
 - `cloud <subcommand>`
 - `agent <subcommand>`
-- `update [--check|--force]`, `uninstall [--force]`, `reinstall`
+- `upgrade [--check|--force]`, `update` (deprecated alias), `uninstall [--force]`, `reinstall`
 
 For full usage and examples, see `docs/COMMAND_REFERENCE.md` and `docs/USER_GUIDE.md`.
 

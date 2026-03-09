@@ -40,7 +40,7 @@ class Manifest < Formula
     end
 
     # Apply config migrations so `brew upgrade` is functionally equivalent
-    # to `manifest update --force` for user-global settings.
+    # to `manifest upgrade --force` for user-global settings.
     if user_global_config.exist?
       migration_cmd = [
         "#{bin}/manifest",

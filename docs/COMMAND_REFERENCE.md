@@ -16,7 +16,7 @@ This reference reflects the command dispatcher in `modules/core/manifest-core.sh
 - `manifest config [show|ntp|doctor|setup|--non-interactive]`
 - `manifest security`
 - `manifest test [suite] [--strict-redact|--no-strict-redact]`
-- `manifest update [--check|--force]`
+- `manifest upgrade [--check|--force]`
 - `manifest uninstall [--force]`
 - `manifest reinstall`
 - `manifest cloud [config|status|generate]`

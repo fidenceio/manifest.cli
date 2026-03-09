@@ -683,7 +683,7 @@ display_post_install_info() {
         echo
         print_status "🔒 Git Hooks Installed:"
         echo "   • Pre-commit hook is active and protecting your commits"
-        echo "   • To update hooks: Re-run ./install-cli.sh"
+        echo "   • To refresh hooks: Re-run ./install-cli.sh"
         echo "   • Documentation: docs/GIT_HOOKS.md"
     fi
     
@@ -903,7 +903,7 @@ main() {
     # On macOS, offer to install Homebrew if not present
     if [[ "$OSTYPE" == "darwin"* ]] && ! command_exists brew; then
         print_status "🍺 macOS detected but Homebrew is not installed"
-        print_status "Homebrew is the recommended way to install, update, manage, and cleanly remove Manifest CLI on macOS. Plus, it offers thousands of other packages."
+        print_status "Homebrew is the recommended way to install, upgrade, manage, and cleanly remove Manifest CLI on macOS. Plus, it offers thousands of other packages."
         echo ""
         read -p "   Would you like to install Homebrew? (Y/n): " -n 1 -r
         echo
@@ -962,7 +962,7 @@ main() {
                 echo "   manifest test agent      # Test Manifest Agent functionality"
                 echo "   manifest ntp             # Get NTP timestamp"
                 echo ""
-                print_status "💡 To update:  brew update && brew upgrade manifest"
+                print_status "💡 To upgrade: brew update && brew upgrade manifest"
                 echo ""
             else
                 print_error "❌ Homebrew installation verification failed"
