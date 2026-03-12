@@ -7,7 +7,7 @@
 
 # Check if manifest was installed via Homebrew
 is_homebrew_installed() {
-    command -v brew &>/dev/null && brew list fidenceio/tap/manifest &>/dev/null
+    command -v brew &>/dev/null && (brew list fidenceio/tap/manifest &>/dev/null || brew list manifest &>/dev/null)
 }
 
 # Function to find all possible installation locations
@@ -56,6 +56,23 @@ find_cli_binaries() {
             binaries+=("$binary")
         fi
     done
+
+    # Include resolved PATH binary when available (e.g., Homebrew /opt/homebrew/bin/manifest)
+    local resolved_manifest=""
+    resolved_manifest="$(command -v manifest 2>/dev/null || echo "")"
+    if [ -n "$resolved_manifest" ] && [ -f "$resolved_manifest" ]; then
+        local seen=false
+        local existing=""
+        for existing in "${binaries[@]}"; do
+            if [ "$existing" = "$resolved_manifest" ]; then
+                seen=true
+                break
+            fi
+        done
+        if [ "$seen" = "false" ]; then
+            binaries+=("$resolved_manifest")
+        fi
+    fi
     
     # Return found binaries
     printf '%s\n' "${binaries[@]}"
@@ -168,9 +185,13 @@ uninstall_manifest() {
     # Find all installation locations
     local install_locations=($(find_installation_locations))
     local cli_binaries=($(find_cli_binaries))
+    local homebrew_installed=false
+    if is_homebrew_installed; then
+        homebrew_installed=true
+    fi
     
     # Check if anything is installed
-    if [ ${#install_locations[@]} -eq 0 ] && [ ${#cli_binaries[@]} -eq 0 ]; then
+    if [ ${#install_locations[@]} -eq 0 ] && [ ${#cli_binaries[@]} -eq 0 ] && [ "$homebrew_installed" = "false" ]; then
         echo "No Manifest CLI installation found"
         return 0
     fi
@@ -198,9 +219,9 @@ uninstall_manifest() {
     local errors=0
 
     # Uninstall via Homebrew if that's how it was installed
-    if is_homebrew_installed; then
+    if [ "$homebrew_installed" = "true" ]; then
         echo "🍺 Homebrew installation detected — uninstalling via Homebrew..."
-        if brew uninstall manifest 2>/dev/null; then
+        if brew uninstall fidenceio/tap/manifest 2>/dev/null || brew uninstall manifest 2>/dev/null; then
             echo "✅ Homebrew package removed"
         else
             echo "⚠️  brew uninstall failed"

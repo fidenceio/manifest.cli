@@ -562,7 +562,9 @@ main() {
             echo "🔄 Reinstalling Manifest CLI..."
             echo ""
             # Uninstall everything (force, non-interactive)
-            uninstall_manifest "true" "true"
+            if ! uninstall_manifest "true" "true"; then
+                log_warning "Uninstall reported issues; continuing reinstall."
+            fi
             echo ""
             # On macOS, offer to install Homebrew if not present
             if [[ "$OSTYPE" == "darwin"* ]] && ! command -v brew &>/dev/null; then
@@ -586,7 +588,11 @@ main() {
             if command -v brew &>/dev/null; then
                 echo "🍺 Reinstalling via Homebrew..."
                 brew tap fidenceio/tap 2>/dev/null
-                brew install fidenceio/tap/manifest
+                if brew list fidenceio/tap/manifest &>/dev/null || brew list manifest &>/dev/null; then
+                    brew reinstall fidenceio/tap/manifest || brew reinstall manifest
+                else
+                    brew install fidenceio/tap/manifest || brew install manifest
+                fi
             else
                 echo "📦 Reinstalling via manual install..."
                 source "$MANIFEST_CLI_CORE_MODULES_DIR/workflow/manifest-auto-upgrade.sh"

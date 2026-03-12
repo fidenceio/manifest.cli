@@ -316,8 +316,7 @@ upgrade_cli_internal() {
     # Route through Homebrew if that's how it was installed
     if is_homebrew_installed; then
         log_info "🍺 Homebrew installation detected — upgrading via Homebrew..."
-        brew update && brew upgrade "$brew_formula_ref"
-        if [ $? -eq 0 ]; then
+        if brew update && (brew upgrade "$brew_formula_ref" || brew upgrade manifest); then
             if brew postinstall "$brew_formula_ref" || brew postinstall manifest; then
                 log_info "Ran Homebrew post-install migrations."
             else
