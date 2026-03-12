@@ -2,12 +2,12 @@
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `37.1.0` |
-| **Release Date** | `2026-03-12 02:26:12 UTC` |
-| **Git Tag** | `v37.1.0` |
+| **Current Version** | `37.1.1` |
+| **Release Date** | `2026-03-12 02:29:30 UTC` |
+| **Git Tag** | `v37.1.1` |
 | **Branch** | `main` |
-| **Last Updated** | `2026-03-12 02:26:12 UTC` |
-| **CLI Version** | `37.1.0` |
+| **Last Updated** | `2026-03-12 02:29:30 UTC` |
+| **CLI Version** | `37.1.1` |
 
 ### 📚 Documentation Files
 
