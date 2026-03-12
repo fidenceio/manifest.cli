@@ -99,8 +99,54 @@ archive_old_docs() {
 
 # Main workflow function is now handled by manifest-orchestrator.sh
 
+# Returns repository slug from origin remote (e.g., org/repo).
+manifest_origin_repo_slug() {
+    local repo_url=""
+    repo_url="$(git remote get-url origin 2>/dev/null || echo "")"
+
+    if [[ "$repo_url" =~ ^git@[^:]+:([^/]+)/([^/]+)\.git$ ]]; then
+        echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+        return 0
+    fi
+    if [[ "$repo_url" =~ ^https?://[^/]+/([^/]+)/([^/]+)(\.git)?$ ]]; then
+        echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+        return 0
+    fi
+
+    echo ""
+    return 1
+}
+
+# Homebrew update should run only from the Manifest CLI canonical repo.
+should_update_homebrew_for_repo() {
+    local origin_slug=""
+    origin_slug="$(manifest_origin_repo_slug || echo "")"
+    if [ -z "$origin_slug" ]; then
+        return 1
+    fi
+
+    local allowed_slugs="${MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS:-fidenceio/manifest.cli,fidenceio/fidenceio.manifest.cli}"
+    IFS=',' read -r -a allowed_array <<< "$allowed_slugs"
+    local allowed=""
+    for allowed in "${allowed_array[@]}"; do
+        if [ "$origin_slug" = "$allowed" ]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 # Update Homebrew formula in both this repo and the tap repo
 update_homebrew_formula() {
+    if ! should_update_homebrew_for_repo; then
+        local origin_slug=""
+        origin_slug="$(manifest_origin_repo_slug || echo "unknown")"
+        echo "🍺 Skipping Homebrew formula update for repository: ${origin_slug}"
+        echo "   Homebrew updates run only for: ${MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS:-fidenceio/manifest.cli,fidenceio/fidenceio.manifest.cli}"
+        return 0
+    fi
+
     local version
     version=$(cat "$PROJECT_ROOT/VERSION" 2>/dev/null)
     if [ -z "$version" ]; then

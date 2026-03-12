@@ -7,11 +7,74 @@
 
 # Orchestrator module - modules are already sourced by manifest-core.sh
 
+emit_ship_failure_report() {
+    local failure_step="$1"
+    local start_sha="$2"
+    local version="$3"
+    local tag_name="$4"
+    local push_status="$5"
+    local homebrew_status="$6"
+
+    local branch upstream ahead behind commits_created
+    branch="$(git branch --show-current 2>/dev/null || echo "unknown")"
+    upstream="$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || echo "none")"
+    ahead="unknown"
+    behind="unknown"
+    if [ "$upstream" != "none" ]; then
+        local lr_counts=""
+        lr_counts="$(git rev-list --left-right --count "${upstream}...HEAD" 2>/dev/null || echo "")"
+        if [ -n "$lr_counts" ]; then
+            behind="$(echo "$lr_counts" | awk '{print $1}')"
+            ahead="$(echo "$lr_counts" | awk '{print $2}')"
+        fi
+    fi
+
+    commits_created="unknown"
+    if [ -n "$start_sha" ] && git cat-file -e "$start_sha^{commit}" 2>/dev/null; then
+        commits_created="$(git rev-list --count "${start_sha}..HEAD" 2>/dev/null || echo "unknown")"
+    fi
+
+    echo ""
+    echo "🚨 Ship Failure Report"
+    echo "======================"
+    echo "   failed step:        ${failure_step}"
+    echo "   target version:     ${version:-unknown}"
+    echo "   commits created:    ${commits_created}"
+    echo "   tag:                ${tag_name:-none}"
+    echo "   push status:        ${push_status}"
+    echo "   homebrew status:    ${homebrew_status}"
+    echo "   branch:             ${branch}"
+    echo "   upstream:           ${upstream}"
+    echo "   ahead/behind:       ${ahead}/${behind}"
+    echo "   start commit:       ${start_sha:-unknown}"
+    echo ""
+    echo "📋 Git status snapshot:"
+    git status --short --branch 2>/dev/null || echo "   (unavailable)"
+    echo ""
+    echo "🛠️  Recovery commands:"
+    echo "   Retry push:  git push origin ${branch} --follow-tags"
+    if [ -n "$tag_name" ] && [ "$tag_name" != "none" ]; then
+        echo "   Remove tag:  git tag -d ${tag_name}"
+    fi
+    if [ -n "$start_sha" ]; then
+        echo "   Roll back:   git reset --hard ${start_sha}"
+    fi
+    echo ""
+}
+
 # Main prep workflow function
 manifest_prep_workflow() {
     local increment_type="$1"
     local interactive="$2"
     local publish_release="${3:-false}"
+    local workflow_start_sha=""
+    local workflow_tag_name="none"
+    local workflow_push_status="not_attempted"
+    local workflow_homebrew_status="not_applicable"
+
+    if [ "$publish_release" = "true" ]; then
+        workflow_homebrew_status="skipped"
+    fi
     
     # Ensure we're running from repository root
     if ! ensure_repository_root; then
@@ -22,6 +85,7 @@ manifest_prep_workflow() {
     # Update PROJECT_ROOT to the actual current directory (in case we changed)
     PROJECT_ROOT="$(pwd)"
     export PROJECT_ROOT
+    workflow_start_sha="$(git rev-parse HEAD 2>/dev/null || echo "")"
     
     # Determine version increment type
     if [ -z "$increment_type" ]; then
@@ -224,28 +288,61 @@ manifest_prep_workflow() {
     echo ""
     
     if [ "$publish_release" = "true" ]; then
+        workflow_tag_name="v${new_version}"
         # Create git tag
-        create_tag "$new_version"
+        if ! create_tag "$new_version"; then
+            log_error "Tag creation failed; aborting ship workflow."
+            emit_ship_failure_report "create_tag" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+            return 1
+        fi
         echo ""
         
         # Push changes
-        push_changes "$new_version"
+        workflow_push_status="attempted"
+        if ! push_changes "$new_version"; then
+            workflow_push_status="failed"
+            log_error "Push failed; aborting ship workflow."
+            emit_ship_failure_report "push_changes" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+            return 1
+        fi
+        workflow_push_status="success"
         echo ""
 
-        # Update Homebrew formula (only if this repo has one)
-        if [ -f "$PROJECT_ROOT/formula/manifest.rb" ]; then
+        # Update Homebrew formula only for the Manifest CLI canonical repository.
+        if [ -f "$PROJECT_ROOT/formula/manifest.rb" ] && should_update_homebrew_for_repo; then
+            workflow_homebrew_status="attempted"
             echo "🍺 Updating Homebrew formula..."
             if update_homebrew_formula; then
                 # Commit the formula change to this repo
                 if [ -n "$(git status --porcelain formula/manifest.rb 2>/dev/null)" ]; then
                     git add formula/manifest.rb
-                    git commit -m "Update Homebrew formula to v$new_version"
-                    git push origin main
+                    if ! git commit -m "Update Homebrew formula to v$new_version"; then
+                        workflow_homebrew_status="failed"
+                        log_error "Failed to commit Homebrew formula update."
+                        emit_ship_failure_report "homebrew_commit" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+                        return 1
+                    fi
+                    if ! git push origin main; then
+                        workflow_homebrew_status="failed"
+                        log_error "Failed to push Homebrew formula commit."
+                        emit_ship_failure_report "homebrew_push" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+                        return 1
+                    fi
                 fi
+                workflow_homebrew_status="success"
                 echo "✅ Homebrew formula updated"
             else
-                echo "⚠️  Homebrew formula update failed, continuing..."
+                workflow_homebrew_status="failed"
+                log_error "Homebrew formula update failed; aborting ship workflow."
+                emit_ship_failure_report "homebrew_update" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+                return 1
             fi
+            echo ""
+        elif [ -f "$PROJECT_ROOT/formula/manifest.rb" ]; then
+            workflow_homebrew_status="skipped_non_canonical_repo"
+            local origin_slug=""
+            origin_slug="$(manifest_origin_repo_slug || echo "unknown")"
+            echo "🍺 Skipping Homebrew formula update for non-canonical repo: ${origin_slug}"
             echo ""
         fi
     else
