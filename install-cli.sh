@@ -72,7 +72,7 @@ get_install_location() {
 MANIFEST_CLI_INSTALL_LOCATION="$(get_install_location)"
 
 # Version information
-MANIFEST_CLI_MIN_BASH_VERSION="4.0"
+MANIFEST_CLI_MIN_BASH_VERSION="5.0"
 
 # =============================================================================
 # Utility Functions
@@ -274,11 +274,28 @@ validate_system() {
         local bash_ver=$(bash --version | head -n1 | grep -oE 'version [0-9]+\.[0-9]+' | cut -d' ' -f2)
         if [ -n "$bash_ver" ]; then
             local major_ver=$(echo "$bash_ver" | cut -d'.' -f1)
-            local minor_ver=$(echo "$bash_ver" | cut -d'.' -f2)
             
-            if [ "$major_ver" -lt 4 ] || ([ "$major_ver" -eq 4 ] && [ "$minor_ver" -lt 0 ]); then
-                print_warning "⚠️  Bash version $bash_ver detected. Version 4.0+ recommended."
-                print_warning "   Some features may not work correctly with older versions."
+            if [ "$major_ver" -lt 5 ]; then
+                print_error "❌ Bash version $bash_ver detected. Manifest CLI requires Bash 5.0+."
+                print_error "   Install Bash 5+ and retry:"
+                if [[ "$OSTYPE" == "darwin"* ]]; then
+                    print_error "     brew install bash"
+                elif command_exists apt-get; then
+                    print_error "     sudo apt-get install bash"
+                elif command_exists dnf; then
+                    print_error "     sudo dnf install bash"
+                elif command_exists yum; then
+                    print_error "     sudo yum install bash"
+                elif command_exists zypper; then
+                    print_error "     sudo zypper install bash"
+                elif command_exists apk; then
+                    print_error "     sudo apk add bash"
+                elif command_exists pacman; then
+                    print_error "     sudo pacman -S bash"
+                else
+                    print_error "     Install Bash 5+ using your distro package manager"
+                fi
+                errors=$((errors + 1))
             else
                 print_success "✅ Bash version $bash_ver meets requirements"
             fi

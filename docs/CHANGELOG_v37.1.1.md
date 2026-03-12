@@ -1,6 +1,6 @@
 # Changelog v37.1.1
 
-**Release Date:** 2026-03-12 02:29:30 UTC
+**Release Date:** 2026-03-12 16:17:50 UTC
 **Release Type:** patch
 
 ## 🆕 New Features
@@ -42,11 +42,15 @@
 
 ## New Features
 
+
 ## Improvements
-Update Homebrew formula to v37.1.0
+Update Homebrew formula to v37.1.1
 
 ## Bug Fixes
 
+
 ## Breaking Changes
 
+
 ## Documentation
+

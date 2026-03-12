@@ -13,10 +13,6 @@ if [ -f "$(dirname "${BASH_SOURCE[0]}")/manifest-zsh-compatibility-test.sh" ]; t
     source "$(dirname "${BASH_SOURCE[0]}")/manifest-zsh-compatibility-test.sh"
 fi
 
-if [ -f "$(dirname "${BASH_SOURCE[0]}")/manifest-bash32-compatibility-test.sh" ]; then
-    source "$(dirname "${BASH_SOURCE[0]}")/manifest-bash32-compatibility-test.sh"
-fi
-
 if [ -f "$(dirname "${BASH_SOURCE[0]}")/manifest-bash4-compatibility-test.sh" ]; then
     source "$(dirname "${BASH_SOURCE[0]}")/manifest-bash4-compatibility-test.sh"
 fi
@@ -193,12 +189,12 @@ test_command() {
             echo "🐚 Running zsh 5.9 compatibility tests..."
             run_zsh_compatibility_tests
             ;;
-        "bash32")
-            echo "🐍 Running bash 3.2 compatibility tests..."
-            run_bash32_compatibility_tests
+        "bash5")
+            echo "🐍 Running bash 5+ compatibility tests..."
+            run_bash4_compatibility_tests
             ;;
         "bash4")
-            echo "🐍 Running bash 4+ compatibility tests..."
+            echo "ℹ️  'manifest test bash4' is deprecated; running bash 5+ suite."
             run_bash4_compatibility_tests
             ;;
         "bash")
@@ -206,12 +202,12 @@ test_command() {
             local bash_version=$(bash --version | head -n1 | grep -oE 'version [0-9]+\.[0-9]+' | cut -d' ' -f2)
             local major_version=$(echo "$bash_version" | cut -d'.' -f1)
             
-            if [ "$major_version" -ge 4 ]; then
-                echo "   Detected bash $bash_version - running bash 4+ tests..."
+            if [ "$major_version" -ge 5 ]; then
+                echo "   Detected bash $bash_version - running bash 5+ tests..."
                 run_bash4_compatibility_tests
             else
-                echo "   Detected bash $bash_version - running bash 3.2 tests..."
-                run_bash32_compatibility_tests
+                echo "   Detected bash $bash_version - this project requires bash 5+."
+                return 1
             fi
             ;;
         "all")
@@ -386,7 +382,7 @@ run_manifest_test() {
                 echo "Usage: manifest test [suite] [--strict-redact|--no-strict-redact]"
                 echo ""
                 echo "Suites include: all, versions, security, config, docs, git, ntp, os, modules,"
-                echo "                integration, cloud, agent, zsh, bash32, bash4, bash"
+                echo "                integration, cloud, agent, zsh, bash5, bash (bash4 alias)"
                 echo ""
                 echo "Redaction:"
                 echo "  --strict-redact     Enable strict redaction (default)"

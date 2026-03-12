@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Manifest Bash 4+ Compatibility Test Module
-# Tests all critical CLI functionality with bash 4.0+
+# Manifest Bash 5+ Compatibility Test Module
+# Tests all critical CLI functionality with bash 5.0+
 
 # Enable strict error handling for critical operations
 set -eo pipefail
@@ -43,9 +43,9 @@ test_fail() {
     FAILED_TESTS+=("$test_name: $error")
 }
 
-# Test 1: Bash 4+ environment detection
+# Test 1: Bash 5+ environment detection
 test_bash4_environment() {
-    test_start "Bash 4+ Environment Detection"
+    test_start "Bash 5+ Environment Detection"
     
     local bash_version=$(bash --version | head -n1 | grep -oE 'version [0-9]+\.[0-9]+' | cut -d' ' -f2)
     local major_version=$(echo "$bash_version" | cut -d'.' -f1)
@@ -53,31 +53,31 @@ test_bash4_environment() {
     
     echo "   Bash version: $bash_version"
     
-    if [ "$major_version" -ge 4 ]; then
-        test_pass "Bash 4+ Environment Detection"
+    if [ "$major_version" -ge 5 ]; then
+        test_pass "Bash 5+ Environment Detection"
     else
-        test_fail "Bash 4+ Environment Detection" "Expected bash 4.0+, got $bash_version"
+        test_fail "Bash 5+ Environment Detection" "Expected bash 5.0+, got $bash_version"
     fi
 }
 
-# Test 2: Bash 4+ capability detection
+# Test 2: Bash 5+ capability detection
 test_bash4_capabilities() {
-    test_start "Bash 4+ Capability Detection"
+    test_start "Bash 5+ Capability Detection"
     
-    # Test double bracket support (should be true for bash 4+)
+    # Test double bracket support (should be true for bash 5+)
     local result=$(bash -c 'source modules/system/manifest-os.sh >/dev/null 2>&1 && echo "[[ ]]: $MANIFEST_CLI_OS_BASH_SUPPORTS_DOUBLE_BRACKETS, Arrays: $MANIFEST_CLI_OS_BASH_SUPPORTS_ASSOCIATIVE_ARRAYS"' 2>&1)
     
     if echo "$result" | grep -q "\[\[ \]\]: true" && echo "$result" | grep -q "Arrays: true"; then
         echo "   Result: $result"
-        test_pass "Bash 4+ Capability Detection"
+        test_pass "Bash 5+ Capability Detection"
     else
-        test_fail "Bash 4+ Capability Detection" "Incorrect capability detection: $result"
+        test_fail "Bash 5+ Capability Detection" "Incorrect capability detection: $result"
     fi
 }
 
-# Test 3: Conditional functions with bash 4+
+# Test 3: Conditional functions with bash 5+
 test_conditional_functions_bash4() {
-    test_start "Conditional Functions with Bash 4+"
+    test_start "Conditional Functions with Bash 5+"
     
     # Test each conditional function
     local test_cases=(
@@ -96,17 +96,17 @@ test_conditional_functions_bash4() {
             echo "   ✅ $func_name: Working"
         else
             echo "   ❌ $func_name: Failed - $result"
-            test_fail "Conditional Functions with Bash 4+" "$func_name failed: $result"
+            test_fail "Conditional Functions with Bash 5+" "$func_name failed: $result"
             return 1
         fi
     done
     
-    test_pass "Conditional Functions with Bash 4+"
+    test_pass "Conditional Functions with Bash 5+"
 }
 
-# Test 4: String comparison edge cases with bash 4+
+# Test 4: String comparison edge cases with bash 5+
 test_string_comparisons_bash4() {
-    test_start "String Comparison Edge Cases with Bash 4+"
+    test_start "String Comparison Edge Cases with Bash 5+"
     
     # Test various string comparison scenarios
     local test_cases=(
@@ -123,17 +123,17 @@ test_string_comparisons_bash4() {
             echo "   ✅ $test_case: Working"
         else
             echo "   ❌ $test_case: Failed - $result"
-            test_fail "String Comparison Edge Cases with Bash 4+" "$test_case failed: $result"
+            test_fail "String Comparison Edge Cases with Bash 5+" "$test_case failed: $result"
             return 1
         fi
     done
     
-    test_pass "String Comparison Edge Cases with Bash 4+"
+    test_pass "String Comparison Edge Cases with Bash 5+"
 }
 
-# Test 5: File and directory checks with bash 4+
+# Test 5: File and directory checks with bash 5+
 test_file_directory_checks_bash4() {
-    test_start "File and Directory Checks with Bash 4+"
+    test_start "File and Directory Checks with Bash 5+"
     
     # Test file existence check
     local result1=$(bash -c "source modules/system/manifest-os.sh >/dev/null 2>&1 && check_file_exists 'modules/system/manifest-os.sh' && echo 'PASS' || echo 'FAIL'" 2>&1)
@@ -144,15 +144,15 @@ test_file_directory_checks_bash4() {
     if echo "$result1" | grep -q "PASS" && echo "$result2" | grep -q "PASS"; then
         echo "   ✅ File checks: Working"
         echo "   ✅ Directory checks: Working"
-        test_pass "File and Directory Checks with Bash 4+"
+        test_pass "File and Directory Checks with Bash 5+"
     else
-        test_fail "File and Directory Checks with Bash 4+" "File: $result1, Directory: $result2"
+        test_fail "File and Directory Checks with Bash 5+" "File: $result1, Directory: $result2"
     fi
 }
 
-# Test 6: Core CLI commands with bash 4+
+# Test 6: Core CLI commands with bash 5+
 test_core_cli_commands_bash4() {
-    test_start "Core CLI Commands with Bash 4+"
+    test_start "Core CLI Commands with Bash 5+"
     
     local commands=("--help" "ntp" "config" "test")
     
@@ -164,17 +164,17 @@ test_core_cli_commands_bash4() {
             echo "   ✅ manifest $cmd: Working (exit code: $exit_code)"
         else
             echo "   ❌ manifest $cmd: Failed (exit code: $exit_code)"
-            test_fail "Core CLI Commands with Bash 4+" "Command 'manifest $cmd' failed with exit code $exit_code"
+            test_fail "Core CLI Commands with Bash 5+" "Command 'manifest $cmd' failed with exit code $exit_code"
             return 1
         fi
     done
     
-    test_pass "Core CLI Commands with Bash 4+"
+    test_pass "Core CLI Commands with Bash 5+"
 }
 
-# Test 7: Error handling with bash 4+
+# Test 7: Error handling with bash 5+
 test_error_handling_bash4() {
-    test_start "Error Handling with Bash 4+"
+    test_start "Error Handling with Bash 5+"
     
     # Test invalid command - should show help message (user-friendly behavior)
     local result=$(bash -c "cd '$(pwd)' && manifest invalidcommand" 2>&1)
@@ -182,30 +182,30 @@ test_error_handling_bash4() {
     
     if echo "$result" | grep -q "Usage: manifest" && [ $exit_code -eq 0 ]; then
         echo "   ✅ Invalid command handling: Shows help message (user-friendly)"
-        test_pass "Error Handling with Bash 4+"
+        test_pass "Error Handling with Bash 5+"
     else
-        test_fail "Error Handling with Bash 4+" "Invalid command should show help message but didn't"
+        test_fail "Error Handling with Bash 5+" "Invalid command should show help message but didn't"
     fi
 }
 
-# Test 8: Environment variable handling with bash 4+
+# Test 8: Environment variable handling with bash 5+
 test_environment_variables_bash4() {
-    test_start "Environment Variable Handling with Bash 4+"
+    test_start "Environment Variable Handling with Bash 5+"
     
     # Test environment variable detection and usage
     local result=$(bash -c "source modules/system/manifest-os.sh >/dev/null 2>&1 && echo \"OS: \$MANIFEST_CLI_OS_OS, Bash: \$MANIFEST_CLI_OS_BASH_VERSION\"" 2>&1)
     
     if echo "$result" | grep -q "OS:" && echo "$result" | grep -q "Bash:"; then
         echo "   Result: $result"
-        test_pass "Environment Variable Handling with Bash 4+"
+        test_pass "Environment Variable Handling with Bash 5+"
     else
-        test_fail "Environment Variable Handling with Bash 4+" "Failed to handle environment variables: $result"
+        test_fail "Environment Variable Handling with Bash 5+" "Failed to handle environment variables: $result"
     fi
 }
 
-# Test 9: Module loading with bash 4+
+# Test 9: Module loading with bash 5+
 test_module_loading_bash4() {
-    test_start "Module Loading with Bash 4+"
+    test_start "Module Loading with Bash 5+"
     
     # Test loading all critical modules
     local modules=("manifest-os.sh" "manifest-shared-utils.sh" "manifest-core.sh")
@@ -217,17 +217,17 @@ test_module_loading_bash4() {
             echo "   ✅ $module: Loaded successfully"
         else
             echo "   ❌ $module: Failed to load - $result"
-            test_fail "Module Loading with Bash 4+" "$module failed to load: $result"
+            test_fail "Module Loading with Bash 5+" "$module failed to load: $result"
             return 1
         fi
     done
     
-    test_pass "Module Loading with Bash 4+"
+    test_pass "Module Loading with Bash 5+"
 }
 
-# Test 10: Bash 4+ specific features
+# Test 10: Bash 5+ specific features
 test_bash4_specific_features() {
-    test_start "Bash 4+ Specific Features"
+    test_start "Bash 5+ Specific Features"
     
     # Test associative arrays (bash 4+ feature)
     local result=$(bash -c 'declare -A test_array; test_array[key]="value"; echo "${test_array[key]}"' 2>&1)
@@ -236,7 +236,7 @@ test_bash4_specific_features() {
         echo "   ✅ Associative arrays: Working"
     else
         echo "   ❌ Associative arrays: Failed - $result"
-        test_fail "Bash 4+ Specific Features" "Associative arrays failed: $result"
+        test_fail "Bash 5+ Specific Features" "Associative arrays failed: $result"
         return 1
     fi
     
@@ -247,11 +247,11 @@ test_bash4_specific_features() {
         echo "   ✅ Advanced parameter expansion: Working"
     else
         echo "   ❌ Advanced parameter expansion: Failed - $result2"
-        test_fail "Bash 4+ Specific Features" "Advanced parameter expansion failed: $result2"
+        test_fail "Bash 5+ Specific Features" "Advanced parameter expansion failed: $result2"
         return 1
     fi
     
-    test_pass "Bash 4+ Specific Features"
+    test_pass "Bash 5+ Specific Features"
 }
 
 # Test 11: Modern bash syntax compatibility
@@ -283,7 +283,7 @@ test_modern_bash_syntax() {
 
 # Main test runner function (callable from other modules)
 run_bash4_compatibility_tests() {
-    echo "🐍 Bash 4+ Compatibility Test Suite"
+    echo "🐍 Bash 5+ Compatibility Test Suite"
     echo "===================================="
     echo ""
     
@@ -317,9 +317,13 @@ run_bash4_compatibility_tests() {
         return 1
     else
         echo ""
-        echo -e "${GREEN}🎉 All tests passed! Bash 4+ compatibility confirmed.${NC}"
+        echo -e "${GREEN}🎉 All tests passed! Bash 5+ compatibility confirmed.${NC}"
         return 0
     fi
+}
+
+run_bash5_compatibility_tests() {
+    run_bash4_compatibility_tests "$@"
 }
 
 # Main function for direct execution
@@ -336,4 +340,5 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
 else
     # Script is being sourced - export the function
     export -f run_bash4_compatibility_tests
+    export -f run_bash5_compatibility_tests
 fi

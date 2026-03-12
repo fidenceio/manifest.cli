@@ -90,8 +90,7 @@ manifest test integration
 manifest test cloud
 manifest test agent
 manifest test zsh
-manifest test bash32
-manifest test bash4
+manifest test bash5
 manifest test bash
 ```
 

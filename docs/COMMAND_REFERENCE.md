@@ -75,7 +75,7 @@ manifest config --non-interactive
 ```bash
 manifest test all
 manifest test cloud
-manifest test bash32
+manifest test bash5
 manifest test all --no-strict-redact
 ```
 
