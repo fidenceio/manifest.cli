@@ -93,43 +93,39 @@ ${changes}"
 }
 
 # Update README version information
+# Preserves user-crafted README content. Only updates inline version strings
+# and the version metadata section if one already exists. Never prepends a
+# new metadata block to a README that doesn't have one.
 update_readme_version() {
     local version="$1"
     local timestamp="$2"
-    
+
     log_info "Updating README version information..."
-    
+
     local readme_file="$PROJECT_ROOT/README.md"
-    
+
     if [[ ! -f "$readme_file" ]]; then
         log_warning "README.md not found, skipping version update"
         return 0
     fi
-    
-    # Generate version section
-    local version_section=$(generate_readme_version_section "$version" "$timestamp")
-    
-    # Update README
+
     local temp_file=$(mktemp)
-    
-    # Replace or add version section
+
     if grep -q "## 📋 Version Information" "$readme_file"; then
-        # Replace existing version section using sed
+        # README has a version metadata section — replace it in place
+        local version_section=$(generate_readme_version_section "$version" "$timestamp")
         local version_section_file=$(mktemp)
         echo "$version_section" > "$version_section_file"
-        
-        # Find the start and end of the version section
+
         local start_line=$(grep -n "## 📋 Version Information" "$readme_file" | head -1 | cut -d: -f1)
         local end_line=$(tail -n +$((start_line + 1)) "$readme_file" | grep -n "^## " | head -1 | cut -d: -f1)
-        
+
         if [[ -n "$end_line" ]]; then
             end_line=$((start_line + end_line - 1))
         else
             end_line=$(wc -l < "$readme_file")
         fi
-        
-        # Create new file with replacement.
-        # BSD/macOS head errors on "head -n 0", so guard for section at top of file.
+
         if [[ "$start_line" -gt 1 ]]; then
             head -n $((start_line - 1)) "$readme_file" > "$temp_file"
         else
@@ -137,75 +133,119 @@ update_readme_version() {
         fi
         cat "$version_section_file" >> "$temp_file"
         tail -n +$((end_line + 1)) "$readme_file" >> "$temp_file"
-        
+
         rm -f "$version_section_file"
+        mv "$temp_file" "$readme_file"
     else
-        # Add version section at the beginning
-        echo "$version_section" > "$temp_file"
-        echo "" >> "$temp_file"
-        cat "$readme_file" >> "$temp_file"
+        rm -f "$temp_file"
+        # No version metadata section — update inline version strings only.
+        # Match patterns like `39.0.0` or **Version** `39.0.0` and update them.
+        local old_version=""
+        if [[ -f "$PROJECT_ROOT/VERSION" ]]; then
+            # The VERSION file already has the new version; derive the old one
+            # by looking at what's currently in the README.
+            old_version=$(grep -oE '`[0-9]+\.[0-9]+\.[0-9]+`' "$readme_file" | head -1 | tr -d '`')
+        fi
+        if [[ -n "$old_version" ]] && [[ "$old_version" != "$version" ]]; then
+            sed -i'' -e "s|\`${old_version}\`|\`${version}\`|g" "$readme_file"
+            log_debug "Updated inline version references: $old_version -> $version"
+        fi
     fi
-    
-    # Replace original file
-    mv "$temp_file" "$readme_file"
-    
+
     log_success "README version information updated"
 }
 
 # Generate documentation index
+# If an INDEX.md already exists, updates version numbers and release note
+# links in place, preserving user-crafted structure and formatting.
+# Only creates the file from a template when it doesn't exist at all.
 generate_docs_index() {
     local version="$1"
-    
+
     log_info "Generating documentation index..."
-    
+
     local index_file="$(get_docs_dir)/INDEX.md"
-    
+
+    if [[ -f "$index_file" ]]; then
+        # Preserve existing INDEX.md — only update version references and release links.
+
+        # Update version strings (e.g., `38.2.0` -> `39.0.0`)
+        local old_version=""
+        old_version=$(grep -oE '`[0-9]+\.[0-9]+\.[0-9]+`' "$index_file" | head -1 | tr -d '`')
+        if [[ -n "$old_version" ]] && [[ "$old_version" != "$version" ]]; then
+            sed -i'' -e "s|\`${old_version}\`|\`${version}\`|g" "$index_file"
+        fi
+
+        # Update **Version:** header line
+        sed -i'' -e "s|^\*\*Version:\*\* [0-9][0-9.]*|\*\*Version:\*\* $version|" "$index_file"
+
+        # Update release note file links (RELEASE_vX.Y.Z.md -> RELEASE_v{new}.md)
+        sed -i'' -e "s|RELEASE_v[0-9][0-9.]*\.md|RELEASE_v${version}.md|g" "$index_file"
+        sed -i'' -e "s|CHANGELOG_v[0-9][0-9.]*\.md|CHANGELOG_v${version}.md|g" "$index_file"
+
+        # Update date if present
+        local today=$(date -u '+%Y-%m-%d')
+        sed -i'' -e "s|^\*\*Updated:\*\* [0-9-]*|\*\*Updated:\*\* $today|" "$index_file"
+
+        # Clean up sed backup files (macOS creates these)
+        rm -f "${index_file}-e"
+
+        log_success "Documentation index updated: $index_file"
+        return 0
+    fi
+
+    # File does not exist — create from template
     cat > "$index_file" << EOF
 # Manifest CLI Documentation
 
-**Version:** $version  
-**Last Updated:** $(get_formatted_timestamp)
+**Version:** $version | **Updated:** $(date -u '+%Y-%m-%d')
 
-## 📚 Available Documentation
+---
 
-### Core Documentation
-- [User Guide](USER_GUIDE.md) - Complete usage guide
-- [Command Reference](COMMAND_REFERENCE.md) - All commands and options
-- [Examples](EXAMPLES.md) - Usage examples and workflows
-- [Installation Guide](INSTALLATION.md) - Installation instructions
+## Getting Started
 
-### Release Information
-- [Latest Release](RELEASE_v$version.md) - Current release notes
-- [Latest Changelog](CHANGELOG_v$version.md) - Current changelog
+| Document | Description |
+| -------- | ----------- |
+| [Installation Guide](INSTALLATION.md) | Setup, upgrade, uninstall, and troubleshooting |
+| [User Guide](USER_GUIDE.md) | Workflows, daily commands, and configuration |
+| [Examples](EXAMPLES.md) | Real-world workflow recipes |
 
-### Archived Documentation
-- [Archived Releases](zArchive/) - Previous release documentation
+## Reference
 
-## 🚀 Quick Start
+| Document | Description |
+| -------- | ----------- |
+| [Command Reference](COMMAND_REFERENCE.md) | Every command, flag, and option |
+| [Git Hooks](GIT_HOOKS.md) | Pre-commit secret protection and hook management |
+
+## Current Release
+
+| Document | Description |
+| -------- | ----------- |
+| [Release Notes v${version}](RELEASE_v${version}.md) | What's new in this release |
+| [Changelog v${version}](CHANGELOG_v${version}.md) | Detailed change log |
+| [Archived Releases](zArchive/) | Previous version documentation |
+
+---
+
+## Quick Start
 
 \`\`\`bash
-# Install Manifest CLI
-curl -fsSL https://raw.githubusercontent.com/fidenceio/manifest.cli/main/install-cli.sh | bash
+# Install
+brew tap fidenceio/tap && brew install manifest
 
-# Run complete workflow
+# Prepare a release locally
 manifest prep patch
+
+# Publish a release
+manifest ship minor
 
 # Get help
 manifest --help
 \`\`\`
 
-## 📋 Version Information
-
-| Property | Value |
-|----------|-------|
-| **Current Version** | \`$version\` |
-| **Documentation Version** | \`$version\` |
-| **Last Updated** | \`$(get_formatted_timestamp)\` |
-
----
-*Generated by Manifest CLI v$version*
+<!-- Manifest CLI v$version -->
 EOF
-    
+
     log_success "Documentation index generated: $index_file"
 }
 
