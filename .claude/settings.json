@@ -5,7 +5,15 @@
       "Bash(MANIFEST_DEBUG=1 bash -c 'source modules/system/manifest-os.sh; source modules/system/manifest-time.sh; query_time_server \"https://www.google.com/generate_204\" 5')",
       "Bash(MANIFEST_DEBUG=1 bash -c 'source modules/system/manifest-os.sh; source modules/system/manifest-time.sh; query_time_server \"https://www.apple.com\" 5')",
       "Read(//Users/william/**)",
-      "Bash(ruby -c /Users/william/coderepos/manifest/fidenceio.manifest.cli/formula/manifest.rb)"
+      "Bash(ruby -c /Users/william/coderepos/manifest/fidenceio.manifest.cli/formula/manifest.rb)",
+      "Read(//^get_new_repos\\\\\\(\\\\\\)|^get_missing_repos\\\\\\(\\\\\\)|^append_services_to_manifest\\\\\\(\\\\\\)/ {p=1} p {print NR\": \"$0} /^}/**)",
+      "Read(//^_get_repo_version\\\\\\(\\\\\\)/ {p=1} p {print NR\": \"$0} /^}/**)",
+      "Read(//^_extract_service_name\\\\\\(\\\\\\)/ {p=1} p {print NR\": \"$0} /^}/**)",
+      "Read(//^_fleet_ensure_gitignores\\\\\\(\\\\\\)/ {p=1} p {print NR\": \"$0} /^}/**)",
+      "Read(//^fleet_sync\\\\\\(\\\\\\)/ {p=1} p {print NR\": \"$0} /^}/**)",
+      "Read(//^fleet_init\\\\\\(\\\\\\)/ {p=1} p {print NR\": \"$0} /^}/**)",
+      "Read(//^fleet_ship\\\\\\(\\\\\\)/ {p=1} p {print NR\": \"$0} /^}/**)",
+      "Read(//^_discover_repos_recursive\\\\\\(\\\\\\)/ {p=1} p {print NR\": \"$0} /^}/**)"
     ]
   }
 }

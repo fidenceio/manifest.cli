@@ -259,8 +259,8 @@ _is_git_submodule() {
 
     # Check parent's .gitmodules if provided
     if [[ -n "$parent" ]] && [[ -f "$parent/.gitmodules" ]]; then
-        local rel_path="${dir#$parent/}"
-        if grep -q "path = $rel_path" "$parent/.gitmodules" 2>/dev/null; then
+        local rel_path="${dir#"$parent"/}"
+        if grep -qF "path = $rel_path" "$parent/.gitmodules" 2>/dev/null; then
             return 0
         fi
     fi
@@ -369,8 +369,7 @@ _get_repo_version() {
     # Check package.json
     if [[ -f "$repo_dir/package.json" ]]; then
         local pkg_version
-        pkg_version=$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' "$repo_dir/package.json" | \
-                      head -1 | sed 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+        pkg_version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$repo_dir/package.json" | head -1)
         if [[ -n "$pkg_version" ]]; then
             echo "$pkg_version"
             return
@@ -490,17 +489,15 @@ _extract_service_name() {
     # - Convert to lowercase
     # - Replace underscores and spaces with hyphens
     # - Remove any characters that aren't alphanumeric or hyphens
-    name=$(echo "$name" | tr '[:upper:]' '[:lower:]' | \
-           tr '_' '-' | tr ' ' '-' | \
-           sed 's/[^a-z0-9-]//g' | \
-           sed 's/--*/-/g' | \
-           sed 's/^-//' | sed 's/-$//')
+    # - Collapse multiple hyphens, strip leading/trailing hyphens
+    name=$(echo "$name" | tr '[:upper:]' '[:lower:]' | tr '_ ' '--' | \
+           sed 's/[^a-z0-9-]//g; s/--*/-/g; s/^-//; s/-$//')
 
     # Handle potential naming conflicts by including parent directory
     # if name is too generic
     if [[ "$name" == "src" ]] || [[ "$name" == "app" ]] || [[ "$name" == "api" ]]; then
         if [[ -n "$fleet_root" ]]; then
-            local rel_path="${repo_dir#$fleet_root/}"
+            local rel_path="${repo_dir#"$fleet_root"/}"
             local parent
             parent=$(dirname "$rel_path")
             if [[ "$parent" != "." ]]; then
@@ -624,7 +621,7 @@ _discover_repos_recursive() {
     # Output repository info if found (and not at root level)
     if [[ "$is_repo" == "true" ]] && [[ $current_depth -ge $MANIFEST_FLEET_MIN_DISCOVERY_DEPTH ]]; then
         # Skip if we've already discovered this path
-        local rel_path="${current_dir#$root_dir/}"
+        local rel_path="${current_dir#"$root_dir"/}"
         local already_found=false
         for found_path in "${_discovered_ref[@]}"; do
             if [[ "$found_path" == "$rel_path" ]]; then
@@ -717,7 +714,7 @@ diff_discovered_repos() {
         path=$(get_fleet_service_property "$service" "path")
         if [[ -n "$path" ]]; then
             # Make relative if absolute
-            path="${path#$MANIFEST_FLEET_ROOT/}"
+            path="${path#"$MANIFEST_FLEET_ROOT"/}"
             # Strip leading ./ so paths match discovery output format
             path="${path#./}"
             manifest_paths["$path"]="$service"
@@ -917,12 +914,16 @@ interactive_discover() {
     echo "Found $repo_count potential service(s)"
     echo ""
 
-    # Resolve the config file: prefer the global variable if set, otherwise
-    # look for the config file in the root directory being scanned.
-    local config_file="${MANIFEST_FLEET_CONFIG_FILE:-}"
-    if [[ -z "$config_file" ]] || [[ ! -f "$config_file" ]]; then
-        local config_filename="${MANIFEST_CLI_FLEET_CONFIG_FILENAME:-$MANIFEST_FLEET_DEFAULT_CONFIG_FILENAME}"
-        config_file="$root_dir/$config_filename"
+    # Resolve the config file
+    local config_file
+    if declare -F _fleet_resolve_config >/dev/null 2>&1; then
+        config_file=$(_fleet_resolve_config "$root_dir")
+    else
+        config_file="${MANIFEST_FLEET_CONFIG_FILE:-}"
+        if [[ -z "$config_file" ]] || [[ ! -f "$config_file" ]]; then
+            local config_filename="${MANIFEST_CLI_FLEET_CONFIG_FILENAME:-$MANIFEST_FLEET_DEFAULT_CONFIG_FILENAME}"
+            config_file="$root_dir/$config_filename"
+        fi
     fi
 
     # If no manifest exists, this is initial setup
@@ -943,12 +944,16 @@ interactive_discover() {
     local diff_output
     diff_output=$(diff_discovered_repos "$discovered" "$config_file")
 
-    # Count changes
-    local new_count removed_count changed_count unchanged_count
-    new_count=$(echo "$diff_output" | grep -c "^+" || true)
-    removed_count=$(echo "$diff_output" | grep -c "^-" || true)
-    changed_count=$(echo "$diff_output" | grep -c "^~" || true)
-    unchanged_count=$(echo "$diff_output" | grep -c "^=" || true)
+    # Count changes in a single pass
+    local new_count=0 removed_count=0 changed_count=0 unchanged_count=0
+    while IFS= read -r line; do
+        case "${line:0:1}" in
+            +) ((new_count++)) ;;
+            -) ((removed_count++)) ;;
+            '~') ((changed_count++)) ;;
+            =) ((unchanged_count++)) ;;
+        esac
+    done <<< "$diff_output"
 
     echo "Comparison with manifest.fleet.yaml:"
     echo "  + New:       $new_count"
@@ -1074,32 +1079,39 @@ append_services_to_manifest() {
     # Find the line number of the next top-level key after "services:"
     # Top-level keys start at column 0 with a word followed by ":"
     local services_line
-    services_line=$(grep -n "^services:" "$config_file" | head -1 | cut -d: -f1)
+    services_line=$(grep -nm 1 "^services:" "$config_file" | cut -d: -f1)
 
-    if [[ -z "$services_line" ]]; then
+    if [[ -z "$services_line" ]] || ! [[ "$services_line" =~ ^[0-9]+$ ]]; then
         log_error "No 'services:' section found in $config_file"
         return 1
     fi
 
     # Find the next top-level key after services:
     local insert_line
-    insert_line=$(tail -n "+$((services_line + 1))" "$config_file" | grep -n "^[a-zA-Z_]" | head -1 | cut -d: -f1)
+    insert_line=$(tail -n "+$((services_line + 1))" "$config_file" | grep -nm 1 "^[a-zA-Z_]" | cut -d: -f1)
 
     if [[ -n "$insert_line" ]]; then
         # Insert before the next top-level key
         # insert_line is relative to services_line+1, so absolute line is:
         local abs_line=$((services_line + insert_line))
 
-        # Use a temp file for safe writing
+        # Use a temp file in the same directory for safe writing (avoids /tmp race conditions)
         local tmp_file
-        tmp_file=$(mktemp)
+        tmp_file=$(mktemp "${config_file}.XXXXXX") || {
+            log_error "Failed to create temp file for $config_file"
+            return 1
+        }
+        # Clean up temp file on any failure
+        trap "rm -f '$tmp_file'" RETURN
 
-        head -n "$((abs_line - 1))" "$config_file" > "$tmp_file"
+        head -n "$((abs_line - 1))" "$config_file" > "$tmp_file" || { log_error "Failed to write to temp file"; return 1; }
         echo "$yaml_content" >> "$tmp_file"
         echo "" >> "$tmp_file"
-        tail -n "+$abs_line" "$config_file" >> "$tmp_file"
+        tail -n "+$abs_line" "$config_file" >> "$tmp_file" || { log_error "Failed to write to temp file"; return 1; }
 
-        mv "$tmp_file" "$config_file"
+        mv "$tmp_file" "$config_file" || { log_error "Failed to replace $config_file"; return 1; }
+        # Successful mv — clear cleanup trap
+        trap - RETURN
     else
         # No next section — append to end of file
         echo "" >> "$config_file"

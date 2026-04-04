@@ -158,6 +158,28 @@ _fleet_ensure_gitignores() {
 }
 
 # -----------------------------------------------------------------------------
+# Function: _fleet_resolve_config (internal)
+# -----------------------------------------------------------------------------
+# Resolves the fleet config file path. Prefers the global variable if set,
+# otherwise looks for the config file in the given root directory.
+#
+# ARGUMENTS:
+#   $1 - Root directory to search (defaults to MANIFEST_FLEET_ROOT or pwd)
+#
+# OUTPUT:
+#   Echoes the resolved config file path
+# -----------------------------------------------------------------------------
+_fleet_resolve_config() {
+    local root_dir="${1:-${MANIFEST_FLEET_ROOT:-.}}"
+    local config_file="${MANIFEST_FLEET_CONFIG_FILE:-}"
+    if [[ -z "$config_file" ]] || [[ ! -f "$config_file" ]]; then
+        local config_filename="${MANIFEST_CLI_FLEET_CONFIG_FILENAME:-$MANIFEST_FLEET_DEFAULT_CONFIG_FILENAME}"
+        config_file="$root_dir/$config_filename"
+    fi
+    echo "$config_file"
+}
+
+# -----------------------------------------------------------------------------
 # Function: _fleet_ensure_initialized
 # -----------------------------------------------------------------------------
 # Ensures fleet configuration is loaded before running commands.
@@ -270,10 +292,9 @@ fleet_status() {
     fi
 
     # Service count
-    local service_count=0
-    for _ in $MANIFEST_FLEET_SERVICES; do
-        service_count=$((service_count + 1))
-    done
+    local service_count
+    # shellcheck disable=SC2086
+    service_count=$(set -- $MANIFEST_FLEET_SERVICES; echo $#)
     echo "Services: $service_count"
     echo ""
 
@@ -329,8 +350,10 @@ fleet_status() {
         # Verbose output
         if [[ "$verbose" == "true" ]]; then
             printf "│   Path: %-63s │\n" "$path"
-            if [[ -n "$(get_fleet_service_property "$service" "url")" ]]; then
-                printf "│   URL:  %-63s │\n" "$(get_fleet_service_property "$service" "url")"
+            local service_url
+            service_url=$(get_fleet_service_property "$service" "url")
+            if [[ -n "$service_url" ]]; then
+                printf "│   URL:  %-63s │\n" "$service_url"
             fi
         fi
     done
@@ -437,7 +460,7 @@ fleet_init() {
     # If fleet already exists, route to update routine (unless --force reinit)
     if [[ -f "$config_file" ]] && [[ "$force" != "true" ]]; then
         log_info "Fleet already initialized. Running update routine..."
-        fleet_update
+        fleet_update --_from-init
         return $?
     fi
 
@@ -488,7 +511,10 @@ EOF
     fi
 
     # Discover and populate services via fleet update
-    fleet_update
+    if ! fleet_update --_from-init; then
+        log_error "Fleet update failed during initialization"
+        return 1
+    fi
 
     # Validate the final configuration
     echo ""
@@ -655,12 +681,8 @@ fleet_discover() {
         local discovered
         discovered=$(discover_fleet_repos "$root_dir" "$depth")
 
-        # Resolve config file: prefer global if set, otherwise check root_dir
-        local config_file="${MANIFEST_FLEET_CONFIG_FILE:-}"
-        if [[ -z "$config_file" ]] || [[ ! -f "$config_file" ]]; then
-            local config_filename="${MANIFEST_CLI_FLEET_CONFIG_FILENAME:-$MANIFEST_FLEET_DEFAULT_CONFIG_FILENAME}"
-            config_file="$root_dir/$config_filename"
-        fi
+        local config_file
+        config_file=$(_fleet_resolve_config "$root_dir")
 
         if [[ -f "$config_file" ]]; then
             local diff_output
@@ -746,8 +768,17 @@ fleet_sync() {
                 continue
             fi
 
+            # Validate path is within fleet root (prevent path traversal)
+            local abs_clone_path
+            abs_clone_path=$(cd "$MANIFEST_FLEET_ROOT" 2>/dev/null && mkdir -p "$(dirname "$path")" 2>/dev/null && cd "$(dirname "$path")" && echo "$(pwd)/$(basename "$path")")
+            if [[ -z "$abs_clone_path" ]] || [[ "$abs_clone_path" != "$MANIFEST_FLEET_ROOT"* ]]; then
+                echo "    ✗ Invalid path (outside fleet root): $path"
+                ((failed++))
+                continue
+            fi
+
             echo "    → Cloning from $url..."
-            if git clone --branch "$branch" "$url" "$path" 2>/dev/null; then
+            if git clone --branch "$branch" "$url" "$path" 2>&1 | tail -1; then
                 echo "    ✓ Cloned successfully"
                 ((cloned++))
             else
@@ -767,11 +798,12 @@ fleet_sync() {
             fi
 
             echo "    → Pulling latest..."
-            if git -C "$path" pull --rebase 2>/dev/null; then
+            local pull_output
+            if pull_output=$(git -C "$path" pull --rebase 2>&1); then
                 echo "    ✓ Updated"
                 ((pulled++))
             else
-                echo "    ⚠ Pull failed (may have local changes)"
+                echo "    ⚠ Pull failed: $(echo "$pull_output" | tail -1)"
                 ((failed++))
             fi
         fi
@@ -804,11 +836,8 @@ fleet_sync() {
 #   manifest fleet update --depth 3
 # -----------------------------------------------------------------------------
 fleet_update() {
-    if ! _fleet_require_initialized "update"; then
-        return 1
-    fi
-
     local depth=5
+    local skip_init_check=false
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -819,18 +848,24 @@ fleet_update() {
                     return 1
                 fi
                 depth="$2"; shift 2 ;;
+            --_from-init) skip_init_check=true; shift ;;
             *) shift ;;
         esac
     done
 
+    # When called standalone, require fleet to be initialized.
+    # When called from fleet_init (--_from-init), skip — config was just created.
+    if [[ "$skip_init_check" != "true" ]]; then
+        if ! _fleet_require_initialized "update"; then
+            return 1
+        fi
+    fi
+
     local root_dir="${MANIFEST_FLEET_ROOT:-$(pwd)}"
 
     # Resolve config file
-    local config_file="${MANIFEST_FLEET_CONFIG_FILE:-}"
-    if [[ -z "$config_file" ]] || [[ ! -f "$config_file" ]]; then
-        local config_filename="${MANIFEST_CLI_FLEET_CONFIG_FILENAME:-$MANIFEST_FLEET_DEFAULT_CONFIG_FILENAME}"
-        config_file="$root_dir/$config_filename"
-    fi
+    local config_file
+    config_file=$(_fleet_resolve_config "$root_dir")
 
     echo ""
     echo "╔══════════════════════════════════════════════════════════════════════╗"
@@ -846,11 +881,16 @@ fleet_update() {
     local diff_output
     diff_output=$(diff_discovered_repos "$discovered" "$config_file")
 
-    local new_count removed_count changed_count unchanged_count
-    new_count=$(echo "$diff_output" | grep -c "^+" || true)
-    removed_count=$(echo "$diff_output" | grep -c "^-" || true)
-    changed_count=$(echo "$diff_output" | grep -c "^~" || true)
-    unchanged_count=$(echo "$diff_output" | grep -c "^=" || true)
+    # Count changes in a single pass
+    local new_count=0 removed_count=0 changed_count=0 unchanged_count=0
+    while IFS= read -r _line; do
+        case "${_line:0:1}" in
+            +) ((new_count++)) ;;
+            -) ((removed_count++)) ;;
+            '~') ((changed_count++)) ;;
+            =) ((unchanged_count++)) ;;
+        esac
+    done <<< "$diff_output"
 
     echo "Fleet scan results:"
     echo "  + New:       $new_count"
@@ -1182,25 +1222,30 @@ fleet_add() {
     echo "Service type: $service_type"
     echo ""
 
-    # Build YAML snippet
+    # Sanitize service name for safe YAML key (alphanumeric + hyphens only)
+    local safe_name
+    safe_name=$(echo "$service_name" | tr '[:upper:]' '[:lower:]' | tr '_ ' '--' | \
+                sed 's/[^a-z0-9-]//g; s/--*/-/g; s/^-//; s/-$//')
+    if [[ -z "$safe_name" ]]; then
+        log_error "Service name '$service_name' contains no valid characters"
+        return 1
+    fi
+
+    # Build YAML snippet (escape embedded quotes in values)
     local yaml_content=""
-    yaml_content+="  $service_name:"$'\n'
+    yaml_content+="  $safe_name:"$'\n'
     if [[ "$is_url" == "true" ]]; then
-        yaml_content+="    url: \"$path_or_url\""$'\n'
-        yaml_content+="    path: \"./$service_name\""$'\n'
+        yaml_content+="    url: \"${path_or_url//\"/\\\"}\""$'\n'
+        yaml_content+="    path: \"./$safe_name\""$'\n'
     else
         local rel_path="${path_or_url#"$MANIFEST_FLEET_ROOT"/}"
         rel_path="${rel_path#./}"
-        yaml_content+="    path: \"./$rel_path\""$'\n'
+        yaml_content+="    path: \"./${rel_path//\"/\\\"}\""$'\n'
     fi
-    yaml_content+="    type: \"$service_type\""
+    yaml_content+="    type: \"${service_type//\"/\\\"}\""
 
-    # Resolve config file
-    local config_file="${MANIFEST_FLEET_CONFIG_FILE:-}"
-    if [[ -z "$config_file" ]] || [[ ! -f "$config_file" ]]; then
-        local config_filename="${MANIFEST_CLI_FLEET_CONFIG_FILENAME:-$MANIFEST_FLEET_DEFAULT_CONFIG_FILENAME}"
-        config_file="${MANIFEST_FLEET_ROOT:-.}/$config_filename"
-    fi
+    local config_file
+    config_file=$(_fleet_resolve_config)
 
     if [[ -f "$config_file" ]]; then
         if append_services_to_manifest "$config_file" "$yaml_content"; then
@@ -1336,7 +1381,6 @@ COMMANDS:
     If fleet already exists, routes directly to 'fleet update'.
     Options:
       --name, -n NAME    Fleet name
-      --force, -f        Overwrite existing manifest.fleet.yaml
       --force, -f        Overwrite existing manifest.fleet.yaml
 
   manifest fleet status [options]
