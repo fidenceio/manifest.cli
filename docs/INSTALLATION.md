@@ -35,7 +35,7 @@ manifest test all
 
 - Git
 - Bash environment
-- Network access for remote operations and NTP/cloud features
+- Network access for remote operations and time/cloud features
 
 ## Uninstall
 

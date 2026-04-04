@@ -53,7 +53,7 @@ manifest agent status
 ```bash
 manifest config setup
 manifest config show
-manifest config ntp
+manifest config time
 ```
 
 ## Safe Maintenance

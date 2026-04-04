@@ -34,33 +34,33 @@ migrate_user_global_config_internal() {
     local config_file="$HOME/.env.manifest.global"
     [ -f "$config_file" ] || return 0
 
-    local ntp1 ntp2 ntp3 ntp4 ntp_servers tap_repo
-    ntp1=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER1=/{print $2}' "$config_file" | tail -n1)
-    ntp2=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER2=/{print $2}' "$config_file" | tail -n1)
-    ntp3=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER3=/{print $2}' "$config_file" | tail -n1)
-    ntp4=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER4=/{print $2}' "$config_file" | tail -n1)
-    ntp_servers=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVERS=/{print $2}' "$config_file" | tail -n1)
+    local time1 time2 time3 time4 time_servers tap_repo
+    time1=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER1=/{print $2}' "$config_file" | tail -n1)
+    time2=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER2=/{print $2}' "$config_file" | tail -n1)
+    time3=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER3=/{print $2}' "$config_file" | tail -n1)
+    time4=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER4=/{print $2}' "$config_file" | tail -n1)
+    time_servers=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVERS=/{print $2}' "$config_file" | tail -n1)
     tap_repo=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TAP_REPO=/{print $2}' "$config_file" | tail -n1)
 
     # Safe migrations for known legacy defaults only.
-    [ "$ntp1" = "time.apple.com" ] && manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER1" "216.239.35.0"
-    [ "$ntp2" = "time.google.com" ] && manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER2" "216.239.35.4"
-    [ "$ntp3" = "pool.ntp.org" ] && manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER3" ""
-    [ "$ntp4" = "time.nist.gov" ] && manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER4" ""
+    { [ "$time1" = "time.apple.com" ] || [ "$time1" = "216.239.35.0" ]; } && manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_SERVER1" "https://www.cloudflare.com/cdn-cgi/trace"
+    { [ "$time2" = "time.google.com" ] || [ "$time2" = "216.239.35.4" ]; } && manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_SERVER2" "https://www.google.com/generate_204"
+    [ "$time3" = "pool.ntp.org" ] && manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_SERVER3" "https://www.apple.com"
+    [ "$time4" = "time.nist.gov" ] && manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_SERVER4" ""
     [ "$tap_repo" = "https://github.com/fidenceio/fidenceio-homebrew-tap.git" ] && \
         manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_TAP_REPO" "https://github.com/fidenceio/homebrew-tap.git"
 
     # Add new cache keys if missing.
-    grep -Eq "^[[:space:]]*MANIFEST_CLI_NTP_CACHE_TTL=" "$config_file" || \
-        manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_CACHE_TTL" "120"
-    grep -Eq "^[[:space:]]*MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD=" "$config_file" || \
-        manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD" "3600"
-    grep -Eq "^[[:space:]]*MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE=" "$config_file" || \
-        manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE" "21600"
+    grep -Eq "^[[:space:]]*MANIFEST_CLI_TIME_CACHE_TTL=" "$config_file" || \
+        manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_CACHE_TTL" "120"
+    grep -Eq "^[[:space:]]*MANIFEST_CLI_TIME_CACHE_CLEANUP_PERIOD=" "$config_file" || \
+        manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_CACHE_CLEANUP_PERIOD" "3600"
+    grep -Eq "^[[:space:]]*MANIFEST_CLI_TIME_CACHE_STALE_MAX_AGE=" "$config_file" || \
+        manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_CACHE_STALE_MAX_AGE" "21600"
 
-    if [ -n "$ntp_servers" ]; then
-        log_warning "Deprecated variable detected in ~/.env.manifest.global: MANIFEST_CLI_NTP_SERVERS"
-        log_warning "Use MANIFEST_CLI_NTP_SERVER1..4 instead (legacy value preserved)"
+    if [ -n "$time_servers" ]; then
+        log_warning "Deprecated variable detected in ~/.env.manifest.global: MANIFEST_CLI_TIME_SERVERS"
+        log_warning "Use MANIFEST_CLI_TIME_SERVER1..4 instead (legacy value preserved)"
     fi
 }
 
@@ -184,13 +184,13 @@ install_cli() {
 MANIFEST_CLI_AUTO_UPDATE=true
 MANIFEST_CLI_UPDATE_COOLDOWN=30
 
-# NTP settings
-MANIFEST_CLI_NTP_TIMESTAMP=true
-MANIFEST_CLI_NTP_SERVER1="216.239.35.0"
-MANIFEST_CLI_NTP_SERVER2="216.239.35.4"
-MANIFEST_CLI_NTP_SERVER3=""
-MANIFEST_CLI_NTP_TIMEOUT=3
-MANIFEST_CLI_NTP_RETRIES=2
+# Time server settings
+MANIFEST_CLI_TIME_TIMESTAMP=true
+MANIFEST_CLI_TIME_SERVER1="https://www.cloudflare.com/cdn-cgi/trace"
+MANIFEST_CLI_TIME_SERVER2="https://www.google.com/generate_204"
+MANIFEST_CLI_TIME_SERVER3="https://www.apple.com"
+MANIFEST_CLI_TIME_TIMEOUT=5
+MANIFEST_CLI_TIME_RETRIES=2
 
 # Interactive mode
 MANIFEST_CLI_INTERACTIVE_MODE=false

@@ -115,12 +115,12 @@ main_cleanup() {
     local version="${1:-}"
     local timestamp="${2:-}"
     
-    # Get NTP timestamp if not provided
+    # Get trusted timestamp if not provided
     if [ -z "$timestamp" ]; then
-        get_ntp_timestamp >/dev/null
-        timestamp=$(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+        get_time_timestamp >/dev/null
+        timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
     fi
-    
+
     log_info "Starting repository cleanup..."
     log_info "Version: $version"
     log_info "Timestamp: $timestamp"
@@ -189,9 +189,9 @@ main() {
             if [ -f "$PROJECT_ROOT/VERSION" ]; then
                 latest_version=$(cat "$PROJECT_ROOT/VERSION" 2>/dev/null || echo "")
             fi
-            # Get NTP timestamp for cleanup
-            get_ntp_timestamp >/dev/null
-            local timestamp=$(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+            # Get trusted timestamp for cleanup
+            get_time_timestamp >/dev/null
+            local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
             main_cleanup "$latest_version" "$timestamp"
             ;;
         "validate")

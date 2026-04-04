@@ -150,7 +150,7 @@ test_file_directory_checks() {
 test_core_cli_commands() {
     test_start "Core CLI Commands"
     
-    local commands=("--help" "ntp" "config" "test")
+    local commands=("--help" "time" "config" "test")
     
     for cmd in "${commands[@]}"; do
         local result=$(zsh -c "cd '$(pwd)' && manifest $cmd" 2>&1)

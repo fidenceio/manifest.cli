@@ -155,8 +155,8 @@ test_command() {
         "git")
             test_git_functionality
             ;;
-        "ntp")
-            test_ntp_functionality
+        "time")
+            test_time_functionality
             ;;
         "os")
             test_os_functionality
@@ -381,7 +381,7 @@ run_manifest_test() {
             -h|--help)
                 echo "Usage: manifest test [suite] [--strict-redact|--no-strict-redact]"
                 echo ""
-                echo "Suites include: all, versions, security, config, docs, git, ntp, os, modules,"
+                echo "Suites include: all, versions, security, config, docs, git, time, os, modules,"
                 echo "                integration, cloud, agent, zsh, bash5, bash (bash4 alias)"
                 echo ""
                 echo "Redaction:"
@@ -552,29 +552,27 @@ test_git_functionality() {
     echo "   ✅ Git functionality testing completed"
 }
 
-# Test NTP functionality
-test_ntp_functionality() {
-    echo "🧪 Testing NTP functionality..."
-    
-    # Check NTP command availability
-    if command -v sntp >/dev/null 2>&1; then
-        echo "   ✅ sntp command available"
-    elif command -v ntpdate >/dev/null 2>&1; then
-        echo "   ✅ ntpdate command available"
+# Test time functionality
+test_time_functionality() {
+    echo "🧪 Testing timestamp functionality..."
+
+    # Check timestamp command availability
+    if command -v curl >/dev/null 2>&1; then
+        echo "   ✅ curl command available (HTTPS timestamps)"
     else
-        echo "   ⚠️  No NTP command available"
+        echo "   ⚠️  curl not available (HTTPS timestamps require curl)"
     fi
-    
-    # Test NTP command if available
+
+    # Test timestamp command if available
     if command -v manifest >/dev/null 2>&1; then
-        if manifest ntp >/dev/null 2>&1; then
-            echo "   ✅ NTP command execution successful"
+        if manifest time >/dev/null 2>&1; then
+            echo "   ✅ Timestamp service working"
         else
-            echo "   ⚠️  NTP command execution had issues"
+            echo "   ⚠️  Timestamp service had issues"
         fi
     fi
-    
-    echo "   ✅ NTP functionality testing completed"
+
+    echo "   ✅ Timestamp functionality testing completed"
 }
 
 # Test OS functionality
@@ -609,7 +607,7 @@ test_module_loading() {
     echo "🧪 Testing module loading..."
     
     # Check if all required modules exist
-    local required_modules=("core/manifest-core.sh" "core/manifest-config.sh" "git/manifest-git.sh" "docs/manifest-documentation.sh" "system/manifest-ntp.sh" "system/manifest-os.sh" "system/manifest-security.sh" "testing/manifest-test.sh")
+    local required_modules=("core/manifest-core.sh" "core/manifest-config.sh" "git/manifest-git.sh" "docs/manifest-documentation.sh" "system/manifest-time.sh" "system/manifest-os.sh" "system/manifest-security.sh" "testing/manifest-test.sh")
     local modules_dir="modules"
     
     for module in "${required_modules[@]}"; do
@@ -687,7 +685,7 @@ test_all_functionality() {
     echo ""
     test_git_functionality
     echo ""
-    test_ntp_functionality
+    test_time_functionality
     echo ""
     test_module_loading
     echo ""

@@ -70,7 +70,7 @@ class Manifest < Formula
       To get started:
         manifest --help          # Show help
         manifest test            # Test functionality
-        manifest ntp             # Get trusted timestamp
+        manifest time            # Get trusted timestamp
 
       The CLI will automatically detect your OS and apply optimizations.
 

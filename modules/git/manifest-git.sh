@@ -202,7 +202,7 @@ commit_changes() {
     fi
     
     if [ -n "$timestamp" ]; then
-        message="$message [NTP: $timestamp]"
+        message="$message [TS: $timestamp]"
     fi
     
     echo "💾 Committing changes..."

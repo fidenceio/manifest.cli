@@ -392,9 +392,9 @@ generate_fleet_per_service_docs() {
 
             # Get timestamp
             local timestamp
-            if declare -F get_ntp_timestamp >/dev/null 2>&1; then
-                get_ntp_timestamp >/dev/null 2>&1
-                timestamp=$(format_timestamp "${MANIFEST_CLI_NTP_TIMESTAMP:-$(date +%s)}" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || date -u '+%Y-%m-%d %H:%M:%S UTC')
+            if declare -F get_time_timestamp >/dev/null 2>&1; then
+                get_time_timestamp >/dev/null 2>&1
+                timestamp=$(format_timestamp "${MANIFEST_CLI_TIME_TIMESTAMP:-$(date +%s)}" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || date -u '+%Y-%m-%d %H:%M:%S UTC')
             else
                 timestamp=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
             fi
@@ -513,9 +513,9 @@ fleet_docs_generate() {
     # Get fleet version and timestamp
     local fleet_version="${MANIFEST_FLEET_VERSION:-unknown}"
     local timestamp
-    if declare -F get_ntp_timestamp >/dev/null 2>&1; then
-        get_ntp_timestamp >/dev/null 2>&1
-        timestamp=$(format_timestamp "${MANIFEST_CLI_NTP_TIMESTAMP:-$(date +%s)}" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || date -u '+%Y-%m-%d %H:%M:%S UTC')
+    if declare -F get_time_timestamp >/dev/null 2>&1; then
+        get_time_timestamp >/dev/null 2>&1
+        timestamp=$(format_timestamp "${MANIFEST_CLI_TIME_TIMESTAMP:-$(date +%s)}" '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || date -u '+%Y-%m-%d %H:%M:%S UTC')
     else
         timestamp=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
     fi

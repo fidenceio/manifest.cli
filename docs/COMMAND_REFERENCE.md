@@ -4,7 +4,7 @@ This reference reflects the command dispatcher in `modules/core/manifest-core.sh
 
 ## Top-Level Commands
 
-- `manifest ntp`
+- `manifest time`
 - `manifest prep <patch|minor|major|revision> [-i|--interactive]`
 - `manifest ship <patch|minor|major|revision> [-i|--interactive]`
 - `manifest sync`
@@ -13,7 +13,7 @@ This reference reflects the command dispatcher in `modules/core/manifest-core.sh
 - `manifest version [patch|minor|major|revision]`
 - `manifest docs [metadata|homebrew|cleanup]`
 - `manifest cleanup`
-- `manifest config [show|ntp|doctor|setup|--non-interactive]`
+- `manifest config [show|time|doctor|setup|--non-interactive]`
 - `manifest security`
 - `manifest test [suite] [--strict-redact|--no-strict-redact]`
 - `manifest upgrade [--check|--force]`
@@ -62,7 +62,7 @@ manifest docs cleanup
 ```bash
 manifest config
 manifest config show
-manifest config ntp
+manifest config time
 manifest config doctor
 manifest config doctor --dry-run
 manifest config doctor --fix

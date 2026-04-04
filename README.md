@@ -68,7 +68,7 @@ manifest test all
 - `version [patch|minor|major|revision]`
 - `docs [metadata|homebrew|cleanup]`
 - `sync`, `commit`, `revert`, `cleanup`
-- `config [show|ntp|doctor|setup|--non-interactive]`
+- `config [show|time|doctor|setup|--non-interactive]`
 - `security`
 - `test [suite] [--strict-redact|--no-strict-redact]`
 - `pr <subcommand>`

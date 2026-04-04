@@ -154,7 +154,7 @@ test_file_directory_checks_bash32() {
 test_core_cli_commands_bash32() {
     test_start "Core CLI Commands with Bash 3.2"
     
-    local commands=("--help" "ntp" "config" "test")
+    local commands=("--help" "time" "config" "test")
     
     for cmd in "${commands[@]}"; do
         local result=$(bash -c "cd '$(pwd)' && manifest $cmd" 2>&1)

@@ -264,10 +264,10 @@ main() {
             local version="${2:-}"
             local timestamp="${3:-}"
             
-            # Get NTP timestamp if not provided
+            # Get trusted timestamp if not provided
             if [ -z "$timestamp" ]; then
-                get_ntp_timestamp >/dev/null
-                timestamp=$(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+                get_time_timestamp >/dev/null
+                timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
             fi
             local release_type="${4:-patch}"
             

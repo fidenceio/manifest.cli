@@ -196,8 +196,8 @@ manifest_prep_workflow() {
         echo ""
     fi
     
-    # Get NTP timestamp
-    get_ntp_timestamp
+    # Get trusted timestamp
+    get_time_timestamp
     
     echo "📋 Version increment type: $increment_type"
     echo ""
@@ -205,7 +205,7 @@ manifest_prep_workflow() {
     # Check for uncommitted changes
     if [ -n "$(git status --porcelain)" ]; then
         echo "📝 Uncommitted changes detected. Committing first..."
-        local timestamp=$(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+        local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
         commit_changes "Auto-commit before Manifest process" "$timestamp"
         echo ""
     fi
@@ -236,7 +236,7 @@ manifest_prep_workflow() {
     echo ""
     
     # Generate documentation using new architecture
-    local timestamp=$(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+    local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
     echo "📚 Generating documentation and release notes..."
     if generate_documents "$new_version" "$timestamp" "$increment_type"; then
         echo "✅ Documentation generated successfully"
@@ -369,10 +369,10 @@ manifest_prep_workflow() {
         echo "   - Remotes: (no pushes in prep mode)"
     fi
     echo "   - Timestamp: $timestamp"
-    echo "   - Source: $MANIFEST_NTP_SERVER ($MANIFEST_NTP_SERVER_IP)"
-    echo "   - Offset: $MANIFEST_NTP_OFFSET seconds"
-    echo "   - Uncertainty: ±$MANIFEST_NTP_UNCERTAINTY seconds"
-    echo "   - Method: $MANIFEST_NTP_METHOD"
+    echo "   - Source: $MANIFEST_TIME_SERVER ($MANIFEST_TIME_SERVER_IP)"
+    echo "   - Offset: $MANIFEST_TIME_OFFSET seconds"
+    echo "   - Uncertainty: ±$MANIFEST_TIME_UNCERTAINTY seconds"
+    echo "   - Method: $MANIFEST_TIME_METHOD"
 }
 
 # Test/dry-run function for safety
@@ -443,14 +443,12 @@ manifest_test_dry_run() {
     fi
     echo ""
     
-    # Test NTP functionality
-    echo "🕐 NTP Testing:"
-    if command -v sntp >/dev/null 2>&1; then
-        echo "   ✅ sntp command available"
-    elif command -v ntpdate >/dev/null 2>&1; then
-        echo "   ✅ ntpdate command available"
+    # Test timestamp functionality
+    echo "🕐 Timestamp Testing:"
+    if command -v curl >/dev/null 2>&1; then
+        echo "   ✅ curl command available (HTTPS timestamps)"
     else
-        echo "   ⚠️  No NTP command available (will use system time)"
+        echo "   ⚠️  curl not available (will use system time)"
     fi
     echo ""
     

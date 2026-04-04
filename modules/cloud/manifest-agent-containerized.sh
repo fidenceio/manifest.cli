@@ -189,9 +189,9 @@ send_heartbeat() {
     
     log_operation "heartbeat" "Sending heartbeat to Manifest Cloud"
     
-    # Get NTP timestamp for accurate heartbeat
-    get_ntp_timestamp >/dev/null
-    local timestamp=$(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%dT%H:%M:%SZ')
+    # Get trusted timestamp for accurate heartbeat
+    get_time_timestamp >/dev/null
+    local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%dT%H:%M:%SZ')
     local response=$(curl -s --max-time 10 \
         -X POST "$manifest_cloud_endpoint/api/v1/agent/heartbeat" \
         -H "Authorization: Bearer $subscription_token" \

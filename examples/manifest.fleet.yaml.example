@@ -174,7 +174,7 @@ changelog:
       per_service_sections: true  # Collapsible per-service details
       compatibility_matrix: true  # Dependency compatibility table
       migration_guides: true      # For major version bumps
-      ntp_verification: true      # Timestamp verification details
+      time_verification: true     # Timestamp verification details
 
     # Detail level for per-service sections
     # "full"    - Include entire changelog

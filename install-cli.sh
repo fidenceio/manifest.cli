@@ -10,7 +10,7 @@
 # 🚀 **Core Features:**
 #   • Automated version management (patch, minor, major, revision)
 #   • AI-powered documentation generation
-#   • Trusted NTP timestamp verification
+#   • Trusted HTTPS timestamp verification
 #   • Git workflow automation (sync, commit, tag, push)
 #   • Homebrew formula integration
 #   • Historical documentation management
@@ -143,29 +143,29 @@ migrate_user_global_configuration() {
     local migrated=0
     local warnings=0
 
-    local ntp1 ntp2 ntp3 ntp4 tap_repo ntp_servers
-    ntp1=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER1=/{print $2}' "$config_file" | tail -n1)
-    ntp2=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER2=/{print $2}' "$config_file" | tail -n1)
-    ntp3=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER3=/{print $2}' "$config_file" | tail -n1)
-    ntp4=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER4=/{print $2}' "$config_file" | tail -n1)
+    local time1 time2 time3 time4 tap_repo time_servers
+    time1=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER1=/{print $2}' "$config_file" | tail -n1)
+    time2=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER2=/{print $2}' "$config_file" | tail -n1)
+    time3=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER3=/{print $2}' "$config_file" | tail -n1)
+    time4=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER4=/{print $2}' "$config_file" | tail -n1)
     tap_repo=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TAP_REPO=/{print $2}' "$config_file" | tail -n1)
-    ntp_servers=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVERS=/{print $2}' "$config_file" | tail -n1)
+    time_servers=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVERS=/{print $2}' "$config_file" | tail -n1)
 
     # Migrate only known legacy defaults; preserve user custom values.
-    if [ "$ntp1" = "time.apple.com" ]; then
-        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER1" "216.239.35.0"
+    if [ "$time1" = "time.apple.com" ] || [ "$time1" = "216.239.35.0" ]; then
+        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_SERVER1" "https://www.cloudflare.com/cdn-cgi/trace"
         migrated=$((migrated + 1))
     fi
-    if [ "$ntp2" = "time.google.com" ]; then
-        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER2" "216.239.35.4"
+    if [ "$time2" = "time.google.com" ] || [ "$time2" = "216.239.35.4" ]; then
+        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_SERVER2" "https://www.google.com/generate_204"
         migrated=$((migrated + 1))
     fi
-    if [ "$ntp3" = "pool.ntp.org" ]; then
-        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER3" ""
+    if [ "$time3" = "pool.ntp.org" ]; then
+        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_SERVER3" "https://www.apple.com"
         migrated=$((migrated + 1))
     fi
-    if [ "$ntp4" = "time.nist.gov" ]; then
-        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_SERVER4" ""
+    if [ "$time4" = "time.nist.gov" ]; then
+        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_SERVER4" ""
         migrated=$((migrated + 1))
     fi
     if [ "$tap_repo" = "https://github.com/fidenceio/fidenceio-homebrew-tap.git" ]; then
@@ -174,23 +174,23 @@ migrate_user_global_configuration() {
     fi
 
     # Ensure new cache controls exist.
-    if ! grep -Eq "^[[:space:]]*MANIFEST_CLI_NTP_CACHE_TTL=" "$config_file"; then
-        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_CACHE_TTL" "120"
+    if ! grep -Eq "^[[:space:]]*MANIFEST_CLI_TIME_CACHE_TTL=" "$config_file"; then
+        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_CACHE_TTL" "120"
         migrated=$((migrated + 1))
     fi
-    if ! grep -Eq "^[[:space:]]*MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD=" "$config_file"; then
-        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD" "3600"
+    if ! grep -Eq "^[[:space:]]*MANIFEST_CLI_TIME_CACHE_CLEANUP_PERIOD=" "$config_file"; then
+        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_CACHE_CLEANUP_PERIOD" "3600"
         migrated=$((migrated + 1))
     fi
-    if ! grep -Eq "^[[:space:]]*MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE=" "$config_file"; then
-        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE" "21600"
+    if ! grep -Eq "^[[:space:]]*MANIFEST_CLI_TIME_CACHE_STALE_MAX_AGE=" "$config_file"; then
+        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_CACHE_STALE_MAX_AGE" "21600"
         migrated=$((migrated + 1))
     fi
 
     # Deprecated variable warning (preserve value; user may still rely on it).
-    if [ -n "$ntp_servers" ]; then
-        print_warning "⚠️  Deprecated variable detected: MANIFEST_CLI_NTP_SERVERS"
-        print_warning "   Prefer MANIFEST_CLI_NTP_SERVER1..4 (legacy value preserved)"
+    if [ -n "$time_servers" ]; then
+        print_warning "⚠️  Deprecated variable detected: MANIFEST_CLI_TIME_SERVERS"
+        print_warning "   Prefer MANIFEST_CLI_TIME_SERVER1..4 (legacy value preserved)"
         warnings=$((warnings + 1))
     fi
 
@@ -519,17 +519,17 @@ create_configuration() {
 # Timezone (IANA format, e.g., America/New_York, Europe/London, Asia/Tokyo)
 MANIFEST_CLI_TIMEZONE=UTC
 
-# NTP Configuration
-MANIFEST_CLI_NTP_SERVER1=216.239.35.0
-MANIFEST_CLI_NTP_SERVER2=216.239.35.4
-MANIFEST_CLI_NTP_SERVER3=
-MANIFEST_CLI_NTP_SERVER4=
-MANIFEST_CLI_NTP_TIMEOUT=5
-MANIFEST_CLI_NTP_RETRIES=3
-MANIFEST_CLI_NTP_VERIFY=true
-MANIFEST_CLI_NTP_CACHE_TTL=120
-MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD=3600
-MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE=21600
+# Time Server Configuration
+MANIFEST_CLI_TIME_SERVER1=https://www.cloudflare.com/cdn-cgi/trace
+MANIFEST_CLI_TIME_SERVER2=https://www.google.com/generate_204
+MANIFEST_CLI_TIME_SERVER3=https://www.apple.com
+MANIFEST_CLI_TIME_SERVER4=
+MANIFEST_CLI_TIME_TIMEOUT=5
+MANIFEST_CLI_TIME_RETRIES=3
+MANIFEST_CLI_TIME_VERIFY=true
+MANIFEST_CLI_TIME_CACHE_TTL=120
+MANIFEST_CLI_TIME_CACHE_CLEANUP_PERIOD=3600
+MANIFEST_CLI_TIME_CACHE_STALE_MAX_AGE=21600
 
 # Versioning Configuration
 MANIFEST_CLI_VERSION_FORMAT=XX.XX.XX
@@ -684,7 +684,7 @@ display_post_install_info() {
     echo "   $MANIFEST_CLI_NAME test            # Test functionality"
     echo "   $MANIFEST_CLI_NAME test cloud      # Test Manifest Cloud connectivity"
     echo "   $MANIFEST_CLI_NAME test agent      # Test Manifest Agent functionality"
-    echo "   $MANIFEST_CLI_NAME ntp             # Get NTP timestamp"
+    echo "   $MANIFEST_CLI_NAME time            # Get trusted timestamp"
     echo "   $MANIFEST_CLI_NAME sync            # Sync with remote"
     echo "   $MANIFEST_CLI_NAME cleanup         # Manage historical docs"
     
@@ -977,7 +977,7 @@ main() {
                 echo "   manifest test            # Test functionality"
                 echo "   manifest test cloud      # Test Manifest Cloud connectivity"
                 echo "   manifest test agent      # Test Manifest Agent functionality"
-                echo "   manifest ntp             # Get NTP timestamp"
+                echo "   manifest time            # Get trusted timestamp"
                 echo ""
                 print_status "💡 To upgrade: brew update && brew upgrade manifest"
                 echo ""

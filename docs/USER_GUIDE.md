@@ -83,7 +83,7 @@ manifest test security
 manifest test config
 manifest test docs
 manifest test git
-manifest test ntp
+manifest test time
 manifest test os
 manifest test modules
 manifest test integration
@@ -103,7 +103,7 @@ Use:
 ```bash
 manifest config
 manifest config show
-manifest config ntp
+manifest config time
 manifest config doctor --dry-run
 manifest config doctor --fix
 manifest config setup

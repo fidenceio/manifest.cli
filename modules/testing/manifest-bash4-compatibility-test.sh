@@ -154,7 +154,7 @@ test_file_directory_checks_bash4() {
 test_core_cli_commands_bash4() {
     test_start "Core CLI Commands with Bash 5+"
     
-    local commands=("--help" "ntp" "config" "test")
+    local commands=("--help" "time" "config" "test")
     
     for cmd in "${commands[@]}"; do
         local result=$(bash -c "cd '$(pwd)' && manifest $cmd" 2>&1)

@@ -44,7 +44,7 @@ source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-shared-functions.sh"
 # Now source modules after variables are set
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-config.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-os.sh"
-source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-ntp.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-time.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/git/manifest-git.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-security.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/docs/manifest-documentation.sh"
@@ -234,9 +234,9 @@ manifest_test() {
     echo "🧪 Starting Manifest test mode..."
     echo ""
     
-    # Get NTP timestamp
-    get_ntp_timestamp
-    
+    # Get trusted timestamp
+    get_time_timestamp
+
     case "$test_type" in
         "versions")
             echo "🔄 Testing version increments..."
@@ -255,9 +255,9 @@ manifest_test() {
             echo "🔄 Running comprehensive tests..."
             echo ""
             
-            # Test NTP
-            echo "🕐 Testing NTP functionality..."
-            get_ntp_timestamp
+            # Test timestamp
+            echo "🕐 Testing timestamp functionality..."
+            get_time_timestamp
             echo ""
             
             # Test Git operations
@@ -281,9 +281,9 @@ manifest_test() {
             echo "   All operations are simulated"
             echo ""
             
-            # Get NTP timestamp
-            get_ntp_timestamp
-            
+            # Get trusted timestamp
+            get_time_timestamp
+
             # Check repository status
             echo "📋 Repository status:"
             echo "   - Branch: $(git branch --show-current)"
@@ -343,10 +343,10 @@ main() {
 
     # Commands that do NOT require a Git repository
     case "$command" in
-        "help"|"-help"|"--help"|"-h"|"uninstall"|"reinstall"|"update"|"upgrade"|"fleet"|"config"|"ntp")
+        "help"|"-help"|"--help"|"-h"|"uninstall"|"reinstall"|"update"|"upgrade"|"fleet"|"config"|"time")
             # Commands that can run outside repos still need configuration loaded.
             case "$command" in
-                "config"|"ntp")
+                "config"|"time")
                     load_configuration "$(pwd)" "false"
                     ;;
             esac
@@ -374,8 +374,8 @@ main() {
     esac
     
     case "$command" in
-        "ntp")
-            display_ntp_info
+        "time")
+            display_time_info
             ;;
         "prep")
             local increment_type=""
@@ -443,9 +443,9 @@ main() {
             ;;
         "commit")
             local message="$1"
-            # Get NTP timestamp for accurate versioning
-            get_ntp_timestamp >/dev/null
-            local timestamp=$(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+            # Get trusted timestamp for accurate versioning
+            get_time_timestamp >/dev/null
+            local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
             commit_changes "$message" "$timestamp"
             ;;
         "version")
@@ -477,9 +477,9 @@ main() {
                         return 1
                     fi
                     
-                    # Get NTP timestamp for accurate documentation
-                    get_ntp_timestamp >/dev/null
-                    local timestamp=$(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+                    # Get trusted timestamp for accurate documentation
+                    get_time_timestamp >/dev/null
+                    local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
                     generate_documents "$current_version" "$timestamp" "patch"
                     ;;
             esac
@@ -490,9 +490,9 @@ main() {
             if [ -f "$MANIFEST_CLI_VERSION_FILE" ]; then
                 current_version=$(cat "$MANIFEST_CLI_VERSION_FILE")
             fi
-            # Get NTP timestamp for accurate cleanup
-            get_ntp_timestamp >/dev/null
-            local timestamp=$(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+            # Get trusted timestamp for accurate cleanup
+            get_time_timestamp >/dev/null
+            local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
             main_cleanup "$current_version" "$timestamp"
             ;;
         "config")
@@ -500,8 +500,8 @@ main() {
                 "show")
                     show_configuration
                     ;;
-                "ntp")
-                    display_ntp_config
+                "time")
+                    display_time_config
                     ;;
                 "doctor")
                     shift
@@ -515,11 +515,11 @@ main() {
                     fi
                     ;;
                 "-h"|"--help")
-                    echo "Usage: manifest config [show|ntp|doctor|setup]"
+                    echo "Usage: manifest config [show|time|doctor|setup]"
                     echo ""
                     echo "  (no args)  Run interactive wizard (TTY) or show config (non-interactive)"
                     echo "  show       Print full effective configuration"
-                    echo "  ntp        Print NTP-only configuration"
+                    echo "  time       Print time server configuration"
                     echo "  doctor     Detect stale/deprecated config (use --fix/--dry-run)"
                     echo "  setup      Force interactive configuration wizard"
                     ;;
@@ -531,7 +531,7 @@ main() {
                     ;;
                 *)
                     log_error "Unknown config view: $1"
-                    echo "Usage: manifest config [show|ntp|doctor|setup]"
+                    echo "Usage: manifest config [show|time|doctor|setup]"
                     return 1
                     ;;
             esac
@@ -741,7 +741,7 @@ display_help() {
     echo "Usage: manifest <command>"
     echo ""
     echo "Commands:"
-    echo "  ntp         - 🕐 Get trusted timestamp for manifest operations"
+    echo "  time        - 🕐 Get trusted timestamp for manifest operations"
   echo "  ship        - 🚢 Publish release artifacts (remote push path)"
   echo "    ship <patch|minor|major|revision> [-i]       # Runs prep + tag/push/homebrew publish"
     echo "  prep        - 🧰 Prepare changes before shipping"

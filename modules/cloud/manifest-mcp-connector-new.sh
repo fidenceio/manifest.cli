@@ -207,9 +207,9 @@ fallback_to_local_docs() {
         # Source the local documentation module
         source "$(dirname "$(get_script_dir)")/docs/manifest-documentation.sh"
         
-        # Generate documentation locally with NTP timestamp
-        get_ntp_timestamp >/dev/null
-        local timestamp=$(format_timestamp "$MANIFEST_CLI_NTP_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+        # Generate documentation locally with trusted timestamp
+        get_time_timestamp >/dev/null
+        local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
         
         log_info "Generating documentation locally for version $version..."
         

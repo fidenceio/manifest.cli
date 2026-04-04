@@ -13,7 +13,7 @@ MANIFEST_CLI_CONFIG_SCHEMA_VERSION_CURRENT=2
 
 # Configuration validation
 validate_config() {
-    # Temporarily disable validation to debug NTP issue
+    # Temporarily disable validation to debug time server issue
     log_debug "Configuration validation skipped for debugging"
     return 0
 }
@@ -112,16 +112,18 @@ warn_deprecated_configuration() {
 
     local warned=0
 
-    if [ -n "${MANIFEST_CLI_NTP_SERVERS:-}" ]; then
-        _manifest_config_warn "Deprecated variable detected: MANIFEST_CLI_NTP_SERVERS. Prefer MANIFEST_CLI_NTP_SERVER1..4."
+    if [ -n "${MANIFEST_CLI_TIME_SERVERS:-}" ]; then
+        _manifest_config_warn "Deprecated variable detected: MANIFEST_CLI_TIME_SERVERS. Prefer MANIFEST_CLI_TIME_SERVER1..4."
         warned=1
     fi
 
-    if [ "${MANIFEST_CLI_NTP_SERVER1:-}" = "time.apple.com" ] || \
-       [ "${MANIFEST_CLI_NTP_SERVER2:-}" = "time.google.com" ] || \
-       [ "${MANIFEST_CLI_NTP_SERVER3:-}" = "pool.ntp.org" ] || \
-       [ "${MANIFEST_CLI_NTP_SERVER4:-}" = "time.nist.gov" ]; then
-        _manifest_config_warn "Legacy NTP defaults detected. Recommended defaults are 216.239.35.0 / 216.239.35.4 with empty SERVER3/4."
+    if [ "${MANIFEST_CLI_TIME_SERVER1:-}" = "time.apple.com" ] || \
+       [ "${MANIFEST_CLI_TIME_SERVER2:-}" = "time.google.com" ] || \
+       [ "${MANIFEST_CLI_TIME_SERVER3:-}" = "pool.ntp.org" ] || \
+       [ "${MANIFEST_CLI_TIME_SERVER4:-}" = "time.nist.gov" ] || \
+       [ "${MANIFEST_CLI_TIME_SERVER1:-}" = "216.239.35.0" ] || \
+       [ "${MANIFEST_CLI_TIME_SERVER2:-}" = "216.239.35.4" ]; then
+        _manifest_config_warn "Legacy time server defaults detected. Recommended defaults are https://www.cloudflare.com/cdn-cgi/trace / https://www.google.com/generate_204 with https://www.apple.com for SERVER3."
         warned=1
     fi
 
@@ -139,29 +141,29 @@ _manifest_config_detect_issues() {
     local config_file="$1"
     [ -f "$config_file" ] || return 1
 
-    local ntp1 ntp2 ntp3 ntp4 tap_repo ntp_servers
-    ntp1=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER1=/{print $2}' "$config_file" | tail -n1)
-    ntp2=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER2=/{print $2}' "$config_file" | tail -n1)
-    ntp3=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER3=/{print $2}' "$config_file" | tail -n1)
-    ntp4=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVER4=/{print $2}' "$config_file" | tail -n1)
+    local ts1 ts2 ts3 ts4 tap_repo time_servers
+    ts1=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER1=/{print $2}' "$config_file" | tail -n1)
+    ts2=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER2=/{print $2}' "$config_file" | tail -n1)
+    ts3=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER3=/{print $2}' "$config_file" | tail -n1)
+    ts4=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER4=/{print $2}' "$config_file" | tail -n1)
     tap_repo=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TAP_REPO=/{print $2}' "$config_file" | tail -n1)
-    ntp_servers=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_NTP_SERVERS=/{print $2}' "$config_file" | tail -n1)
+    time_servers=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVERS=/{print $2}' "$config_file" | tail -n1)
 
-    [ "$ntp1" = "time.apple.com" ] && echo "legacy|MANIFEST_CLI_NTP_SERVER1|time.apple.com|216.239.35.0"
-    [ "$ntp2" = "time.google.com" ] && echo "legacy|MANIFEST_CLI_NTP_SERVER2|time.google.com|216.239.35.4"
-    [ "$ntp3" = "pool.ntp.org" ] && echo "legacy|MANIFEST_CLI_NTP_SERVER3|pool.ntp.org|"
-    [ "$ntp4" = "time.nist.gov" ] && echo "legacy|MANIFEST_CLI_NTP_SERVER4|time.nist.gov|"
+    [ "$ts1" = "time.apple.com" ] || [ "$ts1" = "216.239.35.0" ] && echo "legacy|MANIFEST_CLI_TIME_SERVER1|$ts1|https://www.cloudflare.com/cdn-cgi/trace"
+    [ "$ts2" = "time.google.com" ] || [ "$ts2" = "216.239.35.4" ] && echo "legacy|MANIFEST_CLI_TIME_SERVER2|$ts2|https://www.google.com/generate_204"
+    [ "$ts3" = "pool.ntp.org" ] && echo "legacy|MANIFEST_CLI_TIME_SERVER3|pool.ntp.org|https://www.apple.com"
+    [ "$ts4" = "time.nist.gov" ] && echo "legacy|MANIFEST_CLI_TIME_SERVER4|time.nist.gov|"
     [ "$tap_repo" = "https://github.com/fidenceio/fidenceio-homebrew-tap.git" ] && \
         echo "legacy|MANIFEST_CLI_TAP_REPO|https://github.com/fidenceio/fidenceio-homebrew-tap.git|https://github.com/fidenceio/homebrew-tap.git"
 
-    [ -n "$ntp_servers" ] && echo "deprecated|MANIFEST_CLI_NTP_SERVERS|$ntp_servers|MANIFEST_CLI_NTP_SERVER1..4"
+    [ -n "$time_servers" ] && echo "deprecated|MANIFEST_CLI_TIME_SERVERS|$time_servers|MANIFEST_CLI_TIME_SERVER1..4"
 
-    grep -Eq "^[[:space:]]*MANIFEST_CLI_NTP_CACHE_TTL=" "$config_file" || \
-        echo "missing|MANIFEST_CLI_NTP_CACHE_TTL||120"
-    grep -Eq "^[[:space:]]*MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD=" "$config_file" || \
-        echo "missing|MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD||3600"
-    grep -Eq "^[[:space:]]*MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE=" "$config_file" || \
-        echo "missing|MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE||21600"
+    grep -Eq "^[[:space:]]*MANIFEST_CLI_TIME_CACHE_TTL=" "$config_file" || \
+        echo "missing|MANIFEST_CLI_TIME_CACHE_TTL||120"
+    grep -Eq "^[[:space:]]*MANIFEST_CLI_TIME_CACHE_CLEANUP_PERIOD=" "$config_file" || \
+        echo "missing|MANIFEST_CLI_TIME_CACHE_CLEANUP_PERIOD||3600"
+    grep -Eq "^[[:space:]]*MANIFEST_CLI_TIME_CACHE_STALE_MAX_AGE=" "$config_file" || \
+        echo "missing|MANIFEST_CLI_TIME_CACHE_STALE_MAX_AGE||21600"
 
     grep -Eq "^[[:space:]]*MANIFEST_CLI_CONFIG_SCHEMA_VERSION=" "$config_file" || \
         echo "missing|MANIFEST_CLI_CONFIG_SCHEMA_VERSION||${MANIFEST_CLI_CONFIG_SCHEMA_VERSION_CURRENT}"
@@ -519,7 +521,7 @@ load_configuration() {
     set_default_configuration
     warn_deprecated_configuration
     
-    # Skip validation for now to debug NTP issue
+    # Skip validation for now to debug time server issue
     # validate_config
 }
 
@@ -562,17 +564,17 @@ set_default_configuration() {
     export MANIFEST_CLI_GIT_DEVELOPMENT_BRANCH="${MANIFEST_CLI_GIT_DEVELOPMENT_BRANCH:-develop}"
     export MANIFEST_CLI_GIT_STAGING_BRANCH="${MANIFEST_CLI_GIT_STAGING_BRANCH:-staging}"
     
-    # NTP Configuration
-    export MANIFEST_CLI_NTP_SERVER1="${MANIFEST_CLI_NTP_SERVER1:-216.239.35.0}"
-    export MANIFEST_CLI_NTP_SERVER2="${MANIFEST_CLI_NTP_SERVER2:-216.239.35.4}"
-    export MANIFEST_CLI_NTP_SERVER3="${MANIFEST_CLI_NTP_SERVER3:-}"
-    export MANIFEST_CLI_NTP_SERVER4="${MANIFEST_CLI_NTP_SERVER4:-}"
-    export MANIFEST_CLI_NTP_TIMEOUT="${MANIFEST_CLI_NTP_TIMEOUT:-5}"
-    export MANIFEST_CLI_NTP_RETRIES="${MANIFEST_CLI_NTP_RETRIES:-3}"
-    export MANIFEST_CLI_NTP_VERIFY="${MANIFEST_CLI_NTP_VERIFY:-true}"
-    export MANIFEST_CLI_NTP_CACHE_TTL="${MANIFEST_CLI_NTP_CACHE_TTL:-120}"
-    export MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD="${MANIFEST_CLI_NTP_CACHE_CLEANUP_PERIOD:-3600}"
-    export MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE="${MANIFEST_CLI_NTP_CACHE_STALE_MAX_AGE:-21600}"
+    # Trusted Timestamps Configuration
+    export MANIFEST_CLI_TIME_SERVER1="${MANIFEST_CLI_TIME_SERVER1:-https://www.cloudflare.com/cdn-cgi/trace}"
+    export MANIFEST_CLI_TIME_SERVER2="${MANIFEST_CLI_TIME_SERVER2:-https://www.google.com/generate_204}"
+    export MANIFEST_CLI_TIME_SERVER3="${MANIFEST_CLI_TIME_SERVER3:-https://www.apple.com}"
+    export MANIFEST_CLI_TIME_SERVER4="${MANIFEST_CLI_TIME_SERVER4:-}"
+    export MANIFEST_CLI_TIME_TIMEOUT="${MANIFEST_CLI_TIME_TIMEOUT:-5}"
+    export MANIFEST_CLI_TIME_RETRIES="${MANIFEST_CLI_TIME_RETRIES:-3}"
+    export MANIFEST_CLI_TIME_VERIFY="${MANIFEST_CLI_TIME_VERIFY:-true}"
+    export MANIFEST_CLI_TIME_CACHE_TTL="${MANIFEST_CLI_TIME_CACHE_TTL:-120}"
+    export MANIFEST_CLI_TIME_CACHE_CLEANUP_PERIOD="${MANIFEST_CLI_TIME_CACHE_CLEANUP_PERIOD:-3600}"
+    export MANIFEST_CLI_TIME_CACHE_STALE_MAX_AGE="${MANIFEST_CLI_TIME_CACHE_STALE_MAX_AGE:-21600}"
 
     # Timezone Configuration (defaults to UTC)
     # Can be overridden in .env.manifest.local with IANA timezone names like:
@@ -747,7 +749,7 @@ configure_interactive() {
 
     local project_name project_description organization
     local default_branch feature_prefix hotfix_prefix release_prefix bugfix_prefix
-    local ntp_server1 ntp_server2 ntp_server3 ntp_server4 ntp_timeout ntp_retries ntp_verify timezone
+    local time_server1 time_server2 time_server3 time_server4 time_timeout time_retries time_verify timezone
     local docs_folder docs_archive docs_limit
     local auto_update update_cooldown pr_profile pr_enforce_ready
 
@@ -764,14 +766,14 @@ configure_interactive() {
     bugfix_prefix=$(_manifest_config_prompt_value "Bugfix branch prefix" "${MANIFEST_CLI_GIT_BUGFIX_BRANCH_PREFIX:-bugfix/}")
 
     echo ""
-    echo "NTP settings:"
-    ntp_server1=$(_manifest_config_prompt_value "NTP server 1" "${MANIFEST_CLI_NTP_SERVER1:-216.239.35.0}")
-    ntp_server2=$(_manifest_config_prompt_value "NTP server 2" "${MANIFEST_CLI_NTP_SERVER2:-216.239.35.4}")
-    ntp_server3=$(_manifest_config_prompt_value "NTP server 3" "${MANIFEST_CLI_NTP_SERVER3:-}")
-    ntp_server4=$(_manifest_config_prompt_value "NTP server 4" "${MANIFEST_CLI_NTP_SERVER4:-}")
-    ntp_timeout=$(_manifest_config_prompt_value "NTP timeout (seconds)" "${MANIFEST_CLI_NTP_TIMEOUT:-5}")
-    ntp_retries=$(_manifest_config_prompt_value "NTP retries" "${MANIFEST_CLI_NTP_RETRIES:-3}")
-    ntp_verify=$(_manifest_config_prompt_value "Verify NTP responses (true/false)" "${MANIFEST_CLI_NTP_VERIFY:-true}")
+    echo "Time server settings:"
+    time_server1=$(_manifest_config_prompt_value "Time server 1" "${MANIFEST_CLI_TIME_SERVER1:-https://www.cloudflare.com/cdn-cgi/trace}")
+    time_server2=$(_manifest_config_prompt_value "Time server 2" "${MANIFEST_CLI_TIME_SERVER2:-https://www.google.com/generate_204}")
+    time_server3=$(_manifest_config_prompt_value "Time server 3" "${MANIFEST_CLI_TIME_SERVER3:-https://www.apple.com}")
+    time_server4=$(_manifest_config_prompt_value "Time server 4" "${MANIFEST_CLI_TIME_SERVER4:-}")
+    time_timeout=$(_manifest_config_prompt_value "Time server timeout (seconds)" "${MANIFEST_CLI_TIME_TIMEOUT:-5}")
+    time_retries=$(_manifest_config_prompt_value "Time server retries" "${MANIFEST_CLI_TIME_RETRIES:-3}")
+    time_verify=$(_manifest_config_prompt_value "Verify time server responses (true/false)" "${MANIFEST_CLI_TIME_VERIFY:-true}")
     timezone=$(_manifest_config_prompt_value "Timezone (IANA, e.g. UTC, America/New_York)" "${MANIFEST_CLI_TIMEZONE:-UTC}")
 
     echo ""
@@ -787,13 +789,13 @@ configure_interactive() {
     pr_profile=$(_manifest_config_prompt_value "PR profile (solo|team|regulated)" "${MANIFEST_CLI_PR_PROFILE:-solo}")
     pr_enforce_ready=$(_manifest_config_prompt_value "Enforce PR ready gate (true/false)" "${MANIFEST_CLI_PR_ENFORCE_READY:-true}")
 
-    if ! [[ "$ntp_timeout" =~ ^[0-9]+$ ]]; then
-        log_warning "Invalid NTP timeout '$ntp_timeout'; using existing/default value."
-        ntp_timeout="${MANIFEST_CLI_NTP_TIMEOUT:-5}"
+    if ! [[ "$time_timeout" =~ ^[0-9]+$ ]]; then
+        log_warning "Invalid time server timeout '$time_timeout'; using existing/default value."
+        time_timeout="${MANIFEST_CLI_TIME_TIMEOUT:-5}"
     fi
-    if ! [[ "$ntp_retries" =~ ^[0-9]+$ ]]; then
-        log_warning "Invalid NTP retries '$ntp_retries'; using existing/default value."
-        ntp_retries="${MANIFEST_CLI_NTP_RETRIES:-3}"
+    if ! [[ "$time_retries" =~ ^[0-9]+$ ]]; then
+        log_warning "Invalid time server retries '$time_retries'; using existing/default value."
+        time_retries="${MANIFEST_CLI_TIME_RETRIES:-3}"
     fi
     if ! [[ "$docs_limit" =~ ^[0-9]+$ ]]; then
         log_warning "Invalid docs limit '$docs_limit'; using existing/default value."
@@ -812,13 +814,13 @@ configure_interactive() {
     _manifest_config_write_key "$config_file" "MANIFEST_CLI_GIT_HOTFIX_BRANCH_PREFIX" "$hotfix_prefix"
     _manifest_config_write_key "$config_file" "MANIFEST_CLI_GIT_RELEASE_BRANCH_PREFIX" "$release_prefix"
     _manifest_config_write_key "$config_file" "MANIFEST_CLI_GIT_BUGFIX_BRANCH_PREFIX" "$bugfix_prefix"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_NTP_SERVER1" "$ntp_server1"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_NTP_SERVER2" "$ntp_server2"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_NTP_SERVER3" "$ntp_server3"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_NTP_SERVER4" "$ntp_server4"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_NTP_TIMEOUT" "$ntp_timeout"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_NTP_RETRIES" "$ntp_retries"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_NTP_VERIFY" "$ntp_verify"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_TIME_SERVER1" "$time_server1"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_TIME_SERVER2" "$time_server2"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_TIME_SERVER3" "$time_server3"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_TIME_SERVER4" "$time_server4"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_TIME_TIMEOUT" "$time_timeout"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_TIME_RETRIES" "$time_retries"
+    _manifest_config_write_key "$config_file" "MANIFEST_CLI_TIME_VERIFY" "$time_verify"
     _manifest_config_write_key "$config_file" "MANIFEST_CLI_TIMEZONE" "$timezone"
     _manifest_config_write_key "$config_file" "MANIFEST_CLI_DOCS_FOLDER" "$docs_folder"
     _manifest_config_write_key "$config_file" "MANIFEST_CLI_DOCS_ARCHIVE_FOLDER" "$docs_archive"
@@ -1029,17 +1031,17 @@ show_configuration() {
     echo "   Remotes: Uses all configured git remotes automatically"
     echo ""
 
-    echo "🕐 NTP Configuration:"
-    echo "   Server 1: ${MANIFEST_CLI_NTP_SERVER1}"
-    echo "   Server 2: ${MANIFEST_CLI_NTP_SERVER2}"
-    echo "   Server 3: ${MANIFEST_CLI_NTP_SERVER3}"
-    echo "   Server 4: ${MANIFEST_CLI_NTP_SERVER4}"
-    if [ -n "${MANIFEST_CLI_NTP_SERVERS:-}" ]; then
-        echo "   Legacy Server List: ${MANIFEST_CLI_NTP_SERVERS}"
+    echo "🕐 Time Server Configuration:"
+    echo "   Server 1: ${MANIFEST_CLI_TIME_SERVER1}"
+    echo "   Server 2: ${MANIFEST_CLI_TIME_SERVER2}"
+    echo "   Server 3: ${MANIFEST_CLI_TIME_SERVER3}"
+    echo "   Server 4: ${MANIFEST_CLI_TIME_SERVER4}"
+    if [ -n "${MANIFEST_CLI_TIME_SERVERS:-}" ]; then
+        echo "   Legacy Server List: ${MANIFEST_CLI_TIME_SERVERS}"
     fi
-    echo "   Timeout: ${MANIFEST_CLI_NTP_TIMEOUT} seconds"
-    echo "   Retries: ${MANIFEST_CLI_NTP_RETRIES} attempts"
-    echo "   Verify: ${MANIFEST_CLI_NTP_VERIFY}"
+    echo "   Timeout: ${MANIFEST_CLI_TIME_TIMEOUT} seconds"
+    echo "   Retries: ${MANIFEST_CLI_TIME_RETRIES} attempts"
+    echo "   Verify: ${MANIFEST_CLI_TIME_VERIFY}"
     echo ""
     
     echo "📚 Documentation Configuration:"
@@ -1084,7 +1086,7 @@ show_configuration() {
     echo "Quick views:"
     echo "   • manifest config          # Interactive setup wizard"
     echo "   • manifest config show     # Full effective configuration"
-    echo "   • manifest config ntp      # NTP-only configuration view"
+    echo "   • manifest config time     # Time server configuration view"
     echo "   • manifest config doctor   # Drift/deprecation diagnostics"
 }
 
