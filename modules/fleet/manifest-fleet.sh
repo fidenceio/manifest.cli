@@ -77,6 +77,7 @@ readonly MANIFEST_FLEET_MODULE_NAME="manifest-fleet"
 # Source fleet sub-modules
 source "$MANIFEST_FLEET_SCRIPT_DIR/manifest-fleet-config.sh"
 source "$MANIFEST_FLEET_SCRIPT_DIR/manifest-fleet-detect.sh"
+source "$MANIFEST_FLEET_SCRIPT_DIR/manifest-fleet-docs.sh"
 
 # =============================================================================
 # UTILITY FUNCTIONS
@@ -823,8 +824,8 @@ Options:
   --draft                   Create draft PRs
 
 Flow:
-  default: fleet prep -> fleet pr create -> fleet pr queue
-  --safe:  fleet prep -> fleet pr create -> fleet pr checks -> fleet pr ready -> fleet pr queue
+  default: fleet prep -> fleet docs -> fleet pr create -> fleet pr queue
+  --safe:  fleet prep -> fleet docs -> fleet pr create -> fleet pr checks -> fleet pr ready -> fleet pr queue
 EOF
                 return 0
                 ;;
@@ -840,10 +841,16 @@ EOF
         return 1
     fi
 
+    # Determine step count based on whether safe mode adds extra steps
+    local total_steps=5
+    if [ "$safe" = "true" ]; then
+        total_steps=6
+    fi
+
     echo "🚢 Starting fleet ship workflow ($increment_type)"
 
     if [ "$run_prep" = "true" ]; then
-        echo "🔧 Step 1/4: Running prep across fleet services..."
+        echo "🔧 Step 1/$total_steps: Running prep across fleet services..."
         for service in $MANIFEST_FLEET_SERVICES; do
             local path
             path=$(get_fleet_service_property "$service" "path")
@@ -882,18 +889,27 @@ EOF
         fi
     fi
 
-    echo "🔀 Step 2/4: Creating or reusing PRs across fleet..."
+    # --- Fleet docs generation ---
+    echo "📄 Step 2/$total_steps: Generating fleet documentation..."
+    local docs_strategy
+    docs_strategy=$(get_fleet_docs_strategy)
+    fleet_docs_generate "$increment_type" || {
+        log_warning "Fleet docs generation had issues, continuing..."
+    }
+
+    echo "🔀 Step 3/$total_steps: Creating or reusing PRs across fleet..."
     local create_args=()
     [ "$draft" = "true" ] && create_args+=("--draft")
     manifest_fleet_pr_dispatch create "${create_args[@]}" || return 1
 
     if [ "$safe" = "true" ]; then
-        echo "🧪 Step 3/4: Verifying checks and readiness across fleet..."
+        echo "🧪 Step 4/$total_steps: Verifying checks and readiness across fleet..."
         manifest_fleet_pr_dispatch checks || return 1
         manifest_fleet_pr_dispatch ready || return 1
     fi
 
-    echo "📥 Step 4/4: Queueing PRs across fleet..."
+    local queue_step=$((total_steps))
+    echo "📥 Step ${queue_step}/${total_steps}: Queueing PRs across fleet..."
     local queue_args=(--method "$method")
     [ "$force" = "true" ] && queue_args+=("--force")
     [ "$no_delete_branch" = "true" ] && queue_args+=("--no-delete-branch")
@@ -1110,9 +1126,8 @@ fleet_main() {
             echo "For now, run 'manifest prep' in each service directory"
             ;;
         docs)
-            # TODO: Implement unified documentation
-            log_warning "fleet docs is not yet implemented"
-            echo "For now, run 'manifest docs' in each service directory"
+            shift
+            fleet_docs_dispatch "$@"
             ;;
         help|--help|-h)
             fleet_help
@@ -1207,9 +1222,16 @@ COMMANDS:
     Coordinated version bump across all services.
     (Coming soon)
 
-  manifest fleet docs
-    Generate unified fleet documentation.
-    (Coming soon)
+  manifest fleet docs [subcommand] [options]
+    Generate fleet documentation per configured strategy.
+    Subcommands:
+      generate          Generate docs (default)
+      status            Show current docs configuration
+      help              Show docs help
+    Options:
+      --strategy <s>    Override strategy: fleet-root|per-service|both
+      --fleet-only      Only generate fleet-root docs
+      --services-only   Only generate per-service docs
 
 CONFIGURATION:
 

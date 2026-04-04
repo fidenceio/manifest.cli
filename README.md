@@ -2,12 +2,12 @@
 
 | Property | Value |
 |----------|-------|
-| **Current Version** | `37.1.2` |
-| **Release Date** | `2026-03-12 18:27:51 UTC` |
-| **Git Tag** | `v37.1.2` |
+| **Current Version** | `38.0.0` |
+| **Release Date** | `2026-04-04 15:25:17 UTC` |
+| **Git Tag** | `v38.0.0` |
 | **Branch** | `main` |
-| **Last Updated** | `2026-03-12 18:27:51 UTC` |
-| **CLI Version** | `37.1.2` |
+| **Last Updated** | `2026-04-04 15:25:17 UTC` |
+| **CLI Version** | `38.0.0` |
 
 ### 📚 Documentation Files
 
@@ -108,7 +108,7 @@ manifest.cli/
 
 - `prep` requires an explicit release type.
 - `ship` is the publish path; `pr` is handled explicitly via `manifest pr ...`.
-- Some fleet subcommands are scaffolded and not fully implemented yet (`fleet prep`, `fleet docs`).
+- Some fleet subcommands are scaffolded and not fully implemented yet (`fleet prep`).
 
 ## Support
 

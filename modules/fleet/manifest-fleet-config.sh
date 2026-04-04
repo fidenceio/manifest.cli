@@ -133,6 +133,41 @@ readonly MANIFEST_FLEET_DEFAULT_CHANGELOG_DETAIL="summary"
 readonly MANIFEST_FLEET_DEFAULT_CHANGELOG_MATRIX="true"
 
 # -----------------------------------------------------------------------------
+# Fleet Docs Defaults
+# -----------------------------------------------------------------------------
+
+# Docs placement strategy for fleet operations
+# Options: "fleet-root" | "per-service" | "both"
+#   - "fleet-root"  : One docs/ folder at the fleet root only
+#   - "per-service"  : Each service gets its own docs/ folder (default)
+#   - "both"         : Fleet root AND per-service docs folders
+readonly MANIFEST_FLEET_DEFAULT_DOCS_STRATEGY="per-service"
+
+# Whether to generate docs at fleet root level
+readonly MANIFEST_FLEET_DEFAULT_DOCS_FLEET_ROOT_ENABLED="false"
+
+# Docs folder name at fleet root (relative to fleet root)
+readonly MANIFEST_FLEET_DEFAULT_DOCS_FLEET_ROOT_FOLDER="docs"
+
+# Detail level for fleet-root documentation
+# Options: "summary" | "index"
+#   - "summary" : Aggregated changes from all services
+#   - "index"   : Lightweight version list with links to per-service docs
+readonly MANIFEST_FLEET_DEFAULT_DOCS_FLEET_ROOT_DETAIL_LEVEL="summary"
+
+# Whether to generate per-service docs
+readonly MANIFEST_FLEET_DEFAULT_DOCS_PER_SERVICE_ENABLED="true"
+
+# Docs folder name within each service (relative to service root)
+readonly MANIFEST_FLEET_DEFAULT_DOCS_PER_SERVICE_FOLDER="docs"
+
+# What document types to generate
+readonly MANIFEST_FLEET_DEFAULT_DOCS_GEN_RELEASE_NOTES="true"
+readonly MANIFEST_FLEET_DEFAULT_DOCS_GEN_CHANGELOG="true"
+readonly MANIFEST_FLEET_DEFAULT_DOCS_GEN_INDEX="true"
+readonly MANIFEST_FLEET_DEFAULT_DOCS_GEN_README_VERSION="true"
+
+# -----------------------------------------------------------------------------
 # Fleet Validation Defaults
 # -----------------------------------------------------------------------------
 
@@ -929,6 +964,17 @@ get_fleet_config_value() {
         "require_clean") yaml_path=".validation.require_clean_status" ;;
         "enforce_deps") yaml_path=".validation.enforce_dependencies" ;;
         "strict") yaml_path=".validation.strict" ;;
+        # Docs configuration
+        "docs_strategy")              yaml_path=".docs.strategy" ;;
+        "docs_fleet_root_enabled")    yaml_path=".docs.fleet_root.enabled" ;;
+        "docs_fleet_root_folder")     yaml_path=".docs.fleet_root.folder" ;;
+        "docs_fleet_root_detail_level") yaml_path=".docs.fleet_root.detail_level" ;;
+        "docs_per_service_enabled")   yaml_path=".docs.per_service.enabled" ;;
+        "docs_per_service_folder")    yaml_path=".docs.per_service.folder" ;;
+        "docs_gen_release_notes")     yaml_path=".docs.generate.release_notes" ;;
+        "docs_gen_changelog")         yaml_path=".docs.generate.changelog" ;;
+        "docs_gen_index")             yaml_path=".docs.generate.index" ;;
+        "docs_gen_readme_version")    yaml_path=".docs.generate.readme_version" ;;
     esac
 
     if [[ -n "$yaml_path" ]] && [[ -f "${MANIFEST_FLEET_CONFIG_FILE:-}" ]]; then

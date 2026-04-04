@@ -193,6 +193,59 @@ changelog:
     sync_path: "./changelogs/"
 
 # =============================================================================
+# FLEET DOCUMENTATION CONFIGURATION
+# =============================================================================
+# Controls where and how docs folders are created across the fleet.
+#
+# The "strategy" field is the primary control:
+#   - "fleet-root"  : One docs/ folder at the fleet root only
+#   - "per-service" : Each service gets its own docs/ folder (default)
+#   - "both"        : Fleet root AND per-service docs folders
+#
+# The fleet_root and per_service sections provide granular overrides.
+#
+docs:
+  # ---------------------------------------------------------------------------
+  # DOCS PLACEMENT STRATEGY
+  # ---------------------------------------------------------------------------
+  strategy: "per-service"
+
+  # ---------------------------------------------------------------------------
+  # FLEET-ROOT DOCS
+  # ---------------------------------------------------------------------------
+  # When enabled, generates unified documentation at the fleet root level.
+  #
+  fleet_root:
+    enabled: false                    # Set to true (or use strategy: "fleet-root" / "both")
+    folder: "docs"                    # Folder name relative to fleet root
+
+    # Detail level for fleet-root documentation
+    # "summary" - Aggregated RELEASE/CHANGELOG with changes from all services
+    # "index"   - Lightweight index listing service versions with links to per-service docs
+    detail_level: "summary"
+
+  # ---------------------------------------------------------------------------
+  # PER-SERVICE DOCS
+  # ---------------------------------------------------------------------------
+  # When enabled, each service in the fleet gets its own docs/ folder.
+  # This is the traditional single-repo behavior.
+  #
+  per_service:
+    enabled: true                     # Set to false (or use strategy: "fleet-root") to disable
+    folder: "docs"                    # Folder name relative to each service root
+
+  # ---------------------------------------------------------------------------
+  # WHAT TO GENERATE
+  # ---------------------------------------------------------------------------
+  # Control which document types are created during fleet docs generation.
+  #
+  generate:
+    release_notes: true               # RELEASE_v<version>.md
+    changelog: true                   # CHANGELOG_v<version>.md
+    index: true                       # INDEX.md
+    readme_version: true              # Update README.md version section
+
+# =============================================================================
 # FLEET OPERATIONS
 # =============================================================================
 operations:
