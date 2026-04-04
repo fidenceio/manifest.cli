@@ -885,10 +885,10 @@ fleet_update() {
     local new_count=0 removed_count=0 changed_count=0 unchanged_count=0
     while IFS= read -r _line; do
         case "${_line:0:1}" in
-            +) ((new_count++)) ;;
-            -) ((removed_count++)) ;;
-            '~') ((changed_count++)) ;;
-            =) ((unchanged_count++)) ;;
+            +) new_count=$((new_count + 1)) ;;
+            -) removed_count=$((removed_count + 1)) ;;
+            '~') changed_count=$((changed_count + 1)) ;;
+            =) unchanged_count=$((unchanged_count + 1)) ;;
         esac
     done <<< "$diff_output"
 
