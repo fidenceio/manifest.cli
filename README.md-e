@@ -4,7 +4,7 @@
 
 Manifest CLI orchestrates version bumping, documentation generation, Git tagging, remote publishing, and Homebrew distribution — all from a single command. It extends naturally to polyrepo fleets and pull request workflows without sacrificing single-repo simplicity.
 
-**Version** `39.2.2` | **Platform** macOS, Linux, FreeBSD | **Requires** Bash 5+, Git
+**Version** `39.2.1` | **Platform** macOS, Linux, FreeBSD | **Requires** Bash 5+, Git
 
 ---
 
