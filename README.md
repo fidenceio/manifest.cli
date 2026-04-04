@@ -1,27 +1,10 @@
-## 📋 Version Information
-
-| Property | Value |
-|----------|-------|
-| **Current Version** | `39.2.0` |
-| **Release Date** | `2026-04-04 19:41:43 UTC` |
-| **Git Tag** | `v39.2.0` |
-| **Branch** | `main` |
-| **Last Updated** | `2026-04-04 19:41:43 UTC` |
-| **CLI Version** | `39.2.0` |
-
-### 📚 Documentation Files
-
-- **Version Info**: [VERSION](VERSION)
-- **CLI Modules**: [modules/](modules/)
-- **Install Script**: [install-cli.sh](install-cli.sh)
-
 # Manifest CLI
 
 **A deterministic release control plane for Git repositories.**
 
 Manifest CLI orchestrates version bumping, documentation generation, Git tagging, remote publishing, and Homebrew distribution — all from a single command. It extends naturally to polyrepo fleets and pull request workflows without sacrificing single-repo simplicity.
 
-**Version** `39.1.1` | **Platform** macOS, Linux, FreeBSD | **Requires** Bash 5+, Git
+**Version** `39.2.0` | **Platform** macOS, Linux, FreeBSD | **Requires** Bash 5+, Git
 
 ---
 
@@ -199,7 +182,7 @@ manifest.cli/
 | [Git Hooks](docs/GIT_HOOKS.md) | Secret protection and hook management |
 | [Configuration Examples](examples/env.manifest.examples.md) | Templates for every use case |
 | [North Star](docs/NORTH_STAR.md) | Strategic direction and priorities |
-| [Release Notes](docs/RELEASE_v39.1.1.md) | Current release details |
+| [Release Notes](docs/RELEASE_v39.2.0.md) | Current release details |
 
 ---
 
