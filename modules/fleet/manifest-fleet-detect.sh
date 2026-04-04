@@ -979,7 +979,10 @@ interactive_discover() {
     # Output YAML for new repos
     if [[ $new_count -gt 0 ]]; then
         echo ""
-        echo "To add new services, append this to manifest.fleet.yaml:"
+        echo "To auto-add all new services, run:"
+        echo "  manifest fleet update"
+        echo ""
+        echo "Or append this to manifest.fleet.yaml manually:"
         echo "============================================="
         local new_repos
         new_repos=$(get_new_repos "$diff_output")
@@ -1036,6 +1039,77 @@ EOF
 }
 
 # =============================================================================
+# MANIFEST YAML WRITE FUNCTIONS
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Function: append_services_to_manifest
+# -----------------------------------------------------------------------------
+# Appends new service entries to manifest.fleet.yaml.
+#
+# Finds the last line of the services: section (before the next top-level key
+# or end of file) and inserts the generated YAML there.
+#
+# ARGUMENTS:
+#   $1 - Config file path (manifest.fleet.yaml)
+#   $2 - YAML content to append (from generate_manifest_additions)
+#
+# RETURNS:
+#   0 on success, 1 on failure
+# -----------------------------------------------------------------------------
+append_services_to_manifest() {
+    local config_file="$1"
+    local yaml_content="$2"
+
+    if [[ ! -f "$config_file" ]]; then
+        log_error "Config file not found: $config_file"
+        return 1
+    fi
+
+    if [[ -z "$yaml_content" ]]; then
+        log_info "No content to append"
+        return 0
+    fi
+
+    # Find the line number of the next top-level key after "services:"
+    # Top-level keys start at column 0 with a word followed by ":"
+    local services_line
+    services_line=$(grep -n "^services:" "$config_file" | head -1 | cut -d: -f1)
+
+    if [[ -z "$services_line" ]]; then
+        log_error "No 'services:' section found in $config_file"
+        return 1
+    fi
+
+    # Find the next top-level key after services:
+    local insert_line
+    insert_line=$(tail -n "+$((services_line + 1))" "$config_file" | grep -n "^[a-zA-Z_]" | head -1 | cut -d: -f1)
+
+    if [[ -n "$insert_line" ]]; then
+        # Insert before the next top-level key
+        # insert_line is relative to services_line+1, so absolute line is:
+        local abs_line=$((services_line + insert_line))
+
+        # Use a temp file for safe writing
+        local tmp_file
+        tmp_file=$(mktemp)
+
+        head -n "$((abs_line - 1))" "$config_file" > "$tmp_file"
+        echo "$yaml_content" >> "$tmp_file"
+        echo "" >> "$tmp_file"
+        tail -n "+$abs_line" "$config_file" >> "$tmp_file"
+
+        mv "$tmp_file" "$config_file"
+    else
+        # No next section — append to end of file
+        echo "" >> "$config_file"
+        echo "$yaml_content" >> "$config_file"
+    fi
+
+    return 0
+}
+
+# =============================================================================
 # MODULE EXPORTS
 # =============================================================================
 
@@ -1045,5 +1119,6 @@ export -f get_new_repos
 export -f get_missing_repos
 export -f generate_service_yaml
 export -f generate_manifest_additions
+export -f append_services_to_manifest
 export -f interactive_discover
 export -f quick_discover

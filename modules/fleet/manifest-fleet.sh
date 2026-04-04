@@ -84,6 +84,80 @@ source "$MANIFEST_FLEET_SCRIPT_DIR/manifest-fleet-docs.sh"
 # =============================================================================
 
 # -----------------------------------------------------------------------------
+# Function: _fleet_ensure_gitignores (internal)
+# -----------------------------------------------------------------------------
+# Ensures .gitignore files exist in discovered repos.
+#
+# ARGUMENTS:
+#   $1 - Fleet root directory
+#   $2 - Tab-delimited repo list (from get_new_repos or discover_fleet_repos)
+# -----------------------------------------------------------------------------
+_fleet_ensure_gitignores() {
+    local root_dir="$1"
+    local repos="$2"
+
+    [[ -z "$repos" ]] && return 0
+
+    echo ""
+    echo "Ensuring .gitignore in discovered repositories..."
+    local gitignore_created=0
+    local gitignore_overwritten=0
+    local gitignore_ref=0
+    local gitignore_skipped=0
+    local gitignore_failed=0
+    local overwritten_repos=()
+
+    while IFS=$'\t' read -r name path _type _branch _version _url _submodule; do
+        [[ -z "$path" ]] && continue
+        local repo_path="$root_dir/$path"
+        [[ ! -d "$repo_path" ]] && continue
+
+        local result
+        result=$(ensure_gitignore_smart "$repo_path")
+        local rc=$?
+
+        if [[ $rc -ne 0 ]]; then
+            echo "  ✗ $name: failed to create .gitignore"
+            ((gitignore_failed++))
+            continue
+        fi
+
+        case "$result" in
+            ".gitignore")
+                echo "  ✓ $name: created .gitignore"
+                ((gitignore_created++))
+                ;;
+            ".gitignore:empty-overwrite")
+                echo "  ✓ $name: created .gitignore"
+                ((gitignore_overwritten++))
+                overwritten_repos+=("$name")
+                ;;
+            ".gitignore.manifest")
+                echo "  ~ $name: existing .gitignore preserved, created .gitignore.manifest"
+                ((gitignore_ref++))
+                ;;
+            *)
+                ((gitignore_skipped++))
+                ;;
+        esac
+    done <<< "$repos"
+
+    echo ""
+    local total_created=$((gitignore_created + gitignore_overwritten))
+    echo "Gitignore summary: $total_created created, $gitignore_ref reference files, $gitignore_skipped already present${gitignore_failed:+, $gitignore_failed failed}"
+
+    # Deferred warnings for empty-overwrite repos
+    if [[ ${#overwritten_repos[@]} -gt 0 ]]; then
+        echo ""
+        log_warning "The following repos had an existing .gitignore with no entries, which was overwritten with Manifest defaults:"
+        for repo_name in "${overwritten_repos[@]}"; do
+            log_warning "  • $repo_name"
+        done
+        log_warning "If any empty .gitignore was intentional, review and adjust as needed."
+    fi
+}
+
+# -----------------------------------------------------------------------------
 # Function: _fleet_ensure_initialized
 # -----------------------------------------------------------------------------
 # Ensures fleet configuration is loaded before running commands.
@@ -270,9 +344,10 @@ fleet_status() {
 
     # Quick actions
     echo "Quick actions:"
-    echo "  manifest fleet sync       - Clone missing, pull existing"
+    echo "  manifest fleet update       - Add newly discovered repos"
+    echo "  manifest fleet sync         - Clone missing, pull existing"
     echo "  manifest fleet prep patch   - Bump all services"
-    echo "  manifest fleet discover   - Find new repos"
+    echo "  manifest fleet discover     - Preview new/missing repos"
 }
 
 # -----------------------------------------------------------------------------
@@ -321,26 +396,23 @@ _fleet_status_json() {
 # Initializes a new fleet in the current directory.
 #
 # BEHAVIOR:
-#   1. Creates manifest.fleet.yaml from template
-#   2. Discovers repos in workspace (unless --bare)
-#   3. Ensures .gitignore in discovered repos
-#   4. Creates .env.manifest.local with fleet settings
+#   1. If fleet already exists (no --force), routes to fleet_update
+#   2. Creates skeleton manifest.fleet.yaml (fleet metadata, operations, etc.)
+#   3. Creates .env.manifest.local with fleet settings
+#   4. Calls fleet_update to discover and populate services
 #   5. Validates the configuration
 #
 # ARGUMENTS:
 #   --name, -n NAME     Fleet name (prompted if not provided)
-#   --bare              Skip auto-discovery; create manifest template only
 #   --template, -t      Use minimal template (no comments)
 #   --force, -f         Overwrite existing manifest.fleet.yaml
 #
 # EXAMPLE:
 #   manifest fleet init
 #   manifest fleet init --name "my-platform"
-#   manifest fleet init --bare
 # -----------------------------------------------------------------------------
 fleet_init() {
     local fleet_name=""
-    local auto_discover=true
     local minimal_template=false
     local force=false
 
@@ -353,7 +425,6 @@ fleet_init() {
                     return 1
                 fi
                 fleet_name="$2"; shift 2 ;;
-            --bare) auto_discover=false; shift ;;
             -t|--template) minimal_template=true; shift ;;
             -f|--force) force=true; shift ;;
             *) shift ;;
@@ -363,11 +434,11 @@ fleet_init() {
     local target_dir="$(pwd)"
     local config_file="$target_dir/manifest.fleet.yaml"
 
-    # Check for existing manifest
+    # If fleet already exists, route to update routine (unless --force reinit)
     if [[ -f "$config_file" ]] && [[ "$force" != "true" ]]; then
-        log_error "manifest.fleet.yaml already exists"
-        log_error "Use --force to overwrite or edit the existing file"
-        return 1
+        log_info "Fleet already initialized. Running update routine..."
+        fleet_update
+        return $?
     fi
 
     echo ""
@@ -389,23 +460,13 @@ fleet_init() {
     echo "Location: $target_dir"
     echo ""
 
-    # Discover repos in workspace
-    local discovered_services=""
-    if [[ "$auto_discover" == "true" ]]; then
-        echo "Discovering repositories..."
-        discovered_services=$(discover_fleet_repos "$target_dir")
-        local count=$(echo "$discovered_services" | grep -c "^" 2>/dev/null || echo "0")
-        echo "Found $count potential service(s)"
-        echo ""
-    fi
-
-    # Generate manifest.fleet.yaml
+    # Generate skeleton manifest.fleet.yaml (no services — update populates them)
     echo "Creating manifest.fleet.yaml..."
 
     if [[ "$minimal_template" == "true" ]]; then
-        _generate_minimal_manifest "$config_file" "$fleet_name" "$discovered_services"
+        _generate_minimal_manifest "$config_file" "$fleet_name"
     else
-        _generate_full_manifest "$config_file" "$fleet_name" "$discovered_services"
+        _generate_full_manifest "$config_file" "$fleet_name"
     fi
 
     echo "✓ Created: $config_file"
@@ -426,68 +487,10 @@ EOF
         echo "✓ Created: $env_file"
     fi
 
-    # Ensure .gitignore in discovered service repos
-    if [[ -n "$discovered_services" ]]; then
-        echo ""
-        echo "Ensuring .gitignore in discovered repositories..."
-        local gitignore_created=0
-        local gitignore_overwritten=0
-        local gitignore_ref=0
-        local gitignore_skipped=0
-        local gitignore_failed=0
-        local overwritten_repos=()
+    # Discover and populate services via fleet update
+    fleet_update
 
-        while IFS=$'\t' read -r name path _type _branch _version _url _submodule; do
-            [[ -z "$path" ]] && continue
-            local repo_path="$target_dir/$path"
-            [[ ! -d "$repo_path" ]] && continue
-
-            local result
-            result=$(ensure_gitignore_smart "$repo_path")
-            local rc=$?
-
-            if [[ $rc -ne 0 ]]; then
-                echo "  ✗ $name: failed to create .gitignore"
-                ((gitignore_failed++))
-                continue
-            fi
-
-            case "$result" in
-                ".gitignore")
-                    echo "  ✓ $name: created .gitignore"
-                    ((gitignore_created++))
-                    ;;
-                ".gitignore:empty-overwrite")
-                    echo "  ✓ $name: created .gitignore"
-                    ((gitignore_overwritten++))
-                    overwritten_repos+=("$name")
-                    ;;
-                ".gitignore.manifest")
-                    echo "  ~ $name: existing .gitignore preserved, created .gitignore.manifest"
-                    ((gitignore_ref++))
-                    ;;
-                *)
-                    ((gitignore_skipped++))
-                    ;;
-            esac
-        done <<< "$discovered_services"
-
-        echo ""
-        local total_created=$((gitignore_created + gitignore_overwritten))
-        echo "Gitignore summary: $total_created created, $gitignore_ref reference files, $gitignore_skipped already present${gitignore_failed:+, $gitignore_failed failed}"
-
-        # Deferred warnings for empty-overwrite repos
-        if [[ ${#overwritten_repos[@]} -gt 0 ]]; then
-            echo ""
-            log_warning "The following repos had an existing .gitignore with no entries, which was overwritten with Manifest defaults:"
-            for repo_name in "${overwritten_repos[@]}"; do
-                log_warning "  • $repo_name"
-            done
-            log_warning "If any empty .gitignore was intentional, review and adjust as needed."
-        fi
-    fi
-
-    # Load and validate
+    # Validate the final configuration
     echo ""
     echo "Validating configuration..."
     if load_fleet_config "$target_dir"; then
@@ -513,7 +516,6 @@ EOF
 _generate_minimal_manifest() {
     local config_file="$1"
     local fleet_name="$2"
-    local discovered_services="$3"
 
     cat > "$config_file" << EOF
 fleet:
@@ -521,23 +523,8 @@ fleet:
   versioning: "date"
 
 services:
+  # Services are populated by 'manifest fleet update'
 EOF
-
-    # Add discovered services
-    if [[ -n "$discovered_services" ]]; then
-        while IFS=$'\t' read -r name path type branch version url is_sub; do
-            [[ -z "$name" ]] && continue
-            echo "  $name:" >> "$config_file"
-            echo "    path: \"./$path\"" >> "$config_file"
-            echo "    type: \"$type\"" >> "$config_file"
-        done <<< "$discovered_services"
-    else
-        # Add placeholder
-        echo "  # Add services here or run 'manifest fleet discover'" >> "$config_file"
-        echo "  # example-service:" >> "$config_file"
-        echo "  #   path: \"./example-service\"" >> "$config_file"
-        echo "  #   type: \"service\"" >> "$config_file"
-    fi
 }
 
 # -----------------------------------------------------------------------------
@@ -546,7 +533,6 @@ EOF
 _generate_full_manifest() {
     local config_file="$1"
     local fleet_name="$2"
-    local discovered_services="$3"
 
     cat > "$config_file" << EOF
 # =============================================================================
@@ -569,34 +555,8 @@ fleet:
 # SERVICES
 # =============================================================================
 services:
+  # Services are populated by 'manifest fleet update'
 EOF
-
-    # Add discovered services
-    if [[ -n "$discovered_services" ]]; then
-        while IFS=$'\t' read -r name path type branch version url is_sub; do
-            [[ -z "$name" ]] && continue
-            echo "" >> "$config_file"
-            echo "  $name:" >> "$config_file"
-            echo "    path: \"./$path\"" >> "$config_file"
-            [[ -n "$url" ]] && echo "    url: \"$url\"" >> "$config_file"
-            echo "    type: \"$type\"" >> "$config_file"
-            echo "    branch: \"$branch\"" >> "$config_file"
-            [[ "$is_sub" == "true" ]] && echo "    submodule: true" >> "$config_file"
-        done <<< "$discovered_services"
-    else
-        cat >> "$config_file" << 'EOF'
-  # Add services here or run 'manifest fleet discover'
-  #
-  # example-service:
-  #   path: "./services/example"
-  #   type: "service"
-  #   branch: "main"
-  #
-  # shared-lib:
-  #   path: "./libs/shared"
-  #   type: "library"
-EOF
-    fi
 
     # Add operations section
     cat >> "$config_file" << 'EOF'
@@ -820,6 +780,125 @@ fleet_sync() {
     echo ""
     echo "────────────────────────────────────────────────────────────────────────"
     echo "Summary: $cloned cloned, $pulled pulled, $failed failed (of $total total)"
+    echo ""
+}
+
+# =============================================================================
+# COMMAND: fleet update
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Function: fleet_update
+# -----------------------------------------------------------------------------
+# Re-scans the workspace and adds newly discovered repos to manifest.fleet.yaml.
+#
+# This is the routine counterpart to fleet init — run it whenever new repos
+# appear in the workspace. Also invoked automatically by fleet init when a
+# manifest already exists.
+#
+# ARGUMENTS:
+#   --depth N      Maximum search depth (default: 5)
+#
+# EXAMPLE:
+#   manifest fleet update
+#   manifest fleet update --depth 3
+# -----------------------------------------------------------------------------
+fleet_update() {
+    if ! _fleet_require_initialized "update"; then
+        return 1
+    fi
+
+    local depth=5
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --depth)
+                if [ -z "${2:-}" ] || [[ "${2:-}" == --* ]]; then
+                    log_error "--depth requires a numeric value"
+                    return 1
+                fi
+                depth="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+
+    local root_dir="${MANIFEST_FLEET_ROOT:-$(pwd)}"
+
+    # Resolve config file
+    local config_file="${MANIFEST_FLEET_CONFIG_FILE:-}"
+    if [[ -z "$config_file" ]] || [[ ! -f "$config_file" ]]; then
+        local config_filename="${MANIFEST_CLI_FLEET_CONFIG_FILENAME:-$MANIFEST_FLEET_DEFAULT_CONFIG_FILENAME}"
+        config_file="$root_dir/$config_filename"
+    fi
+
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════════════╗"
+    echo "║                       MANIFEST FLEET UPDATE                          ║"
+    echo "╚══════════════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo "Scanning: $root_dir"
+    echo ""
+
+    local discovered
+    discovered=$(discover_fleet_repos "$root_dir" "$depth")
+
+    local diff_output
+    diff_output=$(diff_discovered_repos "$discovered" "$config_file")
+
+    local new_count removed_count changed_count unchanged_count
+    new_count=$(echo "$diff_output" | grep -c "^+" || true)
+    removed_count=$(echo "$diff_output" | grep -c "^-" || true)
+    changed_count=$(echo "$diff_output" | grep -c "^~" || true)
+    unchanged_count=$(echo "$diff_output" | grep -c "^=" || true)
+
+    echo "Fleet scan results:"
+    echo "  + New:       $new_count"
+    echo "  - Missing:   $removed_count"
+    echo "  ~ Changed:   $changed_count"
+    echo "  = Unchanged: $unchanged_count"
+    echo ""
+
+    # Handle new repos
+    if [[ "$new_count" -gt 0 ]]; then
+        echo "Adding new repositories:"
+        echo ""
+        echo "$diff_output" | grep "^+" | while IFS=$'\t' read -r status name path type branch version url is_sub; do
+            printf "  + %-25s %-12s %s\n" "$name" "($type)" "$path"
+        done
+        echo ""
+
+        local new_repos
+        new_repos=$(get_new_repos "$diff_output")
+
+        local yaml_content
+        yaml_content=$(generate_manifest_additions "$new_repos")
+
+        if append_services_to_manifest "$config_file" "$yaml_content"; then
+            echo "✓ Added $new_count service(s) to $config_file"
+        else
+            log_error "Failed to update $config_file"
+            return 1
+        fi
+
+        # Ensure .gitignore in newly discovered repos
+        _fleet_ensure_gitignores "$root_dir" "$new_repos"
+    else
+        echo "✓ No new repositories found."
+    fi
+
+    # Report missing repos (informational — don't auto-remove)
+    if [[ "$removed_count" -gt 0 ]]; then
+        echo ""
+        log_warning "Missing repositories (in manifest but not on disk):"
+        echo "$diff_output" | grep "^-" | while IFS=$'\t' read -r status name path type rest; do
+            printf "  - %-25s %s\n" "$name" "$path"
+        done
+        echo ""
+        echo "  Run 'manifest fleet sync' to clone missing repos,"
+        echo "  or remove them from manifest.fleet.yaml manually."
+    fi
+
     echo ""
 }
 
@@ -1103,19 +1182,42 @@ fleet_add() {
     echo "Service type: $service_type"
     echo ""
 
-    # Generate YAML to add
-    echo "Add the following to manifest.fleet.yaml under 'services:':"
-    echo ""
-    echo "  $service_name:"
+    # Build YAML snippet
+    local yaml_content=""
+    yaml_content+="  $service_name:"$'\n'
     if [[ "$is_url" == "true" ]]; then
-        echo "    url: \"$path_or_url\""
-        echo "    path: \"./$service_name\""
+        yaml_content+="    url: \"$path_or_url\""$'\n'
+        yaml_content+="    path: \"./$service_name\""$'\n'
     else
         local rel_path="${path_or_url#"$MANIFEST_FLEET_ROOT"/}"
         rel_path="${rel_path#./}"
-        echo "    path: \"./$rel_path\""
+        yaml_content+="    path: \"./$rel_path\""$'\n'
     fi
-    echo "    type: \"$service_type\""
+    yaml_content+="    type: \"$service_type\""
+
+    # Resolve config file
+    local config_file="${MANIFEST_FLEET_CONFIG_FILE:-}"
+    if [[ -z "$config_file" ]] || [[ ! -f "$config_file" ]]; then
+        local config_filename="${MANIFEST_CLI_FLEET_CONFIG_FILENAME:-$MANIFEST_FLEET_DEFAULT_CONFIG_FILENAME}"
+        config_file="${MANIFEST_FLEET_ROOT:-.}/$config_filename"
+    fi
+
+    if [[ -f "$config_file" ]]; then
+        if append_services_to_manifest "$config_file" "$yaml_content"; then
+            echo "✓ Added '$service_name' to $config_file"
+        else
+            log_error "Failed to update $config_file"
+            echo ""
+            echo "Add the following to manifest.fleet.yaml under 'services:' manually:"
+            echo ""
+            echo "$yaml_content"
+            return 1
+        fi
+    else
+        echo "No manifest.fleet.yaml found. Add the following under 'services:':"
+        echo ""
+        echo "$yaml_content"
+    fi
     echo ""
 }
 
@@ -1152,6 +1254,9 @@ fleet_main() {
             ;;
         sync)
             fleet_sync "$@"
+            ;;
+        update)
+            fleet_update "$@"
             ;;
         ship)
             fleet_ship "$@"
@@ -1227,10 +1332,11 @@ COMMANDS:
 
   manifest fleet init [options]
     Initialize a new fleet in the current directory.
-    Automatically discovers repos in the workspace.
+    Creates skeleton config, then runs 'fleet update' to discover repos.
+    If fleet already exists, routes directly to 'fleet update'.
     Options:
       --name, -n NAME    Fleet name
-      --bare             Skip auto-discovery; create manifest template only
+      --force, -f        Overwrite existing manifest.fleet.yaml
       --force, -f        Overwrite existing manifest.fleet.yaml
 
   manifest fleet status [options]
@@ -1240,10 +1346,16 @@ COMMANDS:
       --json             Output as JSON
 
   manifest fleet discover [options]
-    Discover repositories in workspace.
+    Discover repositories in workspace (read-only).
     Options:
       --depth N          Maximum search depth (default: 5)
       --quiet, -q        Only show new repos
+
+  manifest fleet update [options]
+    Re-scan workspace and add new repos to manifest.fleet.yaml.
+    Also runs automatically when 'fleet init' is called on an existing fleet.
+    Options:
+      --depth N          Maximum search depth (default: 5)
 
   manifest fleet sync [options]
     Clone missing repos, pull existing ones.
@@ -1316,13 +1428,16 @@ EXAMPLES:
   # Initialize a new fleet (discovers repos automatically)
   manifest fleet init
 
+  # Add newly discovered repos to existing fleet
+  manifest fleet update
+
   # Check fleet status
   manifest fleet status
 
   # Clone all missing services
   manifest fleet sync
 
-  # Discover new repos added to workspace
+  # Preview new/missing repos (read-only)
   manifest fleet discover
 
 EOF
