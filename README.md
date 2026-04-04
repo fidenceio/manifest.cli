@@ -1,3 +1,20 @@
+## 📋 Version Information
+
+| Property | Value |
+|----------|-------|
+| **Current Version** | `39.2.1` |
+| **Release Date** | `2026-04-04 19:43:50 UTC` |
+| **Git Tag** | `v39.2.1` |
+| **Branch** | `main` |
+| **Last Updated** | `2026-04-04 19:43:50 UTC` |
+| **CLI Version** | `39.2.1` |
+
+### 📚 Documentation Files
+
+- **Version Info**: [VERSION](VERSION)
+- **CLI Modules**: [modules/](modules/)
+- **Install Script**: [install-cli.sh](install-cli.sh)
+
 # Manifest CLI
 
 **A deterministic release control plane for Git repositories.**
