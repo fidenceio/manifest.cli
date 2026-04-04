@@ -708,10 +708,15 @@ diff_discovered_repos() {
     fi
 
     # Build a lookup of manifest service paths
+    # NOTE: We read directly from the YAML file (via get_yaml_value) rather than
+    # using get_fleet_service_property, because the latter requires load_fleet_config
+    # to have been called first — which isn't guaranteed in all code paths (e.g.
+    # fleet discover, interactive_discover).
     declare -A manifest_paths
+    declare -A manifest_types
     for service in $manifest_services; do
         local path
-        path=$(get_fleet_service_property "$service" "path")
+        path=$(get_yaml_value "$manifest_file" ".services.$service.path" "")
         if [[ -n "$path" ]]; then
             # Make relative if absolute
             path="${path#"$MANIFEST_FLEET_ROOT"/}"
@@ -719,6 +724,7 @@ diff_discovered_repos() {
             path="${path#./}"
             manifest_paths["$path"]="$service"
         fi
+        manifest_types["$service"]=$(get_yaml_value "$manifest_file" ".services.$service.type" "service")
     done
 
     # Process discovered repos
@@ -731,8 +737,7 @@ diff_discovered_repos() {
         if [[ -n "${manifest_paths[$path]:-}" ]]; then
             # Found in manifest - check for differences
             local manifest_name="${manifest_paths[$path]}"
-            local manifest_type
-            manifest_type=$(get_fleet_service_property "$manifest_name" "type" "service")
+            local manifest_type="${manifest_types[$manifest_name]:-service}"
 
             if [[ "$name" != "$manifest_name" ]] || [[ "$type" != "$manifest_type" ]]; then
                 echo "~	$name	$path	$type	$branch	$version	$url	$is_sub"
