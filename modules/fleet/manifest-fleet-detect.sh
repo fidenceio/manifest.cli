@@ -588,7 +588,8 @@ _discover_repos_recursive() {
     local current_depth="$3"
     local max_depth="$4"
     local include_submodules="$5"
-    local -n _discovered_ref="$6"  # nameref for dedup array
+    local _arr_name="$6"
+    local -n _discovered_ref="$_arr_name"  # nameref for dedup array
 
     # Check depth limit
     if [[ $current_depth -gt $max_depth ]]; then
@@ -670,7 +671,7 @@ _discover_repos_recursive() {
     while IFS= read -r -d '' subdir; do
         # Only recurse if it's a directory (not a file or symlink to file)
         if [[ -d "$subdir" ]] && [[ ! -L "$subdir" ]]; then
-            _discover_repos_recursive "$subdir" "$root_dir" $((current_depth + 1)) "$max_depth" "$include_submodules" _discovered_ref
+            _discover_repos_recursive "$subdir" "$root_dir" $((current_depth + 1)) "$max_depth" "$include_submodules" "$_arr_name"
         fi
     done < <(find "$current_dir" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
 }
@@ -717,6 +718,8 @@ diff_discovered_repos() {
         if [[ -n "$path" ]]; then
             # Make relative if absolute
             path="${path#$MANIFEST_FLEET_ROOT/}"
+            # Strip leading ./ so paths match discovery output format
+            path="${path#./}"
             manifest_paths["$path"]="$service"
         fi
     done
@@ -942,10 +945,10 @@ interactive_discover() {
 
     # Count changes
     local new_count removed_count changed_count unchanged_count
-    new_count=$(echo "$diff_output" | grep -c "^+" || echo "0")
-    removed_count=$(echo "$diff_output" | grep -c "^-" || echo "0")
-    changed_count=$(echo "$diff_output" | grep -c "^~" || echo "0")
-    unchanged_count=$(echo "$diff_output" | grep -c "^=" || echo "0")
+    new_count=$(echo "$diff_output" | grep -c "^+" || true)
+    removed_count=$(echo "$diff_output" | grep -c "^-" || true)
+    changed_count=$(echo "$diff_output" | grep -c "^~" || true)
+    unchanged_count=$(echo "$diff_output" | grep -c "^=" || true)
 
     echo "Comparison with manifest.fleet.yaml:"
     echo "  + New:       $new_count"
