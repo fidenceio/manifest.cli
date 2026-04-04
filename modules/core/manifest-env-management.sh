@@ -99,9 +99,12 @@ remove_manifest_from_shell_profiles() {
             cp "$profile_file" "$backup_file"
             echo "Created backup: $backup_file"
             
-            # Remove lines containing MANIFEST_* variable exports
+            # Remove lines containing:
+            #   - MANIFEST_* variable exports
+            #   - PATH additions for .manifest-cli or .local/bin added by the installer
+            #   - source/. lines referencing manifest files (e.g., source ~/.manifestrc)
             local temp_file=$(mktemp)
-            if grep -v -E '^[[:space:]]*export[[:space:]]+MANIFEST_[A-Z_]+=' "$profile_file" > "$temp_file"; then
+            if grep -v -E '^[[:space:]]*(export[[:space:]]+MANIFEST_[A-Z_]+=|export[[:space:]]+PATH=.*\.manifest-cli|export[[:space:]]+PATH=.*\.local/bin.*PATH|(\.|source)[[:space:]]+.*manifest)' "$profile_file" > "$temp_file"; then
                 if [ -s "$temp_file" ] && ! cmp -s "$profile_file" "$temp_file"; then
                     mv "$temp_file" "$profile_file"
                     echo "✅ Removed Manifest CLI environment variables from $profile_file"

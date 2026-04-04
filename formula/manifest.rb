@@ -24,19 +24,15 @@ class Manifest < Formula
   end
 
   def post_install
-    # Clean up legacy manual installations
+    # Clean up legacy manual installation binary (conflicts with Homebrew binary).
+    # NOTE: ~/.manifest-cli is intentionally preserved — it is the runtime state/data
+    # directory (logs, config markers, etc.), NOT a legacy install artifact.
     legacy_bin = Pathname.new(Dir.home)/".local"/"bin"/"manifest"
-    legacy_dir = Pathname.new(Dir.home)/".manifest-cli"
     user_global_config = Pathname.new(Dir.home)/".env.manifest.global"
 
     if legacy_bin.exist?
       legacy_bin.unlink
-      ohai "Removed legacy manual install: #{legacy_bin}"
-    end
-
-    if legacy_dir.exist?
-      legacy_dir.rmtree
-      ohai "Removed legacy install directory: #{legacy_dir}"
+      ohai "Removed legacy manual install binary: #{legacy_bin}"
     end
 
     # Apply config migrations so `brew upgrade` is functionally equivalent

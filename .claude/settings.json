@@ -4,7 +4,8 @@
       "Bash(MANIFEST_DEBUG=1 bash -c 'source modules/system/manifest-os.sh; source modules/system/manifest-time.sh; query_time_server \"https://www.cloudflare.com/cdn-cgi/trace\" 5')",
       "Bash(MANIFEST_DEBUG=1 bash -c 'source modules/system/manifest-os.sh; source modules/system/manifest-time.sh; query_time_server \"https://www.google.com/generate_204\" 5')",
       "Bash(MANIFEST_DEBUG=1 bash -c 'source modules/system/manifest-os.sh; source modules/system/manifest-time.sh; query_time_server \"https://www.apple.com\" 5')",
-      "Read(//Users/william/**)"
+      "Read(//Users/william/**)",
+      "Bash(ruby -c /Users/william/coderepos/manifest/fidenceio.manifest.cli/formula/manifest.rb)"
     ]
   }
 }

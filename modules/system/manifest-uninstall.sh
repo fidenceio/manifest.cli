@@ -116,7 +116,7 @@ remove_cli_binary() {
     fi
 }
 
-# Function to clean up configuration files
+# Function to clean up configuration files and data directories
 cleanup_config_files() {
     local config_files=(
         "$HOME/.manifestrc"
@@ -125,7 +125,20 @@ cleanup_config_files() {
         "$HOME/.env.manifest.global"
         "$HOME/.env.manifest.local"
     )
-    
+
+    # Data directories created at runtime by cloud/agent and time modules
+    local data_dirs=(
+        "$HOME/.manifest-agent"
+    )
+
+    # Time cache lives under $TMPDIR (or /tmp) — clean both possible locations
+    local tmpdir_cache="${TMPDIR:-/tmp}/manifest-cli"
+    local fallback_cache="/tmp/manifest-cli"
+    data_dirs+=("$tmpdir_cache")
+    if [[ "$fallback_cache" != "$tmpdir_cache" ]]; then
+        data_dirs+=("$fallback_cache")
+    fi
+
     local cleaned=0
     for config_file in "${config_files[@]}"; do
         if [ -f "$config_file" ] || [ -d "$config_file" ]; then
@@ -138,9 +151,21 @@ cleanup_config_files() {
             fi
         fi
     done
-    
+
+    for data_dir in "${data_dirs[@]}"; do
+        if [ -d "$data_dir" ]; then
+            echo "Removing data directory: $data_dir"
+            if rm -rf "$data_dir"; then
+                echo "✅ Data directory removed: $data_dir"
+                ((cleaned++))
+            else
+                echo "❌ Failed to remove data directory: $data_dir"
+            fi
+        fi
+    done
+
     if [ $cleaned -eq 0 ]; then
-        echo "No configuration files found to clean up"
+        echo "No configuration files or data directories found to clean up"
     fi
 }
 
@@ -197,9 +222,16 @@ uninstall_manifest() {
     fi
     
     # Show what will be removed
-    echo "Found the following Manifest CLI installations:"
+    echo "Found the following Manifest CLI artifacts:"
+    if [ "$homebrew_installed" = "true" ]; then
+        echo "  🍺 Homebrew package: fidenceio/tap/manifest"
+    fi
     for location in "${install_locations[@]}"; do
-        echo "  📁 $location"
+        if [[ "$location" == "$HOME/.manifest-cli" ]]; then
+            echo "  📁 $location (state/data directory: logs, config markers)"
+        else
+            echo "  📁 $location"
+        fi
     done
     for binary in "${cli_binaries[@]}"; do
         echo "  🔧 $binary"

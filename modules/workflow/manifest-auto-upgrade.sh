@@ -83,30 +83,22 @@ check_for_upgrades() {
     fi
 }
 
-# Clean up old installation directories
+# Clean up old installation artifacts (binaries and legacy system install).
+# NOTE: ~/.manifest-cli is the runtime state/data directory (logs, config
+# markers, etc.) and is intentionally preserved during upgrades.
 cleanup_old_installation() {
-    local project_dir="$HOME/.manifest-cli"
     local local_bin="$HOME/.local/bin"
     local cli_name="manifest"
-    
+
     log_info "Cleaning up old installation..."
-    
-    # Clean up the old .manifest-cli directory
-    if [ -d "$project_dir" ]; then
-        log_info "Removing old installation directory: $project_dir"
-        rm -rf "$project_dir"
-        log_success "Old installation directory removed"
-    else
-        log_info "No old installation directory found"
-    fi
-    
+
     # Clean up any old CLI binary
     if [ -f "$local_bin/$cli_name" ]; then
         log_info "Removing old CLI binary: $local_bin/$cli_name"
         rm -f "$local_bin/$cli_name"
         log_success "Old CLI binary removed"
     fi
-    
+
     # Clean up any old installation in /usr/local/share
     local old_install_dir="/usr/local/share/manifest-cli"
     if [ -d "$old_install_dir" ]; then
@@ -159,18 +151,24 @@ install_cli() {
     fi
     
     # Copy essential files
-    local essential_files=("VERSION" ".gitignore" "README.md")
+    local essential_files=("VERSION" ".gitignore" "README.md" "CHANGELOG.md")
     for file in "${essential_files[@]}"; do
         if [ -f "$PROJECT_ROOT/$file" ]; then
             cp "$PROJECT_ROOT/$file" "$install_dir/"
             log_success "Copied $file"
         fi
     done
-    
+
     # Copy documentation
     if [ -d "$PROJECT_ROOT/docs" ]; then
         cp -r "$PROJECT_ROOT/docs" "$install_dir/"
         log_success "Documentation copied"
+    fi
+
+    # Copy examples (config templates, fleet examples)
+    if [ -d "$PROJECT_ROOT/examples" ]; then
+        cp -r "$PROJECT_ROOT/examples" "$install_dir/"
+        log_success "Examples copied"
     fi
     
     # Create configuration file

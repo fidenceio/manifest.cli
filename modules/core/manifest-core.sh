@@ -555,8 +555,8 @@ main() {
             if [ "$2" = "--force" ]; then
                 force_flag="true"
             fi
-            # Parameters: skip_confirmations (from --force flag), non_interactive=true (non-interactive by default)
-            uninstall_manifest "$force_flag" "true"
+            # Parameters: skip_confirmations (from --force flag), non_interactive (only when forced)
+            uninstall_manifest "$force_flag" "$force_flag"
             ;;
         "reinstall")
             echo "🔄 Reinstalling Manifest CLI..."
@@ -597,6 +597,7 @@ main() {
                 echo "📦 Reinstalling via manual install..."
                 source "$MANIFEST_CLI_CORE_MODULES_DIR/workflow/manifest-auto-upgrade.sh"
                 install_cli "true"
+                migrate_user_global_config_internal
             fi
             ;;
         # Registry commands removed - not compatible with macOS default Bash 3.2
