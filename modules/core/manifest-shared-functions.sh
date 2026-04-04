@@ -543,22 +543,32 @@ ensure_required_files() {
         log_success "Created CHANGELOG.md file"
     fi
     
-    # Ensure .gitignore exists
-    if [ ! -f "$project_root/.gitignore" ]; then
-        log_info "Creating .gitignore file..."
-        create_default_gitignore "$project_root/.gitignore"
-        created_files+=(".gitignore")
-        log_success "Created .gitignore file"
-    fi
-    
+    # Ensure .gitignore exists with best-practice entries
+    local gitignore_result
+    gitignore_result=$(ensure_gitignore_smart "$project_root")
+    case "$gitignore_result" in
+        ".gitignore:empty-overwrite")
+            created_files+=(".gitignore")
+            ;;
+        ".gitignore"|".gitignore.manifest")
+            created_files+=("$gitignore_result")
+            ;;
+    esac
+
     # Report results
     if [ ${#created_files[@]} -gt 0 ]; then
         log_success "Created ${#created_files[@]} missing file(s): ${created_files[*]}"
-        return 0
     else
         log_info "All required files are present"
-        return 0
     fi
+
+    # Deferred warnings
+    if [[ "$gitignore_result" == ".gitignore:empty-overwrite" ]]; then
+        log_warning "An existing .gitignore had no entries and was overwritten with Manifest defaults."
+        log_warning "If the empty .gitignore was intentional, review and adjust as needed."
+    fi
+
+    return 0
 }
 
 # Create default README.md content
@@ -672,16 +682,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 EOF
 }
 
+# Smart .gitignore creation
+# - No .gitignore          → create .gitignore
+# - .gitignore with no entries (empty / only comments+blanks) → overwrite .gitignore
+# - .gitignore with entries → create .gitignore.manifest as reference
+#
+# Output (stdout):
+#   ".gitignore"                 — created new file
+#   ".gitignore:empty-overwrite" — overwrote a .gitignore that had no real entries
+#   ".gitignore.manifest"        — reference file created alongside existing .gitignore
+#   (empty)                      — nothing was done
+#
+# Returns 0 on success, 1 on write failure.
+ensure_gitignore_smart() {
+    local project_root="$1"
+    local gitignore_file="$project_root/.gitignore"
+    local manifest_ref="$project_root/.gitignore.manifest"
+
+    if [[ ! -f "$gitignore_file" ]]; then
+        # No .gitignore at all — create one
+        log_info "Creating .gitignore file..."
+        if ! create_default_gitignore "$gitignore_file"; then
+            log_error "Failed to create .gitignore in $project_root"
+            return 1
+        fi
+        log_success "Created .gitignore file"
+        echo ".gitignore"
+        return 0
+    fi
+
+    # Count non-blank, non-comment lines (actual ignore entries)
+    local entry_count
+    entry_count=$(grep -cvE '^\s*$|^\s*#' "$gitignore_file" 2>/dev/null || echo "0")
+
+    if [[ "$entry_count" -eq 0 ]]; then
+        # .gitignore exists but has no real entries — overwrite
+        log_info "Existing .gitignore has no entries, overwriting with defaults..."
+        if ! create_default_gitignore "$gitignore_file"; then
+            log_error "Failed to overwrite .gitignore in $project_root"
+            return 1
+        fi
+        log_success "Overwrote empty .gitignore with best-practice defaults"
+        echo ".gitignore:empty-overwrite"
+        return 0
+    fi
+
+    # .gitignore has real entries — write a reference file instead
+    if [[ ! -f "$manifest_ref" ]]; then
+        log_info "Existing .gitignore has entries, creating .gitignore.manifest as reference..."
+        if ! create_default_gitignore "$manifest_ref"; then
+            log_error "Failed to create .gitignore.manifest in $project_root"
+            return 1
+        fi
+        log_success "Created .gitignore.manifest (merge entries into .gitignore as needed)"
+        echo ".gitignore.manifest"
+        return 0
+    fi
+
+    # Both files already exist — nothing to do
+    return 0
+}
+
 # Create default .gitignore content
 create_default_gitignore() {
     local gitignore_file="$1"
-    
-    cat > "$gitignore_file" << EOF
+
+    cat > "$gitignore_file" << 'EOF'
+# =============================================================================
 # Manifest CLI
+# =============================================================================
 .manifest-cli/
 *.manifest-cli.log
+.gitignore.manifest
 
+# =============================================================================
 # OS generated files
+# =============================================================================
 .DS_Store
 .DS_Store?
 ._*
@@ -689,66 +765,164 @@ create_default_gitignore() {
 .Trashes
 ehthumbs.db
 Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
 
-# IDE files
+# =============================================================================
+# Editor and IDE files
+# =============================================================================
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.settings/
+*.tmproj
+*.tmproject
+.tmtags
+nbproject/
 
-# Logs
+# =============================================================================
+# Environment and secrets
+# =============================================================================
+.env
+.env.*
+!.env.example
+!.env.template
+.env.manifest.local
+
+# =============================================================================
+# Logs and runtime data
+# =============================================================================
 *.log
 logs/
-
-# Runtime data
-pids
+pids/
 *.pid
 *.seed
 *.pid.lock
 
-# Coverage directory used by tools like istanbul
-coverage/
-
-# nyc test coverage
-.nyc_output
-
-# Dependency directories
+# =============================================================================
+# Dependencies
+# =============================================================================
 node_modules/
 bower_components/
+vendor/
+.bundle/
+jspm_packages/
 
-# Optional npm cache directory
+# =============================================================================
+# Package manager caches and artifacts
+# =============================================================================
 .npm
-
-# Optional REPL history
+.yarn/
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.pnpm-store/
 .node_repl_history
-
-# Output of 'npm pack'
 *.tgz
-
-# Yarn Integrity file
 .yarn-integrity
 
-# dotenv environment variables file
-.env
-.env.test
-.env.manifest.local
-.env.production
+# =============================================================================
+# Build outputs
+# =============================================================================
+dist/
+build/
+out/
+target/
+*.egg-info/
+*.egg
+*.whl
+*.class
+*.jar
+*.war
+*.ear
 
+# =============================================================================
+# Test and coverage
+# =============================================================================
+coverage/
+.nyc_output/
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# =============================================================================
+# Compiled and generated files
+# =============================================================================
+*.o
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+*.app
+*.com
+__pycache__/
+*.py[cod]
+*$py.class
+*.class
+
+# =============================================================================
 # Temporary files
+# =============================================================================
 tmp/
 temp/
 *.tmp
 *.temp
+*.bak
+*.orig
+*.rej
 
-# Build outputs
-dist/
-build/
-out/
-
+# =============================================================================
 # Archive directories
+# =============================================================================
 zArchive/
 archive/
+
+# =============================================================================
+# Terraform
+# =============================================================================
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# =============================================================================
+# Docker
+# =============================================================================
+.docker/
+
+# =============================================================================
+# Miscellaneous
+# =============================================================================
+*.sqlite
+*.db
+.cache/
+.parcel-cache/
+.turbo/
+.next/
+.nuxt/
+.output/
+.svelte-kit/
 EOF
 }
 
@@ -765,4 +939,4 @@ export -f safe_read_file safe_write_file
 export -f create_managed_temp_file cleanup_managed_temp_files
 export -f get_config_value set_config_value
 export -f safe_json_read safe_json_write
-export -f ensure_required_files create_default_readme create_default_changelog create_default_gitignore
+export -f ensure_required_files create_default_readme create_default_changelog create_default_gitignore ensure_gitignore_smart

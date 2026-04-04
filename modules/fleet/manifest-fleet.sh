@@ -322,23 +322,25 @@ _fleet_status_json() {
 #
 # BEHAVIOR:
 #   1. Creates manifest.fleet.yaml from template
-#   2. Optionally runs discovery to populate services
-#   3. Creates .env.manifest.local with fleet settings
-#   4. Validates the configuration
+#   2. Discovers repos in workspace (unless --bare)
+#   3. Ensures .gitignore in discovered repos
+#   4. Creates .env.manifest.local with fleet settings
+#   5. Validates the configuration
 #
 # ARGUMENTS:
 #   --name, -n NAME     Fleet name (prompted if not provided)
-#   --discover, -d      Auto-discover repos and add to manifest
+#   --bare              Skip auto-discovery; create manifest template only
 #   --template, -t      Use minimal template (no comments)
 #   --force, -f         Overwrite existing manifest.fleet.yaml
 #
 # EXAMPLE:
 #   manifest fleet init
-#   manifest fleet init --name "my-platform" --discover
+#   manifest fleet init --name "my-platform"
+#   manifest fleet init --bare
 # -----------------------------------------------------------------------------
 fleet_init() {
     local fleet_name=""
-    local auto_discover=false
+    local auto_discover=true
     local minimal_template=false
     local force=false
 
@@ -351,7 +353,7 @@ fleet_init() {
                     return 1
                 fi
                 fleet_name="$2"; shift 2 ;;
-            -d|--discover) auto_discover=true; shift ;;
+            --bare) auto_discover=false; shift ;;
             -t|--template) minimal_template=true; shift ;;
             -f|--force) force=true; shift ;;
             *) shift ;;
@@ -387,7 +389,7 @@ fleet_init() {
     echo "Location: $target_dir"
     echo ""
 
-    # Run discovery if requested
+    # Discover repos in workspace
     local discovered_services=""
     if [[ "$auto_discover" == "true" ]]; then
         echo "Discovering repositories..."
@@ -422,6 +424,67 @@ MANIFEST_CLI_FLEET_MODE="auto"
 # MANIFEST_CLI_FLEET_PUSH_STRATEGY="batched"
 EOF
         echo "✓ Created: $env_file"
+    fi
+
+    # Ensure .gitignore in discovered service repos
+    if [[ -n "$discovered_services" ]]; then
+        echo ""
+        echo "Ensuring .gitignore in discovered repositories..."
+        local gitignore_created=0
+        local gitignore_overwritten=0
+        local gitignore_ref=0
+        local gitignore_skipped=0
+        local gitignore_failed=0
+        local overwritten_repos=()
+
+        while IFS=$'\t' read -r name path _type _branch _version _url _submodule; do
+            [[ -z "$path" ]] && continue
+            local repo_path="$target_dir/$path"
+            [[ ! -d "$repo_path" ]] && continue
+
+            local result
+            result=$(ensure_gitignore_smart "$repo_path")
+            local rc=$?
+
+            if [[ $rc -ne 0 ]]; then
+                echo "  ✗ $name: failed to create .gitignore"
+                ((gitignore_failed++))
+                continue
+            fi
+
+            case "$result" in
+                ".gitignore")
+                    echo "  ✓ $name: created .gitignore"
+                    ((gitignore_created++))
+                    ;;
+                ".gitignore:empty-overwrite")
+                    echo "  ✓ $name: created .gitignore"
+                    ((gitignore_overwritten++))
+                    overwritten_repos+=("$name")
+                    ;;
+                ".gitignore.manifest")
+                    echo "  ~ $name: existing .gitignore preserved, created .gitignore.manifest"
+                    ((gitignore_ref++))
+                    ;;
+                *)
+                    ((gitignore_skipped++))
+                    ;;
+            esac
+        done <<< "$discovered_services"
+
+        echo ""
+        local total_created=$((gitignore_created + gitignore_overwritten))
+        echo "Gitignore summary: $total_created created, $gitignore_ref reference files, $gitignore_skipped already present${gitignore_failed:+, $gitignore_failed failed}"
+
+        # Deferred warnings for empty-overwrite repos
+        if [[ ${#overwritten_repos[@]} -gt 0 ]]; then
+            echo ""
+            log_warning "The following repos had an existing .gitignore with no entries, which was overwritten with Manifest defaults:"
+            for repo_name in "${overwritten_repos[@]}"; do
+                log_warning "  • $repo_name"
+            done
+            log_warning "If any empty .gitignore was intentional, review and adjust as needed."
+        fi
     fi
 
     # Load and validate
@@ -1157,9 +1220,10 @@ COMMANDS:
 
   manifest fleet init [options]
     Initialize a new fleet in the current directory.
+    Automatically discovers repos in the workspace.
     Options:
       --name, -n NAME    Fleet name
-      --discover, -d     Auto-discover repos
+      --bare             Skip auto-discovery; create manifest template only
       --force, -f        Overwrite existing manifest.fleet.yaml
 
   manifest fleet status [options]
@@ -1242,8 +1306,8 @@ CONFIGURATION:
 
 EXAMPLES:
 
-  # Initialize a new fleet with auto-discovery
-  manifest fleet init --discover
+  # Initialize a new fleet (discovers repos automatically)
+  manifest fleet init
 
   # Check fleet status
   manifest fleet status
