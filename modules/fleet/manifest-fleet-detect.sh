@@ -914,8 +914,16 @@ interactive_discover() {
     echo "Found $repo_count potential service(s)"
     echo ""
 
+    # Resolve the config file: prefer the global variable if set, otherwise
+    # look for the config file in the root directory being scanned.
+    local config_file="${MANIFEST_FLEET_CONFIG_FILE:-}"
+    if [[ -z "$config_file" ]] || [[ ! -f "$config_file" ]]; then
+        local config_filename="${MANIFEST_CLI_FLEET_CONFIG_FILENAME:-$MANIFEST_FLEET_DEFAULT_CONFIG_FILENAME}"
+        config_file="$root_dir/$config_filename"
+    fi
+
     # If no manifest exists, this is initial setup
-    if [[ ! -f "$MANIFEST_FLEET_CONFIG_FILE" ]]; then
+    if [[ ! -f "$config_file" ]]; then
         echo "No manifest.fleet.yaml found."
         echo "Run 'manifest fleet init' to create one with these services."
         echo ""
@@ -928,9 +936,9 @@ interactive_discover() {
         return 0
     fi
 
-    # Run diff
+    # Run diff against the resolved config file
     local diff_output
-    diff_output=$(diff_discovered_repos "$discovered")
+    diff_output=$(diff_discovered_repos "$discovered" "$config_file")
 
     # Count changes
     local new_count removed_count changed_count unchanged_count

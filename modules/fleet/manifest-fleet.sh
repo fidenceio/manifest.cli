@@ -695,9 +695,16 @@ fleet_discover() {
         local discovered
         discovered=$(discover_fleet_repos "$root_dir" "$depth")
 
-        if [[ -f "$MANIFEST_FLEET_CONFIG_FILE" ]]; then
+        # Resolve config file: prefer global if set, otherwise check root_dir
+        local config_file="${MANIFEST_FLEET_CONFIG_FILE:-}"
+        if [[ -z "$config_file" ]] || [[ ! -f "$config_file" ]]; then
+            local config_filename="${MANIFEST_CLI_FLEET_CONFIG_FILENAME:-$MANIFEST_FLEET_DEFAULT_CONFIG_FILENAME}"
+            config_file="$root_dir/$config_filename"
+        fi
+
+        if [[ -f "$config_file" ]]; then
             local diff_output
-            diff_output=$(diff_discovered_repos "$discovered")
+            diff_output=$(diff_discovered_repos "$discovered" "$config_file")
             get_new_repos "$diff_output"
         else
             echo "$discovered"
