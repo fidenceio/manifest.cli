@@ -48,6 +48,10 @@
       "Bash(brew upgrade:*)"
     ],
     "deny": [],
-    "ask": []
+    "ask": [],
+    "additionalDirectories": [
+      "/opt/homebrew/Cellar/manifest/39.2.2/libexec/modules/workflow",
+      "/opt/homebrew/Cellar/manifest/39.2.2/libexec/modules/docs"
+    ]
   }
 }

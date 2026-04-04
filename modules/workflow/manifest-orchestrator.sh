@@ -270,7 +270,7 @@ manifest_prep_workflow() {
     echo "📝 Updating main CHANGELOG.md for GitHub..."
     local latest_changelog="$(get_docs_folder "$PROJECT_ROOT")/CHANGELOG_v$new_version.md"
     local root_changelog="$PROJECT_ROOT/CHANGELOG.md"
-    if [[ -f "$root_changelog" ]] && grep -q "^\[" "$root_changelog" 2>/dev/null; then
+    if [[ -f "$root_changelog" ]] && grep -qE '\[[0-9]+\.[0-9]+\.[0-9]+\]' "$root_changelog" 2>/dev/null; then
         # Root CHANGELOG has Keep-a-Changelog-style [version] entries — user-crafted.
         # Update inline version references only (e.g., version strings in headers).
         local prev_version=""

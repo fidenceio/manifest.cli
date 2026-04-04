@@ -32,8 +32,8 @@
 
 | Document | Description |
 | -------- | ----------- |
-| [Release Notes v39.2.1](RELEASE_v39.2.2.md) | What's new in this release |
-| [Changelog v39.2.1](CHANGELOG_v39.2.2.md) | Detailed change log |
+| [Release Notes v39.2.2](RELEASE_v39.2.2.md) | What's new in this release |
+| [Changelog v39.2.2](CHANGELOG_v39.2.2.md) | Detailed change log |
 | [Archived Releases](zArchive/) | Previous version documentation |
 
 ---

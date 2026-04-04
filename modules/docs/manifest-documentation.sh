@@ -148,6 +148,10 @@ update_readme_version() {
         fi
         if [[ -n "$old_version" ]] && [[ "$old_version" != "$version" ]]; then
             sed -i'' -e "s|\`${old_version}\`|\`${version}\`|g" "$readme_file"
+            # Also update release note links in README (e.g., RELEASE_v39.2.1.md)
+            sed -i'' -e "s|RELEASE_v[0-9][0-9.]*\.md|RELEASE_v${version}.md|g" "$readme_file"
+            # Clean up sed backup files (macOS creates these)
+            rm -f "${readme_file}-e"
             log_debug "Updated inline version references: $old_version -> $version"
         fi
     fi
@@ -179,9 +183,12 @@ generate_docs_index() {
         # Update **Version:** header line
         sed -i'' -e "s|^\*\*Version:\*\* [0-9][0-9.]*|\*\*Version:\*\* $version|" "$index_file"
 
-        # Update release note file links (RELEASE_vX.Y.Z.md -> RELEASE_v{new}.md)
+        # Update release note file links and display text
         sed -i'' -e "s|RELEASE_v[0-9][0-9.]*\.md|RELEASE_v${version}.md|g" "$index_file"
         sed -i'' -e "s|CHANGELOG_v[0-9][0-9.]*\.md|CHANGELOG_v${version}.md|g" "$index_file"
+        # Update version in link display text (e.g., "Release Notes v39.2.1" -> "v39.2.2")
+        sed -i'' -e "s|Notes v[0-9][0-9.]*|Notes v${version}|g" "$index_file"
+        sed -i'' -e "s|Changelog v[0-9][0-9.]*|Changelog v${version}|g" "$index_file"
 
         # Update date if present
         local today=$(date -u '+%Y-%m-%d')
