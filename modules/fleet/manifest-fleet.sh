@@ -380,10 +380,20 @@ fleet_status() {
 # Outputs fleet status in JSON format.
 # -----------------------------------------------------------------------------
 _fleet_status_json() {
+    # Helper: escape a string for safe JSON embedding
+    _json_escape() {
+        local s="$1"
+        s="${s//\\/\\\\}"
+        s="${s//\"/\\\"}"
+        s="${s//$'\n'/\\n}"
+        s="${s//$'\t'/\\t}"
+        echo "$s"
+    }
+
     echo "{"
     echo "  \"fleet\": {"
-    echo "    \"name\": \"$MANIFEST_FLEET_NAME\","
-    echo "    \"root\": \"$MANIFEST_FLEET_ROOT\","
+    echo "    \"name\": \"$(_json_escape "$MANIFEST_FLEET_NAME")\","
+    echo "    \"root\": \"$(_json_escape "$MANIFEST_FLEET_ROOT")\","
     echo "    \"version\": \"${MANIFEST_FLEET_VERSION:-null}\","
     echo "    \"versioning\": \"$MANIFEST_FLEET_VERSIONING\""
     echo "  },"
@@ -402,7 +412,7 @@ _fleet_status_json() {
         [[ -d "$path" ]] && status="present"
         [[ -d "$path/.git" ]] && status="ready"
 
-        echo -n "    {\"name\": \"$service\", \"type\": \"$type\", \"version\": \"$version\", \"branch\": \"$branch\", \"status\": \"$status\"}"
+        echo -n "    {\"name\": \"$(_json_escape "$service")\", \"type\": \"$(_json_escape "$type")\", \"version\": \"$(_json_escape "$version")\", \"branch\": \"$(_json_escape "$branch")\", \"status\": \"$status\"}"
     done
 
     echo ""

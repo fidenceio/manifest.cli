@@ -201,7 +201,7 @@ ${changes}
 
 | Service | Version | Bump Type |
 |---------|---------|-----------|
-$(echo -e "$service_summary")
+$(printf '%b' "$service_summary")
 
 ## Changes by Service
 ${service_changes}
@@ -226,7 +226,7 @@ EOF
 
 | Service | Version | Bump Type |
 |---------|---------|-----------|
-$(echo -e "$service_summary")
+$(printf '%b' "$service_summary")
 
 ## Detailed Changes
 ${service_changes}

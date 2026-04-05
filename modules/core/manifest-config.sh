@@ -143,32 +143,51 @@ _manifest_config_detect_issues() {
     [ -f "$config_file" ] || return 1
 
     local ts1 ts2 ts3 ts4 tap_repo time_servers
-    ts1=$(get_yaml_value "$config_file" "time.server1" "")
-    ts2=$(get_yaml_value "$config_file" "time.server2" "")
-    ts3=$(get_yaml_value "$config_file" "time.server3" "")
-    ts4=$(get_yaml_value "$config_file" "time.server4" "")
-    tap_repo=$(get_yaml_value "$config_file" "homebrew.tap_repo" "")
-    time_servers=$(get_yaml_value "$config_file" "time.servers" "")
+    ts1=$(get_yaml_value "$config_file" ".time.server1" "")
+    ts2=$(get_yaml_value "$config_file" ".time.server2" "")
+    ts3=$(get_yaml_value "$config_file" ".time.server3" "")
+    ts4=$(get_yaml_value "$config_file" ".time.server4" "")
+    tap_repo=$(get_yaml_value "$config_file" ".homebrew.tap_repo" "")
+    time_servers=$(get_yaml_value "$config_file" ".time.servers" "")
 
-    [ "$ts1" = "time.apple.com" ] || [ "$ts1" = "216.239.35.0" ] && echo "legacy|time.server1|$ts1|https://www.cloudflare.com/cdn-cgi/trace"
-    [ "$ts2" = "time.google.com" ] || [ "$ts2" = "216.239.35.4" ] && echo "legacy|time.server2|$ts2|https://www.google.com/generate_204"
-    [ "$ts3" = "pool.ntp.org" ] && echo "legacy|time.server3|pool.ntp.org|https://www.apple.com"
-    [ "$ts4" = "time.nist.gov" ] && echo "legacy|time.server4|time.nist.gov|"
-    [ "$tap_repo" = "https://github.com/fidenceio/fidenceio-homebrew-tap.git" ] && \
+    if [ "$ts1" = "time.apple.com" ] || [ "$ts1" = "216.239.35.0" ]; then
+        echo "legacy|time.server1|$ts1|https://www.cloudflare.com/cdn-cgi/trace"
+    fi
+    if [ "$ts2" = "time.google.com" ] || [ "$ts2" = "216.239.35.4" ]; then
+        echo "legacy|time.server2|$ts2|https://www.google.com/generate_204"
+    fi
+    if [ "$ts3" = "pool.ntp.org" ]; then
+        echo "legacy|time.server3|pool.ntp.org|https://www.apple.com"
+    fi
+    if [ "$ts4" = "time.nist.gov" ]; then
+        echo "legacy|time.server4|time.nist.gov|"
+    fi
+    if [ "$tap_repo" = "https://github.com/fidenceio/fidenceio-homebrew-tap.git" ]; then
         echo "legacy|homebrew.tap_repo|https://github.com/fidenceio/fidenceio-homebrew-tap.git|https://github.com/fidenceio/homebrew-tap.git"
+    fi
 
-    [ -n "$time_servers" ] && echo "deprecated|time.servers|$time_servers|time.server1..4"
+    if [ -n "$time_servers" ]; then
+        echo "deprecated|time.servers|$time_servers|time.server1..4"
+    fi
 
     local cache_ttl cache_cleanup cache_stale schema_ver
-    cache_ttl=$(get_yaml_value "$config_file" "time.cache_ttl" "")
-    cache_cleanup=$(get_yaml_value "$config_file" "time.cache_cleanup_period" "")
-    cache_stale=$(get_yaml_value "$config_file" "time.cache_stale_max_age" "")
-    schema_ver=$(get_yaml_value "$config_file" "config_schema_version" "")
+    cache_ttl=$(get_yaml_value "$config_file" ".time.cache_ttl" "")
+    cache_cleanup=$(get_yaml_value "$config_file" ".time.cache_cleanup_period" "")
+    cache_stale=$(get_yaml_value "$config_file" ".time.cache_stale_max_age" "")
+    schema_ver=$(get_yaml_value "$config_file" ".config.schema_version" "")
 
-    [ -z "$cache_ttl" ] && echo "missing|time.cache_ttl||120"
-    [ -z "$cache_cleanup" ] && echo "missing|time.cache_cleanup_period||3600"
-    [ -z "$cache_stale" ] && echo "missing|time.cache_stale_max_age||21600"
-    [ -z "$schema_ver" ] && echo "missing|config_schema_version||${MANIFEST_CLI_CONFIG_SCHEMA_VERSION_CURRENT}"
+    if [ -z "$cache_ttl" ]; then
+        echo "missing|time.cache_ttl||120"
+    fi
+    if [ -z "$cache_cleanup" ]; then
+        echo "missing|time.cache_cleanup_period||3600"
+    fi
+    if [ -z "$cache_stale" ]; then
+        echo "missing|time.cache_stale_max_age||21600"
+    fi
+    if [ -z "$schema_ver" ]; then
+        echo "missing|config.schema_version||${MANIFEST_CLI_CONFIG_SCHEMA_VERSION_CURRENT}"
+    fi
 }
 
 _manifest_config_upsert_key() {
@@ -228,7 +247,7 @@ _manifest_config_apply_migrations() {
     done < <(_manifest_config_detect_issues "$config_file")
 
     if [ "$dry_run" = "false" ] && [ "$applied" -gt 0 ]; then
-        _manifest_config_upsert_key "$config_file" "config_schema_version" "${MANIFEST_CLI_CONFIG_SCHEMA_VERSION_CURRENT}" >/dev/null 2>&1 || true
+        _manifest_config_upsert_key "$config_file" "config.schema_version" "${MANIFEST_CLI_CONFIG_SCHEMA_VERSION_CURRENT}" >/dev/null 2>&1 || true
     fi
 }
 

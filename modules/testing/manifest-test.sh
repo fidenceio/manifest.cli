@@ -17,6 +17,14 @@ if [ -f "$(dirname "${BASH_SOURCE[0]}")/manifest-bash4-compatibility-test.sh" ];
     source "$(dirname "${BASH_SOURCE[0]}")/manifest-bash4-compatibility-test.sh"
 fi
 
+if [ -f "$(dirname "${BASH_SOURCE[0]}")/manifest-fleet-test.sh" ]; then
+    source "$(dirname "${BASH_SOURCE[0]}")/manifest-fleet-test.sh"
+fi
+
+if [ -f "$(dirname "${BASH_SOURCE[0]}")/manifest-yaml-test.sh" ]; then
+    source "$(dirname "${BASH_SOURCE[0]}")/manifest-yaml-test.sh"
+fi
+
 # Security testing functions
 test_security_validation() {
     echo "🔒 Testing security validation functions..."
@@ -182,6 +190,24 @@ test_command() {
                 test_agent
             else
                 echo "   ❌ Agent test module not available"
+                return 1
+            fi
+            ;;
+        "fleet")
+            echo "🚢 Running fleet test suite..."
+            if declare -F test_fleet >/dev/null 2>&1; then
+                test_fleet
+            else
+                echo "   ❌ Fleet test module not available"
+                return 1
+            fi
+            ;;
+        "yaml"|"config-yaml")
+            echo "📄 Running YAML & config test suite..."
+            if declare -F test_yaml >/dev/null 2>&1; then
+                test_yaml
+            else
+                echo "   ❌ YAML test module not available"
                 return 1
             fi
             ;;
@@ -382,7 +408,7 @@ run_manifest_test() {
                 echo "Usage: manifest test [suite] [--strict-redact|--no-strict-redact]"
                 echo ""
                 echo "Suites include: all, versions, security, config, docs, git, time, os, modules,"
-                echo "                integration, cloud, agent, zsh, bash5, bash (bash4 alias)"
+                echo "                integration, cloud, agent, fleet, yaml, zsh, bash5, bash (bash4 alias)"
                 echo ""
                 echo "Redaction:"
                 echo "  --strict-redact     Enable strict redaction (default)"
@@ -699,7 +725,17 @@ test_all_functionality() {
     test_command_injection_protection
     test_network_security
     echo ""
-    
+
+    if declare -F test_yaml >/dev/null 2>&1; then
+        test_yaml
+        echo ""
+    fi
+
+    if declare -F test_fleet >/dev/null 2>&1; then
+        test_fleet
+        echo ""
+    fi
+
     echo "✅ Comprehensive testing completed"
 }
 

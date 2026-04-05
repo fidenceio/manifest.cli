@@ -1,6 +1,6 @@
 # Release v41.0.1
 
-**Release Date:** 2026-04-05 02:42:25 UTC
+**Release Date:** 2026-04-05 03:09:20 UTC
 **Release Type:** patch
 
 ## 🎯 What's New
@@ -59,12 +59,15 @@ manifest docs
 
 ## New Features
 
+
 ## Improvements
-Auto-commit before Manifest process [TS: 2026-04-05 02:42:25 UTC]
-Update Homebrew formula to v41.0.0
+Update Homebrew formula to v41.0.1
 
 ## Bug Fixes
 
+
 ## Breaking Changes
 
+
 ## Documentation
+

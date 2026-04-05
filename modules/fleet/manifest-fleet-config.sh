@@ -843,7 +843,10 @@ _validate_service() {
         fi
     fi
 
-    return $errors
+    if [[ $errors -gt 0 ]]; then
+        return 1
+    fi
+    return 0
 }
 
 # =============================================================================
