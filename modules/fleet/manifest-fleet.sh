@@ -36,11 +36,12 @@
 # COMMANDS:
 #   manifest fleet init      - Initialize a new fleet
 #   manifest fleet status    - Show fleet status
-#   manifest fleet discover  - Discover repos in workspace
+#   manifest fleet update    - Re-scan and add new repos (--dry-run to preview)
+#   manifest fleet discover  - Alias for 'fleet update --dry-run'
 #   manifest fleet add       - Add a service to fleet
 #   manifest fleet remove    - Remove a service from fleet
 #   manifest fleet sync      - Clone/pull all services
-#   manifest fleet prep        - Coordinated version bump
+#   manifest fleet prep      - Coordinated version bump
 #   manifest fleet docs      - Generate unified documentation
 #   manifest fleet validate  - Validate configuration
 #
@@ -367,10 +368,10 @@ fleet_status() {
 
     # Quick actions
     echo "Quick actions:"
-    echo "  manifest fleet update       - Add newly discovered repos"
-    echo "  manifest fleet sync         - Clone missing, pull existing"
-    echo "  manifest fleet prep patch   - Bump all services"
-    echo "  manifest fleet discover     - Preview new/missing repos"
+    echo "  manifest fleet update             - Add newly discovered repos"
+    echo "  manifest fleet update --dry-run   - Preview new/missing repos"
+    echo "  manifest fleet sync               - Clone missing, pull existing"
+    echo "  manifest fleet prep patch         - Bump all services"
 }
 
 # -----------------------------------------------------------------------------
@@ -419,7 +420,7 @@ _fleet_status_json() {
 # Initializes a new fleet in the current directory.
 #
 # BEHAVIOR:
-#   1. If fleet already exists (no --force), routes to fleet_update
+#   1. If fleet already exists (no --force), errors with guidance
 #   2. Creates skeleton manifest.fleet.yaml (fleet metadata, operations, etc.)
 #   3. Creates .env.manifest.local with fleet settings
 #   4. Calls fleet_update to discover and populate services
@@ -457,11 +458,14 @@ fleet_init() {
     local target_dir="$(pwd)"
     local config_file="$target_dir/manifest.fleet.yaml"
 
-    # If fleet already exists, route to update routine (unless --force reinit)
+    # If fleet already exists, tell the user clearly and suggest the right command
     if [[ -f "$config_file" ]] && [[ "$force" != "true" ]]; then
-        log_info "Fleet already initialized. Running update routine..."
-        fleet_update --_from-init
-        return $?
+        log_warning "Fleet already initialized at: $config_file"
+        echo ""
+        echo "  To add newly discovered repos:  manifest fleet update"
+        echo "  To preview without changes:     manifest fleet update --dry-run"
+        echo "  To reinitialize from scratch:   manifest fleet init --force"
+        return 0
     fi
 
     echo ""
@@ -628,74 +632,17 @@ EOF
 }
 
 # =============================================================================
-# COMMAND: fleet discover
+# COMMAND: fleet discover (alias for fleet update --dry-run)
 # =============================================================================
 
 # -----------------------------------------------------------------------------
 # Function: fleet_discover
 # -----------------------------------------------------------------------------
-# Discovers repositories in the workspace and shows diff against manifest.
-#
-# ARGUMENTS:
-#   --depth N      Maximum search depth (default: 5)
-#   --json         Output in JSON format
-#   --quiet, -q    Only show new repos
-#
-# EXAMPLE:
-#   manifest fleet discover
-#   manifest fleet discover --depth 3
+# Alias for 'fleet update --dry-run'. Kept for backwards compatibility.
+# All discovery logic now lives in fleet_update.
 # -----------------------------------------------------------------------------
 fleet_discover() {
-    local depth=5
-    local json_output=false
-    local quiet=false
-
-    # Parse arguments
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --depth)
-                if [ -z "${2:-}" ] || [[ "${2:-}" == --* ]]; then
-                    log_error "--depth requires a numeric value"
-                    return 1
-                fi
-                depth="$2"; shift 2 ;;
-            --json) json_output=true; shift ;;
-            -q|--quiet) quiet=true; shift ;;
-            *) shift ;;
-        esac
-    done
-
-    local root_dir="${MANIFEST_FLEET_ROOT:-$(pwd)}"
-    if ! [[ "$depth" =~ ^[0-9]+$ ]]; then
-        log_error "--depth must be a non-negative integer"
-        return 1
-    fi
-
-    if [[ "$json_output" == "true" ]]; then
-        quick_discover "$root_dir"
-        return 0
-    fi
-
-    if [[ "$quiet" == "true" ]]; then
-        # Just output new repos for scripting
-        local discovered
-        discovered=$(discover_fleet_repos "$root_dir" "$depth")
-
-        local config_file
-        config_file=$(_fleet_resolve_config "$root_dir")
-
-        if [[ -f "$config_file" ]]; then
-            local diff_output
-            diff_output=$(diff_discovered_repos "$discovered" "$config_file")
-            get_new_repos "$diff_output"
-        else
-            echo "$discovered"
-        fi
-        return 0
-    fi
-
-    # Interactive discovery
-    interactive_discover "$root_dir"
+    fleet_update --dry-run "$@"
 }
 
 # =============================================================================
@@ -824,20 +771,26 @@ fleet_sync() {
 # -----------------------------------------------------------------------------
 # Re-scans the workspace and adds newly discovered repos to manifest.fleet.yaml.
 #
-# This is the routine counterpart to fleet init — run it whenever new repos
-# appear in the workspace. Also invoked automatically by fleet init when a
-# manifest already exists.
+# Also serves as the single discovery entry point. Use --dry-run to preview
+# changes without writing (this is what 'fleet discover' does).
 #
 # ARGUMENTS:
 #   --depth N      Maximum search depth (default: 5)
+#   --dry-run      Preview only — do not modify manifest.fleet.yaml
+#   --json         Output JSON summary (implies --dry-run)
+#   --quiet, -q    Only output new repo lines, for scripting (implies --dry-run)
 #
 # EXAMPLE:
 #   manifest fleet update
 #   manifest fleet update --depth 3
+#   manifest fleet update --dry-run
 # -----------------------------------------------------------------------------
 fleet_update() {
     local depth=5
     local skip_init_check=false
+    local dry_run=false
+    local json_output=false
+    local quiet=false
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -849,9 +802,69 @@ fleet_update() {
                 fi
                 depth="$2"; shift 2 ;;
             --_from-init) skip_init_check=true; shift ;;
+            --dry-run) dry_run=true; shift ;;
+            --json) json_output=true; dry_run=true; shift ;;
+            -q|--quiet) quiet=true; dry_run=true; shift ;;
             *) shift ;;
         esac
     done
+
+    if ! [[ "$depth" =~ ^[0-9]+$ ]]; then
+        log_error "--depth must be a non-negative integer"
+        return 1
+    fi
+
+    local root_dir="${MANIFEST_FLEET_ROOT:-$(pwd)}"
+
+    # --- JSON summary mode (fast, limited depth) ---
+    if [[ "$json_output" == "true" ]]; then
+        local discovered
+        discovered=$(discover_fleet_repos "$root_dir" 3)  # Limited depth for speed
+
+        local total=0 services=0 libraries=0 infra=0 tools=0
+        while IFS=$'\t' read -r name path type rest; do
+            [[ -z "$name" ]] && continue
+            ((total++))
+            case "$type" in
+                "service") ((services++)) ;;
+                "library") ((libraries++)) ;;
+                "infrastructure") ((infra++)) ;;
+                "tool") ((tools++)) ;;
+            esac
+        done <<< "$discovered"
+
+        cat << EOF
+{
+  "total": $total,
+  "services": $services,
+  "libraries": $libraries,
+  "infrastructure": $infra,
+  "tools": $tools,
+  "root": "$root_dir"
+}
+EOF
+        return 0
+    fi
+
+    # --- Quiet mode (new repos only, for scripting) ---
+    if [[ "$quiet" == "true" ]]; then
+        local discovered
+        discovered=$(discover_fleet_repos "$root_dir" "$depth")
+
+        local config_file
+        config_file=$(_fleet_resolve_config "$root_dir")
+
+        if [[ -f "$config_file" ]]; then
+            local diff_output
+            diff_output=$(diff_discovered_repos "$discovered" "$config_file")
+            get_new_repos "$diff_output"
+        else
+            echo "$discovered"
+        fi
+        return 0
+    fi
+
+    # --- Standard / dry-run mode ---
 
     # When called standalone, require fleet to be initialized.
     # When called from fleet_init (--_from-init), skip — config was just created.
@@ -861,15 +874,16 @@ fleet_update() {
         fi
     fi
 
-    local root_dir="${MANIFEST_FLEET_ROOT:-$(pwd)}"
-
     # Resolve config file
     local config_file
     config_file=$(_fleet_resolve_config "$root_dir")
 
+    local header_label="MANIFEST FLEET UPDATE"
+    [[ "$dry_run" == "true" ]] && header_label="MANIFEST FLEET UPDATE (dry-run)"
+
     echo ""
     echo "╔══════════════════════════════════════════════════════════════════════╗"
-    echo "║                       MANIFEST FLEET UPDATE                          ║"
+    printf "║  %-68s  ║\n" "$header_label"
     echo "╚══════════════════════════════════════════════════════════════════════╝"
     echo ""
     echo "Scanning: $root_dir"
@@ -901,28 +915,37 @@ fleet_update() {
 
     # Handle new repos
     if [[ "$new_count" -gt 0 ]]; then
-        echo "Adding new repositories:"
+        if [[ "$dry_run" == "true" ]]; then
+            echo "New repositories (not in manifest):"
+        else
+            echo "Adding new repositories:"
+        fi
         echo ""
         echo "$diff_output" | grep "^+" | while IFS=$'\t' read -r status name path type branch version url is_sub; do
             printf "  + %-25s %-12s %s\n" "$name" "($type)" "$path"
         done
         echo ""
 
-        local new_repos
-        new_repos=$(get_new_repos "$diff_output")
-
-        local yaml_content
-        yaml_content=$(generate_manifest_additions "$new_repos")
-
-        if append_services_to_manifest "$config_file" "$yaml_content"; then
-            echo "✓ Added $new_count service(s) to $config_file"
+        if [[ "$dry_run" == "true" ]]; then
+            echo "To add these services, run:"
+            echo "  manifest fleet update"
         else
-            log_error "Failed to update $config_file"
-            return 1
-        fi
+            local new_repos
+            new_repos=$(get_new_repos "$diff_output")
 
-        # Ensure .gitignore in newly discovered repos
-        _fleet_ensure_gitignores "$root_dir" "$new_repos"
+            local yaml_content
+            yaml_content=$(generate_manifest_additions "$new_repos")
+
+            if append_services_to_manifest "$config_file" "$yaml_content"; then
+                echo "✓ Added $new_count service(s) to $config_file"
+            else
+                log_error "Failed to update $config_file"
+                return 1
+            fi
+
+            # Ensure .gitignore in newly discovered repos
+            _fleet_ensure_gitignores "$root_dir" "$new_repos"
+        fi
     else
         echo "✓ No new repositories found."
     fi
@@ -1378,7 +1401,7 @@ COMMANDS:
   manifest fleet init [options]
     Initialize a new fleet in the current directory.
     Creates skeleton config, then runs 'fleet update' to discover repos.
-    If fleet already exists, routes directly to 'fleet update'.
+    Errors if fleet already exists (use --force to reinitialize).
     Options:
       --name, -n NAME    Fleet name
       --force, -f        Overwrite existing manifest.fleet.yaml
@@ -1389,17 +1412,16 @@ COMMANDS:
       --verbose, -v      Show detailed information
       --json             Output as JSON
 
-  manifest fleet discover [options]
-    Discover repositories in workspace (read-only).
-    Options:
-      --depth N          Maximum search depth (default: 5)
-      --quiet, -q        Only show new repos
-
   manifest fleet update [options]
     Re-scan workspace and add new repos to manifest.fleet.yaml.
-    Also runs automatically when 'fleet init' is called on an existing fleet.
     Options:
       --depth N          Maximum search depth (default: 5)
+      --dry-run          Preview only — do not modify manifest.fleet.yaml
+      --json             Output JSON summary (implies --dry-run)
+      --quiet, -q        Only output new repo lines (implies --dry-run)
+
+  manifest fleet discover [options]
+    Alias for 'manifest fleet update --dry-run'.
 
   manifest fleet sync [options]
     Clone missing repos, pull existing ones.
@@ -1475,14 +1497,14 @@ EXAMPLES:
   # Add newly discovered repos to existing fleet
   manifest fleet update
 
+  # Preview new/missing repos (read-only)
+  manifest fleet update --dry-run
+
   # Check fleet status
   manifest fleet status
 
   # Clone all missing services
   manifest fleet sync
-
-  # Preview new/missing repos (read-only)
-  manifest fleet discover
 
 EOF
 }

@@ -17,10 +17,9 @@
 #   - Diff detection against existing manifest.fleet.yaml
 #
 # AUTO-DETECTION MODES:
-#   1. DISCOVERY    : Find all git repos in workspace (for fleet init)
+#   1. DISCOVERY    : Find all git repos in workspace (for fleet init/update)
 #   2. DIFF         : Compare discovered repos against manifest.fleet.yaml
 #   3. SUGGEST      : Generate additions for manifest.fleet.yaml
-#   4. SYNC         : Auto-update manifest.fleet.yaml with new repos
 #
 # USAGE:
 #   source manifest-fleet-detect.sh
@@ -711,7 +710,7 @@ diff_discovered_repos() {
     # NOTE: We read directly from the YAML file (via get_yaml_value) rather than
     # using get_fleet_service_property, because the latter requires load_fleet_config
     # to have been called first — which isn't guaranteed in all code paths (e.g.
-    # fleet discover, interactive_discover).
+    # fleet update --dry-run, fleet update --quiet).
     declare -A manifest_paths
     declare -A manifest_types
     for service in $manifest_services; do
@@ -881,174 +880,6 @@ generate_manifest_additions() {
 }
 
 # =============================================================================
-# INTERACTIVE DISCOVERY FUNCTIONS
-# =============================================================================
-
-# -----------------------------------------------------------------------------
-# Function: interactive_discover
-# -----------------------------------------------------------------------------
-# Runs discovery with interactive prompts for handling results.
-#
-# ARGUMENTS:
-#   $1 - Root directory to search
-#
-# BEHAVIOR:
-#   1. Discovers all repositories
-#   2. Shows diff against existing manifest
-#   3. Prompts user to add new repos, remove missing, or skip
-#   4. Optionally updates manifest.fleet.yaml
-# -----------------------------------------------------------------------------
-interactive_discover() {
-    local root_dir="${1:-$(pwd)}"
-
-    echo ""
-    echo "============================================="
-    echo "  MANIFEST FLEET AUTO-DISCOVERY"
-    echo "============================================="
-    echo ""
-    echo "Scanning: $root_dir"
-    echo ""
-
-    # Run discovery
-    local discovered
-    discovered=$(discover_fleet_repos "$root_dir")
-
-    local repo_count
-    repo_count=$(echo "$discovered" | grep -c "^" || echo "0")
-
-    echo "Found $repo_count potential service(s)"
-    echo ""
-
-    # Resolve the config file
-    local config_file
-    if declare -F _fleet_resolve_config >/dev/null 2>&1; then
-        config_file=$(_fleet_resolve_config "$root_dir")
-    else
-        config_file="${MANIFEST_FLEET_CONFIG_FILE:-}"
-        if [[ -z "$config_file" ]] || [[ ! -f "$config_file" ]]; then
-            local config_filename="${MANIFEST_CLI_FLEET_CONFIG_FILENAME:-$MANIFEST_FLEET_DEFAULT_CONFIG_FILENAME}"
-            config_file="$root_dir/$config_filename"
-        fi
-    fi
-
-    # If no manifest exists, this is initial setup
-    if [[ ! -f "$config_file" ]]; then
-        echo "No manifest.fleet.yaml found."
-        echo "Run 'manifest fleet init' to create one with these services."
-        echo ""
-        echo "Discovered services:"
-        echo "---"
-        while IFS=$'\t' read -r name path type branch version url is_sub; do
-            [[ -z "$name" ]] && continue
-            printf "  %-25s %-12s %s\n" "$name" "($type)" "$path"
-        done <<< "$discovered"
-        return 0
-    fi
-
-    # Run diff against the resolved config file
-    local diff_output
-    diff_output=$(diff_discovered_repos "$discovered" "$config_file")
-
-    # Count changes in a single pass
-    local new_count=0 removed_count=0 changed_count=0 unchanged_count=0
-    while IFS= read -r line; do
-        case "${line:0:1}" in
-            +) new_count=$((new_count + 1)) ;;
-            -) removed_count=$((removed_count + 1)) ;;
-            '~') changed_count=$((changed_count + 1)) ;;
-            =) unchanged_count=$((unchanged_count + 1)) ;;
-        esac
-    done <<< "$diff_output"
-
-    echo "Comparison with manifest.fleet.yaml:"
-    echo "  + New:       $new_count"
-    echo "  - Missing:   $removed_count"
-    echo "  ~ Changed:   $changed_count"
-    echo "  = Unchanged: $unchanged_count"
-    echo ""
-
-    # Show details
-    if [[ $new_count -gt 0 ]]; then
-        echo "NEW REPOSITORIES (not in manifest):"
-        echo "---"
-        echo "$diff_output" | grep "^+" | while IFS=$'\t' read -r status name path type branch version url is_sub; do
-            printf "  + %-25s %-12s %s\n" "$name" "($type)" "$path"
-        done
-        echo ""
-    fi
-
-    if [[ $removed_count -gt 0 ]]; then
-        echo "MISSING REPOSITORIES (in manifest but not found):"
-        echo "---"
-        echo "$diff_output" | grep "^-" | while IFS=$'\t' read -r status name path type rest; do
-            printf "  - %-25s %s\n" "$name" "$path"
-        done
-        echo ""
-    fi
-
-    # Output YAML for new repos
-    if [[ $new_count -gt 0 ]]; then
-        echo ""
-        echo "To auto-add all new services, run:"
-        echo "  manifest fleet update"
-        echo ""
-        echo "Or append this to manifest.fleet.yaml manually:"
-        echo "============================================="
-        local new_repos
-        new_repos=$(get_new_repos "$diff_output")
-        generate_manifest_additions "$new_repos"
-        echo ""
-    fi
-}
-
-# =============================================================================
-# QUICK DISCOVERY FUNCTION
-# =============================================================================
-
-# -----------------------------------------------------------------------------
-# Function: quick_discover
-# -----------------------------------------------------------------------------
-# Performs a quick discovery and returns a summary.
-# Useful for status checks and CI/CD pipelines.
-#
-# ARGUMENTS:
-#   $1 - Root directory
-#
-# OUTPUT:
-#   JSON-formatted summary (for easy parsing)
-# -----------------------------------------------------------------------------
-quick_discover() {
-    local root_dir="${1:-$(pwd)}"
-
-    local discovered
-    discovered=$(discover_fleet_repos "$root_dir" 3)  # Limited depth for speed
-
-    local total=0 services=0 libraries=0 infra=0 tools=0
-
-    while IFS=$'\t' read -r name path type rest; do
-        [[ -z "$name" ]] && continue
-        ((total++))
-        case "$type" in
-            "service") ((services++)) ;;
-            "library") ((libraries++)) ;;
-            "infrastructure") ((infra++)) ;;
-            "tool") ((tools++)) ;;
-        esac
-    done <<< "$discovered"
-
-    cat << EOF
-{
-  "total": $total,
-  "services": $services,
-  "libraries": $libraries,
-  "infrastructure": $infra,
-  "tools": $tools,
-  "root": "$root_dir"
-}
-EOF
-}
-
-# =============================================================================
 # MANIFEST YAML WRITE FUNCTIONS
 # =============================================================================
 
@@ -1137,5 +968,3 @@ export -f get_missing_repos
 export -f generate_service_yaml
 export -f generate_manifest_additions
 export -f append_services_to_manifest
-export -f interactive_discover
-export -f quick_discover
