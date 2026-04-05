@@ -120,23 +120,22 @@ sed_inplace() {
     esac
 }
 
-_manifest_cli_upsert_env_key() {
-    local file="$1"
-    local key="$2"
-    local value="$3"
-
-    [ -f "$file" ] || return 1
-
-    if grep -Eq "^[[:space:]]*${key}=" "$file"; then
-        sed_inplace "s|^[[:space:]]*${key}=.*|${key}=${value}|" "$file"
-    else
-        printf '%s=%s\n' "$key" "$value" >> "$file"
-    fi
-}
-
 migrate_user_global_configuration() {
-    local config_file="$HOME/.env.manifest.global"
+    local config_file="$HOME/.manifest-cli/manifest.config.global.yaml"
     [ -f "$config_file" ] || return 0
+
+    # Source the YAML module for get_yaml_value / set_yaml_value
+    local yaml_module
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    yaml_module="$script_dir/modules/core/manifest-yaml.sh"
+    if [[ -f "$yaml_module" ]]; then
+        source "$yaml_module"
+    elif [[ -f "$MANIFEST_CLI_INSTALL_LOCATION/modules/core/manifest-yaml.sh" ]]; then
+        source "$MANIFEST_CLI_INSTALL_LOCATION/modules/core/manifest-yaml.sh"
+    else
+        print_warning "⚠️  YAML module not found, skipping configuration migration"
+        return 0
+    fi
 
     print_subheader "🧭 Migrating User Configuration (Safe Merge)"
 
@@ -144,53 +143,57 @@ migrate_user_global_configuration() {
     local warnings=0
 
     local time1 time2 time3 time4 tap_repo time_servers
-    time1=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER1=/{print $2}' "$config_file" | tail -n1)
-    time2=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER2=/{print $2}' "$config_file" | tail -n1)
-    time3=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER3=/{print $2}' "$config_file" | tail -n1)
-    time4=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER4=/{print $2}' "$config_file" | tail -n1)
-    tap_repo=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TAP_REPO=/{print $2}' "$config_file" | tail -n1)
-    time_servers=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVERS=/{print $2}' "$config_file" | tail -n1)
+    time1=$(get_yaml_value "$config_file" "time.server1")
+    time2=$(get_yaml_value "$config_file" "time.server2")
+    time3=$(get_yaml_value "$config_file" "time.server3")
+    time4=$(get_yaml_value "$config_file" "time.server4")
+    tap_repo=$(get_yaml_value "$config_file" "brew.tap_repo")
+    time_servers=$(get_yaml_value "$config_file" "time.servers")
 
     # Migrate only known legacy defaults; preserve user custom values.
     if [ "$time1" = "time.apple.com" ] || [ "$time1" = "216.239.35.0" ]; then
-        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_SERVER1" "https://www.cloudflare.com/cdn-cgi/trace"
+        set_yaml_value "$config_file" "time.server1" "https://www.cloudflare.com/cdn-cgi/trace"
         migrated=$((migrated + 1))
     fi
     if [ "$time2" = "time.google.com" ] || [ "$time2" = "216.239.35.4" ]; then
-        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_SERVER2" "https://www.google.com/generate_204"
+        set_yaml_value "$config_file" "time.server2" "https://www.google.com/generate_204"
         migrated=$((migrated + 1))
     fi
     if [ "$time3" = "pool.ntp.org" ]; then
-        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_SERVER3" "https://www.apple.com"
+        set_yaml_value "$config_file" "time.server3" "https://www.apple.com"
         migrated=$((migrated + 1))
     fi
     if [ "$time4" = "time.nist.gov" ]; then
-        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_SERVER4" ""
+        set_yaml_value "$config_file" "time.server4" ""
         migrated=$((migrated + 1))
     fi
     if [ "$tap_repo" = "https://github.com/fidenceio/fidenceio-homebrew-tap.git" ]; then
-        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_TAP_REPO" "https://github.com/fidenceio/homebrew-tap.git"
+        set_yaml_value "$config_file" "brew.tap_repo" "https://github.com/fidenceio/homebrew-tap.git"
         migrated=$((migrated + 1))
     fi
 
     # Ensure new cache controls exist.
-    if ! grep -Eq "^[[:space:]]*MANIFEST_CLI_TIME_CACHE_TTL=" "$config_file"; then
-        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_CACHE_TTL" "120"
+    local cache_ttl cache_cleanup cache_stale
+    cache_ttl=$(get_yaml_value "$config_file" "time.cache_ttl")
+    if [ -z "$cache_ttl" ]; then
+        set_yaml_value "$config_file" "time.cache_ttl" "120"
         migrated=$((migrated + 1))
     fi
-    if ! grep -Eq "^[[:space:]]*MANIFEST_CLI_TIME_CACHE_CLEANUP_PERIOD=" "$config_file"; then
-        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_CACHE_CLEANUP_PERIOD" "3600"
+    cache_cleanup=$(get_yaml_value "$config_file" "time.cache_cleanup_period")
+    if [ -z "$cache_cleanup" ]; then
+        set_yaml_value "$config_file" "time.cache_cleanup_period" "3600"
         migrated=$((migrated + 1))
     fi
-    if ! grep -Eq "^[[:space:]]*MANIFEST_CLI_TIME_CACHE_STALE_MAX_AGE=" "$config_file"; then
-        _manifest_cli_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_CACHE_STALE_MAX_AGE" "21600"
+    cache_stale=$(get_yaml_value "$config_file" "time.cache_stale_max_age")
+    if [ -z "$cache_stale" ]; then
+        set_yaml_value "$config_file" "time.cache_stale_max_age" "21600"
         migrated=$((migrated + 1))
     fi
 
     # Deprecated variable warning (preserve value; user may still rely on it).
     if [ -n "$time_servers" ]; then
-        print_warning "⚠️  Deprecated variable detected: MANIFEST_CLI_TIME_SERVERS"
-        print_warning "   Prefer MANIFEST_CLI_TIME_SERVER1..4 (legacy value preserved)"
+        print_warning "⚠️  Deprecated variable detected: time.servers"
+        print_warning "   Prefer time.server1..4 (legacy value preserved)"
         warnings=$((warnings + 1))
     fi
 
@@ -502,53 +505,62 @@ copy_cli_files() {
 create_configuration() {
     print_subheader "⚙️  Creating Configuration Files"
 
+    local config_dir="$HOME/.manifest-cli"
+    local config_file="$config_dir/manifest.config.global.yaml"
+
+    # Ensure the config directory exists
+    mkdir -p "$config_dir"
+
     # Create user's global configuration in home directory if it doesn't exist
-    if [ ! -f "$HOME/.env.manifest.global" ]; then
-        if [ -f "examples/env.manifest.global.example" ]; then
-            cp "examples/env.manifest.global.example" "$HOME/.env.manifest.global"
-            print_success "✅ Global configuration created: $HOME/.env.manifest.global"
+    if [ ! -f "$config_file" ]; then
+        if [ -f "examples/manifest.config.yaml.example" ]; then
+            cp "examples/manifest.config.yaml.example" "$config_file"
+            print_success "✅ Global configuration created: $config_file"
         else
-            print_warning "⚠️  env.manifest.global.example not found, creating basic configuration"
-            cat > "$HOME/.env.manifest.global" << 'EOF'
-# =============================================================================
+            print_warning "⚠️  manifest.config.yaml.example not found, creating basic configuration"
+            cat > "$config_file" << 'EOF'
 # Manifest CLI Global Configuration
-# =============================================================================
-# Customize your global Manifest CLI settings here
-# =============================================================================
+# See: examples/manifest.config.yaml.example for all options
 
-# Timezone (IANA format, e.g., America/New_York, Europe/London, Asia/Tokyo)
-MANIFEST_CLI_TIMEZONE=UTC
+time:
+  timezone: "UTC"
+  server1: "https://www.cloudflare.com/cdn-cgi/trace"
+  server2: "https://www.google.com/generate_204"
+  server3: "https://www.apple.com"
+  server4: ""
+  timeout: 5
+  retries: 3
+  verify: true
+  cache_ttl: 120
+  cache_cleanup_period: 3600
+  cache_stale_max_age: 21600
 
-# Time Server Configuration
-MANIFEST_CLI_TIME_SERVER1=https://www.cloudflare.com/cdn-cgi/trace
-MANIFEST_CLI_TIME_SERVER2=https://www.google.com/generate_204
-MANIFEST_CLI_TIME_SERVER3=https://www.apple.com
-MANIFEST_CLI_TIME_SERVER4=
-MANIFEST_CLI_TIME_TIMEOUT=5
-MANIFEST_CLI_TIME_RETRIES=3
-MANIFEST_CLI_TIME_VERIFY=true
-MANIFEST_CLI_TIME_CACHE_TTL=120
-MANIFEST_CLI_TIME_CACHE_CLEANUP_PERIOD=3600
-MANIFEST_CLI_TIME_CACHE_STALE_MAX_AGE=21600
+version:
+  format: "XX.XX.XX"
 
-# Versioning Configuration
-MANIFEST_CLI_VERSION_FORMAT=XX.XX.XX
-MANIFEST_CLI_GIT_TAG_PREFIX=v
-MANIFEST_CLI_GIT_DEFAULT_BRANCH=main
-MANIFEST_CLI_CONFIG_SCHEMA_VERSION=2
+git:
+  tag_prefix: "v"
+  default_branch: "main"
 
-# Documentation Configuration
-MANIFEST_CLI_DOCS_FOLDER=docs
-MANIFEST_CLI_DOCS_ARCHIVE_FOLDER=docs/zArchive
-MANIFEST_CLI_DOCS_AUTO_GENERATE=true
+docs:
+  folder: "docs"
+  archive_folder: "docs/zArchive"
+  auto_generate: true
 
-# Interactive Mode
-MANIFEST_CLI_INTERACTIVE_MODE=false
+config:
+  schema_version: 2
 EOF
-            print_success "✅ Global configuration created: $HOME/.env.manifest.global"
+            print_success "✅ Global configuration created: $config_file"
         fi
     else
-        print_status "ℹ️  Global configuration already exists: $HOME/.env.manifest.global (preserved)"
+        print_status "ℹ️  Global configuration already exists: $config_file (preserved)"
+    fi
+
+    # Detect legacy .env config and suggest migration
+    if [[ -f "$HOME/.env.manifest.global" ]]; then
+        print_warning "⚠️  Legacy config found: $HOME/.env.manifest.global"
+        print_warning "   Config has been migrated to YAML: $config_file"
+        print_warning "   You can safely remove the old file: rm $HOME/.env.manifest.global"
     fi
 
     # Apply safe key-level migrations on every install/upgrade run.
@@ -561,18 +573,24 @@ EOF
 setup_environment_variables() {
     print_subheader "🌍 Setting Up Environment Variables"
 
-    # Source the environment management module
-    if ! source_manifest_env_management; then
-        print_error "❌ Failed to load environment management module"
-        return 1
+    local config_file="$HOME/.manifest-cli/manifest.config.global.yaml"
+
+    # Source the YAML module for load_yaml_to_env
+    local yaml_module="$MANIFEST_CLI_INSTALL_LOCATION/modules/core/manifest-yaml.sh"
+    if [[ -f "$yaml_module" ]]; then
+        source "$yaml_module"
     fi
 
-    # Export environment variables from the user's global configuration
-    if [ -f "$HOME/.env.manifest.global" ]; then
-        export_env_from_config "$HOME/.env.manifest.global"
-        print_success "✅ Environment variables loaded from $HOME/.env.manifest.global"
+    # Export environment variables from the user's global YAML configuration
+    if [ -f "$config_file" ]; then
+        if type load_yaml_to_env &>/dev/null; then
+            load_yaml_to_env "$config_file"
+            print_success "✅ Environment variables loaded from $config_file"
+        else
+            print_warning "⚠️  YAML module not available, cannot load $config_file"
+        fi
     else
-        print_warning "⚠️  Configuration file not found, using defaults"
+        print_warning "⚠️  Configuration file not found: $config_file, using defaults"
     fi
 
     # Set essential installation variables
@@ -692,8 +710,8 @@ display_post_install_info() {
     print_status "💡 Next Steps:"
     echo "   1. Configure your Git credentials if not already set"
     echo "   2. Run '$MANIFEST_CLI_NAME test' to verify everything works"
-    echo "   3. Customize your global settings in ~/.env.manifest.global (e.g., timezone)"
-    echo "   4. For project-specific overrides, copy examples/env.manifest.local.example to .env.manifest.local"
+    echo "   3. Customize your global settings in ~/.manifest-cli/manifest.config.global.yaml (e.g., timezone)"
+    echo "   4. For project-specific overrides, copy examples/manifest.config.yaml.example to your project root"
 
     # Add git hooks info if they were installed
     if [ -f ".git/hooks/pre-commit" ] && grep -q "Manifest CLI Pre-Commit Hook" ".git/hooks/pre-commit" 2>/dev/null; then
@@ -713,9 +731,9 @@ display_post_install_info() {
     
     echo
     print_status "🔧 Configuration:"
-    echo "   • Global Config: ~/.env.manifest.global"
+    echo "   • Global Config: ~/.manifest-cli/manifest.config.global.yaml"
     echo "   • Example Templates: $MANIFEST_CLI_INSTALL_LOCATION/examples/"
-    echo "   • For project overrides, copy examples/env.manifest.local.example to your project root"
+    echo "   • For project overrides, copy examples/manifest.config.yaml.example to your project root"
     
     echo
     print_status "🌐 Community & Support:"

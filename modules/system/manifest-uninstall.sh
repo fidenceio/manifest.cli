@@ -122,6 +122,7 @@ cleanup_config_files() {
         "$HOME/.manifestrc"
         "$HOME/.manifest-cli.conf"
         "$HOME/.config/manifest-cli"
+        "$HOME/.manifest-cli/manifest.config.global.yaml"
         "$HOME/.env.manifest.global"
         "$HOME/.env.manifest.local"
     )

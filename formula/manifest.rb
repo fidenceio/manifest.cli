@@ -28,7 +28,7 @@ class Manifest < Formula
     # NOTE: ~/.manifest-cli is intentionally preserved — it is the runtime state/data
     # directory (logs, config markers, etc.), NOT a legacy install artifact.
     legacy_bin = Pathname.new(Dir.home)/".local"/"bin"/"manifest"
-    user_global_config = Pathname.new(Dir.home)/".env.manifest.global"
+    user_global_config = Pathname.new(Dir.home)/".manifest-cli"/"manifest.config.global.yaml"
 
     if legacy_bin.exist?
       legacy_bin.unlink

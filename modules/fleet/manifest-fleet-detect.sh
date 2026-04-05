@@ -7,19 +7,19 @@
 # PURPOSE:
 #   Automatically discovers and catalogs git repositories within a fleet
 #   workspace. This enables zero-configuration fleet setup where Manifest
-#   can detect new services without manual manifest.fleet.yaml updates.
+#   can detect new services without manual manifest.fleet.config.yaml updates.
 #
 # KEY FEATURES:
 #   - Recursive git repository discovery
 #   - Submodule detection and handling
 #   - Repository classification (service, library, infrastructure)
 #   - Smart filtering (ignore node_modules, vendor, etc.)
-#   - Diff detection against existing manifest.fleet.yaml
+#   - Diff detection against existing manifest.fleet.config.yaml
 #
 # AUTO-DETECTION MODES:
 #   1. DISCOVERY    : Find all git repos in workspace (for fleet init/update)
-#   2. DIFF         : Compare discovered repos against manifest.fleet.yaml
-#   3. SUGGEST      : Generate additions for manifest.fleet.yaml
+#   2. DIFF         : Compare discovered repos against manifest.fleet.config.yaml
+#   3. SUGGEST      : Generate additions for manifest.fleet.config.yaml
 #
 # USAGE:
 #   source manifest-fleet-detect.sh
@@ -469,7 +469,7 @@ _classify_repository() {
 #   $2 - Fleet root path (for relative path calculation)
 #
 # RETURNS:
-#   Echoes a cleaned service name suitable for manifest.fleet.yaml
+#   Echoes a cleaned service name suitable for manifest.fleet.config.yaml
 #
 # TRANSFORMATIONS:
 #   - Uses directory basename
@@ -673,17 +673,261 @@ _discover_repos_recursive() {
 }
 
 # =============================================================================
+# ALL-DIRECTORY DISCOVERY (git + non-git)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Function: discover_all_directories
+# -----------------------------------------------------------------------------
+# Scans ALL subdirectories (not just git repos) for fleet start.
+# Produces the same tab-separated format as discover_fleet_repos with two
+# extra trailing fields: HAS_GIT and HAS_REMOTE.
+#
+# ARGUMENTS:
+#   $1 - Root directory to scan (default: pwd)
+#   $2 - Maximum depth (default: MANIFEST_FLEET_DEFAULT_DISCOVERY_DEPTH)
+#
+# OUTPUT FORMAT (per line, tab-separated):
+#   NAME  PATH  TYPE  BRANCH  VERSION  URL  IS_SUBMODULE  HAS_GIT  HAS_REMOTE
+# -----------------------------------------------------------------------------
+discover_all_directories() {
+    local root_dir="${1:-$(pwd)}"
+    local max_depth="${2:-$MANIFEST_FLEET_DEFAULT_DISCOVERY_DEPTH}"
+
+    if [[ ! -d "$root_dir" ]]; then
+        log_error "Discovery root directory does not exist: $root_dir"
+        return 1
+    fi
+
+    root_dir=$(cd "$root_dir" && pwd)
+
+    log_info "Scanning all directories in: $root_dir (max depth: $max_depth)"
+
+    local discovered_paths=()
+    _discover_dirs_recursive "$root_dir" "$root_dir" 0 "$max_depth" discovered_paths
+}
+
+# -----------------------------------------------------------------------------
+# Function: _discover_dirs_recursive (internal)
+# -----------------------------------------------------------------------------
+# Recursive scanner that emits ALL directories, not just git repos.
+# Fork of _discover_repos_recursive with the git gate removed.
+# -----------------------------------------------------------------------------
+_discover_dirs_recursive() {
+    local current_dir="$1"
+    local root_dir="$2"
+    local current_depth="$3"
+    local max_depth="$4"
+    local _arr_name="$5"
+    local -n _discovered_ref="$_arr_name"
+
+    if [[ $current_depth -gt $max_depth ]]; then
+        return 0
+    fi
+
+    local dirname
+    dirname=$(basename "$current_dir")
+    if _should_ignore_directory "$dirname"; then
+        log_debug "Skipping ignored directory: $current_dir"
+        return 0
+    fi
+
+    # Emit directory info at valid depth (skip the root itself)
+    if [[ $current_depth -ge $MANIFEST_FLEET_MIN_DISCOVERY_DEPTH ]]; then
+        local rel_path="${current_dir#"$root_dir"/}"
+
+        # Dedup check
+        local already_found=false
+        for found_path in "${_discovered_ref[@]}"; do
+            if [[ "$found_path" == "$rel_path" ]]; then
+                already_found=true
+                break
+            fi
+        done
+
+        if [[ "$already_found" == "false" ]]; then
+            local name
+            name=$(_extract_service_name "$current_dir" "$root_dir")
+
+            local type
+            type=$(_classify_repository "$current_dir")
+
+            local has_git="false"
+            local has_remote="false"
+            local branch="" version="0.0.0" url="" submodule_flag="false"
+
+            if _is_git_repository "$current_dir"; then
+                has_git="true"
+                branch=$(_get_repo_default_branch "$current_dir")
+                version=$(_get_repo_version "$current_dir")
+                url=$(_get_repo_remote_url "$current_dir")
+                [[ -n "$url" ]] && has_remote="true"
+                if _is_git_submodule "$current_dir"; then
+                    submodule_flag="true"
+                fi
+            fi
+
+            printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+                "$name" "$rel_path" "$type" "$branch" "$version" "$url" "$submodule_flag" "$has_git" "$has_remote"
+
+            _discovered_ref+=("$rel_path")
+            log_debug "Found directory: $name (has_git=$has_git) at $rel_path"
+        fi
+    fi
+
+    # Recurse into subdirectories
+    while IFS= read -r -d '' subdir; do
+        if [[ -d "$subdir" ]] && [[ ! -L "$subdir" ]]; then
+            _discover_dirs_recursive "$subdir" "$root_dir" $((current_depth + 1)) "$max_depth" "$_arr_name"
+        fi
+    done < <(find "$current_dir" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
+}
+
+# -----------------------------------------------------------------------------
+# Function: generate_start_tsv
+# -----------------------------------------------------------------------------
+# Generates TSV selection file content from discover_all_directories output.
+#
+# ARGUMENTS:
+#   $1 - Output of discover_all_directories (multi-line, tab-separated)
+#   $2 - Root directory path (for header metadata)
+#   $3 - Scan depth used (for header metadata)
+#
+# OUTPUT:
+#   TSV content written to stdout, ready to redirect to a file.
+# -----------------------------------------------------------------------------
+generate_start_tsv() {
+    local discovered="$1"
+    local root_dir="$2"
+    local depth="$3"
+    local scan_date
+    scan_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Header
+    echo "# MANIFEST FLEET — Directory Inventory"
+    echo "# Root: $root_dir | Depth: $depth | Date: $scan_date"
+    echo "# Toggle the SELECT column (true/false), then run: manifest fleet init"
+    printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
+
+    # Data rows
+    while IFS=$'\t' read -r name path type branch version url submodule has_git has_remote; do
+        [[ -z "$name" ]] && continue
+
+        # Default selection: true for git repos, false for non-git dirs
+        local selected="false"
+        [[ "$has_git" == "true" ]] && selected="true"
+
+        printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+            "$selected" "$name" "$path" "$type" "$has_git" "$url" "${branch:-}" "${version:-0.0.0}"
+    done <<< "$discovered"
+}
+
+# -----------------------------------------------------------------------------
+# Function: parse_start_tsv
+# -----------------------------------------------------------------------------
+# Reads a manifest.fleet.tsv file and returns selected entries.
+#
+# ARGUMENTS:
+#   $1 - Path to manifest.fleet.tsv
+#
+# OUTPUT FORMAT (per line, tab-separated):
+#   NAME  PATH  TYPE  HAS_GIT  REMOTE_URL  BRANCH  VERSION
+# -----------------------------------------------------------------------------
+parse_start_tsv() {
+    local tsv_file="$1"
+
+    if [[ ! -f "$tsv_file" ]]; then
+        log_error "Start file not found: $tsv_file"
+        return 1
+    fi
+
+    while IFS=$'\t' read -r selected name path type has_git url branch version; do
+        # Skip comments and blank lines
+        [[ "$selected" =~ ^#.*$ ]] && continue
+        [[ -z "$selected" ]] && continue
+
+        # Only return selected entries
+        if [[ "$selected" == "true" ]]; then
+            printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$name" "$path" "$type" "$has_git" "$url" "${branch:-}" "${version:-0.0.0}"
+        fi
+    done < "$tsv_file"
+}
+
+# -----------------------------------------------------------------------------
+# Function: merge_start_tsv
+# -----------------------------------------------------------------------------
+# Merges fresh scan results into an existing manifest.fleet.tsv,
+# preserving user-edited 'selected' values for known paths and adding
+# new directories as selected=false.
+#
+# ARGUMENTS:
+#   $1 - Output of discover_all_directories (multi-line, tab-separated)
+#   $2 - Path to existing manifest.fleet.tsv
+#   $3 - Root directory path (for header)
+#   $4 - Scan depth (for header)
+#
+# OUTPUT:
+#   Updated TSV content written to stdout.
+#   Returns count of new entries via stderr as "NEW:<count>"
+# -----------------------------------------------------------------------------
+merge_start_tsv() {
+    local discovered="$1"
+    local existing_tsv="$2"
+    local root_dir="$3"
+    local depth="$4"
+    local scan_date
+    scan_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Build lookup of existing selections keyed by path
+    declare -A existing_selections
+    if [[ -f "$existing_tsv" ]]; then
+        while IFS=$'\t' read -r selected name path type has_git url branch version; do
+            [[ "$selected" =~ ^#.*$ ]] && continue
+            [[ -z "$selected" ]] && continue
+            existing_selections["$path"]="$selected"
+        done < "$existing_tsv"
+    fi
+
+    # Write header
+    echo "# MANIFEST FLEET — Directory Inventory"
+    echo "# Root: $root_dir | Depth: $depth | Date: $scan_date"
+    echo "# Toggle the SELECT column (true/false), then run: manifest fleet init"
+    printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
+
+    # Write data rows, preserving existing selections
+    local new_count=0
+    while IFS=$'\t' read -r name path type branch version url submodule has_git has_remote; do
+        [[ -z "$name" ]] && continue
+
+        local selected
+        if [[ -n "${existing_selections[$path]+_}" ]]; then
+            # Preserve user's previous selection
+            selected="${existing_selections[$path]}"
+        else
+            # New entry: default based on git status
+            [[ "$has_git" == "true" ]] && selected="true" || selected="false"
+            ((new_count++))
+        fi
+
+        printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+            "$selected" "$name" "$path" "$type" "$has_git" "$url" "${branch:-}" "${version:-0.0.0}"
+    done <<< "$discovered"
+
+    echo "NEW:$new_count" >&2
+}
+
+# =============================================================================
 # COMPARISON AND DIFF FUNCTIONS
 # =============================================================================
 
 # -----------------------------------------------------------------------------
 # Function: diff_discovered_repos
 # -----------------------------------------------------------------------------
-# Compares discovered repositories against existing manifest.fleet.yaml.
+# Compares discovered repositories against existing manifest.fleet.config.yaml.
 #
 # ARGUMENTS:
 #   $1 - Discovery output (from discover_fleet_repos)
-#   $2 - Path to manifest.fleet.yaml (optional, uses loaded config if not provided)
+#   $2 - Path to manifest.fleet.config.yaml (optional, uses loaded config if not provided)
 #
 # OUTPUT FORMAT:
 #   Outputs lines prefixed with status:
@@ -817,7 +1061,7 @@ get_missing_repos() {
 #   $7 - Is submodule flag
 #
 # OUTPUT:
-#   YAML snippet suitable for inserting into manifest.fleet.yaml
+#   YAML snippet suitable for inserting into manifest.fleet.config.yaml
 # -----------------------------------------------------------------------------
 generate_service_yaml() {
     local name="$1"
@@ -855,7 +1099,7 @@ generate_service_yaml() {
 #   $1 - New repos output (from get_new_repos)
 #
 # OUTPUT:
-#   Complete YAML snippet to add to manifest.fleet.yaml services section
+#   Complete YAML snippet to add to manifest.fleet.config.yaml services section
 # -----------------------------------------------------------------------------
 generate_manifest_additions() {
     local new_repos="$1"
@@ -886,13 +1130,13 @@ generate_manifest_additions() {
 # -----------------------------------------------------------------------------
 # Function: append_services_to_manifest
 # -----------------------------------------------------------------------------
-# Appends new service entries to manifest.fleet.yaml.
+# Appends new service entries to manifest.fleet.config.yaml.
 #
 # Finds the last line of the services: section (before the next top-level key
 # or end of file) and inserts the generated YAML there.
 #
 # ARGUMENTS:
-#   $1 - Config file path (manifest.fleet.yaml)
+#   $1 - Config file path (manifest.fleet.config.yaml)
 #   $2 - YAML content to append (from generate_manifest_additions)
 #
 # RETURNS:
@@ -962,6 +1206,10 @@ append_services_to_manifest() {
 # =============================================================================
 
 export -f discover_fleet_repos
+export -f discover_all_directories
+export -f generate_start_tsv
+export -f parse_start_tsv
+export -f merge_start_tsv
 export -f diff_discovered_repos
 export -f get_new_repos
 export -f get_missing_repos

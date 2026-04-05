@@ -404,22 +404,42 @@ get_config_value() {
     local key="$1"
     local default="${2:-}"
     local config_file="${3:-$PROJECT_ROOT/.env}"
-    
+
     # Try environment variable first
     if [ -n "${!key:-}" ]; then
         echo "${!key}"
         return 0
     fi
-    
+
     # Try config file
     if [ -f "$config_file" ]; then
-        local value=$(grep "^${key}=" "$config_file" 2>/dev/null | cut -d'=' -f2- | sed 's/^["'\'']\|["'\'']$//g')
-        if [ -n "$value" ]; then
-            echo "$value"
-            return 0
-        fi
+        case "$config_file" in
+            *.yaml|*.yml)
+                # YAML config: convert env var name to YAML dot-path
+                local yaml_path=""
+                if declare -F env_var_to_yaml_path >/dev/null 2>&1; then
+                    yaml_path=$(env_var_to_yaml_path "$key")
+                fi
+                if [ -n "$yaml_path" ]; then
+                    local value
+                    value=$(get_yaml_value "$config_file" "$yaml_path" "")
+                    if [ -n "$value" ]; then
+                        echo "$value"
+                        return 0
+                    fi
+                fi
+                ;;
+            *)
+                # Legacy .env config: grep KEY=VALUE
+                local value=$(grep "^${key}=" "$config_file" 2>/dev/null | cut -d'=' -f2- | sed 's/^["'\'']\|["'\'']$//g')
+                if [ -n "$value" ]; then
+                    echo "$value"
+                    return 0
+                fi
+                ;;
+        esac
     fi
-    
+
     # Return default
     echo "$default"
 }
@@ -429,26 +449,39 @@ set_config_value() {
     local key="$1"
     local value="$2"
     local config_file="${3:-$PROJECT_ROOT/.env}"
-    
+
     # Ensure config directory exists
     local config_dir=$(dirname "$config_file")
     mkdir -p "$config_dir" 2>/dev/null
-    
-    # Update or add configuration
-    if [ -f "$config_file" ]; then
-        # Update existing key
-        if grep -q "^${key}=" "$config_file"; then
-            sed -i.bak "s/^${key}=.*/${key}=\"${value}\"/" "$config_file"
-            rm -f "$config_file.bak" 2>/dev/null
-        else
-            # Add new key
-            echo "${key}=\"${value}\"" >> "$config_file"
-        fi
-    else
-        # Create new config file
-        echo "${key}=\"${value}\"" > "$config_file"
-    fi
-    
+
+    case "$config_file" in
+        *.yaml|*.yml)
+            # YAML config: convert env var name to YAML dot-path
+            local yaml_path=""
+            if declare -F env_var_to_yaml_path >/dev/null 2>&1; then
+                yaml_path=$(env_var_to_yaml_path "$key")
+            fi
+            if [ -z "$yaml_path" ]; then
+                # Unknown key — write under custom section
+                yaml_path="custom.${key}"
+            fi
+            set_yaml_value "$config_file" "$yaml_path" "$value"
+            ;;
+        *)
+            # Legacy .env config
+            if [ -f "$config_file" ]; then
+                if grep -q "^${key}=" "$config_file"; then
+                    sed -i.bak "s/^${key}=.*/${key}=\"${value}\"/" "$config_file"
+                    rm -f "$config_file.bak" 2>/dev/null
+                else
+                    echo "${key}=\"${value}\"" >> "$config_file"
+                fi
+            else
+                echo "${key}=\"${value}\"" > "$config_file"
+            fi
+            ;;
+    esac
+
     log_debug "Configuration updated: $key=$value"
 }
 

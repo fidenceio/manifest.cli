@@ -157,44 +157,58 @@ display_manifest_env_vars() {
 # Function to export environment variables from configuration file
 export_env_from_config() {
     local config_file="$1"
-    
+
     if [ ! -f "$config_file" ]; then
         echo "Configuration file not found: $config_file"
         return 1
     fi
-    
-    echo "📥 Loading environment variables from $config_file..."
-    
+
+    echo "Loading environment variables from $config_file..."
+
+    # YAML config files: delegate to load_yaml_to_env from manifest-yaml.sh
+    case "$config_file" in
+        *.yaml|*.yml)
+            if declare -F load_yaml_to_env >/dev/null 2>&1; then
+                load_yaml_to_env "$config_file"
+                return $?
+            else
+                echo "Warning: load_yaml_to_env not available; cannot load YAML config"
+                return 1
+            fi
+            ;;
+    esac
+
+    # Legacy .env file parser
     local exported_count=0
     local line_number=0
-    
+
     while IFS= read -r line; do
         ((line_number++))
-        
+
         # Skip empty lines and comments
         if [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]]; then
             continue
         fi
-        
+
         # Check if line contains an environment variable assignment
         if [[ "$line" =~ ^[A-Z_][A-Z0-9_]*= ]]; then
             local var_name="${line%%=*}"
             local var_value="${line#*=}"
-            
+
             # Remove quotes if present
             var_value="${var_value%\"}"
             var_value="${var_value#\"}"
             var_value="${var_value%\'}"
             var_value="${var_value#\'}"
-            
+
             # Export the variable
             export "$var_name"="$var_value"
             ((exported_count++))
             echo "Exported $var_name"
         fi
     done < "$config_file"
-    
-    echo "✅ Exported $exported_count environment variables from $config_file"
+
+    echo "Exported $exported_count environment variables from $config_file"
     return 0
 }
 

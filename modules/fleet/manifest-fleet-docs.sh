@@ -9,8 +9,8 @@
 #   Supports configurable placement strategies: fleet-root, per-service, or both.
 #
 # CONFIGURATION:
-#   Reads from the "docs" section of manifest.fleet.yaml via get_fleet_config_value().
-#   See examples/manifest.fleet.yaml.example for the full schema.
+#   Reads from the "docs" section of manifest.fleet.config.yaml via get_fleet_config_value().
+#   See examples/manifest.fleet.config.yaml.example for the full schema.
 #
 # KEY FUNCTIONS:
 #   - fleet_docs_dispatch()           : Route fleet docs subcommands
@@ -641,7 +641,7 @@ Generate Options:
   patch|minor|major Release type (default: patch)
 
 Configuration:
-  Set the "docs" section in manifest.fleet.yaml to control placement:
+  Set the "docs" section in manifest.fleet.config.yaml to control placement:
 
     docs:
       strategy: "per-service"    # fleet-root | per-service | both

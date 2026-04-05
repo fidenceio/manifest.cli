@@ -5,9 +5,10 @@
 
 # Configuration file paths (in order of precedence)
 MANIFEST_CLI_CONFIG_FILES=(
-    ".env.manifest.global"
-    ".env.manifest.local"
+    "manifest.config.yaml"
+    "manifest.config.local.yaml"
 )
+MANIFEST_CLI_GLOBAL_CONFIG="$HOME/.manifest-cli/manifest.config.global.yaml"
 
 MANIFEST_CLI_CONFIG_SCHEMA_VERSION_CURRENT=2
 
@@ -113,7 +114,7 @@ warn_deprecated_configuration() {
     local warned=0
 
     if [ -n "${MANIFEST_CLI_TIME_SERVERS:-}" ]; then
-        _manifest_config_warn "Deprecated variable detected: MANIFEST_CLI_TIME_SERVERS. Prefer MANIFEST_CLI_TIME_SERVER1..4."
+        _manifest_config_warn "Deprecated config detected: time.servers (MANIFEST_CLI_TIME_SERVERS). Use time.server1..4 instead."
         warned=1
     fi
 
@@ -123,12 +124,12 @@ warn_deprecated_configuration() {
        [ "${MANIFEST_CLI_TIME_SERVER4:-}" = "time.nist.gov" ] || \
        [ "${MANIFEST_CLI_TIME_SERVER1:-}" = "216.239.35.0" ] || \
        [ "${MANIFEST_CLI_TIME_SERVER2:-}" = "216.239.35.4" ]; then
-        _manifest_config_warn "Legacy time server defaults detected. Recommended defaults are https://www.cloudflare.com/cdn-cgi/trace / https://www.google.com/generate_204 with https://www.apple.com for SERVER3."
+        _manifest_config_warn "Legacy time server defaults detected in time.server1..4. Recommended defaults are https://www.cloudflare.com/cdn-cgi/trace / https://www.google.com/generate_204 with https://www.apple.com for server3."
         warned=1
     fi
 
     if [ "${MANIFEST_CLI_TAP_REPO:-}" = "https://github.com/fidenceio/fidenceio-homebrew-tap.git" ]; then
-        _manifest_config_warn "Legacy MANIFEST_CLI_TAP_REPO detected. Recommended value: https://github.com/fidenceio/homebrew-tap.git"
+        _manifest_config_warn "Legacy homebrew.tap_repo detected. Recommended value: https://github.com/fidenceio/homebrew-tap.git"
         warned=1
     fi
 
@@ -142,31 +143,32 @@ _manifest_config_detect_issues() {
     [ -f "$config_file" ] || return 1
 
     local ts1 ts2 ts3 ts4 tap_repo time_servers
-    ts1=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER1=/{print $2}' "$config_file" | tail -n1)
-    ts2=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER2=/{print $2}' "$config_file" | tail -n1)
-    ts3=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER3=/{print $2}' "$config_file" | tail -n1)
-    ts4=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER4=/{print $2}' "$config_file" | tail -n1)
-    tap_repo=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TAP_REPO=/{print $2}' "$config_file" | tail -n1)
-    time_servers=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVERS=/{print $2}' "$config_file" | tail -n1)
+    ts1=$(get_yaml_value "$config_file" "time.server1" "")
+    ts2=$(get_yaml_value "$config_file" "time.server2" "")
+    ts3=$(get_yaml_value "$config_file" "time.server3" "")
+    ts4=$(get_yaml_value "$config_file" "time.server4" "")
+    tap_repo=$(get_yaml_value "$config_file" "homebrew.tap_repo" "")
+    time_servers=$(get_yaml_value "$config_file" "time.servers" "")
 
-    [ "$ts1" = "time.apple.com" ] || [ "$ts1" = "216.239.35.0" ] && echo "legacy|MANIFEST_CLI_TIME_SERVER1|$ts1|https://www.cloudflare.com/cdn-cgi/trace"
-    [ "$ts2" = "time.google.com" ] || [ "$ts2" = "216.239.35.4" ] && echo "legacy|MANIFEST_CLI_TIME_SERVER2|$ts2|https://www.google.com/generate_204"
-    [ "$ts3" = "pool.ntp.org" ] && echo "legacy|MANIFEST_CLI_TIME_SERVER3|pool.ntp.org|https://www.apple.com"
-    [ "$ts4" = "time.nist.gov" ] && echo "legacy|MANIFEST_CLI_TIME_SERVER4|time.nist.gov|"
+    [ "$ts1" = "time.apple.com" ] || [ "$ts1" = "216.239.35.0" ] && echo "legacy|time.server1|$ts1|https://www.cloudflare.com/cdn-cgi/trace"
+    [ "$ts2" = "time.google.com" ] || [ "$ts2" = "216.239.35.4" ] && echo "legacy|time.server2|$ts2|https://www.google.com/generate_204"
+    [ "$ts3" = "pool.ntp.org" ] && echo "legacy|time.server3|pool.ntp.org|https://www.apple.com"
+    [ "$ts4" = "time.nist.gov" ] && echo "legacy|time.server4|time.nist.gov|"
     [ "$tap_repo" = "https://github.com/fidenceio/fidenceio-homebrew-tap.git" ] && \
-        echo "legacy|MANIFEST_CLI_TAP_REPO|https://github.com/fidenceio/fidenceio-homebrew-tap.git|https://github.com/fidenceio/homebrew-tap.git"
+        echo "legacy|homebrew.tap_repo|https://github.com/fidenceio/fidenceio-homebrew-tap.git|https://github.com/fidenceio/homebrew-tap.git"
 
-    [ -n "$time_servers" ] && echo "deprecated|MANIFEST_CLI_TIME_SERVERS|$time_servers|MANIFEST_CLI_TIME_SERVER1..4"
+    [ -n "$time_servers" ] && echo "deprecated|time.servers|$time_servers|time.server1..4"
 
-    grep -Eq "^[[:space:]]*MANIFEST_CLI_TIME_CACHE_TTL=" "$config_file" || \
-        echo "missing|MANIFEST_CLI_TIME_CACHE_TTL||120"
-    grep -Eq "^[[:space:]]*MANIFEST_CLI_TIME_CACHE_CLEANUP_PERIOD=" "$config_file" || \
-        echo "missing|MANIFEST_CLI_TIME_CACHE_CLEANUP_PERIOD||3600"
-    grep -Eq "^[[:space:]]*MANIFEST_CLI_TIME_CACHE_STALE_MAX_AGE=" "$config_file" || \
-        echo "missing|MANIFEST_CLI_TIME_CACHE_STALE_MAX_AGE||21600"
+    local cache_ttl cache_cleanup cache_stale schema_ver
+    cache_ttl=$(get_yaml_value "$config_file" "time.cache_ttl" "")
+    cache_cleanup=$(get_yaml_value "$config_file" "time.cache_cleanup_period" "")
+    cache_stale=$(get_yaml_value "$config_file" "time.cache_stale_max_age" "")
+    schema_ver=$(get_yaml_value "$config_file" "config_schema_version" "")
 
-    grep -Eq "^[[:space:]]*MANIFEST_CLI_CONFIG_SCHEMA_VERSION=" "$config_file" || \
-        echo "missing|MANIFEST_CLI_CONFIG_SCHEMA_VERSION||${MANIFEST_CLI_CONFIG_SCHEMA_VERSION_CURRENT}"
+    [ -z "$cache_ttl" ] && echo "missing|time.cache_ttl||120"
+    [ -z "$cache_cleanup" ] && echo "missing|time.cache_cleanup_period||3600"
+    [ -z "$cache_stale" ] && echo "missing|time.cache_stale_max_age||21600"
+    [ -z "$schema_ver" ] && echo "missing|config_schema_version||${MANIFEST_CLI_CONFIG_SCHEMA_VERSION_CURRENT}"
 }
 
 _manifest_config_upsert_key() {
@@ -175,26 +177,8 @@ _manifest_config_upsert_key() {
     local value="$3"
     [ -f "$file" ] || return 1
 
-    local dir tmp_file
-    dir="$(dirname "$file")"
-    tmp_file="$(mktemp "$dir/.env.manifest.global.tmp.XXXXXX")" || return 1
-
-    awk -v key="$key" -v value="$value" '
-        BEGIN { done=0 }
-        {
-            if ($0 ~ "^[[:space:]]*" key "=") {
-                if (done == 0) {
-                    print key "=" value
-                    done=1
-                }
-                next
-            }
-            print
-        }
-        END {
-            if (done == 0) print key "=" value
-        }
-    ' "$file" > "$tmp_file" && mv "$tmp_file" "$file"
+    # key is now a YAML dot-path (e.g. "time.server1")
+    set_yaml_value "$file" "$key" "$value"
 }
 
 _manifest_config_lock_acquire() {
@@ -244,12 +228,12 @@ _manifest_config_apply_migrations() {
     done < <(_manifest_config_detect_issues "$config_file")
 
     if [ "$dry_run" = "false" ] && [ "$applied" -gt 0 ]; then
-        _manifest_config_upsert_key "$config_file" "MANIFEST_CLI_CONFIG_SCHEMA_VERSION" "${MANIFEST_CLI_CONFIG_SCHEMA_VERSION_CURRENT}" >/dev/null 2>&1 || true
+        _manifest_config_upsert_key "$config_file" "config_schema_version" "${MANIFEST_CLI_CONFIG_SCHEMA_VERSION_CURRENT}" >/dev/null 2>&1 || true
     fi
 }
 
 auto_migrate_user_global_configuration() {
-    local config_file="$HOME/.env.manifest.global"
+    local config_file="$MANIFEST_CLI_GLOBAL_CONFIG"
     [ -f "$config_file" ] || return 0
     if ! _manifest_config_should_run_auto_migration; then
         return 0
@@ -282,7 +266,7 @@ auto_migrate_user_global_configuration() {
 config_doctor() {
     local fix="false"
     local dry_run="false"
-    local config_file="$HOME/.env.manifest.global"
+    local config_file="$MANIFEST_CLI_GLOBAL_CONFIG"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -372,157 +356,63 @@ config_doctor() {
     fi
 }
 
-# Load configuration from environment files
+# Load configuration from YAML files
 load_configuration() {
     local project_root="$1"
     local include_project_overrides="${2:-true}"
-    
+
     if [ -z "$project_root" ]; then
         project_root="."
     fi
-    
-    # Load configuration files in order (last wins)
-    # First try the installation location for global config
-    if [ -n "${INSTALL_LOCATION:-}" ] && [ -d "$INSTALL_LOCATION" ]; then
-        local config_loaded=false
-        for config_file in "${MANIFEST_CLI_CONFIG_FILES[@]}"; do
-            local full_path="$INSTALL_LOCATION/$config_file"
-            if [ -f "$full_path" ]; then
-                if [ "$config_loaded" = "false" ]; then
-                    echo "🔧 Loading global configuration from: $config_file (CLI: $INSTALL_LOCATION)"
-                    config_loaded=true
-                fi
-                # Source the file to load variables
-                if [ -r "$full_path" ]; then
-                    # Use a safe way to load env files
-                    while IFS= read -r line || [ -n "$line" ]; do
-                        # Skip comments and empty lines
-                        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ -z "${line// }" ]]; then
-                            continue
-                        fi
-                        
-                        # Skip lines that don't look like variable assignments
-                        if [[ "$line" =~ ^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*= ]]; then
-                            # Parse the line to handle quoted values properly
-                            local var_name="${line%%=*}"
-                            local var_value="${line#*=}"
-                            
-                            # Remove quotes if present
-                            if [[ "$var_value" =~ ^\".*\"$ ]]; then
-                                var_value="${var_value#\"}"
-                                var_value="${var_value%\"}"
-                            elif [[ "$var_value" =~ ^\'.*\'$ ]]; then
-                                var_value="${var_value#\'}"
-                                var_value="${var_value%\'}"
-                            fi
-                            
-                            # Export the variable
-                            export "$var_name=$var_value"
-                        fi
-                    done < "$full_path"
-                fi
-            fi
-        done
+
+    # Baseline defaults first (so YAML layers override them)
+    set_default_configuration
+
+    # Layer 1: User global configuration
+    if [ -f "$MANIFEST_CLI_GLOBAL_CONFIG" ]; then
+        echo "🔧 Loading user global configuration from: $MANIFEST_CLI_GLOBAL_CONFIG"
+        load_yaml_to_env "$MANIFEST_CLI_GLOBAL_CONFIG"
     fi
-    
-    # Then try the user's home directory for global user preferences
-    if [ -f "$HOME/.env.manifest.global" ]; then
-        echo "🔧 Loading user configuration from: $HOME/.env.manifest.global"
-        if [ -r "$HOME/.env.manifest.global" ]; then
-            while IFS= read -r line || [ -n "$line" ]; do
-                # Skip comments and empty lines
-                if [[ "$line" =~ ^[[:space:]]*# ]] || [[ -z "${line// }" ]]; then
-                    continue
-                fi
 
-                # Skip lines that don't look like variable assignments
-                if [[ "$line" =~ ^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*= ]]; then
-                    local var_name="${line%%=*}"
-                    local var_value="${line#*=}"
+    # Layer 2: Project shared configuration
+    local project_shared="$project_root/manifest.config.yaml"
+    if [ -f "$project_shared" ]; then
+        echo "🔧 Loading project configuration from: manifest.config.yaml (Project: $project_root)"
+        load_yaml_to_env "$project_shared"
+    fi
 
-                    # Remove inline comments
-                    var_value="${var_value%%\#*}"
-
-                    # Trim whitespace
-                    var_value=$(echo "$var_value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-
-                    # Remove quotes if present
-                    if [[ "$var_value" =~ ^\".*\"$ ]]; then
-                        var_value="${var_value#\"}"
-                        var_value="${var_value%\"}"
-                    elif [[ "$var_value" =~ ^\'.*\'$ ]]; then
-                        var_value="${var_value#\'}"
-                        var_value="${var_value%\'}"
-                    fi
-
-                    # Trim whitespace again after quote removal
-                    var_value=$(echo "$var_value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-
-                    # Export the variable
-                    export "$var_name=$var_value"
-                fi
-            done < "$HOME/.env.manifest.global"
+    # Layer 3: Project local overrides (only when requested)
+    if [ "$include_project_overrides" = "true" ]; then
+        local project_local="$project_root/manifest.config.local.yaml"
+        if [ -f "$project_local" ]; then
+            echo "🔧 Loading project local configuration from: manifest.config.local.yaml (Project: $project_root)"
+            load_yaml_to_env "$project_local"
         fi
     fi
 
-    # Then try the project root for local overrides.
-    # For out-of-repo invocations, callers can disable this scope.
-    if [ "$include_project_overrides" = "true" ]; then
-        for config_file in "${MANIFEST_CLI_CONFIG_FILES[@]}"; do
-            local full_path="$project_root/$config_file"
-            if [ -f "$full_path" ]; then
-                echo "🔧 Loading project configuration from: $config_file (Project: $project_root)"
-                # Source the file to load variables
-                if [ -r "$full_path" ]; then
-                    # Use a safe way to load env files
-                    while IFS= read -r line || [ -n "$line" ]; do
-                        # Skip comments and empty lines
-                        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ -z "${line// }" ]]; then
-                            continue
-                        fi
-                        
-                        # Skip lines that don't look like variable assignments
-                        if [[ "$line" =~ ^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*= ]]; then
-                            # Parse the line to handle quoted values properly
-                            local var_name="${line%%=*}"
-                            local var_value="${line#*=}"
-                            
-                            # Remove inline comments (everything after #)
-                            var_value="${var_value%%\#*}"
-                            
-                            # Trim whitespace first
-                            var_value=$(echo "$var_value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-                            
-                            # Remove quotes if present
-                            if [[ "$var_value" =~ ^\".*\"$ ]]; then
-                                var_value="${var_value#\"}"
-                                var_value="${var_value%\"}"
-                            elif [[ "$var_value" =~ ^\'.*\'$ ]]; then
-                                var_value="${var_value#\'}"
-                                var_value="${var_value%\'}"
-                            fi
-                            
-                            # Trim whitespace again after quote removal
-                            var_value=$(echo "$var_value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-                            
-                            # Export the variable
-                            export "$var_name=$var_value"
-                        fi
-                    done < "$full_path"
-                fi
+    # Warn if legacy .env config files are still present
+    local legacy_warned=0
+    for legacy_file in "$HOME/.env.manifest.global" \
+                       "$project_root/.env.manifest.global" \
+                       "$project_root/.env.manifest.local"; do
+        if [ -f "$legacy_file" ]; then
+            if [ "$legacy_warned" -eq 0 ]; then
+                _manifest_config_warn "Legacy .env config file(s) detected. Manifest CLI now uses YAML configuration."
+                legacy_warned=1
             fi
-        done
+            _manifest_config_warn "  Found: $legacy_file"
+        fi
+    done
+    if [ "$legacy_warned" -eq 1 ]; then
+        _manifest_config_warn "Run 'manifest config doctor --fix' to apply safe migrations."
     fi
-    
-    # Always set default values for critical variables (even if no config files found)
+
+    # Fill any remaining gaps with defaults
     set_default_configuration
     auto_migrate_user_global_configuration
     # Re-apply defaults in case auto-migration added missing values.
     set_default_configuration
     warn_deprecated_configuration
-    
-    # Skip validation for now to debug time server issue
-    # validate_config
 }
 
 # Set default configuration values
@@ -577,7 +467,7 @@ set_default_configuration() {
     export MANIFEST_CLI_TIME_CACHE_STALE_MAX_AGE="${MANIFEST_CLI_TIME_CACHE_STALE_MAX_AGE:-21600}"
 
     # Timezone Configuration (defaults to UTC)
-    # Can be overridden in .env.manifest.local with IANA timezone names like:
+    # Can be overridden in manifest.config.local.yaml with IANA timezone names like:
     # America/New_York, America/Los_Angeles, Europe/London, Asia/Tokyo, etc.
     export MANIFEST_CLI_TIMEZONE="${MANIFEST_CLI_TIMEZONE:-UTC}"
     
@@ -621,8 +511,8 @@ set_default_configuration() {
     export MANIFEST_CLI_TEMP_LIST="${MANIFEST_CLI_TEMP_LIST:-temp-files.list}"
     
     # Configuration file names
-    export MANIFEST_CLI_CONFIG_GLOBAL="${MANIFEST_CLI_CONFIG_GLOBAL:-.env.manifest.global}"
-    export MANIFEST_CLI_CONFIG_LOCAL="${MANIFEST_CLI_CONFIG_LOCAL:-.env.manifest.local}"
+    export MANIFEST_CLI_CONFIG_GLOBAL="${MANIFEST_CLI_CONFIG_GLOBAL:-manifest.config.global.yaml}"
+    export MANIFEST_CLI_CONFIG_LOCAL="${MANIFEST_CLI_CONFIG_LOCAL:-manifest.config.local.yaml}"
     export MANIFEST_CLI_CONFIG_SCHEMA_VERSION="${MANIFEST_CLI_CONFIG_SCHEMA_VERSION:-${MANIFEST_CLI_CONFIG_SCHEMA_VERSION_CURRENT}}"
     
     # Project Configuration
@@ -643,7 +533,11 @@ set_default_configuration() {
     export MANIFEST_CLI_VERBOSE="${MANIFEST_CLI_VERBOSE:-false}"
     export MANIFEST_CLI_LOG_LEVEL="${MANIFEST_CLI_LOG_LEVEL:-INFO}"
     export MANIFEST_CLI_INTERACTIVE="${MANIFEST_CLI_INTERACTIVE:-false}"
-    
+
+    # PR Policy
+    export MANIFEST_CLI_PR_PROFILE="${MANIFEST_CLI_PR_PROFILE:-solo}"
+    export MANIFEST_CLI_PR_ENFORCE_READY="${MANIFEST_CLI_PR_ENFORCE_READY:-true}"
+
     # Validate configuration after setting defaults
     # validate_config
 }
@@ -721,20 +615,13 @@ _manifest_config_prompt_value() {
     echo "${user_input:-$default_value}"
 }
 
-_manifest_config_write_key() {
-    local config_file="$1"
-    local key="$2"
-    local value="$3"
-    set_config_value "$key" "$value" "$config_file"
-}
-
 configure_interactive() {
     if [ ! -t 0 ]; then
         log_error "Interactive config requires a TTY. Use: manifest config show"
         return 1
     fi
 
-    local config_file="$PROJECT_ROOT/.env.manifest.local"
+    local config_file="$PROJECT_ROOT/manifest.config.local.yaml"
     local inferred_repo_name inferred_org inferred_default_branch
     inferred_repo_name=$(_manifest_config_git_infer_repo_name)
     inferred_org=$(_manifest_config_git_infer_org)
@@ -806,29 +693,29 @@ configure_interactive() {
         update_cooldown="${MANIFEST_CLI_UPDATE_COOLDOWN:-30}"
     fi
 
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_PROJECT_NAME" "$project_name"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_PROJECT_DESCRIPTION" "$project_description"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_ORGANIZATION" "$organization"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_GIT_DEFAULT_BRANCH" "$default_branch"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_GIT_FEATURE_BRANCH_PREFIX" "$feature_prefix"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_GIT_HOTFIX_BRANCH_PREFIX" "$hotfix_prefix"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_GIT_RELEASE_BRANCH_PREFIX" "$release_prefix"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_GIT_BUGFIX_BRANCH_PREFIX" "$bugfix_prefix"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_TIME_SERVER1" "$time_server1"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_TIME_SERVER2" "$time_server2"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_TIME_SERVER3" "$time_server3"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_TIME_SERVER4" "$time_server4"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_TIME_TIMEOUT" "$time_timeout"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_TIME_RETRIES" "$time_retries"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_TIME_VERIFY" "$time_verify"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_TIMEZONE" "$timezone"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_DOCS_FOLDER" "$docs_folder"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_DOCS_ARCHIVE_FOLDER" "$docs_archive"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_DOCS_HISTORICAL_LIMIT" "$docs_limit"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_AUTO_UPDATE" "$auto_update"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_UPDATE_COOLDOWN" "$update_cooldown"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_PR_PROFILE" "$pr_profile"
-    _manifest_config_write_key "$config_file" "MANIFEST_CLI_PR_ENFORCE_READY" "$pr_enforce_ready"
+    set_yaml_value "$config_file" "project.name" "$project_name"
+    set_yaml_value "$config_file" "project.description" "$project_description"
+    set_yaml_value "$config_file" "project.organization" "$organization"
+    set_yaml_value "$config_file" "git.default_branch" "$default_branch"
+    set_yaml_value "$config_file" "git.feature_prefix" "$feature_prefix"
+    set_yaml_value "$config_file" "git.hotfix_prefix" "$hotfix_prefix"
+    set_yaml_value "$config_file" "git.release_prefix" "$release_prefix"
+    set_yaml_value "$config_file" "git.bugfix_prefix" "$bugfix_prefix"
+    set_yaml_value "$config_file" "time.server1" "$time_server1"
+    set_yaml_value "$config_file" "time.server2" "$time_server2"
+    set_yaml_value "$config_file" "time.server3" "$time_server3"
+    set_yaml_value "$config_file" "time.server4" "$time_server4"
+    set_yaml_value "$config_file" "time.timeout" "$time_timeout"
+    set_yaml_value "$config_file" "time.retries" "$time_retries"
+    set_yaml_value "$config_file" "time.verify" "$time_verify"
+    set_yaml_value "$config_file" "time.timezone" "$timezone"
+    set_yaml_value "$config_file" "docs.folder" "$docs_folder"
+    set_yaml_value "$config_file" "docs.archive_folder" "$docs_archive"
+    set_yaml_value "$config_file" "docs.historical_limit" "$docs_limit"
+    set_yaml_value "$config_file" "auto_update.enabled" "$auto_update"
+    set_yaml_value "$config_file" "auto_update.cooldown" "$update_cooldown"
+    set_yaml_value "$config_file" "pr.profile" "$pr_profile"
+    set_yaml_value "$config_file" "pr.enforce_ready" "$pr_enforce_ready"
 
     echo ""
     echo "✅ Saved configuration to $config_file"

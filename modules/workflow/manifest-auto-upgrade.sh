@@ -16,52 +16,30 @@ manifest_upgrade_sed_inplace() {
     esac
 }
 
-manifest_upgrade_upsert_env_key() {
-    local file="$1"
-    local key="$2"
-    local value="$3"
-
-    [ -f "$file" ] || return 1
-
-    if grep -Eq "^[[:space:]]*${key}=" "$file"; then
-        manifest_upgrade_sed_inplace "s|^[[:space:]]*${key}=.*|${key}=${value}|" "$file"
-    else
-        printf '%s=%s\n' "$key" "$value" >> "$file"
-    fi
-}
-
 migrate_user_global_config_internal() {
-    local config_file="$HOME/.env.manifest.global"
+    local config_file="$HOME/.manifest-cli/manifest.config.global.yaml"
     [ -f "$config_file" ] || return 0
 
-    local time1 time2 time3 time4 time_servers tap_repo
-    time1=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER1=/{print $2}' "$config_file" | tail -n1)
-    time2=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER2=/{print $2}' "$config_file" | tail -n1)
-    time3=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER3=/{print $2}' "$config_file" | tail -n1)
-    time4=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVER4=/{print $2}' "$config_file" | tail -n1)
-    time_servers=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TIME_SERVERS=/{print $2}' "$config_file" | tail -n1)
-    tap_repo=$(awk -F= '/^[[:space:]]*MANIFEST_CLI_TAP_REPO=/{print $2}' "$config_file" | tail -n1)
+    local time1 time2 time3 tap_repo
+    time1=$(get_yaml_value "$config_file" "time.server1" "")
+    time2=$(get_yaml_value "$config_file" "time.server2" "")
+    time3=$(get_yaml_value "$config_file" "time.server3" "")
+    tap_repo=$(get_yaml_value "$config_file" "brew.tap_repo" "")
 
     # Safe migrations for known legacy defaults only.
-    { [ "$time1" = "time.apple.com" ] || [ "$time1" = "216.239.35.0" ]; } && manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_SERVER1" "https://www.cloudflare.com/cdn-cgi/trace"
-    { [ "$time2" = "time.google.com" ] || [ "$time2" = "216.239.35.4" ]; } && manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_SERVER2" "https://www.google.com/generate_204"
-    [ "$time3" = "pool.ntp.org" ] && manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_SERVER3" "https://www.apple.com"
-    [ "$time4" = "time.nist.gov" ] && manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_SERVER4" ""
+    { [ "$time1" = "time.apple.com" ] || [ "$time1" = "216.239.35.0" ]; } && set_yaml_value "$config_file" "time.server1" "https://www.cloudflare.com/cdn-cgi/trace"
+    { [ "$time2" = "time.google.com" ] || [ "$time2" = "216.239.35.4" ]; } && set_yaml_value "$config_file" "time.server2" "https://www.google.com/generate_204"
+    [ "$time3" = "pool.ntp.org" ] && set_yaml_value "$config_file" "time.server3" "https://www.apple.com"
     [ "$tap_repo" = "https://github.com/fidenceio/fidenceio-homebrew-tap.git" ] && \
-        manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_TAP_REPO" "https://github.com/fidenceio/homebrew-tap.git"
+        set_yaml_value "$config_file" "brew.tap_repo" "https://github.com/fidenceio/homebrew-tap.git"
 
     # Add new cache keys if missing.
-    grep -Eq "^[[:space:]]*MANIFEST_CLI_TIME_CACHE_TTL=" "$config_file" || \
-        manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_CACHE_TTL" "120"
-    grep -Eq "^[[:space:]]*MANIFEST_CLI_TIME_CACHE_CLEANUP_PERIOD=" "$config_file" || \
-        manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_CACHE_CLEANUP_PERIOD" "3600"
-    grep -Eq "^[[:space:]]*MANIFEST_CLI_TIME_CACHE_STALE_MAX_AGE=" "$config_file" || \
-        manifest_upgrade_upsert_env_key "$config_file" "MANIFEST_CLI_TIME_CACHE_STALE_MAX_AGE" "21600"
-
-    if [ -n "$time_servers" ]; then
-        log_warning "Deprecated variable detected in ~/.env.manifest.global: MANIFEST_CLI_TIME_SERVERS"
-        log_warning "Use MANIFEST_CLI_TIME_SERVER1..4 instead (legacy value preserved)"
-    fi
+    [ -z "$(get_yaml_value "$config_file" "time.cache_ttl" "")" ] && \
+        set_yaml_value "$config_file" "time.cache_ttl" "120"
+    [ -z "$(get_yaml_value "$config_file" "time.cache_cleanup_period" "")" ] && \
+        set_yaml_value "$config_file" "time.cache_cleanup_period" "3600"
+    [ -z "$(get_yaml_value "$config_file" "time.cache_stale_max_age" "")" ] && \
+        set_yaml_value "$config_file" "time.cache_stale_max_age" "21600"
 }
 
 # Check if upgrade is available
@@ -171,35 +149,37 @@ install_cli() {
         log_success "Examples copied"
     fi
     
-    # Create configuration file
-    local config_file="$install_dir/.env"
+    # Create global YAML configuration file
+    local global_config_dir="$HOME/.manifest-cli"
+    local config_file="$global_config_dir/manifest.config.global.yaml"
+    mkdir -p "$global_config_dir" 2>/dev/null
     if [ ! -f "$config_file" ]; then
         cat > "$config_file" << EOF
-# Manifest CLI Configuration
+# Manifest CLI Global Configuration
 # Generated on $(date)
 
-# Upgrade settings
-MANIFEST_CLI_AUTO_UPDATE=true
-MANIFEST_CLI_UPDATE_COOLDOWN=30
+upgrade:
+  auto_update: true
+  update_cooldown: 30
 
-# Time server settings
-MANIFEST_CLI_TIME_TIMESTAMP=true
-MANIFEST_CLI_TIME_SERVER1="https://www.cloudflare.com/cdn-cgi/trace"
-MANIFEST_CLI_TIME_SERVER2="https://www.google.com/generate_204"
-MANIFEST_CLI_TIME_SERVER3="https://www.apple.com"
-MANIFEST_CLI_TIME_TIMEOUT=5
-MANIFEST_CLI_TIME_RETRIES=2
+time:
+  timestamp: true
+  server1: "https://www.cloudflare.com/cdn-cgi/trace"
+  server2: "https://www.google.com/generate_204"
+  server3: "https://www.apple.com"
+  timeout: 5
+  retries: 2
 
-# Interactive mode
-MANIFEST_CLI_INTERACTIVE_MODE=false
+interactive:
+  mode: false
 
-# Homebrew settings
-MANIFEST_CLI_BREW_OPTION=enabled
-MANIFEST_CLI_BREW_INTERACTIVE=no
-MANIFEST_CLI_TAP_REPO="https://github.com/fidenceio/homebrew-tap.git"
+brew:
+  option: enabled
+  interactive: false
+  tap_repo: "https://github.com/fidenceio/homebrew-tap.git"
 
-# Repository settings
-MANIFEST_CLI_REPO_URL="https://api.github.com/repos/fidenceio/fidenceio.manifest.cli"
+repo:
+  url: "https://api.github.com/repos/fidenceio/fidenceio.manifest.cli"
 EOF
         log_success "Configuration file created"
     fi

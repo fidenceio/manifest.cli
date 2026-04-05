@@ -5,22 +5,22 @@
 # =============================================================================
 #
 # PURPOSE:
-#   Parses and manages fleet configuration from manifest.fleet.yaml and
+#   Parses and manages fleet configuration from manifest.fleet.config.yaml and
 #   environment variables. Provides a unified interface for accessing
 #   fleet settings throughout the application.
 #
 # CONFIGURATION SOURCES (in order of precedence, lowest to highest):
 #   1. Built-in defaults (defined in this module)
-#   2. ~/.env.manifest.global (user-level preferences)
-#   3. <fleet-root>/.env.manifest.local (fleet-level overrides)
-#   4. manifest.fleet.yaml (fleet definition - committed to git)
-#   5. <service>/.env.manifest.local (service-specific overrides)
+#   2. ~/.manifest-cli/manifest.config.global.yaml (user-level preferences)
+#   3. <fleet-root>/manifest.config.local.yaml (fleet-level overrides)
+#   4. manifest.fleet.config.yaml (fleet definition - committed to git)
+#   5. <service>/manifest.config.local.yaml (service-specific overrides)
 #   6. Command-line flags (highest priority)
 #
 # KEY FUNCTIONS:
 #   - load_fleet_config()      : Load and merge all configuration sources
 #   - get_fleet_value()        : Get a configuration value with fallback
-#   - parse_fleet_yaml()       : Parse manifest.fleet.yaml into shell variables
+#   - parse_fleet_yaml()       : Parse manifest.fleet.config.yaml into shell variables
 #   - validate_fleet_config()  : Validate configuration completeness
 #
 # DEPENDENCIES:
@@ -60,17 +60,17 @@ readonly MANIFEST_FLEET_CONFIG_MODULE_NAME="manifest-fleet-config"
 
 # How to determine if current directory is part of a fleet
 # Options: "auto" | "true" | "false"
-#   - "auto"  : Check for manifest.fleet.yaml in current or parent directories
+#   - "auto"  : Check for manifest.fleet.config.yaml in current or parent directories
 #   - "true"  : Force fleet mode, fail if no fleet found
 #   - "false" : Disable fleet mode entirely, operate as single repo
 readonly MANIFEST_FLEET_DEFAULT_MODE="auto"
 
-# Maximum directory depth to search for manifest.fleet.yaml when auto-detecting
+# Maximum directory depth to search for manifest.fleet.config.yaml when auto-detecting
 # Prevents infinite loops in deeply nested structures
 readonly MANIFEST_FLEET_DEFAULT_MAX_SEARCH_DEPTH=10
 
 # Filename for fleet configuration (can be customized per organization)
-readonly MANIFEST_FLEET_DEFAULT_CONFIG_FILENAME="manifest.fleet.yaml"
+readonly MANIFEST_FLEET_DEFAULT_CONFIG_FILENAME="manifest.fleet.config.yaml"
 
 # -----------------------------------------------------------------------------
 # Fleet Versioning Defaults
@@ -207,7 +207,7 @@ readonly MANIFEST_FLEET_DEFAULT_SUBMODULE_UPDATE="checkout"
 # Fleet root directory (absolute path)
 declare -g MANIFEST_FLEET_ROOT=""
 
-# Fleet configuration file path (absolute path to manifest.fleet.yaml)
+# Fleet configuration file path (absolute path to manifest.fleet.config.yaml)
 declare -g MANIFEST_FLEET_CONFIG_FILE=""
 
 # Whether fleet mode is active
@@ -230,326 +230,57 @@ declare -g MANIFEST_FLEET_VERSION=""
 # =============================================================================
 # YAML PARSING FUNCTIONS
 # =============================================================================
-# These functions handle parsing manifest.fleet.yaml into shell variables.
-# We support multiple YAML parsers with graceful fallback.
+# YAML parser functions (detect_yaml_parser, parse_yaml_with_yq,
+# parse_yaml_with_python, parse_yaml_basic, get_yaml_value, set_yaml_value)
+# now live in modules/core/manifest-yaml.sh and are sourced before this module
+# via manifest-core.sh. Fleet-specific code inherits them from core.
 
 # -----------------------------------------------------------------------------
-# Function: detect_yaml_parser
+# Function: get_fleet_services
 # -----------------------------------------------------------------------------
-# Detects which YAML parser is available on the system.
-#
-# RETURNS:
-#   Echoes the parser name: "yq" | "python" | "none"
-#
-# PRIORITY:
-#   1. yq (fastest, purpose-built for YAML)
-#   2. python3 with PyYAML (widely available)
-#   3. none (will use basic grep/sed fallback)
-#
-# EXAMPLE:
-#   parser=$(detect_yaml_parser)
-#   if [[ "$parser" == "none" ]]; then
-#       echo "Warning: No YAML parser found, using basic parsing"
-#   fi
-# -----------------------------------------------------------------------------
-detect_yaml_parser() {
-    # Check for yq (Mike Farah's version, most common)
-    if command -v yq &>/dev/null; then
-        # Verify it's the Go version (not the Python wrapper)
-        if yq --version 2>&1 | grep -q "mikefarah\|version v4"; then
-            echo "yq"
-            return 0
-        fi
-    fi
-
-    # Check for python3 with yaml module
-    if command -v python3 &>/dev/null; then
-        if python3 -c "import yaml" 2>/dev/null; then
-            echo "python"
-            return 0
-        fi
-    fi
-
-    # No parser available
-    echo "none"
-    return 0
-}
-
-# -----------------------------------------------------------------------------
-# Function: parse_yaml_with_yq
-# -----------------------------------------------------------------------------
-# Parses YAML using yq (Mike Farah's Go version).
+# Extracts selected service names from manifest.fleet.tsv.
 #
 # ARGUMENTS:
-#   $1 - Path to YAML file
-#   $2 - YAML path expression (e.g., ".fleet.name")
-#
-# RETURNS:
-#   Echoes the value at the specified path
-#   Returns 1 if path doesn't exist or file is invalid
-#
-# EXAMPLE:
-#   fleet_name=$(parse_yaml_with_yq "manifest.fleet.yaml" ".fleet.name")
-# -----------------------------------------------------------------------------
-parse_yaml_with_yq() {
-    local yaml_file="$1"
-    local yaml_path="$2"
-
-    if [[ ! -f "$yaml_file" ]]; then
-        log_error "YAML file not found: $yaml_file"
-        return 1
-    fi
-
-    # Use yq to extract value
-    # The 'e' command evaluates the expression
-    # We use -r for raw output (no quotes around strings)
-    local value
-    value=$(yq e "$yaml_path // \"\"" "$yaml_file" 2>/dev/null)
-
-    # Check if value is "null" (yq's representation of missing keys)
-    if [[ "$value" == "null" ]] || [[ -z "$value" ]]; then
-        return 1
-    fi
-
-    echo "$value"
-    return 0
-}
-
-# -----------------------------------------------------------------------------
-# Function: parse_yaml_with_python
-# -----------------------------------------------------------------------------
-# Parses YAML using Python's yaml module.
-#
-# ARGUMENTS:
-#   $1 - Path to YAML file
-#   $2 - Dot-notation path (e.g., "fleet.name" - note: no leading dot)
-#
-# RETURNS:
-#   Echoes the value at the specified path
-#   Returns 1 if path doesn't exist or file is invalid
-#
-# EXAMPLE:
-#   fleet_name=$(parse_yaml_with_python "manifest.fleet.yaml" "fleet.name")
-# -----------------------------------------------------------------------------
-parse_yaml_with_python() {
-    local yaml_file="$1"
-    local yaml_path="$2"
-
-    if [[ ! -f "$yaml_file" ]]; then
-        log_error "YAML file not found: $yaml_file"
-        return 1
-    fi
-
-    # Remove leading dot if present (for consistency with yq syntax)
-    yaml_path="${yaml_path#.}"
-
-    # Python script to navigate the YAML structure
-    local value
-    value=$(python3 << EOF
-import yaml
-import sys
-
-try:
-    with open('$yaml_file', 'r') as f:
-        data = yaml.safe_load(f)
-
-    # Navigate the path
-    path_parts = '$yaml_path'.split('.')
-    current = data
-
-    for part in path_parts:
-        if current is None:
-            sys.exit(1)
-        if isinstance(current, dict):
-            current = current.get(part)
-        else:
-            sys.exit(1)
-
-    if current is None:
-        sys.exit(1)
-
-    print(current)
-except Exception as e:
-    sys.exit(1)
-EOF
-    )
-
-    if [[ $? -ne 0 ]] || [[ -z "$value" ]]; then
-        return 1
-    fi
-
-    echo "$value"
-    return 0
-}
-
-# -----------------------------------------------------------------------------
-# Function: parse_yaml_basic
-# -----------------------------------------------------------------------------
-# Basic YAML parsing using grep/sed for simple key-value pairs.
-# This is a fallback when no proper YAML parser is available.
-#
-# LIMITATIONS:
-#   - Only handles simple top-level keys
-#   - Does not support nested structures
-#   - Does not support arrays
-#   - May fail on complex YAML
-#
-# ARGUMENTS:
-#   $1 - Path to YAML file
-#   $2 - Key name (simple, e.g., "name" not "fleet.name")
-#
-# RETURNS:
-#   Echoes the value for the key
-#   Returns 1 if key not found
-#
-# EXAMPLE:
-#   # For YAML: name: "my-fleet"
-#   name=$(parse_yaml_basic "manifest.fleet.yaml" "name")
-# -----------------------------------------------------------------------------
-parse_yaml_basic() {
-    local yaml_file="$1"
-    local key="$2"
-
-    if [[ ! -f "$yaml_file" ]]; then
-        log_error "YAML file not found: $yaml_file"
-        return 1
-    fi
-
-    # Extract the last component of dotted path
-    local simple_key="${key##*.}"
-
-    # Try to find the key and extract its value
-    # This handles: key: value, key: "value", key: 'value'
-    local value
-    value=$(grep -E "^[[:space:]]*${simple_key}:" "$yaml_file" | head -1 | \
-            sed -E 's/^[[:space:]]*[^:]+:[[:space:]]*//' | \
-            sed -E 's/^["'\''](.*)[\"'\'']$/\1/' | \
-            sed -E 's/[[:space:]]*#.*$//' | \
-            sed -E 's/[[:space:]]+$//')
-
-    if [[ -z "$value" ]]; then
-        return 1
-    fi
-
-    echo "$value"
-    return 0
-}
-
-# -----------------------------------------------------------------------------
-# Function: get_yaml_value
-# -----------------------------------------------------------------------------
-# Unified YAML parsing function that automatically selects the best parser.
-#
-# This is the primary function to use for reading YAML values.
-# It handles parser detection, caching, and error handling.
-#
-# ARGUMENTS:
-#   $1 - Path to YAML file
-#   $2 - YAML path (dot notation, e.g., ".fleet.name" or "fleet.name")
-#   $3 - Default value if path not found (optional)
-#
-# RETURNS:
-#   Echoes the value or default
-#   Returns 0 on success, 1 if not found and no default provided
-#
-# EXAMPLE:
-#   fleet_name=$(get_yaml_value "manifest.fleet.yaml" ".fleet.name" "unnamed-fleet")
-# -----------------------------------------------------------------------------
-get_yaml_value() {
-    local yaml_file="$1"
-    local yaml_path="$2"
-    local default_value="${3:-}"
-
-    # Cache the parser detection result
-    if [[ -z "${_MANIFEST_YAML_PARSER:-}" ]]; then
-        _MANIFEST_YAML_PARSER=$(detect_yaml_parser)
-        log_debug "YAML parser detected: $_MANIFEST_YAML_PARSER"
-    fi
-
-    local value=""
-    local found=false
-
-    case "$_MANIFEST_YAML_PARSER" in
-        "yq")
-            if value=$(parse_yaml_with_yq "$yaml_file" "$yaml_path" 2>/dev/null); then
-                found=true
-            fi
-            ;;
-        "python")
-            # Remove leading dot for Python parser
-            local python_path="${yaml_path#.}"
-            if value=$(parse_yaml_with_python "$yaml_file" "$python_path" 2>/dev/null); then
-                found=true
-            fi
-            ;;
-        "none"|*)
-            # Fallback to basic parsing
-            local simple_key="${yaml_path##*.}"
-            if value=$(parse_yaml_basic "$yaml_file" "$simple_key" 2>/dev/null); then
-                found=true
-            fi
-            ;;
-    esac
-
-    if [[ "$found" == "true" ]] && [[ -n "$value" ]]; then
-        echo "$value"
-        return 0
-    elif [[ -n "$default_value" ]]; then
-        echo "$default_value"
-        return 0
-    else
-        return 1
-    fi
-}
-
-# -----------------------------------------------------------------------------
-# Function: get_yaml_services
-# -----------------------------------------------------------------------------
-# Extracts all service names from manifest.fleet.yaml.
-#
-# ARGUMENTS:
-#   $1 - Path to YAML file
+#   $1 - Fleet root directory (containing manifest.fleet.tsv)
 #
 # RETURNS:
 #   Space-separated list of service names
 #
 # EXAMPLE:
-#   services=$(get_yaml_services "manifest.fleet.yaml")
+#   services=$(get_fleet_services "/path/to/fleet")
 #   for service in $services; do
 #       echo "Found service: $service"
 #   done
 # -----------------------------------------------------------------------------
-get_yaml_services() {
-    local yaml_file="$1"
+get_fleet_services() {
+    local fleet_root="$1"
+    local tsv_file="$fleet_root/manifest.fleet.tsv"
 
-    if [[ ! -f "$yaml_file" ]]; then
+    if [[ ! -f "$tsv_file" ]]; then
         return 1
     fi
 
-    case "${_MANIFEST_YAML_PARSER:-$(detect_yaml_parser)}" in
-        "yq")
-            # yq can directly extract keys
-            yq e '.services | keys | .[]' "$yaml_file" 2>/dev/null | tr '\n' ' '
-            ;;
-        "python")
-            python3 << EOF
-import yaml
-try:
-    with open('$yaml_file', 'r') as f:
-        data = yaml.safe_load(f)
-    services = data.get('services', {})
-    if isinstance(services, dict):
-        print(' '.join(services.keys()))
-except:
-    pass
-EOF
-            ;;
-        *)
-            # Basic fallback: look for indented keys under services:
-            # This is fragile but works for simple cases
-            awk '/^services:/{found=1; next} found && /^[a-zA-Z]/{exit} found && /^  [a-zA-Z_-]+:/{gsub(/[: ]/, ""); print}' "$yaml_file" | tr '\n' ' '
-            ;;
-    esac
+    local names=""
+    while IFS=$'\t' read -r selected name path type has_git url branch version; do
+        [[ "$selected" =~ ^#.*$ ]] && continue
+        [[ -z "$selected" ]] && continue
+        [[ "$selected" != "true" ]] && continue
+        if [[ -z "$names" ]]; then
+            names="$name"
+        else
+            names="$names $name"
+        fi
+    done < "$tsv_file"
+
+    echo "$names"
+}
+
+# Backward-compat alias (deprecated — callers should migrate to get_fleet_services)
+get_yaml_services() {
+    local yaml_file="$1"
+    local fleet_root
+    fleet_root=$(dirname "$yaml_file")
+    get_fleet_services "$fleet_root"
 }
 
 # =============================================================================
@@ -560,7 +291,7 @@ EOF
 # -----------------------------------------------------------------------------
 # Function: find_fleet_root
 # -----------------------------------------------------------------------------
-# Searches for manifest.fleet.yaml starting from the given directory
+# Searches for manifest.fleet.config.yaml starting from the given directory
 # and walking up the directory tree.
 #
 # This enables fleet-aware operations from any subdirectory within a fleet.
@@ -570,7 +301,7 @@ EOF
 #   $2 - Maximum depth to search (defaults to MANIFEST_FLEET_DEFAULT_MAX_SEARCH_DEPTH)
 #
 # RETURNS:
-#   Echoes the absolute path to the fleet root (directory containing manifest.fleet.yaml)
+#   Echoes the absolute path to the fleet root (directory containing manifest.fleet.config.yaml)
 #   Returns 1 if no fleet configuration found
 #
 # EXAMPLE:
@@ -679,7 +410,7 @@ is_fleet_mode_enabled() {
     # Handle forced fleet mode
     if [[ "$fleet_mode" == "true" ]]; then
         if [[ -z "$fleet_root" ]]; then
-            log_error "Fleet mode forced but no manifest.fleet.yaml found"
+            log_error "Fleet mode forced but no manifest.fleet.config.yaml found"
             MANIFEST_FLEET_ACTIVE="false"
             return 1
         fi
@@ -766,17 +497,15 @@ load_fleet_config() {
         fi
     fi
 
-    # Parse services
-    MANIFEST_FLEET_SERVICES=$(get_yaml_services "$MANIFEST_FLEET_CONFIG_FILE")
+    # Parse services from manifest.fleet.tsv (the service inventory)
+    MANIFEST_FLEET_SERVICES=$(get_fleet_services "$MANIFEST_FLEET_ROOT")
 
     if [[ -z "$MANIFEST_FLEET_SERVICES" ]]; then
-        log_warning "No services defined in fleet configuration"
+        log_warning "No services found in manifest.fleet.tsv"
     fi
 
-    # Load per-service configuration
-    for service in $MANIFEST_FLEET_SERVICES; do
-        _load_service_config "$service"
-    done
+    # Load per-service configuration from TSV + optional YAML overrides
+    _load_all_service_configs "$MANIFEST_FLEET_ROOT"
 
     local _svc_count=0
     for _ in $MANIFEST_FLEET_SERVICES; do _svc_count=$((_svc_count + 1)); done
@@ -785,13 +514,14 @@ load_fleet_config() {
 }
 
 # -----------------------------------------------------------------------------
-# Function: _load_service_config (internal)
+# Function: _load_all_service_configs (internal)
 # -----------------------------------------------------------------------------
-# Loads configuration for a single service.
-# Called by load_fleet_config() for each service.
+# Loads configuration for all selected services from manifest.fleet.tsv.
+# Reads base properties (path, url, type, branch) from TSV, then applies
+# optional per-service overrides from the YAML config (team, excluded, etc.).
 #
 # ARGUMENTS:
-#   $1 - Service name (key in manifest.fleet.yaml services section)
+#   $1 - Fleet root directory
 #
 # SIDE EFFECTS:
 #   Sets MANIFEST_FLEET_SERVICE_<NAME>_PATH
@@ -801,47 +531,62 @@ load_fleet_config() {
 #   Sets MANIFEST_FLEET_SERVICE_<NAME>_TEAM
 #   Sets MANIFEST_FLEET_SERVICE_<NAME>_EXCLUDED
 #   Sets MANIFEST_FLEET_SERVICE_<NAME>_SUBMODULE
+#   Sets MANIFEST_FLEET_SERVICE_<NAME>_DESCRIPTION
 # -----------------------------------------------------------------------------
-_load_service_config() {
-    local service="$1"
+_load_all_service_configs() {
+    local fleet_root="$1"
+    local tsv_file="$fleet_root/manifest.fleet.tsv"
 
-    # Sanitize service name for use in variable names
-    # Replace hyphens and dots with underscores, convert to uppercase
-    local var_name
-    var_name=$(echo "$service" | tr '[:lower:]-.' '[:upper:]__')
-
-    # Load service properties
-    # Use bracket notation for service name to handle dots in names
-    local svc_prefix=".services[\"${service}\"]"
-    local path url type branch team excluded submodule description
-
-    path=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" "${svc_prefix}.path" "")
-    url=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" "${svc_prefix}.url" "")
-    type=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" "${svc_prefix}.type" "service")
-    branch=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" "${svc_prefix}.branch" "${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}")
-    team=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" "${svc_prefix}.team" "")
-    excluded=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" "${svc_prefix}.exclude_from_fleet_bump" "false")
-    submodule=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" "${svc_prefix}.submodule" "false")
-    description=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" "${svc_prefix}.description" "")
-
-    # Resolve relative path to absolute
-    if [[ -n "$path" ]] && [[ ! "$path" = /* ]]; then
-        path="$MANIFEST_FLEET_ROOT/$path"
+    if [[ ! -f "$tsv_file" ]]; then
+        return 0
     fi
 
-    # Export as shell variables
-    # Using eval here is necessary for dynamic variable names
-    # The values are already validated/sanitized from YAML parsing
-    eval "MANIFEST_FLEET_SERVICE_${var_name}_PATH=\"$path\""
-    eval "MANIFEST_FLEET_SERVICE_${var_name}_URL=\"$url\""
-    eval "MANIFEST_FLEET_SERVICE_${var_name}_TYPE=\"$type\""
-    eval "MANIFEST_FLEET_SERVICE_${var_name}_BRANCH=\"$branch\""
-    eval "MANIFEST_FLEET_SERVICE_${var_name}_TEAM=\"$team\""
-    eval "MANIFEST_FLEET_SERVICE_${var_name}_EXCLUDED=\"$excluded\""
-    eval "MANIFEST_FLEET_SERVICE_${var_name}_SUBMODULE=\"$submodule\""
-    eval "MANIFEST_FLEET_SERVICE_${var_name}_DESCRIPTION=\"$description\""
+    while IFS=$'\t' read -r selected name path type has_git url branch version; do
+        [[ "$selected" =~ ^#.*$ ]] && continue
+        [[ -z "$selected" ]] && continue
+        [[ "$selected" != "true" ]] && continue
 
-    log_debug "Loaded service config: $service (path=$path, type=$type)"
+        # Sanitize service name for variable names
+        local var_name
+        var_name=$(echo "$name" | tr '[:lower:]-.' '[:upper:]__')
+
+        # Resolve relative path to absolute
+        local abs_path="$path"
+        if [[ -n "$path" ]] && [[ ! "$path" = /* ]]; then
+            abs_path="$MANIFEST_FLEET_ROOT/${path#./}"
+        fi
+
+        # Base properties from TSV (inventory)
+        eval "MANIFEST_FLEET_SERVICE_${var_name}_PATH=\"$abs_path\""
+        eval "MANIFEST_FLEET_SERVICE_${var_name}_URL=\"$url\""
+        eval "MANIFEST_FLEET_SERVICE_${var_name}_TYPE=\"$type\""
+        eval "MANIFEST_FLEET_SERVICE_${var_name}_BRANCH=\"${branch:-${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}}\""
+        eval "MANIFEST_FLEET_SERVICE_${var_name}_SUBMODULE=\"false\""
+
+        # Defaults for per-service properties
+        local team="" excluded="false" description=""
+
+        # Per-service config from the repo's own manifest.fleet.config.yaml
+        local svc_config="$abs_path/manifest.fleet.config.yaml"
+        if [[ -f "$svc_config" ]]; then
+            team=$(get_yaml_value "$svc_config" ".team" "" 2>/dev/null) || true
+            excluded=$(get_yaml_value "$svc_config" ".exclude_from_fleet_bump" "false" 2>/dev/null) || true
+            description=$(get_yaml_value "$svc_config" ".description" "" 2>/dev/null) || true
+
+            # Allow per-service overrides of TSV-sourced values
+            local svc_type svc_branch
+            svc_type=$(get_yaml_value "$svc_config" ".type" "" 2>/dev/null) || true
+            svc_branch=$(get_yaml_value "$svc_config" ".branch" "" 2>/dev/null) || true
+            [[ -n "$svc_type" ]] && eval "MANIFEST_FLEET_SERVICE_${var_name}_TYPE=\"$svc_type\""
+            [[ -n "$svc_branch" ]] && eval "MANIFEST_FLEET_SERVICE_${var_name}_BRANCH=\"$svc_branch\""
+        fi
+
+        eval "MANIFEST_FLEET_SERVICE_${var_name}_TEAM=\"$team\""
+        eval "MANIFEST_FLEET_SERVICE_${var_name}_EXCLUDED=\"$excluded\""
+        eval "MANIFEST_FLEET_SERVICE_${var_name}_DESCRIPTION=\"$description\""
+
+        log_debug "Loaded service config: $name (path=$abs_path, type=$type)"
+    done < "$tsv_file"
 }
 
 # =============================================================================
@@ -1151,8 +896,6 @@ list_fleet_services() {
 # =============================================================================
 # Export functions for use by other modules
 
-export -f detect_yaml_parser
-export -f get_yaml_value
 export -f get_yaml_services
 export -f find_fleet_root
 export -f is_fleet_mode_enabled

@@ -1,0 +1,139 @@
+# =============================================================================
+# Manifest CLI — Project Configuration
+# =============================================================================
+# This file is committed to git and shared with your team.
+# It defines how this project is versioned, tagged, documented, and released.
+#
+# Setup:
+#   cp examples/manifest.config.yaml.example manifest.config.yaml
+#
+# Precedence (last wins):
+#   1. Code defaults (set_default_configuration)
+#   2. User global (~/.manifest-cli/manifest.config.global.yaml)
+#   3. This file (manifest.config.yaml) — committed, shared
+#   4. Local overrides (manifest.config.local.yaml) — git-ignored, personal
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Versioning
+# -----------------------------------------------------------------------------
+version:
+  format: "XX.XX.XX"           # XX.XX.XX | XXXX.XXXX.XXXX | YYYY.MM.DD
+  separator: "."
+  components: "major,minor,patch"
+  max_values: "0,0,0"          # 0 = unlimited
+
+  component_position:
+    major: 1
+    minor: 2
+    patch: 3
+    revision: 4
+
+  increment_target:
+    major: 1
+    minor: 2
+    patch: 3
+    revision: 4
+
+  reset_components:
+    major: "2,3,4"
+    minor: "3,4"
+    patch: "4"
+    revision: ""
+
+# -----------------------------------------------------------------------------
+# Git
+# -----------------------------------------------------------------------------
+git:
+  tag_prefix: "v"
+  tag_suffix: ""
+  default_branch: "main"
+  development_branch: "develop"
+  staging_branch: "staging"
+  feature_prefix: "feature/"
+  hotfix_prefix: "hotfix/"
+  release_prefix: "release/"
+  bugfix_prefix: "bugfix/"
+  commit_template: "Release v{version} - {timestamp}"
+  push_strategy: "simple"
+  pull_strategy: "rebase"
+  timeout: 300
+  retries: 3
+
+# -----------------------------------------------------------------------------
+# Documentation
+# -----------------------------------------------------------------------------
+docs:
+  folder: "docs"
+  archive_folder: "docs/zArchive"
+  auto_generate: true
+  historical_limit: 20
+  filename_pattern: "RELEASE_vVERSION.md"
+  template_dir: ""
+
+# -----------------------------------------------------------------------------
+# Trusted Timestamps (HTTPS)
+# -----------------------------------------------------------------------------
+time:
+  server1: "https://www.cloudflare.com/cdn-cgi/trace"
+  server2: "https://www.google.com/generate_204"
+  server3: "https://www.apple.com"
+  server4: ""
+  timeout: 5
+  retries: 3
+  verify: true
+  cache_ttl: 120
+  cache_cleanup_period: 3600
+  cache_stale_max_age: 21600
+  timezone: "UTC"
+
+# -----------------------------------------------------------------------------
+# Files and Directories
+# -----------------------------------------------------------------------------
+files:
+  readme: "README.md"
+  version: "VERSION"
+  gitignore: ".gitignore"
+  archive_dir: "zArchive"
+  git_dir: ".git"
+  modules_dir: "modules"
+  markdown_ext: "*.md"
+
+# -----------------------------------------------------------------------------
+# Installation Paths (manual install only)
+# -----------------------------------------------------------------------------
+install:
+  dir: "~/.manifest-cli"
+  bin_dir: "~/.local/bin"
+  temp_dir: "~/.manifest-cli"
+  temp_list: "temp-files.list"
+
+# -----------------------------------------------------------------------------
+# Auto-Update
+# -----------------------------------------------------------------------------
+auto_update:
+  enabled: true
+  cooldown: 30
+
+# -----------------------------------------------------------------------------
+# Homebrew (macOS)
+# -----------------------------------------------------------------------------
+brew:
+  option: "enabled"
+  interactive: "no"
+  tap_repo: "https://github.com/fidenceio/homebrew-tap.git"
+
+# -----------------------------------------------------------------------------
+# Project Metadata
+# -----------------------------------------------------------------------------
+project:
+  name: ""
+  description: ""
+  organization: ""
+  team: ""
+
+# -----------------------------------------------------------------------------
+# Config
+# -----------------------------------------------------------------------------
+config:
+  schema_version: 2

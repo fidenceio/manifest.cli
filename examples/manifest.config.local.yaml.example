@@ -1,0 +1,45 @@
+# =============================================================================
+# Manifest CLI — Local Overrides (Personal / Per-Machine)
+# =============================================================================
+# This file is git-ignored. It is NOT committed or shared.
+# Use it for settings that differ per developer or per machine.
+#
+# Setup:
+#   cp examples/manifest.config.local.yaml.example manifest.config.local.yaml
+#
+# Only include keys you want to override — everything else comes from
+# manifest.config.yaml (project) or code defaults.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Debugging and Development
+# -----------------------------------------------------------------------------
+# debug:
+#   enabled: true
+#   verbose: true
+#   log_level: "DEBUG"
+#   interactive: true
+
+# -----------------------------------------------------------------------------
+# Timezone
+# -----------------------------------------------------------------------------
+# Override the project/global timezone for your machine.
+# Uses IANA names: America/New_York, Europe/London, Asia/Tokyo, etc.
+#
+# time:
+#   timezone: "America/New_York"
+
+# -----------------------------------------------------------------------------
+# Git (per-developer overrides)
+# -----------------------------------------------------------------------------
+# git:
+#   default_branch: "develop"
+
+# -----------------------------------------------------------------------------
+# Project Metadata
+# -----------------------------------------------------------------------------
+# project:
+#   name: "My Awesome Project"
+#   description: "A revolutionary tool for developers"
+#   organization: "Acme Corp"
+#   team: "Development Team"

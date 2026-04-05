@@ -41,6 +41,9 @@ source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-shared-utils.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-shared-functions.sh"
 # Function registry removed - not compatible with macOS default Bash 3.2
 
+# Source YAML module before config (config depends on YAML functions)
+source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-yaml.sh"
+
 # Now source modules after variables are set
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-config.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-os.sh"
