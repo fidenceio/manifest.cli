@@ -4,7 +4,7 @@
 
 Manifest CLI orchestrates version bumping, documentation generation, Git tagging, remote publishing, and Homebrew distribution — all from a single command. It extends naturally to polyrepo fleets and pull request workflows without sacrificing single-repo simplicity.
 
-**Version** `41.1.0` | **Platform** macOS, Linux, FreeBSD | **Requires** Bash 5+, Git
+**Version** `41.2.0` | **Platform** macOS, Linux, FreeBSD | **Requires** Bash 5+, Git
 
 ---
 
@@ -182,7 +182,7 @@ manifest.cli/
 | [Git Hooks](docs/GIT_HOOKS.md) | Secret protection and hook management |
 | [Configuration Examples](examples/env.manifest.examples.md) | Templates for every use case |
 | [North Star](docs/NORTH_STAR.md) | Strategic direction and priorities |
-| [Release Notes](docs/RELEASE_v41.1.0.md) | Current release details |
+| [Release Notes](docs/RELEASE_v41.2.0.md) | Current release details |
 
 ---
 
