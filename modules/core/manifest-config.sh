@@ -290,8 +290,55 @@ config_doctor() {
         esac
     done
 
+    # --- .env → YAML migration ---
+    local legacy_env="$HOME/.env.manifest.global"
+    if [ ! -f "$config_file" ] && [ -f "$legacy_env" ]; then
+        echo "🩺 Manifest Config Doctor"
+        echo "========================="
+        echo "   Legacy config found: $legacy_env"
+        echo "   YAML config missing: $config_file"
+        echo ""
+        echo "📦 Migrating .env configuration to YAML..."
+
+        if [ "$fix" = "true" ]; then
+            # Parse legacy .env and export vars so write_full_yaml can pick them up
+            while IFS= read -r line || [ -n "$line" ]; do
+                [[ "$line" =~ ^[[:space:]]*# ]] && continue
+                [[ -z "${line// }" ]] && continue
+                if [[ "$line" =~ ^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*= ]]; then
+                    local var_name="${line%%=*}"
+                    local var_value="${line#*=}"
+                    var_value="${var_value#\"}" ; var_value="${var_value%\"}"
+                    var_value="${var_value#\'}" ; var_value="${var_value%\'}"
+                    export "$var_name=$var_value"
+                fi
+            done < "$legacy_env"
+
+            mkdir -p "$(dirname "$config_file")"
+            write_full_yaml "$config_file"
+
+            if [ -f "$config_file" ]; then
+                mv "$legacy_env" "${legacy_env}.migrated"
+                echo ""
+                echo "✅ Migrated to: $config_file"
+                echo "✅ Legacy file renamed to: ${legacy_env}.migrated"
+                echo "   You can safely delete the .migrated file once verified."
+                return 0
+            else
+                echo "❌ Migration failed — YAML file was not created."
+                return 1
+            fi
+        else
+            echo "   Run with --fix to migrate automatically."
+            echo "   Run with --dry-run to preview changes."
+            return 0
+        fi
+    fi
+
     if [ ! -f "$config_file" ]; then
         echo "⚠️  Config file not found: $config_file"
+        echo "   Run 'manifest config setup' to create one, or copy the example:"
+        echo "   mkdir -p ~/.manifest-cli && cp examples/manifest.config.yaml.example $config_file"
         return 1
     fi
 

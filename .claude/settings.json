@@ -13,7 +13,10 @@
       "Read(//^fleet_sync\\\\\\(\\\\\\)/ {p=1} p {print NR\": \"$0} /^}/**)",
       "Read(//^fleet_init\\\\\\(\\\\\\)/ {p=1} p {print NR\": \"$0} /^}/**)",
       "Read(//^fleet_ship\\\\\\(\\\\\\)/ {p=1} p {print NR\": \"$0} /^}/**)",
-      "Read(//^_discover_repos_recursive\\\\\\(\\\\\\)/ {p=1} p {print NR\": \"$0} /^}/**)"
+      "Read(//^_discover_repos_recursive\\\\\\(\\\\\\)/ {p=1} p {print NR\": \"$0} /^}/**)",
+      "Bash(manifest --version)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(MANIFEST_CLI_DEBUG=true manifest ship patch)"
     ]
   }
 }

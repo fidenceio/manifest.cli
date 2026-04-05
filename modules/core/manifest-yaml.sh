@@ -795,7 +795,7 @@ load_yaml_to_env() {
             if [[ -n "$value" ]]; then
                 export "$env_var"="$value"
                 log_debug "load_yaml_to_env: ${env_var}=${value}"
-                (( loaded_count++ ))
+                loaded_count=$((loaded_count + 1))
             fi
         fi
     done
