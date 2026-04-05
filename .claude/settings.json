@@ -19,7 +19,8 @@
       "Bash(MANIFEST_CLI_DEBUG=true manifest ship patch)",
       "Bash(yq e:*)",
       "Bash(echo \"rc=$?\" echo 'time: server1: time.apple.com')",
-      "Bash(echo \"rc=$?\")"
+      "Bash(echo \"rc=$?\")",
+      "Bash(manifest test:*)"
     ]
   }
 }

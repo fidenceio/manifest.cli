@@ -1,7 +1,7 @@
 # Changelog v41.1.0
 
-**Release Date:** 2026-04-05 03:10:41 UTC
-**Release Type:** minor
+**Release Date:** 2026-04-05 03:16:29 UTC
+**Release Type:** patch
 
 ## 🆕 New Features
 
@@ -42,12 +42,15 @@
 
 ## New Features
 
+
 ## Improvements
-Auto-commit before Manifest process [TS: 2026-04-05 03:10:41 UTC]
-Update Homebrew formula to v41.0.1
+Update Homebrew formula to v41.1.0
 
 ## Bug Fixes
 
+
 ## Breaking Changes
 
+
 ## Documentation
+
