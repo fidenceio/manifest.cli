@@ -140,15 +140,13 @@ migrate_user_global_configuration() {
     print_subheader "🧭 Migrating User Configuration (Safe Merge)"
 
     local migrated=0
-    local warnings=0
 
-    local time1 time2 time3 time4 tap_repo time_servers
+    local time1 time2 time3 time4 tap_repo
     time1=$(get_yaml_value "$config_file" "time.server1")
     time2=$(get_yaml_value "$config_file" "time.server2")
     time3=$(get_yaml_value "$config_file" "time.server3")
     time4=$(get_yaml_value "$config_file" "time.server4")
     tap_repo=$(get_yaml_value "$config_file" "brew.tap_repo")
-    time_servers=$(get_yaml_value "$config_file" "time.servers")
 
     # Migrate only known legacy defaults; preserve user custom values.
     if [ "$time1" = "time.apple.com" ] || [ "$time1" = "216.239.35.0" ]; then
@@ -190,20 +188,10 @@ migrate_user_global_configuration() {
         migrated=$((migrated + 1))
     fi
 
-    # Deprecated variable warning (preserve value; user may still rely on it).
-    if [ -n "$time_servers" ]; then
-        print_warning "⚠️  Deprecated variable detected: time.servers"
-        print_warning "   Prefer time.server1..4 (legacy value preserved)"
-        warnings=$((warnings + 1))
-    fi
-
     if [ "$migrated" -gt 0 ]; then
         print_success "✅ Migrated $migrated configuration setting(s) in $config_file"
     else
         print_status "ℹ️  No user config migrations needed"
-    fi
-    if [ "$warnings" -gt 0 ]; then
-        print_warning "⚠️  Found $warnings deprecated configuration setting(s)"
     fi
     echo ""
 }

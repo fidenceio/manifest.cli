@@ -37,6 +37,58 @@ readonly MANIFEST_FLEET_DOCS_MODULE_VERSION="1.0.0"
 readonly MANIFEST_FLEET_DOCS_MODULE_NAME="manifest-fleet-docs"
 
 # =============================================================================
+# UTILITY FUNCTIONS
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Function: _compute_relpath (internal)
+# -----------------------------------------------------------------------------
+# Computes a relative path from one directory to another in pure Bash.
+# Both arguments must be absolute paths.
+#
+# ARGUMENTS:
+#   $1 - Target path (where we want to point)
+#   $2 - Base path (where we're coming from)
+#
+# RETURNS:
+#   Echoes the relative path from $2 to $1.
+# -----------------------------------------------------------------------------
+_compute_relpath() {
+    local target="$1"
+    local base="$2"
+
+    # Ensure trailing slashes are stripped
+    target="${target%/}"
+    base="${base%/}"
+
+    # Split into arrays
+    local IFS='/'
+    read -ra target_parts <<< "$target"
+    read -ra base_parts <<< "$base"
+
+    # Find common prefix length
+    local common=0
+    while [[ $common -lt ${#target_parts[@]} ]] && [[ $common -lt ${#base_parts[@]} ]] \
+          && [[ "${target_parts[$common]}" == "${base_parts[$common]}" ]]; do
+        ((common++))
+    done
+
+    # Build relative path: go up from base, then down to target
+    local rel=""
+    local i
+    for (( i=common; i<${#base_parts[@]}; i++ )); do
+        rel="${rel}../"
+    done
+    for (( i=common; i<${#target_parts[@]}; i++ )); do
+        rel="${rel}${target_parts[$i]}/"
+    done
+
+    # Strip trailing slash (but return "." for empty result)
+    rel="${rel%/}"
+    printf '%s' "${rel:-.}"
+}
+
+# =============================================================================
 # STRATEGY RESOLUTION
 # =============================================================================
 
@@ -318,7 +370,7 @@ EOF
 
         # Compute relative path from fleet docs dir to service docs
         local rel_path
-        rel_path=$(python3 -c "import os.path; print(os.path.relpath('$path/$per_service_folder', '$fleet_docs_dir'))" 2>/dev/null || echo "$path/$per_service_folder")
+        rel_path=$(_compute_relpath "$path/$per_service_folder" "$fleet_docs_dir")
 
         echo "| ${service} | v${version} | ${type} | [docs](${rel_path}/) |" >> "$index_file"
     done

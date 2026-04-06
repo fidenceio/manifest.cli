@@ -557,11 +557,11 @@ _load_all_service_configs() {
         fi
 
         # Base properties from TSV (inventory)
-        eval "MANIFEST_FLEET_SERVICE_${var_name}_PATH=\"$abs_path\""
-        eval "MANIFEST_FLEET_SERVICE_${var_name}_URL=\"$url\""
-        eval "MANIFEST_FLEET_SERVICE_${var_name}_TYPE=\"$type\""
-        eval "MANIFEST_FLEET_SERVICE_${var_name}_BRANCH=\"${branch:-${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}}\""
-        eval "MANIFEST_FLEET_SERVICE_${var_name}_SUBMODULE=\"false\""
+        printf -v "MANIFEST_FLEET_SERVICE_${var_name}_PATH" '%s' "$abs_path"
+        printf -v "MANIFEST_FLEET_SERVICE_${var_name}_URL" '%s' "$url"
+        printf -v "MANIFEST_FLEET_SERVICE_${var_name}_TYPE" '%s' "$type"
+        printf -v "MANIFEST_FLEET_SERVICE_${var_name}_BRANCH" '%s' "${branch:-${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}}"
+        printf -v "MANIFEST_FLEET_SERVICE_${var_name}_SUBMODULE" '%s' "false"
 
         # Defaults for per-service properties
         local team="" excluded="false" description=""
@@ -577,13 +577,13 @@ _load_all_service_configs() {
             local svc_type svc_branch
             svc_type=$(get_yaml_value "$svc_config" ".type" "" 2>/dev/null) || true
             svc_branch=$(get_yaml_value "$svc_config" ".branch" "" 2>/dev/null) || true
-            [[ -n "$svc_type" ]] && eval "MANIFEST_FLEET_SERVICE_${var_name}_TYPE=\"$svc_type\""
-            [[ -n "$svc_branch" ]] && eval "MANIFEST_FLEET_SERVICE_${var_name}_BRANCH=\"$svc_branch\""
+            [[ -n "$svc_type" ]] && printf -v "MANIFEST_FLEET_SERVICE_${var_name}_TYPE" '%s' "$svc_type"
+            [[ -n "$svc_branch" ]] && printf -v "MANIFEST_FLEET_SERVICE_${var_name}_BRANCH" '%s' "$svc_branch"
         fi
 
-        eval "MANIFEST_FLEET_SERVICE_${var_name}_TEAM=\"$team\""
-        eval "MANIFEST_FLEET_SERVICE_${var_name}_EXCLUDED=\"$excluded\""
-        eval "MANIFEST_FLEET_SERVICE_${var_name}_DESCRIPTION=\"$description\""
+        printf -v "MANIFEST_FLEET_SERVICE_${var_name}_TEAM" '%s' "$team"
+        printf -v "MANIFEST_FLEET_SERVICE_${var_name}_EXCLUDED" '%s' "$excluded"
+        printf -v "MANIFEST_FLEET_SERVICE_${var_name}_DESCRIPTION" '%s' "$description"
 
         log_debug "Loaded service config: $name (path=$abs_path, type=$type)"
     done < "$tsv_file"

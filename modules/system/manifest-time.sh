@@ -157,8 +157,7 @@ _manifest_time_write_cache_data() {
     } > "$cache_file" 2>/dev/null || return 1
 }
 
-# Build effective HTTPS time server list from canonical variables (SERVER1..SERVER4),
-# with fallback support for legacy MANIFEST_CLI_TIME_SERVERS.
+# Build effective HTTPS time server list from canonical variables (SERVER1..SERVER4).
 _manifest_time_effective_servers() {
     local servers=()
 
@@ -169,19 +168,6 @@ _manifest_time_effective_servers() {
             servers+=("$server_value")
         fi
     done
-
-    if [ ${#servers[@]} -eq 0 ] && [ -n "${MANIFEST_CLI_TIME_SERVERS:-}" ]; then
-        local legacy_servers=()
-        IFS=',' read -r -a legacy_servers <<< "${MANIFEST_CLI_TIME_SERVERS}"
-        local server=""
-        for server in "${legacy_servers[@]}"; do
-            # Trim leading/trailing spaces around comma-separated values.
-            server="$(echo "$server" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-            if [ -n "$server" ]; then
-                servers+=("$server")
-            fi
-        done
-    fi
 
     if [ ${#servers[@]} -eq 0 ]; then
         # Default HTTPS time endpoints (port 443, not blocked by firewalls).

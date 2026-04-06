@@ -100,7 +100,7 @@ time:
   server3: pool.ntp.org
   server4: time.nist.gov
 
-homebrew:
+brew:
   tap_repo: https://github.com/fidenceio/fidenceio-homebrew-tap.git
 YAML
 
@@ -559,7 +559,7 @@ _test_config_migration_detection() {
     fi
 
     _yaml_test_start "detect_issues finds legacy homebrew tap"
-    if echo "$issues" | grep -q "legacy|homebrew.tap_repo"; then
+    if echo "$issues" | grep -q "legacy|brew.tap_repo"; then
         _yaml_test_pass "detect_issues finds legacy homebrew tap"
     else
         _yaml_test_fail "detect_issues finds legacy homebrew tap" "output: $issues"

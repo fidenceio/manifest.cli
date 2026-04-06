@@ -387,14 +387,21 @@ _fleet_status_json() {
         s="${s//\"/\\\"}"
         s="${s//$'\n'/\\n}"
         s="${s//$'\t'/\\t}"
-        echo "$s"
+        s="${s//$'\r'/\\r}"
+        s="${s//$'\b'/\\b}"
+        s="${s//$'\f'/\\f}"
+        printf '%s' "$s"
     }
 
     echo "{"
     echo "  \"fleet\": {"
     echo "    \"name\": \"$(_json_escape "$MANIFEST_FLEET_NAME")\","
     echo "    \"root\": \"$(_json_escape "$MANIFEST_FLEET_ROOT")\","
-    echo "    \"version\": \"${MANIFEST_FLEET_VERSION:-null}\","
+    if [[ -n "${MANIFEST_FLEET_VERSION:-}" ]]; then
+        echo "    \"version\": \"$(_json_escape "$MANIFEST_FLEET_VERSION")\","
+    else
+        echo "    \"version\": null,"
+    fi
     echo "    \"versioning\": \"$MANIFEST_FLEET_VERSIONING\""
     echo "  },"
     echo "  \"services\": ["
@@ -934,34 +941,125 @@ fleet_sync() {
     echo "╚══════════════════════════════════════════════════════════════════════╝"
     echo ""
 
-    local total=0
-    local cloned=0
-    local pulled=0
-    local failed=0
+    if [[ "$parallel" == "true" ]]; then
+        _fleet_sync_parallel "$clone_only" "$pull_only"
+    else
+        _fleet_sync_sequential "$clone_only" "$pull_only"
+    fi
+}
+
+# -----------------------------------------------------------------------------
+# Function: _fleet_sync_service (internal)
+# -----------------------------------------------------------------------------
+# Syncs a single fleet service (clone or pull). Writes result to a status file.
+#
+# ARGUMENTS:
+#   $1 - service name
+#   $2 - clone_only flag
+#   $3 - pull_only flag
+#   $4 - result directory (for parallel mode status tracking)
+# -----------------------------------------------------------------------------
+_fleet_sync_service() {
+    local service="$1"
+    local clone_only="$2"
+    local pull_only="$3"
+    local result_dir="$4"
+
+    local path url branch is_submodule
+    path=$(get_fleet_service_property "$service" "path")
+    url=$(get_fleet_service_property "$service" "url")
+    branch=$(get_fleet_service_property "$service" "branch" "main")
+    is_submodule=$(get_fleet_service_property "$service" "submodule" "false")
+
+    if [[ ! -d "$path" ]]; then
+        # Need to clone
+        if [[ "$pull_only" == "true" ]]; then
+            echo "  $service: ⏭ Skipping (pull-only mode)"
+            [[ -n "$result_dir" ]] && echo "skip" > "$result_dir/$service"
+            return 0
+        fi
+
+        if [[ -z "$url" ]]; then
+            echo "  $service: ✗ Cannot clone: no URL specified"
+            [[ -n "$result_dir" ]] && echo "fail" > "$result_dir/$service"
+            return 1
+        fi
+
+        # Validate path is within fleet root (prevent path traversal)
+        local abs_clone_path
+        abs_clone_path=$(cd "$MANIFEST_FLEET_ROOT" 2>/dev/null && mkdir -p "$(dirname "$path")" 2>/dev/null && cd "$(dirname "$path")" && echo "$(pwd)/$(basename "$path")")
+        if [[ -z "$abs_clone_path" ]] || [[ "$abs_clone_path" != "$MANIFEST_FLEET_ROOT"* ]]; then
+            echo "  $service: ✗ Invalid path (outside fleet root): $path"
+            [[ -n "$result_dir" ]] && echo "fail" > "$result_dir/$service"
+            return 1
+        fi
+
+        echo "  $service: → Cloning from $url..."
+        if git clone --branch "$branch" "$url" "$path" 2>&1 | tail -1; then
+            echo "  $service: ✓ Cloned successfully"
+            [[ -n "$result_dir" ]] && echo "clone" > "$result_dir/$service"
+            return 0
+        else
+            echo "  $service: ✗ Clone failed"
+            [[ -n "$result_dir" ]] && echo "fail" > "$result_dir/$service"
+            return 1
+        fi
+    else
+        # Already exists - pull
+        if [[ "$clone_only" == "true" ]]; then
+            echo "  $service: ⏭ Skipping (clone-only mode)"
+            [[ -n "$result_dir" ]] && echo "skip" > "$result_dir/$service"
+            return 0
+        fi
+
+        if [[ ! -d "$path/.git" ]] && [[ "$is_submodule" != "true" ]]; then
+            echo "  $service: ⚠ Not a git repository"
+            [[ -n "$result_dir" ]] && echo "skip" > "$result_dir/$service"
+            return 0
+        fi
+
+        local pull_output
+        if pull_output=$(git -C "$path" pull --rebase 2>&1); then
+            echo "  $service: ✓ Updated"
+            [[ -n "$result_dir" ]] && echo "pull" > "$result_dir/$service"
+            return 0
+        else
+            echo "  $service: ⚠ Pull failed: $(echo "$pull_output" | tail -1)"
+            [[ -n "$result_dir" ]] && echo "fail" > "$result_dir/$service"
+            return 1
+        fi
+    fi
+}
+
+# -----------------------------------------------------------------------------
+# Function: _fleet_sync_sequential (internal)
+# -----------------------------------------------------------------------------
+_fleet_sync_sequential() {
+    local clone_only="$1"
+    local pull_only="$2"
+
+    local total=0 cloned=0 pulled=0 failed=0
 
     for service in $MANIFEST_FLEET_SERVICES; do
         ((total++))
-        local path=$(get_fleet_service_property "$service" "path")
-        local url=$(get_fleet_service_property "$service" "url")
-        local branch=$(get_fleet_service_property "$service" "branch" "main")
-        local is_submodule=$(get_fleet_service_property "$service" "submodule" "false")
-
         echo "[$total] $service"
 
+        local path url branch is_submodule
+        path=$(get_fleet_service_property "$service" "path")
+        url=$(get_fleet_service_property "$service" "url")
+        branch=$(get_fleet_service_property "$service" "branch" "main")
+        is_submodule=$(get_fleet_service_property "$service" "submodule" "false")
+
         if [[ ! -d "$path" ]]; then
-            # Need to clone
             if [[ "$pull_only" == "true" ]]; then
-                echo "    ⏭ Skipping (clone-only mode)"
+                echo "    ⏭ Skipping (pull-only mode)"
                 continue
             fi
-
             if [[ -z "$url" ]]; then
                 echo "    ✗ Cannot clone: no URL specified"
                 ((failed++))
                 continue
             fi
-
-            # Validate path is within fleet root (prevent path traversal)
             local abs_clone_path
             abs_clone_path=$(cd "$MANIFEST_FLEET_ROOT" 2>/dev/null && mkdir -p "$(dirname "$path")" 2>/dev/null && cd "$(dirname "$path")" && echo "$(pwd)/$(basename "$path")")
             if [[ -z "$abs_clone_path" ]] || [[ "$abs_clone_path" != "$MANIFEST_FLEET_ROOT"* ]]; then
@@ -969,7 +1067,6 @@ fleet_sync() {
                 ((failed++))
                 continue
             fi
-
             echo "    → Cloning from $url..."
             if git clone --branch "$branch" "$url" "$path" 2>&1 | tail -1; then
                 echo "    ✓ Cloned successfully"
@@ -979,17 +1076,14 @@ fleet_sync() {
                 ((failed++))
             fi
         else
-            # Already exists - pull
             if [[ "$clone_only" == "true" ]]; then
-                echo "    ⏭ Skipping (pull-only mode)"
+                echo "    ⏭ Skipping (clone-only mode)"
                 continue
             fi
-
             if [[ ! -d "$path/.git" ]] && [[ "$is_submodule" != "true" ]]; then
                 echo "    ⚠ Not a git repository"
                 continue
             fi
-
             echo "    → Pulling latest..."
             local pull_output
             if pull_output=$(git -C "$path" pull --rebase 2>&1); then
@@ -1001,6 +1095,60 @@ fleet_sync() {
             fi
         fi
     done
+
+    echo ""
+    echo "────────────────────────────────────────────────────────────────────────"
+    echo "Summary: $cloned cloned, $pulled pulled, $failed failed (of $total total)"
+    echo ""
+}
+
+# -----------------------------------------------------------------------------
+# Function: _fleet_sync_parallel (internal)
+# -----------------------------------------------------------------------------
+_fleet_sync_parallel() {
+    local clone_only="$1"
+    local pull_only="$2"
+
+    echo "Running in parallel mode..."
+    echo ""
+
+    local result_dir
+    result_dir=$(mktemp -d)
+
+    local pids=()
+    local pid_services=()
+
+    for service in $MANIFEST_FLEET_SERVICES; do
+        _fleet_sync_service "$service" "$clone_only" "$pull_only" "$result_dir" &
+        pids+=($!)
+        pid_services+=("$service")
+    done
+
+    # Wait for all background jobs
+    local any_failed=false
+    for i in "${!pids[@]}"; do
+        if ! wait "${pids[$i]}"; then
+            any_failed=true
+        fi
+    done
+
+    # Tally results from status files
+    local total=0 cloned=0 pulled=0 failed=0
+    for service in $MANIFEST_FLEET_SERVICES; do
+        ((total++))
+        local result_file="$result_dir/$service"
+        if [[ -f "$result_file" ]]; then
+            local result
+            result=$(<"$result_file")
+            case "$result" in
+                clone) ((cloned++)) ;;
+                pull)  ((pulled++)) ;;
+                fail)  ((failed++)) ;;
+            esac
+        fi
+    done
+
+    rm -rf "$result_dir"
 
     echo ""
     echo "────────────────────────────────────────────────────────────────────────"
@@ -1237,6 +1385,78 @@ EOF
 }
 
 # =============================================================================
+# COMMAND: fleet prep
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Function: fleet_prep
+# -----------------------------------------------------------------------------
+# Runs manifest prep across all fleet services. This is the coordinated version
+# bump step that can be invoked standalone or as part of fleet ship.
+#
+# ARGUMENTS:
+#   $1 - Increment type: patch|minor|major|revision (default: patch)
+#
+# EXAMPLE:
+#   manifest fleet prep
+#   manifest fleet prep minor
+# -----------------------------------------------------------------------------
+# Internal prep runner (no banner — called by fleet_ship and fleet_prep)
+_fleet_prep_run() {
+    local increment_type="${1:-patch}"
+
+    local any_failures=0
+    for service in $MANIFEST_FLEET_SERVICES; do
+        local path
+        path=$(get_fleet_service_property "$service" "path")
+        if [ ! -d "$path/.git" ]; then
+            echo "  - $service: skipped (not a git repo)"
+            continue
+        fi
+        (
+            cd "$path" || exit 1
+            manifest_prep "$increment_type" "false"
+        ) || {
+            echo "  - $service: ❌ prep failed"
+            any_failures=1
+        }
+    done
+
+    if [ "$any_failures" -eq 1 ]; then
+        log_error "Fleet prep failed for one or more services."
+        return 1
+    fi
+}
+
+fleet_prep() {
+    if ! _fleet_require_initialized "prep"; then
+        return 1
+    fi
+
+    local increment_type="${1:-patch}"
+
+    if [[ ! "$increment_type" =~ ^(patch|minor|major|revision)$ ]]; then
+        log_error "Invalid increment type: '$increment_type' (expected patch|minor|major|revision)"
+        return 1
+    fi
+
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════════════╗"
+    echo "║                         MANIFEST FLEET PREP                          ║"
+    echo "╚══════════════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo "Running prep ($increment_type) across fleet services..."
+
+    if ! _fleet_prep_run "$increment_type"; then
+        return 1
+    fi
+
+    echo ""
+    echo "✓ Fleet prep complete ($increment_type)"
+    echo ""
+}
+
+# =============================================================================
 # COMMAND: fleet ship
 # =============================================================================
 
@@ -1334,23 +1554,7 @@ EOF
 
     if [ "$run_prep" = "true" ]; then
         echo "🔧 Step 1/$total_steps: Running prep across fleet services..."
-        for service in $MANIFEST_FLEET_SERVICES; do
-            local path
-            path=$(get_fleet_service_property "$service" "path")
-            if [ ! -d "$path/.git" ]; then
-                echo "  - $service: skipped (not a git repo)"
-                continue
-            fi
-            (
-                cd "$path" || exit 1
-                manifest_prep "$increment_type" "false"
-            ) || {
-                echo "  - $service: ❌ prep failed"
-                any_failures=1
-            }
-        done
-        if [ "$any_failures" -eq 1 ]; then
-            log_error "Fleet prep failed for one or more services."
+        if ! _fleet_prep_run "$increment_type"; then
             return 1
         fi
     else
@@ -1641,12 +1845,9 @@ fleet_main() {
             fi
             ;;
         prep)
-            # TODO: Implement coordinated version bump
-            log_warning "fleet prep is not yet implemented"
-            echo "For now, run 'manifest prep' in each service directory"
+            fleet_prep "$@"
             ;;
         docs)
-            shift
             fleet_docs_dispatch "$@"
             ;;
         help|--help|-h)

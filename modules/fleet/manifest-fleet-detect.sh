@@ -21,6 +21,10 @@
 #   2. DIFF         : Compare discovered repos against manifest.fleet.config.yaml
 #   3. SUGGEST      : Generate additions for manifest.fleet.config.yaml
 #
+# REQUIREMENTS:
+#   Bash 5.0+ (enforced by manifest-cli-wrapper.sh and install-cli.sh).
+#   Uses namerefs (local -n) and associative arrays (declare -A).
+#
 # USAGE:
 #   source manifest-fleet-detect.sh
 #   discovered=$(discover_fleet_repos "/path/to/workspace")

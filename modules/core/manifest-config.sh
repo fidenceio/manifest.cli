@@ -12,13 +12,6 @@ MANIFEST_CLI_GLOBAL_CONFIG="$HOME/.manifest-cli/manifest.config.global.yaml"
 
 MANIFEST_CLI_CONFIG_SCHEMA_VERSION_CURRENT=2
 
-# Configuration validation
-validate_config() {
-    # Temporarily disable validation to debug time server issue
-    log_debug "Configuration validation skipped for debugging"
-    return 0
-}
-
 _manifest_config_warn() {
     local message="$1"
     if command -v log_warning >/dev/null 2>&1; then
@@ -113,11 +106,6 @@ warn_deprecated_configuration() {
 
     local warned=0
 
-    if [ -n "${MANIFEST_CLI_TIME_SERVERS:-}" ]; then
-        _manifest_config_warn "Deprecated config detected: time.servers (MANIFEST_CLI_TIME_SERVERS). Use time.server1..4 instead."
-        warned=1
-    fi
-
     if [ "${MANIFEST_CLI_TIME_SERVER1:-}" = "time.apple.com" ] || \
        [ "${MANIFEST_CLI_TIME_SERVER2:-}" = "time.google.com" ] || \
        [ "${MANIFEST_CLI_TIME_SERVER3:-}" = "pool.ntp.org" ] || \
@@ -129,7 +117,7 @@ warn_deprecated_configuration() {
     fi
 
     if [ "${MANIFEST_CLI_TAP_REPO:-}" = "https://github.com/fidenceio/fidenceio-homebrew-tap.git" ]; then
-        _manifest_config_warn "Legacy homebrew.tap_repo detected. Recommended value: https://github.com/fidenceio/homebrew-tap.git"
+        _manifest_config_warn "Legacy brew.tap_repo detected. Recommended value: https://github.com/fidenceio/homebrew-tap.git"
         warned=1
     fi
 
@@ -142,13 +130,12 @@ _manifest_config_detect_issues() {
     local config_file="$1"
     [ -f "$config_file" ] || return 1
 
-    local ts1 ts2 ts3 ts4 tap_repo time_servers
+    local ts1 ts2 ts3 ts4 tap_repo
     ts1=$(get_yaml_value "$config_file" ".time.server1" "")
     ts2=$(get_yaml_value "$config_file" ".time.server2" "")
     ts3=$(get_yaml_value "$config_file" ".time.server3" "")
     ts4=$(get_yaml_value "$config_file" ".time.server4" "")
-    tap_repo=$(get_yaml_value "$config_file" ".homebrew.tap_repo" "")
-    time_servers=$(get_yaml_value "$config_file" ".time.servers" "")
+    tap_repo=$(get_yaml_value "$config_file" ".brew.tap_repo" "")
 
     if [ "$ts1" = "time.apple.com" ] || [ "$ts1" = "216.239.35.0" ]; then
         echo "legacy|time.server1|$ts1|https://www.cloudflare.com/cdn-cgi/trace"
@@ -163,11 +150,7 @@ _manifest_config_detect_issues() {
         echo "legacy|time.server4|time.nist.gov|"
     fi
     if [ "$tap_repo" = "https://github.com/fidenceio/fidenceio-homebrew-tap.git" ]; then
-        echo "legacy|homebrew.tap_repo|https://github.com/fidenceio/fidenceio-homebrew-tap.git|https://github.com/fidenceio/homebrew-tap.git"
-    fi
-
-    if [ -n "$time_servers" ]; then
-        echo "deprecated|time.servers|$time_servers|time.server1..4"
+        echo "legacy|brew.tap_repo|https://github.com/fidenceio/fidenceio-homebrew-tap.git|https://github.com/fidenceio/homebrew-tap.git"
     fi
 
     local cache_ttl cache_cleanup cache_stale schema_ver
@@ -604,8 +587,6 @@ set_default_configuration() {
     export MANIFEST_CLI_PR_PROFILE="${MANIFEST_CLI_PR_PROFILE:-solo}"
     export MANIFEST_CLI_PR_ENFORCE_READY="${MANIFEST_CLI_PR_ENFORCE_READY:-true}"
 
-    # Validate configuration after setting defaults
-    # validate_config
 }
 
 # Get configuration value with fallback
@@ -989,9 +970,6 @@ show_configuration() {
     echo "   Server 2: ${MANIFEST_CLI_TIME_SERVER2}"
     echo "   Server 3: ${MANIFEST_CLI_TIME_SERVER3}"
     echo "   Server 4: ${MANIFEST_CLI_TIME_SERVER4}"
-    if [ -n "${MANIFEST_CLI_TIME_SERVERS:-}" ]; then
-        echo "   Legacy Server List: ${MANIFEST_CLI_TIME_SERVERS}"
-    fi
     echo "   Timeout: ${MANIFEST_CLI_TIME_TIMEOUT} seconds"
     echo "   Retries: ${MANIFEST_CLI_TIME_RETRIES} attempts"
     echo "   Verify: ${MANIFEST_CLI_TIME_VERIFY}"
