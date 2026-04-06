@@ -722,6 +722,10 @@ main() {
             display_help
             ;;
 
+        "version"|"-version"|"--version"|"-v"|"-V")
+            display_version
+            ;;
+
         *)
             log_error "Unknown command: $command"
             echo ""
@@ -767,8 +771,26 @@ Usage: manifest <command> [scope] [options]
   Recovery:
     revert                              Roll back to a previous version
 
+  Info:
+    version                             Show CLI version
+    help                                Show this help message
+
 Run 'manifest <command> --help' for details on any command.
 EOF
+}
+
+# Display version
+display_version() {
+    local version=""
+    if [ -f "$PROJECT_ROOT/VERSION" ]; then
+        version=$(cat "$PROJECT_ROOT/VERSION" 2>/dev/null)
+    fi
+    if [ -n "$version" ]; then
+        echo "Manifest CLI v${version}"
+    else
+        log_error "Could not read VERSION file"
+        return 1
+    fi
 }
 
 # Test module is sourced at the top level

@@ -281,14 +281,22 @@ manifest_prep_workflow() {
             rm -f "${root_changelog}-e"
         fi
         git add CHANGELOG.md
-        git commit -m "Update main CHANGELOG.md to v$new_version"
-        echo "✅ Main CHANGELOG.md updated for GitHub"
+        if git diff --cached --quiet -- CHANGELOG.md; then
+            echo "✅ Main CHANGELOG.md already up to date"
+        else
+            git commit -m "Update main CHANGELOG.md to v$new_version"
+            echo "✅ Main CHANGELOG.md updated for GitHub"
+        fi
     elif [[ -f "$latest_changelog" ]]; then
         # Root CHANGELOG is a template or missing — replace with latest version changelog
         cp "$latest_changelog" "$root_changelog"
         git add CHANGELOG.md
-        git commit -m "Update main CHANGELOG.md to v$new_version"
-        echo "✅ Main CHANGELOG.md updated for GitHub"
+        if git diff --cached --quiet -- CHANGELOG.md; then
+            echo "✅ Main CHANGELOG.md already up to date"
+        else
+            git commit -m "Update main CHANGELOG.md to v$new_version"
+            echo "✅ Main CHANGELOG.md updated for GitHub"
+        fi
     else
         echo "⚠️  Latest changelog not found: $latest_changelog"
     fi
@@ -357,6 +365,22 @@ manifest_prep_workflow() {
             echo "🍺 Skipping Homebrew formula update for non-canonical repo: ${origin_slug}"
             echo ""
         fi
+        # Upgrade local Manifest CLI installation to the just-published version
+        echo "🔄 Upgrading local Manifest CLI installation..."
+        if command -v brew &>/dev/null; then
+            if brew update &>/dev/null && brew upgrade manifest 2>&1; then
+                echo "✅ Local installation upgraded to v$new_version via Homebrew"
+            else
+                echo "⚠️  Homebrew upgrade did not complete — try 'brew update && brew upgrade manifest' manually"
+            fi
+        else
+            if manifest upgrade --force 2>&1; then
+                echo "✅ Local installation upgraded to v$new_version"
+            else
+                echo "⚠️  Local upgrade did not complete — try 'manifest upgrade --force' manually"
+            fi
+        fi
+        echo ""
     else
         echo "🧰 Prep mode complete: skipped tag/push/Homebrew publish steps."
         echo ""
