@@ -354,7 +354,7 @@ main() {
     # =========================================================================
     case "$command" in
         # Commands that do NOT require a Git repository
-        "help"|"-help"|"--help"|"-h"|"uninstall"|"reinstall"|"update"|"upgrade"|"config")
+        "help"|"-help"|"--help"|"-h"|"version"|"-version"|"--version"|"-v"|"-V"|"uninstall"|"reinstall"|"update"|"upgrade"|"config")
             case "$command" in
                 "config")
                     load_configuration "$(pwd)" "false"
