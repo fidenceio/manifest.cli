@@ -12,10 +12,8 @@
 #   - manifest-shared-utils.sh (for log_debug, log_error, log_warning)
 #   - bash 5+ (for associative arrays with declare -gA)
 #
-# External tool support (in order of preference):
-#   - yq (Mike Farah's Go version, v4+)
-#   - python3 with PyYAML (yaml.safe_load)
-#   - grep/sed fallback (read-only, top-level keys only)
+# External tool support:
+#   - yq (Mike Farah's Go version, v4+) — hard dependency
 
 # Guard: provide no-op log functions if shared-utils not yet sourced
 if ! command -v log_debug &>/dev/null; then
@@ -231,32 +229,28 @@ env_var_to_yaml_path() {
 # -----------------------------------------------------------------------------
 # Function: detect_yaml_parser
 # -----------------------------------------------------------------------------
-# Detects the best available YAML parser on the system.
+# Validates that yq (Mike Farah's Go version, v4+) is available.
+# yq is a hard dependency — installation enforces this via install-cli.sh
+# and the Homebrew formula.
 #
 # RETURNS:
-#   Echoes "yq", "python", or "none"
+#   Echoes "yq" on success
+#   Returns 1 if yq is missing or wrong version
 # -----------------------------------------------------------------------------
 detect_yaml_parser() {
-    # Check for yq (Mike Farah's version, most common)
     if command -v yq &>/dev/null; then
-        # Verify it's the Go version (not the Python wrapper)
         if yq --version 2>&1 | grep -q "mikefarah\|version v4"; then
             echo "yq"
             return 0
         fi
+        log_error "yq is installed but is not Mike Farah's Go version (v4+)."
+        log_error "Install the correct version: https://github.com/mikefarah/yq#install"
+        return 1
     fi
 
-    # Check for python3 with yaml module
-    if command -v python3 &>/dev/null; then
-        if python3 -c "import yaml" 2>/dev/null; then
-            echo "python"
-            return 0
-        fi
-    fi
-
-    # No parser available
-    echo "none"
-    return 0
+    log_error "yq is not installed. Manifest CLI requires yq (v4+) for YAML configuration."
+    log_error "Install: brew install yq  OR  https://github.com/mikefarah/yq#install"
+    return 1
 }
 
 # -----------------------------------------------------------------------------
@@ -300,129 +294,6 @@ parse_yaml_with_yq() {
 }
 
 # -----------------------------------------------------------------------------
-# Function: parse_yaml_with_python
-# -----------------------------------------------------------------------------
-# Parses YAML using Python's yaml module.
-#
-# ARGUMENTS:
-#   $1 - Path to YAML file
-#   $2 - Dot-notation path (e.g., "fleet.name" — note: no leading dot)
-#
-# RETURNS:
-#   Echoes the value at the specified path
-#   Returns 1 if path doesn't exist or file is invalid
-#
-# EXAMPLE:
-#   value=$(parse_yaml_with_python "config.yaml" "git.tag_prefix")
-# -----------------------------------------------------------------------------
-parse_yaml_with_python() {
-    local yaml_file="$1"
-    local yaml_path="$2"
-
-    if [[ ! -f "$yaml_file" ]]; then
-        log_error "YAML file not found: $yaml_file"
-        return 1
-    fi
-
-    # Remove leading dot if present (for consistency with yq syntax)
-    yaml_path="${yaml_path#.}"
-
-    # Python script to navigate the YAML structure
-    # Pass file/path via env vars to avoid shell injection through heredoc
-    local value
-    value=$(_MANIFEST_PY_FILE="$yaml_file" _MANIFEST_PY_PATH="$yaml_path" python3 << 'PYEOF'
-import yaml
-import sys
-import os
-
-try:
-    yaml_file = os.environ['_MANIFEST_PY_FILE']
-    yaml_path = os.environ['_MANIFEST_PY_PATH']
-
-    with open(yaml_file, 'r') as f:
-        data = yaml.safe_load(f)
-
-    path_parts = yaml_path.split('.')
-    current = data
-
-    for part in path_parts:
-        if current is None:
-            sys.exit(1)
-        if isinstance(current, dict):
-            current = current.get(part)
-        else:
-            sys.exit(1)
-
-    if current is None:
-        sys.exit(1)
-
-    print(current)
-except Exception as e:
-    sys.exit(1)
-PYEOF
-    )
-
-    if [[ $? -ne 0 ]] || [[ -z "$value" ]]; then
-        return 1
-    fi
-
-    echo "$value"
-    return 0
-}
-
-# -----------------------------------------------------------------------------
-# Function: parse_yaml_basic
-# -----------------------------------------------------------------------------
-# Basic YAML parsing using grep/sed for simple key-value pairs.
-# This is a fallback when no proper YAML parser is available.
-#
-# LIMITATIONS:
-#   - Only handles simple top-level keys
-#   - Does not support nested structures
-#   - Does not support arrays
-#   - May fail on complex YAML
-#
-# ARGUMENTS:
-#   $1 - Path to YAML file
-#   $2 - Key name (simple, e.g., "name" not "fleet.name")
-#
-# RETURNS:
-#   Echoes the value for the key
-#   Returns 1 if key not found
-#
-# EXAMPLE:
-#   name=$(parse_yaml_basic "config.yaml" "name")
-# -----------------------------------------------------------------------------
-parse_yaml_basic() {
-    local yaml_file="$1"
-    local key="$2"
-
-    if [[ ! -f "$yaml_file" ]]; then
-        log_error "YAML file not found: $yaml_file"
-        return 1
-    fi
-
-    # Extract the last component of dotted path
-    local simple_key="${key##*.}"
-
-    # Try to find the key and extract its value
-    # This handles: key: value, key: "value", key: 'value'
-    local value
-    value=$(grep -E "^[[:space:]]*${simple_key}:" "$yaml_file" | head -1 | \
-            sed -E 's/^[[:space:]]*[^:]+:[[:space:]]*//' | \
-            sed -E 's/^["'\''](.*)[\"'\'']$/\1/' | \
-            sed -E 's/[[:space:]]*#.*$//' | \
-            sed -E 's/[[:space:]]+$//')
-
-    if [[ -z "$value" ]]; then
-        return 1
-    fi
-
-    echo "$value"
-    return 0
-}
-
-# -----------------------------------------------------------------------------
 # Function: get_yaml_value
 # -----------------------------------------------------------------------------
 # Unified YAML parsing function that automatically selects the best parser.
@@ -447,38 +318,21 @@ get_yaml_value() {
     local yaml_path="$2"
     local default_value="${3:-}"
 
-    # Cache the parser detection result
+    # Validate yq is available (cached after first call)
     if [[ -z "${_MANIFEST_YAML_PARSER:-}" ]]; then
-        _MANIFEST_YAML_PARSER=$(detect_yaml_parser)
+        _MANIFEST_YAML_PARSER=$(detect_yaml_parser) || {
+            # yq missing — return default if provided, else fail
+            if [[ -n "$default_value" ]]; then
+                echo "$default_value"
+                return 0
+            fi
+            return 1
+        }
         log_debug "YAML parser detected: $_MANIFEST_YAML_PARSER"
     fi
 
     local value=""
-    local found=false
-
-    case "$_MANIFEST_YAML_PARSER" in
-        "yq")
-            if value=$(parse_yaml_with_yq "$yaml_file" "$yaml_path" 2>/dev/null); then
-                found=true
-            fi
-            ;;
-        "python")
-            # Remove leading dot for Python parser
-            local python_path="${yaml_path#.}"
-            if value=$(parse_yaml_with_python "$yaml_file" "$python_path" 2>/dev/null); then
-                found=true
-            fi
-            ;;
-        "none"|*)
-            # Fallback to basic parsing
-            local simple_key="${yaml_path##*.}"
-            if value=$(parse_yaml_basic "$yaml_file" "$simple_key" 2>/dev/null); then
-                found=true
-            fi
-            ;;
-    esac
-
-    if [[ "$found" == "true" ]] && [[ -n "$value" ]]; then
+    if value=$(parse_yaml_with_yq "$yaml_file" "$yaml_path" 2>/dev/null); then
         echo "$value"
         return 0
     elif [[ -n "$default_value" ]]; then
@@ -536,69 +390,20 @@ set_yaml_value() {
         }
     fi
 
-    # Cache parser detection
+    # Validate yq is available (cached after first call)
     if [[ -z "${_MANIFEST_YAML_PARSER:-}" ]]; then
-        _MANIFEST_YAML_PARSER=$(detect_yaml_parser)
+        _MANIFEST_YAML_PARSER=$(detect_yaml_parser) || {
+            log_error "set_yaml_value: yq is required but not available"
+            return 1
+        }
         log_debug "YAML parser detected: $_MANIFEST_YAML_PARSER"
     fi
 
-    case "$_MANIFEST_YAML_PARSER" in
-        "yq")
-            # Use yq's env() operator to avoid shell injection through value
-            _MANIFEST_YQ_VAL="$value" yq e ".${dotpath} = env(_MANIFEST_YQ_VAL)" -i "$yaml_file" 2>/dev/null
-            if [[ $? -ne 0 ]]; then
-                log_error "set_yaml_value: yq failed to set '${dotpath}' in $yaml_file"
-                return 1
-            fi
-            ;;
-        "python")
-            # Pass file/path/value via env vars to avoid shell injection through heredoc
-            _MANIFEST_PY_FILE="$yaml_file" _MANIFEST_PY_PATH="$dotpath" _MANIFEST_PY_VAL="$value" python3 << 'PYEOF'
-import yaml
-import sys
-import os
-
-try:
-    yaml_file = os.environ['_MANIFEST_PY_FILE']
-    dotpath = os.environ['_MANIFEST_PY_PATH']
-    value = os.environ['_MANIFEST_PY_VAL']
-
-    # Load existing data or start fresh
-    try:
-        with open(yaml_file, 'r') as f:
-            data = yaml.safe_load(f) or {}
-    except Exception:
-        data = {}
-
-    # Navigate/create the nested path
-    path_parts = dotpath.split('.')
-    current = data
-    for part in path_parts[:-1]:
-        if part not in current or not isinstance(current.get(part), dict):
-            current[part] = {}
-        current = current[part]
-
-    # Set the value
-    current[path_parts[-1]] = value
-
-    # Write back
-    with open(yaml_file, 'w') as f:
-        yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
-
-except Exception as e:
-    print(f"Error: {e}", file=sys.stderr)
-    sys.exit(1)
-PYEOF
-            if [[ $? -ne 0 ]]; then
-                log_error "set_yaml_value: python3 failed to set '${dotpath}' in $yaml_file"
-                return 1
-            fi
-            ;;
-        "none"|*)
-            log_error "set_yaml_value: writing YAML requires yq or python3 (neither available)"
-            return 1
-            ;;
-    esac
+    # Use yq's env() operator to avoid shell injection through value
+    if ! _MANIFEST_YQ_VAL="$value" yq e ".${dotpath} = env(_MANIFEST_YQ_VAL)" -i "$yaml_file" 2>/dev/null; then
+        log_error "set_yaml_value: yq failed to set '${dotpath}' in $yaml_file"
+        return 1
+    fi
 
     log_debug "set_yaml_value: set '${dotpath}' = '${value}' in $yaml_file"
     return 0
@@ -638,109 +443,36 @@ write_full_yaml() {
         return 1
     fi
 
-    # Cache parser detection
+    # Validate yq is available (cached after first call)
     if [[ -z "${_MANIFEST_YAML_PARSER:-}" ]]; then
-        _MANIFEST_YAML_PARSER=$(detect_yaml_parser)
+        _MANIFEST_YAML_PARSER=$(detect_yaml_parser) || {
+            log_error "write_full_yaml: yq is required but not available"
+            return 1
+        }
         log_debug "YAML parser detected: $_MANIFEST_YAML_PARSER"
     fi
 
-    # Collect all mappings that have a current env var value
-    # Format: dotpath=value pairs, one per line
-    local mappings=""
+    # Start with header comments
+    echo "# Manifest CLI Configuration" > "$yaml_file"
+    echo "# Generated by manifest-yaml.sh" >> "$yaml_file"
+
+    # Set each mapped env var value using yq
     local yaml_path env_var env_value
+    local written_count=0
     for yaml_path in "${!_MANIFEST_YAML_TO_ENV[@]}"; do
         env_var="${_MANIFEST_YAML_TO_ENV[$yaml_path]}"
         env_value="${!env_var:-}"
         if [[ -n "$env_value" ]]; then
-            mappings+="${yaml_path}=${env_value}"$'\n'
+            if ! _MANIFEST_YQ_VAL="$env_value" yq e ".${yaml_path} = env(_MANIFEST_YQ_VAL)" -i "$yaml_file" 2>/dev/null; then
+                log_warning "write_full_yaml: yq failed to set '${yaml_path}'"
+            else
+                written_count=$((written_count + 1))
+            fi
         fi
     done
 
-    if [[ -z "$mappings" ]]; then
-        log_warning "write_full_yaml: no MANIFEST_CLI_* env vars are set; writing empty config"
-        echo "# Manifest CLI Configuration" > "$yaml_file"
-        echo "# Generated by manifest-yaml.sh" >> "$yaml_file"
-        return 0
-    fi
-
-    # Prefer python3 for correct nested YAML structure
-    # Pass mappings and output file via env vars to avoid heredoc injection
-    if command -v python3 &>/dev/null && python3 -c "import yaml" 2>/dev/null; then
-        _MANIFEST_PY_FILE="$yaml_file" _MANIFEST_PY_MAPPINGS="$mappings" python3 << 'PYEOF'
-import yaml
-import sys
-import os
-
-SECTION_COMMENTS = {
-    'version': 'Version scheme configuration',
-    'git': 'Git workflow configuration',
-    'time': 'HTTPS time verification and caching',
-    'docs': 'Documentation generation',
-    'files': 'File and directory paths',
-    'install': 'Installation paths',
-    'brew': 'Homebrew integration',
-    'project': 'Project metadata',
-    'auto_update': 'Automatic update settings',
-    'config': 'Schema versioning',
-    'debug': 'Debugging and verbosity',
-    'pr': 'Pull request settings',
-}
-
-try:
-    yaml_file = os.environ['_MANIFEST_PY_FILE']
-    mappings_raw = os.environ['_MANIFEST_PY_MAPPINGS'].strip()
-
-    data = {}
-    for line in mappings_raw.split('\n'):
-        if not line.strip():
-            continue
-        dotpath, value = line.split('=', 1)
-        parts = dotpath.split('.')
-        current = data
-        for part in parts[:-1]:
-            if part not in current:
-                current[part] = {}
-            current = current[part]
-        current[parts[-1]] = value
-
-    with open(yaml_file, 'w') as f:
-        f.write('# Manifest CLI Configuration\n')
-        f.write('# Generated by manifest-yaml.sh\n\n')
-
-        for section_key in data:
-            comment = SECTION_COMMENTS.get(section_key, section_key)
-            f.write(f'# {comment}\n')
-            section_data = {section_key: data[section_key]}
-            yaml_str = yaml.dump(section_data, default_flow_style=False, sort_keys=False, allow_unicode=True)
-            f.write(yaml_str)
-            f.write('\n')
-
-except Exception as e:
-    print(f"Error: {e}", file=sys.stderr)
-    sys.exit(1)
-PYEOF
-        if [[ $? -ne 0 ]]; then
-            log_error "write_full_yaml: python3 failed to write $yaml_file"
-            return 1
-        fi
-    elif [[ "$_MANIFEST_YAML_PARSER" == "yq" ]]; then
-        # Fallback: use yq by setting each value individually
-        echo "# Manifest CLI Configuration" > "$yaml_file"
-        echo "# Generated by manifest-yaml.sh" >> "$yaml_file"
-
-        local line dotpath value
-        while IFS= read -r line; do
-            [[ -z "$line" ]] && continue
-            dotpath="${line%%=*}"
-            value="${line#*=}"
-            _MANIFEST_YQ_VAL="$value" yq e ".${dotpath} = env(_MANIFEST_YQ_VAL)" -i "$yaml_file" 2>/dev/null
-            if [[ $? -ne 0 ]]; then
-                log_warning "write_full_yaml: yq failed to set '${dotpath}'"
-            fi
-        done <<< "$mappings"
-    else
-        log_error "write_full_yaml: writing YAML requires python3 (with PyYAML) or yq (neither available)"
-        return 1
+    if [[ "$written_count" -eq 0 ]]; then
+        log_warning "write_full_yaml: no MANIFEST_CLI_* env vars are set; wrote empty config"
     fi
 
     log_debug "write_full_yaml: wrote config to $yaml_file"
@@ -816,8 +548,6 @@ load_yaml_to_env() {
 
 export -f detect_yaml_parser
 export -f parse_yaml_with_yq
-export -f parse_yaml_with_python
-export -f parse_yaml_basic
 export -f get_yaml_value
 export -f set_yaml_value
 export -f write_full_yaml

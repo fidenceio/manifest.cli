@@ -6,7 +6,9 @@ class Manifest < Formula
   license "MIT"
   head "https://github.com/fidenceio/manifest.cli.git", branch: "main"
 
+  depends_on "bash" => :recommended
   depends_on "git" => :recommended
+  depends_on "yq" => :recommended
   depends_on "coreutils" => :optional
 
   def install

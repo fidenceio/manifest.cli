@@ -65,6 +65,12 @@ source "$MANIFEST_CLI_CORE_MODULES_DIR/cloud/manifest-mcp-connector.sh"
 # Source Fleet module for polyrepo management
 source "$MANIFEST_CLI_CORE_MODULES_DIR/fleet/manifest-fleet.sh"
 
+# Source v42 journey modules (init, prep, refresh, ship dispatchers)
+source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-init.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-prep.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-refresh.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-ship.sh"
+
 # Function to get the CLI installation directory dynamically
 get_cli_dir() {
     # If we're in a development environment, use the current project root
@@ -310,15 +316,14 @@ check_auto_upgrade() {
     check_auto_upgrade_internal
 }
 
-# Main command dispatcher
+# Legacy prep entry point — kept for internal callers (manifest_ship in pr module)
 manifest_prep() {
     local increment_type="${1:-}"
     local interactive="${2:-false}"
     local publish_release="${3:-false}"
     if [ -z "$increment_type" ]; then
         log_error "prep requires a release type subcommand"
-        echo "Usage: manifest prep <patch|minor|major|revision> [-i|--interactive]"
-        echo "Release type options: patch, minor, major, revision"
+        echo "Usage: manifest ship repo <patch|minor|major|revision> [--local] [-i]"
         return 1
     fi
     manifest_prep_workflow "$increment_type" "$interactive" "$publish_release"
@@ -331,31 +336,37 @@ main() {
 
     # SECURITY: Early check to prevent running from installation directory
     if is_installation_directory "$(pwd)"; then
-        log_error "❌ SECURITY ERROR: Cannot run Manifest CLI from installation directory"
+        log_error "SECURITY ERROR: Cannot run Manifest CLI from installation directory"
         log_error "   Installation directory: ${INSTALL_LOCATION:-$HOME/.manifest-cli}"
         log_error "   Current directory: $(pwd)"
         log_error ""
-        log_error "💡 Please run Manifest CLI from your project directory instead:"
+        log_error "Please run Manifest CLI from your project directory instead:"
         log_error "   cd /path/to/your/project"
         log_error "   manifest [command]"
         return 1
     fi
-    
+
     local command="${1:-}"
     [[ $# -gt 0 ]] && shift
 
-    # Commands that do NOT require a Git repository
+    # =========================================================================
+    # Pre-dispatch: load config / validate git depending on command
+    # =========================================================================
     case "$command" in
-        "help"|"-help"|"--help"|"-h"|"uninstall"|"reinstall"|"update"|"upgrade"|"fleet"|"config"|"time")
-            # Commands that can run outside repos still need configuration loaded.
+        # Commands that do NOT require a Git repository
+        "help"|"-help"|"--help"|"-h"|"uninstall"|"reinstall"|"update"|"upgrade"|"config")
             case "$command" in
-                "config"|"time")
+                "config")
                     load_configuration "$(pwd)" "false"
                     ;;
             esac
             ;;
         "")
-            # No command given — will fall through to display_help
+            # No command — will fall through to display_help
+            ;;
+        # init may create a git repo, so don't require one
+        "init")
+            load_configuration "$(pwd)" "false"
             ;;
         *)
             # All other commands require a Git repository
@@ -364,140 +375,21 @@ main() {
                 return 1
             fi
 
-            # Update PROJECT_ROOT to the actual current directory (in case we changed)
             PROJECT_ROOT="$(pwd)"
             export PROJECT_ROOT
-
-            # Load configuration now that all variables are properly set
             load_configuration "$PROJECT_ROOT"
-
-            # Check for upgrades in background (with cooldown)
             check_auto_upgrade
             ;;
     esac
-    
-    case "$command" in
-        "time")
-            display_time_info
-            ;;
-        "prep")
-            local increment_type=""
-            local interactive=false
-            
-            # Parse arguments
-            while [[ $# -gt 0 ]]; do
-                case $1 in
-                    "patch"|"minor"|"major"|"revision")
-                        increment_type="$1"
-                        shift
-                        ;;
-                    "-h"|"--help")
-                        echo "Usage: manifest prep <patch|minor|major|revision> [-i|--interactive]"
-                        echo "Prepare changes only (version/docs/commit/push)."
-                        echo "Use 'manifest ship <release-type>' to run this in ship mode."
-                        return 0
-                        ;;
-                    "-i"|"--interactive")
-                        interactive=true
-                        shift
-                        ;;
-                    "-p")
-                        increment_type="patch"
-                        shift
-                        ;;
-                    "-m")
-                        increment_type="minor"
-                        shift
-                        ;;
-                    "-M")
-                        increment_type="major"
-                        shift
-                        ;;
-                    "-r")
-                        increment_type="revision"
-                        shift
-                        ;;
-                    *)
-                        log_error "Unknown option: $1"
-                        echo "Usage: manifest prep <patch|minor|major|revision> [-i|--interactive]"
-                        return 1
-                        ;;
-                esac
-            done
 
-            if [ -z "$increment_type" ]; then
-                log_error "prep requires a release type subcommand"
-                echo "Usage: manifest prep <patch|minor|major|revision> [-i|--interactive]"
-                echo "Release type options: patch, minor, major, revision"
-                return 1
-            fi
-            
-            # Route through prep entrypoint for consistency with ship.
-            manifest_prep "$increment_type" "$interactive" "false"
-            ;;
-        "ship")
-            manifest_ship "$@"
-            ;;
-        "sync")
-            sync_repository
-            ;;
-        "revert")
-            revert_version
-            ;;
-        "commit")
-            local message="$1"
-            # Get trusted timestamp for accurate versioning
-            get_time_timestamp >/dev/null
-            local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
-            commit_changes "$message" "$timestamp"
-            ;;
-        "version")
-            local increment_type="${1:-patch}"
-            bump_version "$increment_type"
-            ;;
-        "docs")
-            local subcommand="$1"
-            case "$subcommand" in
-                "metadata")
-                    update_repository_metadata
-                    ;;
-                "homebrew")
-                    echo "🍺 Homebrew formula is updated automatically by 'manifest prep'"
-                    ;;
-                "cleanup")
-                    echo "📁 Moving historical documentation to zArchive..."
-                    move_existing_historical_docs
-                    ;;
-                *)
-                    # Generate all documentation for current version
-                    local current_version=""
-                    if [ -f "$MANIFEST_CLI_VERSION_FILE" ]; then
-                        current_version=$(cat "$MANIFEST_CLI_VERSION_FILE")
-                    fi
-                    
-                    if [ -z "$current_version" ]; then
-                        log_error "Could not determine current version. Please run 'manifest version' first."
-                        return 1
-                    fi
-                    
-                    # Get trusted timestamp for accurate documentation
-                    get_time_timestamp >/dev/null
-                    local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
-                    generate_documents "$current_version" "$timestamp" "patch"
-                    ;;
-            esac
-            ;;
-        "cleanup")
-            echo "📁 Repository cleanup operations..."
-            local current_version=""
-            if [ -f "$MANIFEST_CLI_VERSION_FILE" ]; then
-                current_version=$(cat "$MANIFEST_CLI_VERSION_FILE")
-            fi
-            # Get trusted timestamp for accurate cleanup
-            get_time_timestamp >/dev/null
-            local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
-            main_cleanup "$current_version" "$timestamp"
-            ;;
+    # =========================================================================
+    # Command dispatch — v42 core journey + supporting + legacy aliases
+    # =========================================================================
+    case "$command" in
+
+        # =====================================================================
+        # CORE JOURNEY: config → init → prep → refresh → ship
+        # =====================================================================
         "config")
             case "${1:-}" in
                 "show")
@@ -539,130 +431,26 @@ main() {
                     ;;
             esac
             ;;
-        "security")
-            manifest_security
-            ;;
-        "test")
-            run_manifest_test "$@"
-            ;;
-        "upgrade")
-            upgrade_cli "$@"
-            ;;
-        "update")
-            log_warning "Deprecated alias used; prefer 'manifest upgrade'."
-            upgrade_cli "$@"
-            ;;
-        "uninstall")
-            # Check for --force flag
-            local force_flag="false"
-            if [ "$2" = "--force" ]; then
-                force_flag="true"
-            fi
-            # Parameters: skip_confirmations (from --force flag), non_interactive (only when forced)
-            uninstall_manifest "$force_flag" "$force_flag"
-            ;;
-        "reinstall")
-            echo "🔄 Reinstalling Manifest CLI..."
-            echo ""
-            # Uninstall everything (force, non-interactive)
-            if ! uninstall_manifest "true" "true"; then
-                log_warning "Uninstall reported issues; continuing reinstall."
-            fi
-            echo ""
-            # On macOS, offer to install Homebrew if not present
-            if [[ "$OSTYPE" == "darwin"* ]] && ! command -v brew &>/dev/null; then
-                echo "🍺 macOS detected but Homebrew is not installed"
-                echo "   Homebrew is the recommended way to install, upgrade, manage, and cleanly remove Manifest CLI on macOS. Plus, it offers thousands of other packages."
-                read -p "   Would you like to install Homebrew? (Y/n): " -n 1 -r
-                echo
-                if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-                    echo "   Installing Homebrew..."
-                    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-                    if [ -f "/opt/homebrew/bin/brew" ]; then
-                        eval "$(/opt/homebrew/bin/brew shellenv)"
-                    elif [ -f "/usr/local/bin/brew" ]; then
-                        eval "$(/usr/local/bin/brew shellenv)"
-                    fi
-                else
-                    echo "   Skipping Homebrew — will use manual installation"
-                fi
-            fi
-            # Reinstall using the appropriate method
-            if command -v brew &>/dev/null; then
-                echo "🍺 Reinstalling via Homebrew..."
-                brew tap fidenceio/tap 2>/dev/null
-                if brew list fidenceio/tap/manifest &>/dev/null || brew list manifest &>/dev/null; then
-                    brew reinstall fidenceio/tap/manifest || brew reinstall manifest
-                else
-                    brew install fidenceio/tap/manifest || brew install manifest
-                fi
-            else
-                echo "📦 Reinstalling via manual install..."
-                source "$MANIFEST_CLI_CORE_MODULES_DIR/workflow/manifest-auto-upgrade.sh"
-                install_cli "true"
-                migrate_user_global_config_internal
-            fi
-            ;;
-        # Registry commands removed - not compatible with macOS default Bash 3.2
-        "cloud")
-            local subcommand="$1"
-            case "$subcommand" in
-                "config")
-                    configure_mcp_connection
-                    ;;
-                "status")
-                    show_mcp_status
-                    ;;
-                "generate")
-                    local version="${2:-}"
-                    local timestamp="${3:-$(date -u +"%Y-%m-%d %H:%M:%S UTC")}"
-                    local release_type="${4:-patch}"
 
-                    if [ -z "$version" ]; then
-                        log_error "Version required"
-                        echo "Usage: manifest cloud generate <version> [timestamp] [release_type]"
-                        return 1
-                    fi
+        "init")
+            manifest_init_dispatch "$@"
+            ;;
 
-                    # Create temporary changes file
-                    local changes_file=$(mktemp)
-                    get_git_changes "$version" > "$changes_file"
+        "prep")
+            manifest_prep_dispatch "$@"
+            ;;
 
-                    send_to_manifest_cloud "$version" "$changes_file" "$release_type"
-                    local result=$?
-                    rm -f "$changes_file"
-                    return $result
-                    ;;
-                *)
-                    echo "Manifest Cloud MCP Usage:"
-                    echo "========================="
-                    echo ""
-                    echo "Commands:"
-                    echo "  cloud config                  - Configure API key and connection"
-                    echo "  cloud status                  - Show connection status"
-                    echo "  cloud generate <version> [opts] - Generate documentation via Manifest Cloud"
-                    echo "  (use 'manifest test cloud' for MCP connectivity tests)"
-                    echo ""
-                    echo "Configuration:"
-                    echo "  MANIFEST_CLI_CLOUD_API_KEY       - Your Manifest Cloud API key"
-                    echo "  MANIFEST_CLI_CLOUD_ENDPOINT      - Manifest Cloud endpoint (optional)"
-                    echo ""
-                    echo "Examples:"
-                    echo "  manifest test cloud"
-                    echo "  manifest cloud config"
-                    echo "  manifest cloud generate 1.2.3 '2025-01-27 10:00:00 UTC' patch"
-                    echo ""
-                    echo "Get your API key from: https://manifest.cloud/dashboard"
-                    ;;
-            esac
+        "refresh")
+            manifest_refresh_dispatch "$@"
             ;;
-        "agent")
-            agent_main "${@}"
+
+        "ship")
+            manifest_ship_dispatch "$@"
             ;;
-        "fleet")
-            # Fleet commands for polyrepo management
-            fleet_main "$@"
-            ;;
+
+        # =====================================================================
+        # SUPPORTING COMMANDS (used anytime, not part of core sequence)
+        # =====================================================================
         "pr")
             local subcommand=""
             case "${1:-}" in
@@ -732,89 +520,255 @@ main() {
                     ;;
             esac
             ;;
-        "help"|"-help"|"--help"|"-h"|*)
+
+        "revert")
+            revert_version
+            ;;
+
+        # =====================================================================
+        # DIAGNOSTIC / MAINTENANCE COMMANDS
+        # =====================================================================
+        "security")
+            manifest_security
+            ;;
+
+        "test")
+            run_manifest_test "$@"
+            ;;
+
+        "upgrade")
+            upgrade_cli "$@"
+            ;;
+
+        "uninstall")
+            local force_flag="false"
+            if [ "$2" = "--force" ]; then
+                force_flag="true"
+            fi
+            uninstall_manifest "$force_flag" "$force_flag"
+            ;;
+
+        "reinstall")
+            echo "Reinstalling Manifest CLI..."
+            echo ""
+            if ! uninstall_manifest "true" "true"; then
+                log_warning "Uninstall reported issues; continuing reinstall."
+            fi
+            echo ""
+            if [[ "$OSTYPE" == "darwin"* ]] && ! command -v brew &>/dev/null; then
+                echo "macOS detected but Homebrew is not installed"
+                echo "   Homebrew is the recommended way to install, upgrade, manage, and cleanly remove Manifest CLI on macOS."
+                read -p "   Would you like to install Homebrew? (Y/n): " -n 1 -r
+                echo
+                if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+                    echo "   Installing Homebrew..."
+                    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+                    if [ -f "/opt/homebrew/bin/brew" ]; then
+                        eval "$(/opt/homebrew/bin/brew shellenv)"
+                    elif [ -f "/usr/local/bin/brew" ]; then
+                        eval "$(/usr/local/bin/brew shellenv)"
+                    fi
+                else
+                    echo "   Skipping Homebrew — will use manual installation"
+                fi
+            fi
+            if command -v brew &>/dev/null; then
+                echo "Reinstalling via Homebrew..."
+                brew tap fidenceio/tap 2>/dev/null
+                if brew list fidenceio/tap/manifest &>/dev/null || brew list manifest &>/dev/null; then
+                    brew reinstall fidenceio/tap/manifest || brew reinstall manifest
+                else
+                    brew install fidenceio/tap/manifest || brew install manifest
+                fi
+            else
+                echo "Reinstalling via manual install..."
+                source "$MANIFEST_CLI_CORE_MODULES_DIR/workflow/manifest-auto-upgrade.sh"
+                install_cli "true"
+                migrate_user_global_config_internal
+            fi
+            ;;
+
+        # =====================================================================
+        # CLOUD / AGENT (optional add-ons)
+        # =====================================================================
+        "cloud")
+            local subcommand="$1"
+            case "$subcommand" in
+                "config")
+                    configure_mcp_connection
+                    ;;
+                "status")
+                    show_mcp_status
+                    ;;
+                "generate")
+                    local version="${2:-}"
+                    local timestamp="${3:-$(date -u +"%Y-%m-%d %H:%M:%S UTC")}"
+                    local release_type="${4:-patch}"
+                    if [ -z "$version" ]; then
+                        log_error "Version required"
+                        echo "Usage: manifest cloud generate <version> [timestamp] [release_type]"
+                        return 1
+                    fi
+                    local changes_file=$(mktemp)
+                    get_git_changes "$version" > "$changes_file"
+                    send_to_manifest_cloud "$version" "$changes_file" "$release_type"
+                    local result=$?
+                    rm -f "$changes_file"
+                    return $result
+                    ;;
+                *)
+                    echo "Manifest Cloud MCP Usage:"
+                    echo "========================="
+                    echo ""
+                    echo "Commands:"
+                    echo "  cloud config                  - Configure API key and connection"
+                    echo "  cloud status                  - Show connection status"
+                    echo "  cloud generate <version> [opts] - Generate documentation via Manifest Cloud"
+                    echo ""
+                    echo "Run 'manifest test cloud' for MCP connectivity tests."
+                    ;;
+            esac
+            ;;
+
+        "agent")
+            agent_main "${@}"
+            ;;
+
+        # =====================================================================
+        # HIDDEN LEGACY ALIASES (still functional, not shown in help)
+        # =====================================================================
+
+        # Old "manifest fleet *" top-level — still works, routes to fleet_main
+        "fleet")
+            fleet_main "$@"
+            ;;
+
+        # Old "manifest sync" -> new "manifest prep repo"
+        "sync")
+            manifest_prep_repo
+            ;;
+
+        # Old "manifest time" -> accessible via "manifest config time"
+        "time")
+            display_time_info
+            ;;
+
+        # Old "manifest update" -> "manifest upgrade"
+        "update")
+            log_warning "Deprecated: 'manifest update' is now 'manifest upgrade'."
+            upgrade_cli "$@"
+            ;;
+
+        # Old "manifest commit" — plumbing, called by ship
+        "commit")
+            local message="$1"
+            get_time_timestamp >/dev/null
+            local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+            commit_changes "$message" "$timestamp"
+            ;;
+
+        # Old "manifest version" — plumbing, called by ship
+        "version")
+            local increment_type="${1:-patch}"
+            bump_version "$increment_type"
+            ;;
+
+        # Old "manifest docs" — plumbing, replaced by "refresh"
+        "docs")
+            local subcommand="$1"
+            case "$subcommand" in
+                "metadata")
+                    update_repository_metadata
+                    ;;
+                "homebrew")
+                    echo "Homebrew formula is updated automatically by 'manifest ship'"
+                    ;;
+                "cleanup")
+                    echo "Moving historical documentation to zArchive..."
+                    move_existing_historical_docs
+                    ;;
+                *)
+                    local current_version=""
+                    if [ -f "$MANIFEST_CLI_VERSION_FILE" ]; then
+                        current_version=$(cat "$MANIFEST_CLI_VERSION_FILE")
+                    fi
+                    if [ -z "$current_version" ]; then
+                        log_error "Could not determine current version. Run 'manifest init repo' first."
+                        return 1
+                    fi
+                    get_time_timestamp >/dev/null
+                    local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+                    generate_documents "$current_version" "$timestamp" "patch"
+                    ;;
+            esac
+            ;;
+
+        # Old "manifest cleanup" — plumbing, absorbed into "refresh"
+        "cleanup")
+            echo "Repository cleanup operations..."
+            local current_version=""
+            if [ -f "$MANIFEST_CLI_VERSION_FILE" ]; then
+                current_version=$(cat "$MANIFEST_CLI_VERSION_FILE")
+            fi
+            get_time_timestamp >/dev/null
+            local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+            main_cleanup "$current_version" "$timestamp"
+            ;;
+
+        # =====================================================================
+        # HELP / FALLBACK
+        # =====================================================================
+        "help"|"-help"|"--help"|"-h")
             display_help
+            ;;
+
+        *)
+            log_error "Unknown command: $command"
+            echo ""
+            display_help
+            return 1
             ;;
     esac
 }
 
 # Display help
 display_help() {
-    echo "Manifest CLI"
-    echo ""
-    echo "Usage: manifest <command>"
-    echo ""
-    echo "Commands:"
-    echo "  time        - 🕐 Get trusted timestamp for manifest operations"
-  echo "  ship        - 🚢 Publish release artifacts (remote push path)"
-  echo "    ship <patch|minor|major|revision> [-i]       # Runs prep + tag/push/homebrew publish"
-    echo "  prep        - 🧰 Prepare changes before shipping"
-  echo "    prep <patch|minor|major|revision> [-i]       # Local-only: sync, docs, version, commit"
-    echo "    prep -p|-m|-M|-r [-i]                        # Short form options with interactive mode"
-    echo "    Note: Use -i flag to enable interactive safety prompts (default: non-interactive)"
-    echo "  sync        - 🔄 Sync local repo with remote (pull latest changes)"
-    echo "  revert      - 🔄 Revert to previous version"
-    echo "  commit      - Commit changes with custom message"
-    echo "  version     - Bump version (patch/minor/major)"
-      echo "  docs        - 📚 Create documentation and release notes"
-  echo "    docs metadata  - 🏷️  Update repository metadata (description, topics, etc.)"
-  echo "    docs homebrew  - 🍺 Update Homebrew formula"
-  echo "  cleanup     - 📁 Clean repository files and archive old docs"
-  echo "  config      - ⚙️  Interactive config wizard (use 'manifest config show' for full view)"
-  echo "  security    - 🔒 Security audit for vulnerabilities and privacy protection"
-  echo "  test        - 🧪 Unified test group (cli/cloud/agent and workflows)"
-  echo "    test cloud                       # Test Manifest Cloud MCP connectivity"
-  echo "    test agent                       # Test Manifest Agent functionality"
-  echo "    test ... --strict-redact         # Default redaction mode for shareable logs"
-  echo "    (writes raw + sanitized logs to ~/.manifest-cli/logs/tests/<run-id>/)"
-  echo "  upgrade     - 🔄 Check for and install CLI upgrades"
-  echo "    upgrade [--force] [--check]       # Upgrade options: force upgrade or check only"
-  echo "  update      - 🔄 Deprecated alias for 'upgrade'"
-  echo "  uninstall   - 🗑️  Remove Manifest CLI completely"
-  echo "    uninstall [--force]               # Uninstall options: force uninstall without confirmation"
-  echo "  reinstall   - 🔄 Uninstall and reinstall Manifest CLI (detects OS and install method)"
-  echo "  cloud       - ☁️  Manifest Cloud MCP connector"
-  echo "    cloud config                      # Configure API key and connection"
-  echo "    cloud status                      # Show connection status"
-  echo "    cloud generate <version> [opts]   # Generate documentation via Manifest Cloud"
-  echo "  agent       - 🤖  Containerized agent for secure cloud integration"
-  echo "    agent init <mode>                 # Initialize agent (docker|binary|script)"
-  echo "    agent auth github                 # Set up GitHub OAuth authentication"
-  echo "    agent auth manifest               # Set up Manifest Cloud subscription"
-  echo "    agent status                      # Show agent status and configuration"
-  echo "    agent logs                        # Show agent operation logs"
-  echo "    agent uninstall                   # Remove agent completely"
-  echo "  pr          - 🔀 Pull request operations"
-  echo "    pr [options]                      # Interactive PR wizard (remote push path via PR create)"
-  echo "    pr create [options]               # Create PR with optional labels/reviewers"
-  echo "    pr update [options]               # Update PR metadata/reviewers/labels"
-  echo "    pr status [--pr <selector>]       # Show resolved PR status"
-  echo "    pr ready [--pr <selector>]        # Evaluate merge readiness"
-  echo "    pr checks [--pr <selector>]       # Show CI checks (optional watch)"
-  echo "    pr queue [--pr <selector>]        # Preferred: queue policy-aware auto-merge"
-  echo "    pr policy show|validate           # Show/validate PR policy profile"
-  echo "  fleet       - 🚢 Coordinate versioning across multiple repos (run 'manifest fleet' for details)"
-  # Registry commands removed - not compatible with macOS default Bash 3.2
-  echo "  help        - Show this help"
-    echo ""
-    echo "This CLI provides comprehensive Git operations and version management."
-echo ""
-echo "The 'ship' command runs release prep/publish only; PR operations are explicit via 'manifest pr ...'."
-echo ""
-echo "Environment Variables:"
-echo "  • MANIFEST_CLI_INTERACTIVE_MODE  - Interactive safety prompts (true/false, default: false)"
-echo "  • MANIFEST_CLI_BREW_OPTION       - Control Homebrew functionality (enabled/disabled)"
-echo "  • MANIFEST_CLI_BREW_INTERACTIVE  - Interactive Homebrew upgrades (yes/true/1, default: no)"
-echo "  • MANIFEST_CLI_TAP_REPO          - Homebrew tap repository URL (default: https://github.com/fidenceio/homebrew-tap.git)"
-echo "  • MANIFEST_CLI_CLOUD_API_KEY     - Manifest Cloud API key (get from https://manifest.cloud/dashboard)"
-echo "  • MANIFEST_CLI_CLOUD_ENDPOINT    - Manifest Cloud endpoint (default: https://api.manifest.cloud)"
-echo "  • MANIFEST_CLI_CLOUD_SKIP        - Skip Manifest Cloud and use local docs (true/false)"
-echo "  • MANIFEST_CLI_OFFLINE_MODE      - Force offline mode, no cloud connectivity (true/false)"
-echo ""
-echo "For testing and verification:"
-echo "  • manifest test              - Basic functionality test"
-echo "  • manifest test versions     - Test version increment logic"
-echo "  • manifest test all          - Comprehensive system testing"
+    cat << 'EOF'
+Manifest CLI
+
+Usage: manifest <command> [scope] [options]
+
+  Core workflow:
+    config                              Setup wizard / show configuration
+    init repo|fleet                     Scaffold repo or fleet
+    prep repo|fleet                     Connect remotes, pull latest
+    refresh repo|fleet                  Regenerate docs, metadata, membership
+    ship repo|fleet <patch|minor|major> Publish release (version + tag + push)
+         --local                        Preview locally without pushing
+
+  Pull requests:
+    pr                                  Interactive PR wizard
+    pr create|status|ready              Create, view, evaluate PRs
+    pr checks|queue|update              CI status, auto-merge, update
+
+  Config:
+    config doctor                       Detect and fix config issues
+
+  Maintenance:
+    upgrade                             Update Manifest CLI
+    uninstall                           Remove Manifest CLI
+    security                            Run security audit
+    test                                Run diagnostic tests
+
+  Cloud:
+    cloud config|status|generate        Manifest Cloud connector
+    agent init|auth|status              Containerized cloud agent
+
+  Recovery:
+    revert                              Roll back to a previous version
+
+Run 'manifest <command> --help' for details on any command.
+EOF
 }
 
 # Test module is sourced at the top level

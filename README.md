@@ -2,21 +2,49 @@
 
 **A deterministic release control plane for Git repositories.**
 
-Manifest CLI orchestrates version bumping, documentation generation, Git tagging, remote publishing, and Homebrew distribution — all from a single command. It extends naturally to polyrepo fleets and pull request workflows without sacrificing single-repo simplicity.
+Manifest CLI orchestrates version bumping, documentation generation, Git tagging, remote publishing, and Homebrew distribution from a single command. It extends naturally to polyrepo fleets and pull request workflows without sacrificing single-repo simplicity.
 
-**Version** `41.3.0` | **Platform** macOS, Linux, FreeBSD | **Requires** Bash 5+, Git
+**Version** `41.3.0` | **Platform** macOS, Linux, FreeBSD | **Requires** Bash 5+, Git, yq v4+
 
 ---
 
-## Why Manifest?
+## Executive Summary
 
-Most release tooling either does too little (tag-and-push scripts) or too much (opinionated CI platforms). Manifest sits in the middle:
+Software teams ship code constantly, yet the mechanical steps surrounding a release — bumping a version number, regenerating changelogs, tagging commits, pushing to remotes, updating package managers — remain tedious and error-prone. Manifest CLI exists to collapse that entire sequence into a single, auditable command.
 
-- **Explicit release types** — every version bump requires `patch`, `minor`, `major`, or `revision`. No magic.
-- **Prep vs Ship split** — `prep` keeps everything local for review; `ship` publishes. You choose when changes leave your machine.
-- **Deterministic artifacts** — changelogs, release notes, and metadata are generated from Git history with trusted HTTPS timestamps.
-- **Fleet-native** — coordinate releases across dozens of repositories with auto-discovery and per-repo `.gitignore` scaffolding.
-- **Security-first** — pre-commit hooks block secrets, staged content is scanned, and `.gitignore` best practices are enforced automatically.
+### What It Does
+
+Manifest CLI is a Bash-based command-line tool that manages the full lifecycle of a software release. Given a repository with a `VERSION` file and standard Git workflow, Manifest can:
+
+1. **Initialize** a project with the scaffolding it needs (version file, changelog, documentation directory, gitignore rules).
+2. **Prepare** the workspace by connecting remotes and pulling the latest state.
+3. **Refresh** documentation, metadata, and fleet membership without changing the version.
+4. **Ship** a release — bumping the version, generating release notes from Git history, committing, tagging, pushing to remotes, and updating the Homebrew formula — in one atomic operation.
+
+For organizations managing multiple repositories (microservices, libraries, infrastructure-as-code), Manifest extends every operation to work across an entire **fleet** of repositories with coordinated versioning and unified documentation.
+
+### How It Works
+
+At its core, Manifest is a modular Bash application comprising 39 shell scripts organized into eight functional categories: core dispatch, workflow orchestration, fleet management, Git operations, pull request lifecycle, documentation generation, system utilities, and cloud integration. The entry point ([manifest-core.sh](modules/core/manifest-core.sh)) sources all modules at startup and routes commands through a central dispatcher.
+
+Configuration flows through a layered precedence system: code defaults are overridden by a global YAML config (`~/.manifest-cli/manifest.config.global.yaml`), then by a project-level config (`manifest.config.yaml`), and finally by a git-ignored local config (`manifest.config.local.yaml`). This hierarchy maps approximately 80 YAML dot-paths to `MANIFEST_CLI_*` environment variables via a bidirectional lookup table in [manifest-yaml.sh](modules/core/manifest-yaml.sh), which uses [yq](https://github.com/mikefarah/yq) (Mike Farah's Go implementation, v4+) as its sole YAML parser.
+
+Every release is timestamped using trusted HTTPS sources (Cloudflare, Google, Apple) rather than relying on the local system clock. This makes release artifacts independently verifiable.
+
+### Who It Is For
+
+- **Small teams** that want deterministic releases without maintaining CI pipeline YAML.
+- **Platform engineers** coordinating version bumps across dozens of microservice repositories.
+- **Open-source maintainers** who need consistent changelogs, release notes, and Homebrew distribution.
+- **Compliance-conscious organizations** that require auditable, timestamped release artifacts.
+
+### Design Philosophy
+
+Manifest follows three principles:
+
+1. **Explicit over implicit.** Every version bump requires a type (`patch`, `minor`, `major`, `revision`). There is no "auto-detect what changed" magic.
+2. **Local before remote.** The `--local` flag lets you preview every release operation on your machine before anything leaves it. Ship only when you are ready.
+3. **Convention over configuration, but configurable.** Sensible defaults get you started immediately; 80+ configuration knobs let you customize everything from tag prefixes to timestamp servers.
 
 ---
 
@@ -25,7 +53,7 @@ Most release tooling either does too little (tag-and-push scripts) or too much (
 ### Install
 
 ```bash
-# Homebrew (recommended)
+# Homebrew (recommended — installs Bash 5 and yq automatically)
 brew tap fidenceio/tap
 brew install manifest
 
@@ -38,11 +66,18 @@ curl -fsSL https://raw.githubusercontent.com/fidenceio/manifest.cli/main/install
 ```bash
 cd your-project
 
-# Prepare a patch release (local only — nothing is pushed)
-manifest prep patch
+# 1. Scaffold required files (VERSION, CHANGELOG.md, docs/, .gitignore)
+manifest init repo
 
-# When ready, publish a minor release (tag + push + Homebrew update)
-manifest ship minor
+# 2. Connect remotes and pull latest
+manifest prep repo
+
+# 3. Ship a patch release (version bump + docs + tag + push)
+manifest ship repo patch
+
+# Or preview locally first, then publish when ready
+manifest ship repo minor --local    # Local only — nothing pushed
+manifest ship repo minor            # Full publish
 ```
 
 ### Verify Installation
@@ -50,28 +85,92 @@ manifest ship minor
 ```bash
 manifest --help
 manifest test all
+manifest config show
 ```
 
 ---
 
-## Core Commands
+## Command Model
+
+Manifest v42 organizes commands around a five-stage journey that mirrors how developers actually work with a repository:
+
+```text
+config  -->  init  -->  prep  -->  refresh  -->  ship
+  |            |          |           |            |
+ setup      scaffold   connect     update       publish
+ wizard     files      remotes     docs/meta    release
+```
+
+Every journey command accepts a **scope** — `repo` for a single repository, `fleet` for coordinated multi-repo operations:
+
+```bash
+manifest <verb> <scope> [options]
+```
+
+### Core Journey Commands
 
 | Command | Purpose |
 | ------- | ------- |
-| `manifest prep <type>` | Local release preparation (sync, bump, docs, commit) |
-| `manifest ship <type>` | Full publish (prep + tag + push + Homebrew formula) |
-| `manifest pr <sub>` | Pull request lifecycle (create, status, checks, queue) |
-| `manifest fleet <sub>` | Polyrepo coordination (init, discover, sync, ship) |
-| `manifest docs` | Regenerate documentation for the current version |
-| `manifest config` | Interactive configuration wizard |
-| `manifest test [suite]` | Run test suites (14 available) |
-| `manifest security` | Security audit and vulnerability scan |
-| `manifest sync` | Pull latest changes from remote |
-| `manifest upgrade` | Check for and install CLI updates |
+| `manifest config` | Setup wizard, show config, diagnose issues |
+| `manifest init repo\|fleet` | Scaffold files and directories |
+| `manifest prep repo\|fleet` | Connect remotes, pull latest |
+| `manifest refresh repo\|fleet` | Regenerate docs, metadata, fleet membership |
+| `manifest ship repo\|fleet <type>` | Publish release (bump + docs + tag + push) |
+
+### Ship Options
+
+| Option | Effect |
+| ------ | ------ |
+| `manifest ship repo patch` | Full publish: bump, docs, commit, tag, push, Homebrew |
+| `manifest ship repo minor --local` | Everything except tag, push, and Homebrew |
+| `manifest ship repo major -i` | Interactive mode with safety prompts |
+| `manifest ship fleet patch --safe` | Fleet release with checks and readiness gates |
 
 Release types: `patch` | `minor` | `major` | `revision`
 
 Short flags: `-p` (patch), `-m` (minor), `-M` (major), `-r` (revision), `-i` (interactive)
+
+### Supporting Commands
+
+| Command | Purpose |
+| ------- | ------- |
+| `manifest pr` | Interactive PR wizard |
+| `manifest pr create\|status\|ready\|checks\|queue\|update` | PR lifecycle operations |
+| `manifest revert` | Roll back to a previous version |
+
+### Maintenance Commands
+
+| Command | Purpose |
+| ------- | ------- |
+| `manifest upgrade` | Check for and install CLI updates |
+| `manifest uninstall` | Remove Manifest CLI |
+| `manifest reinstall` | Full uninstall + reinstall |
+| `manifest security` | Run security audit |
+| `manifest test [suite]` | Run diagnostic tests |
+
+### Cloud and Agent
+
+| Command | Purpose |
+| ------- | ------- |
+| `manifest cloud config\|status\|generate` | Manifest Cloud connector |
+| `manifest agent init\|auth\|status` | Containerized cloud agent |
+
+### Legacy Aliases (Hidden)
+
+All pre-v42 commands continue to work. They are not shown in `manifest --help` but remain fully functional:
+
+| Old Command | Routes To |
+| ----------- | --------- |
+| `manifest prep patch` | `manifest ship repo patch --local` (with deprecation warning) |
+| `manifest ship patch` | `manifest ship repo patch` |
+| `manifest sync` | `manifest prep repo` |
+| `manifest fleet <sub>` | `fleet_main` (unchanged behavior) |
+| `manifest time` | `display_time_info` |
+| `manifest update` | `manifest upgrade` (with deprecation warning) |
+| `manifest docs` | Documentation generation (plumbing) |
+| `manifest cleanup` | Archive old docs (plumbing) |
+| `manifest commit <msg>` | Commit with timestamp (plumbing) |
+| `manifest version <type>` | Bump version only (plumbing) |
 
 > See [Command Reference](docs/COMMAND_REFERENCE.md) for the complete surface area.
 
@@ -79,20 +178,55 @@ Short flags: `-p` (patch), `-m` (minor), `-M` (major), `-r` (revision), `-i` (in
 
 ## Fleet: Polyrepo Orchestration
 
-Manifest Fleet manages versioning across multiple repositories from a single workspace.
+Manifest Fleet manages versioning and releases across multiple repositories from a single workspace.
+
+### Initialize
 
 ```bash
-# Initialize fleet with auto-discovery (finds all Git repos in your workspace)
-manifest fleet init
+# Two-phase initialization:
+# Phase 1: Scan directories, create manifest.fleet.tsv for review
+manifest init fleet
 
-# Skip discovery and create a bare template
-manifest fleet init --bare
+# Phase 2: Re-run after reviewing TSV — scaffolds repos, creates fleet config
+manifest init fleet
 
-# Coordinated release across all services
-manifest fleet ship minor --safe
+# Custom scan depth (default: 2 levels)
+manifest init fleet --depth 3
+
+# Named fleet with forced overwrite
+manifest init fleet --name "platform-services" --force
 ```
 
-Fleet auto-discovers repositories, generates `manifest.fleet.yaml`, and ensures every repo has a properly configured `.gitignore`. Existing `.gitignore` files with entries are never overwritten — Manifest creates a `.gitignore.manifest` reference file instead.
+### Day-to-Day Operations
+
+```bash
+# Prepare fleet workspace (clone missing, pull existing)
+manifest prep fleet
+manifest prep fleet --parallel
+
+# Refresh fleet (re-scan membership, regenerate docs, validate)
+manifest refresh fleet
+manifest refresh fleet --dry-run
+
+# Coordinated release
+manifest ship fleet minor
+manifest ship fleet patch --safe
+
+# Preview fleet release locally
+manifest ship fleet minor --local
+```
+
+### Direct Fleet Commands (Legacy)
+
+The `manifest fleet <sub>` interface continues to work:
+
+```bash
+manifest fleet status --verbose
+manifest fleet discover --depth 3
+manifest fleet add ./services/new-api --name "new-api"
+manifest fleet validate
+manifest fleet pr queue --method squash
+```
 
 > See [Fleet Design Spec](docs/FLEET_DESIGN_SPEC.md) for architecture details.
 
@@ -101,10 +235,12 @@ Fleet auto-discovers repositories, generates `manifest.fleet.yaml`, and ensures 
 ## Pull Request Workflows
 
 ```bash
-manifest pr create --draft          # Create a draft PR
+manifest pr                         # Interactive PR wizard
+manifest pr create --draft --labels "feature,v2"
 manifest pr checks --watch          # Watch CI checks in real-time
 manifest pr ready                   # Evaluate merge readiness
-manifest pr queue --method squash   # Queue auto-merge with squash strategy
+manifest pr queue --method squash   # Queue auto-merge
+manifest pr policy show             # Display PR policy profile
 ```
 
 PR operations are policy-aware and support configurable merge strategies.
@@ -113,18 +249,23 @@ PR operations are policy-aware and support configurable merge strategies.
 
 ## Configuration
 
-Configuration loads in priority order:
+Configuration loads in priority order (later overrides earlier):
 
-| Level | File | Scope |
-| ----- | ---- | ----- |
-| Install | `.env.manifest.global` (under install dir) | Shared defaults |
-| User | `$HOME/.env.manifest.global` | Personal preferences |
-| Project | `.env.manifest.global`, `.env.manifest.local` | Repo-specific |
+| Priority | File | Scope |
+| -------- | ---- | ----- |
+| 1 (lowest) | Code defaults | Built-in |
+| 2 | `~/.manifest-cli/manifest.config.global.yaml` | User-wide |
+| 3 | `manifest.config.yaml` | Project |
+| 4 (highest) | `manifest.config.local.yaml` (git-ignored) | Local overrides |
+
+All configuration is YAML-based. Approximately 80 settings map to `MANIFEST_CLI_*` environment variables. The YAML parser is [yq v4+](https://github.com/mikefarah/yq) (Mike Farah's Go implementation), a hard dependency validated at install time.
 
 ```bash
-manifest config setup       # Interactive wizard
-manifest config show        # Display current config
-manifest config doctor      # Detect and fix deprecated settings
+manifest config               # Interactive wizard (TTY) or show config
+manifest config show          # Display effective configuration
+manifest config setup         # Force interactive wizard
+manifest config doctor        # Detect deprecated settings
+manifest config doctor --fix  # Auto-fix deprecated settings
 ```
 
 > See [Configuration Examples](examples/env.manifest.examples.md) for templates covering enterprise, compliance, open-source, and more.
@@ -140,33 +281,118 @@ Manifest includes layered security protections:
 - **Smart `.gitignore` scaffolding** creates best-practice ignore rules for new projects
 - **Large file detection** warns before accidentally committing binaries
 - **Security audit** via `manifest security` for on-demand vulnerability scanning
+- **Installation directory guard** prevents running from the CLI install directory
 
 > See [Git Hooks](docs/GIT_HOOKS.md) for hook installation and recovery procedures.
 
 ---
 
-## Project Layout
+## Architecture
+
+### Module Organization
 
 ```text
 manifest.cli/
-├── scripts/          # Entry points and CLI wrapper
+├── scripts/            Entry points and CLI wrapper
 ├── modules/
-│   ├── core/         # Dispatcher, shared functions, config, env management
-│   ├── workflow/     # Prep/ship orchestration, auto-upgrade
-│   ├── fleet/        # Fleet init, discover, sync, ship, PR, docs
-│   ├── git/          # Git operations and change analysis
-│   ├── pr/           # Pull request lifecycle management
-│   ├── docs/         # Documentation generation and validation
-│   ├── system/       # OS detection, timestamps, security, uninstall
-│   ├── cloud/        # Manifest Cloud MCP connector and agent
-│   └── testing/      # Test framework and compatibility suites
-├── docs/             # User-facing documentation and release notes
-├── formula/          # Homebrew formula source
-├── examples/         # Configuration templates
-├── .git-hooks/       # Version-controlled pre-commit hooks
-├── install-cli.sh    # Installer (Homebrew-aware)
-└── VERSION           # Current version file
+│   ├── core/           Dispatcher, config, YAML, shared functions
+│   │   ├── manifest-core.sh        Main dispatcher (routes all commands)
+│   │   ├── manifest-config.sh      Layered YAML config loading
+│   │   ├── manifest-yaml.sh        yq-based YAML parser + env var mapping
+│   │   ├── manifest-init.sh        init repo|fleet (v42)
+│   │   ├── manifest-prep.sh        prep repo|fleet (v42)
+│   │   ├── manifest-refresh.sh     refresh repo|fleet (v42)
+│   │   ├── manifest-ship.sh        ship repo|fleet (v42)
+│   │   ├── manifest-shared-functions.sh  Version math, file scaffolding
+│   │   └── manifest-shared-utils.sh      Logging, formatting, guards
+│   ├── workflow/       Orchestration engine (prep/ship pipeline)
+│   ├── fleet/          Fleet dispatcher, config, detection, docs
+│   ├── git/            Git operations and change analysis
+│   ├── pr/             Pull request lifecycle management
+│   ├── docs/           Documentation generation and validation
+│   ├── system/         OS detection, timestamps, security, uninstall
+│   ├── cloud/          Manifest Cloud MCP connector and agent
+│   └── testing/        Test framework (8 suites, 14 test categories)
+├── docs/               User-facing documentation and release notes
+├── formula/            Homebrew formula source
+├── examples/           Configuration templates
+├── .git-hooks/         Version-controlled pre-commit hooks
+├── install-cli.sh      Installer (validates Bash 5+, yq v4+, Git)
+└── VERSION             Current version file
 ```
+
+### Data Flow
+
+```text
+User command
+    │
+    ▼
+manifest-core.sh :: main()
+    │
+    ├─ Pre-dispatch: load config, validate git repo
+    │
+    ├─ Core journey dispatch ──► manifest-init.sh
+    │                           manifest-prep.sh
+    │                           manifest-refresh.sh
+    │                           manifest-ship.sh
+    │                               │
+    │                               ▼
+    │                       manifest-orchestrator.sh :: manifest_prep_workflow()
+    │                           │
+    │                           ├── sync_repository()          [git module]
+    │                           ├── bump_version()             [git module]
+    │                           ├── generate_documents()       [docs module]
+    │                           ├── main_cleanup()             [docs module]
+    │                           ├── validate_project()         [docs module]
+    │                           ├── commit_changes()           [git module]
+    │                           ├── create_tag()               [git module]
+    │                           ├── push_changes()             [git module]
+    │                           └── update_homebrew_formula()   [core module]
+    │
+    ├─ Fleet dispatch ──► manifest-fleet.sh :: fleet_main()
+    │                       ├── fleet-config.sh   (YAML parsing)
+    │                       ├── fleet-detect.sh   (auto-discovery)
+    │                       └── fleet-docs.sh     (unified docs)
+    │
+    ├─ PR dispatch ──► manifest-pr.sh
+    │
+    └─ Legacy aliases ──► (route to new implementations)
+```
+
+### Configuration Pipeline
+
+```text
+Code defaults (set_default_configuration)
+    │
+    ▼
+~/.manifest-cli/manifest.config.global.yaml    ← User-wide
+    │
+    ▼
+manifest.config.yaml                           ← Project-level
+    │
+    ▼
+manifest.config.local.yaml (.gitignored)       ← Local overrides
+    │
+    ▼
+~80 MANIFEST_CLI_* environment variables       ← Runtime state
+    │
+    ▼
+_MANIFEST_YAML_TO_ENV[] bidirectional map      ← In manifest-yaml.sh
+```
+
+---
+
+## Dependencies
+
+| Dependency | Version | Purpose | Install |
+| ---------- | ------- | ------- | ------- |
+| Bash | 5.0+ | Shell runtime (macOS ships 3.2) | `brew install bash` |
+| Git | Any recent | Version control operations | `brew install git` |
+| yq | 4.0+ (Mike Farah's Go version) | YAML configuration parsing | `brew install yq` |
+| curl | Any | HTTPS timestamps, API calls | Usually pre-installed |
+| coreutils | Any (optional) | Cross-platform date/stat | `brew install coreutils` |
+
+Homebrew installation handles all dependencies automatically. The install script validates Bash 5+ and yq v4+ with platform-specific error messages and install instructions.
 
 ---
 

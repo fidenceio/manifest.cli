@@ -231,9 +231,9 @@ declare -g MANIFEST_FLEET_VERSION=""
 # YAML PARSING FUNCTIONS
 # =============================================================================
 # YAML parser functions (detect_yaml_parser, parse_yaml_with_yq,
-# parse_yaml_with_python, parse_yaml_basic, get_yaml_value, set_yaml_value)
-# now live in modules/core/manifest-yaml.sh and are sourced before this module
-# via manifest-core.sh. Fleet-specific code inherits them from core.
+# get_yaml_value, set_yaml_value) now live in modules/core/manifest-yaml.sh
+# and are sourced before this module via manifest-core.sh.
+# Fleet-specific code inherits them from core. yq is a hard dependency.
 
 # -----------------------------------------------------------------------------
 # Function: get_fleet_services

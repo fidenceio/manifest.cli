@@ -1,6 +1,6 @@
 # Manifest CLI Documentation
 
-**Version:** 41.3.0 | **Updated:** 2026-04-04
+**Version:** 41.3.0 | **Updated:** 2026-04-06
 
 ---
 
@@ -16,7 +16,7 @@
 
 | Document | Description |
 | -------- | ----------- |
-| [Command Reference](COMMAND_REFERENCE.md) | Every command, flag, and option |
+| [Command Reference](COMMAND_REFERENCE.md) | Every command, flag, and option (v42 structure) |
 | [Configuration Examples](../examples/env.manifest.examples.md) | Templates for enterprise, compliance, open-source, and more |
 | [Git Hooks](GIT_HOOKS.md) | Pre-commit secret protection and hook management |
 
@@ -44,17 +44,21 @@
 # Install
 brew tap fidenceio/tap && brew install manifest
 
-# Prepare a release locally
-manifest prep patch
+# Scaffold a new project
+manifest init repo
 
-# Publish a release
-manifest ship minor
+# Connect remotes and pull latest
+manifest prep repo
+
+# Ship a patch release
+manifest ship repo patch
+
+# Preview a release locally first
+manifest ship repo minor --local
 
 # Initialize a fleet
-manifest fleet init
+manifest init fleet
 
 # Get help
 manifest --help
 ```
-
-<!-- Manifest CLI v39.2.1 -->

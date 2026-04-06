@@ -296,6 +296,47 @@ validate_system() {
         errors=$((errors + 1))
     fi
     
+    # Check for yq (Mike Farah's Go version, v4+)
+    if command_exists yq; then
+        if yq --version 2>&1 | grep -q "mikefarah\|version v4"; then
+            local yq_ver=$(yq --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+            print_success "✅ yq version $yq_ver meets requirements"
+        else
+            print_error "❌ yq is installed but is not Mike Farah's Go version (v4+)."
+            print_error "   Manifest CLI requires https://github.com/mikefarah/yq"
+            print_error "   Install the correct version:"
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                print_error "     brew install yq"
+            elif command_exists snap; then
+                print_error "     sudo snap install yq"
+            elif command_exists apk; then
+                print_error "     sudo apk add yq"
+            elif command_exists pacman; then
+                print_error "     sudo pacman -S go-yq"
+            else
+                print_error "     See https://github.com/mikefarah/yq#install"
+            fi
+            errors=$((errors + 1))
+        fi
+    else
+        print_error "❌ yq is not installed. Manifest CLI requires yq (v4+) for YAML configuration."
+        print_error "   Install yq:"
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            print_error "     brew install yq"
+        elif command_exists apt-get; then
+            print_error "     sudo snap install yq  OR  see https://github.com/mikefarah/yq#install"
+        elif command_exists dnf; then
+            print_error "     sudo dnf install yq  OR  see https://github.com/mikefarah/yq#install"
+        elif command_exists apk; then
+            print_error "     sudo apk add yq"
+        elif command_exists pacman; then
+            print_error "     sudo pacman -S go-yq"
+        else
+            print_error "     See https://github.com/mikefarah/yq#install"
+        fi
+        errors=$((errors + 1))
+    fi
+
     # Check for essential commands
     local required_commands=("git" "curl" "wget")
     for cmd in "${required_commands[@]}"; do
@@ -305,12 +346,6 @@ validate_system() {
             print_warning "⚠️  $cmd is not available (some features may be limited)"
         fi
     done
-    
-    # Check for Node.js (optional but recommended)
-    if command_exists node; then
-        local node_version=$(node --version)
-        print_success "✅ Node.js $node_version is available"
-    fi
     
     if [ $errors -gt 0 ]; then
         print_error "❌ System validation failed with $errors error(s)"

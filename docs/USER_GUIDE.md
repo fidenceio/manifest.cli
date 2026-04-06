@@ -1,18 +1,24 @@
 # Manifest CLI User Guide
 
-This guide covers how to use Manifest CLI as it is currently implemented (v39.0.0).
+This guide covers how to use Manifest CLI as it is currently implemented (v42 command structure).
 
 ---
 
-## Release Workflow Model
+## The Five-Stage Journey
 
-Manifest separates release preparation from publishing:
+Manifest v42 organizes commands around a five-stage workflow that mirrors how developers actually work with a repository:
 
-- **`manifest prep <type>`** — local-only release preparation (sync, version bump, docs, commit).
-  Nothing leaves your machine.
-- **`manifest ship <type>`** — full publish flow (prep + Git tag + remote push + Homebrew formula update).
-- **`manifest pr ...`** — pull request lifecycle operations.
-- **`manifest fleet ...`** — coordinated multi-repo operations.
+```text
+config  -->  init  -->  prep  -->  refresh  -->  ship
+```
+
+1. **`manifest config`** — set up your environment (interactive wizard, show settings, diagnose issues).
+2. **`manifest init repo|fleet`** — scaffold required files (VERSION, CHANGELOG, docs, .gitignore).
+3. **`manifest prep repo|fleet`** — connect remotes and pull latest code.
+4. **`manifest refresh repo|fleet`** — regenerate docs, metadata, fleet membership without a version change.
+5. **`manifest ship repo|fleet <type>`** — publish a release (bump, docs, commit, tag, push, Homebrew).
+
+Every journey command takes a **scope**: `repo` (single repository) or `fleet` (coordinated multi-repo).
 
 Supported release types: `patch`, `minor`, `major`, `revision`.
 
@@ -23,6 +29,9 @@ Supported release types: `patch`, `minor`, `major`, `revision`.
 ```bash
 # View all available commands
 manifest --help
+
+# Scaffold your project (creates VERSION, CHANGELOG.md, docs/, .gitignore)
+manifest init repo
 
 # Review your current configuration
 manifest config show
@@ -38,38 +47,50 @@ manifest config setup
 
 ## Daily Commands
 
-### Prepare a Release (Local Only)
+### Prepare Your Workspace
 
 ```bash
-manifest prep patch       # Patch release
-manifest prep minor       # Minor release
-manifest prep -M          # Major release (short flag)
-manifest prep revision    # Revision (e.g., 1.0.0.1)
+manifest prep repo             # Connect remotes if missing, pull latest
 ```
 
-Prep runs: sync, version bump, documentation generation, markdown validation, commit.
-It does **not** create tags, push to remotes, or update Homebrew.
+If no remote is configured and you are in a terminal, Manifest prompts for a remote URL.
+
+### Preview a Release Locally
+
+```bash
+manifest ship repo patch --local    # Patch release, local only
+manifest ship repo minor --local    # Minor release, local only
+manifest ship repo -M --local       # Major release, short flag
+manifest ship repo revision --local # Revision (e.g., 1.0.0.1)
+```
+
+The `--local` flag runs the full pipeline (sync, bump, docs, commit) but skips tagging, pushing, and Homebrew updates. Nothing leaves your machine.
 
 ### Publish a Release
 
 ```bash
-manifest ship minor       # Full publish flow
-manifest ship patch -i    # Interactive mode (confirmation prompts)
+manifest ship repo patch       # Full patch release
+manifest ship repo minor       # Full minor release
+manifest ship repo major -i    # Major release with interactive safety prompts
 ```
 
-Ship runs everything prep does, then: creates a Git tag, pushes to all remotes,
-and updates the Homebrew formula (in the canonical repository).
+Ship runs: sync, version bump, documentation generation, markdown validation, commit, Git tag, push to all remotes, and Homebrew formula update (in the canonical repository).
+
+### Regenerate Documentation
+
+```bash
+manifest refresh repo              # Regenerate docs and metadata
+manifest refresh repo --commit     # Also commit the refreshed files
+```
+
+Use `refresh` between releases to keep docs current without bumping the version.
 
 ### Other Common Operations
 
 ```bash
-manifest sync             # Pull latest from remote
-manifest version patch    # Bump version without full prep
-manifest docs             # Regenerate docs for current version
-manifest docs metadata    # Update repository metadata
-manifest commit "msg"     # Commit with a custom message
-manifest revert           # Revert to previous version
-manifest cleanup          # Archive old documentation
+manifest revert               # Revert to previous version
+manifest security             # Run security audit
+manifest upgrade              # Check for and install CLI updates
 ```
 
 ---
@@ -77,18 +98,18 @@ manifest cleanup          # Archive old documentation
 ## Pull Request Workflows
 
 ```bash
-manifest pr               # Interactive PR wizard (TTY mode)
-manifest pr create        # Create a new pull request
+manifest pr                   # Interactive PR wizard (TTY mode)
+manifest pr create            # Create a new pull request
 manifest pr create --draft --labels "feature,v2"
-manifest pr update        # Update PR metadata
-manifest pr status        # Show PR status
-manifest pr checks        # Show CI check results
-manifest pr checks --watch  # Watch checks in real-time
-manifest pr ready         # Evaluate merge readiness
-manifest pr queue         # Queue auto-merge
+manifest pr update            # Update PR metadata
+manifest pr status            # Show PR status
+manifest pr checks            # Show CI check results
+manifest pr checks --watch    # Watch checks in real-time
+manifest pr ready             # Evaluate merge readiness
+manifest pr queue             # Queue auto-merge
 manifest pr queue --method squash --force
-manifest pr policy show   # Display PR policy profile
-manifest pr policy validate  # Validate against policy
+manifest pr policy show       # Display PR policy profile
+manifest pr policy validate   # Validate against policy
 ```
 
 ---
@@ -100,39 +121,59 @@ Fleet manages versioning and releases across multiple repositories.
 ### Initialize a Fleet
 
 ```bash
-# Auto-discover repos in your workspace (default behavior)
-manifest fleet init
+# Phase 1: Scan directories, create manifest.fleet.tsv for review
+manifest init fleet
 
-# Auto-discover with a custom fleet name
-manifest fleet init --name "my-platform"
+# Phase 2: Re-run after reviewing TSV — scaffolds repos, creates fleet config
+manifest init fleet
 
-# Skip discovery, create a bare template
-manifest fleet init --bare
+# Custom scan depth (default: 2 levels)
+manifest init fleet --depth 3
 
-# Overwrite existing fleet config
-manifest fleet init --force
+# Named fleet
+manifest init fleet --name "my-platform"
 ```
 
-During initialization, Manifest ensures every discovered repo has a `.gitignore`.
-Existing `.gitignore` files with entries are preserved; a `.gitignore.manifest`
-reference file is created instead.
+The two-phase approach lets you review discovered repositories in the TSV file before committing to a fleet configuration. During initialization, Manifest ensures every discovered repo has a `.gitignore`. Existing `.gitignore` files with entries are preserved; a `.gitignore.manifest` reference file is created instead.
 
-### Fleet Operations
+### Prepare Fleet Workspace
 
 ```bash
-manifest fleet discover          # Find new repos in workspace
-manifest fleet discover --depth 3 --json
-manifest fleet status            # Overview of all services
-manifest fleet status --verbose
-manifest fleet sync              # Clone/pull all services
-manifest fleet sync --parallel
-manifest fleet validate          # Check fleet configuration
-manifest fleet add ./new-service # Add a service to the fleet
-manifest fleet ship minor --safe # Coordinated release with safety gates
-manifest fleet pr queue          # Auto-merge PRs across fleet
+manifest prep fleet                # Clone missing, pull existing
+manifest prep fleet --parallel     # Run operations in parallel
+manifest prep fleet --clone-only   # Clone only (skip pull)
+manifest prep fleet --pull-only    # Pull only (skip clone)
 ```
 
-**Current status:** `fleet prep` and `fleet docs` are scaffolded and not yet implemented.
+### Refresh Fleet
+
+```bash
+manifest refresh fleet             # Re-scan membership, validate, regenerate docs
+manifest refresh fleet --dry-run   # Preview changes without applying
+```
+
+### Ship Fleet Release
+
+```bash
+manifest ship fleet minor                  # Coordinated minor release
+manifest ship fleet patch --safe           # With checks and readiness gates
+manifest ship fleet minor --local          # Local-only across fleet
+manifest ship fleet patch --method squash  # Squash merge strategy
+manifest ship fleet minor --draft          # Create draft PRs
+```
+
+### Direct Fleet Commands
+
+The legacy `manifest fleet <sub>` interface continues to work:
+
+```bash
+manifest fleet status --verbose    # Fleet status
+manifest fleet discover --depth 3  # Find new repos
+manifest fleet add ./new-service   # Add a service
+manifest fleet validate            # Check configuration
+manifest fleet pr queue            # Auto-merge PRs across fleet
+manifest fleet help                # Fleet help
+```
 
 ---
 
@@ -172,22 +213,27 @@ Test logs are written to `~/.manifest-cli/logs/tests/<run-id>/`.
 ### Interactive Setup
 
 ```bash
-manifest config             # Interactive wizard (TTY)
+manifest config             # Interactive wizard (TTY) or show config (pipe)
 manifest config setup       # Force interactive wizard
 manifest config show        # Display current configuration
 manifest config time        # Show time server settings
 manifest config doctor      # Detect deprecated settings
-manifest config doctor --fix  # Auto-fix deprecated settings
+manifest config doctor --fix      # Auto-fix deprecated settings
 manifest config doctor --dry-run  # Preview fixes without applying
 ```
 
 ### Configuration Loading Order
 
-Configuration files are loaded in this order (later files override earlier ones):
+Configuration uses YAML files loaded in priority order (later overrides earlier):
 
-1. **Install-level:** `.env.manifest.global`, `.env.manifest.local` (under install dir)
-2. **User-level:** `$HOME/.env.manifest.global`
-3. **Project-level:** `.env.manifest.global`, `.env.manifest.local`
+| Priority | File | Scope |
+| -------- | ---- | ----- |
+| 1 (lowest) | Code defaults | Built-in |
+| 2 | `~/.manifest-cli/manifest.config.global.yaml` | User-wide |
+| 3 | `manifest.config.yaml` | Project |
+| 4 (highest) | `manifest.config.local.yaml` (git-ignored) | Local overrides |
+
+All settings map to `MANIFEST_CLI_*` environment variables via a bidirectional YAML-to-env mapping in `manifest-yaml.sh`. The YAML parser is [yq v4+](https://github.com/mikefarah/yq) (Mike Farah's Go implementation), a hard dependency.
 
 For configuration templates covering enterprise, compliance, open-source, and specialized
 use cases, see [Configuration Examples](../examples/env.manifest.examples.md).
@@ -198,7 +244,6 @@ use cases, see [Configuration Examples](../examples/env.manifest.examples.md).
 
 ```bash
 manifest security           # Run security audit
-manifest cleanup            # Archive old documentation
 manifest upgrade --check    # Check for updates (no install)
 manifest upgrade            # Install latest version
 manifest upgrade --force    # Force upgrade regardless of version
@@ -233,3 +278,24 @@ manifest agent uninstall    # Remove agent
 
 Cloud features require `MANIFEST_CLI_CLOUD_API_KEY`. The cloud connector enriches
 decisions but is never a hard runtime requirement.
+
+---
+
+## Legacy Command Compatibility
+
+All pre-v42 commands continue to work. Some have changed meaning:
+
+| Old Command | New Equivalent | Notes |
+| ----------- | -------------- | ----- |
+| `manifest prep patch` | `manifest ship repo patch --local` | Shows deprecation warning |
+| `manifest ship patch` | `manifest ship repo patch` | Automatic redirect |
+| `manifest sync` | `manifest prep repo` | Automatic redirect |
+| `manifest fleet sync` | `manifest prep fleet` | Both work |
+| `manifest update` | `manifest upgrade` | Shows deprecation warning |
+| `manifest docs` | `manifest refresh repo` | Still works as plumbing |
+| `manifest cleanup` | `manifest refresh repo` | Still works as plumbing |
+| `manifest time` | `manifest config time` | Still works |
+| `manifest commit "msg"` | *(plumbing)* | Still works |
+| `manifest version patch` | *(plumbing)* | Still works |
+
+If you have scripts using the old commands, they will continue to function. Update them at your convenience.
