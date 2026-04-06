@@ -661,7 +661,7 @@ test_integration_workflows() {
     echo "🧪 Testing integration workflows..."
     
     # Test basic workflow commands by checking if they exist in the help text
-    local workflow_commands=("sync" "version" "commit" "cleanup")
+    local workflow_commands=("sync" "bump-version" "commit" "cleanup")
     
     for cmd in "${workflow_commands[@]}"; do
         # Check if the command exists in the help text

@@ -667,8 +667,8 @@ main() {
             commit_changes "$message" "$timestamp"
             ;;
 
-        # Old "manifest version" — plumbing, called by ship
-        "version")
+        # Old "manifest version" — plumbing, called by ship internally
+        "bump-version")
             local increment_type="${1:-patch}"
             bump_version "$increment_type"
             ;;
@@ -779,16 +779,17 @@ Run 'manifest <command> --help' for details on any command.
 EOF
 }
 
-# Display version
+# Display version — reads the CLI's own VERSION, not the target project's
 display_version() {
+    local cli_root="${MANIFEST_CLI_CORE_MODULES_DIR%/modules}"
     local version=""
-    if [ -f "$PROJECT_ROOT/VERSION" ]; then
-        version=$(cat "$PROJECT_ROOT/VERSION" 2>/dev/null)
+    if [ -f "$cli_root/VERSION" ]; then
+        version=$(cat "$cli_root/VERSION" 2>/dev/null)
     fi
     if [ -n "$version" ]; then
         echo "Manifest CLI v${version}"
     else
-        log_error "Could not read VERSION file"
+        log_error "Could not read Manifest CLI VERSION file"
         return 1
     fi
 }
