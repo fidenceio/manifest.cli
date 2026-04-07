@@ -39,12 +39,14 @@ export PROJECT_ROOT
 # Source shared utilities first
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-shared-utils.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-shared-functions.sh"
-# Function registry removed - not compatible with macOS default Bash 3.2
 
 # Source YAML module before config (config depends on YAML functions)
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-yaml.sh"
 
-# Now source modules after variables are set
+# Source plugin loader (must come after shared-utils for log_* functions)
+source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-plugin-loader.sh"
+
+# Now source core modules after variables are set
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-config.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-os.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-time.sh"
@@ -54,13 +56,19 @@ source "$MANIFEST_CLI_CORE_MODULES_DIR/docs/manifest-documentation.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-uninstall.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/workflow/manifest-orchestrator.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/docs/manifest-cleanup-docs.sh"
-source "$MANIFEST_CLI_CORE_MODULES_DIR/testing/manifest-test.sh"
-source "$MANIFEST_CLI_CORE_MODULES_DIR/pr/manifest-pr.sh"
-source "$MANIFEST_CLI_CORE_MODULES_DIR/cloud/manifest-agent-containerized.sh"
 
-# Source MCP utilities and connector for Manifest Cloud
-source "$MANIFEST_CLI_CORE_MODULES_DIR/cloud/manifest-mcp-utils.sh"
-source "$MANIFEST_CLI_CORE_MODULES_DIR/cloud/manifest-mcp-connector.sh"
+# Optional modules — loaded from Manifest Cloud plugins, or stubs if absent
+manifest_load_plugin "testing/manifest-test.sh" \
+    || source "$MANIFEST_CLI_CORE_MODULES_DIR/stubs/manifest-test-stub.sh"
+manifest_load_plugin "pr/manifest-pr.sh" \
+    || source "$MANIFEST_CLI_CORE_MODULES_DIR/stubs/manifest-pr-stub.sh"
+manifest_load_plugin "cloud/manifest-agent-containerized.sh" \
+    || source "$MANIFEST_CLI_CORE_MODULES_DIR/stubs/manifest-agent-stub.sh"
+if ! manifest_load_plugin "cloud/manifest-mcp-utils.sh"; then
+    source "$MANIFEST_CLI_CORE_MODULES_DIR/stubs/manifest-cloud-stub.sh"
+else
+    manifest_load_plugin "cloud/manifest-mcp-connector.sh" || true
+fi
 
 # Source Fleet module for polyrepo management
 source "$MANIFEST_CLI_CORE_MODULES_DIR/fleet/manifest-fleet.sh"
@@ -309,11 +317,10 @@ manifest_test() {
 
 # Auto-upgrade check with cooldown
 check_auto_upgrade() {
-    # Source the auto-upgrade module
-    source "$MANIFEST_CLI_CORE_MODULES_DIR/workflow/manifest-auto-upgrade.sh"
-    
-    # Call the check function from the auto-upgrade module
-    check_auto_upgrade_internal
+    # Load from Cloud plugins; silently skip if not installed
+    if manifest_load_plugin "workflow/manifest-auto-upgrade.sh"; then
+        check_auto_upgrade_internal
+    fi
 }
 
 # Legacy prep entry point — kept for internal callers (manifest_ship in pr module)
@@ -537,7 +544,12 @@ main() {
             ;;
 
         "upgrade")
-            upgrade_cli "$@"
+            if manifest_load_plugin "workflow/manifest-auto-upgrade.sh"; then
+                upgrade_cli_internal "$@"
+            else
+                log_warning "Upgrade module requires Manifest Cloud."
+                echo "  To upgrade via Homebrew: brew update && brew upgrade manifest"
+            fi
             ;;
 
         "uninstall")
@@ -582,9 +594,13 @@ main() {
                 fi
             else
                 echo "Reinstalling via manual install..."
-                source "$MANIFEST_CLI_CORE_MODULES_DIR/workflow/manifest-auto-upgrade.sh"
-                install_cli "true"
-                migrate_user_global_config_internal
+                if manifest_load_plugin "workflow/manifest-auto-upgrade.sh"; then
+                    install_cli "true"
+                    migrate_user_global_config_internal
+                else
+                    log_error "Manual reinstall requires Manifest Cloud. Use: brew reinstall manifest"
+                    return 1
+                fi
             fi
             ;;
 
@@ -656,7 +672,12 @@ main() {
         # Old "manifest update" -> "manifest upgrade"
         "update")
             log_warning "Deprecated: 'manifest update' is now 'manifest upgrade'."
-            upgrade_cli "$@"
+            if manifest_load_plugin "workflow/manifest-auto-upgrade.sh"; then
+                upgrade_cli_internal "$@"
+            else
+                log_warning "Upgrade module requires Manifest Cloud."
+                echo "  To upgrade via Homebrew: brew update && brew upgrade manifest"
+            fi
             ;;
 
         # Old "manifest commit" — plumbing, called by ship
@@ -750,7 +771,7 @@ Usage: manifest <command> [scope] [options]
     ship repo|fleet <patch|minor|major> Publish release (version + tag + push)
          --local                        Preview locally without pushing
 
-  Pull requests:
+  Pull requests:                              [Cloud]
     pr                                  Interactive PR wizard
     pr create|status|ready              Create, view, evaluate PRs
     pr checks|queue|update              CI status, auto-merge, update
@@ -759,12 +780,12 @@ Usage: manifest <command> [scope] [options]
     config doctor                       Detect and fix config issues
 
   Maintenance:
-    upgrade                             Update Manifest CLI
+    upgrade                             Update Manifest CLI  [Cloud]
     uninstall                           Remove Manifest CLI
     security                            Run security audit
-    test                                Run diagnostic tests
+    test                                Run diagnostic tests [Cloud]
 
-  Cloud:
+  Cloud:                                       [Cloud]
     cloud config|status|generate        Manifest Cloud connector
     agent init|auth|status              Containerized cloud agent
 

@@ -4,7 +4,7 @@
 
 Manifest CLI orchestrates version bumping, documentation generation, Git tagging, remote publishing, and Homebrew distribution from a single command. It extends naturally to polyrepo fleets and pull request workflows without sacrificing single-repo simplicity.
 
-**Version** `42.0.3` | **Platform** macOS, Linux, FreeBSD | **Requires** Bash 5+, Git, yq v4+
+**Version** `43.0.0` | **Platform** macOS, Linux, FreeBSD | **Requires** Bash 5+, Git, yq v4+
 
 ---
 
@@ -25,7 +25,7 @@ For organizations managing multiple repositories (microservices, libraries, infr
 
 ### How It Works
 
-At its core, Manifest is a modular Bash application comprising 39 shell scripts organized into eight functional categories: core dispatch, workflow orchestration, fleet management, Git operations, pull request lifecycle, documentation generation, system utilities, and cloud integration. The entry point ([manifest-core.sh](modules/core/manifest-core.sh)) sources all modules at startup and routes commands through a central dispatcher.
+At its core, Manifest is a modular Bash application comprising 29 shell scripts organized into six functional categories: core dispatch, workflow orchestration, fleet management, Git operations, documentation generation, and system utilities. Optional modules (PR workflows, cloud integration, test suites, auto-upgrade) are loaded as plugins from Manifest Cloud when installed. The entry point ([manifest-core.sh](modules/core/manifest-core.sh)) sources core modules at startup, attempts to load optional plugins via [manifest-plugin-loader.sh](modules/core/manifest-plugin-loader.sh), and routes commands through a central dispatcher.
 
 Configuration flows through a layered precedence system: code defaults are overridden by a global YAML config (`~/.manifest-cli/manifest.config.global.yaml`), then by a project-level config (`manifest.config.yaml`), and finally by a git-ignored local config (`manifest.config.local.yaml`). This hierarchy maps approximately 80 YAML dot-paths to `MANIFEST_CLI_*` environment variables via a bidirectional lookup table in [manifest-yaml.sh](modules/core/manifest-yaml.sh), which uses [yq](https://github.com/mikefarah/yq) (Mike Farah's Go implementation, v4+) as its sole YAML parser.
 
@@ -84,8 +84,8 @@ manifest ship repo minor            # Full publish
 
 ```bash
 manifest --help
-manifest test all
 manifest config show
+manifest test all           # Requires Manifest Cloud
 ```
 
 ---
@@ -134,26 +134,28 @@ Short flags: `-p` (patch), `-m` (minor), `-M` (major), `-r` (revision), `-i` (in
 
 | Command | Purpose |
 | ------- | ------- |
-| `manifest pr` | Interactive PR wizard |
-| `manifest pr create\|status\|ready\|checks\|queue\|update` | PR lifecycle operations |
+| `manifest pr` | Interactive PR wizard \[Cloud\] |
+| `manifest pr create\|status\|ready\|checks\|queue\|update` | PR lifecycle operations \[Cloud\] |
 | `manifest revert` | Roll back to a previous version |
 
 ### Maintenance Commands
 
 | Command | Purpose |
 | ------- | ------- |
-| `manifest upgrade` | Check for and install CLI updates |
+| `manifest upgrade` | Check for and install CLI updates \[Cloud\] |
 | `manifest uninstall` | Remove Manifest CLI |
 | `manifest reinstall` | Full uninstall + reinstall |
 | `manifest security` | Run security audit |
-| `manifest test [suite]` | Run diagnostic tests |
+| `manifest test [suite]` | Run diagnostic tests \[Cloud\] |
 
-### Cloud and Agent
+### Cloud and Agent \[Cloud\]
 
 | Command | Purpose |
 | ------- | ------- |
 | `manifest cloud config\|status\|generate` | Manifest Cloud connector |
 | `manifest agent init\|auth\|status` | Containerized cloud agent |
+
+> Commands marked \[Cloud\] require [Manifest Cloud](https://github.com/fidenceio/fidenceio.manifest.cloud) to be installed. The CLI works fully without Cloud for the core journey (config, init, prep, refresh, ship).
 
 ### Legacy Aliases (Hidden)
 
@@ -232,7 +234,9 @@ manifest fleet pr queue --method squash
 
 ---
 
-## Pull Request Workflows
+## Pull Request Workflows \[Cloud\]
+
+Requires [Manifest Cloud](https://github.com/fidenceio/fidenceio.manifest.cloud).
 
 ```bash
 manifest pr                         # Interactive PR wizard
@@ -296,23 +300,22 @@ manifest.cli/
 ├── scripts/            Entry points and CLI wrapper
 ├── modules/
 │   ├── core/           Dispatcher, config, YAML, shared functions
-│   │   ├── manifest-core.sh        Main dispatcher (routes all commands)
-│   │   ├── manifest-config.sh      Layered YAML config loading
-│   │   ├── manifest-yaml.sh        yq-based YAML parser + env var mapping
-│   │   ├── manifest-init.sh        init repo|fleet (v42)
-│   │   ├── manifest-prep.sh        prep repo|fleet (v42)
-│   │   ├── manifest-refresh.sh     refresh repo|fleet (v42)
-│   │   ├── manifest-ship.sh        ship repo|fleet (v42)
-│   │   ├── manifest-shared-functions.sh  Version math, file scaffolding
-│   │   └── manifest-shared-utils.sh      Logging, formatting, guards
+│   │   ├── manifest-core.sh             Main dispatcher (routes all commands)
+│   │   ├── manifest-plugin-loader.sh    Plugin loader for optional Cloud modules
+│   │   ├── manifest-config.sh           Layered YAML config loading
+│   │   ├── manifest-yaml.sh             yq-based YAML parser + env var mapping
+│   │   ├── manifest-init.sh             init repo|fleet (v42)
+│   │   ├── manifest-prep.sh             prep repo|fleet (v42)
+│   │   ├── manifest-refresh.sh          refresh repo|fleet (v42)
+│   │   ├── manifest-ship.sh             ship repo|fleet (v42)
+│   │   ├── manifest-shared-functions.sh Version math, file scaffolding
+│   │   └── manifest-shared-utils.sh     Logging, formatting, guards
 │   ├── workflow/       Orchestration engine (prep/ship pipeline)
 │   ├── fleet/          Fleet dispatcher, config, detection, docs
 │   ├── git/            Git operations and change analysis
-│   ├── pr/             Pull request lifecycle management
 │   ├── docs/           Documentation generation and validation
 │   ├── system/         OS detection, timestamps, security, uninstall
-│   ├── cloud/          Manifest Cloud MCP connector and agent
-│   └── testing/        Test framework (8 suites, 14 test categories)
+│   └── stubs/          Fallback stubs for optional Cloud modules
 ├── docs/               User-facing documentation and release notes
 ├── formula/            Homebrew formula source
 ├── examples/           Configuration templates
@@ -320,6 +323,8 @@ manifest.cli/
 ├── install-cli.sh      Installer (validates Bash 5+, yq v4+, Git)
 └── VERSION             Current version file
 ```
+
+Optional modules (PR, cloud, testing, auto-upgrade) live in the [Manifest Cloud](https://github.com/fidenceio/fidenceio.manifest.cloud) repo under `cli-plugins/` and are loaded at runtime when installed to `~/.manifest-cloud/cli-plugins/`.
 
 ### Data Flow
 
@@ -354,7 +359,7 @@ manifest-core.sh :: main()
     │                       ├── fleet-detect.sh   (auto-discovery)
     │                       └── fleet-docs.sh     (unified docs)
     │
-    ├─ PR dispatch ──► manifest-pr.sh
+    ├─ PR dispatch ──► manifest-pr.sh        [Cloud plugin]
     │
     └─ Legacy aliases ──► (route to new implementations)
 ```

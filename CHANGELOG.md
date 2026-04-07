@@ -3,6 +3,27 @@
 All notable changes to Manifest CLI are documented here.
 This project uses [Semantic Versioning](https://semver.org/).
 
+## [43.0.0] - 2026-04-06
+
+**Release Type:** Major
+
+### Architecture: Plugin Extraction
+
+- Extracted PR, cloud, testing, and auto-upgrade modules (~7,000 lines) to Manifest Cloud repo
+- Added plugin loader (`manifest-plugin-loader.sh`) for optional Cloud-provided modules
+- Added stub files that print guidance when Cloud modules are not installed
+- Deleted dead duplicate `manifest-mcp-connector-new.sh`
+- CLI core journey (config, init, prep, refresh, ship) works fully standalone
+- Commands requiring Cloud modules now marked `[Cloud]` in help text
+- Modules removed from CLI: `modules/cloud/`, `modules/pr/`, `modules/testing/`, `modules/workflow/manifest-auto-upgrade.sh`
+- Modules added to CLI: `modules/core/manifest-plugin-loader.sh`, `modules/stubs/` (4 stub files)
+
+### Breaking Changes
+
+- `manifest pr`, `manifest test`, `manifest cloud`, `manifest agent` now require Manifest Cloud installation
+- `manifest upgrade` via manual install requires Manifest Cloud; Homebrew upgrade path unaffected
+- `manifest ship fleet` (non-local) requires Manifest Cloud for PR operations
+
 ## [39.2.2] - 2026-04-04
 
 **Release Type:** Patch
