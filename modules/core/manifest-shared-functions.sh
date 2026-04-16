@@ -112,6 +112,59 @@ get_latest_version() {
     get_current_version
 }
 
+manifest_origin_repo_slug() {
+    local repo_url=""
+    repo_url="$(git -C "${1:-$PROJECT_ROOT}" remote get-url origin 2>/dev/null || echo "")"
+
+    if [[ "$repo_url" =~ ^git@[^:]+:([^/]+)/([^/]+)\.git$ ]]; then
+        echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+        return 0
+    fi
+    if [[ "$repo_url" =~ ^https?://[^/]+/([^/]+)/([^/]+)(\.git)?$ ]]; then
+        echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+        return 0
+    fi
+
+    echo ""
+    return 1
+}
+
+manifest_is_canonical_repo() {
+    local project_root="${1:-$PROJECT_ROOT}"
+    local origin_slug=""
+    origin_slug="$(manifest_origin_repo_slug "$project_root" || echo "")"
+
+    local allowed_slugs="${MANIFEST_CLI_CANONICAL_REPO_SLUGS:-fidenceio/manifest.cli,fidenceio/fidenceio.manifest.cli}"
+    IFS=',' read -r -a allowed_array <<< "$allowed_slugs"
+    local allowed=""
+    for allowed in "${allowed_array[@]}"; do
+        if [ "$origin_slug" = "$allowed" ]; then
+            return 0
+        fi
+    done
+
+    if [[ -f "$project_root/install-cli.sh" ]] && [[ -f "$project_root/scripts/manifest-cli-wrapper.sh" ]] && [[ -f "$project_root/formula/manifest.rb" ]] && [[ -d "$project_root/modules" ]]; then
+        return 0
+    fi
+
+    return 1
+}
+
+manifest_repo_display_name() {
+    local project_root="${1:-$PROJECT_ROOT}"
+    if manifest_is_canonical_repo "$project_root"; then
+        echo "${MANIFEST_CLI_PROJECT_NAME:-Manifest CLI}"
+        return 0
+    fi
+
+    if [[ -n "${MANIFEST_CLI_PROJECT_NAME:-}" ]] && [[ "${MANIFEST_CLI_PROJECT_NAME}" != "Manifest CLI" ]]; then
+        echo "$MANIFEST_CLI_PROJECT_NAME"
+        return 0
+    fi
+
+    basename "$project_root"
+}
+
 # =============================================================================
 # NETWORK AND CONNECTIVITY FUNCTIONS
 # =============================================================================
@@ -607,10 +660,19 @@ ensure_required_files() {
 # Create default README.md content
 create_default_readme() {
     local readme_file="$1"
-    local project_name=$(basename "$(dirname "$readme_file")")
-    local current_version=$(cat "$(dirname "$readme_file")/VERSION" 2>/dev/null || echo "1.0.0")
-    
-    cat > "$readme_file" << EOF
+    local project_root
+    project_root="$(dirname "$readme_file")"
+    local project_name
+    project_name="$(manifest_repo_display_name "$project_root")"
+    local current_version
+    current_version=$(cat "$project_root/VERSION" 2>/dev/null || echo "1.0.0")
+    local docs_dir_name
+    docs_dir_name="$(basename "$(get_docs_folder "$project_root")")"
+    local timestamp
+    timestamp="$(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+    if manifest_is_canonical_repo "$project_root"; then
+        cat > "$readme_file" << EOF
 # $project_name
 
 A software project with automated version management and documentation.
@@ -669,14 +731,45 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 *This project uses [Manifest CLI](https://github.com/fidenceio/fidenceio.manifest.cli) for automated version management and documentation generation.*
 EOF
+        return 0
+    fi
+
+    cat > "$readme_file" << EOF
+# $project_name
+
+Repository documentation and release metadata.
+
+<!-- manifest:readme-version:start -->
+## Version Information
+
+| Property | Value |
+|----------|-------|
+| Current Version | \`$current_version\` |
+| Release Date | \`$timestamp\` |
+| Git Tag | \`v$current_version\` |
+| Release Notes | [$docs_dir_name/RELEASE_v$current_version.md]($docs_dir_name/RELEASE_v$current_version.md) |
+| Changelog | [$docs_dir_name/CHANGELOG_v$current_version.md]($docs_dir_name/CHANGELOG_v$current_version.md) |
+| Last Updated | \`$timestamp\` |
+<!-- manifest:readme-version:end -->
+
+## Documentation
+
+- [VERSION](VERSION)
+- [CHANGELOG.md](CHANGELOG.md)
+- [$docs_dir_name/]($docs_dir_name/)
+EOF
 }
 
 # Create default CHANGELOG.md content
 create_default_changelog() {
     local changelog_file="$1"
-    local current_version=$(cat "$(dirname "$changelog_file")/VERSION" 2>/dev/null || echo "1.0.0")
-    
-    cat > "$changelog_file" << EOF
+    local project_root
+    project_root="$(dirname "$changelog_file")"
+    local current_version
+    current_version=$(cat "$project_root/VERSION" 2>/dev/null || echo "1.0.0")
+
+    if manifest_is_canonical_repo "$project_root"; then
+        cat > "$changelog_file" << EOF
 # Changelog
 
 All notable changes to this project will be documented in this file.
@@ -712,6 +805,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 - N/A
+EOF
+        return 0
+    fi
+
+    local release_date
+    release_date="$(date -u +'%Y-%m-%d')"
+    local docs_dir_name
+    docs_dir_name="$(basename "$(get_docs_folder "$project_root")")"
+
+    cat > "$changelog_file" << EOF
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## [Unreleased]
+
+<!-- manifest:root-changelog:start -->
+## [$current_version] - $release_date
+
+See [$docs_dir_name/CHANGELOG_v$current_version.md]($docs_dir_name/CHANGELOG_v$current_version.md) for the detailed changelog and [$docs_dir_name/RELEASE_v$current_version.md]($docs_dir_name/RELEASE_v$current_version.md) for release notes.
+<!-- manifest:root-changelog:end -->
 EOF
 }
 
@@ -965,6 +1079,7 @@ EOF
 
 # Export all shared functions
 export -f get_current_version get_next_version get_latest_version
+export -f manifest_origin_repo_slug manifest_is_canonical_repo manifest_repo_display_name
 export -f secure_curl_request check_network_connectivity check_required_tools
 export -f generate_agent_id generate_session_id log_operation
 export -f get_git_info is_git_repository

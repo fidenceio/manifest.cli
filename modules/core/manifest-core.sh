@@ -15,18 +15,13 @@ MANIFEST_CLI_CORE_MODULES_DIR="$(dirname "$MANIFEST_CLI_CORE_SCRIPT_DIR")"
 # Get the binary location (where the CLI binary is installed)
 MANIFEST_CLI_CORE_BINARY_LOCATION="${MANIFEST_CLI_BIN_DIR:-$HOME/.local/bin}"
 
-# Determine the project root (where we're actually working)
-# Use the current working directory from the environment, not the script's directory
-if [ -n "$PWD" ] && git -C "$PWD" rev-parse --git-dir > /dev/null 2>&1; then
-    # We're in a git repository, use current working directory
-    PROJECT_ROOT="$PWD"
-    # When in a git repo, INSTALL_LOCATION is where the CLI files are installed
-    INSTALL_LOCATION="${MANIFEST_CLI_INSTALL_DIR:-$HOME/.manifest-cli}"
-else
-    # Not in a git repository, use installation location for both
-    INSTALL_LOCATION="${MANIFEST_CLI_CORE_MODULES_DIR%/*/*/*}"
-    PROJECT_ROOT="$INSTALL_LOCATION"
-fi
+# PROJECT_ROOT = where the user is working (always PWD, never the install location).
+# main() re-sets this after validating the command, but modules sourced at
+# load time may read it, so give it a sane default now.
+PROJECT_ROOT="$PWD"
+
+# INSTALL_LOCATION = where the CLI files live (separate concern from PROJECT_ROOT)
+INSTALL_LOCATION="${MANIFEST_CLI_INSTALL_DIR:-$HOME/.manifest-cli}"
 
 # Note: PROJECT_ROOT will be validated and corrected in the main() function
 # to ensure we're always working from the repository root
@@ -338,7 +333,7 @@ manifest_prep() {
 
 main() {
     # Set INSTALL_LOCATION early for security checks
-    INSTALL_LOCATION="${MANIFEST_CLI_INSTALL_DIR:-$HOME/.manifest}"
+    INSTALL_LOCATION="${MANIFEST_CLI_INSTALL_DIR:-$HOME/.manifest-cli}"
     export INSTALL_LOCATION
 
     # SECURITY: Early check to prevent running from installation directory
@@ -364,7 +359,9 @@ main() {
         "help"|"-help"|"--help"|"-h"|"version"|"-version"|"--version"|"-v"|"-V"|"uninstall"|"reinstall"|"update"|"upgrade"|"config")
             case "$command" in
                 "config")
-                    load_configuration "$(pwd)" "false"
+                    PROJECT_ROOT="$(pwd)"
+                    export PROJECT_ROOT
+                    load_configuration "$PROJECT_ROOT" "false"
                     ;;
             esac
             ;;
@@ -373,7 +370,9 @@ main() {
             ;;
         # init may create a git repo, so don't require one
         "init")
-            load_configuration "$(pwd)" "false"
+            PROJECT_ROOT="$(pwd)"
+            export PROJECT_ROOT
+            load_configuration "$PROJECT_ROOT" "false"
             ;;
         *)
             # All other commands require a Git repository
