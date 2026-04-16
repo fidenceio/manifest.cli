@@ -205,11 +205,19 @@ update_homebrew_formula() {
     fi
 
     if [ -d "$tap_dir/Formula" ]; then
-        cp "$formula_file" "$tap_dir/Formula/manifest.rb"
         if (
             set -e
             cd "$tap_dir"
             git pull --rebase origin main
+        ); then
+            :
+        else
+            echo "   ⚠️  Could not pull latest from homebrew-tap — continuing with local state"
+        fi
+        cp "$formula_file" "$tap_dir/Formula/manifest.rb"
+        if (
+            set -e
+            cd "$tap_dir"
             git add Formula/manifest.rb
             if ! git diff --cached --quiet; then
                 git commit -m "Update formula to ${tag}"

@@ -405,10 +405,10 @@ manifest_prep_workflow() {
         echo "   - Remotes: (no pushes in prep mode)"
     fi
     echo "   - Timestamp: $timestamp"
-    echo "   - Source: $MANIFEST_TIME_SERVER ($MANIFEST_TIME_SERVER_IP)"
-    echo "   - Offset: $MANIFEST_TIME_OFFSET seconds"
-    echo "   - Uncertainty: ±$MANIFEST_TIME_UNCERTAINTY seconds"
-    echo "   - Method: $MANIFEST_TIME_METHOD"
+    echo "   - Source: $MANIFEST_CLI_TIME_SERVER ($MANIFEST_CLI_TIME_SERVER_IP)"
+    echo "   - Offset: $MANIFEST_CLI_TIME_OFFSET seconds"
+    echo "   - Uncertainty: ±$MANIFEST_CLI_TIME_UNCERTAINTY seconds"
+    echo "   - Method: $MANIFEST_CLI_TIME_METHOD"
 }
 
 # Test/dry-run function for safety
