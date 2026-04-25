@@ -5,23 +5,29 @@
 
 # Git changes module - uses PROJECT_ROOT from core module
 
+# Commits Manifest CLI writes during its own pipeline. Filter these from
+# generated changelogs so Manifest's bookkeeping never pollutes user docs.
+MANIFEST_COMMIT_NOISE_REGEX='^- (Auto-commit (before Manifest process|changes)|Bump version to |Update Homebrew formula to |Update formula to |Update main CHANGELOG\.md to |Refresh docs and metadata for )'
+
 # Get git changes since last tag
 get_git_changes() {
     local version="$1"
     local last_tag=""
-    
+    local range=""
+
     # Get the previous tag (not the current one)
     last_tag=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
-    
+
     if [[ -n "$last_tag" ]]; then
         log_info "Getting changes since $last_tag" >&2
-        git log --oneline --pretty=format:"- %s" "$last_tag..HEAD" 2>/dev/null || true
-        echo  # Add final newline
+        range="$last_tag..HEAD"
     else
         log_info "No previous tags found, getting all changes" >&2
-        git log --oneline --pretty=format:"- %s" 2>/dev/null || true
-        echo  # Add final newline
     fi
+
+    git log --oneline --pretty=format:"- %s" ${range:+"$range"} 2>/dev/null \
+        | grep -E -v "$MANIFEST_COMMIT_NOISE_REGEX" || true
+    echo  # Add final newline
 }
 
 # Analyze code changes and categorize them
@@ -55,7 +61,7 @@ analyze_changes() {
             *"docs"*|*"documentation"*|*"readme"*|*"README"*|*"Update README"*)
                 documentation+=("$change")
                 ;;
-            *"refactor"*|*"improve"*|*"optimize"*|*"enhance"*|*"Bump version"*)
+            *"refactor"*|*"improve"*|*"optimize"*|*"enhance"*)
                 improvements+=("$change")
                 ;;
             *)
