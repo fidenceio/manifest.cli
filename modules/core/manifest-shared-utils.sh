@@ -70,6 +70,40 @@ log_trace() {
     fi
 }
 
+# -----------------------------------------------------------------------------
+# Deprecation warning — single source of truth for legacy aliases.
+# -----------------------------------------------------------------------------
+# Args:
+#   $1 — old name (e.g. "manifest update", "MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS")
+#   $2 — new name (e.g. "manifest upgrade", "MANIFEST_CLI_CANONICAL_REPO_SLUGS")
+#   $3 — optional context note (e.g. "syntax changed in v42")
+#
+# Behavior:
+#   - Emits at most once per old name per session (tracked in the
+#     _MANIFEST_DEPRECATIONS_WARNED env var).
+#   - Suppressed entirely when MANIFEST_CLI_QUIET_DEPRECATIONS=1.
+#   - Always goes to stderr via log_warning so it never mixes with stdout.
+# -----------------------------------------------------------------------------
+log_deprecated() {
+    [[ "${MANIFEST_CLI_QUIET_DEPRECATIONS:-0}" = "1" ]] && return 0
+
+    local old="$1"
+    local new="$2"
+    local note="${3:-}"
+
+    # Idempotent per old-name. Use a delimited string instead of an
+    # associative array so this works even when no `declare -gA` is in
+    # scope yet (e.g. very early-loading callers).
+    case ":${_MANIFEST_DEPRECATIONS_WARNED:-}:" in
+        *":${old}:"*) return 0 ;;
+    esac
+    export _MANIFEST_DEPRECATIONS_WARNED="${_MANIFEST_DEPRECATIONS_WARNED:-}:${old}"
+
+    local msg="'${old}' is deprecated. Use '${new}' instead."
+    [[ -n "$note" ]] && msg="${msg} (${note})"
+    log_warning "${msg}  Silence with MANIFEST_CLI_QUIET_DEPRECATIONS=1"
+}
+
 # Common validation functions
 validate_required_args() {
     local args=("$@")

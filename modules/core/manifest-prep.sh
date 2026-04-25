@@ -160,7 +160,7 @@ manifest_prep_dispatch() {
             ;;
         # Legacy support: old "prep <patch|minor|major|revision>" routes to ship --local
         patch|minor|major|revision)
-            log_warning "Deprecated: 'manifest prep $scope' now means 'manifest ship repo $scope --local'"
+            log_deprecated "manifest prep $scope" "manifest ship repo $scope --local" "old prep-as-local-release syntax"
             manifest_ship_dispatch "repo" "$scope" "--local" "$@"
             ;;
         "")

@@ -144,12 +144,7 @@ manifest_is_canonical_repo() {
         allowed_slugs="$MANIFEST_CLI_CANONICAL_REPO_SLUGS"
     elif [[ -n "${MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS:-}" ]]; then
         allowed_slugs="$MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS"
-        if [[ -z "${_MANIFEST_LEGACY_HOMEBREW_SLUGS_WARNED:-}" ]]; then
-            export _MANIFEST_LEGACY_HOMEBREW_SLUGS_WARNED=1
-            command -v log_warning >/dev/null 2>&1 \
-                && log_warning "MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS is deprecated; rename to MANIFEST_CLI_CANONICAL_REPO_SLUGS." \
-                || echo "⚠️  MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS is deprecated; rename to MANIFEST_CLI_CANONICAL_REPO_SLUGS." >&2
-        fi
+        log_deprecated "MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS" "MANIFEST_CLI_CANONICAL_REPO_SLUGS"
     else
         allowed_slugs="fidenceio/manifest.cli,fidenceio/fidenceio.manifest.cli"
     fi

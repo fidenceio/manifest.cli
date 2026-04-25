@@ -697,6 +697,7 @@ EOF
 
         # Old "manifest sync" -> new "manifest prep repo"
         "sync")
+            log_deprecated "manifest sync" "manifest prep repo"
             manifest_prep_repo
             ;;
 
@@ -707,7 +708,7 @@ EOF
 
         # Old "manifest update" -> "manifest upgrade"
         "update")
-            log_warning "Deprecated: 'manifest update' is now 'manifest upgrade'."
+            log_deprecated "manifest update" "manifest upgrade"
             if manifest_load_plugin "workflow/manifest-auto-upgrade.sh"; then
                 upgrade_cli_internal "$@"
             else
