@@ -40,28 +40,69 @@ _MANIFEST_INIT_LOADED=1
 # -----------------------------------------------------------------------------
 manifest_init_repo() {
     local force=false
+    local dry_run=false
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -f|--force) force=true; shift ;;
+            --dry-run) dry_run=true; shift ;;
             -h|--help)
                 _render_help \
-                    "manifest init repo [--force]" \
+                    "manifest init repo [--force] [--dry-run]" \
                     "Scaffold a single repository: VERSION, CHANGELOG.md, README.md, docs/, .gitignore.
 Idempotent — safe to re-run. No remote operations." \
-                    "Options" "  -f, --force   Re-create files even if they already exist" \
+                    "Options" "  -f, --force   Re-create files even if they already exist
+  --dry-run     Print what would be created/updated; no writes" \
                     "Examples" "  manifest init repo
+  manifest init repo --dry-run
   manifest init repo --force"
                 return 0
                 ;;
             *)
-                _render_help_error "Unknown option: $1" "manifest init repo [--force]"
+                _render_help_error "Unknown option: $1" "manifest init repo [--force] [--dry-run]"
                 return 1
                 ;;
         esac
     done
 
     local project_root="${PROJECT_ROOT:-$(pwd)}"
+
+    if [[ "$dry_run" == "true" ]]; then
+        echo ""
+        echo "Dry run — manifest init repo: $project_root"
+        echo ""
+        if ! git -C "$project_root" rev-parse --git-dir >/dev/null 2>&1; then
+            echo "  would create: .git/   (git init)"
+        else
+            echo "  exists:       .git/"
+        fi
+        local f
+        for f in VERSION README.md CHANGELOG.md .gitignore; do
+            if [[ -f "$project_root/$f" ]]; then
+                if [[ "$force" == "true" ]]; then
+                    echo "  would overwrite: $f   (--force)"
+                else
+                    echo "  exists:          $f"
+                fi
+            else
+                echo "  would create:    $f"
+            fi
+        done
+        if [[ -d "$project_root/docs" ]]; then
+            echo "  exists:          docs/"
+        else
+            echo "  would create:    docs/"
+        fi
+        if [[ -f "$project_root/manifest.config.local.yaml" && "$force" != "true" ]]; then
+            echo "  exists:          manifest.config.local.yaml"
+        else
+            echo "  would create:    manifest.config.local.yaml"
+        fi
+        echo ""
+        echo "No changes written. Re-run without --dry-run to apply."
+        echo ""
+        return 0
+    fi
 
     echo ""
     echo "Initializing repository: $project_root"

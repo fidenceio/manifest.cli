@@ -46,21 +46,25 @@ _MANIFEST_REFRESH_LOADED=1
 # -----------------------------------------------------------------------------
 manifest_refresh_repo() {
     local do_commit=false
+    local dry_run=false
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --commit) do_commit=true; shift ;;
+            --dry-run) dry_run=true; shift ;;
             -h|--help)
                 _render_help \
-                    "manifest refresh repo [--commit]" \
+                    "manifest refresh repo [--commit] [--dry-run]" \
                     "Regenerate docs and metadata without changing the version." \
-                    "Options" "  --commit    Also commit refreshed files after regeneration" \
+                    "Options" "  --commit    Also commit refreshed files after regeneration
+  --dry-run   Print what would happen; no docs regen, no writes" \
                     "Examples" "  manifest refresh repo
+  manifest refresh repo --dry-run
   manifest refresh repo --commit"
                 return 0
                 ;;
             *)
-                _render_help_error "Unknown option: $1" "manifest refresh repo [--commit]"
+                _render_help_error "Unknown option: $1" "manifest refresh repo [--commit] [--dry-run]"
                 return 1
                 ;;
         esac
@@ -69,7 +73,11 @@ manifest_refresh_repo() {
     local project_root="${PROJECT_ROOT:-$(pwd)}"
 
     echo ""
-    echo "Refreshing repository: $project_root"
+    if [[ "$dry_run" == "true" ]]; then
+        echo "Dry run — manifest refresh repo: $project_root"
+    else
+        echo "Refreshing repository: $project_root"
+    fi
     echo ""
 
     # Read current version
@@ -85,6 +93,21 @@ manifest_refresh_repo() {
 
     echo "  Version: $current_version (unchanged)"
     echo ""
+
+    if [[ "$dry_run" == "true" ]]; then
+        echo "Would perform:"
+        echo "  • Regenerate documentation (release notes for v$current_version)"
+        echo "  • Archive previous documentation under docs/zArchive/"
+        echo "  • Validate markdown across the project"
+        echo "  • Update repository metadata"
+        if [[ "$do_commit" == "true" ]]; then
+            echo "  • Commit refreshed files (--commit)"
+        fi
+        echo ""
+        echo "No changes written. Re-run without --dry-run to apply."
+        echo ""
+        return 0
+    fi
 
     # Get trusted timestamp
     get_time_timestamp >/dev/null 2>&1

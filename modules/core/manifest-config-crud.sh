@@ -69,19 +69,23 @@ _cfg_effective_value() {
 # -----------------------------------------------------------------------------
 manifest_config_list() {
     local filter_layer=""
+    local emit_json=false
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --layer) filter_layer="$2"; shift 2 ;;
+            --json) emit_json=true; shift ;;
             -h|--help)
                 _render_help \
-                    "manifest config list [--layer global|project|local]" \
+                    "manifest config list [--layer global|project|local] [--json]" \
                     "List all configuration keys with their effective value and source layer.
-With --layer, list only keys explicitly set in that layer's file." \
+With --layer, list only keys explicitly set in that layer's file.
+With --json, emit a machine-readable array." \
                     "Examples" "  manifest config list
-  manifest config list --layer global"
+  manifest config list --layer global
+  manifest config list --json"
                 return 0
                 ;;
-            *) _render_help_error "Unknown option: $1" "manifest config list [--layer ...]"; return 1 ;;
+            *) _render_help_error "Unknown option: $1" "manifest config list [--layer ...] [--json]"; return 1 ;;
         esac
     done
 
@@ -93,18 +97,31 @@ With --layer, list only keys explicitly set in that layer's file." \
             return 1
         fi
         if [[ ! -f "$file" ]]; then
-            echo "($filter_layer layer not present at $file)"
+            if [[ "$emit_json" == "true" ]]; then
+                echo "[]"
+            else
+                echo "($filter_layer layer not present at $file)"
+            fi
             return 0
         fi
-        echo "Keys in $filter_layer ($file):"
-        local path
-        for path in "${!_MANIFEST_YAML_TO_ENV[@]}"; do
-            local val
-            val="$(yq e "(.${path} // \"\")" "$file" 2>/dev/null)"
-            if [[ -n "$val" && "$val" != "null" ]]; then
-                printf "  %-40s %s\n" "$path" "$val"
-            fi
-        done | sort
+        if [[ "$emit_json" == "true" ]]; then
+            _config_list_json_layer "$filter_layer" "$file"
+        else
+            echo "Keys in $filter_layer ($file):"
+            local path
+            for path in "${!_MANIFEST_YAML_TO_ENV[@]}"; do
+                local val
+                val="$(yq e "(.${path} // \"\")" "$file" 2>/dev/null)"
+                if [[ -n "$val" && "$val" != "null" ]]; then
+                    printf "  %-40s %s\n" "$path" "$val"
+                fi
+            done | sort
+        fi
+        return 0
+    fi
+
+    if [[ "$emit_json" == "true" ]]; then
+        _config_list_json_effective
         return 0
     fi
 
@@ -120,6 +137,49 @@ With --layer, list only keys explicitly set in that layer's file." \
             printf "  %-40s %-8s %s\n" "$path" "$layer" "$val"
         fi
     done | sort
+}
+
+# Emit `[{"key":..., "layer":..., "value":...}, ...]` of effective values.
+# Sorted by key for stable diffing.
+_config_list_json_effective() {
+    local out=""
+    local path
+    while IFS= read -r path; do
+        local result layer val
+        if result="$(_cfg_effective_value "$path")"; then
+            layer="${result%%:*}"
+            val="${result#*:}"
+            local entry
+            entry="{$(_json_kv_str "key" "$path"),$(_json_kv_str "layer" "$layer"),$(_json_kv_raw "value" "$(_json_value "$val")")}"
+            if [[ -z "$out" ]]; then
+                out="$entry"
+            else
+                out="${out},${entry}"
+            fi
+        fi
+    done < <(printf '%s\n' "${!_MANIFEST_YAML_TO_ENV[@]}" | sort)
+    printf '[%s]\n' "$out"
+}
+
+# Emit `[{"key":..., "value":...}, ...]` for keys explicitly set in $file.
+_config_list_json_layer() {
+    local layer="$1" file="$2"
+    local out=""
+    local path
+    while IFS= read -r path; do
+        local val
+        val="$(yq e "(.${path} // \"\")" "$file" 2>/dev/null)"
+        if [[ -n "$val" && "$val" != "null" ]]; then
+            local entry
+            entry="{$(_json_kv_str "key" "$path"),$(_json_kv_str "layer" "$layer"),$(_json_kv_raw "value" "$(_json_value "$val")")}"
+            if [[ -z "$out" ]]; then
+                out="$entry"
+            else
+                out="${out},${entry}"
+            fi
+        fi
+    done < <(printf '%s\n' "${!_MANIFEST_YAML_TO_ENV[@]}" | sort)
+    printf '[%s]\n' "$out"
 }
 
 # -----------------------------------------------------------------------------
@@ -322,3 +382,5 @@ export -f manifest_config_get
 export -f manifest_config_set
 export -f manifest_config_unset
 export -f manifest_config_describe
+export -f _config_list_json_effective
+export -f _config_list_json_layer

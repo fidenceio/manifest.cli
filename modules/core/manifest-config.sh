@@ -693,6 +693,87 @@ _manifest_config_prompt_value() {
     echo "${user_input:-$default_value}"
 }
 
+# -----------------------------------------------------------------------------
+# Tier 3 #14 — review-and-confirm helper for the interactive wizard.
+# Prints every value the user just entered grouped by section, then asks for
+# a single y/N. Returns 0 to proceed, 1 to abort.
+#
+# Args (positional, in this exact order — keep in sync with caller):
+#   1: config_file path (destination)
+#   2-4: project: name, description, organization
+#   5-9: git: default, feature, hotfix, release, bugfix
+#  10-13: time: server1..4
+#  14-17: time: timeout, retries, verify, timezone
+#  18-20: docs: folder, archive, historical_limit
+#  21-22: auto_update: enabled, cooldown
+#  23-24: pr: profile, enforce_ready
+#
+# Bypassed (returns 0 immediately) when MANIFEST_CLI_AUTO_CONFIRM=1 — for CI
+# / `manifest config --auto-confirm` use cases. The same env var the
+# global-config gate honours, so users don't have to learn a second knob.
+# -----------------------------------------------------------------------------
+_manifest_config_review_and_confirm() {
+    local config_file="$1"
+    local project_name="$2" project_description="$3" organization="$4"
+    local default_branch="$5" feature_prefix="$6" hotfix_prefix="$7" release_prefix="$8" bugfix_prefix="$9"
+    shift 9
+    local time_server1="$1" time_server2="$2" time_server3="$3" time_server4="$4"
+    local time_timeout="$5" time_retries="$6" time_verify="$7" timezone="$8"
+    shift 8
+    local docs_folder="$1" docs_archive="$2" docs_limit="$3"
+    local auto_update="$4" update_cooldown="$5"
+    local pr_profile="$6" pr_enforce_ready="$7"
+
+    echo ""
+    echo "Review your settings"
+    echo "===================="
+    echo "Destination: $config_file"
+    echo ""
+    echo "Project:"
+    printf "  %-30s %s\n" "name" "$project_name"
+    printf "  %-30s %s\n" "description" "$project_description"
+    printf "  %-30s %s\n" "organization" "$organization"
+    echo ""
+    echo "Git:"
+    printf "  %-30s %s\n" "default_branch" "$default_branch"
+    printf "  %-30s %s\n" "feature_prefix" "$feature_prefix"
+    printf "  %-30s %s\n" "hotfix_prefix" "$hotfix_prefix"
+    printf "  %-30s %s\n" "release_prefix" "$release_prefix"
+    printf "  %-30s %s\n" "bugfix_prefix" "$bugfix_prefix"
+    echo ""
+    echo "Time:"
+    printf "  %-30s %s\n" "server1" "$time_server1"
+    printf "  %-30s %s\n" "server2" "$time_server2"
+    printf "  %-30s %s\n" "server3" "$time_server3"
+    printf "  %-30s %s\n" "server4" "$time_server4"
+    printf "  %-30s %s\n" "timeout" "$time_timeout"
+    printf "  %-30s %s\n" "retries" "$time_retries"
+    printf "  %-30s %s\n" "verify" "$time_verify"
+    printf "  %-30s %s\n" "timezone" "$timezone"
+    echo ""
+    echo "Docs / automation / PR:"
+    printf "  %-30s %s\n" "docs.folder" "$docs_folder"
+    printf "  %-30s %s\n" "docs.archive_folder" "$docs_archive"
+    printf "  %-30s %s\n" "docs.historical_limit" "$docs_limit"
+    printf "  %-30s %s\n" "auto_update.enabled" "$auto_update"
+    printf "  %-30s %s\n" "auto_update.cooldown" "$update_cooldown"
+    printf "  %-30s %s\n" "pr.profile" "$pr_profile"
+    printf "  %-30s %s\n" "pr.enforce_ready" "$pr_enforce_ready"
+    echo ""
+
+    if [[ "${MANIFEST_CLI_AUTO_CONFIRM:-0}" == "1" ]]; then
+        echo "MANIFEST_CLI_AUTO_CONFIRM=1 — proceeding without prompt."
+        return 0
+    fi
+
+    local confirm
+    read -r -p "Write these settings to $config_file? [y/N] " confirm
+    case "$confirm" in
+        y|Y|yes|YES|Yes) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 configure_interactive() {
     if [ ! -t 0 ]; then
         log_error "Interactive config requires a TTY. Use: manifest config show"
@@ -769,6 +850,22 @@ configure_interactive() {
     if ! [[ "$update_cooldown" =~ ^[0-9]+$ ]]; then
         log_warning "Invalid upgrade cooldown '$update_cooldown'; using existing/default value."
         update_cooldown="${MANIFEST_CLI_UPDATE_COOLDOWN:-30}"
+    fi
+
+    # Review-and-confirm step (Tier 3 #14). Show every value the user just
+    # entered, plus the destination file, before writing anything. One
+    # fat-finger up to this point still costs zero — they can abort and re-run.
+    if ! _manifest_config_review_and_confirm "$config_file" \
+        "$project_name" "$project_description" "$organization" \
+        "$default_branch" "$feature_prefix" "$hotfix_prefix" "$release_prefix" "$bugfix_prefix" \
+        "$time_server1" "$time_server2" "$time_server3" "$time_server4" \
+        "$time_timeout" "$time_retries" "$time_verify" "$timezone" \
+        "$docs_folder" "$docs_archive" "$docs_limit" \
+        "$auto_update" "$update_cooldown" \
+        "$pr_profile" "$pr_enforce_ready"; then
+        echo ""
+        echo "Aborted. No changes written."
+        return 1
     fi
 
     set_yaml_value "$config_file" "project.name" "$project_name"
@@ -1090,6 +1187,7 @@ export -f generate_next_version
 export -f show_configuration
 export -f config_doctor
 export -f configure_interactive
+export -f _manifest_config_review_and_confirm
 export -f get_docs_folder
 export -f get_docs_archive_folder
 

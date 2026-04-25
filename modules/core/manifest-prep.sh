@@ -36,17 +36,21 @@ _MANIFEST_PREP_LOADED=1
 # Absorbs the old sync_repository() behavior.
 # -----------------------------------------------------------------------------
 manifest_prep_repo() {
+    local dry_run=false
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            --dry-run) dry_run=true; shift ;;
             -h|--help)
                 _render_help \
-                    "manifest prep repo" \
+                    "manifest prep repo [--dry-run]" \
                     "Prepare workspace: add remote if missing, pull latest from all remotes." \
-                    "Examples" "  manifest prep repo"
+                    "Options" "  --dry-run   Print what would happen; no remote calls" \
+                    "Examples" "  manifest prep repo
+  manifest prep repo --dry-run"
                 return 0
                 ;;
             *)
-                _render_help_error "Unknown option: $1" "manifest prep repo"
+                _render_help_error "Unknown option: $1" "manifest prep repo [--dry-run]"
                 return 1
                 ;;
         esac
@@ -55,7 +59,11 @@ manifest_prep_repo() {
     local project_root="${PROJECT_ROOT:-$(pwd)}"
 
     echo ""
-    echo "Preparing repository: $project_root"
+    if [[ "$dry_run" == "true" ]]; then
+        echo "Dry run — manifest prep repo: $project_root"
+    else
+        echo "Preparing repository: $project_root"
+    fi
     echo ""
 
     # Check if remote exists; if not, prompt for one
@@ -63,6 +71,13 @@ manifest_prep_repo() {
     remotes=$(git -C "$project_root" remote 2>/dev/null)
 
     if [[ -z "$remotes" ]]; then
+        if [[ "$dry_run" == "true" ]]; then
+            echo "  no remotes configured — would prompt for an origin URL"
+            echo ""
+            echo "No changes written. Re-run without --dry-run to apply."
+            echo ""
+            return 0
+        fi
         echo "No remote configured."
         if [[ -t 0 ]]; then
             echo ""
@@ -82,6 +97,21 @@ manifest_prep_repo() {
             log_warning "No remotes configured and not in interactive mode. Skipping sync."
             return 0
         fi
+    fi
+
+    if [[ "$dry_run" == "true" ]]; then
+        echo "Remotes that would be pulled:"
+        local r
+        while IFS= read -r r; do
+            [[ -z "$r" ]] && continue
+            local url
+            url="$(git -C "$project_root" remote get-url "$r" 2>/dev/null || echo "?")"
+            printf "  %-12s %s\n" "$r" "$url"
+        done <<< "$remotes"
+        echo ""
+        echo "No changes written. Re-run without --dry-run to apply."
+        echo ""
+        return 0
     fi
 
     # Pull latest from all remotes (delegates to existing sync_repository)

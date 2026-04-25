@@ -168,6 +168,52 @@ _manifest_hash_short() {
     fi
 }
 
+# -----------------------------------------------------------------------------
+# JSON helpers — minimal hand-rolled emitters so --json works without jq.
+# We only support the small subset of JSON the CLI actually emits: strings,
+# numbers/booleans/null (caller-classified), and flat arrays/objects.
+# -----------------------------------------------------------------------------
+
+# Escape a string for inclusion as a JSON string literal.
+# Echoes the escaped value WITHOUT surrounding quotes.
+_json_escape() {
+    local s="$1"
+    s="${s//\\/\\\\}"     # backslash first
+    s="${s//\"/\\\"}"     # double quote
+    s="${s//$'\n'/\\n}"   # newline
+    s="${s//$'\r'/\\r}"   # carriage return
+    s="${s//$'\t'/\\t}"   # tab
+    printf '%s' "$s"
+}
+
+# Emit `"key":"value"` with the value quoted-and-escaped. Caller handles
+# trailing commas if any.
+_json_kv_str() {
+    printf '"%s":"%s"' "$(_json_escape "$1")" "$(_json_escape "$2")"
+}
+
+# Emit `"key":<value>` raw — for booleans, numbers, or pre-built JSON.
+_json_kv_raw() {
+    printf '"%s":%s' "$(_json_escape "$1")" "$2"
+}
+
+# Detect whether a value should be JSON-classified as bool/null/number, else
+# fall through to a quoted string. Echoes the JSON form.
+_json_value() {
+    local v="$1"
+    case "$v" in
+        true|false|null) printf '%s' "$v" ;;
+        '') printf '""' ;;
+        *)
+            if [[ "$v" =~ ^-?[0-9]+(\.[0-9]+)?$ ]]; then
+                printf '%s' "$v"
+            else
+                printf '"%s"' "$(_json_escape "$v")"
+            fi
+            ;;
+    esac
+}
+
 # Common validation functions
 validate_required_args() {
     local args=("$@")
@@ -517,6 +563,7 @@ export -f log_debug log_info log_success log_warning log_error log_trace
 export -f validate_required_args ensure_directory create_temp_file
 export -f show_help show_usage_error show_required_arg_error
 export -f _render_help _render_help_error _manifest_hash_short
+export -f _json_escape _json_kv_str _json_kv_raw _json_value
 export -f get_script_dir get_script_parent_dir get_project_root get_modules_dir
 export -f is_installation_directory validate_repository_root ensure_repository_root
 export -f show_network_error show_file_error show_git_error show_config_error

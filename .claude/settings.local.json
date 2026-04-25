@@ -49,7 +49,12 @@
       "Bash(manifest doctor *)",
       "Bash(sed 's/\\\\x1b\\\\[[0-9;]*m//g')",
       "Bash(gh run *)",
-      "Bash(yq -P)"
+      "Bash(yq -P)",
+      "Bash(./scripts/run-tests.sh)",
+      "Bash(./scripts/run-tests.sh tests/wizard_confirm.bats)",
+      "Bash(manifest status *)",
+      "Bash(MANIFEST_CLI_CORE_MODULES_DIR=/Users/william/coderepos/manifest/fidenceio.manifest.cli/modules bash -c 'source /Users/william/coderepos/manifest/fidenceio.manifest.cli/modules/core/manifest-core.sh && main status --json')",
+      "Bash(MANIFEST_CLI_CORE_MODULES_DIR=/Users/william/coderepos/manifest/fidenceio.manifest.cli/modules bash -c 'source /Users/william/coderepos/manifest/fidenceio.manifest.cli/modules/core/manifest-core.sh 2>/dev/null && main status --json 2>/dev/null')"
     ],
     "deny": [],
     "ask": [],
