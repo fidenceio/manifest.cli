@@ -35,7 +35,12 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: |
           set -euxo pipefail
-          brew install bats-core yq
+          brew install bats-core yq bash
+          # macos-latest still ships /bin/bash 3.2 (no associative arrays).
+          # bats's `#!/usr/bin/env bash` picks whichever bash is first in PATH —
+          # ensure that's Homebrew's modern bash for every subsequent step.
+          echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
+          /opt/homebrew/bin/bash --version | head -1
           yq --version
 
       - name: Print environment
