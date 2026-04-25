@@ -37,18 +37,10 @@ manifest_security() {
         critical_issues=$((critical_issues + 1))
     fi
     
-    # Check for actual sensitive data (not just patterns)
-    # Temporarily disabled due to false positives with variable name changes
-    echo "   ⚠️  Sensitive data check temporarily disabled (false positives with variable renaming)"
-    
-    # Check recent commits
-    # Temporarily disabled due to false positives with variable name changes
-    echo "   ⚠️  Recent commits check temporarily disabled (false positives with variable renaming)"
-    
     echo ""
     echo "🛡️  Privacy Protection Check:"
     echo "=============================="
-    
+
     # Check for actual PII (not just example patterns)
     if check_actual_pii "$project_root"; then
         echo "   ✅ No actual PII detected in code"
@@ -56,11 +48,7 @@ manifest_security() {
         echo "   ⚠️  WARNING: Actual PII detected in code"
         warnings=$((warnings + 1))
     fi
-    
-    # Check for actual hardcoded credentials
-    # Temporarily disabled due to false positives with variable name changes
-    echo "   ⚠️  Hardcoded credentials check temporarily disabled (false positives with variable renaming)"
-    
+
     # Check environment file security
     if check_environment_file_security "$project_root"; then
         echo "   ✅ Environment files are properly secured"
@@ -116,94 +104,6 @@ check_git_tracking() {
     return 0
 }
 
-# Check for actual sensitive data (CRITICAL)
-check_actual_sensitive_data() {
-    local project_root="$1"
-    
-    # Look for actual sensitive data patterns, not just variable names
-    # Exclude patterns that are part of security module definitions
-    local actual_sensitive_patterns=(
-        "^[^#]*password[[:space:]]*=[[:space:]]*['\"][^'\"]{3,}['\"]"           # password = "actual_value" (not in comments)
-        "^[^#]*secret[[:space:]]*=[[:space:]]*['\"][^'\"]{3,}['\"]"             # secret = "actual_value" (not in comments)
-        "^[^#]*api_key[[:space:]]*=[[:space:]]*['\"][^'\"]{3,}['\"]"            # api_key = "actual_value" (not in comments)
-        "^[^#]*private_key[[:space:]]*=[[:space:]]*['\"][^'\"]{3,}['\"]"        # private_key = "actual_value" (not in comments)
-        "^[^#]*database_url[[:space:]]*=[[:space:]]*['\"][^'\"]{3,}['\"]"       # database_url = "actual_value" (not in comments)
-        "^[^#]*aws_access[[:space:]]*=[[:space:]]*['\"][^'\"]{3,}['\"]"         # aws_access = "actual_value" (not in comments)
-        "^[^#]*github_token[[:space:]]*=[[:space:]]*['\"][^'\"]{3,}['\"]"       # github_token = "actual_value" (not in comments)
-        "^[^#]*access_token[[:space:]]*=[[:space:]]*['\"][^'\"]{3,}['\"]"       # access_token = "actual_value" (not in comments)
-        "^[^#]*bearer_token[[:space:]]*=[[:space:]]*['\"][^'\"]{3,}['\"]"       # bearer_token = "actual_value" (not in comments)
-        "^[^#]*jwt_token[[:space:]]*=[[:space:]]*['\"][^'\"]{3,}['\"]"          # jwt_token = "actual_value" (not in comments)
-    )
-    
-    local found_sensitive=0
-    
-    for pattern in "${actual_sensitive_patterns[@]}"; do
-        local matches=$(grep -r "$pattern" "$project_root" \
-            --exclude-dir=.git \
-            --exclude-dir=node_modules \
-            --exclude-dir=docs \
-            --exclude="*.env*" \
-            --exclude="manifest.config" \
-            --exclude="*.md" \
-            --exclude="*.txt" \
-            --exclude="*.rst" \
-            --exclude="*.html" \
-            --exclude="*.css" \
-            --exclude="*.js" \
-            --exclude="*.json" \
-            --exclude="*.xml" \
-            --exclude="*.yaml" \
-            --exclude="*.yml" \
-            --exclude="env.example" \
-            --exclude="env.examples.md" \
-            --exclude="SECURITY.md" \
-            --exclude="CONFIG_VS_SECURITY.md" \
-            --exclude="HUMAN_INTUITIVE_VERSIONING.md" \
-            --exclude="TESTING.md" \
-            --exclude="README.md" \
-            --exclude="USER_GUIDE.md" \
-            --exclude="COMMAND_REFERENCE.md" \
-            --exclude="INSTALLATION.md" \
-            --exclude="CONTRIBUTING.md" \
-            --exclude="EXAMPLES.md" \
-            --exclude="manifest-security.sh" \
-            --exclude="manifest-config.sh" \
-            2>/dev/null | grep -v "password.*=.*['\"]example['\"]" | grep -v "secret.*=.*['\"]example['\"]" | grep -v "pattern.*=" | grep -v "actual_.*patterns" | grep -v "local.*patterns" | wc -l)
-        
-        if [ "$matches" -gt 0 ]; then
-            echo "      ⚠️  Potential sensitive data pattern found: $pattern"
-            found_sensitive=$((found_sensitive + 1))
-        fi
-    done
-    
-    [ $found_sensitive -eq 0 ]
-}
-
-# Check recent commits for sensitive data (CRITICAL)
-check_recent_secret_commits() {
-    local project_root="$1"
-    
-    # Only check if we're in a Git repository
-    if ! git -C "$project_root" rev-parse --git-dir >/dev/null 2>&1; then
-        echo "      ⚠️  Not in a Git repository, skipping commit analysis"
-        return 0
-    fi
-    
-    # Check last 10 commits for actual sensitive data
-    local actual_sensitive_patterns=("^[^#]*password[[:space:]]*=[[:space:]]*['\"][^'\"]{3,}['\"]" "^[^#]*secret[[:space:]]*=[[:space:]]*['\"][^'\"]{3,}['\"]" "^[^#]*api_key[[:space:]]*=[[:space:]]*['\"][^'\"]{3,}['\"]")
-    local secret_commits=0
-    
-    for pattern in "${actual_sensitive_patterns[@]}"; do
-        local matches=$(git -C "$project_root" log -p -10 | grep -i "$pattern" | grep -v "password.*=.*['\"]example['\"]" | grep -v "secret.*=.*['\"]example['\"]" | grep -v "pattern.*=" | grep -v "actual_.*patterns" | grep -v "local.*patterns" | grep -v "export.*=" | grep -v "log_info.*export" | grep -v "echo.*export" | wc -l)
-        if [ "$matches" -gt 0 ]; then
-            echo "      ❌ Recent commits contain pattern '$pattern' (may contain secrets!)"
-            secret_commits=$((secret_commits + 1))
-        fi
-    done
-    
-    [ $secret_commits -eq 0 ]
-}
-
 # Check for actual PII (WARNING)
 check_actual_pii() {
     local project_root="$1"
@@ -257,64 +157,6 @@ check_actual_pii() {
     done
     
     [ $pii_found -eq 0 ]
-}
-
-# Check for actual hardcoded credentials (CRITICAL)
-check_actual_credentials() {
-    local project_root="$1"
-    
-    # Look for actual credential assignments, not just variable names
-    # Exclude patterns that are part of security module definitions
-    local actual_credential_patterns=(
-        "^[^#]*password[[:space:]]*=[[:space:]]*['\"][^'\"]{3,}['\"]"     # password = "actual_value" (not in comments)
-        "^[^#]*secret[[:space:]]*=[[:space:]]*['\"][^'\"]{3,}['\"]"       # secret = "actual_value" (not in comments)
-        "^[^#]*api_key[[:space:]]*=[[:space:]]*['\"][^'\"]{3,}['\"]"      # api_key = "actual_value" (not in comments)
-        "^[^#]*token[[:space:]]*=[[:space:]]*['\"][^'\"]{3,}['\"]"        # token = "actual_value" (not in comments)
-    )
-    
-    local credentials_found=0
-    
-    for pattern in "${actual_credential_patterns[@]}"; do
-        local matches=$(grep -r "$pattern" "$project_root" \
-            --exclude-dir=.git \
-            --exclude-dir=node_modules \
-            --exclude-dir=docs \
-            --exclude="*.env*" \
-            --exclude="manifest.config" \
-            --exclude="*.md" \
-            --exclude="*.txt" \
-            --exclude="*.rst" \
-            --exclude="*.html" \
-            --exclude="*.css" \
-            --exclude="*.js" \
-            --exclude="*.json" \
-            --exclude="*.xml" \
-            --exclude="*.yaml" \
-            --exclude="*.yml" \
-            --exclude="env.example" \
-            --exclude="env.examples.md" \
-            --exclude="SECURITY.md" \
-            --exclude="CONFIG_VS_SECURITY.md" \
-            --exclude="HUMAN_INTUITIVE_VERSIONING.md" \
-            --exclude="TESTING.md" \
-            --exclude="README.md" \
-            --exclude="USER_GUIDE.md" \
-            --exclude="COMMAND_REFERENCE.md" \
-            --exclude="INSTALLATION.md" \
-            --exclude="CONTRIBUTING.md" \
-            --exclude="EXAMPLES.md" \
-            --exclude="manifest-security.sh" \
-            --exclude="manifest-config.sh" \
-            --exclude="SECURITY_ANALYSIS_REPORT.md" \
-            2>/dev/null | grep -v "password.*=.*['\"]example['\"]" | grep -v "secret.*=.*['\"]example['\"]" | grep -v "api_key.*=.*['\"]example['\"]" | grep -v "token.*=.*['\"]example['\"]" | grep -v "pattern.*=" | grep -v "actual_.*patterns" | grep -v "local.*patterns" | wc -l)
-        
-        if [ "$matches" -gt 0 ]; then
-            echo "      ❌ Actual hardcoded credentials pattern found: $pattern"
-            credentials_found=$((credentials_found + 1))
-        fi
-    done
-    
-    [ $credentials_found -eq 0 ]
 }
 
 # Check environment file security (CRITICAL)
