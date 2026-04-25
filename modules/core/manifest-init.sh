@@ -45,18 +45,17 @@ manifest_init_repo() {
         case "$1" in
             -f|--force) force=true; shift ;;
             -h|--help)
-                echo "Usage: manifest init repo [--force]"
-                echo ""
-                echo "Scaffold a single repository with required files."
-                echo "Creates: VERSION, CHANGELOG.md, README.md, docs/, .gitignore"
-                echo ""
-                echo "Options:"
-                echo "  --force    Re-create files even if they already exist"
+                _render_help \
+                    "manifest init repo [--force]" \
+                    "Scaffold a single repository: VERSION, CHANGELOG.md, README.md, docs/, .gitignore.
+Idempotent — safe to re-run. No remote operations." \
+                    "Options" "  -f, --force   Re-create files even if they already exist" \
+                    "Examples" "  manifest init repo
+  manifest init repo --force"
                 return 0
                 ;;
             *)
-                log_error "Unknown option: $1"
-                echo "Usage: manifest init repo [--force]"
+                _render_help_error "Unknown option: $1" "manifest init repo [--force]"
                 return 1
                 ;;
         esac
@@ -148,21 +147,26 @@ manifest_init_fleet() {
             -f|--force) force=true; shift ;;
             -n|--name) fleet_args+=("--name" "$2"); shift 2 ;;
             -h|--help)
-                echo "Usage: manifest init fleet [--depth N] [--force] [--name NAME]"
-                echo ""
-                echo "Two-phase fleet initialization:"
-                echo "  Phase 1: Scan directories, create manifest.fleet.tsv for review"
-                echo "  Phase 2: Read TSV selections, scaffold repos, create fleet config"
-                echo ""
-                echo "Options:"
-                echo "  --depth N    Scan depth (default: 2)"
-                echo "  --force      Overwrite existing files"
-                echo "  --name NAME  Fleet name (prompted if not provided)"
+                _render_help \
+                    "manifest init fleet [--depth N] [--force] [--name NAME]" \
+                    "Two-phase fleet initialization." \
+                    "Phases" "  Phase 1 (no TSV yet):  Scan directories, write manifest.fleet.tsv
+                         for you to review and edit selections.
+  Phase 2 (TSV exists):  Read selections, scaffold each repo, write
+                         manifest.fleet.config.yaml." \
+                    "Options" "  --depth N      Scan depth in Phase 1 (default: 2)
+  -f, --force    Overwrite existing files (re-runs Phase 1 + skips guard)
+  -n, --name     Fleet name (prompted if not provided)" \
+                    "Examples" "  manifest init fleet                 # Phase 1: discover
+  vim manifest.fleet.tsv             # edit SELECT column
+  manifest init fleet                 # Phase 2: apply selections
+  manifest init fleet --depth 4 --name acme"
                 return 0
                 ;;
             *)
-                log_error "Unknown option: $1"
-                echo "Usage: manifest init fleet [--depth N] [--force] [--name NAME]"
+                _render_help_error \
+                    "Unknown option: $1" \
+                    "manifest init fleet [--depth N] [--force] [--name NAME]"
                 return 1
                 ;;
         esac
@@ -172,9 +176,16 @@ manifest_init_fleet() {
     local start_file="$root_dir/manifest.fleet.tsv"
     local config_file="$root_dir/manifest.fleet.config.yaml"
 
-    # Phase 1: No TSV exists yet — run discovery
+    # Phase 1: No TSV exists yet — run discovery.
+    # Also re-runs Phase 1 if --force is given AND no fleet config exists yet
+    # (so users can regenerate the TSV before applying it).
     if [[ ! -f "$start_file" ]] || [[ "$force" == "true" && ! -f "$config_file" ]]; then
-        # Delegate to fleet_start with our depth
+        echo ""
+        echo "Phase 1/2: Discovering directories…"
+        echo "After this completes, edit manifest.fleet.tsv to set SELECT=true/false,"
+        echo "then re-run 'manifest init fleet' to apply your selections (Phase 2)."
+        echo ""
+
         local start_args=("--depth" "$depth")
         if [[ "$force" == "true" ]]; then
             start_args+=("--force")
@@ -184,12 +195,69 @@ manifest_init_fleet() {
         return $?
     fi
 
-    # Phase 2: TSV exists — run initialization
+    # Phase 2: TSV exists — guard against accidental re-scan that would
+    # discard the user's edits unless --force is explicit.
+    if _fleet_init_tsv_is_stale "$start_file" "$config_file"; then
+        log_warning "manifest.fleet.tsv has not been edited since it was generated."
+        echo ""
+        echo "  If you meant to apply Phase 1 results without changes, that's fine —"
+        echo "  re-run with --force to acknowledge:"
+        echo "    manifest init fleet --force"
+        echo ""
+        echo "  Otherwise, edit manifest.fleet.tsv first to set SELECT=true/false,"
+        echo "  then re-run 'manifest init fleet'."
+        return 1
+    fi
+
+    echo ""
+    echo "Phase 2/2: Applying TSV selections…"
+    echo ""
+
     if [[ "$force" == "true" ]]; then
         fleet_args+=("--force")
     fi
 
     fleet_init "${fleet_args[@]}"
+}
+
+# -----------------------------------------------------------------------------
+# Function: _fleet_init_tsv_is_stale (internal)
+# -----------------------------------------------------------------------------
+# Returns 0 (stale = unedited) when the TSV's SELECT column matches the
+# default-selection fingerprint that fleet_start wrote into the header,
+# meaning the user ran Phase 2 without touching selections.
+# Returns 1 (edited, or no fingerprint, or cannot tell) otherwise — in
+# which case Phase 2 proceeds without prompting.
+#
+# We deliberately err on the side of *not* flagging as stale so we don't
+# false-positive and block legitimate Phase 2 runs (e.g. on TSVs written
+# by older versions of generate_start_tsv that lack the fingerprint).
+# -----------------------------------------------------------------------------
+_fleet_init_tsv_is_stale() {
+    local tsv="$1"
+    local config="$2"
+
+    [[ -f "$tsv" ]] || return 1
+    # If a fleet config already exists, we're past phase 2 — not stale.
+    [[ -f "$config" ]] && return 1
+
+    # Pull the embedded default-selection fingerprint. Old TSVs (pre-#15)
+    # have no such header — treat as edited so we don't break them.
+    local stored_hash
+    stored_hash=$(awk '/^# DEFAULT-SELECT-HASH:/ {print $3; exit}' "$tsv")
+    [[ -z "$stored_hash" ]] && return 1
+
+    # Recompute the fingerprint from the current SELECT column. If the
+    # user has edited even one row, the hashes diverge.
+    local current_hash
+    current_hash=$(awk -F'\t' '
+        /^#/ {next}
+        $1 == "" {next}
+        {print $1}
+    ' "$tsv" | _manifest_hash_short)
+
+    [[ "$stored_hash" == "$current_hash" ]] && return 0
+    return 1
 }
 
 # -----------------------------------------------------------------------------
@@ -213,25 +281,20 @@ manifest_init_dispatch() {
             manifest_init_fleet "$@"
             ;;
         -h|--help|help)
-            echo "Usage: manifest init <repo|fleet> [options]"
-            echo ""
-            echo "Scaffold a repository or fleet. No remote operations."
-            echo ""
-            echo "Scopes:"
-            echo "  repo     Scaffold single repo (VERSION, CHANGELOG, docs, etc.)"
-            echo "  fleet    Two-phase fleet setup via directory scanning"
-            echo ""
-            echo "Run 'manifest init repo --help' or 'manifest init fleet --help' for details."
+            _render_help \
+                "manifest init <repo|fleet> [options]" \
+                "Scaffold a repository or fleet. No remote operations." \
+                "Scopes" "  repo    Scaffold single repo (VERSION, CHANGELOG, docs, .gitignore)
+  fleet   Two-phase fleet setup via directory scanning" \
+                "More" "  manifest init repo --help    Per-repo options
+  manifest init fleet --help   Phase 1 / Phase 2 details"
             ;;
         "")
-            echo "Usage: manifest init <repo|fleet>"
-            echo ""
-            echo "Run 'manifest init --help' for details."
+            _render_help_error "init requires a scope" "manifest init <repo|fleet>"
             return 1
             ;;
         *)
-            log_error "Unknown scope: $scope"
-            echo "Usage: manifest init <repo|fleet>"
+            _render_help_error "Unknown scope: $scope" "manifest init <repo|fleet>"
             return 1
             ;;
     esac

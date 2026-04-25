@@ -39,14 +39,14 @@ manifest_prep_repo() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -h|--help)
-                echo "Usage: manifest prep repo"
-                echo ""
-                echo "Prepare workspace: add remotes if missing, pull latest."
+                _render_help \
+                    "manifest prep repo" \
+                    "Prepare workspace: add remote if missing, pull latest from all remotes." \
+                    "Examples" "  manifest prep repo"
                 return 0
                 ;;
             *)
-                log_error "Unknown option: $1"
-                echo "Usage: manifest prep repo"
+                _render_help_error "Unknown option: $1" "manifest prep repo"
                 return 1
                 ;;
         esac
@@ -109,19 +109,21 @@ manifest_prep_fleet() {
             --clone-only) fleet_args+=("--clone-only"); shift ;;
             --pull-only) fleet_args+=("--pull-only"); shift ;;
             -h|--help)
-                echo "Usage: manifest prep fleet [--parallel] [--clone-only] [--pull-only]"
-                echo ""
-                echo "Prepare fleet workspace: clone missing repos, pull existing ones."
-                echo ""
-                echo "Options:"
-                echo "  --parallel     Run operations in parallel"
-                echo "  --clone-only   Only clone missing repos"
-                echo "  --pull-only    Only pull existing repos"
+                _render_help \
+                    "manifest prep fleet [--parallel] [--clone-only] [--pull-only]" \
+                    "Prepare fleet workspace: clone missing repos, pull existing ones." \
+                    "Options" "  -p, --parallel     Run operations in parallel
+  --clone-only       Only clone missing repos (skip pull)
+  --pull-only        Only pull existing repos (skip clone)" \
+                    "Examples" "  manifest prep fleet
+  manifest prep fleet --parallel
+  manifest prep fleet --clone-only"
                 return 0
                 ;;
             *)
-                log_error "Unknown option: $1"
-                echo "Usage: manifest prep fleet [--parallel] [--clone-only] [--pull-only]"
+                _render_help_error \
+                    "Unknown option: $1" \
+                    "manifest prep fleet [--parallel] [--clone-only] [--pull-only]"
                 return 1
                 ;;
         esac
@@ -148,15 +150,13 @@ manifest_prep_dispatch() {
             manifest_prep_fleet "$@"
             ;;
         -h|--help|help)
-            echo "Usage: manifest prep <repo|fleet> [options]"
-            echo ""
-            echo "Prepare workspace: connect remotes, pull latest."
-            echo ""
-            echo "Scopes:"
-            echo "  repo     Add remote if missing, pull latest"
-            echo "  fleet    Clone missing repos, pull existing ones"
-            echo ""
-            echo "Run 'manifest prep repo --help' or 'manifest prep fleet --help' for details."
+            _render_help \
+                "manifest prep <repo|fleet> [options]" \
+                "Prepare workspace: connect remotes, pull latest." \
+                "Scopes" "  repo    Add remote if missing, pull latest from all remotes
+  fleet   Clone missing repos, pull existing ones" \
+                "More" "  manifest prep repo --help    Per-repo options
+  manifest prep fleet --help   Fleet-specific flags"
             ;;
         # Legacy support: old "prep <patch|minor|major|revision>" routes to ship --local
         patch|minor|major|revision)
@@ -164,14 +164,11 @@ manifest_prep_dispatch() {
             manifest_ship_dispatch "repo" "$scope" "--local" "$@"
             ;;
         "")
-            echo "Usage: manifest prep <repo|fleet>"
-            echo ""
-            echo "Run 'manifest prep --help' for details."
+            _render_help_error "prep requires a scope" "manifest prep <repo|fleet>"
             return 1
             ;;
         *)
-            log_error "Unknown scope: $scope"
-            echo "Usage: manifest prep <repo|fleet>"
+            _render_help_error "Unknown scope: $scope" "manifest prep <repo|fleet>"
             return 1
             ;;
     esac

@@ -104,6 +104,70 @@ log_deprecated() {
     log_warning "${msg}  Silence with MANIFEST_CLI_QUIET_DEPRECATIONS=1"
 }
 
+# -----------------------------------------------------------------------------
+# Subcommand help renderer — single source of truth for `manifest X --help`.
+# -----------------------------------------------------------------------------
+# Args:
+#   $1 — usage line (e.g. "manifest ship repo <patch|minor|major|revision> [--local]")
+#   $2 — description (1-3 lines; can contain embedded newlines)
+#   $3+ — alternating "Section" "body" pairs. Body lines are emitted verbatim,
+#         so callers control alignment. Common sections: "Options", "Scopes",
+#         "Examples", "Flow".
+#
+# Example:
+#   _render_help \
+#       "manifest ship repo <patch|minor|major|revision> [--local] [-i]" \
+#       "Publish a release: version bump, docs, commit, tag, push." \
+#       "Options" "  --local            Local only (no tag, push, Homebrew)
+#   -i|--interactive   Enable interactive safety prompts" \
+#       "Examples" "  manifest ship repo patch
+#   manifest ship repo minor --local"
+# -----------------------------------------------------------------------------
+_render_help() {
+    local usage="$1"; shift
+    local description="$1"; shift
+
+    echo "Usage: $usage"
+    echo ""
+    printf '%s\n' "$description"
+
+    while [[ $# -ge 2 ]]; do
+        local heading="$1"; shift
+        local body="$1"; shift
+        echo ""
+        echo "${heading}:"
+        printf '%s\n' "$body"
+    done
+}
+
+# -----------------------------------------------------------------------------
+# Subcommand error renderer — emits "Unknown option" / "missing arg" plus usage.
+# Always returns 1 so callers can `_render_help_error ... && return 1` or
+# `_render_help_error ...; return $?`.
+# -----------------------------------------------------------------------------
+_render_help_error() {
+    local message="$1"
+    local usage="$2"
+    log_error "$message"
+    echo "Usage: $usage" >&2
+    return 1
+}
+
+# -----------------------------------------------------------------------------
+# Short, portable hash for fingerprinting (NOT for security).
+# Reads stdin, prints a hex digest. Uses md5 on macOS, md5sum on Linux,
+# falls back to cksum if neither is installed.
+# -----------------------------------------------------------------------------
+_manifest_hash_short() {
+    if command -v md5 >/dev/null 2>&1; then
+        md5 -q
+    elif command -v md5sum >/dev/null 2>&1; then
+        md5sum | awk '{print $1}'
+    else
+        cksum | awk '{print $1}'
+    fi
+}
+
 # Common validation functions
 validate_required_args() {
     local args=("$@")
@@ -452,6 +516,7 @@ validate_directory_exists() {
 export -f log_debug log_info log_success log_warning log_error log_trace
 export -f validate_required_args ensure_directory create_temp_file
 export -f show_help show_usage_error show_required_arg_error
+export -f _render_help _render_help_error _manifest_hash_short
 export -f get_script_dir get_script_parent_dir get_project_root get_modules_dir
 export -f is_installation_directory validate_repository_root ensure_repository_root
 export -f show_network_error show_file_error show_git_error show_config_error

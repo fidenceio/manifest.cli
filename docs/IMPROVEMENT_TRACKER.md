@@ -132,8 +132,8 @@ Each recommendation is a discrete unit of work. Check off when complete.
 - [x] **12. One flag vocabulary.** Audited 2026-04-25. All four v42 dispatchers (init, prep, refresh, ship) have consistent `-h|--help` at verb / repo / fleet levels. Short bump flags `-p/-m/-M/-r` are on `ship` — the only verb that takes a bump type. The `--dry-run` portion of the wording is the substantive feature tracked separately as #22 (journey-level --dry-run) and stays on the queue.
 - [x] **13. One deprecation format.** `log_deprecated <old> <new> [<note>]` added to `manifest-shared-utils.sh`. Wired into `manifest sync`, `manifest update`, `manifest prep <type>`, and `MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS`. Single-emit-per-session via `_MANIFEST_DEPRECATIONS_WARNED`; suppressed by `MANIFEST_CLI_QUIET_DEPRECATIONS=1`. Four bats tests in `tests/deprecation.bats`.
 - [ ] **14. Config wizard: add review-and-confirm step** before persisting. Show diff from current, ask once.
-- [ ] **15. Fleet-init phase clarity.** Explicit Phase 1 "edit TSV then re-run" message, Phase 2 "Applying TSV selections…". Guard against accidental re-scan.
-- [ ] **16. Help template.** One shared `_render_subcommand_help()` so every `manifest X --help` follows the same shape.
+- [x] **15. Fleet-init phase clarity.** `manifest_init_fleet` now banners "Phase 1/2: Discovering directories…" before delegating to `fleet_start` (with explicit "edit TSV, then re-run" instructions) and "Phase 2/2: Applying TSV selections…" before delegating to `fleet_init`. Added `_fleet_init_tsv_is_stale` guard: `generate_start_tsv` embeds a `# DEFAULT-SELECT-HASH` fingerprint into the TSV header; Phase 2 recomputes the SELECT-column hash and refuses to apply if it still matches the default (i.e. the user ran Phase 2 without editing). The guard is bypassed by `--force`. Falls back to "not stale" if the header is missing (back-compat with pre-#15 TSVs). Six new bats tests in `tests/fleet_init_phase.bats` covering: unedited-flagged, edited-not-flagged, missing-header (back-compat), config-already-present short-circuit, missing-TSV, and `_manifest_hash_short` portability.
+- [x] **16. Help template.** Added `_render_help` and `_render_help_error` to `manifest-shared-utils.sh`. Every `manifest <verb> --help` (init/prep/refresh/ship at scope+dispatch levels) plus `manifest config list/get/set/unset/describe` and `manifest pr create/status/checks/ready/merge/update` now route through the same renderer. Format: `Usage: …` line, blank, description (multi-line OK), then alternating `Heading:` + body sections. Six bats tests in `tests/help_template.bats`.
 
 ### Tier 4 — New capability (power)
 
@@ -148,7 +148,7 @@ Each recommendation is a discrete unit of work. Check off when complete.
 ### Tier 5 — Fleet power
 
 - [ ] **24. `manifest ship fleet --only <service>` / `--except <service>`** for partial fleet ships.
-- [ ] **25. Surface hidden fleet flags in help:** `--noprep`, `--safe`, `--method`, `--draft`.
+- [x] **25. Surface hidden fleet flags in help.** `manifest ship fleet --help` now lists every flag that fleet_ship accepts: `--noprep`, `--safe`, `--method <merge|squash|rebase>`, `--force`, `--no-delete-branch`, `--draft`. Help also includes a "Flow:" section showing the default vs. `--safe` pipeline so users know which step `--safe` adds. Bats coverage verifies all six flags appear in `--help` output.
 - [ ] **26. `manifest refresh fleet --commit`** — don't redirect users to `ship fleet --local` for a semantically-different operation.
 
 ### Tier 2 (additions found while resolving Tier 1)
@@ -192,6 +192,22 @@ Resolved in this session: **#1, #2, #3, #4, #5, #10, #17, #18, #20, #21, #23, #2
 **Files removed** (4): `modules/core/manifest-env-management.sh`, `examples/env.manifest.global.example`, `examples/env.manifest.local.example`, `examples/env.manifest.examples.md`.
 
 **Test count:** 35 bats tests, all passing on macOS. CI runs on Ubuntu + macOS via GitHub Actions.
+
+### Session 2026-04-25 — UX consistency cluster (#15, #16, #25)
+
+Resolved: **#15, #16, #25**. (After this batch: 20/28 done, 8 open: #6, #8, #9, #14, #19, #22, #24, #26.)
+
+**Decisions:**
+
+- **#16 first, then #25, then #15.** Building the help template (#16) first made #25 (surface fleet hidden flags) and #15 (fleet-init phase messaging) cheap — each is just a `_render_help` call with the right sections.
+- **#15 stale-detection design pivoted twice.** First draft used a heuristic ("any SELECT cell that isn't literally `true`/`false` means edited") — but the most common edit IS flipping `true`↔`false`, which the heuristic missed. Second design: embed a default-selection fingerprint into the TSV header (`# DEFAULT-SELECT-HASH:`) and recompute on Phase 2. Robust for any edit, including whitespace/comment changes. Old-format TSVs (no header) are deliberately treated as "not stale" so we don't break users on existing fleet directories.
+- **`_manifest_hash_short` lives in shared-utils, not fleet-detect.** Originally placed it next to `generate_start_tsv` but that made `manifest-init.sh` depend on the fleet module just to read its own TSVs. Moved to `manifest-shared-utils.sh` — both writers (fleet) and readers (init) get it without coupling.
+- **Help template kept deliberately simple.** API: `_render_help "<usage>" "<description>" [section_name body]…`. No nested formatting, no fancy alignment — callers control body alignment via plain text. This matches existing help conventions while eliminating per-verb echo blocks.
+- **`-x` + brackets in grep.** First test pass failed because `grep -qx "Usage: foo [--bar]"` interprets `[--bar]` as a regex character class. Switched to `grep -qFx` (fixed-string, exact-line) throughout `tests/help_template.bats`.
+
+**Files added (2):** `tests/help_template.bats`, `tests/fleet_init_phase.bats`.
+**Files modified (10):** `modules/core/manifest-shared-utils.sh` (helpers), `modules/core/manifest-{init,prep,refresh,ship,config-crud}.sh` (use template), `modules/pr/manifest-pr-native.sh` (use template), `modules/fleet/manifest-fleet-detect.sh` (TSV fingerprint).
+**Test count:** 53 bats tests (was 41, +6 help-template +6 fleet-init phase guard, all passing on macOS).
 
 ### Session 2026-04-25 — Tier 2 cleanups + Tier 3 polish
 

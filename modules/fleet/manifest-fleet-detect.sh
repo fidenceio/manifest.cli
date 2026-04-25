@@ -807,10 +807,25 @@ generate_start_tsv() {
     local scan_date
     scan_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+    # First pass: build the SELECT column for the default pattern so we can
+    # fingerprint it. The fingerprint lets `manifest init fleet` detect
+    # whether the user has actually edited selections in Phase 2.
+    local selects=""
+    while IFS=$'\t' read -r name path type branch version url submodule has_git has_remote; do
+        [[ -z "$name" ]] && continue
+        local selected="false"
+        [[ "$has_git" == "true" ]] && selected="true"
+        selects="${selects}${selected}\n"
+    done <<< "$discovered"
+
+    local default_hash
+    default_hash=$(printf "%b" "$selects" | _manifest_hash_short)
+
     # Header
     echo "# MANIFEST FLEET — Directory Inventory"
     echo "# Root: $root_dir | Depth: $depth | Date: $scan_date"
     echo "# Toggle the SELECT column (true/false), then run: manifest fleet init"
+    echo "# DEFAULT-SELECT-HASH: ${default_hash}"
     printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
 
     # Data rows
@@ -825,6 +840,7 @@ generate_start_tsv() {
             "$selected" "$name" "$path" "$type" "$has_git" "$url" "${branch:-}" "${version:-0.0.0}"
     done <<< "$discovered"
 }
+
 
 # -----------------------------------------------------------------------------
 # Function: parse_start_tsv

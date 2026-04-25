@@ -51,17 +51,16 @@ manifest_refresh_repo() {
         case "$1" in
             --commit) do_commit=true; shift ;;
             -h|--help)
-                echo "Usage: manifest refresh repo [--commit]"
-                echo ""
-                echo "Regenerate docs and metadata without version change."
-                echo ""
-                echo "Options:"
-                echo "  --commit    Commit refreshed files after regeneration"
+                _render_help \
+                    "manifest refresh repo [--commit]" \
+                    "Regenerate docs and metadata without changing the version." \
+                    "Options" "  --commit    Also commit refreshed files after regeneration" \
+                    "Examples" "  manifest refresh repo
+  manifest refresh repo --commit"
                 return 0
                 ;;
             *)
-                log_error "Unknown option: $1"
-                echo "Usage: manifest refresh repo [--commit]"
+                _render_help_error "Unknown option: $1" "manifest refresh repo [--commit]"
                 return 1
                 ;;
         esac
@@ -157,18 +156,19 @@ manifest_refresh_fleet() {
             --dry-run) dry_run=true; fleet_args+=("--dry-run"); shift ;;
             --commit) do_commit=true; shift ;;
             -h|--help)
-                echo "Usage: manifest refresh fleet [--dry-run] [--commit]"
-                echo ""
-                echo "Re-scan fleet membership, regenerate docs, validate config."
-                echo ""
-                echo "Options:"
-                echo "  --dry-run    Preview changes without applying"
-                echo "  --commit     Commit refreshed files across fleet"
+                _render_help \
+                    "manifest refresh fleet [--dry-run] [--commit]" \
+                    "Re-scan fleet membership, regenerate docs, validate config." \
+                    "Options" "  --dry-run    Preview changes without applying
+  --commit     Commit refreshed files across fleet (not yet implemented)" \
+                    "Examples" "  manifest refresh fleet
+  manifest refresh fleet --dry-run"
                 return 0
                 ;;
             *)
-                log_error "Unknown option: $1"
-                echo "Usage: manifest refresh fleet [--dry-run] [--commit]"
+                _render_help_error \
+                    "Unknown option: $1" \
+                    "manifest refresh fleet [--dry-run] [--commit]"
                 return 1
                 ;;
         esac
@@ -223,26 +223,21 @@ manifest_refresh_dispatch() {
             manifest_refresh_fleet "$@"
             ;;
         -h|--help|help)
-            echo "Usage: manifest refresh <repo|fleet> [options]"
-            echo ""
-            echo "Regenerate docs, metadata, and fleet membership."
-            echo "No version change. No remote operations."
-            echo ""
-            echo "Scopes:"
-            echo "  repo     Regenerate docs and metadata for single repo"
-            echo "  fleet    Re-scan fleet, regenerate docs, validate config"
-            echo ""
-            echo "Run 'manifest refresh repo --help' or 'manifest refresh fleet --help' for details."
+            _render_help \
+                "manifest refresh <repo|fleet> [options]" \
+                "Regenerate docs, metadata, and fleet membership.
+No version change. No remote operations." \
+                "Scopes" "  repo    Regenerate docs and metadata for single repo
+  fleet   Re-scan fleet, regenerate docs, validate config" \
+                "More" "  manifest refresh repo --help    Per-repo options
+  manifest refresh fleet --help   Fleet-specific options"
             ;;
         "")
-            echo "Usage: manifest refresh <repo|fleet>"
-            echo ""
-            echo "Run 'manifest refresh --help' for details."
+            _render_help_error "refresh requires a scope" "manifest refresh <repo|fleet>"
             return 1
             ;;
         *)
-            log_error "Unknown scope: $scope"
-            echo "Usage: manifest refresh <repo|fleet>"
+            _render_help_error "Unknown scope: $scope" "manifest refresh <repo|fleet>"
             return 1
             ;;
     esac

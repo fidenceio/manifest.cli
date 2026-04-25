@@ -73,15 +73,15 @@ manifest_config_list() {
         case "$1" in
             --layer) filter_layer="$2"; shift 2 ;;
             -h|--help)
-                cat <<'EOF'
-Usage: manifest config list [--layer global|project|local]
-
-Lists all configuration keys with their effective value and source layer.
-With --layer, lists only keys explicitly set in that layer's file.
-EOF
+                _render_help \
+                    "manifest config list [--layer global|project|local]" \
+                    "List all configuration keys with their effective value and source layer.
+With --layer, list only keys explicitly set in that layer's file." \
+                    "Examples" "  manifest config list
+  manifest config list --layer global"
                 return 0
                 ;;
-            *) log_error "Unknown option: $1"; return 1 ;;
+            *) _render_help_error "Unknown option: $1" "manifest config list [--layer ...]"; return 1 ;;
         esac
     done
 
@@ -127,7 +127,11 @@ EOF
 # -----------------------------------------------------------------------------
 manifest_config_get() {
     if [[ "${1:-}" == "" || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-        echo "Usage: manifest config get <key>"
+        _render_help \
+            "manifest config get <key>" \
+            "Print a config key's effective value (after layering)." \
+            "Examples" "  manifest config get version.format
+  manifest config get git.default_branch"
         return 1
     fi
     local path
@@ -161,22 +165,26 @@ manifest_config_set() {
         case "$1" in
             --layer) layer="$2"; shift 2 ;;
             -h|--help)
-                cat <<'EOF'
-Usage: manifest config set [--layer global|project|local] <key> <value>
-
-Default layer is 'local' (least invasive — git-ignored). Writing 'global'
-prompts for confirmation (uses the global-config safety gate).
-EOF
+                _render_help \
+                    "manifest config set [--layer global|project|local] <key> <value>" \
+                    "Set a config key in a specific layer.
+Default layer is 'local' (git-ignored). Writing 'global' prompts for
+confirmation via the global-config safety gate." \
+                    "Examples" "  manifest config set git.default_branch main
+  manifest config set --layer project version.format semver
+  manifest config set --layer global homebrew.formula_path Formula/manifest.rb"
                 return 0
                 ;;
-            *) log_error "Unknown option: $1"; return 1 ;;
+            *) _render_help_error "Unknown option: $1" "manifest config set [--layer ...] <key> <value>"; return 1 ;;
         esac
     done
 
     local key="${1:-}"
     local value="${2:-}"
     if [[ -z "$key" || $# -lt 2 ]]; then
-        echo "Usage: manifest config set [--layer global|project|local] <key> <value>"
+        _render_help_error \
+            "set requires both a key and a value" \
+            "manifest config set [--layer global|project|local] <key> <value>"
         return 1
     fi
 
@@ -215,16 +223,22 @@ manifest_config_unset() {
         case "$1" in
             --layer) layer="$2"; shift 2 ;;
             -h|--help)
-                echo "Usage: manifest config unset [--layer global|project|local] <key>"
+                _render_help \
+                    "manifest config unset [--layer global|project|local] <key>" \
+                    "Remove a config key from a specific layer." \
+                    "Examples" "  manifest config unset git.default_branch
+  manifest config unset --layer project version.format"
                 return 0
                 ;;
-            *) log_error "Unknown option: $1"; return 1 ;;
+            *) _render_help_error "Unknown option: $1" "manifest config unset [--layer ...] <key>"; return 1 ;;
         esac
     done
 
     local key="${1:-}"
     if [[ -z "$key" ]]; then
-        echo "Usage: manifest config unset [--layer global|project|local] <key>"
+        _render_help_error \
+            "unset requires a key" \
+            "manifest config unset [--layer global|project|local] <key>"
         return 1
     fi
 
@@ -256,9 +270,11 @@ manifest_config_unset() {
 # -----------------------------------------------------------------------------
 manifest_config_describe() {
     if [[ "${1:-}" == "" || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-        echo "Usage: manifest config describe <key>"
-        echo ""
-        echo "Shows where a key comes from across layers, plus its env-var name."
+        _render_help \
+            "manifest config describe <key>" \
+            "Show where a key's value comes from across layers, plus its env-var name." \
+            "Examples" "  manifest config describe version.format
+  manifest config describe homebrew.formula_path"
         return 1
     fi
     local path env_var

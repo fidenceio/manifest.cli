@@ -61,26 +61,33 @@ manifest_ship_repo() {
             --local) local_only=true; shift ;;
             -i|--interactive) interactive=true; shift ;;
             -h|--help)
-                echo "Usage: manifest ship repo <patch|minor|major|revision> [--local] [-i]"
-                echo ""
-                echo "Publish a release: version bump, docs, commit, tag, push."
-                echo ""
-                echo "Options:"
-                echo "  --local        Do everything locally (no tag, push, or Homebrew)"
-                echo "  -i|--interactive  Enable interactive safety prompts"
+                _render_help \
+                    "manifest ship repo <patch|minor|major|revision> [--local] [-i]" \
+                    "Publish a release: version bump, docs, commit, tag, push." \
+                    "Options" "  patch | -p          Increment patch version (e.g. 1.2.3 -> 1.2.4)
+  minor | -m          Increment minor version (e.g. 1.2.3 -> 1.3.0)
+  major | -M          Increment major version (e.g. 1.2.3 -> 2.0.0)
+  revision | -r       Increment revision (e.g. 1.2.3 -> 1.2.3.1)
+  --local             Local only — no tag, push, or Homebrew update
+  -i, --interactive   Enable interactive safety prompts" \
+                    "Examples" "  manifest ship repo patch
+  manifest ship repo minor --local
+  manifest ship repo -M -i"
                 return 0
                 ;;
             *)
-                log_error "Unknown option: $1"
-                echo "Usage: manifest ship repo <patch|minor|major|revision> [--local] [-i]"
+                _render_help_error \
+                    "Unknown option: $1" \
+                    "manifest ship repo <patch|minor|major|revision> [--local] [-i]"
                 return 1
                 ;;
         esac
     done
 
     if [[ -z "$increment_type" ]]; then
-        log_error "ship repo requires a release type"
-        echo "Usage: manifest ship repo <patch|minor|major|revision> [--local] [-i]"
+        _render_help_error \
+            "ship repo requires a release type" \
+            "manifest ship repo <patch|minor|major|revision> [--local] [-i]"
         return 1
     fi
 
@@ -117,16 +124,24 @@ manifest_ship_fleet() {
                 increment_type="$1"; shift ;;
             --local) local_only=true; shift ;;
             -h|--help)
-                echo "Usage: manifest ship fleet <patch|minor|major|revision> [--local] [fleet options]"
-                echo ""
-                echo "Coordinated fleet release."
-                echo ""
-                echo "Options:"
-                echo "  --local        Do everything locally (no push, no PRs)"
-                echo "  --noprep       Skip per-service prep step"
-                echo "  --safe         Run checks/ready gate before queueing"
-                echo "  --method <merge|squash|rebase>"
-                echo "  --draft        Create draft PRs"
+                _render_help \
+                    "manifest ship fleet <patch|minor|major|revision> [--local] [fleet options]" \
+                    "Coordinated fleet release across all services." \
+                    "Options" "  patch | minor | major | revision   Release type
+  --local                  Local only — no push, no PRs
+  --noprep                 Skip per-service prep step (requires clean trees)
+  --safe                   Insert checks/ready gate before queueing
+  --method <merge|squash|rebase>
+                           PR merge strategy (default: squash)
+  --force                  Bypass readiness gate during queue
+  --no-delete-branch       Keep source branches after queue
+  --draft                  Create draft PRs" \
+                    "Flow" "  default:  fleet prep -> fleet docs -> fleet pr create -> fleet pr queue
+  --safe:   fleet prep -> fleet docs -> fleet pr create -> fleet pr checks -> fleet pr ready -> fleet pr queue" \
+                    "Examples" "  manifest ship fleet patch
+  manifest ship fleet minor --local
+  manifest ship fleet major --safe --method squash
+  manifest ship fleet patch --noprep --draft"
                 return 0
                 ;;
             *)
@@ -135,8 +150,9 @@ manifest_ship_fleet() {
     done
 
     if [[ -z "$increment_type" ]]; then
-        log_error "ship fleet requires a release type"
-        echo "Usage: manifest ship fleet <patch|minor|major|revision> [--local]"
+        _render_help_error \
+            "ship fleet requires a release type" \
+            "manifest ship fleet <patch|minor|major|revision> [--local]"
         return 1
     fi
 
@@ -166,33 +182,30 @@ manifest_ship_dispatch() {
             manifest_ship_fleet "$@"
             ;;
         -h|--help|help)
-            echo "Usage: manifest ship <repo|fleet> <patch|minor|major|revision> [--local] [-i]"
-            echo ""
-            echo "Publish a release. Highest consequence command."
-            echo ""
-            echo "Scopes:"
-            echo "  repo     Single repo: version + docs + commit + tag + push"
-            echo "  fleet    Coordinated fleet release across all repos"
-            echo ""
-            echo "Options:"
-            echo "  --local  Do everything locally (no tag, push, Homebrew)"
-            echo "  -i       Enable interactive safety prompts"
-            echo ""
-            echo "Run 'manifest ship repo --help' or 'manifest ship fleet --help' for details."
+            _render_help \
+                "manifest ship <repo|fleet> <patch|minor|major|revision> [--local] [-i]" \
+                "Publish a release. Highest consequence command." \
+                "Scopes" "  repo    Single repo: version + docs + commit + tag + push
+  fleet   Coordinated fleet release across all services" \
+                "Options" "  --local             Local only — no tag, push, Homebrew, PRs
+  -i, --interactive   Enable interactive safety prompts" \
+                "More" "  manifest ship repo --help    Per-repo options + bump short flags
+  manifest ship fleet --help   Fleet-specific flags (--noprep, --safe, --method, ...)"
             ;;
         # Legacy support: old "ship <patch|minor|major|revision>" routes to ship repo
         patch|minor|major|revision)
             manifest_ship_repo "$scope" "$@"
             ;;
         "")
-            echo "Usage: manifest ship <repo|fleet> <patch|minor|major|revision>"
-            echo ""
-            echo "Run 'manifest ship --help' for details."
+            _render_help_error \
+                "ship requires a scope" \
+                "manifest ship <repo|fleet> <patch|minor|major|revision>"
             return 1
             ;;
         *)
-            log_error "Unknown scope: $scope"
-            echo "Usage: manifest ship <repo|fleet> <patch|minor|major|revision>"
+            _render_help_error \
+                "Unknown scope: $scope" \
+                "manifest ship <repo|fleet> <patch|minor|major|revision>"
             return 1
             ;;
     esac

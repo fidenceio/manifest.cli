@@ -59,12 +59,13 @@ manifest_pr_create() {
         case "$1" in
             --draft)        draft=true; shift ;;
             -h|--help)
-                cat <<'EOF'
-Usage: manifest pr create [--draft] [--title <t>] [--body <b>] [--base <branch>]
-
-Creates a pull request from the current branch using the GitHub CLI (gh).
-Any flag not handled here is forwarded to 'gh pr create'.
-EOF
+                _render_help \
+                    "manifest pr create [--draft] [--title <t>] [--body <b>] [--base <branch>]" \
+                    "Create a pull request from the current branch via the GitHub CLI (gh).
+Any flag not handled here is forwarded to 'gh pr create'." \
+                    "Examples" "  manifest pr create
+  manifest pr create --draft
+  manifest pr create --title 'fix: foo' --body 'closes #123'"
                 return 0
                 ;;
             *)              args+=("$1"); shift ;;
@@ -90,8 +91,9 @@ manifest_pr_status() {
     _pr_require_gh || return 1
     _pr_require_repo || return 1
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-        echo "Usage: manifest pr status [<number-or-branch>]"
-        echo "Shows the current branch's PR by default; pass a number or branch to target another."
+        _render_help \
+            "manifest pr status [<number-or-branch>]" \
+            "Show the current branch's PR by default; pass a number or branch to target another."
         return 0
     fi
     if [[ $# -gt 0 ]]; then
@@ -108,8 +110,9 @@ manifest_pr_checks() {
     _pr_require_gh || return 1
     _pr_require_repo || return 1
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-        echo "Usage: manifest pr checks [<number-or-branch>] [--watch]"
-        echo "Shows CI check status. Pass --watch to poll until complete."
+        _render_help \
+            "manifest pr checks [<number-or-branch>] [--watch]" \
+            "Show CI check status. Pass --watch to poll until complete."
         return 0
     fi
     gh pr checks "$@"
@@ -122,8 +125,9 @@ manifest_pr_ready() {
     _pr_require_gh || return 1
     _pr_require_repo || return 1
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-        echo "Usage: manifest pr ready [<number-or-branch>]"
-        echo "Marks a draft PR as ready for review."
+        _render_help \
+            "manifest pr ready [<number-or-branch>]" \
+            "Mark a draft PR as ready for review."
         return 0
     fi
     gh pr ready "$@"
@@ -136,12 +140,13 @@ manifest_pr_merge() {
     _pr_require_gh || return 1
     _pr_require_repo || return 1
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-        cat <<'EOF'
-Usage: manifest pr merge [<number-or-branch>] [--squash|--merge|--rebase] [--auto]
-
-Merges a PR. Default is squash. --auto enables GitHub auto-merge once checks
-pass. For richer queue/policy control, see Cloud's 'manifest pr queue'.
-EOF
+        _render_help \
+            "manifest pr merge [<number-or-branch>] [--squash|--merge|--rebase] [--auto]" \
+            "Merge a PR. Default is squash. --auto enables GitHub auto-merge once checks pass.
+For richer queue/policy control, see Cloud's 'manifest pr queue'." \
+            "Examples" "  manifest pr merge
+  manifest pr merge --merge
+  manifest pr merge 123 --auto"
         return 0
     fi
     local args=("$@")
@@ -159,8 +164,9 @@ manifest_pr_update() {
     _pr_require_gh || return 1
     _pr_require_repo || return 1
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-        echo "Usage: manifest pr update [<number-or-branch>] [--rebase|--merge]"
-        echo "Brings a PR branch up to date with its base."
+        _render_help \
+            "manifest pr update [<number-or-branch>] [--rebase|--merge]" \
+            "Bring a PR branch up to date with its base."
         return 0
     fi
     gh pr update-branch "$@"

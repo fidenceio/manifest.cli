@@ -45,7 +45,11 @@
       "Bash(brew search:*)",
       "Read(//opt/homebrew/Cellar/manifest/**)",
       "Bash(brew update:*)",
-      "Bash(brew upgrade:*)"
+      "Bash(brew upgrade:*)",
+      "Bash(manifest doctor *)",
+      "Bash(sed 's/\\\\x1b\\\\[[0-9;]*m//g')",
+      "Bash(gh run *)",
+      "Bash(yq -P)"
     ],
     "deny": [],
     "ask": [],
