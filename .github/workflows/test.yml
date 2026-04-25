@@ -1,0 +1,56 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  bats:
+    name: bats (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          set -euxo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y bats
+          # Mike Farah's Go yq (apt 'yq' is the older Python tool we don't want)
+          YQ_VERSION="v4.44.3"
+          sudo curl -fsSL -o /usr/local/bin/yq \
+            "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          set -euxo pipefail
+          brew install bats-core yq
+          yq --version
+
+      - name: Print environment
+        run: |
+          bash --version | head -1
+          bats --version
+          yq --version
+          git --version
+
+      - name: Run bats suite
+        run: ./scripts/run-tests.sh
+
+      - name: Smoke-test the CLI
+        run: |
+          bash scripts/manifest-cli.sh version
+          bash scripts/manifest-cli.sh help | head -40
+          bash scripts/manifest-cli.sh status
+          bash scripts/manifest-cli.sh doctor
