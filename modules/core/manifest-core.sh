@@ -55,8 +55,14 @@ source "$MANIFEST_CLI_CORE_MODULES_DIR/docs/manifest-cleanup-docs.sh"
 # Optional modules — loaded from Manifest Cloud plugins, or stubs if absent
 manifest_load_plugin "testing/manifest-test.sh" \
     || source "$MANIFEST_CLI_CORE_MODULES_DIR/stubs/manifest-test-stub.sh"
-manifest_load_plugin "pr/manifest-pr.sh" \
-    || source "$MANIFEST_CLI_CORE_MODULES_DIR/stubs/manifest-pr-stub.sh"
+
+# PR loading order: native (gh wrapper) → Cloud plugin (may override) → stub
+# (fills any remaining gaps with "requires Cloud" message). Native + Cloud
+# are non-exclusive; Cloud functions take precedence where both define one.
+source "$MANIFEST_CLI_CORE_MODULES_DIR/pr/manifest-pr-native.sh"
+manifest_load_plugin "pr/manifest-pr.sh" || true
+source "$MANIFEST_CLI_CORE_MODULES_DIR/stubs/manifest-pr-stub.sh"
+
 manifest_load_plugin "cloud/manifest-agent-containerized.sh" \
     || source "$MANIFEST_CLI_CORE_MODULES_DIR/stubs/manifest-agent-stub.sh"
 if ! manifest_load_plugin "cloud/manifest-mcp-utils.sh"; then
@@ -73,6 +79,9 @@ source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-init.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-prep.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-refresh.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-ship.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-status.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-doctor.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-config-crud.sh"
 
 # Function to get the CLI installation directory dynamically
 get_cli_dir() {
@@ -120,8 +129,10 @@ manifest_origin_repo_slug() {
         echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
         return 0
     fi
-    if [[ "$repo_url" =~ ^https?://[^/]+/([^/]+)/([^/]+)(\.git)?$ ]]; then
-        echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+    if [[ "$repo_url" =~ ^https?://[^/]+/([^/]+)/([^/]+)$ ]]; then
+        local org="${BASH_REMATCH[1]}"
+        local repo="${BASH_REMATCH[2]%.git}"
+        echo "${org}/${repo}"
         return 0
     fi
 
@@ -336,7 +347,7 @@ manifest_prep() {
         echo "Usage: manifest ship repo <patch|minor|major|revision> [--local] [-i]"
         return 1
     fi
-    manifest_prep_workflow "$increment_type" "$interactive" "$publish_release"
+    manifest_ship_workflow "$increment_type" "$interactive" "$publish_release"
 }
 
 main() {
@@ -382,6 +393,12 @@ main() {
             export PROJECT_ROOT
             load_configuration "$PROJECT_ROOT" "false"
             ;;
+        # status is read-only; it handles non-git directories itself
+        "status"|"doctor")
+            PROJECT_ROOT="$(pwd)"
+            export PROJECT_ROOT
+            load_configuration "$PROJECT_ROOT" "false"
+            ;;
         *)
             # All other commands require a Git repository
             if ! ensure_repository_root; then
@@ -416,6 +433,26 @@ main() {
                     shift
                     config_doctor "$@"
                     ;;
+                "list")
+                    shift
+                    manifest_config_list "$@"
+                    ;;
+                "get")
+                    shift
+                    manifest_config_get "$@"
+                    ;;
+                "set")
+                    shift
+                    manifest_config_set "$@"
+                    ;;
+                "unset")
+                    shift
+                    manifest_config_unset "$@"
+                    ;;
+                "describe")
+                    shift
+                    manifest_config_describe "$@"
+                    ;;
                 "")
                     if [ -t 0 ]; then
                         configure_interactive
@@ -424,13 +461,24 @@ main() {
                     fi
                     ;;
                 "-h"|"--help")
-                    echo "Usage: manifest config [show|time|doctor|setup]"
-                    echo ""
-                    echo "  (no args)  Run interactive wizard (TTY) or show config (non-interactive)"
-                    echo "  show       Print full effective configuration"
-                    echo "  time       Print time server configuration"
-                    echo "  doctor     Detect stale/deprecated config (use --fix/--dry-run)"
-                    echo "  setup      Force interactive configuration wizard"
+                    cat <<'EOF'
+Usage: manifest config [<subcommand>] [args]
+
+  (no args)        Interactive wizard (TTY) or show config (non-TTY)
+  show             Print full effective configuration
+  time             Print time server configuration
+  doctor [--fix]   Detect stale/deprecated config; --fix to apply
+  setup            Force interactive configuration wizard
+
+  list [--layer L]                  List all keys + effective layer
+  get <key>                         Read effective value of a key
+  set [--layer L] <key> <value>     Write a key (default layer: local)
+  unset [--layer L] <key>           Remove a key from a layer
+  describe <key>                    Show key value at every layer + env var
+
+Layer L is one of: global | project | local
+Writing to 'global' triggers the safety-gate confirmation.
+EOF
                     ;;
                 "setup")
                     configure_interactive
@@ -440,7 +488,7 @@ main() {
                     ;;
                 *)
                     log_error "Unknown config view: $1"
-                    echo "Usage: manifest config [show|time|doctor|setup]"
+                    echo "Usage: manifest config [show|time|doctor|setup|list|get|set|unset|describe]"
                     return 1
                     ;;
             esac
@@ -462,13 +510,21 @@ main() {
             manifest_ship_dispatch "$@"
             ;;
 
+        "status")
+            manifest_status "$@"
+            ;;
+
+        "doctor")
+            manifest_doctor "$@"
+            ;;
+
         # =====================================================================
         # SUPPORTING COMMANDS (used anytime, not part of core sequence)
         # =====================================================================
         "pr")
             local subcommand=""
             case "${1:-}" in
-                "create"|"update"|"status"|"ready"|"checks"|"queue"|"policy"|"help"|"-h"|"--help")
+                "create"|"update"|"status"|"ready"|"checks"|"merge"|"queue"|"policy"|"help"|"-h"|"--help")
                     subcommand="${1:-help}"
                     shift || true
                     ;;
@@ -503,6 +559,9 @@ main() {
                     ;;
                 "checks")
                     manifest_pr_checks "$@"
+                    ;;
+                "merge")
+                    manifest_pr_merge "$@"
                     ;;
                 "queue")
                     manifest_pr_queue "$@"
@@ -773,20 +832,23 @@ Usage: manifest <command> [scope] [options]
   Core workflow:
     config                              Setup wizard / show configuration
     init repo|fleet                     Scaffold repo or fleet
+    status                              Read-only snapshot (next bump, sync state)
     prep repo|fleet                     Connect remotes, pull latest
     refresh repo|fleet                  Regenerate docs, metadata, membership
     ship repo|fleet <patch|minor|major> Publish release (version + tag + push)
          --local                        Preview locally without pushing
 
-  Pull requests:                              [Cloud]
-    pr                                  Interactive PR wizard
-    pr create|status|ready              Create, view, evaluate PRs
-    pr checks|queue|update              CI status, auto-merge, update
+  Pull requests:                              (gh wrapper, no Cloud needed)
+    pr                                  Show current PR or prompt to create
+    pr create|status|ready              Create, view, mark-ready (gh)
+    pr checks|merge|update              CI status, merge, update branch (gh)
+    pr queue|policy                     Auto-merge, policy enforcement [Cloud]
 
   Config:
     config doctor                       Detect and fix config issues
 
   Maintenance:
+    doctor                              Health check (deps, config, repo)
     upgrade                             Update Manifest CLI  [Cloud]
     uninstall                           Remove Manifest CLI
     security                            Run security audit
