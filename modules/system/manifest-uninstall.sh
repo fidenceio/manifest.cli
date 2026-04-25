@@ -118,13 +118,12 @@ remove_cli_binary() {
 
 # Function to clean up configuration files and data directories
 cleanup_config_files() {
+    local global_yaml="$HOME/.manifest-cli/manifest.config.global.yaml"
     local config_files=(
         "$HOME/.manifestrc"
         "$HOME/.manifest-cli.conf"
         "$HOME/.config/manifest-cli"
-        "$HOME/.manifest-cli/manifest.config.global.yaml"
-        "$HOME/.env.manifest.global"
-        "$HOME/.env.manifest.local"
+        "$global_yaml"
     )
 
     # Data directories created at runtime by cloud/agent and time modules
@@ -140,8 +139,23 @@ cleanup_config_files() {
         data_dirs+=("$fallback_cache")
     fi
 
+    # Gate deletion of the global YAML behind explicit double-confirm so the
+    # uninstall workflow can't silently destroy user-customized settings.
+    local skip_global_yaml=0
+    if [ -f "$global_yaml" ]; then
+        if type _confirm_global_config_write &>/dev/null; then
+            if ! _confirm_global_config_write "delete" "$global_yaml" "uninstall removing user-customized global config"; then
+                echo "ℹ️  Preserving global config: $global_yaml"
+                skip_global_yaml=1
+            fi
+        fi
+    fi
+
     local cleaned=0
     for config_file in "${config_files[@]}"; do
+        if [ "$config_file" = "$global_yaml" ] && [ "$skip_global_yaml" -eq 1 ]; then
+            continue
+        fi
         if [ -f "$config_file" ] || [ -d "$config_file" ]; then
             echo "Removing config file: $config_file"
             if rm -rf "$config_file"; then
@@ -170,35 +184,55 @@ cleanup_config_files() {
     fi
 }
 
-# Function to clean up environment variables
+# Function to clean up environment variables AND shell-profile entries.
+# Uninstall runs in its own process so unsetting in-memory MANIFEST_CLI_*
+# vars affects nothing user-visible — but stripping any leftover lines from
+# shell profiles is real cleanup the user benefits from.
 cleanup_environment_variables() {
-    echo "🧹 Cleaning up Manifest CLI environment variables..."
-    
-    # Source the environment management module if available
-    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local modules_dir="$(dirname "$script_dir")"
-    local env_management_module="$modules_dir/core/manifest-env-management.sh"
-    
-    if [ -f "$env_management_module" ]; then
-        # Source shared utilities first
-        if [ -f "$modules_dir/core/manifest-shared-utils.sh" ]; then
-            source "$modules_dir/core/manifest-shared-utils.sh"
+    echo "🧹 Cleaning up Manifest CLI shell-profile entries..."
+
+    local shell_files=(
+        "$HOME/.zshrc" "$HOME/.zprofile" "$HOME/.zsh_profile"
+        "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"
+    )
+    local removed_count=0
+
+    local profile_file backup_file temp_file
+    for profile_file in "${shell_files[@]}"; do
+        [ -f "$profile_file" ] || continue
+        backup_file="${profile_file}.manifest-backup-$(date +%Y%m%d-%H%M%S)"
+        cp "$profile_file" "$backup_file"
+        temp_file=$(mktemp)
+        # Remove any line that:
+        #  - exports a MANIFEST_* variable
+        #  - prepends .manifest-cli or .local/bin to PATH (installer-style)
+        #  - sources a manifest-related rc file
+        if grep -v -E '^[[:space:]]*(export[[:space:]]+MANIFEST_[A-Z_]+=|export[[:space:]]+PATH=.*\.manifest-cli|export[[:space:]]+PATH=.*\.local/bin.*PATH|(\.|source)[[:space:]]+.*manifest)' "$profile_file" > "$temp_file"; then
+            if [ -s "$temp_file" ] && ! cmp -s "$profile_file" "$temp_file"; then
+                mv "$temp_file" "$profile_file"
+                echo "  ✅ Cleaned: $profile_file (backup: $backup_file)"
+                ((removed_count++))
+            else
+                rm -f "$temp_file" "$backup_file"
+            fi
+        else
+            rm -f "$temp_file" "$backup_file"
         fi
-        
-        # Source the environment management module
-        source "$env_management_module"
-        
-        # Clean up all Manifest CLI-related environment variables
-        cleanup_all_manifest_env_vars
-        
-        # Remove Manifest CLI variables from shell profile files
-        remove_manifest_from_shell_profiles
-        
-        echo "✅ Environment variable cleanup completed"
+    done
+
+    if [ $removed_count -eq 0 ]; then
+        echo "  No Manifest CLI entries found in shell profiles"
     else
-        echo "⚠️  Environment management module not found, skipping environment cleanup"
-        echo "You may need to manually remove MANIFEST_* and MANIFEST_CLI_* variables from your shell profile"
+        echo "  ✅ Cleaned $removed_count shell profile(s) — restart your terminal to apply"
     fi
+
+    # Best-effort in-process unset (not user-visible after process exits).
+    local var
+    for var in $(env | grep -E '^MANIFEST_(CLI_)?[A-Z_]+=' | cut -d'=' -f1); do
+        unset "$var"
+    done
+
+    return 0
 }
 
 # Main uninstall function

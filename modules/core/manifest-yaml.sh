@@ -254,6 +254,25 @@ detect_yaml_parser() {
 }
 
 # -----------------------------------------------------------------------------
+# Function: require_yaml_parser
+# -----------------------------------------------------------------------------
+# Strict startup-time check. Fails the CLI immediately if yq is missing —
+# unlike get_yaml_value which silently falls back to defaults. Call once early
+# from load_configuration() so users see the missing-dependency error upfront
+# rather than getting confusing failures later when a write is first attempted.
+# -----------------------------------------------------------------------------
+require_yaml_parser() {
+    if [[ -n "${_MANIFEST_YAML_PARSER:-}" ]]; then
+        return 0
+    fi
+    if ! _MANIFEST_YAML_PARSER=$(detect_yaml_parser); then
+        unset _MANIFEST_YAML_PARSER
+        return 1
+    fi
+    return 0
+}
+
+# -----------------------------------------------------------------------------
 # Function: parse_yaml_with_yq
 # -----------------------------------------------------------------------------
 # Parses YAML using yq (Mike Farah's Go version).
@@ -351,7 +370,7 @@ get_yaml_value() {
 # Function: set_yaml_value
 # -----------------------------------------------------------------------------
 # Updates a single key in a YAML file. Creates the file if it does not exist.
-# Requires yq or python3 — the basic grep/sed fallback cannot write YAML.
+# Requires yq (Mike Farah's Go version, v4+).
 #
 # ARGUMENTS:
 #   $1 - Path to YAML file
@@ -415,8 +434,7 @@ set_yaml_value() {
 # Dumps ALL current MANIFEST_CLI_* env vars (that have a mapping and a value)
 # into a complete YAML config file. Overwrites the target file.
 #
-# Uses python3 preferably (correct nested structure), falls back to yq,
-# errors out if neither is available.
+# Requires yq (Mike Farah's Go version, v4+).
 #
 # ARGUMENTS:
 #   $1 - Path to output YAML file
@@ -547,6 +565,7 @@ load_yaml_to_env() {
 # =============================================================================
 
 export -f detect_yaml_parser
+export -f require_yaml_parser
 export -f parse_yaml_with_yq
 export -f get_yaml_value
 export -f set_yaml_value

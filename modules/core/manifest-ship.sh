@@ -24,7 +24,7 @@
 #
 # DEPENDENCIES:
 #   - manifest-pr.sh (manifest_ship — the existing ship function)
-#   - manifest-orchestrator.sh (manifest_prep_workflow)
+#   - manifest-orchestrator.sh (manifest_ship_workflow)
 #   - manifest-fleet.sh (fleet_ship, fleet_prep)
 # =============================================================================
 
@@ -92,8 +92,7 @@ manifest_ship_repo() {
         echo "Ship: $increment_type"
     fi
 
-    # Delegate to the existing prep workflow with publish flag
-    manifest_prep_workflow "$increment_type" "$interactive" "$publish_release"
+    manifest_ship_workflow "$increment_type" "$interactive" "$publish_release"
 }
 
 # -----------------------------------------------------------------------------

@@ -120,8 +120,10 @@ manifest_origin_repo_slug() {
         echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
         return 0
     fi
-    if [[ "$repo_url" =~ ^https?://[^/]+/([^/]+)/([^/]+)(\.git)?$ ]]; then
-        echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+    if [[ "$repo_url" =~ ^https?://[^/]+/([^/]+)/([^/]+)$ ]]; then
+        local org="${BASH_REMATCH[1]}"
+        local repo="${BASH_REMATCH[2]%.git}"
+        echo "${org}/${repo}"
         return 0
     fi
 
@@ -940,7 +942,6 @@ nbproject/
 .env.*
 !.env.example
 !.env.template
-.env.manifest.local
 
 # =============================================================================
 # Logs and runtime data

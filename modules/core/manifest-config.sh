@@ -21,6 +21,75 @@ _manifest_config_warn() {
     fi
 }
 
+# -----------------------------------------------------------------------------
+# Global Config Safety Gate
+# -----------------------------------------------------------------------------
+# The user's global config (~/.manifest-cli/manifest.config.global.yaml)
+# persists across upgrades and contains user customizations. Every code path
+# that modifies or deletes it MUST pass through this gate.
+#
+# ARGUMENTS:
+#   $1 - action: "modify" | "delete" | "overwrite"
+#   $2 - target: file path
+#   $3 - reason: human description shown to the user
+#
+# RETURNS: 0 if approved, non-zero if denied
+#
+# ENV:
+#   MANIFEST_CLI_AUTO_CONFIRM=1            bypass prompt (CI / scripted)
+#   _MANIFEST_GLOBAL_CONFIG_AUTHORIZED=1   session-cached approval (modify only)
+# -----------------------------------------------------------------------------
+_confirm_global_config_write() {
+    local action="$1"
+    local target="$2"
+    local reason="$3"
+
+    if [ "${MANIFEST_CLI_AUTO_CONFIRM:-0}" = "1" ]; then
+        _manifest_config_warn "Auto-confirming $action of $target ($reason) [MANIFEST_CLI_AUTO_CONFIRM=1]"
+        export _MANIFEST_GLOBAL_CONFIG_AUTHORIZED=1
+        return 0
+    fi
+
+    if [ "$action" = "modify" ] && [ "${_MANIFEST_GLOBAL_CONFIG_AUTHORIZED:-0}" = "1" ]; then
+        return 0
+    fi
+
+    if [ ! -t 0 ]; then
+        log_error "Refusing to $action global config without confirmation."
+        log_error "  File:   $target"
+        log_error "  Reason: $reason"
+        log_error "  Set MANIFEST_CLI_AUTO_CONFIRM=1 to authorize, or run interactively."
+        return 1
+    fi
+
+    echo ""
+    echo "⚠️  Global configuration $action requested"
+    echo "    File:   $target"
+    echo "    Reason: $reason"
+    echo ""
+
+    case "$action" in
+        delete|overwrite)
+            local ans1 ans2
+            printf "    This is destructive. Type 'yes' to confirm (1/2): "
+            read -r ans1 || return 1
+            [ "$ans1" = "yes" ] || { echo "    Cancelled."; return 1; }
+            printf "    Type 'yes' again to confirm (2/2): "
+            read -r ans2 || return 1
+            [ "$ans2" = "yes" ] || { echo "    Cancelled."; return 1; }
+            ;;
+        *)
+            local ans
+            printf "    Continue? (yes/no): "
+            read -r ans || return 1
+            [ "$ans" = "yes" ] || { echo "    Cancelled."; return 1; }
+            ;;
+    esac
+
+    export _MANIFEST_GLOBAL_CONFIG_AUTHORIZED=1
+    return 0
+}
+
 _manifest_config_warning_state_file() {
     local state_dir="$HOME/.manifest-cli"
     if ! mkdir -p "$state_dir" 2>/dev/null; then
@@ -253,6 +322,20 @@ auto_migrate_user_global_configuration() {
 
     [ "$actionable" -eq 1 ] || return 0
 
+    # Auto-migration silently rewrites the global config on every CLI run.
+    # That violates the "no silent modifications" rule. Default behavior is
+    # now WARN-ONLY; users opt in to silent migration with MANIFEST_CLI_AUTO_CONFIRM=1
+    # or run `manifest config doctor --fix` explicitly.
+    if [ "${MANIFEST_CLI_AUTO_CONFIRM:-0}" != "1" ]; then
+        _manifest_config_warn "Configuration drift detected in $config_file."
+        _manifest_config_warn "Run 'manifest config doctor --dry-run' to review, then '--fix' to apply."
+        return 0
+    fi
+
+    if ! _confirm_global_config_write "modify" "$config_file" "auto-migration of legacy/missing keys"; then
+        return 0
+    fi
+
     local lock_dir=""
     lock_dir=$(_manifest_config_lock_acquire "$config_file") || return 0
     local migration_output=""
@@ -291,51 +374,6 @@ config_doctor() {
                 ;;
         esac
     done
-
-    # --- .env → YAML migration ---
-    local legacy_env="$HOME/.env.manifest.global"
-    if [ ! -f "$config_file" ] && [ -f "$legacy_env" ]; then
-        echo "🩺 Manifest Config Doctor"
-        echo "========================="
-        echo "   Legacy config found: $legacy_env"
-        echo "   YAML config missing: $config_file"
-        echo ""
-        echo "📦 Migrating .env configuration to YAML..."
-
-        if [ "$fix" = "true" ]; then
-            # Parse legacy .env and export vars so write_full_yaml can pick them up
-            while IFS= read -r line || [ -n "$line" ]; do
-                [[ "$line" =~ ^[[:space:]]*# ]] && continue
-                [[ -z "${line// }" ]] && continue
-                if [[ "$line" =~ ^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*= ]]; then
-                    local var_name="${line%%=*}"
-                    local var_value="${line#*=}"
-                    var_value="${var_value#\"}" ; var_value="${var_value%\"}"
-                    var_value="${var_value#\'}" ; var_value="${var_value%\'}"
-                    export "$var_name=$var_value"
-                fi
-            done < "$legacy_env"
-
-            mkdir -p "$(dirname "$config_file")"
-            write_full_yaml "$config_file"
-
-            if [ -f "$config_file" ]; then
-                mv "$legacy_env" "${legacy_env}.migrated"
-                echo ""
-                echo "✅ Migrated to: $config_file"
-                echo "✅ Legacy file renamed to: ${legacy_env}.migrated"
-                echo "   You can safely delete the .migrated file once verified."
-                return 0
-            else
-                echo "❌ Migration failed — YAML file was not created."
-                return 1
-            fi
-        else
-            echo "   Run with --fix to migrate automatically."
-            echo "   Run with --dry-run to preview changes."
-            return 0
-        fi
-    fi
 
     if [ ! -f "$config_file" ]; then
         echo "⚠️  Config file not found: $config_file"
@@ -382,6 +420,11 @@ config_doctor() {
         if [ "$dry_run" = "true" ]; then
             _manifest_config_apply_migrations "$config_file" "$dry_run"
         else
+            if [ "$config_file" = "$MANIFEST_CLI_GLOBAL_CONFIG" ] && \
+               ! _confirm_global_config_write "modify" "$config_file" "applying ${#issues[@]} configuration migration(s)"; then
+                echo "Migration cancelled."
+                return 1
+            fi
             local lock_dir=""
             lock_dir=$(_manifest_config_lock_acquire "$config_file") || {
                 echo "❌ Could not acquire config lock for migration: ${config_file}.lock.d"
@@ -414,6 +457,11 @@ load_configuration() {
         project_root="."
     fi
 
+    # Fail fast if yq is missing (rather than later, mid-workflow).
+    if ! require_yaml_parser; then
+        return 1
+    fi
+
     # Baseline defaults first (so YAML layers override them)
     set_default_configuration
 
@@ -437,23 +485,6 @@ load_configuration() {
             echo "🔧 Loading project local configuration from: manifest.config.local.yaml (Project: $project_root)"
             load_yaml_to_env "$project_local"
         fi
-    fi
-
-    # Warn if legacy .env config files are still present
-    local legacy_warned=0
-    for legacy_file in "$HOME/.env.manifest.global" \
-                       "$project_root/.env.manifest.global" \
-                       "$project_root/.env.manifest.local"; do
-        if [ -f "$legacy_file" ]; then
-            if [ "$legacy_warned" -eq 0 ]; then
-                _manifest_config_warn "Legacy .env config file(s) detected. Manifest CLI now uses YAML configuration."
-                legacy_warned=1
-            fi
-            _manifest_config_warn "  Found: $legacy_file"
-        fi
-    done
-    if [ "$legacy_warned" -eq 1 ]; then
-        _manifest_config_warn "Run 'manifest config doctor --fix' to apply safe migrations."
     fi
 
     # Fill any remaining gaps with defaults

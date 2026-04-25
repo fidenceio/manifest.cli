@@ -62,8 +62,9 @@ emit_ship_failure_report() {
     echo ""
 }
 
-# Main prep workflow function
-manifest_prep_workflow() {
+# Main ship workflow: version bump, docs, commit, tag, push, Homebrew.
+# With publish_release=false this stops short of tag/push (the --local path).
+manifest_ship_workflow() {
     local increment_type="$1"
     local interactive="$2"
     local publish_release="${3:-false}"
@@ -535,10 +536,10 @@ manifest_test_dry_run() {
 # Main function for command-line usage
 main() {
     case "${1:-help}" in
-        "prep")
+        "ship"|"prep")
             local increment_type="${2:-patch}"
             local interactive="${3:-false}"
-            manifest_prep_workflow "$increment_type" "$interactive" "false"
+            manifest_ship_workflow "$increment_type" "$interactive" "false"
             ;;
         "test")
             local increment_type="${2:-patch}"
@@ -551,7 +552,7 @@ main() {
             echo "Usage: $0 [command] [options]"
             echo ""
             echo "Commands:"
-            echo "  prep [type] [interactive]  - Complete manifest workflow"
+            echo "  ship [type] [interactive]  - Complete ship workflow (local-only)"
             echo "  test [type]              - Test/dry-run mode"
             echo "  help                     - Show this help"
             echo ""
@@ -560,14 +561,20 @@ main() {
             echo "  interactive: -i for interactive mode"
             echo ""
             echo "Examples:"
-            echo "  $0 prep minor"
-            echo "  $0 prep patch -i"
+            echo "  $0 ship minor"
+            echo "  $0 ship patch -i"
             echo "  $0 test major"
             ;;
         *)
             show_usage_error "$1"
             ;;
     esac
+}
+
+# Back-compat: old name forwards to the renamed function. Remove once external
+# callers (if any) have migrated.
+manifest_prep_workflow() {
+    manifest_ship_workflow "$@"
 }
 
 # If script is being executed directly

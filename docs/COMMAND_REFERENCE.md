@@ -308,7 +308,7 @@ manifest ship repo patch --local   # Everything except tag/push/Homebrew
 | `-M` | Major (short flag) |
 | `-r` | Revision (short flag) |
 
-**Delegates to:** `manifest_prep_workflow()` in `manifest-orchestrator.sh`
+**Delegates to:** `manifest_ship_workflow()` in `manifest-orchestrator.sh`
 
 **Orchestrator pipeline (in order):**
 
