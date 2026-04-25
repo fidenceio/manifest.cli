@@ -1,40 +1,12 @@
 #!/bin/bash
-
-# =============================================================================
-# Manifest CLI Installation Script
-# =============================================================================
+# Manifest CLI installer.
 #
-# This script installs the Manifest CLI tool locally with comprehensive
-# configuration and validation. The Manifest CLI is a powerful tool for:
+# Validates the host (Bash 5+, yq v4+, Git), copies the CLI tree to
+# ~/.manifest-cli, configures PATH, sets up the global YAML config, and
+# optionally installs a pre-commit security hook in the current repo.
 #
-# 🚀 **Core Features:**
-#   • Automated version management (patch, minor, major, revision)
-#   • AI-powered documentation generation
-#   • Trusted HTTPS timestamp verification
-#   • Git workflow automation (sync, commit, tag, push)
-#   • Homebrew formula integration
-#   • Historical documentation management
-#
-# 🎯 **Use Cases:**
-#   • Software development teams
-#   • DevOps & CI/CD pipelines
-#   • Open source projects
-#   • Compliance and audit requirements
-#
-# 📚 **Documentation:**
-#   • Comprehensive user guides
-#   • Command reference
-#   • Installation instructions
-#   • Contributing guidelines
-#   • Examples and best practices
-#
-# 🔧 **Architecture:**
-#   • Modular design with extensible modules
-#   • Cross-platform compatibility
-#   • Environment-based configuration
-#   • Automated testing framework
-#
-# =============================================================================
+# Run from the repo root:  ./install-cli.sh
+# Or via Homebrew:          brew install fidenceio/tap/manifest
 
 set -e
 
@@ -104,6 +76,34 @@ print_subheader() {
 }
 
 # Check if command exists
+# Print the right install command for the current OS/distro for a given pkg.
+# Pkg names: bash, yq, git, curl. Falls back to a documentation URL.
+_install_hint() {
+    local pkg="$1"
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        echo "brew install $pkg"; return
+    fi
+    if command -v apt-get >/dev/null 2>&1; then
+        case "$pkg" in
+            yq) echo "sudo snap install yq  OR  see https://github.com/mikefarah/yq#install" ;;
+            *)  echo "sudo apt-get install $pkg" ;;
+        esac
+        return
+    fi
+    if command -v dnf >/dev/null 2>&1; then echo "sudo dnf install $pkg"; return; fi
+    if command -v yum >/dev/null 2>&1; then echo "sudo yum install $pkg"; return; fi
+    if command -v zypper >/dev/null 2>&1; then echo "sudo zypper install $pkg"; return; fi
+    if command -v apk >/dev/null 2>&1; then echo "sudo apk add $pkg"; return; fi
+    if command -v pacman >/dev/null 2>&1; then
+        case "$pkg" in
+            yq) echo "sudo pacman -S go-yq" ;;
+            *)  echo "sudo pacman -S $pkg" ;;
+        esac
+        return
+    fi
+    echo "see your distro's package manager (or https://github.com/mikefarah/yq#install for yq)"
+}
+
 command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
@@ -199,51 +199,19 @@ migrate_user_global_configuration() {
 # Get system information
 get_system_info() {
     print_subheader "🔍 System Information"
-    
-    # OS Detection
+    local os shell_name bash_ver
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        OS_NAME="macOS"
-        OS_VERSION=$(sw_vers -productVersion 2>/dev/null || echo "Unknown")
-        PACKAGE_MANAGER="Homebrew"
-    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        if command_exists lsb_release; then
-            OS_NAME=$(lsb_release -si)
-            OS_VERSION=$(lsb_release -sr)
-        else
-            OS_NAME="Linux"
-            OS_VERSION="Unknown"
-        fi
-        
-        if command_exists apt; then
-            PACKAGE_MANAGER="APT"
-        elif command_exists yum; then
-            PACKAGE_MANAGER="YUM"
-        elif command_exists dnf; then
-            PACKAGE_MANAGER="DNF"
-        else
-            PACKAGE_MANAGER="Unknown"
-        fi
+        os="macOS $(sw_vers -productVersion 2>/dev/null || echo "")"
+    elif command_exists lsb_release; then
+        os="$(lsb_release -si) $(lsb_release -sr)"
     else
-        OS_NAME="Unknown"
-        OS_VERSION="Unknown"
-        PACKAGE_MANAGER="Unknown"
+        os="$OSTYPE"
     fi
-    
-    # Shell detection
-    SHELL_NAME=$(basename "$SHELL")
-    SHELL_VERSION="$($SHELL --version 2>/dev/null | head -n1 || echo 'Unknown')"
-    
-    # Bash version check
-    if command_exists bash; then
-        BASH_VERSION=$(bash --version | head -n1 | grep -oE 'version [0-9]+\.[0-9]+' | cut -d' ' -f2 || echo "Unknown")
-    else
-        BASH_VERSION="Not installed"
-    fi
-    
-    echo "   🖥️  OS: $OS_NAME $OS_VERSION"
-    echo "   📦 Package Manager: $PACKAGE_MANAGER"
-    echo "   🐚 Shell: $SHELL_NAME"
-    echo "   🐍 Bash Version: $BASH_VERSION"
+    shell_name="$(basename "$SHELL")"
+    bash_ver="$(bash --version 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+    echo "   🖥️  OS: $os"
+    echo "   🐚 Shell: $shell_name"
+    echo "   🐍 Bash: ${bash_ver:-not installed}"
     echo ""
 }
 
@@ -260,80 +228,31 @@ validate_system() {
         errors=$((errors + 1))
     fi
     
-    # Check bash version
+    # Bash 5+
     if command_exists bash; then
-        local bash_ver=$(bash --version | head -n1 | grep -oE 'version [0-9]+\.[0-9]+' | cut -d' ' -f2)
-        if [ -n "$bash_ver" ]; then
-            local major_ver=$(echo "$bash_ver" | cut -d'.' -f1)
-            
-            if [ "$major_ver" -lt 5 ]; then
-                print_error "❌ Bash version $bash_ver detected. Manifest CLI requires Bash 5.0+."
-                print_error "   Install Bash 5+ and retry:"
-                if [[ "$OSTYPE" == "darwin"* ]]; then
-                    print_error "     brew install bash"
-                elif command_exists apt-get; then
-                    print_error "     sudo apt-get install bash"
-                elif command_exists dnf; then
-                    print_error "     sudo dnf install bash"
-                elif command_exists yum; then
-                    print_error "     sudo yum install bash"
-                elif command_exists zypper; then
-                    print_error "     sudo zypper install bash"
-                elif command_exists apk; then
-                    print_error "     sudo apk add bash"
-                elif command_exists pacman; then
-                    print_error "     sudo pacman -S bash"
-                else
-                    print_error "     Install Bash 5+ using your distro package manager"
-                fi
-                errors=$((errors + 1))
-            else
-                print_success "✅ Bash version $bash_ver meets requirements"
-            fi
+        local bash_ver
+        bash_ver=$(bash --version | head -n1 | grep -oE 'version [0-9]+\.[0-9]+' | cut -d' ' -f2)
+        local major_ver="${bash_ver%%.*}"
+        if [ -n "$major_ver" ] && [ "$major_ver" -lt 5 ]; then
+            print_error "❌ Bash $bash_ver detected. Manifest CLI requires Bash 5.0+."
+            print_error "   Install:  $(_install_hint bash)"
+            errors=$((errors + 1))
+        else
+            print_success "✅ Bash $bash_ver"
         fi
     else
         print_error "❌ Bash is not installed or not in PATH"
         errors=$((errors + 1))
     fi
-    
-    # Check for yq (Mike Farah's Go version, v4+)
-    if command_exists yq; then
-        if yq --version 2>&1 | grep -q "mikefarah\|version v4"; then
-            local yq_ver=$(yq --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-            print_success "✅ yq version $yq_ver meets requirements"
-        else
-            print_error "❌ yq is installed but is not Mike Farah's Go version (v4+)."
-            print_error "   Manifest CLI requires https://github.com/mikefarah/yq"
-            print_error "   Install the correct version:"
-            if [[ "$OSTYPE" == "darwin"* ]]; then
-                print_error "     brew install yq"
-            elif command_exists snap; then
-                print_error "     sudo snap install yq"
-            elif command_exists apk; then
-                print_error "     sudo apk add yq"
-            elif command_exists pacman; then
-                print_error "     sudo pacman -S go-yq"
-            else
-                print_error "     See https://github.com/mikefarah/yq#install"
-            fi
-            errors=$((errors + 1))
-        fi
+
+    # yq (Mike Farah's Go fork, v4+)
+    if command_exists yq && yq --version 2>&1 | grep -q "mikefarah\|version v4"; then
+        local yq_ver
+        yq_ver=$(yq --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        print_success "✅ yq $yq_ver"
     else
-        print_error "❌ yq is not installed. Manifest CLI requires yq (v4+) for YAML configuration."
-        print_error "   Install yq:"
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            print_error "     brew install yq"
-        elif command_exists apt-get; then
-            print_error "     sudo snap install yq  OR  see https://github.com/mikefarah/yq#install"
-        elif command_exists dnf; then
-            print_error "     sudo dnf install yq  OR  see https://github.com/mikefarah/yq#install"
-        elif command_exists apk; then
-            print_error "     sudo apk add yq"
-        elif command_exists pacman; then
-            print_error "     sudo pacman -S go-yq"
-        else
-            print_error "     See https://github.com/mikefarah/yq#install"
-        fi
+        print_error "❌ yq (Mike Farah's Go v4+) required for YAML config."
+        print_error "   Install:  $(_install_hint yq)"
         errors=$((errors + 1))
     fi
 
@@ -361,21 +280,17 @@ validate_system() {
 # =============================================================================
 
 # Source the uninstall module for cleanup
+# Load shared utils + uninstall module from this script's modules/ tree.
+# Returns 0 if both available, 1 otherwise (printing an error).
 source_manifest_uninstall() {
-    # Get the directory where this script is located
-    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local modules_dir="$script_dir/modules"
-    
-    # Source shared utilities first
-    if [ -f "$modules_dir/core/manifest-shared-utils.sh" ]; then
-        source "$modules_dir/core/manifest-shared-utils.sh"
-    fi
-    
-    # Source the uninstall module
-    if [ -f "$modules_dir/system/manifest-uninstall.sh" ]; then
-        source "$modules_dir/system/manifest-uninstall.sh"
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    [ -f "$script_dir/modules/core/manifest-shared-utils.sh" ] \
+        && source "$script_dir/modules/core/manifest-shared-utils.sh"
+    if [ -f "$script_dir/modules/system/manifest-uninstall.sh" ]; then
+        source "$script_dir/modules/system/manifest-uninstall.sh"
     else
-        print_error "❌ Uninstall module not found: $modules_dir/system/manifest-uninstall.sh"
+        print_error "❌ Uninstall module not found: $script_dir/modules/system/manifest-uninstall.sh"
         return 1
     fi
 }
@@ -699,57 +614,28 @@ verify_installation() {
 # Display post-installation information
 display_post_install_info() {
     print_subheader "🎉 Installation Complete!"
-    
-    echo
-    print_success "🚀 You can now use the Manifest CLI:"
-    echo "   $MANIFEST_CLI_NAME --help          # Show comprehensive help"
-    echo "   $MANIFEST_CLI_NAME ship patch      # Publish release artifacts (no PR actions)"
-    echo "   $MANIFEST_CLI_NAME prep patch      # Prepare changes only"
-    echo "   $MANIFEST_CLI_NAME config setup    # Run interactive configuration wizard"
-    echo "   $MANIFEST_CLI_NAME test            # Test functionality"
-    echo "   $MANIFEST_CLI_NAME test cloud      # Test Manifest Cloud connectivity"
-    echo "   $MANIFEST_CLI_NAME test agent      # Test Manifest Agent functionality"
-    echo "   $MANIFEST_CLI_NAME time            # Get trusted timestamp"
-    echo "   $MANIFEST_CLI_NAME sync            # Sync with remote"
-    echo "   $MANIFEST_CLI_NAME cleanup         # Manage historical docs"
-    
-    echo
-    print_status "💡 Next Steps:"
-    echo "   1. Configure your Git credentials if not already set"
-    echo "   2. Run '$MANIFEST_CLI_NAME test' to verify everything works"
-    echo "   3. Customize your global settings in ~/.manifest-cli/manifest.config.global.yaml (e.g., timezone)"
-    echo "   4. For project-specific overrides, copy examples/manifest.config.yaml.example to your project root"
+    cat <<EOF
 
-    # Add git hooks info if they were installed
+🚀 First steps with Manifest CLI:
+   $MANIFEST_CLI_NAME doctor                     # health check (deps + config + repo)
+   $MANIFEST_CLI_NAME status                     # snapshot of current repo
+   $MANIFEST_CLI_NAME init repo                  # scaffold a project
+   $MANIFEST_CLI_NAME ship repo patch            # cut a release
+
+🔧 Configuration:
+   ~/.manifest-cli/manifest.config.global.yaml   # user-wide preferences
+   ./manifest.config.yaml                        # per-project (committed)
+   ./manifest.config.local.yaml                  # per-project (git-ignored)
+   $MANIFEST_CLI_NAME config list                # all keys + active layer
+
+📚 Docs:  $MANIFEST_CLI_INSTALL_LOCATION/docs/USER_GUIDE.md
+🌐 Repo:  https://github.com/fidenceio/manifest.cli
+EOF
     if [ -f ".git/hooks/pre-commit" ] && grep -q "Manifest CLI Pre-Commit Hook" ".git/hooks/pre-commit" 2>/dev/null; then
         echo
-        print_status "🔒 Git Hooks Installed:"
-        echo "   • Pre-commit hook is active and protecting your commits"
-        echo "   • To refresh hooks: Re-run ./install-cli.sh"
-        echo "   • Documentation: docs/GIT_HOOKS.md"
+        print_status "🔒 Pre-commit security hook installed (docs/GIT_HOOKS.md)"
     fi
-    
     echo
-    print_status "📚 Documentation:"
-    echo "   • User Guide: $MANIFEST_CLI_INSTALL_LOCATION/docs/USER_GUIDE.md"
-    echo "   • Command Reference: $MANIFEST_CLI_INSTALL_LOCATION/docs/COMMAND_REFERENCE.md"
-    echo "   • Examples: $MANIFEST_CLI_INSTALL_LOCATION/docs/EXAMPLES.md"
-    echo "   • Contributing: $MANIFEST_CLI_INSTALL_LOCATION/docs/CONTRIBUTING.md"
-    
-    echo
-    print_status "🔧 Configuration:"
-    echo "   • Global Config: ~/.manifest-cli/manifest.config.global.yaml"
-    echo "   • Example Templates: $MANIFEST_CLI_INSTALL_LOCATION/examples/"
-    echo "   • For project overrides, copy examples/manifest.config.yaml.example to your project root"
-    
-    echo
-    print_status "🌐 Community & Support:"
-    echo "   • GitHub: https://github.com/fidenceio/fidenceio.manifest.cli"
-    echo "   • Issues: https://github.com/fidenceio/fidenceio.manifest.cli/issues"
-    echo "   • Discussions: https://github.com/fidenceio/fidenceio.manifest.cli/discussions"
-    
-    echo
-    print_success "🚀 Happy manifesting!"
 }
 
 # =============================================================================
@@ -977,33 +863,14 @@ main() {
         cleanup_homebrew_install
 
         if install_via_homebrew; then
-            # Set up configuration (shared by both paths)
             create_configuration
-
-            # Install git hooks if in a git repository
             install_git_hooks
-
-            # Verify
-            print_subheader "🔍 Verifying Installation"
-            local brew_manifest
-            brew_manifest="$(brew --prefix)/bin/manifest"
+            local brew_manifest="$(brew --prefix)/bin/manifest"
             if [ -x "$brew_manifest" ] && "$brew_manifest" --help >/dev/null 2>&1; then
-                print_success "✅ Manifest CLI installed successfully!"
-                print_status "📍 Location: $brew_manifest"
-                echo ""
-                print_subheader "🎉 Installation Complete!"
-                echo ""
-                print_success "🚀 You can now use the Manifest CLI:"
-                echo "   manifest --help          # Show comprehensive help"
-                echo "   manifest ship patch        # Publish release artifacts (no PR actions)"
-                echo "   manifest prep patch        # Prepare changes only"
-                echo "   manifest test            # Test functionality"
-                echo "   manifest test cloud      # Test Manifest Cloud connectivity"
-                echo "   manifest test agent      # Test Manifest Agent functionality"
-                echo "   manifest time            # Get trusted timestamp"
-                echo ""
+                print_success "✅ Installed at $brew_manifest"
+                MANIFEST_CLI_INSTALL_LOCATION="${MANIFEST_CLI_INSTALL_LOCATION:-$(brew --prefix)/share/manifest}"
+                display_post_install_info
                 print_status "💡 To upgrade: brew update && brew upgrade manifest"
-                echo ""
             else
                 print_error "❌ Homebrew installation verification failed"
                 exit 1
