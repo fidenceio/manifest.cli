@@ -120,44 +120,14 @@ archive_old_docs() {
 
 # Main workflow function is now handled by manifest-orchestrator.sh
 
-# Returns repository slug from origin remote (e.g., org/repo).
-manifest_origin_repo_slug() {
-    local repo_url=""
-    repo_url="$(git remote get-url origin 2>/dev/null || echo "")"
-
-    if [[ "$repo_url" =~ ^git@[^:]+:([^/]+)/([^/]+)\.git$ ]]; then
-        echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
-        return 0
-    fi
-    if [[ "$repo_url" =~ ^https?://[^/]+/([^/]+)/([^/]+)$ ]]; then
-        local org="${BASH_REMATCH[1]}"
-        local repo="${BASH_REMATCH[2]%.git}"
-        echo "${org}/${repo}"
-        return 0
-    fi
-
-    echo ""
-    return 1
-}
-
-# Homebrew update should run only from the Manifest CLI canonical repo.
+# Back-compat shim. The canonical implementations live in
+# manifest-shared-functions.sh:
+#   - manifest_origin_repo_slug (takes optional project_root)
+#   - manifest_is_canonical_repo (uses MANIFEST_CLI_CANONICAL_REPO_SLUGS,
+#     accepts MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS as a deprecated alias)
+# Old call sites continue to work via this shim.
 should_update_homebrew_for_repo() {
-    local origin_slug=""
-    origin_slug="$(manifest_origin_repo_slug || echo "")"
-    if [ -z "$origin_slug" ]; then
-        return 1
-    fi
-
-    local allowed_slugs="${MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS:-fidenceio/manifest.cli,fidenceio/fidenceio.manifest.cli}"
-    IFS=',' read -r -a allowed_array <<< "$allowed_slugs"
-    local allowed=""
-    for allowed in "${allowed_array[@]}"; do
-        if [ "$origin_slug" = "$allowed" ]; then
-            return 0
-        fi
-    done
-
-    return 1
+    manifest_is_canonical_repo "$@"
 }
 
 # Update Homebrew formula in both this repo and the tap repo
@@ -166,7 +136,7 @@ update_homebrew_formula() {
         local origin_slug=""
         origin_slug="$(manifest_origin_repo_slug || echo "unknown")"
         echo "🍺 Skipping Homebrew formula update for repository: ${origin_slug}"
-        echo "   Homebrew updates run only for: ${MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS:-fidenceio/manifest.cli,fidenceio/fidenceio.manifest.cli}"
+        echo "   Homebrew updates run only for: ${MANIFEST_CLI_CANONICAL_REPO_SLUGS:-${MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS:-fidenceio/manifest.cli,fidenceio/fidenceio.manifest.cli}}"
         return 0
     fi
 

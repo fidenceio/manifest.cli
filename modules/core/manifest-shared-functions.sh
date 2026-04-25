@@ -136,7 +136,23 @@ manifest_is_canonical_repo() {
     local origin_slug=""
     origin_slug="$(manifest_origin_repo_slug "$project_root" || echo "")"
 
-    local allowed_slugs="${MANIFEST_CLI_CANONICAL_REPO_SLUGS:-fidenceio/manifest.cli,fidenceio/fidenceio.manifest.cli}"
+    # MANIFEST_CLI_CANONICAL_REPO_SLUGS is the current name.
+    # MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS is the deprecated alias kept
+    # for back-compat — emit a one-time warning if the user is still on it.
+    local allowed_slugs=""
+    if [[ -n "${MANIFEST_CLI_CANONICAL_REPO_SLUGS:-}" ]]; then
+        allowed_slugs="$MANIFEST_CLI_CANONICAL_REPO_SLUGS"
+    elif [[ -n "${MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS:-}" ]]; then
+        allowed_slugs="$MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS"
+        if [[ -z "${_MANIFEST_LEGACY_HOMEBREW_SLUGS_WARNED:-}" ]]; then
+            export _MANIFEST_LEGACY_HOMEBREW_SLUGS_WARNED=1
+            command -v log_warning >/dev/null 2>&1 \
+                && log_warning "MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS is deprecated; rename to MANIFEST_CLI_CANONICAL_REPO_SLUGS." \
+                || echo "⚠️  MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS is deprecated; rename to MANIFEST_CLI_CANONICAL_REPO_SLUGS." >&2
+        fi
+    else
+        allowed_slugs="fidenceio/manifest.cli,fidenceio/fidenceio.manifest.cli"
+    fi
     IFS=',' read -r -a allowed_array <<< "$allowed_slugs"
     local allowed=""
     for allowed in "${allowed_array[@]}"; do
