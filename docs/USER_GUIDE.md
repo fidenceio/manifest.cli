@@ -235,8 +235,8 @@ Configuration uses YAML files loaded in priority order (later overrides earlier)
 
 All settings map to `MANIFEST_CLI_*` environment variables via a bidirectional YAML-to-env mapping in `manifest-yaml.sh`. The YAML parser is [yq v4+](https://github.com/mikefarah/yq) (Mike Farah's Go implementation), a hard dependency.
 
-For configuration templates covering enterprise, compliance, open-source, and specialized
-use cases, see [Configuration Examples](../examples/env.manifest.examples.md).
+For the full configuration schema with comments on every key, see
+[examples/manifest.config.yaml.example](../examples/manifest.config.yaml.example).
 
 ---
 

@@ -17,7 +17,7 @@
 | Document | Description |
 | -------- | ----------- |
 | [Command Reference](COMMAND_REFERENCE.md) | Every command, flag, and option (v42 structure) |
-| [Configuration Examples](../examples/env.manifest.examples.md) | Templates for enterprise, compliance, open-source, and more |
+| [YAML config example](../examples/manifest.config.yaml.example) | Full schema with all keys + comments |
 | [Git Hooks](GIT_HOOKS.md) | Pre-commit secret protection and hook management |
 
 ## Architecture

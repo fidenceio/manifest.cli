@@ -380,44 +380,39 @@ source_manifest_uninstall() {
     fi
 }
 
-# Source the environment management module
-source_manifest_env_management() {
-    # Get the directory where this script is located
-    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local modules_dir="$script_dir/modules"
-    
-    # Source shared utilities first
-    if [ -f "$modules_dir/core/manifest-shared-utils.sh" ]; then
-        source "$modules_dir/core/manifest-shared-utils.sh"
-    fi
-    
-    # Source the environment management module
-    if [ -f "$modules_dir/core/manifest-env-management.sh" ]; then
-        source "$modules_dir/core/manifest-env-management.sh"
-    else
-        print_error "❌ Environment management module not found: $modules_dir/core/manifest-env-management.sh"
-        return 1
-    fi
-}
-
-# Clean up environment variables
+# Strip MANIFEST_* exports and manifest-related source/PATH lines from shell
+# profiles. Inlined here so install-cli.sh has no dependency on the (deleted)
+# env-management module. Called once before installing to remove residue from
+# previous installs.
 cleanup_environment_variables() {
-    print_subheader "🧹 Cleaning Up Manifest CLI Environment Variables"
-    
-    # Source the environment management module
-    if ! source_manifest_env_management; then
-        print_error "❌ Failed to load environment management module"
-        print_error "❌ Cannot proceed with environment cleanup"
-        return 1
+    print_subheader "🧹 Cleaning Up Manifest CLI Shell-Profile Entries"
+
+    local shell_files=(
+        "$HOME/.zshrc" "$HOME/.zprofile" "$HOME/.zsh_profile"
+        "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"
+    )
+    local removed_count=0
+    local profile temp backup
+    for profile in "${shell_files[@]}"; do
+        [ -f "$profile" ] || continue
+        backup="${profile}.manifest-backup-$(date +%Y%m%d-%H%M%S)"
+        cp "$profile" "$backup"
+        temp=$(mktemp)
+        if grep -v -E '^[[:space:]]*(export[[:space:]]+MANIFEST_[A-Z_]+=|export[[:space:]]+PATH=.*\.manifest-cli|export[[:space:]]+PATH=.*\.local/bin.*PATH|(\.|source)[[:space:]]+.*manifest)' "$profile" > "$temp"; then
+            if [ -s "$temp" ] && ! cmp -s "$profile" "$temp"; then
+                mv "$temp" "$profile"
+                print_success "✅ Cleaned: $profile (backup: $backup)"
+                ((removed_count++))
+            else
+                rm -f "$temp" "$backup"
+            fi
+        else
+            rm -f "$temp" "$backup"
+        fi
+    done
+    if [ $removed_count -eq 0 ]; then
+        print_status "  No prior Manifest entries found in shell profiles"
     fi
-    
-    # Clean up all Manifest CLI-related environment variables
-    cleanup_all_manifest_env_vars
-    
-    # Remove Manifest CLI variables from shell profile files
-    remove_manifest_from_shell_profiles
-    
-    print_success "✅ Environment variable cleanup completed"
 }
 
 # Clean up legacy installation locations
@@ -577,13 +572,6 @@ EOF
         fi
     else
         print_status "ℹ️  Global configuration already exists: $config_file (preserved)"
-    fi
-
-    # Detect legacy .env config and suggest migration
-    if [[ -f "$HOME/.env.manifest.global" ]]; then
-        print_warning "⚠️  Legacy config found: $HOME/.env.manifest.global"
-        print_warning "   Config has been migrated to YAML: $config_file"
-        print_warning "   You can safely remove the old file: rm $HOME/.env.manifest.global"
     fi
 
     # Apply safe key-level migrations on every install/upgrade run.
@@ -894,11 +882,9 @@ cleanup_homebrew_install() {
         fi
     done
 
-    # Clean up manifest environment variables from shell profiles
-    if source_manifest_env_management 2>/dev/null; then
-        cleanup_all_manifest_env_vars 2>/dev/null
-        remove_manifest_from_shell_profiles 2>/dev/null
-    fi
+    # Strip residual MANIFEST_* exports from shell profiles (inline; the old
+    # env-management module has been removed).
+    cleanup_environment_variables
 
     echo ""
 }
