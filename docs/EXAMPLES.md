@@ -167,6 +167,12 @@ manifest ship fleet minor --method squash
 
 # Fleet draft PRs
 manifest ship fleet patch --draft
+
+# Ship a subset of the fleet
+manifest ship fleet patch --only api,worker
+
+# Ship the whole fleet except one or more services
+manifest ship fleet patch --except docs,playground
 ```
 
 ### Direct Fleet Operations (Legacy Interface)

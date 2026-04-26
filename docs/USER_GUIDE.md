@@ -155,11 +155,13 @@ manifest refresh fleet --dry-run   # Preview changes without applying
 ### Ship Fleet Release
 
 ```bash
-manifest ship fleet minor                  # Coordinated minor release
-manifest ship fleet patch --safe           # With checks and readiness gates
-manifest ship fleet minor --local          # Local-only across fleet
-manifest ship fleet patch --method squash  # Squash merge strategy
-manifest ship fleet minor --draft          # Create draft PRs
+manifest ship fleet minor                       # Coordinated minor release
+manifest ship fleet patch --safe                # With checks and readiness gates
+manifest ship fleet minor --local               # Local-only across fleet
+manifest ship fleet patch --method squash       # Squash merge strategy
+manifest ship fleet minor --draft               # Create draft PRs
+manifest ship fleet patch --only api,worker     # Ship only the named services
+manifest ship fleet patch --except docs         # Ship every service except 'docs'
 ```
 
 ### Direct Fleet Commands

@@ -336,12 +336,14 @@ manifest ship repo patch --local   # Everything except tag/push/Homebrew
 Coordinated fleet release across all repositories.
 
 ```bash
-manifest ship fleet minor                  # Coordinated minor release
-manifest ship fleet patch --safe           # With checks and readiness gates
-manifest ship fleet minor --local          # Local-only across fleet
-manifest ship fleet patch --method squash  # Squash merge strategy
-manifest ship fleet minor --draft          # Create draft PRs
-manifest ship fleet patch --noprep         # Skip per-service prep step
+manifest ship fleet minor                       # Coordinated minor release
+manifest ship fleet patch --safe                # With checks and readiness gates
+manifest ship fleet minor --local               # Local-only across fleet
+manifest ship fleet patch --method squash       # Squash merge strategy
+manifest ship fleet minor --draft               # Create draft PRs
+manifest ship fleet patch --noprep              # Skip per-service prep step
+manifest ship fleet patch --only api,worker     # Ship only the named services
+manifest ship fleet patch --except docs         # Ship every service except 'docs'
 ```
 
 **Flags:**
@@ -353,6 +355,10 @@ manifest ship fleet patch --noprep         # Skip per-service prep step
 | `--noprep` | Skip per-service prep step |
 | `--method <strategy>` | Merge strategy: `merge`, `squash`, `rebase` |
 | `--draft` | Create draft PRs |
+| `--only <name[,name...]>` | Ship only the named service(s); repeatable |
+| `--except <name[,name...]>` | Ship every service except those named; repeatable |
+
+`--only` and `--except` are mutually exclusive. The filter applies to per-service prep, fleet doc generation, and the PR dispatch (the Cloud-side dispatcher receives the same flags).
 
 **Delegates to:** `fleet_ship()` (full mode) or `fleet_prep()` (local mode) in `manifest-fleet.sh`
 

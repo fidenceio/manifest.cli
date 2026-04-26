@@ -1458,6 +1458,58 @@ fleet_prep() {
 # =============================================================================
 
 # -----------------------------------------------------------------------------
+# Function: _fleet_filter_services
+# -----------------------------------------------------------------------------
+# Computes a filtered subset of $MANIFEST_FLEET_SERVICES based on --only and
+# --except selectors. Selectors are comma- or space-separated service names.
+# Exactly one of $1 / $2 may be set (validation is the caller's job).
+#
+# Echoes the filtered service list (newline-free, space-separated).
+# Returns 1 if any named service is not present in the fleet.
+# -----------------------------------------------------------------------------
+_fleet_filter_services() {
+    local only_csv="$1"
+    local except_csv="$2"
+    local result=""
+    local name
+
+    if [ -n "$only_csv" ]; then
+        for name in $(echo "$only_csv" | tr ',' ' '); do
+            if [ -z "$name" ]; then
+                continue
+            fi
+            if [[ " $MANIFEST_FLEET_SERVICES " != *" $name "* ]]; then
+                log_error "Service '$name' is not in the fleet."
+                return 1
+            fi
+            result="${result:+$result }$name"
+        done
+    elif [ -n "$except_csv" ]; then
+        local exclude=" "
+        for name in $(echo "$except_csv" | tr ',' ' '); do
+            if [ -z "$name" ]; then
+                continue
+            fi
+            if [[ " $MANIFEST_FLEET_SERVICES " != *" $name "* ]]; then
+                log_error "Service '$name' is not in the fleet."
+                return 1
+            fi
+            exclude="$exclude$name "
+        done
+        local svc
+        for svc in $MANIFEST_FLEET_SERVICES; do
+            if [[ "$exclude" != *" $svc "* ]]; then
+                result="${result:+$result }$svc"
+            fi
+        done
+    else
+        result="$MANIFEST_FLEET_SERVICES"
+    fi
+
+    echo "$result"
+}
+
+# -----------------------------------------------------------------------------
 # Function: fleet_ship
 # -----------------------------------------------------------------------------
 # Highest-level coordinated fleet workflow:
@@ -1476,6 +1528,8 @@ fleet_ship() {
     local no_delete_branch=false
     local draft=false
     local any_failures=0
+    local only_filter=""
+    local except_filter=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -1511,6 +1565,22 @@ fleet_ship() {
                 draft=true
                 shift
                 ;;
+            --only)
+                if [ -z "${2:-}" ] || [[ "${2:-}" == --* ]]; then
+                    log_error "--only requires a service name (or comma-separated list)"
+                    return 1
+                fi
+                only_filter="${only_filter:+$only_filter,}$2"
+                shift 2
+                ;;
+            --except)
+                if [ -z "${2:-}" ] || [[ "${2:-}" == --* ]]; then
+                    log_error "--except requires a service name (or comma-separated list)"
+                    return 1
+                fi
+                except_filter="${except_filter:+$except_filter,}$2"
+                shift 2
+                ;;
             -h|--help)
                 cat << 'EOF'
 Usage: manifest fleet ship [patch|minor|major|revision] [options]
@@ -1522,10 +1592,14 @@ Options:
   --force                   Bypass readiness gate during queue
   --no-delete-branch        Keep source branches after queue
   --draft                   Create draft PRs
+  --only <name[,name...]>   Ship only the named service(s) (repeatable)
+  --except <name[,name...]> Ship all services except the named one(s) (repeatable)
 
 Flow:
   default: fleet prep -> fleet docs -> fleet pr create -> fleet pr queue
   --safe:  fleet prep -> fleet docs -> fleet pr create -> fleet pr checks -> fleet pr ready -> fleet pr queue
+
+--only and --except are mutually exclusive.
 EOF
                 return 0
                 ;;
@@ -1536,10 +1610,35 @@ EOF
         esac
     done
 
+    if [ -n "$only_filter" ] && [ -n "$except_filter" ]; then
+        log_error "--only and --except are mutually exclusive."
+        return 1
+    fi
+
     if [[ ! "$method" =~ ^(merge|squash|rebase)$ ]]; then
         log_error "Invalid --method value: '$method' (expected merge|squash|rebase)"
         return 1
     fi
+
+    local _saved_services="$MANIFEST_FLEET_SERVICES"
+    if [ -n "$only_filter" ] || [ -n "$except_filter" ]; then
+        local filtered
+        if ! filtered=$(_fleet_filter_services "$only_filter" "$except_filter"); then
+            return 1
+        fi
+        if [ -z "$filtered" ]; then
+            log_error "Filter selected zero services."
+            return 1
+        fi
+        MANIFEST_FLEET_SERVICES="$filtered"
+        echo "🎯 Filter applied: $filtered"
+    fi
+
+    # Filter args forwarded to manifest_fleet_pr_dispatch — Cloud plugin honors
+    # them so its own service iteration matches the local filter.
+    local pr_filter_args=()
+    [ -n "$only_filter" ]   && pr_filter_args+=(--only   "$only_filter")
+    [ -n "$except_filter" ] && pr_filter_args+=(--except "$except_filter")
 
     # Determine step count based on whether safe mode adds extra steps
     local total_steps=5
@@ -1549,57 +1648,65 @@ EOF
 
     echo "🚢 Starting fleet ship workflow ($increment_type)"
 
-    if [ "$run_prep" = "true" ]; then
-        echo "🔧 Step 1/$total_steps: Running prep across fleet services..."
-        if ! _fleet_prep_run "$increment_type"; then
-            return 1
-        fi
-    else
-        echo "⏭️  Skipping fleet prep (--noprep)."
-        for service in $MANIFEST_FLEET_SERVICES; do
-            local path
-            path=$(get_fleet_service_property "$service" "path")
-            if [ ! -d "$path/.git" ]; then
-                continue
+    # One-shot block so we always restore $MANIFEST_FLEET_SERVICES on exit.
+    local _rc=0
+    while :; do
+        if [ "$run_prep" = "true" ]; then
+            echo "🔧 Step 1/$total_steps: Running prep across fleet services..."
+            if ! _fleet_prep_run "$increment_type"; then
+                _rc=1; break
             fi
-            if [ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]; then
-                echo "  - $service: ❌ has uncommitted changes; cannot use --noprep"
-                any_failures=1
+        else
+            echo "⏭️  Skipping fleet prep (--noprep)."
+            for service in $MANIFEST_FLEET_SERVICES; do
+                local path
+                path=$(get_fleet_service_property "$service" "path")
+                if [ ! -d "$path/.git" ]; then
+                    continue
+                fi
+                if [ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]; then
+                    echo "  - $service: ❌ has uncommitted changes; cannot use --noprep"
+                    any_failures=1
+                fi
+            done
+            if [ "$any_failures" -eq 1 ]; then
+                log_error "Cannot continue fleet ship --noprep with dirty repositories."
+                _rc=1; break
             fi
-        done
-        if [ "$any_failures" -eq 1 ]; then
-            log_error "Cannot continue fleet ship --noprep with dirty repositories."
-            return 1
         fi
-    fi
 
-    # --- Fleet docs generation ---
-    echo "📄 Step 2/$total_steps: Generating fleet documentation..."
-    local docs_strategy
-    docs_strategy=$(get_fleet_docs_strategy)
-    fleet_docs_generate "$increment_type" || {
-        log_warning "Fleet docs generation had issues, continuing..."
-    }
+        # --- Fleet docs generation ---
+        echo "📄 Step 2/$total_steps: Generating fleet documentation..."
+        local docs_strategy
+        docs_strategy=$(get_fleet_docs_strategy)
+        fleet_docs_generate "$increment_type" || {
+            log_warning "Fleet docs generation had issues, continuing..."
+        }
 
-    echo "🔀 Step 3/$total_steps: Creating or reusing PRs across fleet..."
-    local create_args=()
-    [ "$draft" = "true" ] && create_args+=("--draft")
-    manifest_fleet_pr_dispatch create "${create_args[@]}" || return 1
+        echo "🔀 Step 3/$total_steps: Creating or reusing PRs across fleet..."
+        local create_args=("${pr_filter_args[@]}")
+        [ "$draft" = "true" ] && create_args+=("--draft")
+        manifest_fleet_pr_dispatch create "${create_args[@]}" || { _rc=1; break; }
 
-    if [ "$safe" = "true" ]; then
-        echo "🧪 Step 4/$total_steps: Verifying checks and readiness across fleet..."
-        manifest_fleet_pr_dispatch checks || return 1
-        manifest_fleet_pr_dispatch ready || return 1
-    fi
+        if [ "$safe" = "true" ]; then
+            echo "🧪 Step 4/$total_steps: Verifying checks and readiness across fleet..."
+            manifest_fleet_pr_dispatch checks "${pr_filter_args[@]}" || { _rc=1; break; }
+            manifest_fleet_pr_dispatch ready  "${pr_filter_args[@]}" || { _rc=1; break; }
+        fi
 
-    local queue_step=$((total_steps))
-    echo "📥 Step ${queue_step}/${total_steps}: Queueing PRs across fleet..."
-    local queue_args=(--method "$method")
-    [ "$force" = "true" ] && queue_args+=("--force")
-    [ "$no_delete_branch" = "true" ] && queue_args+=("--no-delete-branch")
-    manifest_fleet_pr_dispatch queue "${queue_args[@]}" || return 1
+        local queue_step=$((total_steps))
+        echo "📥 Step ${queue_step}/${total_steps}: Queueing PRs across fleet..."
+        local queue_args=("${pr_filter_args[@]}" --method "$method")
+        [ "$force" = "true" ] && queue_args+=("--force")
+        [ "$no_delete_branch" = "true" ] && queue_args+=("--no-delete-branch")
+        manifest_fleet_pr_dispatch queue "${queue_args[@]}" || { _rc=1; break; }
 
-    echo "✅ Fleet ship workflow complete."
+        echo "✅ Fleet ship workflow complete."
+        break
+    done
+
+    MANIFEST_FLEET_SERVICES="$_saved_services"
+    return $_rc
 }
 
 # =============================================================================

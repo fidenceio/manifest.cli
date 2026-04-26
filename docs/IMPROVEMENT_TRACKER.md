@@ -147,7 +147,7 @@ Each recommendation is a discrete unit of work. Check off when complete.
 
 ### Tier 5 — Fleet power
 
-- [ ] **24. `manifest ship fleet --only <service>` / `--except <service>`** for partial fleet ships.
+- [x] **24. `manifest ship fleet --only <service>` / `--except <service>`** — implemented. New `_fleet_filter_services` helper resolves a comma-separated/repeatable list against `$MANIFEST_FLEET_SERVICES`, errors on unknown names, and uses exact-token matching (so `--only alpha` won't accidentally match `alpha-svc`). `fleet_ship` parses both flags, rejects them as mutually exclusive, validates them before `--method`/init checks, and applies the filter by overriding `$MANIFEST_FLEET_SERVICES` for the workflow's lifetime. The override flows through `_fleet_prep_run`, `fleet_docs_generate`, and the `--noprep` dirty-check loop automatically; `--only`/`--except` are also forwarded to `manifest_fleet_pr_dispatch` so the Cloud plugin honors the same filter. The whole workflow runs inside a one-shot `while :; do ... break; done` block so any early failure restores the saved service list before returning. Help text on `manifest ship fleet --help` documents both flags + the mutual-exclusion rule. Thirteen bats tests in `tests/fleet_ship_filter.bats` cover the helper (only, except, csv, unknown service, word-boundary safety, no-op) and arg parsing (mutual exclusion, missing values, --help surface).
 - [x] **25. Surface hidden fleet flags in help.** `manifest ship fleet --help` now lists every flag that fleet_ship accepts: `--noprep`, `--safe`, `--method <merge|squash|rebase>`, `--force`, `--no-delete-branch`, `--draft`. Help also includes a "Flow:" section showing the default vs. `--safe` pipeline so users know which step `--safe` adds. Bats coverage verifies all six flags appear in `--help` output.
 - [x] **26. `manifest refresh fleet --commit`** — implemented. `manifest_refresh_fleet` now wires `--commit` through to a new `_refresh_fleet_commit_changes` helper that stages and commits refreshed metadata across the fleet root + each non-excluded service repo. Skips paths that are not git repos or have nothing to commit. Single fixed message ("Refresh fleet metadata") — no version bump, no tag, distinct from `ship fleet`. `--dry-run --commit` prints a "Would commit refreshed metadata across fleet root + services" preview and exits without writes. Removes the previous "redirect to ship fleet --local" stub. Uses `git -C "$path"` so subshell `cd` failures can't land commits in the wrong directory; protects against double-commits when a service's path equals the fleet root. Eight bats tests in `tests/refresh_fleet_commit.bats` cover help text, fleet-root committed/clean, service iteration, excluded-skip, non-git-skip, root/service path collision, and the dry-run preview.
 
@@ -299,3 +299,19 @@ Resolved: **#9**. (After this batch: 27/28 done, 1 open: #24.)
 **Files modified (5):** `modules/fleet/manifest-fleet.sh` (renames, dispatcher rewrite, help text), `modules/core/manifest-init.sh` (callsite + docblock), `modules/core/manifest-prep.sh` (callsite + docblock), `docs/USER_GUIDE.md`, `docs/EXAMPLES.md`, `docs/COMMAND_REFERENCE.md`, `docs/FLEET_DESIGN_SPEC.md`.
 **Files added (1):** `tests/fleet_private_routes.bats` (7 tests).
 **Test count:** 106 bats tests (was 99, +7 fleet-private-routes, all passing on macOS).
+
+### Session 2026-04-26 (cont.) — Tier 5 — fleet ship --only/--except (#24)
+
+Resolved: **#24**. (After this batch: 28/28 done. Tracker complete.)
+
+**Decisions:**
+
+- **Filter mechanism: env-override of `$MANIFEST_FLEET_SERVICES`.** Both `_fleet_prep_run` and `fleet_docs_generate` iterate the env var directly, so overriding it for the duration of `fleet_ship` filters every code path that respects it — no need to thread an extra "service list" arg through five functions. The override is restored on every exit path (success or failure) via a `while :; do ... break; done` one-shot block + a single `MANIFEST_FLEET_SERVICES="$_saved_services"` cleanup line.
+- **Forward `--only`/`--except` to `manifest_fleet_pr_dispatch` too.** The Cloud plugin owns its own service iteration; if it doesn't read `$MANIFEST_FLEET_SERVICES` (we can't see the plugin source from this repo), forwarding the flags lets it apply the same filter on its side. The native stub harmlessly ignores extra args ("PR feature requires Manifest Cloud").
+- **Word-boundary safety: substring match with space padding, not `grep -w`.** `grep -w` treats hyphens as separators, so `--only alpha` would falsely match `alpha-svc`. Switched to `[[ " $MANIFEST_FLEET_SERVICES " == *" $name "* ]]` — only spaces are token separators, which matches how the service list is actually built.
+- **Validation order matters.** Mutual-exclusion check fires first, then `--method` validation, then init-required gate, then filter resolution. This means `manifest ship fleet --only foo --except bar` errors out cleanly without ever touching fleet config.
+- **Filter result message.** Print "🎯 Filter applied: alpha charlie" before the workflow banner so users can see which subset is shipping. Suppressed when no filter is in play to avoid noise on the common path.
+
+**Files modified (4):** `modules/fleet/manifest-fleet.sh` (helper, parsing, override + restore, forwarding), `docs/COMMAND_REFERENCE.md`, `docs/USER_GUIDE.md`, `docs/EXAMPLES.md`.
+**Files added (1):** `tests/fleet_ship_filter.bats` (13 tests).
+**Test count:** 119 bats tests (was 106, +13 fleet-ship-filter, all passing on macOS).
