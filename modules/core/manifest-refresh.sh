@@ -183,9 +183,11 @@ manifest_refresh_fleet() {
                     "manifest refresh fleet [--dry-run] [--commit]" \
                     "Re-scan fleet membership, regenerate docs, validate config." \
                     "Options" "  --dry-run    Preview changes without applying
-  --commit     Commit refreshed files across fleet (not yet implemented)" \
+  --commit     Stage and commit refreshed metadata across fleet root + services
+               (no version bump, no tag — use 'ship fleet' for releases)" \
                     "Examples" "  manifest refresh fleet
-  manifest refresh fleet --dry-run"
+  manifest refresh fleet --dry-run
+  manifest refresh fleet --commit"
                 return 0
                 ;;
             *)
@@ -207,7 +209,13 @@ manifest_refresh_fleet() {
     echo ""
 
     if [[ "$dry_run" == "true" ]]; then
-        echo "Dry run complete — no further changes."
+        if [[ "$do_commit" == "true" ]]; then
+            echo "Would commit refreshed metadata across fleet root + services."
+            echo "No changes written. Re-run without --dry-run to apply."
+            echo ""
+        else
+            echo "Dry run complete — no further changes."
+        fi
         return 0
     fi
 
@@ -222,11 +230,77 @@ manifest_refresh_fleet() {
     echo ""
 
     if [[ "$do_commit" == "true" ]]; then
-        echo "Note: Fleet commit not yet implemented in refresh. Use 'manifest ship fleet --local' for coordinated commits."
+        _refresh_fleet_commit_changes "Refresh fleet metadata"
     fi
 
     echo "Fleet refresh complete."
     echo ""
+}
+
+# -----------------------------------------------------------------------------
+# Function: _refresh_fleet_commit_changes
+# -----------------------------------------------------------------------------
+# Stages and commits refreshed metadata across the fleet root and each
+# non-excluded service path. Skips paths that are not git repos or have
+# nothing to commit. Returns non-zero if any commit fails.
+#
+# ARGUMENTS:
+#   $1 - Commit message (default: "Refresh fleet metadata")
+# -----------------------------------------------------------------------------
+_refresh_fleet_commit_changes() {
+    local commit_msg="${1:-Refresh fleet metadata}"
+    local committed=0 skipped=0 failed=0
+
+    echo "Committing refreshed fleet metadata..."
+
+    # Fleet root (config + tsv + fleet-root docs)
+    local root_dir="${MANIFEST_FLEET_ROOT:-$(pwd)}"
+    if [[ -d "$root_dir/.git" ]]; then
+        if [[ -n "$(git -C "$root_dir" status --porcelain 2>/dev/null)" ]]; then
+            if git -C "$root_dir" add . && git -C "$root_dir" commit -m "$commit_msg" >/dev/null; then
+                echo "  ✓ fleet root: committed"
+                committed=$((committed + 1))
+            else
+                echo "  ✗ fleet root: commit failed"
+                failed=$((failed + 1))
+            fi
+        else
+            echo "  • fleet root: no changes"
+            skipped=$((skipped + 1))
+        fi
+    fi
+
+    # Each service
+    local service path excluded
+    for service in $MANIFEST_FLEET_SERVICES; do
+        path=$(get_fleet_service_property "$service" "path")
+        excluded=$(get_fleet_service_property "$service" "excluded" "false")
+
+        [[ "$excluded" == "true" ]] && continue
+        [[ -z "$path" || ! -d "$path/.git" ]] && continue
+        # Avoid double-committing if a service path *is* the fleet root.
+        [[ "$path" == "$root_dir" ]] && continue
+
+        if [[ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]]; then
+            if git -C "$path" add . && git -C "$path" commit -m "$commit_msg" >/dev/null; then
+                echo "  ✓ $service: committed"
+                committed=$((committed + 1))
+            else
+                echo "  ✗ $service: commit failed"
+                failed=$((failed + 1))
+            fi
+        else
+            echo "  • $service: no changes"
+            skipped=$((skipped + 1))
+        fi
+    done
+
+    echo ""
+    echo "Commit summary: $committed committed · $skipped no-changes · $failed failed"
+    echo ""
+
+    [[ "$failed" -gt 0 ]] && return 1
+    return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -270,3 +344,4 @@ No version change. No remote operations." \
 export -f manifest_refresh_repo
 export -f manifest_refresh_fleet
 export -f manifest_refresh_dispatch
+export -f _refresh_fleet_commit_changes

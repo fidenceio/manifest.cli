@@ -149,7 +149,7 @@ Each recommendation is a discrete unit of work. Check off when complete.
 
 - [ ] **24. `manifest ship fleet --only <service>` / `--except <service>`** for partial fleet ships.
 - [x] **25. Surface hidden fleet flags in help.** `manifest ship fleet --help` now lists every flag that fleet_ship accepts: `--noprep`, `--safe`, `--method <merge|squash|rebase>`, `--force`, `--no-delete-branch`, `--draft`. Help also includes a "Flow:" section showing the default vs. `--safe` pipeline so users know which step `--safe` adds. Bats coverage verifies all six flags appear in `--help` output.
-- [ ] **26. `manifest refresh fleet --commit`** — don't redirect users to `ship fleet --local` for a semantically-different operation.
+- [x] **26. `manifest refresh fleet --commit`** — implemented. `manifest_refresh_fleet` now wires `--commit` through to a new `_refresh_fleet_commit_changes` helper that stages and commits refreshed metadata across the fleet root + each non-excluded service repo. Skips paths that are not git repos or have nothing to commit. Single fixed message ("Refresh fleet metadata") — no version bump, no tag, distinct from `ship fleet`. `--dry-run --commit` prints a "Would commit refreshed metadata across fleet root + services" preview and exits without writes. Removes the previous "redirect to ship fleet --local" stub. Uses `git -C "$path"` so subshell `cd` failures can't land commits in the wrong directory; protects against double-commits when a service's path equals the fleet root. Eight bats tests in `tests/refresh_fleet_commit.bats` cover help text, fleet-root committed/clean, service iteration, excluded-skip, non-git-skip, root/service path collision, and the dry-run preview.
 
 ### Tier 2 (additions found while resolving Tier 1)
 
@@ -267,3 +267,19 @@ Resolved: **#8**. (After this batch: 25/28 done, 3 open: #9, #24, #26.)
 
 **Files modified (2):** `modules/core/manifest-shared-functions.sh` (1102 → 614, -488), `modules/core/manifest-init.sh` (348 → 844, +496).
 **Test count:** 91 bats tests (unchanged — the helpers are exercised by existing tests via `manifest init` callers).
+
+### Session 2026-04-26 (cont.) — Tier 5 — refresh fleet --commit (#26)
+
+Resolved: **#26**. (After this batch: 26/28 done, 2 open: #9, #24.)
+
+**Decisions:**
+
+- **`--commit` is additive, not a replacement for `ship fleet`.** The previous stub redirected users to `ship fleet --local`, but those are different operations: `refresh` re-syncs state without bumping version or tagging, while `ship` is the bump-and-tag pipeline. The fixed commit message ("Refresh fleet metadata") makes it clear in `git log` that this commit is metadata maintenance, not a release.
+- **`git -C "$path"` over `(cd "$path" && git ...)`.** Subshell `cd` followed by a chained `git add .` could land commits in the parent dir if `cd` fails (e.g., race-deleted path). `git -C` errors cleanly with no side effect.
+- **Double-commit guard.** Single-repo fleets (where `MANIFEST_FLEET_ROOT == service.path`) would otherwise emit two commits — fleet root pass + service pass — for the same staged tree. Helper short-circuits the service iteration when `path == root_dir`.
+- **Helper extraction made it testable.** Putting the commit pass in `_refresh_fleet_commit_changes` lets bats stub `get_fleet_service_property` + `MANIFEST_FLEET_SERVICES` and exercise the matrix without booting the full fleet stack (which requires `manifest.fleet.config.yaml`, `load_fleet_config`, `_fleet_require_initialized`, etc.).
+- **Help text rewritten.** Old text said "Commit refreshed files across fleet (not yet implemented)" — actively misleading. Now describes what it does and points the user to `ship fleet` for releases so the boundary stays clear.
+
+**Files modified (1):** `modules/core/manifest-refresh.sh`.
+**Files added (1):** `tests/refresh_fleet_commit.bats` (8 tests).
+**Test count:** 99 bats tests (was 91, +8 refresh-fleet-commit, all passing on macOS).

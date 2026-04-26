@@ -62,7 +62,8 @@
       "Bash(scripts/manifest-cli.sh status *)",
       "Bash(scripts/manifest-cli.sh config *)",
       "Bash(scripts/manifest-cli.sh doctor *)",
-      "Bash(git check-ignore *)"
+      "Bash(git check-ignore *)",
+      "Bash(git init *)"
     ],
     "deny": [],
     "ask": [],
