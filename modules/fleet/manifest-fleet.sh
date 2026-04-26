@@ -33,15 +33,19 @@
 #   │ Configuration   │   │ Repo detection   │   │ (future)            │
 #   └─────────────────┘   └──────────────────┘   └─────────────────────┘
 #
-# COMMANDS:
-#   manifest fleet init      - Initialize a new fleet
+# COMMANDS (v42 entry points — preferred):
+#   manifest init fleet      - Scaffold a new fleet (calls _fleet_start / _fleet_init)
+#   manifest prep fleet      - Clone/pull all services (calls _fleet_sync)
+#   manifest refresh fleet   - Re-scan, regenerate docs (calls fleet_update + fleet_docs)
+#   manifest ship fleet      - Coordinated release across services
+#
+# COMMANDS (legacy, still routed via 'manifest fleet *'):
 #   manifest fleet status    - Show fleet status
 #   manifest fleet update    - Re-scan and add new repos (--dry-run to preview)
 #   manifest fleet discover  - Alias for 'fleet update --dry-run'
 #   manifest fleet add       - Add a service to fleet
-#   manifest fleet remove    - Remove a service from fleet
-#   manifest fleet sync      - Clone/pull all services
-#   manifest fleet prep      - Coordinated version bump
+#   manifest fleet quickstart - Auto-discover git repos (skips TSV selection)
+#   manifest fleet prep      - Coordinated version bump (no commit/push)
 #   manifest fleet docs      - Generate unified documentation
 #   manifest fleet validate  - Validate configuration
 #
@@ -213,7 +217,7 @@ _fleet_require_initialized() {
         log_error "Command '$command' requires fleet mode"
         log_error "Either:"
         log_error "  1. Run from a directory containing manifest.fleet.config.yaml"
-        log_error "  2. Run 'manifest fleet init' to create a new fleet"
+        log_error "  2. Run 'manifest init fleet' to create a new fleet"
         log_error "  3. Set MANIFEST_CLI_FLEET_ROOT to point to fleet directory"
         return 1
     fi
@@ -260,7 +264,7 @@ fleet_status() {
         echo "Not in fleet mode. Use 'manifest status' for single-repo status."
         echo ""
         echo "To initialize a fleet in this directory:"
-        echo "  manifest fleet init"
+        echo "  manifest init fleet"
         echo ""
         echo "To discover existing repos:"
         echo "  manifest fleet discover"
@@ -368,10 +372,10 @@ fleet_status() {
 
     # Quick actions
     echo "Quick actions:"
-    echo "  manifest fleet update             - Add newly discovered repos"
-    echo "  manifest fleet update --dry-run   - Preview new/missing repos"
-    echo "  manifest fleet sync               - Clone missing, pull existing"
-    echo "  manifest fleet prep patch         - Bump all services"
+    echo "  manifest refresh fleet            - Re-scan, regenerate docs"
+    echo "  manifest refresh fleet --dry-run  - Preview new/missing repos"
+    echo "  manifest prep fleet               - Clone missing, pull existing"
+    echo "  manifest ship fleet patch         - Coordinated release"
 }
 
 # -----------------------------------------------------------------------------
@@ -438,29 +442,27 @@ _fleet_status_json() {
 # Equivalent to: manifest fleet init --_quickstart
 # -----------------------------------------------------------------------------
 fleet_quickstart() {
-    fleet_init --_quickstart "$@"
+    _fleet_init --_quickstart "$@"
 }
 
 # =============================================================================
-# COMMAND: fleet start
+# INTERNAL: fleet start (Phase 1 of init fleet)
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Function: fleet_start
+# Function: _fleet_start (internal)
 # -----------------------------------------------------------------------------
 # Scans ALL subdirectories (git and non-git) and writes a TSV selection file.
 # The user edits the file to choose which directories to include, then runs
-# 'manifest fleet init' to apply initialization standards.
+# 'manifest init fleet' (Phase 2) to apply initialization standards.
+#
+# Called from manifest_init_fleet (Phase 1) in modules/core/manifest-init.sh.
 #
 # ARGUMENTS:
 #   --depth N    Maximum search depth (default: 5)
 #   --force      Overwrite existing manifest.fleet.tsv
-#
-# EXAMPLE:
-#   manifest fleet start
-#   manifest fleet start --depth 3
 # -----------------------------------------------------------------------------
-fleet_start() {
+_fleet_start() {
     local depth=5
     local force=false
 
@@ -490,14 +492,14 @@ fleet_start() {
         log_warning "Selection file already exists: $start_file"
         echo ""
         echo "  To edit and continue:    open manifest.fleet.tsv"
-        echo "  To regenerate:           manifest fleet start --force"
-        echo "  To initialize from it:   manifest fleet init"
+        echo "  To regenerate:           manifest init fleet --force"
+        echo "  To initialize from it:   manifest init fleet"
         return 0
     fi
 
     echo ""
     echo "╔══════════════════════════════════════════════════════════════════════╗"
-    echo "║                       MANIFEST FLEET START                          ║"
+    echo "║                  MANIFEST INIT FLEET (PHASE 1/2)                    ║"
     echo "╚══════════════════════════════════════════════════════════════════════╝"
     echo ""
     echo "Scanning: $root_dir (depth: $depth)"
@@ -535,7 +537,7 @@ fleet_start() {
     echo ""
     echo "Next steps:"
     echo "  1. Edit manifest.fleet.tsv — set SELECT to true/false"
-    echo "  2. Run 'manifest fleet init' to initialize selected directories"
+    echo "  2. Run 'manifest init fleet' to initialize selected directories"
     echo ""
 }
 
@@ -580,17 +582,19 @@ _fleet_init_directory() {
 }
 
 # =============================================================================
-# COMMAND: fleet init
+# INTERNAL: fleet init (Phase 2 of init fleet)
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Function: fleet_init
+# Function: _fleet_init (internal)
 # -----------------------------------------------------------------------------
 # Initializes a new fleet in the current directory.
 #
-# If manifest.fleet.tsv exists (from 'fleet start'), reads the user's
+# Called from manifest_init_fleet (Phase 2) in modules/core/manifest-init.sh.
+#
+# If manifest.fleet.tsv exists (from Phase 1 / _fleet_start), reads the user's
 # selections and initializes those directories. Otherwise, falls back to
-# auto-discovery via fleet_update (use --skip-start to force this path).
+# auto-discovery via fleet_update (--_quickstart forces this path).
 #
 # BEHAVIOR (with start file):
 #   1. Reads selected directories from manifest.fleet.tsv
@@ -599,7 +603,7 @@ _fleet_init_directory() {
 #   4. Creates manifest.config.local.yaml
 #   5. Validates the configuration
 #
-# BEHAVIOR (without start file / --skip-start):
+# BEHAVIOR (without start file / --_quickstart):
 #   1. Creates skeleton manifest.fleet.config.yaml
 #   2. Calls fleet_update --_from-init to auto-discover git repos
 #   3. Validates the configuration
@@ -608,13 +612,9 @@ _fleet_init_directory() {
 #   --name, -n NAME     Fleet name (prompted if not provided)
 #   --template, -t      Use minimal template (no comments)
 #   --force, -f         Overwrite existing manifest.fleet.config.yaml
-#   --skip-start        Skip start file, use auto-discovery
-#
-# EXAMPLE:
-#   manifest fleet start && manifest fleet init
-#   manifest fleet init --skip-start
+#   --_quickstart       Skip start file, use auto-discovery (used by fleet_quickstart)
 # -----------------------------------------------------------------------------
-fleet_init() {
+_fleet_init() {
     local fleet_name=""
     local minimal_template=false
     local force=false
@@ -644,9 +644,9 @@ fleet_init() {
     if [[ -f "$config_file" ]] && [[ "$force" != "true" ]]; then
         log_warning "Fleet already initialized at: $config_file"
         echo ""
-        echo "  To add newly discovered repos:  manifest fleet update"
-        echo "  To preview without changes:     manifest fleet update --dry-run"
-        echo "  To reinitialize from scratch:   manifest fleet init --force"
+        echo "  To add newly discovered repos:  manifest refresh fleet"
+        echo "  To preview without changes:     manifest refresh fleet --dry-run"
+        echo "  To reinitialize from scratch:   manifest init fleet --force"
         return 0
     fi
 
@@ -657,14 +657,14 @@ fleet_init() {
     elif [[ "$skip_start" != "true" ]] && [[ ! -f "$start_file" ]]; then
         log_warning "No selection file found."
         echo ""
-        echo "  Recommended:  manifest fleet start        (scan and select directories)"
-        echo "  Quick start:  manifest fleet quickstart   (auto-discover git repos)"
+        echo "  Recommended:  manifest init fleet           (scan and select directories)"
+        echo "  Quick start:  manifest fleet quickstart     (auto-discover git repos)"
         return 1
     fi
 
     echo ""
     echo "╔══════════════════════════════════════════════════════════════════════╗"
-    echo "║                     MANIFEST FLEET INITIALIZATION                    ║"
+    echo "║                  MANIFEST INIT FLEET (PHASE 2/2)                    ║"
     echo "╚══════════════════════════════════════════════════════════════════════╝"
     echo ""
 
@@ -793,9 +793,9 @@ EOF
             echo ""
             echo "Next steps:"
             echo "  1. Review manifest.fleet.config.yaml and adjust service configuration"
-            echo "  2. Run 'manifest fleet status' to see fleet overview"
-            echo "  3. Run 'manifest fleet sync' to clone/pull all services"
-            echo "  4. Run 'manifest fleet prep patch' for first coordinated release"
+            echo "  2. Run 'manifest status' to see fleet overview"
+            echo "  3. Run 'manifest prep fleet' to clone/pull all services"
+            echo "  4. Run 'manifest ship fleet patch' for first coordinated release"
             echo ""
         fi
     fi
@@ -826,7 +826,7 @@ _generate_full_manifest() {
 # =============================================================================
 # MANIFEST FLEET CONFIGURATION
 # =============================================================================
-# Generated by: manifest fleet init
+# Generated by: manifest init fleet
 # Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
 #
 # This file defines a collection of related repositories ("fleet") that
@@ -899,24 +899,21 @@ fleet_discover() {
 }
 
 # =============================================================================
-# COMMAND: fleet sync
+# INTERNAL: fleet sync (called by 'manifest prep fleet')
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Function: fleet_sync
+# Function: _fleet_sync (internal)
 # -----------------------------------------------------------------------------
 # Synchronizes all fleet services (clone missing, pull existing).
+# Called from manifest_prep_fleet in modules/core/manifest-prep.sh.
 #
 # ARGUMENTS:
 #   --parallel, -p   Run in parallel (default based on config)
 #   --clone-only     Only clone missing, don't pull existing
 #   --pull-only      Only pull existing, don't clone missing
-#
-# EXAMPLE:
-#   manifest fleet sync
-#   manifest fleet sync --parallel
 # -----------------------------------------------------------------------------
-fleet_sync() {
+_fleet_sync() {
     if ! _fleet_require_initialized "sync"; then
         return 1
     fi
@@ -1261,7 +1258,7 @@ EOF
     # --- Standard / dry-run mode ---
 
     # When called standalone, require fleet to be initialized.
-    # When called from fleet_init (--_from-init), skip — config was just created.
+    # When called from _fleet_init (--_from-init), skip — config was just created.
     if [[ "$skip_init_check" != "true" ]]; then
         if ! _fleet_require_initialized "update"; then
             return 1
@@ -1352,7 +1349,7 @@ EOF
             printf "  - %-25s %s\n" "$name" "$path"
         done
         echo ""
-        echo "  Run 'manifest fleet sync' to clone missing repos,"
+        echo "  Run 'manifest prep fleet' to clone missing repos,"
         echo "  or remove them from manifest.fleet.config.yaml manually."
     fi
 
@@ -1789,20 +1786,16 @@ fleet_main() {
         quickstart)
             fleet_quickstart "$@"
             ;;
-        start)
-            fleet_start "$@"
-            ;;
+        # 'start', 'init', and 'sync' are no longer dispatcher routes — the
+        # underlying functions are private (_fleet_start/_fleet_init/_fleet_sync)
+        # and are reached via the v42 entry points (manifest init/prep fleet).
+        # The unknown-command fallback below detects these and prints migration
+        # hints rather than a bare "Unknown fleet command" error.
         status)
             fleet_status "$@"
             ;;
-        init)
-            fleet_init "$@"
-            ;;
         discover)
             fleet_discover "$@"
-            ;;
-        sync)
-            fleet_sync "$@"
             ;;
         update)
             fleet_update "$@"
@@ -1853,6 +1846,19 @@ fleet_main() {
         help|--help|-h)
             fleet_help
             ;;
+        start|init|sync)
+            local replacement
+            case "$subcommand" in
+                start) replacement="manifest init fleet" ;;
+                init)  replacement="manifest init fleet" ;;
+                sync)  replacement="manifest prep fleet" ;;
+            esac
+            log_error "'manifest fleet $subcommand' is no longer a dispatcher route."
+            echo "  Use: $replacement"
+            echo ""
+            echo "  See 'manifest help' for the v42 command surface."
+            return 1
+            ;;
         *)
             log_error "Unknown fleet command: $subcommand"
             fleet_help
@@ -1874,39 +1880,31 @@ MANIFEST FLEET - Polyrepo Management
 
 Manage multiple related repositories as a coordinated fleet.
 
-COMMANDS:
+This is a legacy command surface — prefer the v42 entry points:
 
-  manifest fleet start [options]
-    Scan workspace and create a selection file for fleet initialization.
-    Finds ALL directories (git repos and plain folders), writes them to
-    manifest.fleet.tsv for the user to review and select.
-    Options:
-      --depth N          Maximum search depth (default: 5)
-      --force, -f        Overwrite existing selection file
+  manifest init fleet           Scaffold (was: manifest fleet start + init)
+  manifest prep fleet           Clone/pull (was: manifest fleet sync)
+  manifest refresh fleet        Re-scan + regenerate docs (was: manifest fleet update)
+  manifest ship fleet <bump>    Coordinated release (was: manifest fleet ship)
+
+LEGACY-ONLY COMMANDS:
 
   manifest fleet quickstart [options]
     Quick fleet setup — auto-discovers existing git repos, skips selection.
-    Equivalent to running 'fleet start' + 'fleet init' in one step.
-    Options:
-      --name, -n NAME    Fleet name
-      --force, -f        Overwrite existing manifest.fleet.config.yaml
-
-  manifest fleet init [options]
-    Initialize a new fleet from a selection file (manifest.fleet.tsv).
-    Reads selected directories and bootstraps them (git init, .gitignore).
-    Requires 'manifest fleet start' to have been run first.
+    Equivalent to: manifest init fleet (without the TSV selection step).
     Options:
       --name, -n NAME    Fleet name
       --force, -f        Overwrite existing manifest.fleet.config.yaml
 
   manifest fleet status [options]
-    Show fleet status overview.
+    Show fleet status overview. (Prefer 'manifest status'.)
     Options:
       --verbose, -v      Show detailed information
       --json             Output as JSON
 
   manifest fleet update [options]
     Re-scan workspace and add new repos to manifest.fleet.config.yaml.
+    (Prefer 'manifest refresh fleet' which also regenerates docs.)
     Options:
       --depth N          Maximum search depth (default: 5)
       --dry-run          Preview only — do not modify manifest.fleet.config.yaml
@@ -1915,13 +1913,6 @@ COMMANDS:
 
   manifest fleet discover [options]
     Alias for 'manifest fleet update --dry-run'.
-
-  manifest fleet sync [options]
-    Clone missing repos, pull existing ones.
-    Options:
-      --parallel, -p     Run operations in parallel
-      --clone-only       Only clone missing repos
-      --pull-only        Only pull existing repos
 
   manifest fleet validate
     Validate fleet configuration.
@@ -1980,29 +1971,29 @@ CONFIGURATION:
   Fleet is configured via manifest.fleet.config.yaml in the fleet root directory.
   Service-specific overrides go in each service's manifest.config.local.yaml.
 
-  Run 'manifest fleet start' then 'manifest fleet init' to set up a new fleet.
+  Run 'manifest init fleet' to set up a new fleet.
 
 EXAMPLES:
 
-  # Recommended workflow for new fleet
-  manifest fleet start                  # scan all directories, create selection file
+  # Recommended workflow for new fleet (v42)
+  manifest init fleet                   # scan and write manifest.fleet.tsv
   # ... edit manifest.fleet.tsv ...
-  manifest fleet init                   # initialize selected directories
+  manifest init fleet                   # apply selections (Phase 2)
 
   # Quick setup (auto-discover git repos, no selection step)
-  manifest fleet init quickstart
+  manifest fleet quickstart
 
-  # Add newly discovered repos to existing fleet
-  manifest fleet update
+  # Add newly discovered repos to an existing fleet
+  manifest refresh fleet                # also regenerates docs
 
-  # Preview new/missing repos (read-only)
-  manifest fleet update --dry-run
+  # Preview only (read-only)
+  manifest refresh fleet --dry-run
 
   # Check fleet status
-  manifest fleet status
+  manifest status
 
   # Clone all missing services
-  manifest fleet sync
+  manifest prep fleet
 
 EOF
 }

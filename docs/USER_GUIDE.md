@@ -290,7 +290,9 @@ All pre-v42 commands continue to work. Some have changed meaning:
 | `manifest prep patch` | `manifest ship repo patch --local` | Shows deprecation warning |
 | `manifest ship patch` | `manifest ship repo patch` | Automatic redirect |
 | `manifest sync` | `manifest prep repo` | Automatic redirect |
-| `manifest fleet sync` | `manifest prep fleet` | Both work |
+| `manifest fleet start` | `manifest init fleet` | Removed in v44.9.0 — emits migration hint |
+| `manifest fleet init` | `manifest init fleet` | Removed in v44.9.0 — emits migration hint |
+| `manifest fleet sync` | `manifest prep fleet` | Removed in v44.9.0 — emits migration hint |
 | `manifest update` | `manifest upgrade` | Shows deprecation warning |
 | `manifest docs` | `manifest refresh repo` | Still works as plumbing |
 | `manifest cleanup` | `manifest refresh repo` | Still works as plumbing |

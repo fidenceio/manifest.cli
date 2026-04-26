@@ -54,7 +54,9 @@ Design principles:
 
 ## Auto-Discovery (v39.0.0)
 
-As of v39.0.0, `manifest fleet init` **discovers Git repositories by default**.
+As of v39.0.0, `manifest init fleet` **discovers Git repositories by default**.
+(Pre-v44.9.0 this was `manifest fleet init`; the legacy command was removed in
+v44.9.0 and now emits a migration hint.)
 
 ### Behavior
 

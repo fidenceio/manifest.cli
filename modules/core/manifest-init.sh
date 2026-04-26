@@ -16,7 +16,7 @@
 #
 # DEPENDENCIES:
 #   - manifest-shared-functions.sh (logging, get_docs_folder, manifest_*_repo)
-#   - manifest-fleet.sh (fleet_start, fleet_init)
+#   - manifest-fleet.sh (_fleet_start, _fleet_init)
 #   - manifest-yaml.sh (set_yaml_value)
 #
 # SCAFFOLDING HELPERS:
@@ -658,7 +658,7 @@ EOF
 #   Phase 1 (no TSV exists): Scan directories, create manifest.fleet.tsv
 #   Phase 2 (TSV exists):    Read selections, scaffold each repo, create config
 #
-# Delegates to fleet_start (phase 1) and fleet_init (phase 2) in
+# Delegates to _fleet_start (phase 1) and _fleet_init (phase 2) in
 # manifest-fleet.sh.
 #
 # ARGUMENTS:
@@ -726,7 +726,7 @@ manifest_init_fleet() {
             start_args+=("--force")
         fi
 
-        fleet_start "${start_args[@]}"
+        _fleet_start "${start_args[@]}"
         return $?
     fi
 
@@ -752,14 +752,14 @@ manifest_init_fleet() {
         fleet_args+=("--force")
     fi
 
-    fleet_init "${fleet_args[@]}"
+    _fleet_init "${fleet_args[@]}"
 }
 
 # -----------------------------------------------------------------------------
 # Function: _fleet_init_tsv_is_stale (internal)
 # -----------------------------------------------------------------------------
 # Returns 0 (stale = unedited) when the TSV's SELECT column matches the
-# default-selection fingerprint that fleet_start wrote into the header,
+# default-selection fingerprint that _fleet_start wrote into the header,
 # meaning the user ran Phase 2 without touching selections.
 # Returns 1 (edited, or no fingerprint, or cannot tell) otherwise — in
 # which case Phase 2 proceeds without prompting.

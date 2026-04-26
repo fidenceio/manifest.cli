@@ -18,7 +18,7 @@
 #
 # DEPENDENCIES:
 #   - manifest-git.sh (sync_repository)
-#   - manifest-fleet.sh (fleet_sync)
+#   - manifest-fleet.sh (_fleet_sync)
 # =============================================================================
 
 # Guard against multiple sourcing
@@ -123,7 +123,7 @@ manifest_prep_repo() {
 # -----------------------------------------------------------------------------
 # Prepares fleet workspace: clones missing repos, pulls existing ones.
 #
-# Absorbs the old fleet_sync() behavior.
+# Absorbs the old fleet_sync() behavior (now _fleet_sync).
 #
 # ARGUMENTS:
 #   --parallel    Run operations in parallel
@@ -159,8 +159,8 @@ manifest_prep_fleet() {
         esac
     done
 
-    # Delegate to existing fleet_sync
-    fleet_sync "${fleet_args[@]}"
+    # Delegate to internal fleet sync (private after #9)
+    _fleet_sync "${fleet_args[@]}"
 }
 
 # -----------------------------------------------------------------------------

@@ -63,7 +63,8 @@
       "Bash(scripts/manifest-cli.sh config *)",
       "Bash(scripts/manifest-cli.sh doctor *)",
       "Bash(git check-ignore *)",
-      "Bash(git init *)"
+      "Bash(git init *)",
+      "Bash(git -C /Users/william/coderepos/manifest/fidenceio.manifest.cli log --oneline -6)"
     ],
     "deny": [],
     "ask": [],

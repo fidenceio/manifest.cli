@@ -510,21 +510,26 @@ manifest agent uninstall       # Remove agent
 
 ## `manifest fleet` (Legacy Interface)
 
-The `manifest fleet <sub>` interface continues to work via `fleet_main()`:
+The `manifest fleet <sub>` interface continues to work via `fleet_main()` for
+the commands listed below. As of v44.9.0 the three dual-path entry points
+(`start`, `init`, `sync`) have been removed — invoking them prints a migration
+hint pointing at the v42 entry point.
 
 ```bash
-manifest fleet init                    # Initialize fleet
-manifest fleet init --name "platform"  # Named fleet
-manifest fleet init --bare             # Template only
+# v42 entry points (preferred)
+manifest init fleet                    # Scaffold fleet (was: fleet start + init)
+manifest prep fleet --parallel         # Clone/pull all (was: fleet sync)
+manifest refresh fleet                 # Re-scan + regenerate docs
+manifest ship fleet minor --safe       # Coordinated release
+
+# Legacy-only fleet commands
+manifest fleet quickstart              # Auto-discover, skip TSV selection
 manifest fleet status --verbose        # Fleet status
-manifest fleet discover --depth 3      # Find new repos
-manifest fleet sync --parallel         # Clone/pull all
+manifest fleet discover --depth 3      # Find new repos (alias for update --dry-run)
 manifest fleet update                  # Re-scan membership
 manifest fleet update --dry-run        # Preview changes
 manifest fleet add ./path --name "svc" # Add a service
-manifest fleet remove "svc"            # Remove a service
 manifest fleet validate                # Validate config
-manifest fleet ship minor --safe       # Coordinated release
 manifest fleet prep patch              # Local-only fleet release
 manifest fleet pr queue --method squash  # Fleet PR operations
 manifest fleet docs                    # Fleet documentation

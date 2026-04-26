@@ -256,9 +256,13 @@ manifest ship patch                 manifest ship repo patch
 manifest sync                       manifest prep repo
 manifest docs                       manifest refresh repo
 manifest cleanup                    manifest refresh repo
+manifest fleet start                manifest init fleet
+manifest fleet init                 manifest init fleet
 manifest fleet sync                 manifest prep fleet
 manifest fleet ship minor           manifest ship fleet minor
 manifest update                     manifest upgrade
 ```
 
-All old commands still work as hidden aliases. Update scripts at your convenience.
+Most old commands still work as hidden aliases. The three legacy fleet routes
+(`manifest fleet start|init|sync`) were removed in v44.9.0 — invoking them now
+emits a one-line migration hint pointing at the v42 entry point.
