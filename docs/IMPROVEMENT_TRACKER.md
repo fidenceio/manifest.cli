@@ -120,7 +120,7 @@ Each recommendation is a discrete unit of work. Check off when complete.
 ### Tier 2 — Remove fat (elegance)
 
 - [x] **5. Delete `manifest-env-management.sh`.** Removed (270 lines). Inlined the only still-useful piece (shell-profile cleanup) into `install-cli.sh` and `manifest-uninstall.sh`. Callers in `install-cli.sh` (`source_manifest_env_management`, `cleanup_environment_variables`) replaced with self-contained inline cleanup.
-- [ ] **6. Slim `manifest-time.sh`** to ~250 lines. One server, one curl, one cache file.
+- [x] **6. Slim `manifest-time.sh`** — 764 → 342 lines (-55%). Removed dead code (`get_timestamp`, `get_formatted_timestamp`, `display_time_os_info` had zero callers). Folded `calculate_time_timestamp` (70 lines of bc-fallback ceremony) into a 6-line `_manifest_time_apply_offset` helper using pure shell integer arithmetic — the previous code always cut at `.` anyway, so floating-point added no precision. Consolidated repeated `if [ "$MANIFEST_DEBUG" = "1" ]` blocks behind a `_manifest_time_debug` helper. Extracted `_manifest_time_export` and `_manifest_time_print_result` so cache-hit / network-success / stale-fallback paths share one display block instead of three near-identical copies. Public API preserved (`get_time_timestamp`, `format_timestamp`, `display_time_info`, `display_time_config` and the `MANIFEST_CLI_TIME_*` exported vars). Cache file format unchanged for back-compat. Twelve bats tests in `tests/time.bats` cover `_parse_http_date` (BSD+GNU+python3 fallback), `_manifest_time_apply_offset` (positive/negative/malformed), cache write+read round-trip, fresh TTL expiration, stale-cache fallback, server list defaults+overrides, and `get_time_timestamp` cache-hit path. → 91/91 bats tests passing.
 - [x] **7. Decide on `manifest security`** — deleted. Removed the three "Temporarily disabled due to false positives" stubs in `manifest_security()` and the dead function bodies (`check_actual_sensitive_data`, `check_recent_secret_commits`, `check_actual_credentials` — 146 lines). Audit now reports honestly on the three real checks: git-tracking of private files, PII detection, environment-file gitignore enforcement.
 - [ ] **8. Re-home scaffolding.** Move `ensure_required_files` + helpers from `manifest-shared-functions.sh:593-894` into `manifest-init.sh`.
 - [ ] **9. Collapse dual fleet paths.** Make `fleet_start`/`fleet_init`/`fleet_sync` private (`_fleet_*`), remove dispatcher routes.
@@ -239,3 +239,18 @@ Resolved: **#14, #19, #22**. v44.4.0 was shipped public earlier in the day captu
 **Files modified (5):** `modules/core/manifest-shared-utils.sh` (JSON helpers), `modules/core/manifest-status.sh` (--json), `modules/core/manifest-config-crud.sh` (--json on list), `modules/core/manifest-{init,prep,refresh}.sh` (--dry-run on repo verbs), `modules/core/manifest-config.sh` (review-and-confirm helper extracted + called from wizard).
 **Test count:** 79 bats tests (was 53, +12 JSON +7 dry-run +5 wizard +2 misc helpers, all passing on macOS).
 **Open queue (5):** #6 (slim time module), #8 (re-home scaffolding), #9 (collapse dual fleet paths), #24 (ship fleet --only/--except), #26 (refresh fleet --commit).
+
+### Session 2026-04-26 — Tier 2 cleanup batch 1 (#6)
+
+Resolved: **#6**. (After this batch: 24/28 done, 4 open: #8, #9, #24, #26.)
+
+**Decisions:**
+
+- **`calculate_time_timestamp` collapsed into 6 lines.** The original 70-line implementation guarded against `bc` being absent, validated offset format with regex, branched on sign, and fell back to system time on bc errors — but at the very end it always did `cut -d. -f1` to drop the fractional part. Since the truncation was unconditional, the bc machinery was theatre. Replaced with `_manifest_time_apply_offset` doing pure-shell integer arithmetic via `BASH_REMATCH`. No precision loss versus the old code; one fewer external dependency.
+- **Three dead functions removed without back-compat shims.** `get_timestamp`, `get_formatted_timestamp`, `display_time_os_info` had zero callers across modules + install-cli + tests (verified via grep). No reason to keep stubs around.
+- **Sub-250 target deferred.** Hit 342 lines instead of the aspirational ~250. Further reduction would require either dropping the Cloudflare-trace sub-second precision branch or merging the two cache-mode paths in `_manifest_time_read_cache_data` — both are real features in active use, so the remaining line count is now mostly load-bearing logic, not bloat.
+- **Tests use dynamic epoch generation.** First draft hard-coded `1775661917` for `"Fri, 04 Apr 2026 15:25:17 GMT"`, but BSD `date -jf` is strict about weekday consistency and Apr 4 2026 is actually a Saturday. Switched to building the date string from a known epoch using `date -u -r "$epoch"` (BSD) or `date -u -d "@$epoch"` (GNU) so the weekday is guaranteed correct on both platforms.
+
+**Files added (1):** `tests/time.bats` (12 tests).
+**Files modified (1):** `modules/system/manifest-time.sh` (764 → 342 lines, -422).
+**Test count:** 91 bats tests (was 79, +12 time, all passing on macOS).
