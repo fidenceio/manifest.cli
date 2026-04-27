@@ -29,6 +29,16 @@ teardown() {
     [ "$output" = "git.tag_prefix" ]
 }
 
+@test "yaml: maps release tag target policy" {
+    run yaml_path_to_env_var "release.tag_target"
+    [ "$status" -eq 0 ]
+    [ "$output" = "MANIFEST_CLI_RELEASE_TAG_TARGET" ]
+
+    run env_var_to_yaml_path "MANIFEST_CLI_RELEASE_TAG_TARGET"
+    [ "$status" -eq 0 ]
+    [ "$output" = "release.tag_target" ]
+}
+
 @test "yaml: set_yaml_value creates a file and writes a nested key" {
     set_yaml_value "$YAML" "git.tag_prefix" "v"
     [ -f "$YAML" ]
@@ -53,10 +63,12 @@ teardown() {
 @test "yaml: load_yaml_to_env exports mapped keys into MANIFEST_CLI_* envs" {
     set_yaml_value "$YAML" "git.tag_prefix" "release-"
     set_yaml_value "$YAML" "git.default_branch" "trunk"
-    unset MANIFEST_CLI_GIT_TAG_PREFIX MANIFEST_CLI_GIT_DEFAULT_BRANCH
+    set_yaml_value "$YAML" "release.tag_target" "final_release_commit"
+    unset MANIFEST_CLI_GIT_TAG_PREFIX MANIFEST_CLI_GIT_DEFAULT_BRANCH MANIFEST_CLI_RELEASE_TAG_TARGET
     load_yaml_to_env "$YAML"
     [ "$MANIFEST_CLI_GIT_TAG_PREFIX" = "release-" ]
     [ "$MANIFEST_CLI_GIT_DEFAULT_BRANCH" = "trunk" ]
+    [ "$MANIFEST_CLI_RELEASE_TAG_TARGET" = "final_release_commit" ]
 }
 
 @test "yaml: load_yaml_to_env preserves unrelated env values when key absent (layered precedence)" {

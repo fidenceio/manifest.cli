@@ -52,6 +52,11 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     ["version.validation"]="MANIFEST_CLI_VERSION_VALIDATION"
 
     # -------------------------------------------------------------------------
+    # release — release artifact policy
+    # -------------------------------------------------------------------------
+    ["release.tag_target"]="MANIFEST_CLI_RELEASE_TAG_TARGET"
+
+    # -------------------------------------------------------------------------
     # git — git workflow configuration
     # -------------------------------------------------------------------------
     ["git.tag_prefix"]="MANIFEST_CLI_GIT_TAG_PREFIX"

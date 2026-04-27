@@ -226,20 +226,33 @@ commit_changes() {
 
 create_tag() {
     local version="$1"
+    local target_sha="${2:-}"
     local tag_prefix="${MANIFEST_CLI_GIT_TAG_PREFIX:-v}"
     local tag_suffix="${MANIFEST_CLI_GIT_TAG_SUFFIX:-}"
     local tag_name="${tag_prefix}${version}${tag_suffix}"
-    
+
     echo "🏷️  Creating git tag..."
     echo "   Tag: $tag_name"
-    
+    if [[ -n "$target_sha" ]]; then
+        echo "   Target: $target_sha"
+    fi
+
     # Change to project root directory
     cd "$PROJECT_ROOT" || {
         echo "❌ Failed to change to project root: $PROJECT_ROOT"
         return 1
     }
-    
-    if git tag "$tag_name"; then
+
+    local tag_status=0
+    if [[ -n "$target_sha" ]]; then
+        git tag "$tag_name" "$target_sha"
+        tag_status=$?
+    else
+        git tag "$tag_name"
+        tag_status=$?
+    fi
+
+    if [[ $tag_status -eq 0 ]]; then
         echo "✅ Tag $tag_name created"
         return 0
     else

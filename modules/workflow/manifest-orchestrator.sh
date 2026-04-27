@@ -72,6 +72,7 @@ manifest_ship_workflow() {
     local workflow_tag_name="none"
     local workflow_push_status="not_attempted"
     local workflow_homebrew_status="not_applicable"
+    local workflow_version_commit_sha=""
 
     if [ "$publish_release" = "true" ]; then
         workflow_homebrew_status="skipped"
@@ -263,6 +264,7 @@ manifest_ship_workflow() {
     # Commit version changes
     echo "💾 Committing version changes..."
     commit_changes "Bump version to $new_version" "$timestamp"
+    workflow_version_commit_sha="$(git rev-parse HEAD 2>/dev/null || echo "")"
     echo ""
     
     # Update main CHANGELOG.md for GitHub visibility
@@ -310,8 +312,31 @@ manifest_ship_workflow() {
     
     if [ "$publish_release" = "true" ]; then
         workflow_tag_name="v${new_version}"
+
+        # Resolve which commit the release tag should point at.
+        # version_commit       — the explicit "Bump version to X" commit, even when
+        #                        a CHANGELOG commit follows it. Default.
+        # final_release_commit — current HEAD at tagging time (post-CHANGELOG,
+        #                        pre-Homebrew). Homebrew commits cannot be
+        #                        included because update_homebrew_formula needs
+        #                        the GitHub tarball SHA256 of an already-pushed
+        #                        tag.
+        local tag_target_sha=""
+        case "${MANIFEST_CLI_RELEASE_TAG_TARGET:-version_commit}" in
+            version_commit)
+                tag_target_sha="$workflow_version_commit_sha"
+                ;;
+            final_release_commit)
+                tag_target_sha=""
+                ;;
+            *)
+                log_warning "Unknown MANIFEST_CLI_RELEASE_TAG_TARGET='${MANIFEST_CLI_RELEASE_TAG_TARGET}', falling back to version_commit"
+                tag_target_sha="$workflow_version_commit_sha"
+                ;;
+        esac
+
         # Create git tag
-        if ! create_tag "$new_version"; then
+        if ! create_tag "$new_version" "$tag_target_sha"; then
             log_error "Tag creation failed; aborting ship workflow."
             emit_ship_failure_report "create_tag" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
             return 1

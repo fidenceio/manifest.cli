@@ -524,6 +524,9 @@ set_default_configuration() {
     # Git Configuration
     export MANIFEST_CLI_GIT_TAG_PREFIX="${MANIFEST_CLI_GIT_TAG_PREFIX:-v}"
     export MANIFEST_CLI_GIT_TAG_SUFFIX="${MANIFEST_CLI_GIT_TAG_SUFFIX:-}"
+
+    # Release Policy
+    export MANIFEST_CLI_RELEASE_TAG_TARGET="${MANIFEST_CLI_RELEASE_TAG_TARGET:-version_commit}"
     
     # Branch Naming Configuration
     export MANIFEST_CLI_GIT_DEFAULT_BRANCH="${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}"
@@ -1086,6 +1089,7 @@ show_configuration() {
     echo "🏷️  Git Configuration:"
     echo "   Tag Prefix: ${MANIFEST_CLI_GIT_TAG_PREFIX}"
     echo "   Tag Suffix: ${MANIFEST_CLI_GIT_TAG_SUFFIX}"
+    echo "   Release Tag Target: ${MANIFEST_CLI_RELEASE_TAG_TARGET}"
     echo "   Push Strategy: ${MANIFEST_CLI_GIT_PUSH_STRATEGY}"
     echo "   Pull Strategy: ${MANIFEST_CLI_GIT_PULL_STRATEGY}"
     echo "   Timeout: ${MANIFEST_CLI_GIT_TIMEOUT} seconds"
