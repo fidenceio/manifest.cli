@@ -1,8 +1,9 @@
 # Repo-Creation Code Paths — Self-Review
 
-**Status:** 9/9 closed (2026-04-28). Bats suite 145/145 green (was 129/129;
+**Status:** 9/9 closed (2026-04-28). Bats suite 150/150 green (was 129/129;
 +9 tests for `init repo`/`prep repo` create-repo flags, +7 tests covering
-fleet wiring and `_manifest_require_gh` TTL memoization).
+fleet wiring and `_manifest_require_gh` TTL memoization, +5 follow-ups from
+the post-ship cohesion audit — see "Cohesion follow-ups" below).
 
 Self-critique of the four functions that create or initialize repositories:
 `manifest init repo`, `manifest prep repo`, `_fleet_init_directory`,
@@ -176,9 +177,13 @@ Phase-1 `init fleet --create-repo-*` prints a notice that the flag will
 apply on Phase-2 re-run (since Phase 1 is read-only directory scanning).
 
 `tests/create_repo.bats` covers mutual exclusion across all three commands,
-dry-run plumbing, the "origin already exists" branch, help-text exposure,
+dry-run plumbing, the "origin already exists" branch (both dry-run preview
+and the live guard at `_manifest_gh_repo_create`), help-text exposure,
 fleet wiring (`_fleet_init_directory` invokes/skips the helper correctly,
-returns 2 on gh failure), and the TTL memoization (cache hit, cache expiry).
+returns 2 on gh failure, returns 3 on missing path), the end-to-end
+visibility-forwarding flow from `manifest_init_fleet` through to
+`_fleet_init_directory`, the Phase-1 notice, the user-facing fix-it block
+for missing paths, and the TTL memoization (cache hit, cache expiry).
 
 ### [x] L3. Parallel clone races on shared parent dirs
 
@@ -203,13 +208,86 @@ remains harmless under POSIX semantics.
 
 ---
 
+## Cohesion follow-ups (post-ship, 2026-04-28)
+
+A self-audit after v44.12.0 surfaced two design smells worth fixing now and
+five test gaps. All shipped on top of the L2 work.
+
+### Flag-style symmetry
+
+External entry points (`init repo`, `prep repo`, `init fleet`) accept
+`--create-repo-private` / `--create-repo-public`. The internal `_fleet_init`
+previously accepted a single `--create-repo VISIBILITY` form, with
+`manifest_init_fleet` transforming the external form on the way in. Removed
+the asymmetry: `_fleet_init` now accepts the same two flags directly and
+uses the shared `_manifest_parse_create_repo_flag` helper. One flag style
+across the codebase, no transformation seam.
+
+### Skip-reporting overhaul (`_fleet_init_directory` exit codes)
+
+The previous scheme conflated "path missing" (TSV typo) with "git init
+failed" (real failure) under exit code 1, and the caller tallied both as
+"Skipped" — wrong user signal for a TSV typo. New scheme:
+
+| Code | Meaning | Caller behaviour |
+| --- | --- | --- |
+| 0 | init ok | `((init_count++))` |
+| 1 | git init failed | `init_failed_paths+=("$path")` |
+| 2 | init ok, gh repo create failed | `gh_failed_paths+=("$path")` |
+| 3 | path missing on disk | `missing_paths+=("$path")` |
+
+Caller now accumulates per-row paths into arrays and prints a fix-it block
+naming the offending paths plus a one-line "how to fix" per category:
+
+```text
+Initialized: 2   Missing: 1   Failed: 0
+GitHub (private): 2 ready, 0 failed
+
+Issues to resolve:
+
+  Missing paths (TSV references directories that don't exist):
+    - ./services/fronend
+    Fix: edit manifest.fleet.tsv to correct these paths or remove their
+         rows, then re-run: manifest init fleet --force
+```
+
+### Test additions
+
+Five new tests in `tests/create_repo.bats`:
+
+- Phase 1 notice assertion (`manifest_init_fleet --create-repo-private`
+  with no TSV emits "applies in Phase 2").
+- End-to-end forwarding (visibility flows from CLI parse → `fleet_args`
+  rewrite → `_fleet_init` re-parse → per-row loop → `_fleet_init_directory`).
+- `_fleet_init_directory` returns 3 for missing path.
+- End-to-end summary names missing paths and prints the "edit
+  manifest.fleet.tsv" fix-it hint.
+- `_manifest_gh_repo_create` real-path "origin already exists" guard
+  (gh-stub sentinel proves no `gh` invocation occurs).
+
+Also: `tests/create_repo.bats` `teardown()` now unsets
+`_MANIFEST_GH_VALIDATED_AT` and `MANIFEST_GH_VALIDATION_TTL` so memoization
+state never leaks between tests.
+
+### Considered and rejected
+
+- **Hard-error in Phase 1 when `--create-repo-*` is set.** The soft notice
+  is the right design for a two-phase command — it forward-points the
+  intent rather than forcing the user to type the flag twice with a "you
+  can't do that yet" wall between Phase 1 and Phase 2.
+- **Refactoring `_pr_require_gh` to use `_manifest_require_gh`.** PR is an
+  isolated subsystem; the duplication is acceptable.
+
+---
+
 ## Verification
 
-- `bash -n` passes on all four modified files (shared-functions, init, prep,
-  fleet).
-- `bats tests/*.bats` — 145/145 passing. Original 129 still green; the L2
-  ship now totals 16 tests in `tests/create_repo.bats` covering all three
-  entry points plus TTL memoization.
+- `bash -n` passes on all modified files.
+- `bats tests/*.bats` — 150/150 passing. Original 129 still green; the L2
+  ship + cohesion follow-ups total 21 tests in `tests/create_repo.bats`
+  covering all three entry points, the live `_manifest_gh_repo_create`
+  guard, end-to-end fleet forwarding, the missing-path fix-it block, and
+  TTL memoization (cache hit, cache expiry).
 - Still uncovered by tests: live `gh repo create` invocation (network +
-  auth-dependent), submodule-guard refusal, and the URL-probe success path.
-  These would need a `gh` stub harness; deferred unless they regress.
+  auth-dependent) and submodule-guard refusal. These would need a `gh`
+  stub harness; deferred unless they regress.

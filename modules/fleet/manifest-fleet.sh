@@ -560,8 +560,9 @@ _fleet_start() {
 #
 # EXIT CODES:
 #   0 - init ok (and gh ok / skipped / not requested)
-#   1 - init failed (or dir missing)
+#   1 - git init failed (real failure — permissions, disk full, etc.)
 #   2 - init ok but gh repo create failed
+#   3 - path missing on disk (TSV row points at a non-existent directory)
 # -----------------------------------------------------------------------------
 _fleet_init_directory() {
     local dir_path="$1"
@@ -570,7 +571,7 @@ _fleet_init_directory() {
 
     if [[ ! -d "$dir_path" ]]; then
         log_warning "Directory not found, skipping: $dir_path"
-        return 1
+        return 3
     fi
 
     if [[ "$has_git" != "true" ]]; then
@@ -624,10 +625,12 @@ _fleet_init_directory() {
 #   3. Validates the configuration
 #
 # ARGUMENTS:
-#   --name, -n NAME     Fleet name (prompted if not provided)
-#   --template, -t      Use minimal template (no comments)
-#   --force, -f         Overwrite existing manifest.fleet.config.yaml
-#   --_quickstart       Skip start file, use auto-discovery (used by fleet_quickstart)
+#   --name, -n NAME              Fleet name (prompted if not provided)
+#   --template, -t               Use minimal template (no comments)
+#   --force, -f                  Overwrite existing manifest.fleet.config.yaml
+#   --_quickstart                Skip start file, use auto-discovery (used by fleet_quickstart)
+#   --create-repo-private        After init, gh-create a private GitHub repo per dir
+#   --create-repo-public         After init, gh-create a public  GitHub repo per dir
 # -----------------------------------------------------------------------------
 _fleet_init() {
     local fleet_name=""
@@ -648,12 +651,12 @@ _fleet_init() {
             -t|--template) minimal_template=true; shift ;;
             -f|--force) force=true; shift ;;
             --_quickstart) skip_start=true; shift ;;
-            --create-repo)
-                if [[ -z "${2:-}" ]] || [[ "${2:-}" == --* ]]; then
-                    log_error "--create-repo requires a value (private|public)"
-                    return 1
-                fi
-                create_repo_visibility="$2"; shift 2 ;;
+            --create-repo-private)
+                create_repo_visibility=$(_manifest_parse_create_repo_flag "$create_repo_visibility" "private") || return 1
+                shift ;;
+            --create-repo-public)
+                create_repo_visibility=$(_manifest_parse_create_repo_flag "$create_repo_visibility" "public") || return 1
+                shift ;;
             *) shift ;;
         esac
     done
@@ -754,8 +757,11 @@ EOF
             return 0
         fi
 
-        # Bootstrap each selected directory (git init, .gitignore, optional gh)
-        local init_count=0 skip_count=0 gh_ok_count=0 gh_failed_count=0
+        # Bootstrap each selected directory (git init, .gitignore, optional gh).
+        # Per-row outcomes accumulate into arrays so the fix-it block can name
+        # the offending paths instead of just counting them.
+        local init_count=0 gh_ok_count=0
+        local missing_paths=() init_failed_paths=() gh_failed_paths=()
         echo ""
         echo "Initializing selected directories..."
 
@@ -770,19 +776,63 @@ EOF
                     [[ -n "$create_repo_visibility" ]] && ((gh_ok_count++))
                     ;;
                 1)
-                    ((skip_count++))
+                    init_failed_paths+=("$path")
                     ;;
                 2)
                     ((init_count++))
-                    ((gh_failed_count++))
+                    gh_failed_paths+=("$path")
+                    ;;
+                3)
+                    missing_paths+=("$path")
                     ;;
             esac
         done <<< "$selected"
 
+        local missing_count=${#missing_paths[@]}
+        local init_failed_count=${#init_failed_paths[@]}
+        local gh_failed_count=${#gh_failed_paths[@]}
+
         echo ""
-        echo "Initialized: $init_count  Skipped: $skip_count"
+        if (( missing_count > 0 || init_failed_count > 0 )); then
+            echo "Initialized: $init_count   Missing: $missing_count   Failed: $init_failed_count"
+        else
+            echo "Initialized: $init_count"
+        fi
         if [[ -n "$create_repo_visibility" ]]; then
             echo "GitHub ($create_repo_visibility): $gh_ok_count ready, $gh_failed_count failed"
+        fi
+
+        if (( missing_count + init_failed_count + gh_failed_count > 0 )); then
+            local p
+            echo ""
+            echo "Issues to resolve:"
+            if (( missing_count > 0 )); then
+                echo ""
+                echo "  Missing paths (TSV references directories that don't exist):"
+                for p in "${missing_paths[@]}"; do
+                    echo "    - $p"
+                done
+                echo "    Fix: edit manifest.fleet.tsv to correct these paths or remove their"
+                echo "         rows, then re-run: manifest init fleet --force"
+            fi
+            if (( init_failed_count > 0 )); then
+                echo ""
+                echo "  git init failed:"
+                for p in "${init_failed_paths[@]}"; do
+                    echo "    - $p"
+                done
+                echo "    Fix: check directory permissions / disk space, then re-run."
+            fi
+            if (( gh_failed_count > 0 )); then
+                echo ""
+                echo "  GitHub repo creation failed:"
+                for p in "${gh_failed_paths[@]}"; do
+                    echo "    - $p"
+                done
+                echo "    Fix: verify 'gh auth status' and that the repo name is available;"
+                echo "         re-run after resolving, or create manually with:"
+                echo "           gh repo create <name> --$create_repo_visibility --source=<path> --remote=origin"
+            fi
         fi
 
         # Refresh TSV with updated metadata (directories now have git)

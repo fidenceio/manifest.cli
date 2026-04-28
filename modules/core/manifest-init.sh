@@ -796,7 +796,7 @@ manifest_init_fleet() {
     fi
 
     if [[ -n "$create_repo_visibility" ]]; then
-        fleet_args+=("--create-repo" "$create_repo_visibility")
+        fleet_args+=("--create-repo-$create_repo_visibility")
     fi
 
     _fleet_init "${fleet_args[@]}"
