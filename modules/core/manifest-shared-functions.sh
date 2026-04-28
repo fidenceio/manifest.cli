@@ -178,6 +178,107 @@ manifest_repo_display_name() {
     basename "$project_root"
 }
 
+# -----------------------------------------------------------------------------
+# Function: _manifest_require_gh
+# -----------------------------------------------------------------------------
+# Verify the GitHub CLI is installed and authenticated. Used by any command
+# that wants to invoke `gh repo create`.
+#
+# Memoizes the success result for MANIFEST_GH_VALIDATION_TTL seconds (default
+# 300) so a fleet loop calling this N times pays the `gh auth status` cost
+# once. The TTL bounds staleness if `gh` is uninstalled or auth changes
+# mid-session; failures are never cached.
+# -----------------------------------------------------------------------------
+_manifest_require_gh() {
+    local ttl="${MANIFEST_GH_VALIDATION_TTL:-300}"
+    local now
+    now=$(date +%s)
+    if [[ -n "${_MANIFEST_GH_VALIDATED_AT:-}" ]] \
+        && (( now - _MANIFEST_GH_VALIDATED_AT < ttl )); then
+        return 0
+    fi
+    if ! command -v gh >/dev/null 2>&1; then
+        log_error "'gh' (GitHub CLI) is required for --create-repo-private/--create-repo-public."
+        log_error "Install: brew install gh   then: gh auth login"
+        return 1
+    fi
+    if ! gh auth status >/dev/null 2>&1; then
+        log_error "'gh' is not authenticated. Run: gh auth login"
+        return 1
+    fi
+    _MANIFEST_GH_VALIDATED_AT=$now
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# Function: _manifest_parse_create_repo_flag
+# -----------------------------------------------------------------------------
+# Resolves --create-repo-private and --create-repo-public into a single
+# visibility string, enforcing mutual exclusion.
+#
+# Args: $1 = current visibility ("" / "private" / "public")
+#       $2 = flag being applied ("private" / "public")
+# Echoes new visibility on success; returns 1 (with log_error) on conflict.
+# -----------------------------------------------------------------------------
+_manifest_parse_create_repo_flag() {
+    local current="$1"
+    local incoming="$2"
+    if [[ -n "$current" && "$current" != "$incoming" ]]; then
+        log_error "--create-repo-private and --create-repo-public are mutually exclusive."
+        return 1
+    fi
+    echo "$incoming"
+}
+
+# -----------------------------------------------------------------------------
+# Function: _manifest_gh_repo_create
+# -----------------------------------------------------------------------------
+# Create a GitHub repo named after the project root's basename and add it as
+# `origin`. Caller is responsible for the dir already being a git repo.
+#
+# Args: $1 = project_root, $2 = visibility ("private" or "public")
+# Returns 0 on success, 1 on failure (with log_error).
+# -----------------------------------------------------------------------------
+_manifest_gh_repo_create() {
+    local project_root="$1"
+    local visibility="$2"
+    local name
+    name="$(basename "$project_root")"
+
+    _manifest_require_gh || return 1
+
+    local vis_flag
+    case "$visibility" in
+        private) vis_flag="--private" ;;
+        public)  vis_flag="--public" ;;
+        *)       log_error "Invalid visibility: $visibility"; return 1 ;;
+    esac
+
+    if git -C "$project_root" remote get-url origin >/dev/null 2>&1; then
+        log_warning "origin already configured — skipping gh repo create."
+        echo "  Existing origin: $(git -C "$project_root" remote get-url origin)"
+        return 0
+    fi
+
+    echo "  Creating GitHub repo: $name ($visibility)..."
+    local create_out
+    if ! create_out=$(gh repo create "$name" "$vis_flag" \
+            --source="$project_root" --remote=origin 2>&1); then
+        log_error "gh repo create failed for: $name"
+        local last_lines
+        last_lines=$(printf '%s' "$create_out" | tail -3 | tr '\n' ' ')
+        echo "  $last_lines"
+        echo "  Common causes: name already exists, no permission for org, auth issue."
+        echo "  Manual fallback: gh repo create $name $vis_flag --source=\"$project_root\" --remote=origin"
+        return 1
+    fi
+    echo "  ✓ Created GitHub repo: $name"
+    local url
+    url="$(git -C "$project_root" remote get-url origin 2>/dev/null || echo "")"
+    [[ -n "$url" ]] && echo "  Origin: $url"
+    return 0
+}
+
 # =============================================================================
 # NETWORK AND CONNECTIVITY FUNCTIONS
 # =============================================================================
@@ -605,6 +706,7 @@ safe_json_write() {
 # Export all shared functions
 export -f get_current_version get_next_version get_latest_version
 export -f manifest_origin_repo_slug manifest_is_canonical_repo manifest_repo_display_name
+export -f _manifest_require_gh _manifest_parse_create_repo_flag _manifest_gh_repo_create
 export -f secure_curl_request check_network_connectivity check_required_tools
 export -f generate_agent_id generate_session_id log_operation
 export -f get_git_info is_git_repository

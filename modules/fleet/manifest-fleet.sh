@@ -548,15 +548,25 @@ _fleet_start() {
 # -----------------------------------------------------------------------------
 # Function: _fleet_init_directory (internal)
 # -----------------------------------------------------------------------------
-# Bootstraps a single directory with git and .gitignore as needed.
+# Bootstraps a single directory with git and .gitignore as needed, and
+# (optionally) creates the GitHub repo behind it via `gh repo create`.
 #
 # ARGUMENTS:
 #   $1 - Absolute path to the directory
 #   $2 - has_git flag ("true" or "false")
+#   $3 - create_visibility ("" / "private" / "public") — when set, after init
+#        invokes _manifest_gh_repo_create (already idempotent vs. existing
+#        origin). Caller is responsible for the one-time gh pre-flight.
+#
+# EXIT CODES:
+#   0 - init ok (and gh ok / skipped / not requested)
+#   1 - init failed (or dir missing)
+#   2 - init ok but gh repo create failed
 # -----------------------------------------------------------------------------
 _fleet_init_directory() {
     local dir_path="$1"
     local has_git="$2"
+    local create_visibility="${3:-}"
 
     if [[ ! -d "$dir_path" ]]; then
         log_warning "Directory not found, skipping: $dir_path"
@@ -564,8 +574,7 @@ _fleet_init_directory() {
     fi
 
     if [[ "$has_git" != "true" ]]; then
-        git init "$dir_path" >/dev/null 2>&1
-        if [[ $? -eq 0 ]]; then
+        if git init "$dir_path" >/dev/null; then
             echo "  ✓ git init: $(basename "$dir_path")"
         else
             log_error "git init failed: $dir_path"
@@ -576,6 +585,12 @@ _fleet_init_directory() {
     # Ensure .gitignore exists
     if declare -F ensure_gitignore_smart >/dev/null 2>&1; then
         ensure_gitignore_smart "$dir_path" >/dev/null 2>&1
+    fi
+
+    if [[ -n "$create_visibility" ]]; then
+        if ! _manifest_gh_repo_create "$dir_path" "$create_visibility"; then
+            return 2
+        fi
     fi
 
     return 0
@@ -619,6 +634,7 @@ _fleet_init() {
     local minimal_template=false
     local force=false
     local skip_start=false
+    local create_repo_visibility=""
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -632,9 +648,24 @@ _fleet_init() {
             -t|--template) minimal_template=true; shift ;;
             -f|--force) force=true; shift ;;
             --_quickstart) skip_start=true; shift ;;
+            --create-repo)
+                if [[ -z "${2:-}" ]] || [[ "${2:-}" == --* ]]; then
+                    log_error "--create-repo requires a value (private|public)"
+                    return 1
+                fi
+                create_repo_visibility="$2"; shift 2 ;;
             *) shift ;;
         esac
     done
+
+    # Pre-flight gh ONCE before the per-row loop. _manifest_require_gh
+    # memoizes the success result so subsequent calls inside
+    # _fleet_init_directory are no-ops (TTL bounds staleness).
+    if [[ -n "$create_repo_visibility" ]]; then
+        if ! _manifest_require_gh; then
+            return 1
+        fi
+    fi
 
     local target_dir="$(pwd)"
     local config_file="$target_dir/manifest.fleet.config.yaml"
@@ -723,8 +754,8 @@ EOF
             return 0
         fi
 
-        # Bootstrap each selected directory (git init, .gitignore)
-        local init_count=0 skip_count=0
+        # Bootstrap each selected directory (git init, .gitignore, optional gh)
+        local init_count=0 skip_count=0 gh_ok_count=0 gh_failed_count=0
         echo ""
         echo "Initializing selected directories..."
 
@@ -732,15 +763,27 @@ EOF
             [[ -z "$name" ]] && continue
             local abs_path="$target_dir/${path#./}"
 
-            if _fleet_init_directory "$abs_path" "$has_git"; then
-                ((init_count++))
-            else
-                ((skip_count++))
-            fi
+            _fleet_init_directory "$abs_path" "$has_git" "$create_repo_visibility"
+            case $? in
+                0)
+                    ((init_count++))
+                    [[ -n "$create_repo_visibility" ]] && ((gh_ok_count++))
+                    ;;
+                1)
+                    ((skip_count++))
+                    ;;
+                2)
+                    ((init_count++))
+                    ((gh_failed_count++))
+                    ;;
+            esac
         done <<< "$selected"
 
         echo ""
         echo "Initialized: $init_count  Skipped: $skip_count"
+        if [[ -n "$create_repo_visibility" ]]; then
+            echo "GitHub ($create_repo_visibility): $gh_ok_count ready, $gh_failed_count failed"
+        fi
 
         # Refresh TSV with updated metadata (directories now have git)
         echo ""
@@ -903,6 +946,28 @@ fleet_discover() {
 # =============================================================================
 
 # -----------------------------------------------------------------------------
+# Function: _fleet_validate_clone_path (internal)
+# -----------------------------------------------------------------------------
+# Validates that a fleet service path is safely under MANIFEST_FLEET_ROOT.
+# Pure string check — no filesystem writes, so a malformed config can't
+# create stray directories outside the fleet root before being rejected.
+#
+# Rejects: absolute paths, empty paths, any '..' segment.
+# (Symlink-based escapes are not covered by this check.)
+#
+# Returns: 0 if safe, 1 otherwise.
+# -----------------------------------------------------------------------------
+_fleet_validate_clone_path() {
+    local path="$1"
+    [[ -z "$path" ]] && return 1
+    [[ "$path" = /* ]] && return 1
+    case "/$path/" in
+        */../*) return 1 ;;
+    esac
+    return 0
+}
+
+# -----------------------------------------------------------------------------
 # Function: _fleet_sync (internal)
 # -----------------------------------------------------------------------------
 # Synchronizes all fleet services (clone missing, pull existing).
@@ -921,6 +986,7 @@ _fleet_sync() {
     local parallel=$(get_fleet_config_value "parallel" "$MANIFEST_FLEET_DEFAULT_PARALLEL")
     local clone_only=false
     local pull_only=false
+    local dry_run=false
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -928,21 +994,90 @@ _fleet_sync() {
             -p|--parallel) parallel=true; shift ;;
             --clone-only) clone_only=true; shift ;;
             --pull-only) pull_only=true; shift ;;
+            --dry-run) dry_run=true; shift ;;
             *) shift ;;
         esac
     done
 
     echo ""
     echo "╔══════════════════════════════════════════════════════════════════════╗"
-    echo "║                         MANIFEST FLEET SYNC                          ║"
+    if [[ "$dry_run" == "true" ]]; then
+        echo "║                  MANIFEST FLEET SYNC (DRY RUN)                       ║"
+    else
+        echo "║                         MANIFEST FLEET SYNC                          ║"
+    fi
     echo "╚══════════════════════════════════════════════════════════════════════╝"
     echo ""
+
+    if [[ "$dry_run" == "true" ]]; then
+        _fleet_sync_dry_run "$clone_only" "$pull_only"
+        return 0
+    fi
 
     if [[ "$parallel" == "true" ]]; then
         _fleet_sync_parallel "$clone_only" "$pull_only"
     else
         _fleet_sync_sequential "$clone_only" "$pull_only"
     fi
+}
+
+# -----------------------------------------------------------------------------
+# Function: _fleet_sync_dry_run (internal)
+# -----------------------------------------------------------------------------
+# Reports what _fleet_sync would do, without touching disk or network.
+# Mirrors the decision logic in _fleet_sync_service so the preview matches
+# the live run.
+# -----------------------------------------------------------------------------
+_fleet_sync_dry_run() {
+    local clone_only="$1"
+    local pull_only="$2"
+
+    local total=0 would_clone=0 would_pull=0 would_skip=0 would_fail=0
+    local service path url is_submodule
+
+    for service in $MANIFEST_FLEET_SERVICES; do
+        ((total++))
+        path=$(get_fleet_service_property "$service" "path")
+        url=$(get_fleet_service_property "$service" "url")
+        is_submodule=$(get_fleet_service_property "$service" "submodule" "false")
+
+        if [[ ! -d "$path" ]]; then
+            if [[ "$pull_only" == "true" ]]; then
+                echo "  $service: would skip (pull-only, path missing)"
+                ((would_skip++))
+            elif [[ "$is_submodule" == "true" ]]; then
+                echo "  $service: would fail (submodule path missing — needs parent 'submodule update --init')"
+                ((would_fail++))
+            elif [[ -z "$url" ]]; then
+                echo "  $service: would fail (no URL)"
+                ((would_fail++))
+            elif ! _fleet_validate_clone_path "$path"; then
+                echo "  $service: would fail (invalid path: $path)"
+                ((would_fail++))
+            else
+                echo "  $service: would clone from $url -> $path"
+                ((would_clone++))
+            fi
+        else
+            if [[ "$clone_only" == "true" ]]; then
+                echo "  $service: would skip (clone-only, path exists)"
+                ((would_skip++))
+            elif [[ ! -d "$path/.git" ]] && [[ "$is_submodule" != "true" ]]; then
+                echo "  $service: would skip (not a git repo)"
+                ((would_skip++))
+            else
+                echo "  $service: would pull --rebase ($path)"
+                ((would_pull++))
+            fi
+        fi
+    done
+
+    echo ""
+    echo "────────────────────────────────────────────────────────────────────────"
+    echo "Plan: $would_clone clone, $would_pull pull, $would_skip skip, $would_fail fail (of $total total)"
+    echo ""
+    echo "No changes written. Re-run without --dry-run to apply."
+    echo ""
 }
 
 # -----------------------------------------------------------------------------
@@ -976,31 +1111,55 @@ _fleet_sync_service() {
             return 0
         fi
 
+        # Submodules must be hydrated from the parent repo (.gitmodules), not
+        # cloned standalone — otherwise the parent's gitlink stays broken.
+        if [[ "$is_submodule" == "true" ]]; then
+            echo "  $service: ✗ Submodule path missing — run 'git submodule update --init' from the parent repo"
+            [[ -n "$result_dir" ]] && echo "fail" > "$result_dir/$service"
+            return 1
+        fi
+
         if [[ -z "$url" ]]; then
             echo "  $service: ✗ Cannot clone: no URL specified"
             [[ -n "$result_dir" ]] && echo "fail" > "$result_dir/$service"
             return 1
         fi
 
-        # Validate path is within fleet root (prevent path traversal)
-        local abs_clone_path
-        abs_clone_path=$(cd "$MANIFEST_FLEET_ROOT" 2>/dev/null && mkdir -p "$(dirname "$path")" 2>/dev/null && cd "$(dirname "$path")" && echo "$(pwd)/$(basename "$path")")
-        if [[ -z "$abs_clone_path" ]] || [[ "$abs_clone_path" != "$MANIFEST_FLEET_ROOT"* ]]; then
-            echo "  $service: ✗ Invalid path (outside fleet root): $path"
+        # Validate path is safely under fleet root (pure check, no side effects)
+        if ! _fleet_validate_clone_path "$path"; then
+            echo "  $service: ✗ Invalid path (outside fleet root or contains '..'): $path"
             [[ -n "$result_dir" ]] && echo "fail" > "$result_dir/$service"
             return 1
         fi
 
+        # Safe to create parent directory now that path is validated.
+        mkdir -p "$MANIFEST_FLEET_ROOT/$(dirname "$path")"
+
         echo "  $service: → Cloning from $url..."
-        if git clone --branch "$branch" "$url" "$path" 2>&1 | tail -1; then
-            echo "  $service: ✓ Cloned successfully"
-            [[ -n "$result_dir" ]] && echo "clone" > "$result_dir/$service"
-            return 0
-        else
-            echo "  $service: ✗ Clone failed"
+        # Clone without --branch and checkout afterward — tolerates remotes
+        # whose default branch differs from the configured branch.
+        local clone_out
+        if ! clone_out=$(git clone "$url" "$path" 2>&1); then
+            local last_lines
+            last_lines=$(printf '%s' "$clone_out" | tail -3 | tr '\n' ' ')
+            echo "  $service: ✗ Clone failed: $last_lines"
             [[ -n "$result_dir" ]] && echo "fail" > "$result_dir/$service"
             return 1
         fi
+
+        if [[ -n "$branch" ]]; then
+            local current_branch
+            current_branch=$(git -C "$path" symbolic-ref --short -q HEAD 2>/dev/null || echo "")
+            if [[ -n "$current_branch" && "$current_branch" != "$branch" ]]; then
+                if ! git -C "$path" checkout "$branch" >/dev/null 2>&1; then
+                    echo "  $service: ⚠ Cloned, but couldn't checkout '$branch' (default: $current_branch)"
+                fi
+            fi
+        fi
+
+        echo "  $service: ✓ Cloned successfully"
+        [[ -n "$result_dir" ]] && echo "clone" > "$result_dir/$service"
+        return 0
     else
         # Already exists - pull
         if [[ "$clone_only" == "true" ]]; then
@@ -1029,74 +1188,54 @@ _fleet_sync_service() {
 }
 
 # -----------------------------------------------------------------------------
-# Function: _fleet_sync_sequential (internal)
+# Function: _fleet_sync_print_summary (internal)
 # -----------------------------------------------------------------------------
-_fleet_sync_sequential() {
-    local clone_only="$1"
-    local pull_only="$2"
+# Tallies per-service status files written by _fleet_sync_service and prints
+# the summary line. Shared between sequential and parallel paths so a single
+# helper change updates both.
+# -----------------------------------------------------------------------------
+_fleet_sync_print_summary() {
+    local result_dir="$1"
+    local total="$2"
 
-    local total=0 cloned=0 pulled=0 failed=0
-
+    local cloned=0 pulled=0 failed=0
     for service in $MANIFEST_FLEET_SERVICES; do
-        ((total++))
-        echo "[$total] $service"
-
-        local path url branch is_submodule
-        path=$(get_fleet_service_property "$service" "path")
-        url=$(get_fleet_service_property "$service" "url")
-        branch=$(get_fleet_service_property "$service" "branch" "main")
-        is_submodule=$(get_fleet_service_property "$service" "submodule" "false")
-
-        if [[ ! -d "$path" ]]; then
-            if [[ "$pull_only" == "true" ]]; then
-                echo "    ⏭ Skipping (pull-only mode)"
-                continue
-            fi
-            if [[ -z "$url" ]]; then
-                echo "    ✗ Cannot clone: no URL specified"
-                ((failed++))
-                continue
-            fi
-            local abs_clone_path
-            abs_clone_path=$(cd "$MANIFEST_FLEET_ROOT" 2>/dev/null && mkdir -p "$(dirname "$path")" 2>/dev/null && cd "$(dirname "$path")" && echo "$(pwd)/$(basename "$path")")
-            if [[ -z "$abs_clone_path" ]] || [[ "$abs_clone_path" != "$MANIFEST_FLEET_ROOT"* ]]; then
-                echo "    ✗ Invalid path (outside fleet root): $path"
-                ((failed++))
-                continue
-            fi
-            echo "    → Cloning from $url..."
-            if git clone --branch "$branch" "$url" "$path" 2>&1 | tail -1; then
-                echo "    ✓ Cloned successfully"
-                ((cloned++))
-            else
-                echo "    ✗ Clone failed"
-                ((failed++))
-            fi
-        else
-            if [[ "$clone_only" == "true" ]]; then
-                echo "    ⏭ Skipping (clone-only mode)"
-                continue
-            fi
-            if [[ ! -d "$path/.git" ]] && [[ "$is_submodule" != "true" ]]; then
-                echo "    ⚠ Not a git repository"
-                continue
-            fi
-            echo "    → Pulling latest..."
-            local pull_output
-            if pull_output=$(git -C "$path" pull --rebase 2>&1); then
-                echo "    ✓ Updated"
-                ((pulled++))
-            else
-                echo "    ⚠ Pull failed: $(echo "$pull_output" | tail -1)"
-                ((failed++))
-            fi
-        fi
+        local result_file="$result_dir/$service"
+        [[ -f "$result_file" ]] || continue
+        local result
+        result=$(<"$result_file")
+        case "$result" in
+            clone) ((cloned++)) ;;
+            pull)  ((pulled++)) ;;
+            fail)  ((failed++)) ;;
+        esac
     done
 
     echo ""
     echo "────────────────────────────────────────────────────────────────────────"
     echo "Summary: $cloned cloned, $pulled pulled, $failed failed (of $total total)"
     echo ""
+}
+
+# -----------------------------------------------------------------------------
+# Function: _fleet_sync_sequential (internal)
+# -----------------------------------------------------------------------------
+_fleet_sync_sequential() {
+    local clone_only="$1"
+    local pull_only="$2"
+
+    local result_dir
+    result_dir=$(mktemp -d)
+
+    local total=0
+    for service in $MANIFEST_FLEET_SERVICES; do
+        ((total++))
+        echo "[$total] $service"
+        _fleet_sync_service "$service" "$clone_only" "$pull_only" "$result_dir" || true
+    done
+
+    _fleet_sync_print_summary "$result_dir" "$total"
+    rm -rf "$result_dir"
 }
 
 # -----------------------------------------------------------------------------
@@ -1113,44 +1252,23 @@ _fleet_sync_parallel() {
     result_dir=$(mktemp -d)
 
     local pids=()
-    local pid_services=()
-
     for service in $MANIFEST_FLEET_SERVICES; do
         _fleet_sync_service "$service" "$clone_only" "$pull_only" "$result_dir" &
         pids+=($!)
-        pid_services+=("$service")
     done
 
-    # Wait for all background jobs
-    local any_failed=false
-    for i in "${!pids[@]}"; do
-        if ! wait "${pids[$i]}"; then
-            any_failed=true
-        fi
+    local pid
+    for pid in "${pids[@]}"; do
+        wait "$pid" || true
     done
 
-    # Tally results from status files
-    local total=0 cloned=0 pulled=0 failed=0
+    local total=0
     for service in $MANIFEST_FLEET_SERVICES; do
         ((total++))
-        local result_file="$result_dir/$service"
-        if [[ -f "$result_file" ]]; then
-            local result
-            result=$(<"$result_file")
-            case "$result" in
-                clone) ((cloned++)) ;;
-                pull)  ((pulled++)) ;;
-                fail)  ((failed++)) ;;
-            esac
-        fi
     done
 
+    _fleet_sync_print_summary "$result_dir" "$total"
     rm -rf "$result_dir"
-
-    echo ""
-    echo "────────────────────────────────────────────────────────────────────────"
-    echo "Summary: $cloned cloned, $pulled pulled, $failed failed (of $total total)"
-    echo ""
 }
 
 # =============================================================================

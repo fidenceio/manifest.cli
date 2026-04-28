@@ -535,25 +535,35 @@ EOF
 manifest_init_repo() {
     local force=false
     local dry_run=false
+    local create_repo_visibility=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -f|--force) force=true; shift ;;
             --dry-run) dry_run=true; shift ;;
+            --create-repo-private)
+                create_repo_visibility=$(_manifest_parse_create_repo_flag "$create_repo_visibility" "private") || return 1
+                shift ;;
+            --create-repo-public)
+                create_repo_visibility=$(_manifest_parse_create_repo_flag "$create_repo_visibility" "public") || return 1
+                shift ;;
             -h|--help)
                 _render_help \
-                    "manifest init repo [--force] [--dry-run]" \
+                    "manifest init repo [--force] [--dry-run] [--create-repo-private|--create-repo-public]" \
                     "Scaffold a single repository: VERSION, CHANGELOG.md, README.md, docs/, .gitignore.
-Idempotent — safe to re-run. No remote operations." \
-                    "Options" "  -f, --force   Re-create files even if they already exist
-  --dry-run     Print what would be created/updated; no writes" \
+Idempotent — safe to re-run. Optionally creates a GitHub repo via 'gh repo create'." \
+                    "Options" "  -f, --force                Re-create files even if they already exist
+  --dry-run                  Print what would be created/updated; no writes
+  --create-repo-private      Create a private GitHub repo (gh repo create) and add as origin
+  --create-repo-public       Create a public GitHub repo (gh repo create) and add as origin" \
                     "Examples" "  manifest init repo
   manifest init repo --dry-run
-  manifest init repo --force"
+  manifest init repo --create-repo-private
+  manifest init repo --force --create-repo-public"
                 return 0
                 ;;
             *)
-                _render_help_error "Unknown option: $1" "manifest init repo [--force] [--dry-run]"
+                _render_help_error "Unknown option: $1" "manifest init repo [--force] [--dry-run] [--create-repo-private|--create-repo-public]"
                 return 1
                 ;;
         esac
@@ -592,6 +602,15 @@ Idempotent — safe to re-run. No remote operations." \
         else
             echo "  would create:    manifest.config.local.yaml"
         fi
+        if [[ -n "$create_repo_visibility" ]]; then
+            local repo_name
+            repo_name="$(basename "$project_root")"
+            if git -C "$project_root" remote get-url origin >/dev/null 2>&1; then
+                echo "  exists:          origin remote (gh repo create skipped)"
+            else
+                echo "  would gh repo create: $repo_name ($create_repo_visibility) and add as origin"
+            fi
+        fi
         echo ""
         echo "No changes written. Re-run without --dry-run to apply."
         echo ""
@@ -605,7 +624,7 @@ Idempotent — safe to re-run. No remote operations." \
     # Ensure we're in a git repo (or create one)
     if ! git -C "$project_root" rev-parse --git-dir >/dev/null 2>&1; then
         echo "No git repository found. Initializing..."
-        if git init "$project_root" >/dev/null 2>&1; then
+        if git init "$project_root" >/dev/null; then
             echo "  Created: .git/"
         else
             log_error "Failed to initialize git repository"
@@ -642,6 +661,16 @@ EOF
         echo "  Created: manifest.config.local.yaml"
     fi
 
+    if [[ -n "$create_repo_visibility" ]]; then
+        echo ""
+        if ! _manifest_gh_repo_create "$project_root" "$create_repo_visibility"; then
+            log_warning "GitHub repo creation failed; local scaffold is intact."
+            echo ""
+            echo "  Re-attempt later with: manifest prep repo --create-repo-$create_repo_visibility"
+            return 1
+        fi
+    fi
+
     echo ""
     echo "Repository initialized successfully."
     echo ""
@@ -669,6 +698,7 @@ EOF
 manifest_init_fleet() {
     local depth=2
     local force=false
+    local create_repo_visibility=""
     local fleet_args=()
 
     while [[ $# -gt 0 ]]; do
@@ -681,27 +711,35 @@ manifest_init_fleet() {
                 depth="$2"; shift 2 ;;
             -f|--force) force=true; shift ;;
             -n|--name) fleet_args+=("--name" "$2"); shift 2 ;;
+            --create-repo-private)
+                create_repo_visibility=$(_manifest_parse_create_repo_flag "$create_repo_visibility" "private") || return 1
+                shift ;;
+            --create-repo-public)
+                create_repo_visibility=$(_manifest_parse_create_repo_flag "$create_repo_visibility" "public") || return 1
+                shift ;;
             -h|--help)
                 _render_help \
-                    "manifest init fleet [--depth N] [--force] [--name NAME]" \
+                    "manifest init fleet [--depth N] [--force] [--name NAME] [--create-repo-private|--create-repo-public]" \
                     "Two-phase fleet initialization." \
                     "Phases" "  Phase 1 (no TSV yet):  Scan directories, write manifest.fleet.tsv
                          for you to review and edit selections.
   Phase 2 (TSV exists):  Read selections, scaffold each repo, write
                          manifest.fleet.config.yaml." \
-                    "Options" "  --depth N      Scan depth in Phase 1 (default: 2)
-  -f, --force    Overwrite existing files (re-runs Phase 1 + skips guard)
-  -n, --name     Fleet name (prompted if not provided)" \
+                    "Options" "  --depth N                  Scan depth in Phase 1 (default: 2)
+  -f, --force                Overwrite existing files (re-runs Phase 1 + skips guard)
+  -n, --name                 Fleet name (prompted if not provided)
+  --create-repo-private      In Phase 2, create a private GitHub repo for each scaffolded dir
+  --create-repo-public       In Phase 2, create a public GitHub repo for each scaffolded dir" \
                     "Examples" "  manifest init fleet                 # Phase 1: discover
   vim manifest.fleet.tsv             # edit SELECT column
   manifest init fleet                 # Phase 2: apply selections
-  manifest init fleet --depth 4 --name acme"
+  manifest init fleet --create-repo-private   # Phase 2 + create private GitHub repos"
                 return 0
                 ;;
             *)
                 _render_help_error \
                     "Unknown option: $1" \
-                    "manifest init fleet [--depth N] [--force] [--name NAME]"
+                    "manifest init fleet [--depth N] [--force] [--name NAME] [--create-repo-private|--create-repo-public]"
                 return 1
                 ;;
         esac
@@ -719,6 +757,11 @@ manifest_init_fleet() {
         echo "Phase 1/2: Discovering directories…"
         echo "After this completes, edit manifest.fleet.tsv to set SELECT=true/false,"
         echo "then re-run 'manifest init fleet' to apply your selections (Phase 2)."
+        if [[ -n "$create_repo_visibility" ]]; then
+            echo ""
+            echo "Note: --create-repo-$create_repo_visibility applies in Phase 2."
+            echo "      Re-run with the same flag after editing manifest.fleet.tsv."
+        fi
         echo ""
 
         local start_args=("--depth" "$depth")
@@ -750,6 +793,10 @@ manifest_init_fleet() {
 
     if [[ "$force" == "true" ]]; then
         fleet_args+=("--force")
+    fi
+
+    if [[ -n "$create_repo_visibility" ]]; then
+        fleet_args+=("--create-repo" "$create_repo_visibility")
     fi
 
     _fleet_init "${fleet_args[@]}"
