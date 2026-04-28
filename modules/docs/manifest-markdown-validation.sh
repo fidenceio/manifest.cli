@@ -1,0 +1,233 @@
+#!/bin/bash
+
+# Manifest Markdown Validation Module
+# Provides comprehensive markdown validation and cleaning
+
+# Markdown validation module - uses PROJECT_ROOT from core module
+
+# Markdown validation helper
+validate_markdown_syntax() {
+    local content="$1"
+    local errors=0
+    
+    # Check for proper heading hierarchy
+    local prev_level=0
+    while IFS= read -r line; do
+        if [[ $line =~ ^#{1,6}[[:space:]] ]]; then
+            local current_level=${#BASH_REMATCH[1]}
+            # Only flag as error if we skip a heading level (e.g., H1 -> H3, H2 -> H4)
+            # Going back to a higher level (e.g., H3 -> H2) is allowed
+            # Same level (e.g., H3 -> H3) is also allowed
+            if [ $current_level -gt $((prev_level + 1)) ]; then
+                log_error "Heading level skipped: $line"
+                errors=$((errors + 1))
+            fi
+            prev_level=$current_level
+        fi
+    done <<< "$content"
+    
+    # Check for multiple consecutive blank lines
+    if echo "$content" | awk '/^$/{if(prev_empty){print "found"; exit} prev_empty=1; next} {prev_empty=0} END{exit 0}' | grep -q "found"; then
+        log_error "Multiple consecutive blank lines found"
+        errors=$((errors + 1))
+    fi
+    
+    # Check for trailing whitespace
+    if echo "$content" | grep -q "[[:space:]]$"; then
+        log_error "Trailing whitespace found"
+        errors=$((errors + 1))
+    fi
+    
+    return $errors
+}
+
+# Clean markdown content
+clean_markdown() {
+    local content="$1"
+    
+    # Remove trailing whitespace
+    content=$(echo "$content" | sed 's/[[:space:]]*$//')
+    
+    # Remove multiple consecutive blank lines
+    content=$(echo "$content" | awk 'BEGIN{blank=0} /^[[:space:]]*$/{blank++; if(blank<=1) print; next} {blank=0; print}')
+    
+    # Ensure file ends with newline
+    if [ -n "$content" ] && [ "${content: -1}" != $'\n' ]; then
+        content="${content}"$'\n'
+    fi
+    
+    echo "$content"
+}
+
+# Validate a single file
+validate_file() {
+    local file="$1"
+    local clean="${2:-false}"
+    
+    if [[ ! -f "$file" ]]; then
+        log_error "File not found: $file"
+        return 1
+    fi
+    
+    log_info "Validating: $file"
+    
+    local content=$(cat "$file")
+    local original_content="$content"
+    
+    # Clean if requested
+    if [[ "$clean" == "true" ]]; then
+        content=$(clean_markdown "$content")
+        if [[ "$content" != "$original_content" ]]; then
+            echo "$content" > "$file"
+            log_success "Cleaned: $file"
+        fi
+    fi
+    
+    # Validate syntax
+    if validate_markdown_syntax "$content"; then
+        log_success "Valid: $file"
+        return 0
+    else
+        log_error "Invalid: $file"
+        return 1
+    fi
+}
+
+# Validate all markdown files in a directory
+validate_directory() {
+    local dir="$1"
+    local clean="${2:-false}"
+    local errors=0
+    local total=0
+    
+    if [[ ! -d "$dir" ]]; then
+        log_error "Directory not found: $dir"
+        return 1
+    fi
+    
+    log_info "Validating all markdown files in: $dir"
+    
+    while IFS= read -r file; do
+        if [[ -f "$file" ]]; then
+            # Skip files in archive directories
+            if [[ "$file" == *"/$MANIFEST_CLI_DOCUMENTATION_ARCHIVE_DIR/"* ]] || [[ "$file" == *"/archive/"* ]]; then
+                continue
+            fi
+            total=$((total + 1))
+            if ! validate_file "$file" "$clean"; then
+                errors=$((errors + 1))
+            fi
+        fi
+    done < <(find "$dir" -name "$MANIFEST_CLI_MARKDOWN_EXT" -type f)
+    
+    log_info "Validated $total files with $errors errors"
+    return $errors
+}
+
+# Validate project documentation
+validate_project() {
+    local clean="${1:-false}"
+    local errors=0
+    
+    # Use PROJECT_ROOT (which should be validated repository root)
+    local project_root="$PROJECT_ROOT"
+    
+    log_info "Validating project documentation..."
+    
+    # Validate root README
+    if [[ -f "$project_root/$MANIFEST_CLI_README_FILE" ]]; then
+        if ! validate_file "$project_root/$MANIFEST_CLI_README_FILE" "$clean"; then
+            errors=$((errors + 1))
+        fi
+    else
+        log_warning "$MANIFEST_CLI_README_FILE not found in project root"
+    fi
+    
+    # Validate docs directory
+    if [[ -d "$project_root/docs" ]]; then
+        if ! validate_directory "$project_root/docs" "$clean"; then
+            errors=$((errors + 1))
+        fi
+    else
+        local docs_dir=$(get_docs_folder "$project_root")
+        log_warning "Documentation directory not found: $docs_dir"
+    fi
+    
+    if [[ $errors -eq 0 ]]; then
+        log_success "All markdown files are valid"
+        return 0
+    else
+        log_error "Found $errors validation issues"
+        return 1
+    fi
+}
+
+# Main function for command-line usage
+main() {
+    case "${1:-help}" in
+        "file")
+            local file="${2:-}"
+            local clean="${3:-false}"
+            
+            if [[ -z "$file" ]]; then
+                show_required_arg_error "File path" "file <path> [clean]"
+            fi
+            
+            validate_file "$file" "$clean"
+            ;;
+        "dir")
+            local dir="${2:-}"
+            local clean="${3:-false}"
+            
+            if [[ -z "$dir" ]]; then
+                show_required_arg_error "Directory path" "dir <path> [clean]"
+            fi
+            
+            validate_directory "$dir" "$clean"
+            ;;
+        "project")
+            local clean="${2:-false}"
+            validate_project "$clean"
+            ;;
+        "clean")
+            local file="${2:-}"
+            if [[ -n "$file" && -f "$file" ]]; then
+                validate_file "$file" "true"
+            else
+                log_error "File not found: $file"
+                exit 1
+            fi
+            ;;
+        "help"|"-h"|"--help")
+            echo "Manifest Markdown Validation Module"
+            echo "==================================="
+            echo ""
+            echo "Usage: $0 [command] [options]"
+            echo ""
+            echo "Commands:"
+            echo "  file <path> [clean]     - Validate a single file"
+            echo "  dir <path> [clean]      - Validate all $MANIFEST_CLI_MARKDOWN_EXT files in directory"
+            echo "  project [clean]         - Validate project documentation"
+            echo "  clean <file>            - Clean a single file"
+            echo "  help                    - Show this help"
+            echo ""
+            echo "Options:"
+            echo "  clean                   - Clean files while validating"
+            echo ""
+            echo "Examples:"
+            echo "  $0 file $MANIFEST_CLI_README_FILE"
+            echo "  $0 file $MANIFEST_CLI_README_FILE clean"
+            echo "  $0 dir $(basename "$(get_docs_folder)")/"
+            echo "  $0 project clean"
+            echo "  $0 clean $MANIFEST_CLI_README_FILE"
+            ;;
+        *)
+            show_usage_error "$1"
+            ;;
+    esac
+}
+
+# If script is being executed directly
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

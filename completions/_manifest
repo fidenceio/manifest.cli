@@ -1,0 +1,86 @@
+#compdef manifest
+# Zsh completion for Manifest CLI.
+# Install: copy or symlink this file into a directory on $fpath named '_manifest',
+# then run `compinit`. Homebrew puts user completions in /opt/homebrew/share/zsh/site-functions/.
+
+_manifest_keys() {
+    local -a keys
+    if [[ -z "${_MANIFEST_ZSH_KEYS_CACHE:-}" ]]; then
+        _MANIFEST_ZSH_KEYS_CACHE="$(manifest config list 2>/dev/null | awk 'NR>2 && $1!="" {print $1}' | sort -u)"
+    fi
+    keys=(${(f)_MANIFEST_ZSH_KEYS_CACHE})
+    _describe 'config keys' keys
+}
+
+_manifest() {
+    local -a top_cmds
+    top_cmds=(
+        'config:Setup wizard / show configuration'
+        'init:Scaffold a repo or fleet'
+        'status:Read-only snapshot'
+        'prep:Connect remotes, pull latest'
+        'refresh:Regenerate docs and metadata'
+        'ship:Publish a release (version + tag + push)'
+        'pr:Pull-request operations (gh wrapper)'
+        'doctor:Health check'
+        'security:Security audit'
+        'upgrade:Update Manifest CLI'
+        'uninstall:Remove Manifest CLI'
+        'version:Show CLI version'
+        'help:Show help'
+    )
+
+    local -a scopes bumps config_subs pr_subs layers
+    scopes=(repo fleet)
+    bumps=(patch minor major revision)
+    config_subs=(show list get set unset describe doctor setup time)
+    pr_subs=(create status checks ready merge update queue policy help)
+    layers=(global project local)
+
+    _arguments -C \
+        '1: :->command' \
+        '2: :->subcommand' \
+        '3: :->arg3' \
+        '*::extra:->extra'
+
+    case $state in
+        command)
+            _describe 'command' top_cmds
+            ;;
+        subcommand)
+            case $words[2] in
+                init|prep|refresh|ship)
+                    _values 'scope' "${scopes[@]}"
+                    ;;
+                config)
+                    _values 'config subcommand' "${config_subs[@]}"
+                    ;;
+                pr)
+                    _values 'pr subcommand' "${pr_subs[@]}"
+                    ;;
+            esac
+            ;;
+        arg3)
+            case "$words[2] $words[3]" in
+                "ship repo"|"ship fleet")
+                    _values 'release type / option' "${bumps[@]}" --local --dry-run -i --interactive
+                    ;;
+                "config get"|"config describe"|"config unset"|"config set")
+                    _manifest_keys
+                    ;;
+                "config list")
+                    _values 'option' --layer
+                    ;;
+            esac
+            ;;
+        extra)
+            if [[ $words[$((CURRENT-1))] == "--layer" ]]; then
+                _values 'layer' "${layers[@]}"
+            else
+                _values 'option' --help --local --dry-run --layer --fix --json
+            fi
+            ;;
+    esac
+}
+
+_manifest "$@"

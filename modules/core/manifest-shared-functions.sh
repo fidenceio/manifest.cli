@@ -1,0 +1,716 @@
+#!/bin/bash
+
+# Manifest Shared Functions Module
+# Centralized functions used across multiple modules with clear separation of concerns
+
+# =============================================================================
+# VERSION MANAGEMENT FUNCTIONS
+# =============================================================================
+
+# Get current version from VERSION file
+get_current_version() {
+    if [ -f "$PROJECT_ROOT/VERSION" ]; then
+        cat "$PROJECT_ROOT/VERSION" 2>/dev/null || echo "unknown"
+    else
+        echo "unknown"
+    fi
+}
+
+# Get next version based on increment type
+get_next_version() {
+    local increment_type="$1"
+    local current_version=""
+    
+    # Read current version
+    if [ -f "VERSION" ]; then
+        current_version=$(cat VERSION 2>/dev/null || echo "1.0.0")
+    else
+        current_version="1.0.0"
+    fi
+    
+    # Validate increment type
+    case "$increment_type" in
+        patch|minor|major|revision)
+            ;;
+        *)
+            show_validation_error "Invalid increment type: $increment_type"
+            return 1
+            ;;
+    esac
+    
+    # Parse version components
+    local major minor patch revision
+    IFS='.' read -r major minor patch revision <<< "$current_version"
+    
+    # Default values if missing
+    major=${major:-0}
+    minor=${minor:-0}
+    patch=${patch:-0}
+    revision=${revision:-0}
+    
+    # Increment based on type
+    case "$increment_type" in
+        "patch")
+            patch=$((patch + 1))
+            ;;
+        "minor")
+            minor=$((minor + 1))
+            patch=0
+            ;;
+        "major")
+            major=$((major + 1))
+            minor=0
+            patch=0
+            ;;
+        "revision")
+            revision=$((revision + 1))
+            ;;
+    esac
+    
+    # Return new version
+    if [ "$revision" -gt 0 ]; then
+        echo "$major.$minor.$patch.$revision"
+    else
+        echo "$major.$minor.$patch"
+    fi
+}
+
+# Get latest version from GitHub API with OS-dependent timeout
+get_latest_version() {
+    local repo_url="${MANIFEST_REPO_URL:-https://api.github.com/repos/fidenceio/fidenceio.manifest.cli/releases/latest}"
+    
+    # Use OS-dependent timeout strategy
+    local timeout_cmd=""
+    case "${MANIFEST_OS:-Unknown}" in
+        "macOS")
+            if command -v gtimeout >/dev/null 2>&1; then
+                timeout_cmd="gtimeout"
+            fi
+            ;;
+        "Linux"|"FreeBSD"|"OpenBSD"|"NetBSD")
+            if command -v timeout >/dev/null 2>&1; then
+                timeout_cmd="timeout"
+            fi
+            ;;
+    esac
+    
+    # Try to get latest version from GitHub API with timeout
+    if command -v curl >/dev/null 2>&1; then
+        local latest_version=""
+        local timeout_seconds="${MANIFEST_UPDATE_TIMEOUT:-10}"
+        
+        # Use secure curl request
+        latest_version=$(secure_curl_request "$repo_url" "$timeout_seconds" 2>/dev/null | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
+        
+        if [ -n "$latest_version" ]; then
+            echo "$latest_version"
+            return 0
+        fi
+    fi
+    
+    # Fallback: return current version
+    get_current_version
+}
+
+manifest_origin_repo_slug() {
+    local repo_url=""
+    repo_url="$(git -C "${1:-$PROJECT_ROOT}" remote get-url origin 2>/dev/null || echo "")"
+
+    if [[ "$repo_url" =~ ^git@[^:]+:([^/]+)/([^/]+)\.git$ ]]; then
+        echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+        return 0
+    fi
+    if [[ "$repo_url" =~ ^https?://[^/]+/([^/]+)/([^/]+)$ ]]; then
+        local org="${BASH_REMATCH[1]}"
+        local repo="${BASH_REMATCH[2]%.git}"
+        echo "${org}/${repo}"
+        return 0
+    fi
+
+    echo ""
+    return 1
+}
+
+manifest_is_canonical_repo() {
+    local project_root="${1:-$PROJECT_ROOT}"
+    local origin_slug=""
+    origin_slug="$(manifest_origin_repo_slug "$project_root" || echo "")"
+
+    # MANIFEST_CLI_CANONICAL_REPO_SLUGS is the current name.
+    # MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS is the deprecated alias kept
+    # for back-compat — emit a one-time warning if the user is still on it.
+    local allowed_slugs=""
+    if [[ -n "${MANIFEST_CLI_CANONICAL_REPO_SLUGS:-}" ]]; then
+        allowed_slugs="$MANIFEST_CLI_CANONICAL_REPO_SLUGS"
+    elif [[ -n "${MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS:-}" ]]; then
+        allowed_slugs="$MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS"
+        log_deprecated "MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS" "MANIFEST_CLI_CANONICAL_REPO_SLUGS"
+    else
+        allowed_slugs="fidenceio/manifest.cli,fidenceio/fidenceio.manifest.cli"
+    fi
+    IFS=',' read -r -a allowed_array <<< "$allowed_slugs"
+    local allowed=""
+    for allowed in "${allowed_array[@]}"; do
+        if [ "$origin_slug" = "$allowed" ]; then
+            return 0
+        fi
+    done
+
+    if [[ -f "$project_root/install-cli.sh" ]] && [[ -f "$project_root/scripts/manifest-cli-wrapper.sh" ]] && [[ -f "$project_root/formula/manifest.rb" ]] && [[ -d "$project_root/modules" ]]; then
+        return 0
+    fi
+
+    return 1
+}
+
+manifest_repo_display_name() {
+    local project_root="${1:-$PROJECT_ROOT}"
+    if manifest_is_canonical_repo "$project_root"; then
+        echo "${MANIFEST_CLI_PROJECT_NAME:-Manifest CLI}"
+        return 0
+    fi
+
+    if [[ -n "${MANIFEST_CLI_PROJECT_NAME:-}" ]] && [[ "${MANIFEST_CLI_PROJECT_NAME}" != "Manifest CLI" ]]; then
+        echo "$MANIFEST_CLI_PROJECT_NAME"
+        return 0
+    fi
+
+    basename "$project_root"
+}
+
+# -----------------------------------------------------------------------------
+# Function: _manifest_require_gh
+# -----------------------------------------------------------------------------
+# Verify the GitHub CLI is installed and authenticated. Used by any command
+# that wants to invoke `gh repo create`.
+#
+# Memoizes the success result for MANIFEST_GH_VALIDATION_TTL seconds (default
+# 300) so a fleet loop calling this N times pays the `gh auth status` cost
+# once. The TTL bounds staleness if `gh` is uninstalled or auth changes
+# mid-session; failures are never cached.
+# -----------------------------------------------------------------------------
+_manifest_require_gh() {
+    local ttl="${MANIFEST_GH_VALIDATION_TTL:-300}"
+    local now
+    now=$(date +%s)
+    if [[ -n "${_MANIFEST_GH_VALIDATED_AT:-}" ]] \
+        && (( now - _MANIFEST_GH_VALIDATED_AT < ttl )); then
+        return 0
+    fi
+    if ! command -v gh >/dev/null 2>&1; then
+        log_error "'gh' (GitHub CLI) is required for --create-repo-private/--create-repo-public."
+        log_error "Install: brew install gh   then: gh auth login"
+        return 1
+    fi
+    if ! gh auth status >/dev/null 2>&1; then
+        log_error "'gh' is not authenticated. Run: gh auth login"
+        return 1
+    fi
+    _MANIFEST_GH_VALIDATED_AT=$now
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# Function: _manifest_parse_create_repo_flag
+# -----------------------------------------------------------------------------
+# Resolves --create-repo-private and --create-repo-public into a single
+# visibility string, enforcing mutual exclusion.
+#
+# Args: $1 = current visibility ("" / "private" / "public")
+#       $2 = flag being applied ("private" / "public")
+# Echoes new visibility on success; returns 1 (with log_error) on conflict.
+# -----------------------------------------------------------------------------
+_manifest_parse_create_repo_flag() {
+    local current="$1"
+    local incoming="$2"
+    if [[ -n "$current" && "$current" != "$incoming" ]]; then
+        log_error "--create-repo-private and --create-repo-public are mutually exclusive."
+        return 1
+    fi
+    echo "$incoming"
+}
+
+# -----------------------------------------------------------------------------
+# Function: _manifest_gh_repo_create
+# -----------------------------------------------------------------------------
+# Create a GitHub repo named after the project root's basename and add it as
+# `origin`. Caller is responsible for the dir already being a git repo.
+#
+# Args: $1 = project_root, $2 = visibility ("private" or "public")
+# Returns 0 on success, 1 on failure (with log_error).
+# -----------------------------------------------------------------------------
+_manifest_gh_repo_create() {
+    local project_root="$1"
+    local visibility="$2"
+    local name
+    name="$(basename "$project_root")"
+
+    _manifest_require_gh || return 1
+
+    local vis_flag
+    case "$visibility" in
+        private) vis_flag="--private" ;;
+        public)  vis_flag="--public" ;;
+        *)       log_error "Invalid visibility: $visibility"; return 1 ;;
+    esac
+
+    if git -C "$project_root" remote get-url origin >/dev/null 2>&1; then
+        log_warning "origin already configured — skipping gh repo create."
+        echo "  Existing origin: $(git -C "$project_root" remote get-url origin)"
+        return 0
+    fi
+
+    echo "  Creating GitHub repo: $name ($visibility)..."
+    local create_out
+    if ! create_out=$(gh repo create "$name" "$vis_flag" \
+            --source="$project_root" --remote=origin 2>&1); then
+        log_error "gh repo create failed for: $name"
+        local last_lines
+        last_lines=$(printf '%s' "$create_out" | tail -3 | tr '\n' ' ')
+        echo "  $last_lines"
+        echo "  Common causes: name already exists, no permission for org, auth issue."
+        echo "  Manual fallback: gh repo create $name $vis_flag --source=\"$project_root\" --remote=origin"
+        return 1
+    fi
+    echo "  ✓ Created GitHub repo: $name"
+    local url
+    url="$(git -C "$project_root" remote get-url origin 2>/dev/null || echo "")"
+    [[ -n "$url" ]] && echo "  Origin: $url"
+    return 0
+}
+
+# =============================================================================
+# NETWORK AND CONNECTIVITY FUNCTIONS
+# =============================================================================
+
+# Secure curl request with security headers and validation
+secure_curl_request() {
+    local url="$1"
+    local timeout="${2:-10}"
+    local additional_args=("${@:3}")
+    
+    # Validate URL to prevent injection
+    if ! [[ "$url" =~ ^https?:// ]]; then
+        echo "Error: Invalid URL format" >&2
+        return 1
+    fi
+    
+    # Add security headers and options
+    local security_args=(
+        "--max-time" "$timeout"
+        "--connect-timeout" "5"
+        "--retry" "0"
+        "--retry-delay" "0"
+        "--fail"
+        "--silent"
+        "--show-error"
+        "--location"
+        "--compressed"
+        "--user-agent" "Manifest-CLI/$(cat "$MANIFEST_CLI_VERSION_FILE" 2>/dev/null || echo "unknown")"
+    )
+    
+    # Execute curl with security options
+    curl "${security_args[@]}" "${additional_args[@]}" "$url"
+}
+
+# Check network connectivity with OS-dependent timeout
+check_network_connectivity() {
+    # Use OS-dependent timeout strategy
+    local timeout_cmd=""
+    case "${MANIFEST_OS:-Unknown}" in
+        "macOS")
+            if command -v gtimeout >/dev/null 2>&1; then
+                timeout_cmd="gtimeout"
+            fi
+            ;;
+        "Linux"|"FreeBSD"|"OpenBSD"|"NetBSD")
+            if command -v timeout >/dev/null 2>&1; then
+                timeout_cmd="timeout"
+            fi
+            ;;
+    esac
+    
+    # Try to ping a reliable service with timeout
+    local ping_timeout=3
+    if [ -n "$timeout_cmd" ]; then
+        if $timeout_cmd "$ping_timeout" ping -c 1 -W "$ping_timeout" 8.8.8.8 >/dev/null 2>&1; then
+            log_debug "Network connectivity check passed (ping with timeout)"
+            return 0
+        fi
+    else
+        # Fallback: use ping with built-in timeout
+        if ping -c 1 -W "$ping_timeout" 8.8.8.8 >/dev/null 2>&1; then
+            log_debug "Network connectivity check passed (ping fallback)"
+            return 0
+        fi
+    fi
+    
+    # Try alternative connectivity check with secure curl
+    local curl_timeout=5
+    if secure_curl_request "https://www.google.com" "$curl_timeout" >/dev/null 2>&1; then
+        log_debug "Network connectivity check passed (secure curl)"
+        return 0
+    fi
+    
+    log_debug "Network connectivity check failed"
+    return 1
+}
+
+# Check if required tools are available
+check_required_tools() {
+    local missing_tools=()
+    
+    # Check for curl
+    if ! command -v curl >/dev/null 2>&1; then
+        missing_tools+=("curl")
+    fi
+    
+    # Check for jq
+    if ! command -v jq >/dev/null 2>&1; then
+        missing_tools+=("jq")
+    fi
+    
+    if [ ${#missing_tools[@]} -gt 0 ]; then
+        show_dependency_error "Missing required tools: ${missing_tools[*]}"
+        return 1
+    fi
+    
+    log_debug "All required tools are available"
+    return 0
+}
+
+# =============================================================================
+# ID GENERATION AND LOGGING FUNCTIONS
+# =============================================================================
+
+# Generate unique agent ID
+generate_agent_id() {
+    local hostname=$(hostname)
+    local user=$(whoami)
+    local timestamp=$(date +%s)
+    local random=$(openssl rand -hex 4 2>/dev/null || echo "$RANDOM")
+    echo "${hostname}-${user}-${timestamp}-${random}" | tr '[:upper:]' '[:lower:]'
+}
+
+# Generate unique session ID
+generate_session_id() {
+    local timestamp=$(date +%s)
+    local random=$(openssl rand -hex 8 2>/dev/null || echo "$RANDOM$RANDOM")
+    echo "session-${timestamp}-${random}" | tr '[:upper:]' '[:lower:]'
+}
+
+# Log operation with timestamp
+log_operation() {
+    local operation="$1"
+    local details="$2"
+    local log_file="${3:-$HOME/.manifest-cli/logs/operations.log}"
+    
+    # Ensure log directory exists
+    local log_dir=$(dirname "$log_file")
+    mkdir -p "$log_dir" 2>/dev/null
+    
+    # Log with timestamp
+    echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ") - $operation: $details" >> "$log_file"
+    log_debug "Operation logged: $operation"
+}
+
+# =============================================================================
+# GIT OPERATIONS FUNCTIONS
+# =============================================================================
+
+# Get Git repository information
+get_git_info() {
+    local info_type="$1"
+    
+    case "$info_type" in
+        "url")
+            git remote get-url origin 2>/dev/null || echo ""
+            ;;
+        "name")
+            local repo_url=$(git remote get-url origin 2>/dev/null || echo "")
+            basename "$repo_url" .git 2>/dev/null || echo ""
+            ;;
+        "owner")
+            local repo_url=$(git remote get-url origin 2>/dev/null || echo "")
+            echo "$repo_url" | sed -n 's/.*[:/]\([^/]*\)\/\([^/]*\)\.git.*/\1/p'
+            ;;
+        "branch")
+            git branch --show-current 2>/dev/null || echo ""
+            ;;
+        "commit")
+            git rev-parse HEAD 2>/dev/null || echo ""
+            ;;
+        "status")
+            git status --porcelain 2>/dev/null || echo ""
+            ;;
+        *)
+            show_validation_error "Unknown Git info type: $info_type"
+            return 1
+            ;;
+    esac
+}
+
+# Check if in Git repository
+is_git_repository() {
+    git rev-parse --git-dir >/dev/null 2>&1
+}
+
+# =============================================================================
+# FILE OPERATIONS FUNCTIONS
+# =============================================================================
+
+# Validate file path to prevent directory traversal attacks
+validate_file_path() {
+    local file_path="$1"
+    
+    # Check for path traversal attempts
+    if [[ "$file_path" =~ \.\./ ]] || [[ "$file_path" =~ \.\.\\ ]]; then
+        return 1
+    fi
+    
+    # Check for absolute paths outside project (if PROJECT_ROOT is set)
+    if [[ "$file_path" =~ ^/ ]] && [[ -n "${PROJECT_ROOT:-}" ]] && [[ ! "$file_path" =~ ^$PROJECT_ROOT ]]; then
+        return 1
+    fi
+    
+    # Check for null bytes or other dangerous characters
+    if [[ "$file_path" =~ $'\0' ]]; then
+        return 1
+    fi
+    
+    return 0
+}
+
+# Safe file read with error handling and path validation
+safe_read_file() {
+    local file="$1"
+    local default="${2:-}"
+    
+    # Validate file path to prevent traversal attacks
+    if ! validate_file_path "$file"; then
+        echo "Error: Invalid file path" >&2
+        echo "$default"
+        return 1
+    fi
+    
+    if [ -f "$file" ] && [ -r "$file" ]; then
+        cat "$file" 2>/dev/null || echo "$default"
+    else
+        echo "$default"
+    fi
+}
+
+# Safe file write with backup and path validation
+safe_write_file() {
+    local file="$1"
+    local content="$2"
+    local backup="${3:-true}"
+    
+    # Validate file path to prevent traversal attacks
+    if ! validate_file_path "$file"; then
+        echo "Error: Invalid file path" >&2
+        return 1
+    fi
+    
+    # Create backup if requested
+    if [ "$backup" = "true" ] && [ -f "$file" ]; then
+        cp "$file" "$file.backup.$(date +%s)" 2>/dev/null
+    fi
+    
+    # Write content
+    echo "$content" > "$file" || {
+        show_file_error "Failed to write file: $file"
+        return 1
+    }
+    
+    log_debug "File written successfully: $file"
+    return 0
+}
+
+# =============================================================================
+# TEMPORARY FILE MANAGEMENT
+# =============================================================================
+
+# Create temporary file with cleanup tracking
+create_managed_temp_file() {
+    local prefix="${1:-manifest-}"
+    local temp_file=$(mktemp -t "$prefix.XXXXXXXXXX" 2>/dev/null)
+    
+    if [ -z "$temp_file" ]; then
+        show_file_error "Failed to create temporary file"
+        return 1
+    fi
+    
+    # Track for cleanup
+    echo "$temp_file" >> "$HOME/$MANIFEST_CLI_TEMP_DIR/$MANIFEST_CLI_TEMP_LIST" 2>/dev/null || true
+    
+    echo "$temp_file"
+}
+
+# Clean up tracked temporary files
+cleanup_managed_temp_files() {
+    local temp_list="$HOME/$MANIFEST_CLI_TEMP_DIR/$MANIFEST_CLI_TEMP_LIST"
+    
+    if [ -f "$temp_list" ]; then
+        while IFS= read -r temp_file; do
+            if [ -f "$temp_file" ]; then
+                rm -f "$temp_file" 2>/dev/null
+                log_debug "Cleaned up temp file: $temp_file"
+            fi
+        done < "$temp_list"
+        rm -f "$temp_list"
+    fi
+}
+
+# =============================================================================
+# CONFIGURATION MANAGEMENT FUNCTIONS
+# =============================================================================
+
+# Get configuration value with fallback
+get_config_value() {
+    local key="$1"
+    local default="${2:-}"
+    local config_file="${3:-$PROJECT_ROOT/.env}"
+
+    # Try environment variable first
+    if [ -n "${!key:-}" ]; then
+        echo "${!key}"
+        return 0
+    fi
+
+    # Try config file
+    if [ -f "$config_file" ]; then
+        case "$config_file" in
+            *.yaml|*.yml)
+                # YAML config: convert env var name to YAML dot-path
+                local yaml_path=""
+                if declare -F env_var_to_yaml_path >/dev/null 2>&1; then
+                    yaml_path=$(env_var_to_yaml_path "$key")
+                fi
+                if [ -n "$yaml_path" ]; then
+                    local value
+                    value=$(get_yaml_value "$config_file" "$yaml_path" "")
+                    if [ -n "$value" ]; then
+                        echo "$value"
+                        return 0
+                    fi
+                fi
+                ;;
+            *)
+                # Legacy .env config: grep KEY=VALUE
+                local value=$(grep "^${key}=" "$config_file" 2>/dev/null | cut -d'=' -f2- | sed 's/^["'\'']\|["'\'']$//g')
+                if [ -n "$value" ]; then
+                    echo "$value"
+                    return 0
+                fi
+                ;;
+        esac
+    fi
+
+    # Return default
+    echo "$default"
+}
+
+# Set configuration value
+set_config_value() {
+    local key="$1"
+    local value="$2"
+    local config_file="${3:-$PROJECT_ROOT/.env}"
+
+    # Ensure config directory exists
+    local config_dir=$(dirname "$config_file")
+    mkdir -p "$config_dir" 2>/dev/null
+
+    case "$config_file" in
+        *.yaml|*.yml)
+            # YAML config: convert env var name to YAML dot-path
+            local yaml_path=""
+            if declare -F env_var_to_yaml_path >/dev/null 2>&1; then
+                yaml_path=$(env_var_to_yaml_path "$key")
+            fi
+            if [ -z "$yaml_path" ]; then
+                # Unknown key — write under custom section
+                yaml_path="custom.${key}"
+            fi
+            set_yaml_value "$config_file" "$yaml_path" "$value"
+            ;;
+        *)
+            # Legacy .env config
+            if [ -f "$config_file" ]; then
+                if grep -q "^${key}=" "$config_file"; then
+                    sed -i.bak "s/^${key}=.*/${key}=\"${value}\"/" "$config_file"
+                    rm -f "$config_file.bak" 2>/dev/null
+                else
+                    echo "${key}=\"${value}\"" >> "$config_file"
+                fi
+            else
+                echo "${key}=\"${value}\"" > "$config_file"
+            fi
+            ;;
+    esac
+
+    log_debug "Configuration updated: $key=$value"
+}
+
+# =============================================================================
+# JSON OPERATIONS FUNCTIONS
+# =============================================================================
+
+# Safe JSON read with error handling
+safe_json_read() {
+    local json_file="$1"
+    local key="$2"
+    local default="${3:-}"
+    
+    if [ ! -f "$json_file" ]; then
+        echo "$default"
+        return 0
+    fi
+    
+    if command -v jq >/dev/null 2>&1; then
+        jq -r ".${key} // empty" "$json_file" 2>/dev/null || echo "$default"
+    else
+        # Fallback to grep/sed
+        grep -o "\"${key}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "$json_file" 2>/dev/null | sed 's/.*"\([^"]*\)".*/\1/' || echo "$default"
+    fi
+}
+
+# Safe JSON write with validation
+safe_json_write() {
+    local json_file="$1"
+    local key="$2"
+    local value="$3"
+    
+    # Ensure directory exists
+    local json_dir=$(dirname "$json_file")
+    mkdir -p "$json_dir" 2>/dev/null
+    
+    if command -v jq >/dev/null 2>&1; then
+        # Use jq for proper JSON handling
+        if [ -f "$json_file" ]; then
+            jq --arg key "$key" --arg value "$value" '.[$key] = $value' "$json_file" > "$json_file.tmp" && mv "$json_file.tmp" "$json_file"
+        else
+            echo "{\"$key\": \"$value\"}" > "$json_file"
+        fi
+    else
+        # Fallback to manual JSON construction
+        show_file_error "jq not available for JSON operations"
+        return 1
+    fi
+}
+
+# =============================================================================
+# EXPORT FUNCTIONS
+# =============================================================================
+
+# Export all shared functions
+export -f get_current_version get_next_version get_latest_version
+export -f manifest_origin_repo_slug manifest_is_canonical_repo manifest_repo_display_name
+export -f _manifest_require_gh _manifest_parse_create_repo_flag _manifest_gh_repo_create
+export -f secure_curl_request check_network_connectivity check_required_tools
+export -f generate_agent_id generate_session_id log_operation
+export -f get_git_info is_git_repository
+export -f safe_read_file safe_write_file
+export -f create_managed_temp_file cleanup_managed_temp_files
+export -f get_config_value set_config_value
+export -f safe_json_read safe_json_write
