@@ -333,19 +333,8 @@ manifest_ship_workflow() {
         #                        included because update_homebrew_formula needs
         #                        the GitHub tarball SHA256 of an already-pushed
         #                        tag.
-        local tag_target_sha=""
-        case "${MANIFEST_CLI_RELEASE_TAG_TARGET:-version_commit}" in
-            version_commit)
-                tag_target_sha="$workflow_version_commit_sha"
-                ;;
-            final_release_commit)
-                tag_target_sha=""
-                ;;
-            *)
-                log_warning "Unknown MANIFEST_CLI_RELEASE_TAG_TARGET='${MANIFEST_CLI_RELEASE_TAG_TARGET}', falling back to version_commit"
-                tag_target_sha="$workflow_version_commit_sha"
-                ;;
-        esac
+        local tag_target_sha
+        tag_target_sha="$(resolve_tag_target_sha "$workflow_version_commit_sha")"
 
         # Create git tag
         if ! create_tag "$new_version" "$tag_target_sha"; then

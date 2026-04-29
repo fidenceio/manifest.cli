@@ -24,7 +24,7 @@ workflow so it actually controls which commit the release tag points at:
 
 ## High severity
 
-### [ ] H1. Test mirrors production logic instead of testing it
+### [x] H1. Test mirrors production logic instead of testing it
 The dispatch tests in [tests/tag_target.bats](../tests/tag_target.bats) define a
 local `resolve_tag_target_sha` helper that's a *copy* of the orchestrator's
 case statement. If somebody edits the orchestrator's case block, the tests

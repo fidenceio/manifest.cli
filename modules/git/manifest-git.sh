@@ -224,6 +224,22 @@ commit_changes() {
     fi
 }
 
+resolve_tag_target_sha() {
+    local version_commit_sha="$1"
+    case "${MANIFEST_CLI_RELEASE_TAG_TARGET:-version_commit}" in
+        version_commit)
+            echo "$version_commit_sha"
+            ;;
+        final_release_commit)
+            echo ""
+            ;;
+        *)
+            log_warning "Unknown MANIFEST_CLI_RELEASE_TAG_TARGET='${MANIFEST_CLI_RELEASE_TAG_TARGET}', falling back to version_commit"
+            echo "$version_commit_sha"
+            ;;
+    esac
+}
+
 create_tag() {
     local version="$1"
     local target_sha="${2:-}"
