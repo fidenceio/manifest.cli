@@ -230,11 +230,19 @@ resolve_tag_target_sha() {
         version_commit)
             echo "$version_commit_sha"
             ;;
+        release_head)
+            echo ""
+            ;;
         final_release_commit)
+            # Deprecated alias for release_head. Renamed because Homebrew
+            # commits cannot be included (update_homebrew_formula needs the
+            # GitHub tarball SHA256 of an already-pushed tag), so "final" was
+            # misleading. Remove this alias one minor version after introduction.
+            log_warning "MANIFEST_CLI_RELEASE_TAG_TARGET='final_release_commit' is deprecated; use 'release_head' instead"
             echo ""
             ;;
         *)
-            log_warning "Unknown MANIFEST_CLI_RELEASE_TAG_TARGET='${MANIFEST_CLI_RELEASE_TAG_TARGET}', falling back to version_commit"
+            log_warning "Unknown MANIFEST_CLI_RELEASE_TAG_TARGET='${MANIFEST_CLI_RELEASE_TAG_TARGET}' (expected version_commit or release_head); falling back to version_commit"
             echo "$version_commit_sha"
             ;;
     esac

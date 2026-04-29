@@ -74,11 +74,20 @@ teardown() {
     [ "$output" = "abc123" ]
 }
 
-@test "tag target dispatch: final_release_commit returns empty (use HEAD)" {
-    MANIFEST_CLI_RELEASE_TAG_TARGET="final_release_commit" \
+@test "tag target dispatch: release_head returns empty (use HEAD)" {
+    MANIFEST_CLI_RELEASE_TAG_TARGET="release_head" \
         run resolve_tag_target_sha "abc123"
     [ "$status" -eq 0 ]
     [ -z "$output" ]
+}
+
+@test "tag target dispatch: final_release_commit is a deprecated alias for release_head" {
+    MANIFEST_CLI_RELEASE_TAG_TARGET="final_release_commit" \
+        run --separate-stderr resolve_tag_target_sha "abc123"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+    [[ "$stderr" == *"deprecated"* ]]
+    [[ "$stderr" == *"release_head"* ]]
 }
 
 @test "tag target dispatch: unknown value falls back to version sha" {
