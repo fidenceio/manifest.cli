@@ -631,6 +631,11 @@ _fleet_init_directory() {
 #   --_quickstart                Skip start file, use auto-discovery (used by fleet_quickstart)
 #   --create-repo-private        After init, gh-create a private GitHub repo per dir
 #   --create-repo-public         After init, gh-create a public  GitHub repo per dir
+#
+# EXIT CODES:
+#   0  All directories initialized (and gh ok if requested)
+#   1  One or more directories failed to init or to create their gh repo
+#   2  TSV references one or more directories that don't exist on disk
 # -----------------------------------------------------------------------------
 _fleet_init() {
     local fleet_name=""
@@ -638,6 +643,7 @@ _fleet_init() {
     local force=false
     local skip_start=false
     local create_repo_visibility=""
+    local _fleet_init_status=0
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -660,6 +666,17 @@ _fleet_init() {
             *) shift ;;
         esac
     done
+
+    # Quickstart discovers existing git repos and writes the TSV; it does
+    # not loop through _fleet_init_directory, so --create-repo-* would
+    # silently no-op. Hard-error instead of paying the gh pre-flight then
+    # ignoring the flag.
+    if [[ "$skip_start" == "true" && -n "$create_repo_visibility" ]]; then
+        log_error "--create-repo-$create_repo_visibility is not supported with quickstart."
+        log_error "Quickstart discovers existing repos; --create-repo-* is for fresh dirs."
+        log_error "Use 'manifest init fleet --create-repo-$create_repo_visibility' instead."
+        return 1
+    fi
 
     # Pre-flight gh ONCE before the per-row loop. _manifest_require_gh
     # memoizes the success result so subsequent calls inside
@@ -802,6 +819,15 @@ EOF
             echo "GitHub ($create_repo_visibility): $gh_ok_count ready, $gh_failed_count failed"
         fi
 
+        # Strict exit-code rule: real failures (init / gh) outrank config
+        # errors (missing). CI/automation parses status without grepping
+        # English; ordering matches severity.
+        if (( init_failed_count > 0 || gh_failed_count > 0 )); then
+            _fleet_init_status=1
+        elif (( missing_count > 0 )); then
+            _fleet_init_status=2
+        fi
+
         if (( missing_count + init_failed_count + gh_failed_count > 0 )); then
             local p
             echo ""
@@ -892,6 +918,8 @@ EOF
             echo ""
         fi
     fi
+
+    return $_fleet_init_status
 }
 
 # -----------------------------------------------------------------------------

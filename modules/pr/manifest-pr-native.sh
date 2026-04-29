@@ -23,17 +23,11 @@ if [[ -n "${_MANIFEST_PR_NATIVE_LOADED:-}" ]]; then
 fi
 _MANIFEST_PR_NATIVE_LOADED=1
 
-# Internal: ensure gh is installed; print install hint and return 1 if not.
-_pr_require_gh() {
-    if ! command -v gh >/dev/null 2>&1; then
-        log_error "'gh' (GitHub CLI) is required for 'manifest pr'."
-        log_error "Install: brew install gh   then: gh auth login"
-        return 1
-    fi
-    return 0
-}
-
 # Internal: confirm we're inside a git repo with a remote that gh recognizes.
+#
+# gh installation + auth is handled by the shared `_manifest_require_gh`
+# (in modules/core/manifest-shared-functions.sh), which adds TTL memoization
+# and a real `gh auth status` pre-check vs. the legacy install-only probe.
 _pr_require_repo() {
     if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
         log_error "Not inside a git repository."
@@ -50,7 +44,7 @@ _pr_require_repo() {
 # manifest pr create [--draft] [--title <t>] [--body <b>] [--base <branch>]
 # -----------------------------------------------------------------------------
 manifest_pr_create() {
-    _pr_require_gh || return 1
+    _manifest_require_gh || return 1
     _pr_require_repo || return 1
 
     local args=()
@@ -88,7 +82,7 @@ Any flag not handled here is forwarded to 'gh pr create'." \
 # manifest pr status [<number-or-branch>]
 # -----------------------------------------------------------------------------
 manifest_pr_status() {
-    _pr_require_gh || return 1
+    _manifest_require_gh || return 1
     _pr_require_repo || return 1
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
         _render_help \
@@ -107,7 +101,7 @@ manifest_pr_status() {
 # manifest pr checks [<number-or-branch>] [--watch]
 # -----------------------------------------------------------------------------
 manifest_pr_checks() {
-    _pr_require_gh || return 1
+    _manifest_require_gh || return 1
     _pr_require_repo || return 1
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
         _render_help \
@@ -122,7 +116,7 @@ manifest_pr_checks() {
 # manifest pr ready [<number-or-branch>]
 # -----------------------------------------------------------------------------
 manifest_pr_ready() {
-    _pr_require_gh || return 1
+    _manifest_require_gh || return 1
     _pr_require_repo || return 1
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
         _render_help \
@@ -137,7 +131,7 @@ manifest_pr_ready() {
 # manifest pr merge [<number-or-branch>] [--squash|--merge|--rebase] [--auto]
 # -----------------------------------------------------------------------------
 manifest_pr_merge() {
-    _pr_require_gh || return 1
+    _manifest_require_gh || return 1
     _pr_require_repo || return 1
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
         _render_help \
@@ -161,7 +155,7 @@ For richer queue/policy control, see Cloud's 'manifest pr queue'." \
 # -----------------------------------------------------------------------------
 # Updates a PR's branch with the latest from base (rebase or merge).
 manifest_pr_update() {
-    _pr_require_gh || return 1
+    _manifest_require_gh || return 1
     _pr_require_repo || return 1
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
         _render_help \
@@ -177,7 +171,7 @@ manifest_pr_update() {
 # -----------------------------------------------------------------------------
 # Shows current branch's PR if it exists, otherwise prompts to create one.
 manifest_pr_interactive() {
-    _pr_require_gh || return 1
+    _manifest_require_gh || return 1
     _pr_require_repo || return 1
 
     if gh pr view >/dev/null 2>&1; then
