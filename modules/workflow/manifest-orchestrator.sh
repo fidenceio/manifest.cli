@@ -208,7 +208,19 @@ manifest_ship_workflow() {
     if [ -n "$(git status --porcelain)" ]; then
         echo "📝 Uncommitted changes detected. Committing first..."
         local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
-        commit_changes "Auto-commit before Manifest process" "$timestamp"
+        # Add a scope hint to the auto-commit subject so `git log --oneline`
+        # alone tells you what got swept up. Hint covers tracked changes
+        # AND untracked files, since `commit_changes` runs `git add .`.
+        local _ac_files _ac_count _ac_first _ac_hint=""
+        _ac_files="$(git status --porcelain | sed 's/^...//')"
+        _ac_count=$(printf '%s\n' "$_ac_files" | grep -c .)
+        _ac_first=$(printf '%s\n' "$_ac_files" | head -1)
+        if [ "$_ac_count" -eq 1 ] && [ -n "$_ac_first" ]; then
+            _ac_hint=" ($_ac_first)"
+        elif [ "$_ac_count" -gt 1 ]; then
+            _ac_hint=" ($_ac_count files: $_ac_first, ...)"
+        fi
+        commit_changes "Auto-commit before Manifest process$_ac_hint" "$timestamp"
         echo ""
     fi
     

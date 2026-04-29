@@ -733,7 +733,10 @@ manifest_init_fleet() {
                     "Examples" "  manifest init fleet                 # Phase 1: discover
   vim manifest.fleet.tsv             # edit SELECT column
   manifest init fleet                 # Phase 2: apply selections
-  manifest init fleet --create-repo-private   # Phase 2 + create private GitHub repos"
+  manifest init fleet --create-repo-private   # Phase 2 + create private GitHub repos" \
+                    "Exit codes (Phase 2)" "  0  All directories initialized (and gh ok if requested)
+  1  One or more directories failed to init or to create their gh repo
+  2  TSV references one or more directories that don't exist on disk"
                 return 0
                 ;;
             *)
