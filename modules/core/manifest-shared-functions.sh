@@ -182,7 +182,7 @@ manifest_repo_display_name() {
 # Function: _manifest_require_gh
 # -----------------------------------------------------------------------------
 # Verify the GitHub CLI is installed and authenticated. Used by any command
-# that wants to invoke `gh repo create`.
+# that talks to GitHub via `gh` (init/prep --create-repo-*, manifest pr ...).
 #
 # Memoizes the success result for MANIFEST_GH_VALIDATION_TTL seconds (default
 # 300) so a fleet loop calling this N times pays the `gh auth status` cost
@@ -198,7 +198,7 @@ _manifest_require_gh() {
         return 0
     fi
     if ! command -v gh >/dev/null 2>&1; then
-        log_error "'gh' (GitHub CLI) is required for --create-repo-private/--create-repo-public."
+        log_error "'gh' (GitHub CLI) is required for this command."
         log_error "Install: brew install gh   then: gh auth login"
         return 1
     fi

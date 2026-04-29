@@ -12,8 +12,10 @@ teardown() {
     rm -rf "$SCRATCH"
     # _MANIFEST_GH_VALIDATED_AT is module-scope; clear it so memoization
     # state cannot leak between tests when the suite is filtered or
-    # re-ordered.
+    # re-ordered. GH_STUB_* belong to the gh_stub harness and would
+    # similarly leak across tests if any test forgot to clean up.
     unset _MANIFEST_GH_VALIDATED_AT MANIFEST_GH_VALIDATION_TTL
+    unset GH_STUB_LOG GH_STUB_EXIT GH_STUB_AUTH_EXIT GH_STUB_STDOUT GH_STUB_STDERR
 }
 
 # -----------------------------------------------------------------------------
@@ -309,4 +311,129 @@ teardown() {
     PATH="/usr/bin:/bin" run _manifest_require_gh
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "GitHub CLI"
+}
+
+# -----------------------------------------------------------------------------
+# Quickstart hard-error: --create-repo-* is silently ignored on the
+# auto-discovery branch, which only writes the TSV (no per-row bootstrap).
+# -----------------------------------------------------------------------------
+
+@test "fleet_quickstart --create-repo-private: hard-errors instead of silently no-opping" {
+    source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet.sh"
+    cd "$SCRATCH"
+
+    run fleet_quickstart --create-repo-private
+    [ "$status" -ne 0 ]
+    echo "$output" | grep -q "not supported with quickstart"
+    echo "$output" | grep -q "manifest init fleet --create-repo-private"
+}
+
+# -----------------------------------------------------------------------------
+# Strict exit code: _fleet_init bubbles a non-zero status on partial failure
+# so CI can act on success/failure without parsing English.
+# -----------------------------------------------------------------------------
+
+@test "_fleet_init: exits 2 when TSV row points at a missing directory" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
+    source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet.sh"
+    source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet-detect.sh"
+    cd "$SCRATCH"
+
+    {
+        printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
+        printf "true\tghost\t./ghost\trepo\tfalse\t\t\t0.0.0\n"
+    } > manifest.fleet.tsv
+
+    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet
+    [ "$status" -eq 2 ]
+}
+
+@test "_fleet_init: exits 1 when a row's gh repo create fails" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
+    source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet.sh"
+    source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet-detect.sh"
+    cd "$SCRATCH"
+    mkdir -p svc_x
+
+    {
+        printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
+        printf "true\tsvc_x\t./svc_x\trepo\tfalse\t\t\t0.0.0\n"
+    } > manifest.fleet.tsv
+
+    _manifest_require_gh() { return 0; }
+    _manifest_gh_repo_create() { return 1; }
+
+    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet --create-repo-private -n test-fleet
+    [ "$status" -eq 1 ]
+}
+
+@test "_fleet_init: exits 0 when all selected rows initialize cleanly" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
+    source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet.sh"
+    source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet-detect.sh"
+    cd "$SCRATCH"
+    mkdir -p svc_clean
+
+    {
+        printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
+        printf "true\tsvc_clean\t./svc_clean\trepo\tfalse\t\t\t0.0.0\n"
+    } > manifest.fleet.tsv
+
+    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet
+    [ "$status" -eq 0 ]
+}
+
+@test "manifest init fleet --help: lists exit codes" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
+    run manifest_init_fleet --help
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Exit codes"
+    echo "$output" | grep -q "TSV references"
+}
+
+# -----------------------------------------------------------------------------
+# Live `gh` path coverage via PATH-prepended stub
+# (tests/helpers/gh_stub.sh records calls; behaviour is env-driven).
+# -----------------------------------------------------------------------------
+
+@test "_manifest_gh_repo_create (live): invokes gh with --private --source --remote" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-shared-functions.sh"
+
+    git init -q "$SCRATCH/myrepo"
+    gh_stub_install
+
+    run _manifest_gh_repo_create "$SCRATCH/myrepo" "private"
+    [ "$status" -eq 0 ]
+    grep -q $'repo\tcreate\tmyrepo\t--private' "$GH_STUB_LOG"
+    grep -q -- "--remote=origin" "$GH_STUB_LOG"
+}
+
+@test "_manifest_gh_repo_create (live): returns 1 when gh repo create fails" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-shared-functions.sh"
+
+    git init -q "$SCRATCH/badrepo"
+    gh_stub_install
+    # Stub `gh auth status` succeeds (default 0); only `gh repo create` fails.
+    export GH_STUB_EXIT=1
+    export GH_STUB_AUTH_EXIT=0
+
+    run _manifest_gh_repo_create "$SCRATCH/badrepo" "public"
+    [ "$status" -eq 1 ]
+    echo "$output" | grep -q "gh repo create failed"
+    # Stub WAS invoked — proves we tried the live call rather than
+    # short-circuiting on a guard.
+    grep -q $'repo\tcreate\tbadrepo\t--public' "$GH_STUB_LOG"
+}
+
+@test "_manifest_require_gh (live): returns 1 when gh auth status exits non-zero" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-shared-functions.sh"
+
+    gh_stub_install
+    export GH_STUB_AUTH_EXIT=1
+    # Force re-check (don't use a memoized success from a prior session).
+    unset _MANIFEST_GH_VALIDATED_AT
+
+    run _manifest_require_gh
+    [ "$status" -eq 1 ]
+    echo "$output" | grep -q "not authenticated"
 }
