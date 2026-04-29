@@ -109,8 +109,8 @@ warning would pass tests.
 **Fix:** Add an assertion that captures stderr and matches the warning
 substring (after H1 lands and the test calls the real function).
 
-### [ ] M7. No coverage for the "CHANGELOG commit between bump and tag" scenario
-This is the *only* case where `version_commit` and `final_release_commit`
+### [x] M7. No coverage for the "CHANGELOG commit between bump and tag" scenario
+This is the *only* case where `version_commit` and `release_head`
 actually diverge. Without a test that exercises it, the feature's central
 distinction is uncovered.
 
@@ -118,11 +118,19 @@ distinction is uncovered.
 `manifest_ship_workflow` (or a stripped-down test harness that exercises just
 the relevant orchestrator slice), and verifies that:
 - With `version_commit`: tag points at the bump commit (pre-CHANGELOG).
-- With `final_release_commit`: tag points at the CHANGELOG commit (post-bump).
+- With `release_head`: tag points at the CHANGELOG commit (post-bump).
 
-This requires a workflow-level integration test, which is heavier than the
-current unit-style tests. Worth the cost for the feature's only meaningful
-behavior delta.
+**Resolution.** Added 3 workflow-slice tests at the bottom of
+[tests/tag_target.bats](../tests/tag_target.bats) (M7 block). The harness
+replays the orchestrator's two relevant commits (Bump → CHANGELOG) on a
+scratch repo and then calls the same production functions the orchestrator
+does — `resolve_tag_target_sha` followed by `create_tag` — verifying the tag
+lands where each setting promises. Covered: `version_commit` tags the bump
+commit, `release_head` tags the CHANGELOG commit, and the unset default
+matches `version_commit`. A "the two commits really are different" sanity
+check guards against silent passes. Cheaper than spinning up
+`manifest_ship_workflow` (no VERSION file, time server, docs/, or markdown
+lint), and still exercises the dispatch + tag-creation seam end-to-end.
 
 ### [x] M8. No CHANGELOG / USER_GUIDE entry for behavior change
 The shipped behavior changed: today's release tags now point at the version
@@ -180,6 +188,18 @@ issues above. Listed here for completeness:
 
 After all of these land, the feature is genuinely production-grade rather
 than "shipped and tested for the happy path."
+
+---
+
+## Closing status (2026-04-29)
+
+H1✅ H2✅ H3✅ M4✅ M5✅ M6✅ M7✅ M8✅ — **8/10 closed.** L9 and L10 collapsed
+into H1's extraction (the warning text and `case` block both live in one
+place now: `resolve_tag_target_sha` in
+[modules/git/manifest-git.sh](../modules/git/manifest-git.sh)). With M7 in
+place, the `version_commit` vs `release_head` divergence — the feature's only
+real behavior delta — is locked at the integration level. The feature is
+production-grade.
 
 ---
 

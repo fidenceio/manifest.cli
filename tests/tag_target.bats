@@ -136,3 +136,80 @@ teardown() {
     [ -z "$output" ]
     [[ "$stderr" == *"deprecated"* ]]
 }
+
+# -----------------------------------------------------------------------------
+# M7: workflow integration — divergent bump/CHANGELOG history
+# -----------------------------------------------------------------------------
+# The unit dispatch tests above prove resolve_tag_target_sha returns the right
+# SHA (or empty) per setting. The create_tag tests prove the tag lands at an
+# explicit SHA. M7 closes the loop: in the *actual* workflow sequence
+# (Bump version commit -> CHANGELOG commit -> tag), does the tag land where
+# the setting promises? This is the only scenario where version_commit and
+# release_head diverge — without it, the feature's central distinction is
+# untested at the integration level.
+#
+# Harness: rather than load the full manifest_ship_workflow (VERSION file,
+# docs/, time server, markdown lint, etc.), we replay the orchestrator's
+# tag-relevant slice — the bump commit and the CHANGELOG commit — then call
+# the same two production functions the orchestrator does. Mirrors
+# orchestrator.sh:285 (capture version_commit_sha), :347 (resolve_tag_target_sha),
+# :350 (create_tag).
+
+@test "M7 workflow: version_commit tags the bump commit when CHANGELOG follows" {
+    # Replay the orchestrator's commit sequence on the scratch repo.
+    git commit -q --allow-empty -m "Bump version to 1.0.0"
+    local version_commit_sha
+    version_commit_sha="$(git rev-parse HEAD)"
+    git commit -q --allow-empty -m "Update main CHANGELOG.md to v1.0.0"
+    local changelog_sha
+    changelog_sha="$(git rev-parse HEAD)"
+    # Sanity: the two commits really are different — without this the test
+    # would silently pass either way.
+    [ "$version_commit_sha" != "$changelog_sha" ]
+
+    local tag_target_sha
+    tag_target_sha="$(MANIFEST_CLI_RELEASE_TAG_TARGET=version_commit \
+        resolve_tag_target_sha "$version_commit_sha")"
+    run create_tag "1.0.0" "$tag_target_sha"
+    [ "$status" -eq 0 ]
+    [ "$(git rev-parse v1.0.0^{commit})" = "$version_commit_sha" ]
+    [ "$(git rev-parse v1.0.0^{commit})" != "$changelog_sha" ]
+}
+
+@test "M7 workflow: release_head tags the CHANGELOG commit (current HEAD)" {
+    git commit -q --allow-empty -m "Bump version to 1.0.0"
+    local version_commit_sha
+    version_commit_sha="$(git rev-parse HEAD)"
+    git commit -q --allow-empty -m "Update main CHANGELOG.md to v1.0.0"
+    local changelog_sha
+    changelog_sha="$(git rev-parse HEAD)"
+    [ "$version_commit_sha" != "$changelog_sha" ]
+
+    local tag_target_sha
+    tag_target_sha="$(MANIFEST_CLI_RELEASE_TAG_TARGET=release_head \
+        resolve_tag_target_sha "$version_commit_sha")"
+    run create_tag "1.0.0" "$tag_target_sha"
+    [ "$status" -eq 0 ]
+    [ "$(git rev-parse v1.0.0^{commit})" = "$changelog_sha" ]
+    [ "$(git rev-parse v1.0.0^{commit})" != "$version_commit_sha" ]
+}
+
+@test "M7 workflow: default (unset) behaves like version_commit on divergent history" {
+    # Locks the documented default. If someone flips the default to
+    # release_head, this test fails loudly — that's a behavior change worth
+    # blocking on.
+    git commit -q --allow-empty -m "Bump version to 1.0.0"
+    local version_commit_sha
+    version_commit_sha="$(git rev-parse HEAD)"
+    git commit -q --allow-empty -m "Update main CHANGELOG.md to v1.0.0"
+    local changelog_sha
+    changelog_sha="$(git rev-parse HEAD)"
+    [ "$version_commit_sha" != "$changelog_sha" ]
+
+    unset MANIFEST_CLI_RELEASE_TAG_TARGET
+    local tag_target_sha
+    tag_target_sha="$(resolve_tag_target_sha "$version_commit_sha")"
+    run create_tag "1.0.0" "$tag_target_sha"
+    [ "$status" -eq 0 ]
+    [ "$(git rev-parse v1.0.0^{commit})" = "$version_commit_sha" ]
+}
