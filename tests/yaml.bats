@@ -63,12 +63,12 @@ teardown() {
 @test "yaml: load_yaml_to_env exports mapped keys into MANIFEST_CLI_* envs" {
     set_yaml_value "$YAML" "git.tag_prefix" "release-"
     set_yaml_value "$YAML" "git.default_branch" "trunk"
-    set_yaml_value "$YAML" "release.tag_target" "final_release_commit"
+    set_yaml_value "$YAML" "release.tag_target" "release_head"
     unset MANIFEST_CLI_GIT_TAG_PREFIX MANIFEST_CLI_GIT_DEFAULT_BRANCH MANIFEST_CLI_RELEASE_TAG_TARGET
     load_yaml_to_env "$YAML"
     [ "$MANIFEST_CLI_GIT_TAG_PREFIX" = "release-" ]
     [ "$MANIFEST_CLI_GIT_DEFAULT_BRANCH" = "trunk" ]
-    [ "$MANIFEST_CLI_RELEASE_TAG_TARGET" = "final_release_commit" ]
+    [ "$MANIFEST_CLI_RELEASE_TAG_TARGET" = "release_head" ]
 }
 
 @test "yaml: load_yaml_to_env preserves unrelated env values when key absent (layered precedence)" {

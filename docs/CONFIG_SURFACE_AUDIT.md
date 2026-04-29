@@ -95,7 +95,7 @@ needed before config loading.
 
 ```yaml
 release:
-  tag_target: "version_commit" # version_commit | final_release_commit
+  tag_target: "version_commit" # version_commit | release_head
 ```
 
 Continue with canonical behavior because it directly affects release
