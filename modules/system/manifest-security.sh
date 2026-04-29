@@ -192,7 +192,7 @@ generate_security_report() {
     local warnings="$3"
 
     # Skip report generation if MANIFEST_CLI_SKIP_SECURITY_REPORT is set (for automated workflows)
-    if [[ "${MANIFEST_CLI_SKIP_SECURITY_REPORT}" == "true" ]]; then
+    if is_truthy "${MANIFEST_CLI_SKIP_SECURITY_REPORT:-}"; then
         return 0
     fi
 

@@ -79,6 +79,27 @@ teardown() {
     [ "$MANIFEST_CLI_GIT_DEFAULT_BRANCH" = "preserved" ]
 }
 
+@test "yaml: load_yaml_to_env trims surrounding whitespace from values" {
+    # YAML preserves leading/trailing whitespace inside quoted strings.  Without
+    # normalization, " release_head " (typo on copy/paste) would silently break
+    # every downstream string comparison.  load_yaml_to_env must trim.
+    set_yaml_value "$YAML" "release.tag_target" "  release_head  "
+    set_yaml_value "$YAML" "git.tag_prefix" "   release-   "
+    unset MANIFEST_CLI_RELEASE_TAG_TARGET MANIFEST_CLI_GIT_TAG_PREFIX
+    load_yaml_to_env "$YAML"
+    [ "$MANIFEST_CLI_RELEASE_TAG_TARGET" = "release_head" ]
+    [ "$MANIFEST_CLI_GIT_TAG_PREFIX" = "release-" ]
+}
+
+@test "yaml: load_yaml_to_env preserves internal whitespace (only trims edges)" {
+    # Trim must be edge-only.  A commit_template legitimately contains spaces;
+    # we should not collapse or modify them, only strip leading/trailing.
+    set_yaml_value "$YAML" "git.commit_template" "  Release v{version} - {timestamp}  "
+    unset MANIFEST_CLI_GIT_COMMIT_TEMPLATE
+    load_yaml_to_env "$YAML"
+    [ "$MANIFEST_CLI_GIT_COMMIT_TEMPLATE" = "Release v{version} - {timestamp}" ]
+}
+
 @test "yaml: set_yaml_value followed by get_yaml_value round-trips multi-level paths" {
     set_yaml_value "$YAML" "time.cache_ttl" "120"
     set_yaml_value "$YAML" "time.cache_cleanup_period" "3600"

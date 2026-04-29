@@ -96,3 +96,43 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "$output" = "abc123" ]
 }
+
+@test "tag target dispatch: unknown value emits a warning to stderr" {
+    # M6: lock the warning behavior so a future refactor that silently drops
+    # it cannot pass tests.  The warning must echo back the offending value
+    # so the user can debug their YAML.
+    MANIFEST_CLI_RELEASE_TAG_TARGET="garbage" \
+        run --separate-stderr resolve_tag_target_sha "abc123"
+    [ "$status" -eq 0 ]
+    [[ "$stderr" == *"garbage"* ]]
+    [[ "$stderr" == *"version_commit or release_head"* ]]
+}
+
+@test "tag target dispatch: case-insensitive — Version_Commit accepted" {
+    # M5: enumerated values are normalized (trim + lowercase) before dispatch
+    # so a YAML user-typed "Version_Commit" matches the same as "version_commit".
+    MANIFEST_CLI_RELEASE_TAG_TARGET="Version_Commit" \
+        run resolve_tag_target_sha "abc123"
+    [ "$status" -eq 0 ]
+    [ "$output" = "abc123" ]
+}
+
+@test "tag target dispatch: whitespace-tolerant — surrounding spaces accepted" {
+    # M5: even though load_yaml_to_env trims at load time, the dispatch is
+    # also tolerant defensively so direct env-var users (CI scripts) get the
+    # same forgiveness.
+    MANIFEST_CLI_RELEASE_TAG_TARGET="  release_head  " \
+        run resolve_tag_target_sha "abc123"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "tag target dispatch: combined whitespace + case + deprecated alias" {
+    # All three forgiveness layers compose: trim, lowercase, and the
+    # final_release_commit -> release_head alias.
+    MANIFEST_CLI_RELEASE_TAG_TARGET="  Final_Release_Commit  " \
+        run --separate-stderr resolve_tag_target_sha "abc123"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+    [[ "$stderr" == *"deprecated"* ]]
+}
