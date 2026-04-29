@@ -1,5 +1,7 @@
 #!/usr/bin/env bats
 
+bats_require_minimum_version 1.5.0
+
 load 'helpers/setup'
 
 setup() {
@@ -58,20 +60,6 @@ teardown() {
     [ "$status" -ne 0 ]
 }
 
-# Validates the orchestrator-level env-var dispatch logic. We extract just the
-# case statement so the test stays unit-level and free of full-workflow side
-# effects (commits, pushes, brew). Mirrors modules/workflow/manifest-orchestrator.sh.
-resolve_tag_target_sha() {
-    local version_commit_sha="$1"
-    local result=""
-    case "${MANIFEST_CLI_RELEASE_TAG_TARGET:-version_commit}" in
-        version_commit)        result="$version_commit_sha" ;;
-        final_release_commit)  result="" ;;
-        *)                     result="$version_commit_sha" ;;
-    esac
-    echo "$result"
-}
-
 @test "tag target dispatch: defaults to version_commit sha" {
     unset MANIFEST_CLI_RELEASE_TAG_TARGET
     run resolve_tag_target_sha "abc123"
@@ -95,7 +83,7 @@ resolve_tag_target_sha() {
 
 @test "tag target dispatch: unknown value falls back to version sha" {
     MANIFEST_CLI_RELEASE_TAG_TARGET="garbage" \
-        run resolve_tag_target_sha "abc123"
+        run --separate-stderr resolve_tag_target_sha "abc123"
     [ "$status" -eq 0 ]
     [ "$output" = "abc123" ]
 }
