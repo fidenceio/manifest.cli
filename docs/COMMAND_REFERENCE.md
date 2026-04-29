@@ -331,6 +331,16 @@ manifest ship repo patch --local   # Everything except tag/push/Homebrew
 
 **Failure handling:** If any step after commit fails, the orchestrator emits a Ship Failure Report with recovery commands (retry push, remove tag, roll back).
 
+**Tag target** (step 13): the SHA the tag points at is resolved by `resolve_tag_target_sha()` in [manifest-git.sh](../modules/git/manifest-git.sh) from `MANIFEST_CLI_RELEASE_TAG_TARGET` (YAML key `release.tag_target`):
+
+| Value | Tagged commit |
+| ----- | ------------- |
+| `version_commit` (default since v44.10.1) | Captured SHA of the "Bump version to X" commit |
+| `release_head` | HEAD at tag-creation time (post-CHANGELOG, pre-Homebrew) |
+| `final_release_commit` | Deprecated alias for `release_head`; emits a warning |
+
+Value matching is whitespace- and case-tolerant. Unknown values fall back to `version_commit` and emit a warning to stderr. The Homebrew formula commit is intentionally outside the tag in all cases (see [USER_GUIDE.md#tag-placement-releasetag_target](USER_GUIDE.md#tag-placement-releasetag_target) for the chicken-and-egg explanation).
+
 ### `manifest ship fleet`
 
 Coordinated fleet release across all repositories.
