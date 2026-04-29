@@ -90,7 +90,7 @@ more consequential (the SHA is now used downstream, not just implicit-via-HEAD).
 or (b) compare pre/post SHAs and abort if HEAD didn't move when it should
 have.
 
-### [ ] M5. YAML whitespace tolerance
+### [x] M5. YAML whitespace tolerance
 `tag_target: " version_commit "` (surrounding whitespace, easy to slip in on
 copy/paste) loads into the env var verbatim. The case match fails, the user
 gets a warning + silent default, and they have no idea why their valid-looking
@@ -100,7 +100,7 @@ config didn't take.
 `load_yaml_to_env`, OR make the case dispatch tolerant by lowercasing and
 trimming first.
 
-### [ ] M6. `log_warning` for unknown values isn't test-verified
+### [x] M6. `log_warning` for unknown values isn't test-verified
 [tests/tag_target.bats:96-100](../tests/tag_target.bats#L96-L100) checks that
 unknown values fall back to `version_commit` semantically, but doesn't capture
 stderr to confirm the warning was emitted. A future refactor that drops the

@@ -553,6 +553,11 @@ load_yaml_to_env() {
 
         # get_yaml_value handles parser detection and caching internally
         if value=$(get_yaml_value "$yaml_file" ".${yaml_path}" "" 2>/dev/null); then
+            # Trim leading/trailing whitespace.  Universally safe — YAML doesn't
+            # grant semantic meaning to surrounding whitespace, and a trailing
+            # space silently breaks every downstream string comparison.
+            value="${value#"${value%%[![:space:]]*}"}"
+            value="${value%"${value##*[![:space:]]}"}"
             if [[ -n "$value" ]]; then
                 export "$env_var"="$value"
                 log_debug "load_yaml_to_env: ${env_var}=${value}"

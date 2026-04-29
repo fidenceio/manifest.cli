@@ -226,7 +226,10 @@ commit_changes() {
 
 resolve_tag_target_sha() {
     local version_commit_sha="$1"
-    case "${MANIFEST_CLI_RELEASE_TAG_TARGET:-version_commit}" in
+    local raw="${MANIFEST_CLI_RELEASE_TAG_TARGET:-version_commit}"
+    local target
+    target="$(normalize_enum_value "$raw")"
+    case "$target" in
         version_commit)
             echo "$version_commit_sha"
             ;;
@@ -242,7 +245,7 @@ resolve_tag_target_sha() {
             echo ""
             ;;
         *)
-            log_warning "Unknown MANIFEST_CLI_RELEASE_TAG_TARGET='${MANIFEST_CLI_RELEASE_TAG_TARGET}' (expected version_commit or release_head); falling back to version_commit"
+            log_warning "Unknown MANIFEST_CLI_RELEASE_TAG_TARGET='${raw}' (expected version_commit or release_head); falling back to version_commit"
             echo "$version_commit_sha"
             ;;
     esac

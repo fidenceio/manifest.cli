@@ -122,7 +122,7 @@ manifest_ship_workflow() {
     fi
     
     # Enable interactive mode if environment variable is set to true
-    if [ "${MANIFEST_CLI_INTERACTIVE_MODE:-false}" = "true" ] || [ "${MANIFEST_CLI_INTERACTIVE_MODE:-false}" = "yes" ] || [ "${MANIFEST_CLI_INTERACTIVE_MODE:-false}" = "1" ]; then
+    if is_truthy "${MANIFEST_CLI_INTERACTIVE_MODE:-false}"; then
         interactive_mode=true
     fi
     
