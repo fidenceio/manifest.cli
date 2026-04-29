@@ -44,8 +44,8 @@ _confirm_global_config_write() {
     local target="$2"
     local reason="$3"
 
-    if [ "${MANIFEST_CLI_AUTO_CONFIRM:-0}" = "1" ]; then
-        _manifest_config_warn "Auto-confirming $action of $target ($reason) [MANIFEST_CLI_AUTO_CONFIRM=1]"
+    if is_truthy "${MANIFEST_CLI_AUTO_CONFIRM:-0}"; then
+        _manifest_config_warn "Auto-confirming $action of $target ($reason) [MANIFEST_CLI_AUTO_CONFIRM=${MANIFEST_CLI_AUTO_CONFIRM}]"
         export _MANIFEST_GLOBAL_CONFIG_AUTHORIZED=1
         return 0
     fi
@@ -326,7 +326,7 @@ auto_migrate_user_global_configuration() {
     # That violates the "no silent modifications" rule. Default behavior is
     # now WARN-ONLY; users opt in to silent migration with MANIFEST_CLI_AUTO_CONFIRM=1
     # or run `manifest config doctor --fix` explicitly.
-    if [ "${MANIFEST_CLI_AUTO_CONFIRM:-0}" != "1" ]; then
+    if ! is_truthy "${MANIFEST_CLI_AUTO_CONFIRM:-0}"; then
         _manifest_config_warn "Configuration drift detected in $config_file."
         _manifest_config_warn "Run 'manifest config doctor --dry-run' to review, then '--fix' to apply."
         return 0
@@ -764,8 +764,8 @@ _manifest_config_review_and_confirm() {
     printf "  %-30s %s\n" "pr.enforce_ready" "$pr_enforce_ready"
     echo ""
 
-    if [[ "${MANIFEST_CLI_AUTO_CONFIRM:-0}" == "1" ]]; then
-        echo "MANIFEST_CLI_AUTO_CONFIRM=1 — proceeding without prompt."
+    if is_truthy "${MANIFEST_CLI_AUTO_CONFIRM:-0}"; then
+        echo "MANIFEST_CLI_AUTO_CONFIRM=${MANIFEST_CLI_AUTO_CONFIRM} — proceeding without prompt."
         return 0
     fi
 

@@ -71,6 +71,58 @@ log_trace() {
 }
 
 # -----------------------------------------------------------------------------
+# Config value normalization — forgiving grammar for YAML/env-driven settings.
+# -----------------------------------------------------------------------------
+# YAML config flows through MANIFEST_CLI_* env vars. Without normalization,
+# a trailing space, a capital letter, or an alternate spelling silently fails
+# the dispatch and falls back to defaults — invisible to the user.
+#
+# These helpers are the canonical answer:
+#   - is_truthy   : 0 if the value means "yes/on" (1|true|yes|on, case-insensitive)
+#   - is_falsy    : 0 if the value means "no/off" (0|false|no|off|empty, case-insensitive)
+#   - normalize_enum_value : trim + lowercase, for closed-set enum dispatch
+#
+# All three trim leading/trailing whitespace and are case-insensitive.
+# is_truthy/is_falsy are NOT strict inverses — "garbage" is neither truthy
+# nor falsy; callers decide how to treat unknown values.
+# -----------------------------------------------------------------------------
+
+# Trim leading/trailing whitespace.  Echoes the trimmed value.
+_trim_ws() {
+    local s="$1"
+    s="${s#"${s%%[![:space:]]*}"}"
+    s="${s%"${s##*[![:space:]]}"}"
+    printf '%s' "$s"
+}
+
+# Trim whitespace and lowercase.  Used by is_truthy/is_falsy and by enum
+# dispatch sites that want forgiving config matching.
+normalize_enum_value() {
+    local s
+    s="$(_trim_ws "$1")"
+    printf '%s' "${s,,}"
+}
+
+# Returns 0 if $1 normalizes to a recognized truthy token, 1 otherwise.
+# Recognized: 1, true, yes, on (case-insensitive, whitespace-tolerant).
+is_truthy() {
+    case "$(normalize_enum_value "${1:-}")" in
+        1|true|yes|on) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# Returns 0 if $1 normalizes to a recognized falsy token, 1 otherwise.
+# Recognized: 0, false, no, off, empty string (case-insensitive,
+# whitespace-tolerant).  Useful for "explicitly off" vs "unset" distinctions.
+is_falsy() {
+    case "$(normalize_enum_value "${1:-}")" in
+        0|false|no|off|'') return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# -----------------------------------------------------------------------------
 # Deprecation warning — single source of truth for legacy aliases.
 # -----------------------------------------------------------------------------
 # Args:
@@ -85,7 +137,7 @@ log_trace() {
 #   - Always goes to stderr via log_warning so it never mixes with stdout.
 # -----------------------------------------------------------------------------
 log_deprecated() {
-    [[ "${MANIFEST_CLI_QUIET_DEPRECATIONS:-0}" = "1" ]] && return 0
+    is_truthy "${MANIFEST_CLI_QUIET_DEPRECATIONS:-0}" && return 0
 
     local old="$1"
     local new="$2"
@@ -562,6 +614,7 @@ validate_directory_exists() {
 export -f log_debug log_info log_success log_warning log_error log_trace
 export -f validate_required_args ensure_directory create_temp_file
 export -f show_help show_usage_error show_required_arg_error
+export -f _trim_ws normalize_enum_value is_truthy is_falsy
 export -f _render_help _render_help_error _manifest_hash_short
 export -f _json_escape _json_kv_str _json_kv_raw _json_value
 export -f get_script_dir get_script_parent_dir get_project_root get_modules_dir
