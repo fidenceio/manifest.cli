@@ -337,13 +337,12 @@ manifest_ship_workflow() {
         workflow_tag_name="v${new_version}"
 
         # Resolve which commit the release tag should point at.
-        # version_commit       — the explicit "Bump version to X" commit, even when
-        #                        a CHANGELOG commit follows it. Default.
-        # final_release_commit — current HEAD at tagging time (post-CHANGELOG,
-        #                        pre-Homebrew). Homebrew commits cannot be
-        #                        included because update_homebrew_formula needs
-        #                        the GitHub tarball SHA256 of an already-pushed
-        #                        tag.
+        # version_commit — the explicit "Bump version to X" commit, even when
+        #                  a CHANGELOG commit follows it. Default.
+        # release_head   — current HEAD at tagging time (post-CHANGELOG,
+        #                  pre-Homebrew). Homebrew commits cannot be included
+        #                  because update_homebrew_formula needs the GitHub
+        #                  tarball SHA256 of an already-pushed tag.
         local tag_target_sha
         tag_target_sha="$(resolve_tag_target_sha "$workflow_version_commit_sha")"
 

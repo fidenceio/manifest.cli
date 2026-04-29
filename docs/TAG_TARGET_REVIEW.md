@@ -36,7 +36,7 @@ Have the orchestrator call that function. Have the test source the module and
 test the real function. Removes both the test-mirror problem and the
 future-drift problem.
 
-### [ ] H2. `final_release_commit` is a name that overpromises
+### [x] H2. `final_release_commit` is a name that overpromises
 The name reads as "the very last commit of the release," but Homebrew commits
 cannot be the target due to the SHA256 chicken-and-egg. So the value actually
 means "last release-prep commit *before* Homebrew." A user setting this and
