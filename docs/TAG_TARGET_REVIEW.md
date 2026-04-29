@@ -56,7 +56,7 @@ Recommendation: (A). A misleading name is a bug; documentation can't fully
 patch it. Pair the rename with a backward-compat alias that warns on the old
 value for one minor version.
 
-### [ ] H3. Silent degradation when SHA capture fails
+### [x] H3. Silent degradation when SHA capture fails
 In [orchestrator.sh:267](../modules/workflow/manifest-orchestrator.sh#L267):
 ```bash
 workflow_version_commit_sha="$(git rev-parse HEAD 2>/dev/null || echo "")"
@@ -75,7 +75,7 @@ commit SHA unavailable; falling back to current HEAD."
 
 ## Medium severity
 
-### [ ] M4. `commit_changes` return code unchecked before SHA capture
+### [x] M4. `commit_changes` return code unchecked before SHA capture
 At [orchestrator.sh:266](../modules/workflow/manifest-orchestrator.sh#L266) the
 orchestrator calls `commit_changes "Bump version to $new_version"` without
 checking its return code, then captures `git rev-parse HEAD` as the "version

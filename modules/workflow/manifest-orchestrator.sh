@@ -275,8 +275,19 @@ manifest_ship_workflow() {
     
     # Commit version changes
     echo "💾 Committing version changes..."
-    commit_changes "Bump version to $new_version" "$timestamp"
+    local pre_version_commit_sha
+    pre_version_commit_sha="$(git rev-parse HEAD 2>/dev/null || echo "")"
+    if ! commit_changes "Bump version to $new_version" "$timestamp"; then
+        log_error "Failed to commit version bump; aborting ship workflow."
+        emit_ship_failure_report "version_commit" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+        return 1
+    fi
     workflow_version_commit_sha="$(git rev-parse HEAD 2>/dev/null || echo "")"
+    if [[ -z "$workflow_version_commit_sha" || "$workflow_version_commit_sha" == "$pre_version_commit_sha" ]]; then
+        log_error "Version commit did not advance HEAD (pre=${pre_version_commit_sha:-unknown} post=${workflow_version_commit_sha:-unknown}); aborting ship workflow."
+        emit_ship_failure_report "version_commit" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+        return 1
+    fi
     echo ""
     
     # Update main CHANGELOG.md for GitHub visibility
