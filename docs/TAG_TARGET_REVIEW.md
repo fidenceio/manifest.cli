@@ -124,7 +124,7 @@ This requires a workflow-level integration test, which is heavier than the
 current unit-style tests. Worth the cost for the feature's only meaningful
 behavior delta.
 
-### [ ] M8. No CHANGELOG / USER_GUIDE entry for behavior change
+### [x] M8. No CHANGELOG / USER_GUIDE entry for behavior change
 The shipped behavior changed: today's release tags now point at the version
 commit instead of post-CHANGELOG HEAD by default. For repos with a real
 CHANGELOG, that's a visible difference for any automation reading

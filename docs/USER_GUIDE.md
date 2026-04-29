@@ -76,6 +76,32 @@ manifest ship repo major -i    # Major release with interactive safety prompts
 
 Ship runs: sync, version bump, documentation generation, markdown validation, commit, Git tag, push to all remotes, and Homebrew formula update (in the canonical repository).
 
+#### Tag Placement (`release.tag_target`)
+
+The release tag can point at either of two commits:
+
+| Value | Tag points at | When to use |
+| ----- | ------------- | ----------- |
+| `version_commit` (default) | The "Bump version to X" commit | Most projects — keeps the tag anchored to the canonical release artifact even when a CHANGELOG commit lands after the bump |
+| `release_head` | Whatever HEAD is when the tag is created (post-bump, post-CHANGELOG, pre-Homebrew) | Projects that want the CHANGELOG entry inside the tag |
+
+The Homebrew formula commit is intentionally outside the tag in both cases:
+`update_homebrew_formula` curls the GitHub tarball at the tag URL to compute
+SHA256, which would require the formula to contain its own SHA256
+(chicken-and-egg). So `release_head` means "last commit *before* Homebrew",
+not literally the final commit of the release.
+
+Configure in `manifest.config.yaml`:
+
+```yaml
+release:
+  tag_target: "version_commit"   # or "release_head"
+```
+
+The value is whitespace- and case-tolerant (`Version_Commit`, `" release_head "` all work). The deprecated alias `final_release_commit` continues to work but emits a warning — switch to `release_head`.
+
+> **Behavior change in v44.10.1.** Before v44.10.1, the release tag always pointed at HEAD at tag-creation time (effectively `release_head`). v44.10.1 introduced this option and changed the default to `version_commit`. If your automation reads `git for-each-ref` or `git rev-list <tag>..main` and expects post-CHANGELOG content inside the tag, set `release.tag_target: "release_head"` to restore the old behavior.
+
 ### Regenerate Documentation
 
 ```bash
