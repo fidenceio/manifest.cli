@@ -22,6 +22,10 @@ Every journey command takes a **scope**: `repo` (single repository) or `fleet` (
 
 Supported release types: `patch`, `minor`, `major`, `revision`.
 
+Fleet adoption has two extra commands before the normal fleet journey:
+`manifest plan fleet` generates an editable plan, and `manifest reconcile fleet`
+validates or applies it. Both are dry-run by default.
+
 ---
 
 ## First-Time Setup
@@ -144,7 +148,47 @@ manifest pr policy validate   # Validate against policy
 
 Fleet manages versioning and releases across multiple repositories.
 
-### Initialize a Fleet
+### Adopt an Existing Fleet
+
+Use `plan` and `reconcile` when a workspace already contains multiple repos,
+plain directories, or submodules and you want an explicit adoption file before
+anything changes.
+
+```bash
+manifest plan fleet                    # Preview plan generation, writes nothing
+manifest plan fleet --apply            # Write manifest.fleet.plan.yaml
+manifest plan fleet --name "my-platform" --apply
+
+# Review and edit manifest.fleet.plan.yaml.
+
+manifest reconcile fleet               # Validate and explain, writes nothing
+manifest reconcile fleet --do          # Apply local filesystem/config changes
+manifest reconcile fleet --apply --commit
+```
+
+`--apply` and `--do` are aliases. `--commit` requires `--apply`/`--do`, and
+`--push` requires `--commit`. `--force` does not bypass target path collisions.
+
+The plan file supports these actions:
+
+| Action | Behavior |
+| ------ | -------- |
+| `track` | Add an existing git repo to fleet config |
+| `init` | Initialize a plain directory as a git repo and track it |
+| `move` | Move a directory/repo to `target_path`, then track it |
+| `adopt_submodule` | Convert a submodule into a standalone tracked repo |
+| `skip` | Leave the entry untouched |
+
+Submodule adoption is intentionally gated:
+
+```bash
+manifest reconcile fleet --apply --adopt-submodules
+```
+
+Only use it after reviewing the generated `parent_path`, `submodule_name`,
+`remote_url`, and `pinned_commit` fields.
+
+### Initialize a New Fleet
 
 ```bash
 # Phase 1: Scan directories, create manifest.fleet.tsv for review
@@ -163,6 +207,10 @@ manifest init fleet --name "my-platform"
 ```
 
 The two-phase approach lets you review discovered repositories in the TSV file before committing to a fleet configuration. During initialization, Manifest ensures every discovered repo has a `.gitignore`. Existing `.gitignore` files with entries are preserved; a `.gitignore.manifest` reference file is created instead.
+
+For messy existing workspaces, prefer `manifest plan fleet` and
+`manifest reconcile fleet`; they keep the adoption decisions in an editable
+YAML plan with a dry-run default.
 
 ### Prepare Fleet Workspace
 

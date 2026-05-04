@@ -172,6 +172,98 @@ manifest init fleet --force                # Overwrite existing files
 
 ---
 
+### `manifest plan fleet`
+
+Generate a YAML fleet adoption plan. Dry-run is the default.
+
+```bash
+manifest plan fleet                  # Preview plan generation, writes nothing
+manifest plan fleet --apply          # Write manifest.fleet.plan.yaml
+manifest plan fleet --do             # Alias for --apply
+manifest plan fleet --depth auto     # Adaptive scan guardrail
+```
+
+**Flags:**
+
+| Flag | Description |
+| ---- | ----------- |
+| `--apply`, `--do` | Write the plan file |
+| `--dry-run` | Explicit no-op; dry-run is already the default |
+| `--depth N\|auto` | Scan depth guardrail |
+| `--safety-cap N` | Auto-depth ceiling |
+| `--plan FILE` | Plan file path |
+
+### `manifest reconcile fleet`
+
+Validate and apply a fleet adoption plan. Dry-run is the default.
+
+```bash
+manifest reconcile fleet                         # Validate and explain, writes nothing
+manifest reconcile fleet --do                    # Apply local filesystem/config changes
+manifest reconcile fleet --apply --commit        # Apply and commit local changes
+manifest reconcile fleet --apply --commit --push # Apply, commit, and push
+```
+
+**Mutation ladder:**
+
+| Flag | Description |
+| ---- | ----------- |
+| `--apply`, `--do` | Apply local filesystem/config changes |
+| `--commit` | Commit local changes; requires `--apply` or `--do` |
+| `--push` | Push commits; requires `--commit` |
+| `--force` | Reserved for explicit overrides; requires `--apply` or `--do` |
+| `--adopt-submodules` | Allow `adopt_submodule` actions |
+
+### `manifest.fleet.plan.yaml`
+
+`manifest plan fleet --apply` writes an editable adoption plan. `manifest reconcile fleet` reads that file, validates every active entry, and either explains the actions in dry-run mode or applies them with `--apply`/`--do`.
+
+Top-level sections:
+
+| Section | Purpose |
+| ------- | ------- |
+| `plan` | Schema version, generation timestamp, and fleet root |
+| `fleet` | Fleet name to write into `manifest.fleet.config.yaml` |
+| `discovery` | Scan depth and safety cap used to build the plan |
+| `rules` | Generated path/depth hints for human review |
+| `entries` | One action per discovered repo, directory, or submodule |
+
+Entry fields:
+
+| Field | Purpose |
+| ----- | ------- |
+| `name` | Service key written under `services:` |
+| `kind` | `git_repo`, `plain_dir`, or `submodule` |
+| `source_path` | Existing relative path under the fleet root |
+| `target_path` | Desired relative path under the fleet root |
+| `action` | `track`, `init`, `move`, `adopt_submodule`, or `skip` |
+| `type` | Fleet service type, usually `service` |
+| `remote_url` | Git remote URL when known or required |
+| `branch` | Branch to track in fleet config |
+| `parent_path` | Parent git repo for submodule adoption |
+| `submodule_name` | `.gitmodules` section name for submodule adoption |
+| `pinned_commit` | Submodule commit to check out after cloning |
+
+Actions:
+
+| Action | Behavior |
+| ------ | -------- |
+| `track` | Add an existing git repo to fleet config without moving it |
+| `init` | Initialize a plain directory as a git repo and track it |
+| `move` | Move a source path to `target_path`, then track it |
+| `adopt_submodule` | Clone the submodule as a standalone repo, remove it from the parent, then track it |
+| `skip` | Leave the entry untouched |
+
+Safety rules:
+
+- `manifest plan fleet` and `manifest reconcile fleet` are read-only unless `--apply` or `--do` is present.
+- `--commit` requires `--apply`/`--do`; `--push` requires `--commit`.
+- `--force` does not override target path collisions.
+- `target_path` must be relative, non-empty, and not nested inside another active `target_path`.
+- `adopt_submodule` entries require `--adopt-submodules` and a clean parent repo.
+
+---
+
 ## `manifest prep`
 
 Prepare workspace: connect remotes, pull latest. This is the v42 meaning of "prep" — it replaces the old `manifest sync`.
@@ -297,6 +389,27 @@ manifest ship repo patch --local   # Everything except tag/push/Homebrew
 
 **Local mode** (`--local`): Everything except creating a tag, pushing to remotes, and updating Homebrew. Equivalent to the old `manifest prep <type>`.
 
+Before any `commit_changes()` call stages files, Manifest runs a smart documentation review. The default provider is local and deterministic: it inspects the dirty tree, classifies changed files, reports whether documentation-impacting changes have matching docs updates, adds a concise review body to the commit, writes a neutral committed report under `docs/documentation-reviews/`, and feeds the review summary into generated release notes/changelogs.
+
+Documentation review environment hooks:
+
+| Variable | Description |
+| -------- | ----------- |
+| `MANIFEST_CLI_DOC_REVIEW=false` | Disable the review |
+| `MANIFEST_CLI_DOC_REVIEW_OUTPUTS=commit_body,report,release_notes` | Enabled outputs; use `all` or omit an item to disable it |
+| `MANIFEST_CLI_DOC_REVIEW_REPORT_DIR=docs/documentation-reviews` | Committed report directory |
+| `MANIFEST_CLI_DOC_REVIEW_PROVIDER=local` | Default local reviewer |
+| `MANIFEST_CLI_DOC_REVIEW_PROVIDER=command` | Run an external reviewer command after the local report is written |
+| `MANIFEST_CLI_DOC_REVIEW_COMMAND=/path/to/reviewer` | Executable called as `reviewer REPORT_FILE PROJECT_ROOT` |
+| `MANIFEST_CLI_DOC_REVIEW_REQUIRED=true` | Fail the commit if the external provider fails |
+
+The same settings are available in `manifest.config.yaml` under `docs.review.*`.
+For `provider=command`, Manifest exports sidecar paths before invoking the command:
+`MANIFEST_DOC_REVIEW_COMMIT_SUBJECT_FILE`, `MANIFEST_DOC_REVIEW_COMMIT_BODY_FILE`,
+and `MANIFEST_DOC_REVIEW_RELEASE_NOTE_FILE`. A provider can write those files to
+override the commit subject, replace the commit body attachment, or replace the
+release-note/changelog attachment.
+
 **Flags:**
 
 | Flag | Description |
@@ -315,7 +428,7 @@ manifest ship repo patch --local   # Everything except tag/push/Homebrew
 1. `ensure_required_files()` — scaffold if missing
 2. Interactive safety check (if `-i`)
 3. `get_time_timestamp()` — trusted HTTPS timestamp
-4. Auto-commit uncommitted changes
+4. Auto-commit uncommitted changes, after smart documentation review
 5. `sync_repository()` — pull from remotes
 6. `bump_version()` — increment VERSION file
 7. `generate_documents()` — release notes, changelog

@@ -83,6 +83,8 @@ readonly MANIFEST_FLEET_MODULE_NAME="manifest-fleet"
 source "$MANIFEST_FLEET_SCRIPT_DIR/manifest-fleet-config.sh"
 source "$MANIFEST_FLEET_SCRIPT_DIR/manifest-fleet-detect.sh"
 source "$MANIFEST_FLEET_SCRIPT_DIR/manifest-fleet-docs.sh"
+source "$MANIFEST_FLEET_SCRIPT_DIR/manifest-fleet-plan.sh"
+source "$MANIFEST_FLEET_SCRIPT_DIR/manifest-fleet-apply.sh"
 
 # =============================================================================
 # UTILITY FUNCTIONS
@@ -2277,6 +2279,8 @@ Manage multiple related repositories as a coordinated fleet.
 Use action-first commands:
 
   manifest init fleet           Scaffold
+  manifest plan fleet           Generate an adoption plan (dry-run by default)
+  manifest reconcile fleet      Apply a validated adoption plan (--apply/--do)
   manifest prep fleet           Clone/pull
   manifest quickstart fleet     Auto-discover git repos, skip TSV selection
   manifest discover fleet       Preview fleet membership discovery
@@ -2297,6 +2301,24 @@ COMMAND DETAILS:
       --name, -n NAME    Fleet name
       --force, -f        Overwrite existing manifest.fleet.config.yaml
       --dry-run          Preview files and discovery without writing
+
+  manifest plan fleet [options]
+    Generate manifest.fleet.plan.yaml for fleet adoption.
+    Dry-run by default.
+    Options:
+      --apply, --do      Write the plan file
+      --depth N|auto     Scan depth guardrail (default: auto)
+      --plan FILE        Plan file path
+
+  manifest reconcile fleet [options]
+    Validate and apply manifest.fleet.plan.yaml.
+    Dry-run by default.
+    Options:
+      --apply, --do      Apply local filesystem/config changes
+      --commit           Commit local changes (requires --apply/--do)
+      --push             Push commits (requires --commit)
+      --force            Reserved for explicit overrides (requires --apply/--do)
+      --adopt-submodules Allow adopt_submodule actions
 
   manifest status [options]
     Show fleet status overview.
@@ -2386,6 +2408,8 @@ EXAMPLES:
   manifest refresh fleet                # also regenerates docs
 
   # Preview only (read-only)
+  manifest plan fleet
+  manifest reconcile fleet
   manifest init fleet --dry-run
   manifest refresh fleet --dry-run
   manifest docs fleet --dry-run

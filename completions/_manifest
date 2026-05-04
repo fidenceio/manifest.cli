@@ -18,6 +18,8 @@ _manifest() {
         'config:Setup wizard / show configuration'
         'init:Scaffold a repo or fleet'
         'quickstart:Run an opinionated quickstart workflow'
+        'plan:Generate an adoption plan'
+        'reconcile:Validate and apply an adoption plan'
         'status:Read-only snapshot'
         'discover:Discover resources without writing changes'
         'update:Update fleet membership'
@@ -55,7 +57,7 @@ _manifest() {
             ;;
         subcommand)
             case $words[2] in
-                init|quickstart|discover|update|add|validate|prep|refresh|docs|ship)
+                init|quickstart|plan|reconcile|discover|update|add|validate|prep|refresh|docs|ship)
                     _values 'scope' "${scopes[@]}"
                     ;;
                 config)
@@ -70,6 +72,12 @@ _manifest() {
             case "$words[2] $words[3]" in
                 "ship repo"|"ship fleet")
                     _values 'release type / option' "${bumps[@]}" --local --dry-run -i --interactive
+                    ;;
+                "plan fleet")
+                    _values 'option' --apply --do --dry-run --depth --safety-cap --plan --name --force --help
+                    ;;
+                "reconcile fleet")
+                    _values 'option' --apply --do --dry-run --plan --commit --push --force --adopt-submodules --help
                     ;;
                 "config get"|"config describe"|"config unset"|"config set")
                     _manifest_keys

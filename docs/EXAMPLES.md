@@ -120,6 +120,37 @@ manifest pr                            # Guided interactive flow (TTY only)
 
 ## Fleet Workflows
 
+### Adopt an Existing Multi-Repo Workspace
+
+```bash
+# Generate an adoption plan without writing files
+manifest plan fleet
+
+# Write manifest.fleet.plan.yaml for review
+manifest plan fleet --apply --name "platform-services"
+
+# Validate the reviewed plan without changing the workspace
+manifest reconcile fleet
+
+# Apply local changes after review
+manifest reconcile fleet --do
+```
+
+### Convert a Submodule into a Fleet Repo
+
+```bash
+manifest plan fleet --apply
+
+# Review generated entries with action: "adopt_submodule".
+# Confirm parent_path, submodule_name, remote_url, and pinned_commit.
+
+manifest reconcile fleet --apply --adopt-submodules
+```
+
+Submodule adoption removes the submodule from its parent repo and tracks the
+standalone clone in `manifest.fleet.config.yaml`. The parent repo and submodule
+working tree must be clean.
+
 ### Initialize a New Fleet (Two-Phase)
 
 ```bash
