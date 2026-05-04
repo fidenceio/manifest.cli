@@ -302,15 +302,17 @@ teardown() {
 
 @test "_manifest_require_gh: re-checks after TTL expiry" {
     source "$TEST_REPO_ROOT/modules/core/manifest-shared-functions.sh"
+    gh_stub_install
+    export GH_STUB_AUTH_EXIT=1
 
     # Stale timestamp + tiny TTL forces a re-check.
     _MANIFEST_GH_VALIDATED_AT=1
     MANIFEST_GH_VALIDATION_TTL=1
 
-    # No `gh` on PATH should now surface as failure.
-    PATH="/usr/bin:/bin" run _manifest_require_gh
+    run _manifest_require_gh
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "GitHub CLI"
+    echo "$output" | grep -q "not authenticated"
+    grep -q $'\tauth\tstatus' "$GH_STUB_LOG"
 }
 
 # -----------------------------------------------------------------------------

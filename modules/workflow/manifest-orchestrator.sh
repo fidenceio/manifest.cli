@@ -60,6 +60,60 @@ emit_ship_failure_report() {
         echo "   Roll back:   git reset --hard ${start_sha}"
     fi
     echo ""
+	}
+
+manifest_should_wait_for_github_actions() {
+    ! is_falsy "${MANIFEST_CLI_GITHUB_ACTIONS_WAIT:-true}"
+}
+
+manifest_check_github_actions_for_head() {
+    local head_sha="${1:-}"
+    local wait_seconds="${MANIFEST_CLI_GITHUB_ACTIONS_TIMEOUT_SECONDS:-600}"
+    local poll_seconds="${MANIFEST_CLI_GITHUB_ACTIONS_POLL_SECONDS:-5}"
+    local elapsed=0
+    local run_id=""
+
+    if ! manifest_should_wait_for_github_actions; then
+        echo "GitHub Actions: skipped (disabled by MANIFEST_CLI_GITHUB_ACTIONS_WAIT)"
+        return 2
+    fi
+    if [[ -z "$head_sha" ]]; then
+        echo "GitHub Actions: skipped (no HEAD SHA available)"
+        return 2
+    fi
+    if ! command -v gh >/dev/null 2>&1; then
+        echo "GitHub Actions: skipped (gh not installed)"
+        return 2
+    fi
+    if ! gh auth status >/dev/null 2>&1; then
+        echo "GitHub Actions: skipped (gh not authenticated)"
+        return 2
+    fi
+
+    echo "🧪 Checking GitHub Actions for ${head_sha:0:7}..."
+    while (( elapsed <= wait_seconds )); do
+        run_id="$(gh run list --commit "$head_sha" --limit 1 --json databaseId --jq '.[0].databaseId // ""' 2>/dev/null || true)"
+        if [[ -n "$run_id" ]]; then
+            break
+        fi
+        sleep "$poll_seconds"
+        elapsed=$((elapsed + poll_seconds))
+    done
+
+    if [[ -z "$run_id" ]]; then
+        echo "GitHub Actions: unavailable (no workflow run found within ${wait_seconds}s)"
+        return 2
+    fi
+
+    echo "   Run: $run_id"
+    if gh run watch "$run_id" --exit-status --interval "$poll_seconds"; then
+        echo "GitHub Actions: passed"
+        return 0
+    fi
+
+    echo "GitHub Actions: failed"
+    echo "   Inspect: gh run view $run_id --log-failed"
+    return 1
 }
 
 # Main ship workflow: version bump, docs, commit, tag, push, Homebrew.
@@ -72,6 +126,7 @@ manifest_ship_workflow() {
     local workflow_tag_name="none"
     local workflow_push_status="not_attempted"
     local workflow_homebrew_status="not_applicable"
+    local workflow_actions_status="not_applicable"
     local workflow_version_commit_sha=""
 
     if [ "$publish_release" = "true" ]; then
@@ -418,6 +473,22 @@ manifest_ship_workflow() {
             fi
         fi
         echo ""
+
+        workflow_actions_status="attempted"
+        local workflow_final_head_sha
+        workflow_final_head_sha="$(git rev-parse HEAD 2>/dev/null || echo "")"
+        if manifest_check_github_actions_for_head "$workflow_final_head_sha"; then
+            workflow_actions_status="passed"
+        else
+            local actions_rc=$?
+            if [[ "$actions_rc" -eq 1 ]]; then
+                workflow_actions_status="failed"
+                echo "⚠️  GitHub Actions failed after publish. Release artifacts were already pushed."
+            else
+                workflow_actions_status="skipped"
+            fi
+        fi
+        echo ""
     else
         echo "🧰 Prep mode complete: skipped tag/push/Homebrew publish steps."
         echo ""
@@ -437,6 +508,7 @@ manifest_ship_workflow() {
     if [ "$publish_release" = "true" ]; then
         echo "   - Tag: v$new_version"
         echo "   - Remotes: All pushed successfully"
+        echo "   - GitHub Actions: $workflow_actions_status"
     else
         echo "   - Tag: (not created in prep mode)"
         echo "   - Remotes: (no pushes in prep mode)"
