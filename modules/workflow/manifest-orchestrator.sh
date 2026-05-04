@@ -63,7 +63,7 @@ emit_ship_failure_report() {
 	}
 
 manifest_should_wait_for_github_actions() {
-    ! is_falsy "${MANIFEST_CLI_GITHUB_ACTIONS_WAIT:-true}"
+    ! is_falsy "${MANIFEST_CLI_GITHUB_ACTIONS_WAIT:-false}"
 }
 
 manifest_check_github_actions_for_head() {

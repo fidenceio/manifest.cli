@@ -20,11 +20,18 @@ teardown() {
     [[ "$output" == *"skipped (disabled"* ]]
 }
 
-@test "github actions check skips when gh is missing" {
+@test "github actions check is disabled by default" {
+    run manifest_check_github_actions_for_head "abc1234"
+
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"skipped (disabled"* ]]
+}
+
+@test "github actions check skips when gh is missing and wait is enabled" {
     old_path="$PATH"
     mkdir -p "${BATS_TEST_TMPDIR:-/tmp}/no-gh"
 
-    PATH="${BATS_TEST_TMPDIR:-/tmp}/no-gh" run manifest_check_github_actions_for_head "abc1234"
+    MANIFEST_CLI_GITHUB_ACTIONS_WAIT=true PATH="${BATS_TEST_TMPDIR:-/tmp}/no-gh" run manifest_check_github_actions_for_head "abc1234"
 
     PATH="$old_path"
     [ "$status" -eq 2 ]
@@ -40,6 +47,7 @@ teardown() {
             *) return 1 ;;
         esac
     }
+    MANIFEST_CLI_GITHUB_ACTIONS_WAIT=true
     MANIFEST_CLI_GITHUB_ACTIONS_TIMEOUT_SECONDS=1
     MANIFEST_CLI_GITHUB_ACTIONS_POLL_SECONDS=1
 
@@ -60,6 +68,7 @@ teardown() {
             *) return 1 ;;
         esac
     }
+    MANIFEST_CLI_GITHUB_ACTIONS_WAIT=true
     MANIFEST_CLI_GITHUB_ACTIONS_TIMEOUT_SECONDS=1
     MANIFEST_CLI_GITHUB_ACTIONS_POLL_SECONDS=1
 
