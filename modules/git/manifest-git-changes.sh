@@ -45,54 +45,103 @@ analyze_changes() {
     local bug_fixes=()
     local breaking_changes=()
     local documentation=()
+    local total_changes=0
+
+    _manifest_add_change_item() {
+        local _array_name="$1"
+        local _item="$2"
+        local -n _array_ref="$_array_name"
+        _array_ref+=("- $_item")
+    }
     
     # Analyze git changes
     while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        [[ "$line" == "#"* ]] && continue
+        [[ "$line" == "## "* ]] && continue
         local change="${line#- }"
+        change="${change#"${change%%[![:space:]]*}"}"
+        change="${change%"${change##*[![:space:]]}"}"
+        [[ -n "$change" ]] || continue
+
+        total_changes=$((total_changes + 1))
+        local change_lc
+        change_lc="$(printf '%s' "$change" | tr '[:upper:]' '[:lower:]')"
         
         # Categorize changes based on keywords
-        case "$change" in
-            *"feat"*|*"feature"*|*"add"*|*"new"*)
-                new_features+=("$change")
+        case "$change_lc" in
+            *"breaking"*|*"break:"*|*"!:"*)
+                _manifest_add_change_item breaking_changes "$change"
                 ;;
-            *"fix"*|*"bug"*|*"issue"*)
-                bug_fixes+=("$change")
+            *"fix"*|*"bug"*|*"issue"*|*"repair"*|*"correct"*)
+                _manifest_add_change_item bug_fixes "$change"
                 ;;
-            *"break"*|*"BREAKING"*)
-                breaking_changes+=("$change")
+            *"doc"*|*"documentation"*|*"readme"*|*"changelog"*|*"release note"*)
+                _manifest_add_change_item documentation "$change"
                 ;;
-            *"docs"*|*"documentation"*|*"readme"*|*"README"*|*"Update README"*)
-                documentation+=("$change")
+            *"feat"*|*"feature"*|*"add"*|*"new"*|*"introduce"*|*"support"*)
+                _manifest_add_change_item new_features "$change"
                 ;;
-            *"refactor"*|*"improve"*|*"optimize"*|*"enhance"*)
-                improvements+=("$change")
+            *"refactor"*|*"improve"*|*"optimize"*|*"enhance"*|*"update"*|*"cleanup"*|*"harden"*)
+                _manifest_add_change_item improvements "$change"
                 ;;
             *)
-                improvements+=("$change")
+                _manifest_add_change_item improvements "$change"
                 ;;
         esac
     done < "$changes_file"
     
     # Write analysis to file
-    cat > "$changes_file" << EOF
-# Change Analysis for v$version
+    {
+        cat << EOF
+## Highlights for v$version
 
-## New Features
-$(printf '%s\n' "${new_features[@]}")
-
-## Improvements
-$(printf '%s\n' "${improvements[@]}")
-
-## Bug Fixes
-$(printf '%s\n' "${bug_fixes[@]}")
-
-## Breaking Changes
-$(printf '%s\n' "${breaking_changes[@]}")
-
-## Documentation
-$(printf '%s\n' "${documentation[@]}")
+### Summary
 EOF
-    
+
+        if [[ "$total_changes" -eq 0 ]]; then
+            cat << EOF
+No notable user-facing changes were detected since the previous release tag. Only release automation or filtered bookkeeping commits were present.
+EOF
+        else
+            cat << EOF
+- Notable changes: $total_changes
+- New features: ${#new_features[@]}
+- Improvements: ${#improvements[@]}
+- Bug fixes: ${#bug_fixes[@]}
+- Breaking changes: ${#breaking_changes[@]}
+- Documentation updates: ${#documentation[@]}
+EOF
+        fi
+
+        if [[ "${#breaking_changes[@]}" -gt 0 ]]; then
+            printf '\n### Breaking Changes\n'
+            printf '%s\n' "${breaking_changes[@]}"
+        fi
+        if [[ "${#new_features[@]}" -gt 0 ]]; then
+            printf '\n### New Features\n'
+            printf '%s\n' "${new_features[@]}"
+        fi
+        if [[ "${#improvements[@]}" -gt 0 ]]; then
+            printf '\n### Improvements\n'
+            printf '%s\n' "${improvements[@]}"
+        fi
+        if [[ "${#bug_fixes[@]}" -gt 0 ]]; then
+            printf '\n### Bug Fixes\n'
+            printf '%s\n' "${bug_fixes[@]}"
+        fi
+        if [[ "${#documentation[@]}" -gt 0 ]]; then
+            printf '\n### Documentation\n'
+            printf '%s\n' "${documentation[@]}"
+        fi
+    } > "$changes_file"
+
+    if [[ "$total_changes" -eq 0 ]]; then
+        log_success "Change analysis completed"
+        log_info "No notable changes found"
+        return 0
+    fi
+
     log_success "Change analysis completed"
     log_info "New features: ${#new_features[@]}"
     log_info "Improvements: ${#improvements[@]}"
