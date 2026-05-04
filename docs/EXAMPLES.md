@@ -156,9 +156,10 @@ working tree must be clean.
 ```bash
 # Phase 1: Scan directories, create TSV for review
 manifest init fleet --depth 3
+manifest init fleet --all-folders
 manifest init fleet --dry-run
 
-# (Review and edit manifest.fleet.tsv — mark repos as selected/excluded)
+# (Review manifest.fleet.tsv — adjust selected/excluded repos if needed)
 
 # Phase 2: Read TSV, scaffold repos, create fleet config
 manifest init fleet

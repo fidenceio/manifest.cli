@@ -701,6 +701,7 @@ _manifest_init_fleet_dry_run_phase1() {
     local start_file="$3"
     local force="$4"
     local create_repo_visibility="$5"
+    local all_folders="${6:-false}"
 
     if ! [[ "$depth" =~ ^[0-9]+$ ]]; then
         log_error "--depth must be a non-negative integer"
@@ -710,27 +711,43 @@ _manifest_init_fleet_dry_run_phase1() {
     local discovered
     discovered=$(discover_all_directories "$root_dir" "$depth")
 
-    local total=0 git_count=0 plain_count=0
+    local rules="" inventory="$discovered"
+    if [[ "$all_folders" != "true" ]]; then
+        rules=$(_fleet_default_repo_depth_rules "$discovered")
+        inventory=$(filter_start_inventory_by_repo_depth "$discovered" "$rules" "false")
+    fi
+
+    local total=0 listed=0 git_count=0 plain_count=0
     while IFS=$'\t' read -r name _path _type _branch _version _url _submodule has_git _has_remote; do
         [[ -z "$name" ]] && continue
         ((total += 1))
+    done <<< "$discovered"
+    while IFS=$'\t' read -r name _path _type _branch _version _url _submodule has_git _has_remote; do
+        [[ -z "$name" ]] && continue
+        ((listed += 1))
         if [[ "$has_git" == "true" ]]; then
             ((git_count += 1))
         else
             ((plain_count += 1))
         fi
-    done <<< "$discovered"
+    done <<< "$inventory"
 
     echo ""
     echo "Dry run - manifest init fleet (Phase 1/2): $root_dir"
     echo ""
     echo "Would scan depth: $depth"
+    if [[ "$all_folders" == "true" ]]; then
+        echo "Inventory mode:   all scanned folders"
+    else
+        echo "Inventory mode:   repo-depth defaults (interactive prompts in live mode)"
+    fi
     if [[ -f "$start_file" && "$force" == "true" ]]; then
         echo "Would overwrite: $start_file"
     else
         echo "Would create:    $start_file"
     fi
-    echo "Would discover:  $total directories ($git_count with git, $plain_count without git)"
+    echo "Would scan:      $total directories"
+    echo "Would list:      $listed TSV rows ($git_count with git, $plain_count without git)"
     if [[ -n "$create_repo_visibility" ]]; then
         echo "Would defer:     GitHub repo creation flag applies in Phase 2 (--create-repo-$create_repo_visibility)"
     fi
@@ -804,6 +821,7 @@ manifest_init_fleet() {
     local dry_run=false
     local fleet_name=""
     local create_repo_visibility=""
+    local all_folders=false
     local fleet_args=()
 
     while [[ $# -gt 0 ]]; do
@@ -816,6 +834,7 @@ manifest_init_fleet() {
                 depth="$2"; shift 2 ;;
             -f|--force) force=true; shift ;;
             --dry-run) dry_run=true; shift ;;
+            --all-folders) all_folders=true; shift ;;
             -n|--name)
                 if [[ -z "${2:-}" ]] || [[ "${2:-}" == --* ]]; then
                     log_error "--name requires a value"
@@ -830,13 +849,15 @@ manifest_init_fleet() {
                 shift ;;
             -h|--help)
                 _render_help \
-                    "manifest init fleet [--depth N] [--force] [--dry-run] [--name NAME] [--create-repo-private|--create-repo-public]" \
+                    "manifest init fleet [--depth N] [--all-folders] [--force] [--dry-run] [--name NAME] [--create-repo-private|--create-repo-public]" \
                     "Two-phase fleet initialization." \
-                    "Phases" "  Phase 1 (no TSV yet):  Scan directories, write manifest.fleet.tsv
-                         for you to review and edit selections.
+                    "Phases" "  Phase 1 (no TSV yet):  Scan directories, ask repo depth per
+                         top-level folder when interactive, then write
+                         manifest.fleet.tsv for review.
   Phase 2 (TSV exists):  Read selections, scaffold each repo, write
                          manifest.fleet.config.yaml." \
-                    "Options" "  --depth N                  Scan depth in Phase 1 (default: 2)
+                    "Options" "  --depth N                  Scan guardrail in Phase 1 (default: 2)
+  --all-folders              Write every scanned folder to the TSV
   -f, --force                Overwrite existing files (re-runs Phase 1 + skips guard)
   --dry-run                  Preview Phase 1 or Phase 2 without writing files
   -n, --name                 Fleet name (prompted if not provided)
@@ -855,7 +876,7 @@ manifest_init_fleet() {
             *)
                 _render_help_error \
                     "Unknown option: $1" \
-                    "manifest init fleet [--depth N] [--force] [--dry-run] [--name NAME] [--create-repo-private|--create-repo-public]"
+                    "manifest init fleet [--depth N] [--all-folders] [--force] [--dry-run] [--name NAME] [--create-repo-private|--create-repo-public]"
                 return 1
                 ;;
         esac
@@ -870,13 +891,13 @@ manifest_init_fleet() {
     # (so users can regenerate the TSV before applying it).
     if [[ ! -f "$start_file" ]] || [[ "$force" == "true" && ! -f "$config_file" ]]; then
         if [[ "$dry_run" == "true" ]]; then
-            _manifest_init_fleet_dry_run_phase1 "$root_dir" "$depth" "$start_file" "$force" "$create_repo_visibility"
+            _manifest_init_fleet_dry_run_phase1 "$root_dir" "$depth" "$start_file" "$force" "$create_repo_visibility" "$all_folders"
             return $?
         fi
 
         echo ""
         echo "Phase 1/2: Discovering directories…"
-        echo "After this completes, edit manifest.fleet.tsv to set SELECT=true/false,"
+        echo "After this completes, review manifest.fleet.tsv and adjust SELECT=true/false,"
         echo "then re-run 'manifest init fleet' to apply your selections (Phase 2)."
         if [[ -n "$create_repo_visibility" ]]; then
             echo ""
@@ -888,6 +909,9 @@ manifest_init_fleet() {
         local start_args=("--depth" "$depth")
         if [[ "$force" == "true" ]]; then
             start_args+=("--force")
+        fi
+        if [[ "$all_folders" == "true" ]]; then
+            start_args+=("--all-folders")
         fi
 
         _fleet_start "${start_args[@]}"

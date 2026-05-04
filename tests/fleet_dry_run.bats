@@ -48,6 +48,8 @@ TSV
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"Dry run - manifest init fleet (Phase 1/2)"* ]]
+    [[ "$output" == *"Inventory mode:"*"repo-depth defaults"* ]]
+    [[ "$output" == *"Would list:"*"TSV rows"* ]]
     [[ "$output" == *"Would create:"*"manifest.fleet.tsv"* ]]
     [[ "$output" == *"No changes written"* ]]
     [ ! -f "$SCRATCH/work/manifest.fleet.tsv" ]
@@ -80,6 +82,7 @@ TSV
     [[ "$output" == *"Dry run - manifest quickstart fleet"* ]]
     [[ "$output" == *"Would create:"*"manifest.fleet.config.yaml"* ]]
     [[ "$output" == *"Would create:"*"manifest.fleet.tsv"* ]]
+    [[ "$output" == *"Would list:"*"existing git repos"* ]]
     [[ "$output" == *"No changes written"* ]]
     [ ! -f "$SCRATCH/work/manifest.fleet.config.yaml" ]
     [ ! -f "$SCRATCH/work/manifest.fleet.tsv" ]

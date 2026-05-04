@@ -40,6 +40,10 @@ _manifest_complete() {
             ;;
         3)
             case "${words[1]} ${words[2]}" in
+                "init fleet")
+                    COMPREPLY=( $(compgen -W "--depth --all-folders --force --dry-run --name --create-repo-private --create-repo-public --help" -- "$cur") )
+                    return 0
+                    ;;
                 "ship repo"|"ship fleet")
                     COMPREPLY=( $(compgen -W "$bumps --local --dry-run -i --interactive" -- "$cur") )
                     return 0

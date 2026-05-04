@@ -10,11 +10,15 @@ setup() {
     source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
 
     SCRATCH="$(mk_scratch)"
+    HOME="$SCRATCH-home"
+    mkdir -p "$HOME"
+    export HOME SCRATCH
     cd "$SCRATCH"
 }
 
 teardown() {
     rm -rf "$SCRATCH"
+    rm -rf "$SCRATCH-home"
 }
 
 # Build a TSV in fleet_start's exact format. Caller passes pairs of
@@ -35,6 +39,19 @@ make_tsv() {
             printf "%s\t%s\t/tmp/%s\trepo\ttrue\t\tmain\t0.0.0\n" "$sel" "$name" "$name"
         done
     }
+}
+
+run_manifest() {
+    run bash -c '
+        export MANIFEST_CLI_CORE_MODULES_DIR="$TEST_REPO_ROOT/modules"
+        source "$TEST_REPO_ROOT/modules/core/manifest-shared-utils.sh"
+        source "$TEST_REPO_ROOT/modules/core/manifest-shared-functions.sh"
+        source "$TEST_REPO_ROOT/modules/core/manifest-yaml.sh"
+        source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet.sh"
+        source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
+        cd "$SCRATCH"
+        manifest_init_fleet "$@"
+    ' bash "$@"
 }
 
 @test "stale-detection: unedited TSV (hash matches) is flagged stale" {
@@ -82,6 +99,34 @@ make_tsv() {
 
     run _fleet_init_tsv_is_stale "$SCRATCH/manifest.fleet.tsv" "$SCRATCH/manifest.fleet.config.yaml"
     [ "$status" -eq 1 ]
+}
+
+@test "init fleet phase 1 defaults to compact repo-depth TSV" {
+    mkdir -p "$SCRATCH/apps/web/src" "$SCRATCH/services/api/internal"
+
+    run_manifest
+
+    [ "$status" -eq 0 ]
+    [ -f "$SCRATCH/manifest.fleet.tsv" ]
+    grep -q $'\tapps/web\t' "$SCRATCH/manifest.fleet.tsv"
+    grep -q $'\tservices/api\t' "$SCRATCH/manifest.fleet.tsv"
+    ! grep -q $'\tapps\t' "$SCRATCH/manifest.fleet.tsv"
+    ! grep -q $'\tapps/web/src\t' "$SCRATCH/manifest.fleet.tsv"
+    [[ "$output" == *"Inventory mode: repo-depth prompts"* ]]
+    [[ "$output" == *"Listed in TSV:"*"2"* ]]
+}
+
+@test "init fleet --all-folders writes exhaustive TSV" {
+    mkdir -p "$SCRATCH/apps/web/src"
+
+    run_manifest --all-folders --depth 3
+
+    [ "$status" -eq 0 ]
+    [ -f "$SCRATCH/manifest.fleet.tsv" ]
+    grep -q $'\tapps\t' "$SCRATCH/manifest.fleet.tsv"
+    grep -q $'\tapps/web\t' "$SCRATCH/manifest.fleet.tsv"
+    grep -q $'\tapps/web/src\t' "$SCRATCH/manifest.fleet.tsv"
+    [[ "$output" == *"Inventory mode: all scanned folders"* ]]
 }
 
 @test "stale-detection: missing TSV returns not-stale" {
