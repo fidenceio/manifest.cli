@@ -4,6 +4,8 @@
 # Handles git change analysis and categorization
 
 # Git changes module - uses PROJECT_ROOT from core module
+MANIFEST_GIT_CHANGES_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$MANIFEST_GIT_CHANGES_SCRIPT_DIR/manifest-doc-review.sh"
 
 # Commits Manifest CLI writes during its own pipeline. Filter these from
 # generated changelogs so Manifest's bookkeeping never pollutes user docs.
@@ -27,6 +29,7 @@ get_git_changes() {
 
     git log --oneline --pretty=format:"- %s" ${range:+"$range"} 2>/dev/null \
         | grep -E -v "$MANIFEST_COMMIT_NOISE_REGEX" || true
+    manifest_doc_review_release_notes_since "$range" || true
     echo  # Add final newline
 }
 

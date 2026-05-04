@@ -98,6 +98,12 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     ["docs.auto_generate"]="MANIFEST_CLI_DOCS_AUTO_GENERATE"
     ["docs.historical_limit"]="MANIFEST_CLI_DOCS_HISTORICAL_LIMIT"
     ["docs.filename_pattern"]="MANIFEST_CLI_DOCS_FILENAME_PATTERN"
+    ["docs.review.enabled"]="MANIFEST_CLI_DOC_REVIEW"
+    ["docs.review.outputs"]="MANIFEST_CLI_DOC_REVIEW_OUTPUTS"
+    ["docs.review.report_dir"]="MANIFEST_CLI_DOC_REVIEW_REPORT_DIR"
+    ["docs.review.provider"]="MANIFEST_CLI_DOC_REVIEW_PROVIDER"
+    ["docs.review.command"]="MANIFEST_CLI_DOC_REVIEW_COMMAND"
+    ["docs.review.required"]="MANIFEST_CLI_DOC_REVIEW_REQUIRED"
 
     # -------------------------------------------------------------------------
     # files — file and directory paths

@@ -450,7 +450,7 @@ main() {
             export PROJECT_ROOT
             load_configuration "$PROJECT_ROOT" "false"
             ;;
-        "docs"|"pr")
+        "docs"|"pr"|"quickstart"|"plan"|"reconcile"|"discover"|"add"|"update"|"validate")
             if [[ "${1:-}" == "fleet" ]] || _manifest_cli_is_help_request "$command" "$@"; then
                 PROJECT_ROOT="$(pwd)"
                 export PROJECT_ROOT
@@ -603,6 +603,52 @@ EOF
 
         "prep")
             manifest_prep_dispatch "$@"
+            ;;
+
+        "plan")
+            case "${1:-}" in
+                fleet)
+                    shift || true
+                    fleet_plan "$@"
+                    ;;
+                help|-h|--help)
+                    _render_help \
+                        "manifest plan <fleet> [options]" \
+                        "Generate adoption plans. Dry-run by default." \
+                        "Scopes" "  fleet   Generate manifest.fleet.plan.yaml"
+                    ;;
+                "")
+                    _render_help_error "plan requires a scope" "manifest plan <fleet>"
+                    return 1
+                    ;;
+                *)
+                    _render_help_error "Unknown plan scope: $1" "manifest plan <fleet>"
+                    return 1
+                    ;;
+            esac
+            ;;
+
+        "reconcile")
+            case "${1:-}" in
+                fleet)
+                    shift || true
+                    fleet_reconcile "$@"
+                    ;;
+                help|-h|--help)
+                    _render_help \
+                        "manifest reconcile <fleet> [options]" \
+                        "Validate and apply adoption plans. Dry-run by default." \
+                        "Scopes" "  fleet   Reconcile manifest.fleet.plan.yaml"
+                    ;;
+                "")
+                    _render_help_error "reconcile requires a scope" "manifest reconcile <fleet>"
+                    return 1
+                    ;;
+                *)
+                    _render_help_error "Unknown reconcile scope: $1" "manifest reconcile <fleet>"
+                    return 1
+                    ;;
+            esac
             ;;
 
         "refresh")

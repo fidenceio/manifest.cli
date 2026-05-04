@@ -39,6 +39,16 @@ teardown() {
     [ "$output" = "release.tag_target" ]
 }
 
+@test "yaml: maps documentation review config" {
+    run yaml_path_to_env_var "docs.review.report_dir"
+    [ "$status" -eq 0 ]
+    [ "$output" = "MANIFEST_CLI_DOC_REVIEW_REPORT_DIR" ]
+
+    run env_var_to_yaml_path "MANIFEST_CLI_DOC_REVIEW_OUTPUTS"
+    [ "$status" -eq 0 ]
+    [ "$output" = "docs.review.outputs" ]
+}
+
 @test "yaml: set_yaml_value creates a file and writes a nested key" {
     set_yaml_value "$YAML" "git.tag_prefix" "v"
     [ -f "$YAML" ]
@@ -64,11 +74,15 @@ teardown() {
     set_yaml_value "$YAML" "git.tag_prefix" "release-"
     set_yaml_value "$YAML" "git.default_branch" "trunk"
     set_yaml_value "$YAML" "release.tag_target" "release_head"
-    unset MANIFEST_CLI_GIT_TAG_PREFIX MANIFEST_CLI_GIT_DEFAULT_BRANCH MANIFEST_CLI_RELEASE_TAG_TARGET
+    set_yaml_value "$YAML" "docs.review.outputs" "commit_body,report"
+    set_yaml_value "$YAML" "docs.review.report_dir" "docs/reviews"
+    unset MANIFEST_CLI_GIT_TAG_PREFIX MANIFEST_CLI_GIT_DEFAULT_BRANCH MANIFEST_CLI_RELEASE_TAG_TARGET MANIFEST_CLI_DOC_REVIEW_OUTPUTS MANIFEST_CLI_DOC_REVIEW_REPORT_DIR
     load_yaml_to_env "$YAML"
     [ "$MANIFEST_CLI_GIT_TAG_PREFIX" = "release-" ]
     [ "$MANIFEST_CLI_GIT_DEFAULT_BRANCH" = "trunk" ]
     [ "$MANIFEST_CLI_RELEASE_TAG_TARGET" = "release_head" ]
+    [ "$MANIFEST_CLI_DOC_REVIEW_OUTPUTS" = "commit_body,report" ]
+    [ "$MANIFEST_CLI_DOC_REVIEW_REPORT_DIR" = "docs/reviews" ]
 }
 
 @test "yaml: load_yaml_to_env preserves unrelated env values when key absent (layered precedence)" {

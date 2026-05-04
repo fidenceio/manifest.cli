@@ -4,6 +4,8 @@
 # Handles Git operations, versioning, and workflow automation
 
 # Git module - uses PROJECT_ROOT from core module
+MANIFEST_GIT_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$MANIFEST_GIT_SCRIPT_DIR/manifest-doc-review.sh"
 
 # Git Configuration
 
@@ -206,16 +208,32 @@ commit_changes() {
     fi
     
     echo "💾 Committing changes..."
-    echo "   Message: $message"
     
     # Change to project root directory
     cd "$PROJECT_ROOT" || {
         echo "❌ Failed to change to project root: $PROJECT_ROOT"
         return 1
     }
+
+    if ! manifest_smart_documentation_review "$message"; then
+        echo "❌ Documentation review failed"
+        return 1
+    fi
+
+    if [[ -n "${MANIFEST_DOC_REVIEW_COMMIT_SUBJECT:-}" ]]; then
+        message="$MANIFEST_DOC_REVIEW_COMMIT_SUBJECT"
+    fi
+
+    echo "   Message: $message"
     
     git add .
-    if git commit -m "$message"; then
+    local commit_ok=false
+    if [[ -n "${MANIFEST_DOC_REVIEW_COMMIT_BODY:-}" ]]; then
+        git commit -m "$message" -m "$MANIFEST_DOC_REVIEW_COMMIT_BODY" && commit_ok=true
+    else
+        git commit -m "$message" && commit_ok=true
+    fi
+    if [[ "$commit_ok" == "true" ]]; then
         echo "✅ Changes committed"
         return 0
     else

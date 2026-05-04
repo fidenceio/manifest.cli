@@ -226,6 +226,11 @@ _is_git_repository() {
         return 0
     fi
 
+    # Check for .git file (normal working tree for git submodules)
+    if [[ -f "$dir/.git" ]]; then
+        return 0
+    fi
+
     # Check for bare repository markers
     if [[ -f "$dir/HEAD" ]] && [[ -d "$dir/objects" ]] && [[ -d "$dir/refs" ]]; then
         return 0

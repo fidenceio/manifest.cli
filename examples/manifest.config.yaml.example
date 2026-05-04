@@ -94,6 +94,13 @@ docs:
   historical_limit: 20
   filename_pattern: "RELEASE_vVERSION.md"
   template_dir: ""
+  review:
+    enabled: true
+    outputs: "commit_body,report,release_notes"
+    report_dir: "docs/documentation-reviews"
+    provider: "local"       # local | command
+    command: ""             # Called as: command REPORT_FILE PROJECT_ROOT
+    required: false         # Fail commit if provider fails
 
 # -----------------------------------------------------------------------------
 # Trusted Timestamps (HTTPS)

@@ -161,7 +161,7 @@ ln -s $(pwd)/completions/manifest.bash $(brew --prefix)/etc/bash_completion.d/ma
 ln -s $(pwd)/completions/_manifest $(brew --prefix)/share/zsh/site-functions/_manifest
 ```
 
-You then get `manifest <TAB>` for top commands, `manifest init <TAB>` → `repo fleet`, `manifest config get <TAB>` → all 80+ config keys, etc. See [completions/README.md](completions/README.md).
+You then get `manifest <TAB>` for top commands, `manifest plan <TAB>` -> `fleet`, `manifest config get <TAB>` -> all 80+ config keys, etc. See [completions/README.md](completions/README.md).
 
 ---
 
@@ -282,6 +282,17 @@ manifest init fleet --depth 3
 # Named fleet with forced overwrite
 manifest init fleet --name "platform-services" --force
 ```
+
+Fleet adoption and conversion commands are safe to explore by default:
+
+```bash
+manifest plan fleet              # Dry-run: inspect the adoption plan
+manifest plan fleet --apply      # Write manifest.fleet.plan.yaml
+manifest reconcile fleet         # Dry-run: validate and explain actions
+manifest reconcile fleet --do    # Apply local changes (--do == --apply)
+```
+
+`--commit` requires `--apply`/`--do`, and `--push` requires `--commit`.
 
 ### Day-to-Day Operations
 
