@@ -17,9 +17,15 @@ _manifest() {
     top_cmds=(
         'config:Setup wizard / show configuration'
         'init:Scaffold a repo or fleet'
+        'quickstart:Run an opinionated quickstart workflow'
         'status:Read-only snapshot'
+        'discover:Discover resources without writing changes'
+        'update:Update fleet membership'
+        'add:Add a resource to Manifest-managed configuration'
+        'validate:Validate fleet configuration'
         'prep:Connect remotes, pull latest'
         'refresh:Regenerate docs and metadata'
+        'docs:Generate fleet documentation'
         'ship:Publish a release (version + tag + push)'
         'pr:Pull-request operations (gh wrapper)'
         'doctor:Health check'
@@ -49,7 +55,7 @@ _manifest() {
             ;;
         subcommand)
             case $words[2] in
-                init|prep|refresh|ship)
+                init|quickstart|discover|update|add|validate|prep|refresh|docs|ship)
                     _values 'scope' "${scopes[@]}"
                     ;;
                 config)

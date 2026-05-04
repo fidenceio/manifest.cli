@@ -163,7 +163,7 @@ manifest_refresh_repo() {
 # Function: manifest_refresh_fleet
 # -----------------------------------------------------------------------------
 # Re-scans fleet membership, regenerates docs, validates config.
-# Absorbs logic from fleet update, fleet discover, fleet validate, fleet docs.
+# Absorbs logic from update fleet, discover fleet, validate fleet, and docs fleet.
 #
 # ARGUMENTS:
 #   --dry-run   Preview changes without applying them

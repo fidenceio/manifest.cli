@@ -492,9 +492,14 @@ fleet_docs_generate() {
     local fleet_only=false
     local services_only=false
     local release_type="patch"
+    local dry_run=false
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            --dry-run)
+                dry_run=true
+                shift
+                ;;
             --strategy)
                 if [[ -z "${2:-}" ]] || [[ "${2:-}" == --* ]]; then
                     log_error "--strategy requires a value: fleet-root|per-service|both"
@@ -560,6 +565,50 @@ fleet_docs_generate() {
                 do_per_service=true
                 ;;
         esac
+    fi
+
+    if [[ "$dry_run" == "true" ]]; then
+        echo ""
+        echo "Dry run - manifest docs fleet"
+        echo ""
+        echo "Strategy:     $strategy"
+        echo "Release type: $release_type"
+        if [[ "$do_fleet_root" == "true" ]]; then
+            local fleet_root_folder
+            fleet_root_folder=$(get_fleet_config_value "docs_fleet_root_folder" "$MANIFEST_FLEET_DEFAULT_DOCS_FLEET_ROOT_FOLDER")
+            echo "Would write:   fleet-root docs in $MANIFEST_FLEET_ROOT/$fleet_root_folder/"
+        else
+            echo "Would skip:    fleet-root docs"
+        fi
+        if [[ "$do_per_service" == "true" ]]; then
+            local per_service_folder
+            per_service_folder=$(get_fleet_config_value "docs_per_service_folder" "$MANIFEST_FLEET_DEFAULT_DOCS_PER_SERVICE_FOLDER")
+            local service_count=0
+            local missing_count=0
+            local excluded_count=0
+            local service path excluded
+            for service in $MANIFEST_FLEET_SERVICES; do
+                excluded=$(get_fleet_service_property "$service" "excluded" "false")
+                if [[ "$excluded" == "true" ]]; then
+                    ((excluded_count += 1))
+                    continue
+                fi
+                path=$(get_fleet_service_property "$service" "path")
+                if [[ -d "$path" ]]; then
+                    ((service_count += 1))
+                else
+                    ((missing_count += 1))
+                fi
+            done
+            echo "Would write:   per-service docs folder '$per_service_folder/' for $service_count service(s)"
+            [[ "$excluded_count" -gt 0 ]] && echo "Would skip:    $excluded_count excluded service(s)"
+            [[ "$missing_count" -gt 0 ]] && echo "Would warn:    $missing_count service path(s) not found"
+        else
+            echo "Would skip:    per-service docs"
+        fi
+        echo ""
+        echo "No changes written. Re-run without --dry-run to apply."
+        return 0
     fi
 
     # Get fleet version and timestamp
@@ -678,7 +727,7 @@ fleet_docs_status() {
 # -----------------------------------------------------------------------------
 fleet_docs_help() {
     cat << 'EOF'
-Usage: manifest fleet docs [subcommand] [options]
+Usage: manifest docs fleet [subcommand] [options]
 
 Subcommands:
   generate          Generate fleet documentation (default)
@@ -690,6 +739,7 @@ Generate Options:
                     Values: fleet-root | per-service | both
   --fleet-only      Only generate fleet-root docs
   --services-only   Only generate per-service docs
+  --dry-run         Preview planned docs writes without changing files
   patch|minor|major Release type (default: patch)
 
 Configuration:
@@ -704,11 +754,12 @@ Configuration:
         folder: "docs"
 
 Examples:
-  manifest fleet docs                     # Generate per configured strategy
-  manifest fleet docs generate            # Same as above
-  manifest fleet docs status              # Show docs configuration
-  manifest fleet docs generate --fleet-only   # Only fleet-root docs
-  manifest fleet docs generate --strategy both  # Override strategy
+  manifest docs fleet                     # Generate per configured strategy
+  manifest docs fleet generate            # Same as above
+  manifest docs fleet status              # Show docs configuration
+  manifest docs fleet generate --fleet-only   # Only fleet-root docs
+  manifest docs fleet generate --strategy both  # Override strategy
+  manifest docs fleet --dry-run             # Preview configured generation
 EOF
 }
 
@@ -726,19 +777,23 @@ fleet_docs_dispatch() {
 
     case "$subcmd" in
         generate)
+            _fleet_ensure_initialized || return 1
             fleet_docs_generate "$@"
             ;;
         status)
+            _fleet_ensure_initialized || return 1
             fleet_docs_status
             ;;
         help|--help|-h)
             fleet_docs_help
             ;;
-        # Allow passing flags directly to generate (e.g., manifest fleet docs --fleet-only)
-        --fleet-only|--services-only|--strategy)
+        # Allow passing flags directly to generate (e.g., manifest docs fleet --fleet-only)
+        --fleet-only|--services-only|--strategy|--dry-run)
+            _fleet_ensure_initialized || return 1
             fleet_docs_generate "$subcmd" "$@"
             ;;
         patch|minor|major|revision)
+            _fleet_ensure_initialized || return 1
             fleet_docs_generate "$subcmd" "$@"
             ;;
         *)

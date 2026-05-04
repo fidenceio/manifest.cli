@@ -9,6 +9,13 @@ MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES=(".env" ".env.development" ".env.test" "
 
 # Main security audit function
 manifest_security() {
+    if [[ "${1:-}" == "help" || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+        _render_help \
+            "manifest security" \
+            "Run a security audit for tracked private files, likely PII, and environment-file hygiene."
+        return 0
+    fi
+
     # Use the validated PROJECT_ROOT from the main command dispatcher
     local project_root="$PROJECT_ROOT"
     

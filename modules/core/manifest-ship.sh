@@ -13,8 +13,7 @@
 # KEY CHANGES from pre-v42:
 #   - "manifest ship <type>" (old) -> "manifest ship repo <type>"
 #   - "manifest prep <type>" (old local preview) -> "manifest ship repo <type> --local"
-#   - "manifest fleet ship <type>" -> "manifest ship fleet <type>"
-#   - "manifest fleet prep <type>" -> "manifest ship fleet <type> --local"
+#   - Fleet release syntax is "manifest ship fleet <type>"
 #
 # COMMANDS:
 #   manifest ship repo <type>           Full release (tag + push + Homebrew)
@@ -136,8 +135,8 @@ manifest_ship_fleet() {
   --force                  Bypass readiness gate during queue
   --no-delete-branch       Keep source branches after queue
   --draft                  Create draft PRs" \
-                    "Flow" "  default:  fleet prep -> fleet docs -> fleet pr create -> fleet pr queue
-  --safe:   fleet prep -> fleet docs -> fleet pr create -> fleet pr checks -> fleet pr ready -> fleet pr queue" \
+                    "Flow" "  default:  prep fleet -> docs fleet -> pr fleet create -> pr fleet queue
+  --safe:   prep fleet -> docs fleet -> pr fleet create -> pr fleet checks -> pr fleet ready -> pr fleet queue" \
                     "Examples" "  manifest ship fleet patch
   manifest ship fleet minor --local
   manifest ship fleet major --safe --method squash

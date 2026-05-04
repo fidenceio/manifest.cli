@@ -241,18 +241,16 @@ Short flags: `-p` (patch), `-m` (minor), `-M` (major), `-r` (revision), `-i` (in
 
 > Commands marked \[Cloud\] require [Manifest Cloud](https://github.com/fidenceio/fidenceio.manifest.cloud) to be installed. The CLI works fully without Cloud for the core journey (config, init, prep, refresh, ship).
 
-### Legacy Aliases (Hidden)
-
-All pre-v42 commands continue to work. They are not shown in `manifest --help` but remain fully functional:
+### Internal Plumbing And Removed Routes
 
 | Old Command | Routes To |
 | ----------- | --------- |
 | `manifest prep patch` | `manifest ship repo patch --local` (with deprecation warning) |
 | `manifest ship patch` | `manifest ship repo patch` |
 | `manifest sync` | `manifest prep repo` |
-| `manifest fleet <sub>` | `fleet_main` (unchanged behavior) |
+| `manifest fleet <action>` | Removed; use `manifest <action> fleet` |
 | `manifest time` | `display_time_info` |
-| `manifest update` | `manifest upgrade` (with deprecation warning) |
+| `manifest update` | Removed as an upgrade alias; use `manifest upgrade` |
 | `manifest docs` | Documentation generation (plumbing) |
 | `manifest cleanup` | Archive old docs (plumbing) |
 | `manifest commit <msg>` | Commit with timestamp (plumbing) |
@@ -272,9 +270,11 @@ Manifest Fleet manages versioning and releases across multiple repositories from
 # Two-phase initialization:
 # Phase 1: Scan directories, create manifest.fleet.tsv for review
 manifest init fleet
+manifest init fleet --dry-run
 
 # Phase 2: Re-run after reviewing TSV — scaffolds repos, creates fleet config
 manifest init fleet
+manifest init fleet --dry-run
 
 # Custom scan depth (default: 2 levels)
 manifest init fleet --depth 3
@@ -302,16 +302,17 @@ manifest ship fleet patch --safe
 manifest ship fleet minor --local
 ```
 
-### Direct Fleet Commands (Legacy)
+### Direct Fleet Commands
 
-The `manifest fleet <sub>` interface continues to work:
+Fleet commands use action-first syntax:
 
 ```bash
-manifest fleet status --verbose
-manifest fleet discover --depth 3
-manifest fleet add ./services/new-api --name "new-api"
-manifest fleet validate
-manifest fleet pr queue --method squash
+manifest status --verbose
+manifest discover fleet --depth 3
+manifest add fleet ./services/new-api --name "new-api" --dry-run
+manifest validate fleet
+manifest docs fleet --dry-run
+manifest pr fleet queue --method squash
 ```
 
 > See [Fleet Design Spec](docs/FLEET_DESIGN_SPEC.md) for architecture details.

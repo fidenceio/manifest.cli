@@ -39,15 +39,15 @@
 #   manifest refresh fleet   - Re-scan, regenerate docs (calls fleet_update + fleet_docs)
 #   manifest ship fleet      - Coordinated release across services
 #
-# COMMANDS (legacy, still routed via 'manifest fleet *'):
-#   manifest fleet status    - Show fleet status
-#   manifest fleet update    - Re-scan and add new repos (--dry-run to preview)
-#   manifest fleet discover  - Alias for 'fleet update --dry-run'
-#   manifest fleet add       - Add a service to fleet
-#   manifest fleet quickstart - Auto-discover git repos (skips TSV selection)
-#   manifest fleet prep      - Coordinated version bump (no commit/push)
-#   manifest fleet docs      - Generate unified documentation
-#   manifest fleet validate  - Validate configuration
+# ADDITIONAL ACTION-FIRST COMMANDS:
+#   manifest status          - Show fleet status when in fleet mode
+#   manifest update fleet    - Re-scan and add new repos (--dry-run to preview)
+#   manifest discover fleet  - Alias for 'update fleet --dry-run'
+#   manifest add fleet       - Add a service to fleet
+#   manifest quickstart fleet - Auto-discover git repos (skips TSV selection)
+#   manifest prep fleet      - Coordinated version bump (no commit/push)
+#   manifest docs fleet      - Generate unified documentation
+#   manifest validate fleet  - Validate configuration
 #
 # USAGE:
 #   # From manifest-core.sh
@@ -242,8 +242,8 @@ _fleet_require_initialized() {
 #   --json           Output in JSON format (for scripting)
 #
 # EXAMPLE:
-#   manifest fleet status
-#   manifest fleet status --verbose
+#   manifest status
+#   manifest status --verbose
 # -----------------------------------------------------------------------------
 fleet_status() {
     local verbose=false
@@ -267,7 +267,7 @@ fleet_status() {
         echo "  manifest init fleet"
         echo ""
         echo "To discover existing repos:"
-        echo "  manifest fleet discover"
+        echo "  manifest discover fleet"
         return 0
     fi
 
@@ -439,10 +439,96 @@ _fleet_status_json() {
 # Function: fleet_quickstart
 # -----------------------------------------------------------------------------
 # Shortcut that skips the selection file and auto-discovers existing git repos.
-# Equivalent to: manifest fleet init --_quickstart
+# Equivalent to: manifest init fleet with the quickstart path.
 # -----------------------------------------------------------------------------
 fleet_quickstart() {
-    _fleet_init --_quickstart "$@"
+    local original_args=("$@")
+    local dry_run=false
+    local fleet_name=""
+    local force=false
+    local create_repo_visibility=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --dry-run) dry_run=true; shift ;;
+            -n|--name)
+                if [[ -z "${2:-}" ]] || [[ "${2:-}" == --* ]]; then
+                    log_error "--name requires a value"
+                    return 1
+                fi
+                fleet_name="$2"; shift 2 ;;
+            -f|--force) force=true; shift ;;
+            --create-repo-private)
+                create_repo_visibility=$(_manifest_parse_create_repo_flag "$create_repo_visibility" "private") || return 1
+                shift ;;
+            --create-repo-public)
+                create_repo_visibility=$(_manifest_parse_create_repo_flag "$create_repo_visibility" "public") || return 1
+                shift ;;
+            *) shift ;;
+        esac
+    done
+
+    if [[ "${original_args[0]:-}" == "help" || "${original_args[0]:-}" == "-h" || "${original_args[0]:-}" == "--help" ]]; then
+        _render_help \
+            "manifest quickstart fleet [--name NAME] [--force] [--dry-run]" \
+            "Initialize a fleet by auto-discovering existing git repositories."
+        return 0
+    fi
+
+    if [[ "$dry_run" == "true" ]]; then
+        if [[ -n "$create_repo_visibility" ]]; then
+            log_error "--create-repo-$create_repo_visibility is not supported with quickstart."
+            log_error "Quickstart discovers existing repos; --create-repo-* is for fresh dirs."
+            log_error "Use 'manifest init fleet --create-repo-$create_repo_visibility --dry-run' instead."
+            return 1
+        fi
+
+        local target_dir="$(pwd)"
+        local config_file="$target_dir/manifest.fleet.config.yaml"
+        local start_file="$target_dir/manifest.fleet.tsv"
+        local local_config="$target_dir/manifest.config.local.yaml"
+        local discovered
+        discovered=$(discover_all_directories "$target_dir" 5)
+
+        local total=0 git_count=0
+        while IFS=$'\t' read -r name _path _type _branch _version _url _submodule has_git _has_remote; do
+            [[ -z "$name" ]] && continue
+            ((total += 1))
+            [[ "$has_git" == "true" ]] && ((git_count += 1))
+        done <<< "$discovered"
+
+        if [[ -z "$fleet_name" ]]; then
+            fleet_name=$(basename "$target_dir" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+        fi
+
+        echo ""
+        echo "Dry run - manifest quickstart fleet: $target_dir"
+        echo ""
+        if [[ -f "$config_file" && "$force" == "true" ]]; then
+            echo "Would overwrite: $config_file"
+        elif [[ -f "$config_file" ]]; then
+            echo "Exists:          $config_file"
+        else
+            echo "Would create:    $config_file"
+        fi
+        if [[ -f "$local_config" ]]; then
+            echo "Exists:          $local_config"
+        else
+            echo "Would create:    $local_config"
+        fi
+        if [[ -f "$start_file" ]]; then
+            echo "Would update:    $start_file"
+        else
+            echo "Would create:    $start_file"
+        fi
+        echo "Fleet name:      $fleet_name"
+        echo "Would discover:  $total directories ($git_count existing git repos selected)"
+        echo ""
+        echo "No changes written. Re-run without --dry-run to apply."
+        return 0
+    fi
+
+    _fleet_init --_quickstart "${original_args[@]}"
 }
 
 # =============================================================================
@@ -709,7 +795,7 @@ _fleet_init() {
         log_warning "No selection file found."
         echo ""
         echo "  Recommended:  manifest init fleet           (scan and select directories)"
-        echo "  Quick start:  manifest fleet quickstart     (auto-discover git repos)"
+        echo "  Quick start:  manifest quickstart fleet     (auto-discover git repos)"
         return 1
     fi
 
@@ -1006,16 +1092,22 @@ EOF
 }
 
 # =============================================================================
-# COMMAND: fleet discover (alias for fleet update --dry-run)
+# COMMAND: discover fleet (alias for update fleet --dry-run)
 # =============================================================================
 
 # -----------------------------------------------------------------------------
 # Function: fleet_discover
 # -----------------------------------------------------------------------------
-# Alias for 'fleet update --dry-run'. Kept for backwards compatibility.
+# Alias for 'update fleet --dry-run'.
 # All discovery logic now lives in fleet_update.
 # -----------------------------------------------------------------------------
 fleet_discover() {
+    if [[ "${1:-}" == "help" || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+        _render_help \
+            "manifest discover fleet [--depth N] [--json] [--quiet]" \
+            "Discover repositories for fleet membership without writing changes."
+        return 0
+    fi
     fleet_update --dry-run "$@"
 }
 
@@ -1350,7 +1442,7 @@ _fleet_sync_parallel() {
 }
 
 # =============================================================================
-# COMMAND: fleet update
+# COMMAND: update fleet
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -1359,7 +1451,7 @@ _fleet_sync_parallel() {
 # Re-scans the workspace and adds newly discovered repos to manifest.fleet.config.yaml.
 #
 # Also serves as the single discovery entry point. Use --dry-run to preview
-# changes without writing (this is what 'fleet discover' does).
+# changes without writing (this is what 'discover fleet' does).
 #
 # ARGUMENTS:
 #   --depth N      Maximum search depth (default: 5)
@@ -1368,9 +1460,9 @@ _fleet_sync_parallel() {
 #   --quiet, -q    Only output new repo lines, for scripting (implies --dry-run)
 #
 # EXAMPLE:
-#   manifest fleet update
-#   manifest fleet update --depth 3
-#   manifest fleet update --dry-run
+#   manifest update fleet
+#   manifest update fleet --depth 3
+#   manifest update fleet --dry-run
 # -----------------------------------------------------------------------------
 fleet_update() {
     local depth=5
@@ -1392,6 +1484,16 @@ fleet_update() {
             --dry-run) dry_run=true; shift ;;
             --json) json_output=true; dry_run=true; shift ;;
             -q|--quiet) quiet=true; dry_run=true; shift ;;
+            -h|--help|help)
+                _render_help \
+                    "manifest update fleet [--depth N] [--dry-run] [--json] [--quiet]" \
+                    "Re-scan fleet membership and add newly discovered repositories." \
+                    "Options" "  --depth N    Maximum search depth (default: 5)
+  --dry-run    Preview only; do not modify manifest.fleet.config.yaml
+  --json       Output JSON summary
+  --quiet, -q  Only output new repo lines"
+                return 0
+                ;;
             *) shift ;;
         esac
     done
@@ -1515,7 +1617,7 @@ EOF
 
         if [[ "$dry_run" == "true" ]]; then
             echo "To add these services, run:"
-            echo "  manifest fleet update"
+            echo "  manifest update fleet"
         else
             local new_repos
             new_repos=$(get_new_repos "$diff_output")
@@ -1578,7 +1680,7 @@ EOF
 }
 
 # =============================================================================
-# COMMAND: fleet prep
+# COMMAND: prep fleet
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -1591,8 +1693,8 @@ EOF
 #   $1 - Increment type: patch|minor|major|revision (default: patch)
 #
 # EXAMPLE:
-#   manifest fleet prep
-#   manifest fleet prep minor
+#   manifest prep fleet
+#   manifest prep fleet minor
 # -----------------------------------------------------------------------------
 # Internal prep runner (no banner — called by fleet_ship and fleet_prep)
 _fleet_prep_run() {
@@ -1709,7 +1811,7 @@ _fleet_filter_services() {
 # Function: fleet_ship
 # -----------------------------------------------------------------------------
 # Highest-level coordinated fleet workflow:
-#   (optional) prep -> fleet pr create -> (optional checks/ready) -> fleet pr queue
+#   (optional) prep -> pr fleet create -> (optional checks/ready) -> pr fleet queue
 # -----------------------------------------------------------------------------
 fleet_ship() {
     if ! _fleet_require_initialized "ship"; then
@@ -1779,7 +1881,7 @@ fleet_ship() {
                 ;;
             -h|--help)
                 cat << 'EOF'
-Usage: manifest fleet ship [patch|minor|major|revision] [options]
+Usage: manifest ship fleet [patch|minor|major|revision] [options]
 
 Options:
   --noprep                  Skip per-service prep step
@@ -1792,15 +1894,15 @@ Options:
   --except <name[,name...]> Ship all services except the named one(s) (repeatable)
 
 Flow:
-  default: fleet prep -> fleet docs -> fleet pr create -> fleet pr queue
-  --safe:  fleet prep -> fleet docs -> fleet pr create -> fleet pr checks -> fleet pr ready -> fleet pr queue
+  default: prep fleet -> docs fleet -> pr fleet create -> pr fleet queue
+  --safe:  prep fleet -> docs fleet -> pr fleet create -> pr fleet checks -> pr fleet ready -> pr fleet queue
 
 --only and --except are mutually exclusive.
 EOF
                 return 0
                 ;;
             *)
-                log_error "Unknown option for 'manifest fleet ship': $1"
+                log_error "Unknown option for 'manifest ship fleet': $1"
                 return 1
                 ;;
         esac
@@ -1906,7 +2008,7 @@ EOF
 }
 
 # =============================================================================
-# COMMAND: fleet validate
+# COMMAND: validate fleet
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -1915,9 +2017,16 @@ EOF
 # Validates fleet configuration and reports issues.
 #
 # EXAMPLE:
-#   manifest fleet validate
+#   manifest validate fleet
 # -----------------------------------------------------------------------------
 fleet_validate() {
+    if [[ "${1:-}" == "help" || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+        _render_help \
+            "manifest validate fleet" \
+            "Validate fleet configuration and service paths."
+        return 0
+    fi
+
     if ! _fleet_require_initialized "validate"; then
         return 1
     fi
@@ -1930,7 +2039,7 @@ fleet_validate() {
 }
 
 # =============================================================================
-# COMMAND: fleet add
+# COMMAND: add fleet
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -1944,17 +2053,20 @@ fleet_validate() {
 #   --type TYPE      Service type (auto-detected if not provided)
 #
 # EXAMPLE:
-#   manifest fleet add ./new-service
-#   manifest fleet add git@github.com:org/repo.git --name my-service
+#   manifest add fleet ./new-service
+#   manifest add fleet git@github.com:org/repo.git --name my-service
 # -----------------------------------------------------------------------------
 fleet_add() {
     local path_or_url=""
     local service_name=""
     local service_type=""
+    local dry_run=false
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            --dry-run)
+                dry_run=true; shift ;;
             --name)
                 if [ -z "${2:-}" ] || [[ "${2:-}" == --* ]]; then
                     log_error "--name requires a value"
@@ -1967,6 +2079,12 @@ fleet_add() {
                     return 1
                 fi
                 service_type="$2"; shift 2 ;;
+            -h|--help|help)
+                _render_help \
+                    "manifest add fleet <path-or-url> [--name NAME] [--type TYPE] [--dry-run]" \
+                    "Add a local path or remote URL to fleet membership."
+                return 0
+                ;;
             *)
                 if [[ -z "$path_or_url" ]]; then
                     path_or_url="$1"
@@ -1977,9 +2095,17 @@ fleet_add() {
     done
 
     if [[ -z "$path_or_url" ]]; then
-        log_error "Usage: manifest fleet add <path-or-url> [--name NAME] [--type TYPE]"
+        log_error "Usage: manifest add fleet <path-or-url> [--name NAME] [--type TYPE]"
         return 1
     fi
+
+    local existing_config
+    existing_config=$(_fleet_resolve_config "$(pwd)")
+    if [[ "$MANIFEST_FLEET_ACTIVE" != "true" && -f "$existing_config" ]]; then
+        load_fleet_config "$(pwd)" || return 1
+    fi
+    MANIFEST_FLEET_ROOT="${MANIFEST_FLEET_ROOT:-$(pwd)}"
+    MANIFEST_FLEET_NAME="${MANIFEST_FLEET_NAME:-$(basename "$MANIFEST_FLEET_ROOT")}"
 
     # Determine if it's a path or URL
     local is_url=false
@@ -2045,6 +2171,23 @@ fleet_add() {
     local config_file
     config_file=$(_fleet_resolve_config)
 
+    if [[ "$dry_run" == "true" ]]; then
+        echo "Dry run - manifest add fleet"
+        if [[ -f "$config_file" ]]; then
+            echo "Would update: $config_file"
+        else
+            echo "No manifest.fleet.config.yaml found."
+            echo "Would print manual YAML only."
+        fi
+        echo ""
+        echo "Would add under services:"
+        echo ""
+        echo "$yaml_content"
+        echo ""
+        echo "No changes written. Re-run without --dry-run to apply."
+        return 0
+    fi
+
     if [[ -f "$config_file" ]]; then
         if append_services_to_manifest "$config_file" "$yaml_content"; then
             echo "✓ Added '$service_name' to $config_file"
@@ -2086,75 +2229,23 @@ fleet_main() {
     shift || true
 
     case "$subcommand" in
-        quickstart)
-            fleet_quickstart "$@"
-            ;;
-        # 'start', 'init', and 'sync' are no longer dispatcher routes — the
-        # underlying functions are private (_fleet_start/_fleet_init/_fleet_sync)
-        # and are reached via the v42 entry points (manifest init/prep fleet).
-        # The unknown-command fallback below detects these and prints migration
-        # hints rather than a bare "Unknown fleet command" error.
-        status)
-            fleet_status "$@"
-            ;;
-        discover)
-            fleet_discover "$@"
-            ;;
-        update)
-            fleet_update "$@"
-            ;;
-        ship)
-            fleet_ship "$@"
-            ;;
-        validate)
-            fleet_validate "$@"
-            ;;
-        add)
-            fleet_add "$@"
-            ;;
-        pr)
-            local pr_subcommand=""
-            local implicit_queue=false
-            case "${1:-}" in
-                create|status|checks|ready|queue|help|-h|--help)
-                    pr_subcommand="${1:-help}"
-                    shift || true
-                    ;;
-                "")
-                    pr_subcommand="queue"
-                    implicit_queue=true
-                    ;;
-                *)
-                    # Treat unknown first token as queue option payload.
-                    pr_subcommand="queue"
-                    implicit_queue=true
-                    ;;
-            esac
-            if [ "$implicit_queue" = "true" ]; then
-                echo "ℹ️  Default fleet PR action: queue (use 'manifest fleet pr help' for all subcommands)."
-            fi
-            if declare -F manifest_fleet_pr_dispatch >/dev/null 2>&1; then
-                manifest_fleet_pr_dispatch "$pr_subcommand" "$@"
-            else
-                log_error "Fleet PR module unavailable"
-                return 1
-            fi
-            ;;
-        prep)
-            fleet_prep "$@"
-            ;;
-        docs)
-            fleet_docs_dispatch "$@"
-            ;;
         help|--help|-h)
             fleet_help
             ;;
-        start|init|sync)
+        add|discover|docs|init|prep|pr|quickstart|ship|start|status|sync|update|validate)
             local replacement
             case "$subcommand" in
-                start) replacement="manifest init fleet" ;;
-                init)  replacement="manifest init fleet" ;;
-                sync)  replacement="manifest prep fleet" ;;
+                add)        replacement="manifest add fleet" ;;
+                discover)   replacement="manifest discover fleet" ;;
+                docs)       replacement="manifest docs fleet" ;;
+                init|start) replacement="manifest init fleet" ;;
+                prep|sync)  replacement="manifest prep fleet" ;;
+                pr)         replacement="manifest pr fleet" ;;
+                quickstart) replacement="manifest quickstart fleet" ;;
+                ship)       replacement="manifest ship fleet" ;;
+                status)     replacement="manifest status" ;;
+                update)     replacement="manifest update fleet" ;;
+                validate)   replacement="manifest validate fleet" ;;
             esac
             log_error "'manifest fleet $subcommand' is no longer a dispatcher route."
             echo "  Use: $replacement"
@@ -2183,51 +2274,59 @@ MANIFEST FLEET - Polyrepo Management
 
 Manage multiple related repositories as a coordinated fleet.
 
-This is a legacy command surface — prefer the v42 entry points:
+Use action-first commands:
 
-  manifest init fleet           Scaffold (was: manifest fleet start + init)
-  manifest prep fleet           Clone/pull (was: manifest fleet sync)
-  manifest refresh fleet        Re-scan + regenerate docs (was: manifest fleet update)
-  manifest ship fleet <bump>    Coordinated release (was: manifest fleet ship)
+  manifest init fleet           Scaffold
+  manifest prep fleet           Clone/pull
+  manifest quickstart fleet     Auto-discover git repos, skip TSV selection
+  manifest discover fleet       Preview fleet membership discovery
+  manifest update fleet         Re-scan and add new repos
+  manifest refresh fleet        Re-scan + regenerate docs
+  manifest validate fleet       Validate fleet configuration
+  manifest add fleet <path>     Add a service to the fleet
+  manifest docs fleet           Generate fleet documentation
+  manifest pr fleet             Fleet-wide PR operations
+  manifest ship fleet <bump>    Coordinated release
 
-LEGACY-ONLY COMMANDS:
+COMMAND DETAILS:
 
-  manifest fleet quickstart [options]
+  manifest quickstart fleet [options]
     Quick fleet setup — auto-discovers existing git repos, skips selection.
     Equivalent to: manifest init fleet (without the TSV selection step).
     Options:
       --name, -n NAME    Fleet name
       --force, -f        Overwrite existing manifest.fleet.config.yaml
+      --dry-run          Preview files and discovery without writing
 
-  manifest fleet status [options]
-    Show fleet status overview. (Prefer 'manifest status'.)
+  manifest status [options]
+    Show fleet status overview.
     Options:
       --verbose, -v      Show detailed information
       --json             Output as JSON
 
-  manifest fleet update [options]
+  manifest update fleet [options]
     Re-scan workspace and add new repos to manifest.fleet.config.yaml.
-    (Prefer 'manifest refresh fleet' which also regenerates docs.)
     Options:
       --depth N          Maximum search depth (default: 5)
       --dry-run          Preview only — do not modify manifest.fleet.config.yaml
       --json             Output JSON summary (implies --dry-run)
       --quiet, -q        Only output new repo lines (implies --dry-run)
 
-  manifest fleet discover [options]
-    Alias for 'manifest fleet update --dry-run'.
+  manifest discover fleet [options]
+    Alias for 'manifest update fleet --dry-run'.
 
-  manifest fleet validate
+  manifest validate fleet
     Validate fleet configuration.
 
-  manifest fleet add <path-or-url> [options]
+  manifest add fleet <path-or-url> [options]
     Add a service to the fleet.
     Options:
       --name NAME        Service name
       --type TYPE        Service type (service|library|infrastructure|tool)
+      --dry-run          Preview YAML without modifying manifest.fleet.config.yaml
 
-  manifest fleet pr [options]
-    Preferred shorthand for: manifest fleet pr queue [options]
+  manifest pr fleet [options]
+    Preferred shorthand for: manifest pr fleet queue [options]
     (queues policy-aware auto-merge across fleet PRs after gates pass)
     Queue options:
       --method <merge|squash|rebase>
@@ -2236,15 +2335,15 @@ LEGACY-ONLY COMMANDS:
     Explicit subcommands:
       create | status | checks | ready | queue
     Examples:
-      manifest fleet pr
-      manifest fleet pr create
-      manifest fleet pr status
-      manifest fleet pr checks
-      manifest fleet pr ready
-      manifest fleet pr --method squash         # Preferred team path
-      manifest fleet pr queue --method merge    # Explicit equivalent
+      manifest pr fleet
+      manifest pr fleet create
+      manifest pr fleet status
+      manifest pr fleet checks
+      manifest pr fleet ready
+      manifest pr fleet --method squash         # Preferred team path
+      manifest pr fleet queue --method merge    # Explicit equivalent
 
-  manifest fleet ship [patch|minor|major|revision] [options]
+  manifest ship fleet [patch|minor|major|revision] [options]
     Highest-level coordinated fleet workflow.
     Options:
       --noprep
@@ -2254,11 +2353,7 @@ LEGACY-ONLY COMMANDS:
       --no-delete-branch
       --draft
 
-  manifest fleet prep [patch|minor|major]
-    Coordinated version bump across all services.
-    (Coming soon)
-
-  manifest fleet docs [subcommand] [options]
+  manifest docs fleet [subcommand] [options]
     Generate fleet documentation per configured strategy.
     Subcommands:
       generate          Generate docs (default)
@@ -2268,6 +2363,7 @@ LEGACY-ONLY COMMANDS:
       --strategy <s>    Override strategy: fleet-root|per-service|both
       --fleet-only      Only generate fleet-root docs
       --services-only   Only generate per-service docs
+      --dry-run         Preview planned docs writes without changing files
 
 CONFIGURATION:
 
@@ -2284,13 +2380,15 @@ EXAMPLES:
   manifest init fleet                   # apply selections (Phase 2)
 
   # Quick setup (auto-discover git repos, no selection step)
-  manifest fleet quickstart
+  manifest quickstart fleet --dry-run
 
   # Add newly discovered repos to an existing fleet
   manifest refresh fleet                # also regenerates docs
 
   # Preview only (read-only)
+  manifest init fleet --dry-run
   manifest refresh fleet --dry-run
+  manifest docs fleet --dry-run
 
   # Check fleet status
   manifest status

@@ -63,18 +63,16 @@ Supporting commands (`pr`, `config`, `test`, etc.) do not require a scope.
 | ------- | ----------- |
 | `manifest revert` | Roll back to a previous version |
 
-### Hidden Legacy Aliases
-
-These commands still work but are not shown in `manifest --help`:
+### Hidden Plumbing And Removed Routes
 
 | Command | Routes To |
 | ------- | --------- |
 | `manifest prep <type>` | `manifest ship repo <type> --local` (deprecation warning) |
 | `manifest ship <type>` | `manifest ship repo <type>` |
 | `manifest sync` | `manifest prep repo` |
-| `manifest fleet <sub>` | Fleet dispatcher (unchanged) |
+| `manifest fleet <action>` | Removed; use `manifest <action> fleet` |
 | `manifest time` | Time info display |
-| `manifest update` | `manifest upgrade` (deprecation warning) |
+| `manifest update` | Removed as an upgrade alias; use `manifest upgrade` |
 | `manifest docs [sub]` | Documentation generation (plumbing) |
 | `manifest cleanup` | Archive old docs (plumbing) |
 | `manifest commit <msg>` | Commit with timestamp (plumbing) |
@@ -151,6 +149,7 @@ Two-phase fleet initialization using TSV-based directory discovery.
 
 ```bash
 manifest init fleet                        # Phase 1 (no TSV) or Phase 2 (TSV exists)
+manifest init fleet --dry-run              # Preview current phase without writes
 manifest init fleet --depth 3              # Custom scan depth (default: 2)
 manifest init fleet --name "my-fleet"      # Named fleet
 manifest init fleet --force                # Overwrite existing files
@@ -166,9 +165,10 @@ manifest init fleet --force                # Overwrite existing files
 | ---- | ----------- |
 | `--depth N` | Scan depth (default: 2) |
 | `-f`, `--force` | Overwrite existing files |
+| `--dry-run` | Preview Phase 1 or Phase 2 without writing files |
 | `-n`, `--name NAME` | Fleet name (prompted if not provided) |
 
-**Delegates to:** `fleet_start()` (phase 1) and `fleet_init()` (phase 2) in `manifest-fleet.sh`
+**Delegates to:** `_fleet_start()` (phase 1) and `_fleet_init()` (phase 2) in `manifest-fleet.sh`
 
 ---
 
@@ -487,7 +487,7 @@ manifest upgrade --check       # Check only (no install)
 manifest upgrade --force       # Force upgrade regardless of version
 ```
 
-`manifest update` is a deprecated alias that routes here with a warning.
+Use `manifest upgrade` explicitly for CLI upgrades.
 
 **Source:** `manifest-auto-upgrade.sh`
 
@@ -524,35 +524,30 @@ manifest agent uninstall       # Remove agent
 
 ---
 
-## `manifest fleet` (Legacy Interface)
+## Fleet Commands
 
-The `manifest fleet <sub>` interface continues to work via `fleet_main()` for
-the commands listed below. As of v44.9.0 the three dual-path entry points
-(`start`, `init`, `sync`) have been removed — invoking them prints a migration
-hint pointing at the v42 entry point.
+Fleet commands use the same action-first shape as the rest of the CLI:
+`manifest <action> fleet ...`. The old object-first `manifest fleet <action>`
+routes are not dispatcher routes.
 
 ```bash
-# v42 entry points (preferred)
-manifest init fleet                    # Scaffold fleet (was: fleet start + init)
-manifest prep fleet --parallel         # Clone/pull all (was: fleet sync)
+manifest init fleet                    # Scaffold fleet
+manifest init fleet --dry-run          # Preview current init phase
+manifest quickstart fleet --dry-run    # Auto-discover preview, skip TSV selection
+manifest status --verbose              # Fleet status when in fleet mode
+manifest discover fleet --depth 3      # Find new repos (alias for update --dry-run)
+manifest update fleet                  # Re-scan membership
+manifest update fleet --dry-run        # Preview changes
+manifest add fleet ./path --name "svc" --dry-run # Preview service YAML
+manifest validate fleet                # Validate config
+manifest prep fleet --parallel         # Clone/pull all
 manifest refresh fleet                 # Re-scan + regenerate docs
+manifest docs fleet --dry-run          # Preview fleet documentation writes
+manifest pr fleet queue --method squash  # Fleet PR operations
 manifest ship fleet minor --safe       # Coordinated release
-
-# Legacy-only fleet commands
-manifest fleet quickstart              # Auto-discover, skip TSV selection
-manifest fleet status --verbose        # Fleet status
-manifest fleet discover --depth 3      # Find new repos (alias for update --dry-run)
-manifest fleet update                  # Re-scan membership
-manifest fleet update --dry-run        # Preview changes
-manifest fleet add ./path --name "svc" # Add a service
-manifest fleet validate                # Validate config
-manifest fleet prep patch              # Local-only fleet release
-manifest fleet pr queue --method squash  # Fleet PR operations
-manifest fleet docs                    # Fleet documentation
-manifest fleet help                    # Fleet help
 ```
 
-**Service types for `fleet add`:** `service`, `library`, `infrastructure`, `tool`
+**Service types for `add fleet`:** `service`, `library`, `infrastructure`, `tool`
 
 > See [Fleet Design Spec](FLEET_DESIGN_SPEC.md) for architecture details.
 

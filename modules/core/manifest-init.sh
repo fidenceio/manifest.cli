@@ -695,9 +695,114 @@ EOF
 #   --force      Overwrite existing files
 #   --name NAME  Fleet name
 # -----------------------------------------------------------------------------
+_manifest_init_fleet_dry_run_phase1() {
+    local root_dir="$1"
+    local depth="$2"
+    local start_file="$3"
+    local force="$4"
+    local create_repo_visibility="$5"
+
+    if ! [[ "$depth" =~ ^[0-9]+$ ]]; then
+        log_error "--depth must be a non-negative integer"
+        return 1
+    fi
+
+    local discovered
+    discovered=$(discover_all_directories "$root_dir" "$depth")
+
+    local total=0 git_count=0 plain_count=0
+    while IFS=$'\t' read -r name _path _type _branch _version _url _submodule has_git _has_remote; do
+        [[ -z "$name" ]] && continue
+        ((total += 1))
+        if [[ "$has_git" == "true" ]]; then
+            ((git_count += 1))
+        else
+            ((plain_count += 1))
+        fi
+    done <<< "$discovered"
+
+    echo ""
+    echo "Dry run - manifest init fleet (Phase 1/2): $root_dir"
+    echo ""
+    echo "Would scan depth: $depth"
+    if [[ -f "$start_file" && "$force" == "true" ]]; then
+        echo "Would overwrite: $start_file"
+    else
+        echo "Would create:    $start_file"
+    fi
+    echo "Would discover:  $total directories ($git_count with git, $plain_count without git)"
+    if [[ -n "$create_repo_visibility" ]]; then
+        echo "Would defer:     GitHub repo creation flag applies in Phase 2 (--create-repo-$create_repo_visibility)"
+    fi
+    echo ""
+    echo "No changes written. Re-run without --dry-run to apply."
+}
+
+_manifest_init_fleet_dry_run_phase2() {
+    local root_dir="$1"
+    local start_file="$2"
+    local config_file="$3"
+    local force="$4"
+    local fleet_name="$5"
+    local create_repo_visibility="$6"
+    local stale="$7"
+
+    local selected
+    selected=$(parse_start_tsv "$start_file")
+
+    local selected_count=0 existing_count=0 missing_count=0 needs_git_count=0
+    while IFS=$'\t' read -r name path _type has_git _url _branch _version; do
+        [[ -z "$name" ]] && continue
+        ((selected_count += 1))
+        local abs_path="$root_dir/${path#./}"
+        if [[ -d "$abs_path" ]]; then
+            ((existing_count += 1))
+        else
+            ((missing_count += 1))
+        fi
+        [[ "$has_git" != "true" ]] && ((needs_git_count += 1))
+    done <<< "$selected"
+
+    if [[ -z "$fleet_name" ]]; then
+        fleet_name=$(basename "$root_dir" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+    fi
+
+    echo ""
+    echo "Dry run - manifest init fleet (Phase 2/2): $root_dir"
+    echo ""
+    echo "Would read:      $start_file"
+    if [[ -f "$config_file" && "$force" == "true" ]]; then
+        echo "Would overwrite: $config_file"
+    elif [[ -f "$config_file" ]]; then
+        echo "Exists:          $config_file"
+    else
+        echo "Would create:    $config_file"
+    fi
+    if [[ -f "$root_dir/manifest.config.local.yaml" ]]; then
+        echo "Exists:          $root_dir/manifest.config.local.yaml"
+    else
+        echo "Would create:    $root_dir/manifest.config.local.yaml"
+    fi
+    echo "Fleet name:      $fleet_name"
+    echo "Selected rows:   $selected_count ($existing_count existing, $missing_count missing)"
+    echo "Would git init:  $needs_git_count selected director$( [[ "$needs_git_count" == "1" ]] && echo "y" || echo "ies" ) without git"
+    if [[ -n "$create_repo_visibility" ]]; then
+        echo "Would create:    $create_repo_visibility GitHub repo per selected directory after local init"
+    fi
+    if [[ "$stale" == "true" ]]; then
+        echo ""
+        echo "Would stop live run: manifest.fleet.tsv still has generated default selections."
+        echo "Re-run with --force to apply defaults, or edit SELECT values first."
+    fi
+    echo ""
+    echo "No changes written. Re-run without --dry-run to apply."
+}
+
 manifest_init_fleet() {
     local depth=2
     local force=false
+    local dry_run=false
+    local fleet_name=""
     local create_repo_visibility=""
     local fleet_args=()
 
@@ -710,7 +815,13 @@ manifest_init_fleet() {
                 fi
                 depth="$2"; shift 2 ;;
             -f|--force) force=true; shift ;;
-            -n|--name) fleet_args+=("--name" "$2"); shift 2 ;;
+            --dry-run) dry_run=true; shift ;;
+            -n|--name)
+                if [[ -z "${2:-}" ]] || [[ "${2:-}" == --* ]]; then
+                    log_error "--name requires a value"
+                    return 1
+                fi
+                fleet_name="$2"; shift 2 ;;
             --create-repo-private)
                 create_repo_visibility=$(_manifest_parse_create_repo_flag "$create_repo_visibility" "private") || return 1
                 shift ;;
@@ -719,7 +830,7 @@ manifest_init_fleet() {
                 shift ;;
             -h|--help)
                 _render_help \
-                    "manifest init fleet [--depth N] [--force] [--name NAME] [--create-repo-private|--create-repo-public]" \
+                    "manifest init fleet [--depth N] [--force] [--dry-run] [--name NAME] [--create-repo-private|--create-repo-public]" \
                     "Two-phase fleet initialization." \
                     "Phases" "  Phase 1 (no TSV yet):  Scan directories, write manifest.fleet.tsv
                          for you to review and edit selections.
@@ -727,10 +838,12 @@ manifest_init_fleet() {
                          manifest.fleet.config.yaml." \
                     "Options" "  --depth N                  Scan depth in Phase 1 (default: 2)
   -f, --force                Overwrite existing files (re-runs Phase 1 + skips guard)
+  --dry-run                  Preview Phase 1 or Phase 2 without writing files
   -n, --name                 Fleet name (prompted if not provided)
   --create-repo-private      In Phase 2, create a private GitHub repo for each scaffolded dir
   --create-repo-public       In Phase 2, create a public GitHub repo for each scaffolded dir" \
                     "Examples" "  manifest init fleet                 # Phase 1: discover
+  manifest init fleet --dry-run       # Preview current phase
   vim manifest.fleet.tsv             # edit SELECT column
   manifest init fleet                 # Phase 2: apply selections
   manifest init fleet --create-repo-private   # Phase 2 + create private GitHub repos" \
@@ -742,7 +855,7 @@ manifest_init_fleet() {
             *)
                 _render_help_error \
                     "Unknown option: $1" \
-                    "manifest init fleet [--depth N] [--force] [--name NAME] [--create-repo-private|--create-repo-public]"
+                    "manifest init fleet [--depth N] [--force] [--dry-run] [--name NAME] [--create-repo-private|--create-repo-public]"
                 return 1
                 ;;
         esac
@@ -756,6 +869,11 @@ manifest_init_fleet() {
     # Also re-runs Phase 1 if --force is given AND no fleet config exists yet
     # (so users can regenerate the TSV before applying it).
     if [[ ! -f "$start_file" ]] || [[ "$force" == "true" && ! -f "$config_file" ]]; then
+        if [[ "$dry_run" == "true" ]]; then
+            _manifest_init_fleet_dry_run_phase1 "$root_dir" "$depth" "$start_file" "$force" "$create_repo_visibility"
+            return $?
+        fi
+
         echo ""
         echo "Phase 1/2: Discovering directories…"
         echo "After this completes, edit manifest.fleet.tsv to set SELECT=true/false,"
@@ -778,7 +896,17 @@ manifest_init_fleet() {
 
     # Phase 2: TSV exists — guard against accidental re-scan that would
     # discard the user's edits unless --force is explicit.
+    local stale_tsv=false
     if _fleet_init_tsv_is_stale "$start_file" "$config_file"; then
+        stale_tsv=true
+    fi
+
+    if [[ "$dry_run" == "true" ]]; then
+        _manifest_init_fleet_dry_run_phase2 "$root_dir" "$start_file" "$config_file" "$force" "$fleet_name" "$create_repo_visibility" "$stale_tsv"
+        return $?
+    fi
+
+    if [[ "$stale_tsv" == "true" ]]; then
         log_warning "manifest.fleet.tsv has not been edited since it was generated."
         echo ""
         echo "  If you meant to apply Phase 1 results without changes, that's fine —"
@@ -796,6 +924,10 @@ manifest_init_fleet() {
 
     if [[ "$force" == "true" ]]; then
         fleet_args+=("--force")
+    fi
+
+    if [[ -n "$fleet_name" ]]; then
+        fleet_args+=("--name" "$fleet_name")
     fi
 
     if [[ -n "$create_repo_visibility" ]]; then
