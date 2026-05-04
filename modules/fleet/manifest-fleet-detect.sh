@@ -572,6 +572,7 @@ discover_fleet_repos() {
 
     # Recursive discovery function
     _discover_repos_recursive "$root_dir" "$root_dir" 0 "$max_depth" "$include_submodules" discovered_paths
+    return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -679,6 +680,7 @@ _discover_repos_recursive() {
             _discover_repos_recursive "$subdir" "$root_dir" $((current_depth + 1)) "$max_depth" "$include_submodules" "$_arr_name"
         fi
     done < <(find "$current_dir" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
+    return 0
 }
 
 # =============================================================================
@@ -714,6 +716,7 @@ discover_all_directories() {
 
     local discovered_paths=()
     _discover_dirs_recursive "$root_dir" "$root_dir" 0 "$max_depth" discovered_paths
+    return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -790,6 +793,7 @@ _discover_dirs_recursive() {
             _discover_dirs_recursive "$subdir" "$root_dir" $((current_depth + 1)) "$max_depth" "$_arr_name"
         fi
     done < <(find "$current_dir" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
+    return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -801,14 +805,190 @@ _discover_dirs_recursive() {
 #   $1 - Output of discover_all_directories (multi-line, tab-separated)
 #   $2 - Root directory path (for header metadata)
 #   $3 - Scan depth used (for header metadata)
+#   $4 - Selection mode: git-only (default) or listed
+#   $5 - Fingerprint mode: fingerprint (default) or trusted
 #
 # OUTPUT:
 #   TSV content written to stdout, ready to redirect to a file.
 # -----------------------------------------------------------------------------
+_fleet_start_selected_for_row() {
+    local has_git="$1"
+    local select_mode="${2:-git-only}"
+
+    case "$select_mode" in
+        listed) echo "true" ;;
+        git-only|*) [[ "$has_git" == "true" ]] && echo "true" || echo "false" ;;
+    esac
+}
+
+_fleet_normalize_relative_path() {
+    local path="$1"
+    path="${path#./}"
+    path="${path%/}"
+    echo "$path"
+}
+
+_fleet_repo_depth_for_path() {
+    local path
+    path=$(_fleet_normalize_relative_path "$1")
+    [[ -n "$path" ]] || {
+        echo "0"
+        return
+    }
+    if [[ "$path" != */* ]]; then
+        echo "0"
+        return
+    fi
+
+    local rest="${path#*/}"
+    local depth=1
+    while [[ "$rest" == */* ]]; do
+        rest="${rest#*/}"
+        ((depth += 1))
+    done
+    echo "$depth"
+}
+
+_fleet_top_level_for_path() {
+    local path
+    path=$(_fleet_normalize_relative_path "$1")
+    echo "${path%%/*}"
+}
+
+_fleet_default_repo_depth_rules() {
+    local discovered="$1"
+    declare -A max_depth_by_top=()
+    local tops=()
+
+    while IFS=$'\t' read -r name path _type _branch _version _url _submodule _has_git _has_remote; do
+        [[ -z "$name" ]] && continue
+        local top depth
+        top=$(_fleet_top_level_for_path "$path")
+        [[ -n "$top" ]] || continue
+        depth=$(_fleet_repo_depth_for_path "$path")
+        if [[ -z "${max_depth_by_top[$top]+_}" ]]; then
+            tops+=("$top")
+            max_depth_by_top["$top"]="$depth"
+        elif (( depth > ${max_depth_by_top[$top]} )); then
+            max_depth_by_top["$top"]="$depth"
+        fi
+    done <<< "$discovered"
+
+    local top
+    for top in "${tops[@]}"; do
+        if (( ${max_depth_by_top[$top]} > 0 )); then
+            echo "$top=1"
+        else
+            echo "$top=0"
+        fi
+    done
+    return 0
+}
+
+_fleet_prompt_repo_depth_rules() {
+    local discovered="$1"
+    local defaults
+    defaults=$(_fleet_default_repo_depth_rules "$discovered")
+
+    [[ -n "$defaults" ]] || return 0
+
+    echo "" > /dev/tty
+    echo "Choose repo granularity for each top-level folder:" > /dev/tty
+    echo "  0 = the folder itself" > /dev/tty
+    echo "  1 = direct children (folder/*)" > /dev/tty
+    echo "  2 = grandchildren (folder/*/*)" > /dev/tty
+    echo "  all = every nested folder, skip = none" > /dev/tty
+    echo "" > /dev/tty
+
+    local line top default_depth answer
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        top="${line%%=*}"
+        default_depth="${line#*=}"
+
+        while true; do
+            printf "How deep should repos be under %s/? [%s] " "$top" "$default_depth" > /dev/tty
+            read -r answer < /dev/tty
+            answer="${answer:-$default_depth}"
+            case "$answer" in
+                skip|none) echo "$top=skip"; break ;;
+                all) echo "$top=all"; break ;;
+                ''|*[!0-9]*)
+                    echo "Enter 0, 1, 2, all, or skip." > /dev/tty
+                    ;;
+                *) echo "$top=$answer"; break ;;
+            esac
+        done
+    done <<< "$defaults"
+    return 0
+}
+
+filter_start_inventory_by_repo_depth() {
+    local discovered="$1"
+    local rules="$2"
+    local all_folders="${3:-false}"
+
+    if [[ "$all_folders" == "true" ]]; then
+        printf "%s\n" "$discovered"
+        return 0
+    fi
+
+    declare -A rule_by_top=()
+    local rule top value
+    while IFS= read -r rule; do
+        [[ -z "$rule" ]] && continue
+        top="${rule%%=*}"
+        value="${rule#*=}"
+        rule_by_top["$top"]="$value"
+    done <<< "$rules"
+
+    while IFS=$'\t' read -r name path type branch version url submodule has_git has_remote; do
+        [[ -z "$name" ]] && continue
+
+        if [[ "$has_git" == "true" ]]; then
+            printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+                "$name" "$path" "$type" "$branch" "$version" "$url" "$submodule" "$has_git" "$has_remote"
+            continue
+        fi
+
+        top=$(_fleet_top_level_for_path "$path")
+        value="${rule_by_top[$top]:-1}"
+        [[ "$value" == "skip" || "$value" == "none" ]] && continue
+
+        local depth
+        depth=$(_fleet_repo_depth_for_path "$path")
+        if [[ "$value" == "all" ]]; then
+            (( depth >= 1 )) || continue
+        elif [[ "$value" =~ ^[0-9]+$ ]]; then
+            (( depth == value )) || continue
+        else
+            continue
+        fi
+
+        printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+            "$name" "$path" "$type" "$branch" "$version" "$url" "$submodule" "$has_git" "$has_remote"
+    done <<< "$discovered"
+    return 0
+}
+
+filter_start_inventory_git_repos() {
+    local discovered="$1"
+
+    while IFS=$'\t' read -r name path type branch version url submodule has_git has_remote; do
+        [[ -z "$name" ]] && continue
+        [[ "$has_git" == "true" ]] || continue
+        printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+            "$name" "$path" "$type" "$branch" "$version" "$url" "$submodule" "$has_git" "$has_remote"
+    done <<< "$discovered"
+    return 0
+}
+
 generate_start_tsv() {
     local discovered="$1"
     local root_dir="$2"
     local depth="$3"
+    local select_mode="${4:-git-only}"
+    local fingerprint_mode="${5:-fingerprint}"
     local scan_date
     scan_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
@@ -818,8 +998,8 @@ generate_start_tsv() {
     local selects=""
     while IFS=$'\t' read -r name path type branch version url submodule has_git has_remote; do
         [[ -z "$name" ]] && continue
-        local selected="false"
-        [[ "$has_git" == "true" ]] && selected="true"
+        local selected
+        selected=$(_fleet_start_selected_for_row "$has_git" "$select_mode")
         selects="${selects}${selected}\n"
     done <<< "$discovered"
 
@@ -830,7 +1010,9 @@ generate_start_tsv() {
     echo "# MANIFEST FLEET — Directory Inventory"
     echo "# Root: $root_dir | Depth: $depth | Date: $scan_date"
     echo "# Toggle the SELECT column (true/false), then run: manifest init fleet"
-    echo "# DEFAULT-SELECT-HASH: ${default_hash}"
+    if [[ "$fingerprint_mode" != "trusted" ]]; then
+        echo "# DEFAULT-SELECT-HASH: ${default_hash}"
+    fi
     printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
 
     # Data rows
@@ -838,12 +1020,13 @@ generate_start_tsv() {
         [[ -z "$name" ]] && continue
 
         # Default selection: true for git repos, false for non-git dirs
-        local selected="false"
-        [[ "$has_git" == "true" ]] && selected="true"
+        local selected
+        selected=$(_fleet_start_selected_for_row "$has_git" "$select_mode")
 
         printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
             "$selected" "$name" "$path" "$type" "$has_git" "$url" "${branch:-}" "${version:-0.0.0}"
     done <<< "$discovered"
+    return 0
 }
 
 
@@ -1232,6 +1415,8 @@ append_services_to_manifest() {
 
 export -f discover_fleet_repos
 export -f discover_all_directories
+export -f filter_start_inventory_by_repo_depth
+export -f filter_start_inventory_git_repos
 export -f generate_start_tsv
 export -f parse_start_tsv
 export -f merge_start_tsv

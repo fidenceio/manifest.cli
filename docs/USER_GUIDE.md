@@ -191,7 +191,7 @@ Only use it after reviewing the generated `parent_path`, `submodule_name`,
 ### Initialize a New Fleet
 
 ```bash
-# Phase 1: Scan directories, create manifest.fleet.tsv for review
+# Phase 1: Scan directories, choose repo depth per folder, create manifest.fleet.tsv
 manifest init fleet
 manifest init fleet --dry-run
 
@@ -202,11 +202,14 @@ manifest init fleet --dry-run
 # Custom scan depth (default: 2 levels)
 manifest init fleet --depth 3
 
+# Exhaustive review mode: list every scanned folder in the TSV
+manifest init fleet --all-folders
+
 # Named fleet
 manifest init fleet --name "my-platform"
 ```
 
-The two-phase approach lets you review discovered repositories in the TSV file before committing to a fleet configuration. During initialization, Manifest ensures every discovered repo has a `.gitignore`. Existing `.gitignore` files with entries are preserved; a `.gitignore.manifest` reference file is created instead.
+The two-phase approach lets you choose repo granularity before committing to a fleet configuration. In an interactive shell, Phase 1 asks how deep repos should be under each top-level folder: `0` means the folder itself, `1` means direct children such as `apps/*`, and `2` means grandchildren such as `apps/*/*`. During initialization, Manifest ensures every selected repo has a `.gitignore`. Existing `.gitignore` files with entries are preserved; a `.gitignore.manifest` reference file is created instead.
 
 For messy existing workspaces, prefer `manifest plan fleet` and
 `manifest reconcile fleet`; they keep the adoption decisions in an editable

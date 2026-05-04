@@ -268,7 +268,7 @@ Manifest Fleet manages versioning and releases across multiple repositories from
 
 ```bash
 # Two-phase initialization:
-# Phase 1: Scan directories, create manifest.fleet.tsv for review
+# Phase 1: Scan directories, choose repo depth per folder, create manifest.fleet.tsv
 manifest init fleet
 manifest init fleet --dry-run
 
@@ -278,6 +278,9 @@ manifest init fleet --dry-run
 
 # Custom scan depth (default: 2 levels)
 manifest init fleet --depth 3
+
+# Exhaustive review mode: list every scanned folder in manifest.fleet.tsv
+manifest init fleet --all-folders
 
 # Named fleet with forced overwrite
 manifest init fleet --name "platform-services" --force

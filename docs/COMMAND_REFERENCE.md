@@ -155,7 +155,7 @@ manifest init fleet --name "my-fleet"      # Named fleet
 manifest init fleet --force                # Overwrite existing files
 ```
 
-**Phase 1** (no `manifest.fleet.tsv` exists): Scans directories up to `--depth` levels, creates `manifest.fleet.tsv` for user review.
+**Phase 1** (no `manifest.fleet.tsv` exists): Scans directories up to `--depth` levels, asks for repo granularity per top-level folder when interactive, then creates a compact `manifest.fleet.tsv` for review.
 
 **Phase 2** (TSV exists): Reads selections from TSV, scaffolds each repo, creates fleet configuration.
 
@@ -163,7 +163,8 @@ manifest init fleet --force                # Overwrite existing files
 
 | Flag | Description |
 | ---- | ----------- |
-| `--depth N` | Scan depth (default: 2) |
+| `--depth N` | Scan guardrail (default: 2) |
+| `--all-folders` | Write every scanned folder to the TSV instead of the compact repo-depth view |
 | `-f`, `--force` | Overwrite existing files |
 | `--dry-run` | Preview Phase 1 or Phase 2 without writing files |
 | `-n`, `--name NAME` | Fleet name (prompted if not provided) |

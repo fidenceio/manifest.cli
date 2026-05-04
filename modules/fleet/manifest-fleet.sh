@@ -524,7 +524,8 @@ fleet_quickstart() {
             echo "Would create:    $start_file"
         fi
         echo "Fleet name:      $fleet_name"
-        echo "Would discover:  $total directories ($git_count existing git repos selected)"
+        echo "Would scan:      $total directories"
+        echo "Would list:      $git_count existing git repos in manifest.fleet.tsv"
         echo ""
         echo "No changes written. Re-run without --dry-run to apply."
         return 0
@@ -540,19 +541,21 @@ fleet_quickstart() {
 # -----------------------------------------------------------------------------
 # Function: _fleet_start (internal)
 # -----------------------------------------------------------------------------
-# Scans ALL subdirectories (git and non-git) and writes a TSV selection file.
-# The user edits the file to choose which directories to include, then runs
-# 'manifest init fleet' (Phase 2) to apply initialization standards.
+# Scans subdirectories and writes a TSV selection file. By default, the scan is
+# exhaustive internally but the TSV is compact: users choose the repo depth for
+# each top-level folder. Pass --all-folders for the old exhaustive TSV.
 #
 # Called from manifest_init_fleet (Phase 1) in modules/core/manifest-init.sh.
 #
 # ARGUMENTS:
-#   --depth N    Maximum search depth (default: 5)
-#   --force      Overwrite existing manifest.fleet.tsv
+#   --depth N       Maximum search depth (default: 5)
+#   --all-folders   Write every scanned folder to manifest.fleet.tsv
+#   --force         Overwrite existing manifest.fleet.tsv
 # -----------------------------------------------------------------------------
 _fleet_start() {
     local depth=5
     local force=false
+    local all_folders=false
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -562,6 +565,7 @@ _fleet_start() {
                     return 1
                 fi
                 depth="$2"; shift 2 ;;
+            --all-folders) all_folders=true; shift ;;
             -f|--force) force=true; shift ;;
             *) shift ;;
         esac
@@ -591,6 +595,11 @@ _fleet_start() {
     echo "╚══════════════════════════════════════════════════════════════════════╝"
     echo ""
     echo "Scanning: $root_dir (depth: $depth)"
+    if [[ "$all_folders" == "true" ]]; then
+        echo "Inventory mode: all scanned folders"
+    else
+        echo "Inventory mode: repo-depth prompts"
+    fi
     echo ""
 
     local discovered
@@ -601,31 +610,67 @@ _fleet_start() {
         return 0
     fi
 
+    local rules="" fingerprint_mode="fingerprint"
+    if [[ "$all_folders" != "true" ]]; then
+        if [[ -t 0 && -r /dev/tty ]]; then
+            rules=$(_fleet_prompt_repo_depth_rules "$discovered")
+            fingerprint_mode="trusted"
+        else
+            rules=$(_fleet_default_repo_depth_rules "$discovered")
+        fi
+    fi
+
+    local inventory
+    inventory=$(filter_start_inventory_by_repo_depth "$discovered" "$rules" "$all_folders")
+
+    if [[ -z "$inventory" ]]; then
+        log_warning "No directories matched the selected repo-depth rules."
+        echo "Use --all-folders to write the exhaustive directory inventory."
+        return 0
+    fi
+
     # Write TSV selection file
-    generate_start_tsv "$discovered" "$root_dir" "$depth" > "$start_file"
+    if [[ "$all_folders" == "true" ]]; then
+        generate_start_tsv "$inventory" "$root_dir" "$depth" "git-only" "$fingerprint_mode" > "$start_file"
+    else
+        generate_start_tsv "$inventory" "$root_dir" "$depth" "listed" "$fingerprint_mode" > "$start_file"
+    fi
 
     # Count stats for summary
-    local total=0 git_count=0 plain_count=0
+    local scanned_total=0 listed_total=0 git_count=0 plain_count=0
     while IFS=$'\t' read -r name path type branch version url submodule has_git has_remote; do
         [[ -z "$name" ]] && continue
-        ((total++))
+        ((scanned_total++))
+    done <<< "$discovered"
+    while IFS=$'\t' read -r name path type branch version url submodule has_git has_remote; do
+        [[ -z "$name" ]] && continue
+        ((listed_total++))
         if [[ "$has_git" == "true" ]]; then
             ((git_count++))
         else
             ((plain_count++))
         fi
-    done <<< "$discovered"
+    done <<< "$inventory"
 
     echo "Scan results:"
-    echo "  Total directories:  $total"
-    echo "  With git:           $git_count (selected by default)"
-    echo "  Without git:        $plain_count (not selected by default)"
+    echo "  Scanned directories: $scanned_total"
+    echo "  Listed in TSV:       $listed_total"
+    echo "  With git:            $git_count"
+    if [[ "$all_folders" == "true" ]]; then
+        echo "  Without git:         $plain_count (not selected by default)"
+    else
+        echo "  Without git:         $plain_count (selected by repo-depth rule)"
+    fi
     echo ""
     echo "✓ Created: $start_file"
     echo ""
     echo "Next steps:"
-    echo "  1. Edit manifest.fleet.tsv — set SELECT to true/false"
+    echo "  1. Review manifest.fleet.tsv — adjust SELECT if needed"
     echo "  2. Run 'manifest init fleet' to initialize selected directories"
+    if [[ "$all_folders" != "true" ]]; then
+        echo ""
+        echo "Tip: use 'manifest init fleet --all-folders --force' for the exhaustive directory list."
+    fi
     echo ""
 }
 
@@ -973,17 +1018,19 @@ EOF
         echo "Auto-discovering repositories..."
         local all_dirs
         all_dirs=$(discover_all_directories "$target_dir" 5)
+        local inventory
+        inventory=$(filter_start_inventory_git_repos "$all_dirs")
 
-        if [[ -n "$all_dirs" ]]; then
-            # Generate TSV with git repos auto-selected
-            generate_start_tsv "$all_dirs" "$target_dir" 5 > "$start_file"
+        if [[ -n "$inventory" ]]; then
+            # Generate TSV with only existing git repos auto-selected.
+            generate_start_tsv "$inventory" "$target_dir" 5 > "$start_file"
             echo "✓ Created: $start_file"
 
             local service_count=0
             while IFS=$'\t' read -r name path type branch version url submodule has_git has_remote; do
                 [[ -z "$name" ]] && continue
                 [[ "$has_git" == "true" ]] && ((service_count++))
-            done <<< "$all_dirs"
+            done <<< "$inventory"
             echo "✓ Fleet inventory: $service_count service(s) in manifest.fleet.tsv"
         fi
     fi
@@ -2294,6 +2341,16 @@ Use action-first commands:
 
 COMMAND DETAILS:
 
+  manifest init fleet [options]
+    Two-phase fleet setup. Scans with a depth guardrail, then asks how deep
+    repos should be under each top-level folder before writing manifest.fleet.tsv.
+    Options:
+      --depth N          Scan guardrail (default: 2 via manifest init)
+      --all-folders      Write every scanned folder to manifest.fleet.tsv
+      --name, -n NAME    Fleet name
+      --force, -f        Overwrite generated files
+      --dry-run          Preview files and discovery without writing
+
   manifest quickstart fleet [options]
     Quick fleet setup — auto-discovers existing git repos, skips selection.
     Equivalent to: manifest init fleet (without the TSV selection step).
@@ -2397,8 +2454,8 @@ CONFIGURATION:
 EXAMPLES:
 
   # Recommended workflow for new fleet (v42)
-  manifest init fleet                   # scan and write manifest.fleet.tsv
-  # ... edit manifest.fleet.tsv ...
+  manifest init fleet                   # choose repo depths, write manifest.fleet.tsv
+  # ... review manifest.fleet.tsv ...
   manifest init fleet                   # apply selections (Phase 2)
 
   # Quick setup (auto-discover git repos, no selection step)
