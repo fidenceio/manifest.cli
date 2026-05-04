@@ -441,12 +441,12 @@ release-note/changelog attachment.
 14. *(if not --local)* `push_changes()` — push to remotes
 15. *(if not --local)* `update_homebrew_formula()` — Homebrew (canonical repo only)
 16. *(if not --local)* Local installed Manifest CLI upgrade
-17. *(if not --local and gh is available)* GitHub Actions status watch for the published HEAD
+17. *(if not --local and MANIFEST_CLI_GITHUB_ACTIONS_WAIT=true)* GitHub Actions status watch for the published HEAD
 18. `update_repository_metadata()` — final metadata update
 
 **Failure handling:** If any step after commit fails, the orchestrator emits a Ship Failure Report with recovery commands (retry push, remove tag, roll back).
 
-**GitHub Actions status:** The Actions watch is informational because release artifacts are already pushed by the time CI runs. Disable it with `MANIFEST_CLI_GITHUB_ACTIONS_WAIT=false`, or tune it with `MANIFEST_CLI_GITHUB_ACTIONS_TIMEOUT_SECONDS` and `MANIFEST_CLI_GITHUB_ACTIONS_POLL_SECONDS`.
+**GitHub Actions status:** The Actions watch is opt-in because release artifacts are already pushed by the time CI runs, and waiting would slow the default ship path. Enable it with `MANIFEST_CLI_GITHUB_ACTIONS_WAIT=true`, or tune it with `MANIFEST_CLI_GITHUB_ACTIONS_TIMEOUT_SECONDS` and `MANIFEST_CLI_GITHUB_ACTIONS_POLL_SECONDS`.
 
 **Tag target** (step 13): the SHA the tag points at is resolved by `resolve_tag_target_sha()` in [manifest-git.sh](../modules/git/manifest-git.sh) from `MANIFEST_CLI_RELEASE_TAG_TARGET` (YAML key `release.tag_target`):
 
