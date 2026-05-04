@@ -307,6 +307,87 @@ check_auto_upgrade() {
     fi
 }
 
+_manifest_cli_is_help_token() {
+    case "${1:-}" in
+        help|-help|-h|--help) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+_manifest_cli_has_help_token() {
+    local arg
+    for arg in "$@"; do
+        if _manifest_cli_is_help_token "$arg"; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+_manifest_cli_has_help_flag() {
+    local arg
+    for arg in "$@"; do
+        case "$arg" in
+            -help|-h|--help) return 0 ;;
+        esac
+    done
+    return 1
+}
+
+_manifest_cli_is_help_request() {
+    local command="${1:-}"
+    shift || true
+
+    if _manifest_cli_is_help_token "$command"; then
+        return 0
+    fi
+
+    if [[ "${1:-}" == "help" ]]; then
+        return 0
+    fi
+
+    _manifest_cli_has_help_flag "$@"
+}
+
+_manifest_pr_fleet_dispatch() {
+    local pr_subcommand=""
+    local implicit_queue=false
+
+    case "${1:-}" in
+        create|status|checks|ready|queue|help|-h|--help)
+            pr_subcommand="${1:-help}"
+            shift || true
+            ;;
+        "")
+            pr_subcommand="queue"
+            implicit_queue=true
+            ;;
+        *)
+            pr_subcommand="queue"
+            implicit_queue=true
+            ;;
+    esac
+
+    if [ "$implicit_queue" = "true" ]; then
+        echo "ℹ️  Default fleet PR action: queue (use 'manifest pr fleet help' for all subcommands)."
+    fi
+    if [[ "$pr_subcommand" == "help" || "$pr_subcommand" == "-h" || "$pr_subcommand" == "--help" ]]; then
+        _render_help \
+            "manifest pr fleet [queue|create|status|checks|ready] [options]" \
+            "Run fleet-wide PR operations." \
+            "Examples" "  manifest pr fleet
+  manifest pr fleet create
+  manifest pr fleet queue --method squash"
+        return 0
+    fi
+    if declare -F manifest_fleet_pr_dispatch >/dev/null 2>&1; then
+        manifest_fleet_pr_dispatch "$pr_subcommand" "$@"
+    else
+        log_error "Fleet PR module unavailable"
+        return 1
+    fi
+}
+
 # Legacy prep entry point — kept for internal callers (manifest_ship in pr module)
 manifest_prep() {
     local increment_type="${1:-}"
@@ -345,7 +426,7 @@ main() {
     # =========================================================================
     case "$command" in
         # Commands that do NOT require a Git repository
-        "help"|"-help"|"--help"|"-h"|"version"|"-version"|"--version"|"-v"|"-V"|"uninstall"|"reinstall"|"update"|"upgrade"|"config")
+        "help"|"-help"|"--help"|"-h"|"version"|"-version"|"--version"|"-v"|"-V"|"uninstall"|"reinstall"|"add"|"discover"|"fleet"|"quickstart"|"update"|"upgrade"|"validate"|"config")
             case "$command" in
                 "config")
                     PROJECT_ROOT="$(pwd)"
@@ -369,17 +450,40 @@ main() {
             export PROJECT_ROOT
             load_configuration "$PROJECT_ROOT" "false"
             ;;
-        *)
-            # All other commands require a Git repository
-            if ! ensure_repository_root; then
-                log_error "Repository root validation failed"
-                return 1
-            fi
+        "docs"|"pr")
+            if [[ "${1:-}" == "fleet" ]] || _manifest_cli_is_help_request "$command" "$@"; then
+                PROJECT_ROOT="$(pwd)"
+                export PROJECT_ROOT
+                load_configuration "$PROJECT_ROOT" "false"
+            else
+                if ! ensure_repository_root; then
+                    log_error "Repository root validation failed"
+                    return 1
+                fi
 
-            PROJECT_ROOT="$(pwd)"
-            export PROJECT_ROOT
-            load_configuration "$PROJECT_ROOT"
-            check_auto_upgrade
+                PROJECT_ROOT="$(pwd)"
+                export PROJECT_ROOT
+                load_configuration "$PROJECT_ROOT"
+                check_auto_upgrade
+            fi
+            ;;
+        *)
+            if _manifest_cli_is_help_request "$command" "$@"; then
+                PROJECT_ROOT="$(pwd)"
+                export PROJECT_ROOT
+                load_configuration "$PROJECT_ROOT" "false"
+            else
+                # All other commands require a Git repository
+                if ! ensure_repository_root; then
+                    log_error "Repository root validation failed"
+                    return 1
+                fi
+
+                PROJECT_ROOT="$(pwd)"
+                export PROJECT_ROOT
+                load_configuration "$PROJECT_ROOT"
+                check_auto_upgrade
+            fi
             ;;
     esac
 
@@ -391,6 +495,35 @@ main() {
         # =====================================================================
         # CORE JOURNEY: config → init → prep → refresh → ship
         # =====================================================================
+        "quickstart")
+            case "${1:-}" in
+                fleet)
+                    shift || true
+                    if _manifest_cli_has_help_token "$@"; then
+                        _render_help \
+                            "manifest quickstart fleet [--name NAME] [--force] [--dry-run]" \
+                            "Initialize a fleet by auto-discovering existing git repositories."
+                        return 0
+                    fi
+                    fleet_quickstart "$@"
+                    ;;
+                help|-h|--help)
+                    _render_help \
+                        "manifest quickstart <fleet> [options]" \
+                        "Run an opinionated quickstart workflow." \
+                        "Scopes" "  fleet   Auto-discover existing git repos and initialize a fleet"
+                    ;;
+                "")
+                    _render_help_error "quickstart requires a scope" "manifest quickstart <fleet>"
+                    return 1
+                    ;;
+                *)
+                    _render_help_error "Unknown quickstart scope: $1" "manifest quickstart <fleet>"
+                    return 1
+                    ;;
+            esac
+            ;;
+
         "config")
             case "${1:-}" in
                 "show")
@@ -476,6 +609,130 @@ EOF
             manifest_refresh_dispatch "$@"
             ;;
 
+        "discover")
+            case "${1:-}" in
+                fleet)
+                    shift || true
+                    if _manifest_cli_has_help_token "$@"; then
+                        _render_help \
+                            "manifest discover fleet [--depth N] [--json] [--quiet]" \
+                            "Discover repositories for fleet membership without writing changes." \
+                            "Options" "  --depth N    Maximum search depth (default: 5)
+  --json       Output JSON summary
+  --quiet, -q  Only output new repo lines"
+                        return 0
+                    fi
+                    fleet_discover "$@"
+                    ;;
+                help|-h|--help)
+                    _render_help \
+                        "manifest discover <fleet> [options]" \
+                        "Discover resources without writing changes." \
+                        "Scopes" "  fleet   Discover repositories for fleet membership"
+                    ;;
+                "")
+                    _render_help_error "discover requires a scope" "manifest discover <fleet>"
+                    return 1
+                    ;;
+                *)
+                    _render_help_error "Unknown discover scope: $1" "manifest discover <fleet>"
+                    return 1
+                    ;;
+            esac
+            ;;
+
+        "add")
+            case "${1:-}" in
+                fleet)
+                    shift || true
+                    if _manifest_cli_has_help_token "$@"; then
+                        _render_help \
+                            "manifest add fleet <path-or-url> [--name NAME] [--type TYPE] [--dry-run]" \
+                            "Add a local path or remote URL to fleet membership."
+                        return 0
+                    fi
+                    fleet_add "$@"
+                    ;;
+                help|-h|--help)
+                    _render_help \
+                        "manifest add <fleet> [options]" \
+                        "Add a resource to Manifest-managed configuration." \
+                        "Scopes" "  fleet   Add a service to fleet membership"
+                    ;;
+                "")
+                    _render_help_error "add requires a scope" "manifest add <fleet>"
+                    return 1
+                    ;;
+                *)
+                    _render_help_error "Unknown add scope: $1" "manifest add <fleet>"
+                    return 1
+                    ;;
+            esac
+            ;;
+
+        "update")
+            case "${1:-}" in
+                fleet)
+                    shift || true
+                    if _manifest_cli_has_help_token "$@"; then
+                        _render_help \
+                            "manifest update fleet [--depth N] [--dry-run] [--json] [--quiet]" \
+                            "Re-scan fleet membership and add newly discovered repositories." \
+                            "Options" "  --depth N    Maximum search depth (default: 5)
+  --dry-run    Preview only; do not modify manifest.fleet.config.yaml
+  --json       Output JSON summary
+  --quiet, -q  Only output new repo lines"
+                        return 0
+                    fi
+                    fleet_update "$@"
+                    ;;
+                help|-h|--help)
+                    _render_help \
+                        "manifest update <fleet>" \
+                        "Update resources. For CLI upgrades, use manifest upgrade." \
+                        "Scopes" "  fleet   Re-scan fleet membership"
+                    ;;
+                "")
+                    _render_help_error "update requires a scope" "manifest update <fleet>"
+                    echo "For CLI upgrades, use: manifest upgrade"
+                    return 1
+                    ;;
+                *)
+                    _render_help_error "Unknown update scope: $1" "manifest update <fleet>"
+                    return 1
+                    ;;
+            esac
+            ;;
+
+        "validate")
+            case "${1:-}" in
+                fleet)
+                    shift || true
+                    if _manifest_cli_has_help_token "$@"; then
+                        _render_help \
+                            "manifest validate fleet" \
+                            "Validate fleet configuration and service paths."
+                        return 0
+                    fi
+                    fleet_validate "$@"
+                    ;;
+                help|-h|--help)
+                    _render_help \
+                        "manifest validate <fleet>" \
+                        "Validate Manifest-managed resources." \
+                        "Scopes" "  fleet   Validate fleet configuration"
+                    ;;
+                "")
+                    _render_help_error "validate requires a scope" "manifest validate <fleet>"
+                    return 1
+                    ;;
+                *)
+                    _render_help_error "Unknown validate scope: $1" "manifest validate <fleet>"
+                    return 1
+                    ;;
+            esac
+            ;;
+
         "ship")
             manifest_ship_dispatch "$@"
             ;;
@@ -492,6 +749,12 @@ EOF
         # SUPPORTING COMMANDS (used anytime, not part of core sequence)
         # =====================================================================
         "pr")
+            if [[ "${1:-}" == "fleet" ]]; then
+                shift || true
+                _manifest_pr_fleet_dispatch "$@"
+                return $?
+            fi
+
             local subcommand=""
             case "${1:-}" in
                 "create"|"update"|"status"|"ready"|"checks"|"merge"|"queue"|"policy"|"help"|"-h"|"--help")
@@ -565,6 +828,12 @@ EOF
             ;;
 
         "revert")
+            if _manifest_cli_has_help_token "$@"; then
+                _render_help \
+                    "manifest revert" \
+                    "Interactively check out a previous version tag."
+                return 0
+            fi
             revert_version
             ;;
 
@@ -572,14 +841,26 @@ EOF
         # DIAGNOSTIC / MAINTENANCE COMMANDS
         # =====================================================================
         "security")
-            manifest_security
+            manifest_security "$@"
             ;;
 
         "test")
+            if _manifest_cli_has_help_token "$@"; then
+                _render_help \
+                    "manifest test [type]" \
+                    "Run diagnostic tests when the Manifest Cloud test module is installed."
+                return 0
+            fi
             run_manifest_test "$@"
             ;;
 
         "upgrade")
+            if _manifest_cli_has_help_token "$@"; then
+                _render_help \
+                    "manifest upgrade" \
+                    "Update Manifest CLI through the installed upgrade provider."
+                return 0
+            fi
             if manifest_load_plugin "workflow/manifest-auto-upgrade.sh"; then
                 upgrade_cli_internal "$@"
             else
@@ -589,14 +870,26 @@ EOF
             ;;
 
         "uninstall")
+            if _manifest_cli_has_help_token "$@"; then
+                _render_help \
+                    "manifest uninstall [--force]" \
+                    "Remove Manifest CLI installation files and optionally skip prompts with --force."
+                return 0
+            fi
             local force_flag="false"
-            if [ "$2" = "--force" ]; then
+            if [ "${1:-}" = "--force" ]; then
                 force_flag="true"
             fi
             uninstall_manifest "$force_flag" "$force_flag"
             ;;
 
         "reinstall")
+            if _manifest_cli_has_help_token "$@"; then
+                _render_help \
+                    "manifest reinstall" \
+                    "Reinstall Manifest CLI through Homebrew or the installed provider."
+                return 0
+            fi
             echo "Reinstalling Manifest CLI..."
             echo ""
             if ! uninstall_manifest "true" "true"; then
@@ -683,6 +976,12 @@ EOF
             ;;
 
         "agent")
+            if _manifest_cli_has_help_token "$@"; then
+                _render_help \
+                    "manifest agent <subcommand> [options]" \
+                    "Manage the optional containerized Manifest Cloud agent."
+                return 0
+            fi
             agent_main "${@}"
             ;;
 
@@ -690,35 +989,42 @@ EOF
         # HIDDEN LEGACY ALIASES (still functional, not shown in help)
         # =====================================================================
 
-        # Old "manifest fleet *" top-level — still works, routes to fleet_main
+        # Old "manifest fleet *" top-level — help plus replacement hints only
         "fleet")
             fleet_main "$@"
             ;;
 
         # Old "manifest sync" -> new "manifest prep repo"
         "sync")
+            if _manifest_cli_has_help_token "$@"; then
+                _render_help \
+                    "manifest sync" \
+                    "Deprecated alias for manifest prep repo."
+                return 0
+            fi
             log_deprecated "manifest sync" "manifest prep repo"
             manifest_prep_repo
             ;;
 
         # Old "manifest time" -> accessible via "manifest config time"
         "time")
-            display_time_info
-            ;;
-
-        # Old "manifest update" -> "manifest upgrade"
-        "update")
-            log_deprecated "manifest update" "manifest upgrade"
-            if manifest_load_plugin "workflow/manifest-auto-upgrade.sh"; then
-                upgrade_cli_internal "$@"
-            else
-                log_warning "Upgrade module requires Manifest Cloud."
-                echo "  To upgrade via Homebrew: brew update && brew upgrade manifest"
+            if _manifest_cli_has_help_token "$@"; then
+                _render_help \
+                    "manifest time" \
+                    "Deprecated alias for manifest config time."
+                return 0
             fi
+            display_time_info
             ;;
 
         # Old "manifest commit" — plumbing, called by ship
         "commit")
+            if _manifest_cli_has_help_token "$@"; then
+                _render_help \
+                    "manifest commit <message>" \
+                    "Internal plumbing command used by ship to commit generated changes."
+                return 0
+            fi
             local message="$1"
             get_time_timestamp >/dev/null
             local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
@@ -727,12 +1033,30 @@ EOF
 
         # Old "manifest version" — plumbing, called by ship internally
         "bump-version")
+            if _manifest_cli_has_help_token "$@"; then
+                _render_help \
+                    "manifest bump-version <patch|minor|major|revision>" \
+                    "Internal plumbing command used by ship to update VERSION."
+                return 0
+            fi
             local increment_type="${1:-patch}"
             bump_version "$increment_type"
             ;;
 
         # Old "manifest docs" — plumbing, replaced by "refresh"
         "docs")
+            if [[ "${1:-}" == "fleet" ]]; then
+                shift || true
+                fleet_docs_dispatch "$@"
+                return $?
+            fi
+            if _manifest_cli_has_help_token "$@"; then
+                _render_help \
+                    "manifest docs <fleet> [subcommand] [options]" \
+                    "Generate or inspect documentation for a Manifest-managed resource." \
+                    "Scopes" "  fleet   Generate fleet documentation"
+                return 0
+            fi
             local subcommand="$1"
             case "$subcommand" in
                 "metadata")
@@ -763,6 +1087,12 @@ EOF
 
         # Old "manifest cleanup" — plumbing, absorbed into "refresh"
         "cleanup")
+            if _manifest_cli_has_help_token "$@"; then
+                _render_help \
+                    "manifest cleanup" \
+                    "Deprecated documentation cleanup plumbing. Prefer manifest refresh repo."
+                return 0
+            fi
             echo "Repository cleanup operations..."
             local current_version=""
             if [ -f "$MANIFEST_CLI_VERSION_FILE" ]; then

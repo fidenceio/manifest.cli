@@ -44,9 +44,6 @@ _pr_require_repo() {
 # manifest pr create [--draft] [--title <t>] [--body <b>] [--base <branch>]
 # -----------------------------------------------------------------------------
 manifest_pr_create() {
-    _manifest_require_gh || return 1
-    _pr_require_repo || return 1
-
     local args=()
     local draft=false
     while [[ $# -gt 0 ]]; do
@@ -66,6 +63,9 @@ Any flag not handled here is forwarded to 'gh pr create'." \
         esac
     done
 
+    _manifest_require_gh || return 1
+    _pr_require_repo || return 1
+
     local cmd=(gh pr create)
     [[ "$draft" == "true" ]] && cmd+=(--draft)
     # Default to filling title/body from commits if user didn't pass them.
@@ -82,14 +82,14 @@ Any flag not handled here is forwarded to 'gh pr create'." \
 # manifest pr status [<number-or-branch>]
 # -----------------------------------------------------------------------------
 manifest_pr_status() {
-    _manifest_require_gh || return 1
-    _pr_require_repo || return 1
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
         _render_help \
             "manifest pr status [<number-or-branch>]" \
             "Show the current branch's PR by default; pass a number or branch to target another."
         return 0
     fi
+    _manifest_require_gh || return 1
+    _pr_require_repo || return 1
     if [[ $# -gt 0 ]]; then
         gh pr view "$@"
     else
@@ -101,14 +101,14 @@ manifest_pr_status() {
 # manifest pr checks [<number-or-branch>] [--watch]
 # -----------------------------------------------------------------------------
 manifest_pr_checks() {
-    _manifest_require_gh || return 1
-    _pr_require_repo || return 1
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
         _render_help \
             "manifest pr checks [<number-or-branch>] [--watch]" \
             "Show CI check status. Pass --watch to poll until complete."
         return 0
     fi
+    _manifest_require_gh || return 1
+    _pr_require_repo || return 1
     gh pr checks "$@"
 }
 
@@ -116,14 +116,14 @@ manifest_pr_checks() {
 # manifest pr ready [<number-or-branch>]
 # -----------------------------------------------------------------------------
 manifest_pr_ready() {
-    _manifest_require_gh || return 1
-    _pr_require_repo || return 1
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
         _render_help \
             "manifest pr ready [<number-or-branch>]" \
             "Mark a draft PR as ready for review."
         return 0
     fi
+    _manifest_require_gh || return 1
+    _pr_require_repo || return 1
     gh pr ready "$@"
 }
 
@@ -131,8 +131,6 @@ manifest_pr_ready() {
 # manifest pr merge [<number-or-branch>] [--squash|--merge|--rebase] [--auto]
 # -----------------------------------------------------------------------------
 manifest_pr_merge() {
-    _manifest_require_gh || return 1
-    _pr_require_repo || return 1
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
         _render_help \
             "manifest pr merge [<number-or-branch>] [--squash|--merge|--rebase] [--auto]" \
@@ -143,6 +141,8 @@ For richer queue/policy control, see Cloud's 'manifest pr queue'." \
   manifest pr merge 123 --auto"
         return 0
     fi
+    _manifest_require_gh || return 1
+    _pr_require_repo || return 1
     local args=("$@")
     if ! printf '%s\n' "${args[@]}" | grep -q -- '--squash\|--merge\|--rebase'; then
         args+=(--squash)
@@ -155,14 +155,14 @@ For richer queue/policy control, see Cloud's 'manifest pr queue'." \
 # -----------------------------------------------------------------------------
 # Updates a PR's branch with the latest from base (rebase or merge).
 manifest_pr_update() {
-    _manifest_require_gh || return 1
-    _pr_require_repo || return 1
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
         _render_help \
             "manifest pr update [<number-or-branch>] [--rebase|--merge]" \
             "Bring a PR branch up to date with its base."
         return 0
     fi
+    _manifest_require_gh || return 1
+    _pr_require_repo || return 1
     gh pr update-branch "$@"
 }
 
@@ -209,6 +209,8 @@ Usage:
   manifest pr ready [<n|branch>]    Mark a draft PR as ready
   manifest pr merge [<n|branch>]    Merge a PR (defaults to squash)
   manifest pr update [<n|branch>]   Update PR branch with base
+  manifest pr fleet [queue|create|status|checks|ready]
+                                     Fleet-wide PR operations
 
 Cloud-only (requires Manifest Cloud):
   manifest pr queue                 Auto-merge orchestration

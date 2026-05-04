@@ -149,9 +149,11 @@ Fleet manages versioning and releases across multiple repositories.
 ```bash
 # Phase 1: Scan directories, create manifest.fleet.tsv for review
 manifest init fleet
+manifest init fleet --dry-run
 
 # Phase 2: Re-run after reviewing TSV — scaffolds repos, creates fleet config
 manifest init fleet
+manifest init fleet --dry-run
 
 # Custom scan depth (default: 2 levels)
 manifest init fleet --depth 3
@@ -192,15 +194,15 @@ manifest ship fleet patch --except docs         # Ship every service except 'doc
 
 ### Direct Fleet Commands
 
-The legacy `manifest fleet <sub>` interface continues to work:
+Fleet commands use action-first syntax:
 
 ```bash
-manifest fleet status --verbose    # Fleet status
-manifest fleet discover --depth 3  # Find new repos
-manifest fleet add ./new-service   # Add a service
-manifest fleet validate            # Check configuration
-manifest fleet pr queue            # Auto-merge PRs across fleet
-manifest fleet help                # Fleet help
+manifest status --verbose          # Fleet status
+manifest discover fleet --depth 3  # Find new repos
+manifest add fleet ./new-service --dry-run   # Preview service YAML
+manifest validate fleet            # Check configuration
+manifest pr fleet queue            # Auto-merge PRs across fleet
+manifest docs fleet --dry-run      # Preview docs generation
 ```
 
 ---
@@ -318,10 +320,8 @@ All pre-v42 commands continue to work. Some have changed meaning:
 | `manifest prep patch` | `manifest ship repo patch --local` | Shows deprecation warning |
 | `manifest ship patch` | `manifest ship repo patch` | Automatic redirect |
 | `manifest sync` | `manifest prep repo` | Automatic redirect |
-| `manifest fleet start` | `manifest init fleet` | Removed in v44.9.0 — emits migration hint |
-| `manifest fleet init` | `manifest init fleet` | Removed in v44.9.0 — emits migration hint |
-| `manifest fleet sync` | `manifest prep fleet` | Removed in v44.9.0 — emits migration hint |
-| `manifest update` | `manifest upgrade` | Shows deprecation warning |
+| `manifest fleet <action>` | `manifest <action> fleet` | Removed object-first fleet routes |
+| `manifest update` | `manifest upgrade` | Use explicit upgrade command |
 | `manifest docs` | `manifest refresh repo` | Still works as plumbing |
 | `manifest cleanup` | `manifest refresh repo` | Still works as plumbing |
 | `manifest time` | `manifest config time` | Still works |

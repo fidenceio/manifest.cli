@@ -125,11 +125,13 @@ manifest pr                            # Guided interactive flow (TTY only)
 ```bash
 # Phase 1: Scan directories, create TSV for review
 manifest init fleet --depth 3
+manifest init fleet --dry-run
 
 # (Review and edit manifest.fleet.tsv — mark repos as selected/excluded)
 
 # Phase 2: Read TSV, scaffold repos, create fleet config
 manifest init fleet
+manifest init fleet --dry-run
 ```
 
 ### Named Fleet with Custom Depth
@@ -175,14 +177,15 @@ manifest ship fleet patch --only api,worker
 manifest ship fleet patch --except docs,playground
 ```
 
-### Direct Fleet Operations (Legacy Interface)
+### Direct Fleet Operations
 
 ```bash
-manifest fleet status --verbose        # Fleet status
-manifest fleet discover --depth 3      # Find new repos
-manifest fleet add ./services/new-api --name "new-api" --type service
-manifest fleet validate                # Check configuration
-manifest fleet pr queue --method squash  # Fleet-wide PR merge
+manifest status --verbose              # Fleet status
+manifest discover fleet --depth 3      # Find new repos
+manifest add fleet ./services/new-api --name "new-api" --type service --dry-run
+manifest validate fleet                # Check configuration
+manifest docs fleet --dry-run          # Preview docs generation
+manifest pr fleet queue --method squash  # Fleet-wide PR merge
 ```
 
 ---
@@ -262,13 +265,9 @@ manifest ship patch                 manifest ship repo patch
 manifest sync                       manifest prep repo
 manifest docs                       manifest refresh repo
 manifest cleanup                    manifest refresh repo
-manifest fleet start                manifest init fleet
-manifest fleet init                 manifest init fleet
-manifest fleet sync                 manifest prep fleet
-manifest fleet ship minor           manifest ship fleet minor
-manifest update                     manifest upgrade
+manifest fleet <action>             manifest <action> fleet
+manifest update                     manifest update fleet / manifest upgrade
 ```
 
-Most old commands still work as hidden aliases. The three legacy fleet routes
-(`manifest fleet start|init|sync`) were removed in v44.9.0 — invoking them now
-emits a one-line migration hint pointing at the v42 entry point.
+Fleet commands use action-first syntax. Object-first `manifest fleet <action>`
+routes are intentionally not retained.

@@ -25,7 +25,7 @@ make_tsv() {
     {
         echo "# MANIFEST FLEET — Directory Inventory"
         echo "# Root: /tmp/example | Depth: 2 | Date: 2026-04-25T00:00:00Z"
-        echo "# Toggle the SELECT column (true/false), then run: manifest fleet init"
+        echo "# Toggle the SELECT column (true/false), then run: manifest init fleet"
         echo "# DEFAULT-SELECT-HASH: $hash"
         printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
         local row

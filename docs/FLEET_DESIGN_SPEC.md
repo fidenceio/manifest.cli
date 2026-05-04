@@ -20,22 +20,21 @@
 
 | Command | Description |
 | ------- | ----------- |
-| `fleet init` | Initialize fleet with auto-discovery (default) or `--bare` template |
-| `fleet status` | Service overview with version, branch, and health indicators |
-| `fleet discover` | Find new repos in workspace with configurable depth |
-| `fleet sync` | Clone/pull all services (supports `--parallel`) |
-| `fleet ship` | Coordinated release across all services |
-| `fleet validate` | Validate fleet configuration and service paths |
-| `fleet add` | Add a service to the fleet |
-| `fleet pr` | Fleet-wide PR operations (create, status, checks, ready, queue) |
-| `fleet help` | Fleet help |
+| `init fleet` | Initialize fleet with auto-discovery (default) or `--bare` template |
+| `status` | Service overview with version, branch, and health indicators |
+| `discover fleet` | Find new repos in workspace with configurable depth |
+| `prep fleet` | Clone/pull all services (supports `--parallel`) |
+| `ship fleet` | Coordinated release across all services |
+| `validate fleet` | Validate fleet configuration and service paths |
+| `add fleet` | Add a service to the fleet |
+| `pr fleet` | Fleet-wide PR operations (create, status, checks, ready, queue) |
+| `docs fleet` | Unified fleet documentation generation |
 
 ### Scaffolded (Not Yet Implemented)
 
 | Command | Planned Behavior |
 | ------- | ---------------- |
-| `fleet prep` | Fleet-wide local prep without publish |
-| `fleet docs` | Unified fleet documentation generation |
+| `quickstart fleet` | Quick auto-discovery path for existing git repos |
 
 ---
 
@@ -55,8 +54,6 @@ Design principles:
 ## Auto-Discovery (v39.0.0)
 
 As of v39.0.0, `manifest init fleet` **discovers Git repositories by default**.
-(Pre-v44.9.0 this was `manifest fleet init`; the legacy command was removed in
-v44.9.0 and now emits a migration hint.)
 
 ### Behavior
 

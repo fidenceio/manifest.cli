@@ -2,7 +2,7 @@
 
 # Tests for #9: collapse dual fleet paths.
 #
-# After v44.9.0 the legacy 'manifest fleet start|init|sync' subcommands no
+# After v44.9.0 the legacy 'manifest fleet <verb>' subcommands no
 # longer exist as dispatcher routes — the underlying functions are private
 # (_fleet_start / _fleet_init / _fleet_sync) and reachable only via the v42
 # entry points. fleet_main prints a one-line migration hint when the removed
@@ -33,7 +33,7 @@ setup() {
 }
 
 # -----------------------------------------------------------------------------
-# fleet_main: removed verbs return non-zero with a migration hint.
+# fleet_main: removed verbs return non-zero with a replacement hint.
 # -----------------------------------------------------------------------------
 
 @test "fleet_main start: emits migration hint pointing at 'manifest init fleet'" {
@@ -57,26 +57,39 @@ setup() {
     [[ "$output" == *"manifest prep fleet"* ]]
 }
 
+@test "fleet_main discover: emits replacement pointing at 'manifest discover fleet'" {
+    run fleet_main discover
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"no longer a dispatcher route"* ]]
+    [[ "$output" == *"manifest discover fleet"* ]]
+}
+
+@test "fleet_main update: emits replacement pointing at 'manifest update fleet'" {
+    run fleet_main update
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"no longer a dispatcher route"* ]]
+    [[ "$output" == *"manifest update fleet"* ]]
+}
+
 # -----------------------------------------------------------------------------
 # fleet_main: surviving routes still respond. The simplest non-side-effecting
 # probe is the help text — fleet_help is still wired and includes the v42
 # pointers.
 # -----------------------------------------------------------------------------
 
-@test "fleet_main help: surviving routes documented; legacy start/init/sync no longer in COMMANDS section" {
+@test "fleet_main help: documents action-first routes only" {
     run fleet_main help
     [ "$status" -eq 0 ]
-    [[ "$output" == *"v42 entry points"* ]]
-    [[ "$output" == *"manifest fleet quickstart"* ]]
-    [[ "$output" == *"manifest fleet status"* ]]
-    [[ "$output" == *"manifest fleet update"* ]]
-    # Legacy aliases must NOT appear as command entries — but a few may still
-    # be referenced as migration pointers (e.g. inside the v42 mapping list).
-    # The COMMANDS section header is "LEGACY-ONLY COMMANDS"; any 'manifest
-    # fleet start|init|sync' line there would be a regression.
+    [[ "$output" == *"action-first commands"* ]]
+    [[ "$output" == *"manifest quickstart fleet"* ]]
+    [[ "$output" == *"manifest status"* ]]
+    [[ "$output" == *"manifest update fleet"* ]]
+    [[ "$output" == *"manifest docs fleet"* ]]
     [[ "$output" != *"manifest fleet start ["* ]]
     [[ "$output" != *"manifest fleet init ["* ]]
     [[ "$output" != *"manifest fleet sync ["* ]]
+    [[ "$output" != *"manifest fleet update"* ]]
+    [[ "$output" != *"manifest fleet discover"* ]]
 }
 
 # -----------------------------------------------------------------------------

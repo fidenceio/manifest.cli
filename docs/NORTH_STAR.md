@@ -29,7 +29,7 @@ Provide a reliable, explicit, and automatable release control plane for Git repo
 - `manifest prep <type>` — local release preparation
 - `manifest ship <type>` — full publish path
 - `manifest pr ...` — explicit PR lifecycle operations
-- `manifest fleet ...` — multi-repo coordination with auto-discovery (v39.0.0)
+- `manifest <action> fleet ...` — multi-repo coordination with auto-discovery (v39.0.0)
 - Smart `.gitignore` scaffolding across single-repo and fleet workflows (v39.0.0)
 
 ---
@@ -38,7 +38,7 @@ Provide a reliable, explicit, and automatable release control plane for Git repo
 
 1. **Reliability hardening** for prep/ship and rollback safety
 2. **Documentation quality** and consistency of generated artifacts
-3. **Fleet maturity** — implement `fleet prep`, `fleet docs`, and dependency-aware operations
+3. **Fleet maturity** — implement `prep fleet`, `docs fleet`, and dependency-aware operations
 
 ---
 
