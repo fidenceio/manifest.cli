@@ -11,10 +11,27 @@ MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES=(".env" ".env.development" ".env.test" "
 manifest_security() {
     if [[ "${1:-}" == "help" || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
         _render_help \
-            "manifest security" \
-            "Run a security audit for tracked private files, likely PII, and environment-file hygiene."
+            "manifest security [--check]" \
+            "Run a security audit for tracked private files, likely PII, and environment-file hygiene." \
+            "Options" "  --check   Run read-only checks and do not write reports"
         return 0
     fi
+
+    local write_report=true
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --check)
+                write_report=false
+                ;;
+            "")
+                ;;
+            *)
+                _render_help_error "Unknown security option: $1" "manifest security [--check]"
+                return 1
+                ;;
+        esac
+        shift || true
+    done
 
     # Use the validated PROJECT_ROOT from the main command dispatcher
     local project_root="$PROJECT_ROOT"
@@ -66,8 +83,10 @@ manifest_security() {
     
     echo ""
     
-    # Generate security report
-    generate_security_report "$project_root" "$critical_issues" "$warnings"
+    # Generate security report unless the caller explicitly requested read-only checks.
+    if [ "$write_report" = "true" ]; then
+        generate_security_report "$project_root" "$critical_issues" "$warnings"
+    fi
     
     # Summary
     if [ $critical_issues -eq 0 ] && [ $warnings -eq 0 ]; then
@@ -83,7 +102,7 @@ manifest_security() {
         echo "   1. Fix critical security issues before committing any code"
         echo "   2. Review and remove any exposed sensitive data"
         echo "   3. Ensure private files are not tracked by Git"
-        echo "   4. Run 'manifest security' again after fixes"
+        echo "   4. Run 'manifest security --check' again after fixes"
         return 1
     fi
 }
@@ -197,11 +216,6 @@ generate_security_report() {
     local project_root="$1"
     local critical_issues="$2"
     local warnings="$3"
-
-    # Skip report generation if MANIFEST_CLI_SKIP_SECURITY_REPORT is set (for automated workflows)
-    if is_truthy "${MANIFEST_CLI_SKIP_SECURITY_REPORT:-}"; then
-        return 0
-    fi
 
     # Ensure docs directory exists
     local docs_dir="$project_root/docs"
@@ -379,6 +393,7 @@ $(if [ $warnings -gt 0 ]; then echo "### **Warnings:** $warnings"; echo ""; echo
 \`\`\`bash
 # Security audit
 manifest security                    # Comprehensive security audit
+manifest security --check            # Read-only check, no report writes
 
 # Test security functions
 manifest test security              # Security validation tests

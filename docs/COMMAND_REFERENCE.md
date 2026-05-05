@@ -47,7 +47,7 @@ Supporting commands (`pr`, `config`, `test`, etc.) do not require a scope.
 | `manifest upgrade [flags]` | Check for and install updates |
 | `manifest uninstall [--force]` | Remove Manifest CLI |
 | `manifest reinstall` | Full uninstall + reinstall |
-| `manifest security` | Security audit |
+| `manifest security` | Security audit and report generation |
 | `manifest test [suite]` | Run diagnostic tests |
 
 ### Cloud / Agent
@@ -585,10 +585,11 @@ manifest test bash             # Basic Bash tests
 
 ## `manifest security`
 
-Run security audit: scans for exposed secrets, validates `.gitignore`, checks for large binary files.
+Run security audit: scans for tracked private files, likely PII, and environment-file hygiene. Plain `manifest security` writes report files; use `--check` for read-only automation.
 
 ```bash
 manifest security
+manifest security --check
 ```
 
 **Source:** `manifest-security.sh`

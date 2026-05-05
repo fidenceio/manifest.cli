@@ -237,7 +237,8 @@ Short flags: `-p` (patch), `-m` (minor), `-M` (major), `-r` (revision), `-i` (in
 | `manifest upgrade` | Check for and install CLI updates \[Cloud\] |
 | `manifest uninstall` | Remove Manifest CLI (preserves global config — double-confirm to delete) |
 | `manifest reinstall` | Full uninstall + reinstall |
-| `manifest security` | Run security audit |
+| `manifest security` | Run security audit and write reports |
+| `manifest security --check` | Run read-only security checks |
 | `manifest test [suite]` | Run diagnostic tests \[Cloud\] |
 
 ### Cloud and Agent \[Cloud\]
@@ -411,7 +412,7 @@ Manifest includes layered security protections:
 - **`.gitignore` enforcement** ensures sensitive files are excluded from version control
 - **Smart `.gitignore` scaffolding** creates best-practice ignore rules for new projects
 - **Large file detection** warns before accidentally committing binaries
-- **Security audit** via `manifest security` for on-demand vulnerability scanning
+- **Security audit** via `manifest security`, with `manifest security --check` for read-only automation
 - **Installation directory guard** prevents running from the CLI install directory
 
 > See [Git Hooks](docs/GIT_HOOKS.md) for hook installation and recovery procedures.
