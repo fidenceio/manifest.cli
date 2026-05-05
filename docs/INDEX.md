@@ -34,7 +34,7 @@
 | -------- | ----------- |
 | [Release Notes v46.11.3](RELEASE_v46.11.3.md) | What's new in this release |
 | [Changelog v46.11.3](CHANGELOG_v46.11.3.md) | Detailed change log |
-| [Archived Releases](zArchive/) | Previous version documentation |
+| [Archived Releases](zArchive/INDEX.md) | Previous version documentation, grouped by major |
 
 ---
 
