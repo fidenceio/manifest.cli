@@ -163,6 +163,14 @@ Each recommendation is a discrete unit of work. Check off when complete.
 
 - [ ] **29. Fleet-aware repo identity preflight for `ship repo`.** In third-party use, especially from VS Code multi-root workspaces, the user may have several disparate repositories open at once. `manifest ship repo <type>` currently means "ship the enclosing Git repository for the terminal working directory"; that is correct mechanically but not explicit enough in a fleet. Before any mutation, `ship repo` should print the current Git root, origin slug, local branch/upstream, enclosing fleet root/name when detected, and matching fleet member name when configured. `manifest status repo` should show the same identity block read-only. Add a concise repo-local fleet hint whose variable names explain the relationship: `fleet.name` and `fleet.member` in project config, plus optional git-ignored `fleet.root` when the fleet root is not discoverable by walking upward. Treat the hint as a claim to verify against fleet config, not as authority. If the Git root is inside a fleet but does not match a configured member, warn before proceeding. If the Git root is the fleet root, explicitly say this targets only the fleet-root repo and is not `ship fleet`. This resolves the ambiguity where the editor's visible workspace folder, terminal cwd, fleet root, and target repo may differ.
 
+### Release workflow regressions exposed by v46.7.0 (added 2026-05-05)
+
+- [x] **30. Fix installed Homebrew CLI startup under Bash 3.2.** `manifest status`, `manifest ship repo minor`, and Homebrew postinstall all failed from the installed Cellar path with `manifest-yaml.sh: line 31: version.format: syntax error: invalid arithmetic operator`. Fixed by making Homebrew Bash a required formula dependency and generating an installed wrapper that re-execs into Bash 5 before sourcing `manifest-core.sh`. Added `tests/homebrew_wrapper.bats` to lock the wrapper ordering and dependency status.
+- [ ] **31. Add ship resume/recovery for post-push failures.** During `v46.7.0`, the workflow committed the release and created `v46.7.0`, failed at `push_changes`, then manual push succeeded. The workflow had no supported "resume after push" path, so Homebrew formula update and local upgrade had to be run manually. Add `manifest ship repo resume` or an idempotent recovery mode that detects version/tag/push state and continues with skipped post-push steps.
+- [ ] **32. Make tag push semantics exact and recovery text correct.** The failure report suggested `git push origin main --follow-tags`, but the lightweight tag still required `git push origin v46.7.0`. Either create annotated tags so `--follow-tags` is correct, push the explicit tag in `push_changes`, or update recovery output to use the exact tag push. Tests should cover the generated recovery command text at minimum.
+- [ ] **33. Fix `manifest status` working-tree count rendering.** `manifest status` rendered `Working: 2 modified, 0` followed by `0 untracked`. Likely cause: `grep -c ... || echo 0` emits a counted `0` and then the fallback `0` when grep returns no matches. Replace these pipelines with count helpers that normalize output to a single integer.
+- [ ] **34. Harden Homebrew postinstall and test it as an installed command.** `brew upgrade manifest` installed `46.7.0` but postinstall failed when it ran `manifest config doctor --fix --file ...`. Add a packaging/install smoke test that invokes the installed wrapper under the same shell path Homebrew uses, and make postinstall non-destructive and non-fatal when global config repair fails.
+
 ---
 
 ## 4 · Suggested sequencing
@@ -319,3 +327,19 @@ Resolved: **#24**. (After this batch: 28/28 done. Tracker complete.)
 **Files modified (4):** `modules/fleet/manifest-fleet.sh` (helper, parsing, override + restore, forwarding), `docs/COMMAND_REFERENCE.md`, `docs/USER_GUIDE.md`, `docs/EXAMPLES.md`.
 **Files added (1):** `tests/fleet_ship_filter.bats` (13 tests).
 **Test count:** 119 bats tests (was 106, +13 fleet-ship-filter, all passing on macOS).
+
+### Session 2026-05-05 — v46.7.0 ship run exposed new release workflow debt
+
+The user requested `manifest ship repo minor`. The installed Homebrew command failed before dispatch with the YAML mapping / Bash startup error, so the repo-local CLI was used to complete the release. `v46.7.0` was created, pushed, and the Homebrew tap was updated, but the run exposed more new problems than old tracker items closed.
+
+Durable handoff: [RELEASE_RUN_HANDOFF_v46.7.0.md](RELEASE_RUN_HANDOFF_v46.7.0.md).
+
+New tracker items opened: **#30-#34**.
+
+Final release state:
+
+- CLI repo `origin/main`: `7f92aaf Update Homebrew formula to v46.7.0`
+- Release tag: `v46.7.0` at `154f87e`
+- Homebrew tap: `58d84ad Update formula to v46.7.0`
+- Homebrew formula SHA: `cbefe6648491575a9fe86544c067e6c96d446d6e22f444737c1b1fdbde0bd61b`
+- Known unresolved in the installed `v46.7.0` package: `manifest` still fails at startup after `brew upgrade manifest` until a build containing item #30 is installed.

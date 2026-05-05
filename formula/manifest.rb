@@ -6,7 +6,7 @@ class Manifest < Formula
   license "MIT"
   head "https://github.com/fidenceio/manifest.cli.git", branch: "main"
 
-  depends_on "bash" => :recommended
+  depends_on "bash"
   depends_on "git" => :recommended
   depends_on "yq" => :recommended
   depends_on "coreutils" => :optional
@@ -15,10 +15,57 @@ class Manifest < Formula
     # Copy all project files to libexec
     libexec.install Dir["*"]
 
-    # Create a wrapper script that points to the installed location
+    # Create a wrapper script that points to the installed location.
+    # Homebrew may launch this through macOS /bin/bash 3.2; re-exec into the
+    # formula dependency before sourcing modules that use Bash 5 features.
     (bin/"manifest").write <<~EOS
       #!/usr/bin/env bash
       set -e
+
+      ensure_bash5_or_reexec() {
+        local min_major=5
+        local current_major="${BASH_VERSINFO[0]:-0}"
+
+        if [ "$current_major" -ge "$min_major" ]; then
+          return 0
+        fi
+
+        if [ "${MANIFEST_CLI_BASH_REEXEC:-0}" = "1" ]; then
+          echo "Manifest CLI requires Bash 5+." >&2
+          echo "Current shell: bash ${BASH_VERSION:-unknown}" >&2
+          echo "Install Bash 5+ and retry." >&2
+          return 1
+        fi
+
+        local candidate major
+        local candidates=(
+          "${MANIFEST_CLI_BASH_PATH:-}"
+          "#{Formula["bash"].opt_bin}/bash"
+          "/opt/homebrew/bin/bash"
+          "/usr/local/bin/bash"
+          "$(command -v bash 2>/dev/null || true)"
+          "/bin/bash"
+        )
+
+        for candidate in "${candidates[@]}"; do
+          if [ -z "$candidate" ] || [ ! -x "$candidate" ]; then
+            continue
+          fi
+
+          major="$("$candidate" -c 'echo "${BASH_VERSINFO[0]:-0}"' 2>/dev/null || echo "0")"
+          if [ "$major" -ge "$min_major" ]; then
+            MANIFEST_CLI_BASH_REEXEC=1 exec "$candidate" "$0" "$@"
+          fi
+        done
+
+        echo "Manifest CLI requires Bash 5+." >&2
+        echo "Current shell: bash ${BASH_VERSION:-unknown}" >&2
+        echo "No compatible bash found in common locations." >&2
+        return 1
+      }
+
+      ensure_bash5_or_reexec "$@"
+
       CLI_DIR="#{libexec}"
       source "$CLI_DIR/modules/core/manifest-core.sh"
       main "$@"
