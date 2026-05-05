@@ -1118,7 +1118,18 @@ EOF
                     ;;
                 "cleanup")
                     echo "Moving historical documentation to zArchive..."
-                    move_existing_historical_docs
+                    local cleanup_version=""
+                    if [ -f "$MANIFEST_CLI_VERSION_FILE" ]; then
+                        cleanup_version=$(cat "$MANIFEST_CLI_VERSION_FILE")
+                    fi
+                    if [ -z "$cleanup_version" ]; then
+                        log_error "Could not determine current version. Run 'manifest init repo' first."
+                        return 1
+                    fi
+                    get_time_timestamp >/dev/null
+                    local cleanup_timestamp
+                    cleanup_timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+                    main_cleanup "$cleanup_version" "$cleanup_timestamp"
                     ;;
                 *)
                     local current_version=""

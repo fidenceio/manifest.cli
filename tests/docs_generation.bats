@@ -88,7 +88,12 @@ EOF
     release_file="$SCRATCH/docs/RELEASE_v99.1.0.md"
     grep -q "## Highlights for v99.1.0" "$release_file"
     grep -q -- "- Add fleet adoption planning" "$release_file"
-    grep -q "manifest ship repo minor" "$release_file"
+    # Release notes carry only version-specific content; install/usage
+    # boilerplate was removed so each release file stays focused on the
+    # actual changes.
+    ! grep -q "## Installation" "$release_file"
+    ! grep -q "## Usage" "$release_file"
+    ! grep -q "curl -fsSL https://raw.githubusercontent.com/fidenceio" "$release_file"
     ! grep -q "Enhanced CLI functionality" "$release_file"
     ! grep -q "manifest prep patch" "$release_file"
 }

@@ -110,11 +110,192 @@ validate_repository() {
     fi
 }
 
+# Strict regex for archivable filenames. Anchored to start and end of the
+# basename so similar-prefixed hand-authored docs (e.g.,
+# RELEASE_RUN_HANDOFF_v46.7.0.md) are not swept up.
+_MANIFEST_ARCHIVABLE_REGEX='^(RELEASE|CHANGELOG|SECURITY_ANALYSIS_REPORT)_v[0-9]+\.[0-9]+\.[0-9]+(_[0-9]+T[0-9]+Z)?\.md$'
+
+# --- Archive index helpers -------------------------------------------------
+#
+# These regenerate docs/zArchive/INDEX.md (top-level) and
+# docs/zArchive/v<major>/INDEX.md (per-major) after every archive sweep,
+# so the indexes never drift from the file layout.
+
+_manifest_archive_extract_date() {
+    awk '
+      /^\*\*Release Date:\*\* / { sub(/^\*\*Release Date:\*\* /, ""); print substr($0, 1, 10); exit }
+      /^Release date: / { sub(/^Release date: */, ""); print substr($0, 1, 10); exit }
+      /^\*\*Date:\*\* / { sub(/^\*\*Date:\*\* /, ""); print substr($0, 1, 10); exit }
+    ' "$1"
+}
+
+_manifest_archive_extract_version_from_filename() {
+    basename "$1" | sed -E 's/^[A-Z_]+_v([0-9]+\.[0-9]+\.[0-9]+).*\.md$/\1/'
+}
+
+_manifest_archive_extract_type() {
+    case "$1" in
+        RELEASE_v*) printf '%s\n' "Release Notes" ;;
+        CHANGELOG_v*) printf '%s\n' "Changelog" ;;
+        SECURITY_ANALYSIS_REPORT*) printf '%s\n' "Security Audit" ;;
+        *) printf '%s\n' "Document" ;;
+    esac
+}
+
+_manifest_archive_sort_key() {
+    local f="$1"
+    local v t tnum maj min pat
+    v="$(_manifest_archive_extract_version_from_filename "$f")"
+    t="$(_manifest_archive_extract_type "$(basename "$f")")"
+    case "$t" in
+        "Release Notes") tnum=1 ;;
+        "Changelog") tnum=2 ;;
+        "Security Audit") tnum=3 ;;
+        *) tnum=4 ;;
+    esac
+    IFS='.' read -r maj min pat <<<"$v"
+    printf '%05d.%05d.%05d.%d\n' "${maj:-0}" "${min:-0}" "${pat:-0}" "$tnum"
+}
+
+_manifest_archive_generate_per_major_index() {
+    local archive_dir="$1"
+    local major="$2"
+    local dir="$archive_dir/v${major}"
+    [[ -d "$dir" ]] || return 0
+
+    local index_file="$dir/INDEX.md"
+    local count=0
+    local rows=""
+    local f
+
+    for f in "$dir"/*.md; do
+        [[ -f "$f" ]] || continue
+        [[ "$(basename "$f")" == "INDEX.md" ]] && continue
+        count=$((count + 1))
+        rows="${rows}$(_manifest_archive_sort_key "$f")|${f}"$'\n'
+    done
+
+    if [[ "$count" -eq 0 ]]; then
+        rm -f "$index_file"
+        rmdir "$dir" 2>/dev/null || true
+        return 0
+    fi
+
+    {
+        echo "# Manifest CLI Archive — v${major}"
+        echo
+        local plural=""
+        [[ "$count" -ne 1 ]] && plural="s"
+        echo "${count} archived document${plural} from the v${major} series."
+        echo
+        echo "| Document | Version | Date |"
+        echo "| --- | --- | --- |"
+        printf '%s' "$rows" | sort | while IFS='|' read -r _key f; do
+            [[ -z "$f" ]] && continue
+            local base v t d_str
+            base="$(basename "$f")"
+            v="$(_manifest_archive_extract_version_from_filename "$f")"
+            t="$(_manifest_archive_extract_type "$base")"
+            d_str="$(_manifest_archive_extract_date "$f")"
+            echo "| [${t} v${v}](${base}) | ${v} | ${d_str:-—} |"
+        done
+        echo
+        echo "[Back to archive index](../INDEX.md)"
+    } > "$index_file"
+}
+
+_manifest_archive_generate_top_level_index() {
+    local archive_dir="$1"
+    local index_file="$archive_dir/INDEX.md"
+
+    {
+        cat <<'INTRO'
+# Manifest CLI Archive
+
+Historical release notes, changelogs, and security audits from past versions.
+
+This archive contains documents that were promoted out of the active `docs/`
+directory when superseded by a newer release. Files are grouped by major
+version. Boilerplate auto-generated stubs (releases with no substantive
+content) have been pruned; only documents describing real changes or
+representing point-in-time security analyses are retained.
+
+| Major | Documents | Date range | Notes |
+| --- | --- | --- | --- |
+INTRO
+
+        local total_docs=0
+        local total_majors=0
+        local d
+        for d in "$archive_dir"/v*/; do
+            [[ -d "$d" ]] || continue
+            local major count min_date max_date types
+            major="$(basename "$d" | tr -d v)"
+            count=0
+            min_date=""
+            max_date=""
+            types=""
+
+            local f d_str
+            for f in "$d"*.md; do
+                [[ -f "$f" ]] || continue
+                [[ "$(basename "$f")" == "INDEX.md" ]] && continue
+                count=$((count + 1))
+                total_docs=$((total_docs + 1))
+                d_str="$(_manifest_archive_extract_date "$f")"
+                if [[ -z "$min_date" || "$d_str" < "$min_date" ]]; then min_date="$d_str"; fi
+                if [[ -z "$max_date" || "$d_str" > "$max_date" ]]; then max_date="$d_str"; fi
+                case "$(basename "$f")" in
+                    RELEASE_v*|CHANGELOG_v*) [[ "$types" == *release* ]] || types="${types}release " ;;
+                    SECURITY_ANALYSIS_REPORT*) [[ "$types" == *security* ]] || types="${types}security " ;;
+                esac
+            done
+
+            [[ "$count" -gt 0 ]] || continue
+            total_majors=$((total_majors + 1))
+
+            local range
+            if [[ "$min_date" == "$max_date" ]]; then
+                range="${min_date:-—}"
+            else
+                range="${min_date} – ${max_date}"
+            fi
+
+            local label=""
+            case "$types" in
+                *release*\ *security*\ |*release*\ *security*) label="Release docs + security audit" ;;
+                *release*\ ) label="Release docs" ;;
+                *security*\ ) label="Security audit$([ "$count" = 1 ] || echo "s")" ;;
+            esac
+            echo "| [v${major}](v${major}/INDEX.md) | ${count} | ${range} | ${label} |"
+        done
+        echo
+        echo "**Total:** ${total_docs} documents across ${total_majors} major versions."
+        echo
+        echo "[Back to current docs](../INDEX.md)"
+    } > "$index_file"
+}
+
+_manifest_archive_regenerate_indexes() {
+    local archive_dir
+    archive_dir="$(get_zarchive_dir)"
+    [[ -d "$archive_dir" ]] || return 0
+
+    local d major
+    for d in "$archive_dir"/v*/; do
+        [[ -d "$d" ]] || continue
+        major="$(basename "$d" | tr -d v)"
+        _manifest_archive_generate_per_major_index "$archive_dir" "$major"
+    done
+
+    _manifest_archive_generate_top_level_index "$archive_dir"
+}
+
 # Main cleanup function - handles archiving and general cleanup
 main_cleanup() {
     local version="${1:-}"
     local timestamp="${2:-}"
-    
+
     # Get trusted timestamp if not provided
     if [ -z "$timestamp" ]; then
         get_time_timestamp >/dev/null
@@ -124,56 +305,73 @@ main_cleanup() {
     log_info "Starting repository cleanup..."
     log_info "Version: $version"
     log_info "Timestamp: $timestamp"
-    
+
     # Change to project root
     cd "$PROJECT_ROOT"
-    
+
     # Archive old documentation
+    local moved_count=0
     if [[ -n "$version" ]]; then
         log_info "Archiving old documentation for version $version..."
-        
+
         ensure_zarchive_dir
-        
-        local moved_count=0
+
         local skipped_count=0
-        
-        # Find all version-specific documentation files
+        local zarchive_dir
+        zarchive_dir="$(get_zarchive_dir)"
+
+        # Walk the active docs/ directory only (-maxdepth 1) to avoid
+        # touching anything already archived under v<major>/ subfolders.
         while IFS= read -r file; do
-            if [[ -f "$file" ]]; then
-                local filename="$(basename "$file")"
-                local dest="$(get_zarchive_dir)/$filename"
-                
-                # Skip if already in archive directory
-                if [[ "$file" == "$(get_zarchive_dir)"/* ]]; then
-                    skipped_count=$((skipped_count + 1))
-                    continue
-                fi
-                
-                # Skip if this is the current version file
-                if [[ "$filename" == *"v$version"* ]]; then
-                    skipped_count=$((skipped_count + 1))
-                    continue
-                fi
-                
-                # Move the file
-                if mv "$file" "$dest" 2>/dev/null; then
-                    log_success "Moved: $filename"
-                    moved_count=$((moved_count + 1))
-                else
-                    log_warning "Failed to move: $filename"
-                fi
+            [[ -f "$file" ]] || continue
+            local filename
+            filename="$(basename "$file")"
+
+            # Strict allowlist: only well-formed RELEASE/CHANGELOG/SECURITY
+            # files with a SemVer-shaped version. Hand-authored docs that
+            # share a prefix (e.g., RELEASE_RUN_HANDOFF_v46.7.0.md) are
+            # not eligible.
+            if ! [[ "$filename" =~ $_MANIFEST_ARCHIVABLE_REGEX ]]; then
+                continue
             fi
-        done < <(find "$(get_docs_folder "$PROJECT_ROOT")" -name "CHANGELOG_v*.md" -o -name "RELEASE_v*.md" -o -name "SECURITY_ANALYSIS_REPORT_v*.md" | grep -v "$(get_zarchive_dir)")
-        
+
+            # Skip the current version's own files.
+            if [[ "$filename" == *"v$version"* ]]; then
+                skipped_count=$((skipped_count + 1))
+                continue
+            fi
+
+            # Slot into the v<major>/ subdirectory so the archive stays
+            # browsable instead of becoming a flat dump.
+            local file_major
+            file_major="$(printf '%s' "$filename" | sed -E 's/^[A-Z_]+_v([0-9]+)\..*/\1/')"
+            local target_dir="${zarchive_dir}/v${file_major}"
+            mkdir -p "$target_dir"
+            local dest="${target_dir}/${filename}"
+
+            if mv "$file" "$dest" 2>/dev/null; then
+                log_success "Moved: ${filename} → v${file_major}/"
+                moved_count=$((moved_count + 1))
+            else
+                log_warning "Failed to move: $filename"
+            fi
+        done < <(find "$(get_docs_folder "$PROJECT_ROOT")" -maxdepth 1 -type f -name "*.md")
+
         log_success "Archived $moved_count files, skipped $skipped_count files"
     fi
-    
+
+    # Regenerate the archive indexes if anything was moved or if the
+    # archive layout exists. Idempotent: rebuilds from current file state.
+    if [[ "$moved_count" -gt 0 ]] || [[ -d "$(get_zarchive_dir)" ]]; then
+        _manifest_archive_regenerate_indexes
+    fi
+
     # Clean up temporary files
     cleanup_temp_files
-    
+
     # Clean up empty directories
     cleanup_empty_dirs
-    
+
     log_success "Repository cleanup completed"
 }
 
