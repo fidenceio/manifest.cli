@@ -183,6 +183,59 @@ Each recommendation is a discrete unit of work. Check off when complete.
   - **Out of scope (keep env-only):** bootstrap and re-exec vars (`MANIFEST_CLI_BASH_PATH`, `MANIFEST_CLI_BASH_REEXEC`), installer-only state (`MANIFEST_CLI_INSTALL_LOCATION`, `MANIFEST_CLI_LOCAL_BIN`, `MANIFEST_CLI_NAME`, `MANIFEST_CLI_TAP`, `MANIFEST_CLI_MIN_BASH_VERSION`), core module discovery (`MANIFEST_CLI_CORE_*_DIR`), OS detection (`MANIFEST_CLI_OS_*`), time result state (`MANIFEST_CLI_TIME_TIMESTAMP` / `_SERVER` / `_OFFSET` / `_METHOD`), logging constants (`MANIFEST_CLI_SHARED_LOG_LEVEL_*`), and config-discovery vars needed before YAML loads (`MANIFEST_CLI_GLOBAL_CONFIG`, `MANIFEST_CLI_CONFIG_FILES`, `MANIFEST_CLI_CONFIG_SCHEMA_VERSION_CURRENT`).
   - Audit context: as of 2026-04-26, 76 keys were YAML-mapped, 13 user-facing toggles were env-only, and 8 mapped keys were absent from the example file. `release.tag_target` (item #27 era) has since shipped.
 
+### Documentation system phase 2 (deferred from the 2026-05-05 cleanup)
+
+The six-commit doc cleanup landing on 2026-05-05 (commits c1dc622..3610eea) addressed the structural and quality issues: scattered files consolidated, 438 boilerplate-stub archives deleted, 44 survivors regrouped into `v<major>/` subfolders, generation now produces boilerplate-free release notes, archive sweeps use an anchored allowlist regex with auto-regenerated indexes, and the broken `manifest docs cleanup` subcommand was fixed. The items below were deliberately deferred from that stack; each addresses a specific remaining gap.
+
+- [ ] **36. LLM-backed release-note generation.** Highest-leverage remaining item — addresses "quality language each version bump" directly. Today's generation path uses keyword-regex categorization in `analyze_changes()` ([modules/git/manifest-git-changes.sh](../modules/git/manifest-git-changes.sh)) and produces either categorized bullets from raw commit subjects or a "no notable user-facing changes" marker. The extensibility hook is already wired: `MANIFEST_CLI_DOC_REVIEW_PROVIDER=command` + `MANIFEST_CLI_DOC_REVIEW_COMMAND=/path/to/script` ([modules/git/manifest-doc-review.sh](../modules/git/manifest-doc-review.sh)) invokes an external script that writes release-note content to `$MANIFEST_DOC_REVIEW_RELEASE_NOTE_FILE`.
+  - **Two implementation options:**
+    - **(a) Direct Anthropic API** via a checked-in `scripts/doc-review-providers/anthropic.sh`. Reads the local report file, assembles a prompt from changed-files + `git log` since last tag, calls the API with prompt caching, writes structured release notes back. Requires `ANTHROPIC_API_KEY` (or shared `MANIFEST_CLI_CLOUD_API_KEY`) in env. No infra dependency — ships immediately.
+    - **(b) Cloud-routed** via a Manifest Cloud endpoint. CLI hits the endpoint through the `command` provider. Cleaner long-term (no per-user API keys) but blocks on the endpoint existing.
+  - **Recommendation:** ship (a) first; migrate to (b) when Cloud has the endpoint. Both fit behind the existing provider hook, so the choice is per-user config.
+  - **Conventional Commits substrate (optional but recommended):** LLM input quality improves if commit subjects use `feat:` / `fix:` / `docs:` prefixes. Add a warning to `.git-hooks/pre-commit` for non-conformant subjects. Categorization in `analyze_changes()` could then prefer the prefix over substring matching.
+  - **Definition of done:** an LLM-backed CLI release produces a release-notes file naming actual changes (not "Enhanced CLI functionality"), boilerplate-free, ~10–30 lines for a typical patch. Bats coverage stubs the provider to verify integration.
+
+- [ ] **37. Backfill root `CHANGELOG.md` for v46.0 → current.** Root [CHANGELOG.md](../CHANGELOG.md)'s last hand-written entry is v45.6.0 (2026-04-29). The orchestrator's update path ([manifest-orchestrator.sh:500-535](../modules/workflow/manifest-orchestrator.sh#L500-L535)) sed-replaces version strings in Keep-a-Changelog files but does not prepend new entries, so v46.0.0–v46.11.3 never landed there even though substantive entries exist in `docs/zArchive/v46/CHANGELOG_v46.x.md`. Result: someone reading root CHANGELOG sees ~5 weeks of release activity vanish.
+  - **Approach:** for each substantive v46.x release, prepend a `## [46.x] - YYYY-MM-DD` block to root `CHANGELOG.md`. The survivor list (already pruned of empty stubs in commit 709d6a5) gives the exact set: v46.0.0, v46.3.0, v46.4.0, v46.4.2, v46.6.0, v46.7.0, v46.8.0, v46.9.0, v46.10.0, v46.11.0, v46.11.2. Empty releases between them (v46.1, v46.2.x, v46.4.1, v46.5, v46.11.1, v46.11.3) need no entry.
+  - **Out of scope:** changing the orchestrator's CHANGELOG update logic. That's a behavior question (should ship auto-prepend?). Item #36 makes auto-prepend more defensible — revisit once LLM-written text is the default.
+  - **Definition of done:** root `CHANGELOG.md` has `[46.x]` sections for every substantive v46 release, newest-first per Keep-a-Changelog convention.
+
+- [ ] **38. Configurable archive retention.** Today's archive sweep runs on every ship and moves every file not matching the current version. Patches within a minor archive previous patches; users lose continuity inside a minor without realizing it.
+  - **New YAML keys** (wire through [manifest-yaml.sh](../modules/core/manifest-yaml.sh) + [manifest-config.sh](../modules/core/manifest-config.sh)):
+    - `docs.archive.keep_recent` (default `1`) — number of prior versions whose files stay in active `docs/` for context.
+    - `docs.archive.trigger` (default `minor_or_major`) — when sweeps run. Options: `every_ship`, `minor_or_major`, `major_only`, `manual`.
+  - **Wiring:** orchestrator passes the bump type to `main_cleanup` so the sweep can early-return when trigger is mismatched (e.g., `trigger=minor_or_major` and bump is patch → no sweep).
+  - **Retention math:** keep all files for the current minor + the previous `keep_recent` minors; archive everything else. For majors with `keep_recent=1`: keep current major's files in `docs/`, archive the previous major to `zArchive/v<major>/`.
+  - **Tests:** bats coverage for each trigger option × each bump type, plus retention boundaries (`keep_recent=0` / `1` / `2`).
+  - **Definition of done:** YAML keys accepted, runtime honors them with sensible defaults, full bats matrix passes, [examples/manifest.config.yaml.example](../examples/manifest.config.yaml.example) documents the new keys.
+
+- [ ] **39. Pre-move safety check on archive sweep.** The sweep currently `mv`'s any matching file regardless of whether it has uncommitted edits. A hand-edit to an old release file (security retraction, typo correction) gets silently relocated by the next ship.
+  - **Approach:** before each `mv`, run `git status --porcelain -- "$file"`. If non-empty (modified or untracked), abort the sweep and print which file is blocking. Bypass with `MANIFEST_CLI_DOCS_ARCHIVE_FORCE=1` for CI.
+  - **Out of scope:** auto-committing the dirty file. Right behavior is to surface the problem.
+  - **Definition of done:** dirty-file scenario aborts sweep with a clear message; clean files move normally; bats coverage for both.
+
+- [ ] **40. Archive move log.** Each sweep should append a structured entry to `docs/zArchive/.archive-log.md` recording timestamp, from-version, to-version, list of moved files, and reason (trigger fired, `keep_recent` value). Auditable; trivial drift inspection.
+  - **Format:** Keep-a-Changelog-shaped sections by date.
+
+    ```markdown
+    ## 2026-05-08 — v46.12.0 sweep
+    Trigger: minor_or_major (bump: minor); keep_recent: 1.
+    Moved 4 files:
+    - RELEASE_v46.10.0.md → v46/RELEASE_v46.10.0.md
+    - ...
+    ```
+
+  - **Storage:** lives inside `zArchive/`, not the active doc surface.
+  - **Definition of done:** every sweep appends; existing entries preserved across runs; smoke test verifies append behavior.
+
+- [ ] **41. `manifest docs archive` subcommand surface.** Make the archive first-class from the CLI, not just a directory tree.
+  - **`manifest docs archive list`** — print the top-level INDEX (majors with doc counts and date ranges) to stdout. Read-only. Honors `--json` for CI.
+  - **`manifest docs archive show <version>`** — print the archived release notes for the named version, sourced from the right `v<major>/RELEASE_v<version>.md`. Answers "what shipped in v44.10.1" without leaving the terminal.
+  - **`manifest docs archive restore <version>`** — copy the archived file back into active `docs/` (uses `cp`, not `mv` — read-only on the archive). Useful for revisiting or templating against an old release.
+  - **Definition of done:** all three subcommands dispatch via the existing `manifest docs <subcommand>` route in [manifest-core.sh](../modules/core/manifest-core.sh); bats coverage for each; help text routes through `_render_help`.
+
+**Sequencing:** #36 is highest-leverage but blocks on a provider script being written. #37 is the easiest to ship today and unrelated to the others. #38 / #39 / #40 share archival infra and naturally cluster. #41 is most useful after #38 lands (so retention metadata is meaningful in `archive list` output).
+
 ---
 
 ## 4 · Suggested sequencing
