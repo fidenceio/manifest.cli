@@ -469,7 +469,7 @@ generate_docs_index() {
 | -------- | ----------- |
 | [Release Notes v${version}](RELEASE_v${version}.md) | What's new in this release |
 | [Changelog v${version}](CHANGELOG_v${version}.md) | Detailed change log |
-| [Archived Releases](zArchive/) | Previous version documentation |
+| [Archived Releases](zArchive/INDEX.md) | Previous version documentation, grouped by major |
 
 ---
 
