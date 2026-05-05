@@ -51,6 +51,34 @@ teardown() {
 
     grep -q 'manifest security --check' "$TEST_REPO_ROOT/.git-hooks/pre-commit"
     grep -q 'security_output=' "$TEST_REPO_ROOT/.git-hooks/pre-commit"
+    grep -q 'env -u MANIFEST_CLI_BASH_REEXEC' "$TEST_REPO_ROOT/.git-hooks/pre-commit"
     ! grep -q "$skip_var" "$TEST_REPO_ROOT/.git-hooks/pre-commit"
     ! grep -q "$skip_var" "$TEST_REPO_ROOT/modules/system/manifest-security.sh"
+}
+
+@test "pre-commit hook clears inherited bash re-exec sentinel for repo-local CLI" {
+    mkdir -p "$PROJECT_ROOT/.git-hooks" "$PROJECT_ROOT/scripts" "$PROJECT_ROOT/modules/core"
+    cp "$TEST_REPO_ROOT/.git-hooks/pre-commit" "$PROJECT_ROOT/.git-hooks/pre-commit"
+    chmod +x "$PROJECT_ROOT/.git-hooks/pre-commit"
+    touch "$PROJECT_ROOT/modules/core/manifest-core.sh"
+    cat > "$PROJECT_ROOT/scripts/manifest-cli.sh" <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+if [ "${MANIFEST_CLI_BASH_REEXEC:-0}" = "1" ]; then
+    echo "leaked MANIFEST_CLI_BASH_REEXEC"
+    exit 12
+fi
+if [ "$1" != "security" ] || [ "$2" != "--check" ]; then
+    echo "unexpected args: $*"
+    exit 13
+fi
+echo "fake security check passed"
+SCRIPT
+    chmod +x "$PROJECT_ROOT/scripts/manifest-cli.sh"
+
+    run env MANIFEST_CLI_BASH_REEXEC=1 "$PROJECT_ROOT/.git-hooks/pre-commit"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Manifest CLI security audit passed"* ]]
+    [[ "$output" != *"leaked MANIFEST_CLI_BASH_REEXEC"* ]]
 }
