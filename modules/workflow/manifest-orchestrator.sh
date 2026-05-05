@@ -468,7 +468,11 @@ manifest_ship_workflow() {
     
     # Archive previous version documentation to zArchive (now that new version is created)
     echo "📁 Archiving previous version documentation..."
-    main_cleanup "$new_version" "$timestamp"
+    if ! main_cleanup "$new_version" "$timestamp"; then
+        log_error "Archive sweep aborted; aborting ship workflow."
+        emit_ship_failure_report "archive_sweep" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+        return 1
+    fi
     echo ""
     
     # Final markdown validation and fixing (before commit)

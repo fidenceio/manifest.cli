@@ -208,10 +208,8 @@ The six-commit doc cleanup landing on 2026-05-05 (commits c1dc622..3610eea) addr
   - **Tests:** bats coverage for each trigger option × each bump type, plus retention boundaries (`keep_recent=0` / `1` / `2`).
   - **Definition of done:** YAML keys accepted, runtime honors them with sensible defaults, full bats matrix passes, [examples/manifest.config.yaml.example](../examples/manifest.config.yaml.example) documents the new keys.
 
-- [ ] **39. Pre-move safety check on archive sweep.** The sweep currently `mv`'s any matching file regardless of whether it has uncommitted edits. A hand-edit to an old release file (security retraction, typo correction) gets silently relocated by the next ship.
-  - **Approach:** before each `mv`, run `git status --porcelain -- "$file"`. If non-empty (modified or untracked), abort the sweep and print which file is blocking. Bypass with `MANIFEST_CLI_DOCS_ARCHIVE_FORCE=1` for CI.
-  - **Out of scope:** auto-committing the dirty file. Right behavior is to surface the problem.
-  - **Definition of done:** dirty-file scenario aborts sweep with a clear message; clean files move normally; bats coverage for both.
+- [x] **39. Pre-move safety check on archive sweep.** Done 2026-05-05. Added a pre-move `git status --porcelain -- "$file"` check inside `main_cleanup`'s sweep loop ([modules/docs/manifest-cleanup-docs.sh](../modules/docs/manifest-cleanup-docs.sh)). On non-empty porcelain, the sweep logs the blocking file and the porcelain line, prints how to bypass, and `return 1`s out of `main_cleanup`. `MANIFEST_CLI_DOCS_ARCHIVE_FORCE=1` (any truthy form via `is_truthy`) bypasses for CI. The orchestrator ([modules/workflow/manifest-orchestrator.sh:471](../modules/workflow/manifest-orchestrator.sh#L471)) now checks the cleanup return code and emits a `archive_sweep` failure report instead of marching on through commit/tag/push.
+  - **Coverage:** four bats cases in [tests/archive_pre_move_safety.bats](../tests/archive_pre_move_safety.bats) — clean-files-move, modified-file-aborts, untracked-file-aborts, force-bypass-moves. Full suite: 258/258 green.
 
 - [ ] **40. Archive move log.** Each sweep should append a structured entry to `docs/zArchive/.archive-log.md` recording timestamp, from-version, to-version, list of moved files, and reason (trigger fired, `keep_recent` value). Auditable; trivial drift inspection.
   - **Format:** Keep-a-Changelog-shaped sections by date.
@@ -237,7 +235,7 @@ The six-commit doc cleanup landing on 2026-05-05 (commits c1dc622..3610eea) addr
   - **Applied to v46:** removed 10 stub pairs (20 files). Eight from the originally-listed doc-review-only set (v46.4.0, v46.4.2, v46.6.0, v46.8.0, v46.9.0, v46.10.0, v46.11.0, v46.11.2) plus two empty-release-marker stubs that slipped past 709d6a5 by timing (v46.11.3 archived after the original prune; v46.12.1 archived during this session's ship). Indexes regenerated via `manifest docs cleanup`. v46 archive now lists only the four substantive releases (v46.0.0, v46.3.0, v46.7.0, v46.12.0) — same set as the root CHANGELOG backfill from #37.
   - **No regression on substantive survivors:** verified — the script's section-set check requires exactly Summary + Documentation, so any release with a New Features / Improvements / Bug Fixes section (e.g., v46.0.0, v46.3.0, v46.7.0, v46.12.0, v45.6.0) is preserved.
 
-**Sequencing:** #36 is highest-leverage but blocks on a provider script being written. ~~#37~~ and ~~#42~~ shipped 2026-05-05. #38 / #39 / #40 share archival infra and naturally cluster. #41 is most useful after #38 lands (so retention metadata is meaningful in `archive list` output).
+**Sequencing:** #36 is highest-leverage but blocks on a provider script being written. ~~#37~~, ~~#39~~, and ~~#42~~ shipped 2026-05-05. #38 / #40 share archival infra and naturally cluster with the now-shipped #39. #41 is most useful after #38 lands (so retention metadata is meaningful in `archive list` output).
 
 ---
 
