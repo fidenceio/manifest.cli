@@ -3,6 +3,57 @@
 All notable changes to Manifest CLI are documented here.
 This project uses [Semantic Versioning](https://semver.org/).
 
+## [46.12.0] - 2026-05-05
+
+**Release Type:** Minor
+
+### Documentation System Cleanup
+
+- Regrouped `docs/zArchive/` into `v<major>/` subfolders with auto-generated
+  `INDEX.md` files per major and at the top level. Archive sweeps now use an
+  anchored allowlist regex.
+- Deleted 438 boilerplate-stub release notes and changelogs from the archive;
+  44 substantive survivors retained. Release-note generation now produces
+  boilerplate-free output by default.
+- Consolidated six standalone audit/handoff docs: `GIT_HOOKS` folded into
+  `USER_GUIDE`, `CONFIG_SURFACE_AUDIT` lifted to `IMPROVEMENT_TRACKER`, the
+  remaining four removed. Cross-references cleaned up; "v42 dispatcher" wording
+  dropped.
+- Doc-review reports are no longer committed by default —
+  `MANIFEST_CLI_DOC_REVIEW_REPORT_DIR` now defaults to
+  `.git/manifest-doc-review/`. Set it to `docs/documentation-reviews` to opt
+  back in to committed reports.
+- Added Phase 2 tracker items #36–#41 covering LLM-backed release notes,
+  CHANGELOG backfill, configurable archive retention, pre-move safety check,
+  archive move log, and a `manifest docs archive` CLI surface.
+
+## [46.7.0] - 2026-05-05
+
+**Release Type:** Minor
+
+### Homebrew Formula Fix
+
+- Corrected the Homebrew formula SHA for v46.6.0.
+
+## [46.3.0] - 2026-05-04
+
+**Release Type:** Minor
+
+### GitHub Actions Integration
+
+- Made the post-ship wait for GitHub Actions opt-in. Local ships no longer
+  block on a remote workflow run by default.
+- Surfaced GitHub Actions status after `manifest ship` completes.
+
+## [46.0.0] - 2026-05-04
+
+**Release Type:** Major
+
+### Fleet Adoption Planning
+
+- Added fleet adoption planning. The v46 line introduces the multi-repo fleet
+  workflow; see `docs/FLEET_DESIGN_SPEC.md` for the current model.
+
 ## [45.6.0] - 2026-04-29
 
 **Release Type:** Minor
