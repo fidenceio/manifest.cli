@@ -291,6 +291,52 @@ _manifest_archive_regenerate_indexes() {
     _manifest_archive_generate_top_level_index "$archive_dir"
 }
 
+# Append a sweep entry to docs/zArchive/.archive-log.md so each archive
+# move is auditable. Args:
+#   $1 = version that triggered the sweep
+#   $2 = full UTC timestamp string ("YYYY-MM-DD HH:MM:SS UTC")
+#   $@ = "src|dest" pairs (project-root-relative paths)
+_manifest_archive_append_move_log() {
+    local version="$1"
+    local timestamp="$2"
+    shift 2
+    local count=$#
+    [[ "$count" -gt 0 ]] || return 0
+
+    local archive_dir log_file
+    archive_dir="$(get_zarchive_dir)"
+    [[ -d "$archive_dir" ]] || return 0
+    log_file="${archive_dir}/.archive-log.md"
+
+    if [[ ! -f "$log_file" ]]; then
+        cat > "$log_file" <<'EOF'
+# Manifest CLI Archive Move Log
+
+Append-only record of files relocated from active `docs/` to `zArchive/`
+by `manifest ship` and `manifest docs cleanup`. Each section below
+records one sweep, newest at the bottom.
+
+EOF
+    fi
+
+    local date plural=""
+    date="${timestamp%% *}"
+    [[ "$count" -ne 1 ]] && plural="s"
+
+    {
+        printf '## %s — v%s sweep\n\n' "$date" "$version"
+        printf 'Timestamp: %s\n' "$timestamp"
+        printf 'Moved %d file%s:\n' "$count" "$plural"
+        local pair src dest
+        for pair in "$@"; do
+            src="${pair%%|*}"
+            dest="${pair##*|}"
+            printf -- '- %s → %s\n' "$src" "$dest"
+        done
+        printf '\n'
+    } >> "$log_file"
+}
+
 # Main cleanup function - handles archiving and general cleanup
 main_cleanup() {
     local version="${1:-}"
@@ -319,6 +365,7 @@ main_cleanup() {
         local skipped_count=0
         local zarchive_dir
         zarchive_dir="$(get_zarchive_dir)"
+        local -a archive_log_entries=()
 
         # Walk the active docs/ directory only (-maxdepth 1) to avoid
         # touching anything already archived under v<major>/ subfolders.
@@ -367,12 +414,17 @@ main_cleanup() {
             if mv "$file" "$dest" 2>/dev/null; then
                 log_success "Moved: ${filename} → v${file_major}/"
                 moved_count=$((moved_count + 1))
+                archive_log_entries+=("${file#"$PROJECT_ROOT"/}|${dest#"$PROJECT_ROOT"/}")
             else
                 log_warning "Failed to move: $filename"
             fi
         done < <(find "$(get_docs_folder "$PROJECT_ROOT")" -maxdepth 1 -type f -name "*.md")
 
         log_success "Archived $moved_count files, skipped $skipped_count files"
+
+        if [[ ${#archive_log_entries[@]} -gt 0 ]]; then
+            _manifest_archive_append_move_log "$version" "$timestamp" "${archive_log_entries[@]}"
+        fi
     fi
 
     # Regenerate the archive indexes if anything was moved or if the

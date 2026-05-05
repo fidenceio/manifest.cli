@@ -211,19 +211,9 @@ The six-commit doc cleanup landing on 2026-05-05 (commits c1dc622..3610eea) addr
 - [x] **39. Pre-move safety check on archive sweep.** Done 2026-05-05. Added a pre-move `git status --porcelain -- "$file"` check inside `main_cleanup`'s sweep loop ([modules/docs/manifest-cleanup-docs.sh](../modules/docs/manifest-cleanup-docs.sh)). On non-empty porcelain, the sweep logs the blocking file and the porcelain line, prints how to bypass, and `return 1`s out of `main_cleanup`. `MANIFEST_CLI_DOCS_ARCHIVE_FORCE=1` (any truthy form via `is_truthy`) bypasses for CI. The orchestrator ([modules/workflow/manifest-orchestrator.sh:471](../modules/workflow/manifest-orchestrator.sh#L471)) now checks the cleanup return code and emits a `archive_sweep` failure report instead of marching on through commit/tag/push.
   - **Coverage:** four bats cases in [tests/archive_pre_move_safety.bats](../tests/archive_pre_move_safety.bats) — clean-files-move, modified-file-aborts, untracked-file-aborts, force-bypass-moves. Full suite: 258/258 green.
 
-- [ ] **40. Archive move log.** Each sweep should append a structured entry to `docs/zArchive/.archive-log.md` recording timestamp, from-version, to-version, list of moved files, and reason (trigger fired, `keep_recent` value). Auditable; trivial drift inspection.
-  - **Format:** Keep-a-Changelog-shaped sections by date.
-
-    ```markdown
-    ## 2026-05-08 — v46.12.0 sweep
-    Trigger: minor_or_major (bump: minor); keep_recent: 1.
-    Moved 4 files:
-    - RELEASE_v46.10.0.md → v46/RELEASE_v46.10.0.md
-    - ...
-    ```
-
-  - **Storage:** lives inside `zArchive/`, not the active doc surface.
-  - **Definition of done:** every sweep appends; existing entries preserved across runs; smoke test verifies append behavior.
+- [x] **40. Archive move log.** Done 2026-05-05. Added `_manifest_archive_append_move_log` in [modules/docs/manifest-cleanup-docs.sh](../modules/docs/manifest-cleanup-docs.sh). After a successful sweep, every moved file is recorded in `docs/zArchive/.archive-log.md` as a dated section: `## YYYY-MM-DD — v<version> sweep` followed by full timestamp and a bullet list of `src → dest` pairs (project-root-relative). The file is created on first move with a brief intro header and grows append-only thereafter (newest at the bottom).
+  - **Coverage:** four bats cases in [tests/archive_move_log.bats](../tests/archive_move_log.bats) — first-sweep-creates-log, subsequent-sweep-appends-without-losing-prior, no-files-no-log, multi-file-records-each-pair. Full suite: 262/262.
+  - **Deferred to #38:** the original spec called for `Trigger:` and `keep_recent:` fields. Those are #38 surface (`docs.archive.trigger`, `docs.archive.keep_recent`) and not yet plumbed; current entries record only what we know today (timestamp, version, moved files). When #38 lands, extend `_manifest_archive_append_move_log` to accept and emit those fields.
 
 - [ ] **41. `manifest docs archive` subcommand surface.** Make the archive first-class from the CLI, not just a directory tree.
   - **`manifest docs archive list`** — print the top-level INDEX (majors with doc counts and date ranges) to stdout. Read-only. Honors `--json` for CI.
@@ -235,7 +225,7 @@ The six-commit doc cleanup landing on 2026-05-05 (commits c1dc622..3610eea) addr
   - **Applied to v46:** removed 10 stub pairs (20 files). Eight from the originally-listed doc-review-only set (v46.4.0, v46.4.2, v46.6.0, v46.8.0, v46.9.0, v46.10.0, v46.11.0, v46.11.2) plus two empty-release-marker stubs that slipped past 709d6a5 by timing (v46.11.3 archived after the original prune; v46.12.1 archived during this session's ship). Indexes regenerated via `manifest docs cleanup`. v46 archive now lists only the four substantive releases (v46.0.0, v46.3.0, v46.7.0, v46.12.0) — same set as the root CHANGELOG backfill from #37.
   - **No regression on substantive survivors:** verified — the script's section-set check requires exactly Summary + Documentation, so any release with a New Features / Improvements / Bug Fixes section (e.g., v46.0.0, v46.3.0, v46.7.0, v46.12.0, v45.6.0) is preserved.
 
-**Sequencing:** #36 is highest-leverage but blocks on a provider script being written. ~~#37~~, ~~#39~~, and ~~#42~~ shipped 2026-05-05. #38 / #40 share archival infra and naturally cluster with the now-shipped #39. #41 is most useful after #38 lands (so retention metadata is meaningful in `archive list` output).
+**Sequencing:** #36 is highest-leverage but blocks on a provider script being written. ~~#37~~, ~~#39~~, ~~#40~~, and ~~#42~~ shipped 2026-05-05. Remaining: #38 (configurable archive retention) brings trigger/keep_recent fields that #40 will extend to record. #41 (`manifest docs archive list/show/restore` CLI) is most useful after #38 lands so retention metadata appears in `archive list` output.
 
 ---
 
