@@ -349,6 +349,21 @@ main_cleanup() {
             mkdir -p "$target_dir"
             local dest="${target_dir}/${filename}"
 
+            # Pre-move safety check: refuse to relocate a file the user
+            # is mid-editing. A hand-edit (security retraction, typo fix)
+            # would otherwise be silently moved by the sweep. Set
+            # MANIFEST_CLI_DOCS_ARCHIVE_FORCE=1 to bypass in CI.
+            if ! is_truthy "${MANIFEST_CLI_DOCS_ARCHIVE_FORCE:-}"; then
+                local porcelain
+                porcelain="$(git status --porcelain -- "$file" 2>/dev/null || true)"
+                if [[ -n "$porcelain" ]]; then
+                    log_error "Refusing to archive ${filename} — file has uncommitted changes:"
+                    log_error "  ${porcelain}"
+                    log_error "Commit, stash, or set MANIFEST_CLI_DOCS_ARCHIVE_FORCE=1 to bypass."
+                    return 1
+                fi
+            fi
+
             if mv "$file" "$dest" 2>/dev/null; then
                 log_success "Moved: ${filename} → v${file_major}/"
                 moved_count=$((moved_count + 1))
