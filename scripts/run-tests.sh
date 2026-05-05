@@ -18,10 +18,12 @@ if [[ "${BASH_VERSINFO[0]:-0}" -lt 4 ]]; then
 fi
 
 # bats's '#!/usr/bin/env bash' shebang resolves to whatever bash is first on
-# PATH. If we're on macOS with Homebrew's bash present but not first, fix that
-# transparently so 'bats' itself runs under bash 5+ — same as the CI workflow.
-if [[ -x /opt/homebrew/bin/bash ]] && [[ ":$PATH:" != *":/opt/homebrew/bin:"* ]]; then
+# PATH. If macOS has Homebrew's bash but command lookup still lands on
+# /bin/bash 3.2, prepend the Homebrew bin so bats itself runs under Bash 5+.
+if [[ -x /opt/homebrew/bin/bash ]] && [[ "$(command -v bash 2>/dev/null || true)" != "/opt/homebrew/bin/bash" ]]; then
     export PATH="/opt/homebrew/bin:$PATH"
+elif [[ -x /usr/local/bin/bash ]] && [[ "$(command -v bash 2>/dev/null || true)" != "/usr/local/bin/bash" ]] && [[ "$(/usr/local/bin/bash -c 'echo "${BASH_VERSINFO[0]:-0}"' 2>/dev/null || echo 0)" -ge 5 ]]; then
+    export PATH="/usr/local/bin:$PATH"
 fi
 
 if ! command -v bats >/dev/null 2>&1; then

@@ -52,12 +52,123 @@ _status_line() {
     printf "  %-12s %s\n" "$1" "$2"
 }
 
+_status_git_porcelain_counts() {
+    local path="$1"
+    local modified=0
+    local untracked=0
+    local line status_code
+
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        status_code="${line:0:2}"
+        if [[ "$status_code" == "??" ]]; then
+            untracked=$((untracked + 1))
+        else
+            modified=$((modified + 1))
+        fi
+    done < <(git -C "$path" status --porcelain 2>/dev/null || true)
+
+    printf '%s %s\n' "$modified" "$untracked"
+}
+
 _status_fleet_config_file() {
     local proj="$1"
     if [[ -f "$proj/manifest.fleet.config.yaml" ]]; then
         echo "$proj/manifest.fleet.config.yaml"
     elif [[ -f "$proj/manifest.fleet.yaml" ]]; then
         echo "$proj/manifest.fleet.yaml"
+    fi
+}
+
+_manifest_repo_identity_collect() {
+    local proj="${1:-$PROJECT_ROOT}"
+    _MANIFEST_REPO_ID_GIT_ROOT="$(git -C "$proj" rev-parse --show-toplevel 2>/dev/null || echo "$proj")"
+    _MANIFEST_REPO_ID_ORIGIN="$(manifest_origin_repo_slug "$_MANIFEST_REPO_ID_GIT_ROOT" 2>/dev/null || echo "")"
+    [[ -n "$_MANIFEST_REPO_ID_ORIGIN" ]] || _MANIFEST_REPO_ID_ORIGIN="(no origin remote)"
+    _MANIFEST_REPO_ID_BRANCH="$(git -C "$_MANIFEST_REPO_ID_GIT_ROOT" branch --show-current 2>/dev/null || echo "(detached)")"
+    _MANIFEST_REPO_ID_UPSTREAM="$(git -C "$_MANIFEST_REPO_ID_GIT_ROOT" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || echo "")"
+    _MANIFEST_REPO_ID_FLEET_ROOT=""
+    _MANIFEST_REPO_ID_FLEET_NAME=""
+    _MANIFEST_REPO_ID_FLEET_MEMBER=""
+    _MANIFEST_REPO_ID_WARNING=""
+
+    local configured_root="${MANIFEST_CLI_FLEET_ROOT:-}"
+    if [[ -n "$configured_root" && -d "$configured_root" ]]; then
+        _MANIFEST_REPO_ID_FLEET_ROOT="$(cd "$configured_root" 2>/dev/null && pwd)"
+    elif declare -F find_fleet_root >/dev/null 2>&1; then
+        _MANIFEST_REPO_ID_FLEET_ROOT="$(find_fleet_root "$_MANIFEST_REPO_ID_GIT_ROOT" 2>/dev/null || echo "")"
+    fi
+
+    if [[ -z "$_MANIFEST_REPO_ID_FLEET_ROOT" ]]; then
+        _MANIFEST_REPO_ID_FLEET_NAME="${MANIFEST_CLI_FLEET_NAME:-}"
+        _MANIFEST_REPO_ID_FLEET_MEMBER="${MANIFEST_CLI_FLEET_MEMBER:-}"
+        if [[ -n "$_MANIFEST_REPO_ID_FLEET_MEMBER" ]]; then
+            _MANIFEST_REPO_ID_WARNING="fleet.member hint is present but no fleet root was detected"
+        fi
+        return 0
+    fi
+
+    local fleet_config=""
+    fleet_config="$(_status_fleet_config_file "$_MANIFEST_REPO_ID_FLEET_ROOT")"
+    if [[ -n "$fleet_config" && -f "$fleet_config" && "$(command -v yq 2>/dev/null)" ]]; then
+        _MANIFEST_REPO_ID_FLEET_NAME="$(yq e '.fleet.name // "fleet"' "$fleet_config" 2>/dev/null)"
+        local service raw_path service_path service_root
+        while IFS= read -r service; do
+            [[ -z "$service" ]] && continue
+            raw_path="$(SERVICE="$service" yq e '.services[strenv(SERVICE)].path // ""' "$fleet_config" 2>/dev/null)"
+            service_path="$(_status_resolve_member_path "$_MANIFEST_REPO_ID_FLEET_ROOT" "$raw_path")"
+            service_root="$(git -C "$service_path" rev-parse --show-toplevel 2>/dev/null || echo "$service_path")"
+            if [[ "$service_root" == "$_MANIFEST_REPO_ID_GIT_ROOT" ]]; then
+                _MANIFEST_REPO_ID_FLEET_MEMBER="$service"
+                break
+            fi
+        done < <(yq e '.services | keys | .[]' "$fleet_config" 2>/dev/null)
+    fi
+
+    _MANIFEST_REPO_ID_FLEET_NAME="${_MANIFEST_REPO_ID_FLEET_NAME:-${MANIFEST_CLI_FLEET_NAME:-fleet}}"
+    if [[ -n "${MANIFEST_CLI_FLEET_MEMBER:-}" && -n "$_MANIFEST_REPO_ID_FLEET_MEMBER" && "${MANIFEST_CLI_FLEET_MEMBER}" != "$_MANIFEST_REPO_ID_FLEET_MEMBER" ]]; then
+        _MANIFEST_REPO_ID_WARNING="fleet.member hint '${MANIFEST_CLI_FLEET_MEMBER}' does not match fleet config member '${_MANIFEST_REPO_ID_FLEET_MEMBER}'"
+    elif [[ -z "$_MANIFEST_REPO_ID_FLEET_MEMBER" && -n "${MANIFEST_CLI_FLEET_MEMBER:-}" ]]; then
+        _MANIFEST_REPO_ID_FLEET_MEMBER="$MANIFEST_CLI_FLEET_MEMBER (hint, unverified)"
+    elif [[ -z "$_MANIFEST_REPO_ID_FLEET_MEMBER" && "$_MANIFEST_REPO_ID_GIT_ROOT" != "$_MANIFEST_REPO_ID_FLEET_ROOT" ]]; then
+        _MANIFEST_REPO_ID_WARNING="Git root is inside a fleet but is not configured as a fleet member"
+    fi
+
+    if [[ "$_MANIFEST_REPO_ID_GIT_ROOT" == "$_MANIFEST_REPO_ID_FLEET_ROOT" ]]; then
+        if [[ -n "$_MANIFEST_REPO_ID_WARNING" ]]; then
+            _MANIFEST_REPO_ID_WARNING="${_MANIFEST_REPO_ID_WARNING}; this targets only the fleet-root repo, not ship fleet"
+        else
+            _MANIFEST_REPO_ID_WARNING="This targets only the fleet-root repo, not ship fleet"
+        fi
+    fi
+}
+
+manifest_repo_identity_block() {
+    local proj="${1:-$PROJECT_ROOT}"
+    _manifest_repo_identity_collect "$proj"
+
+    echo ""
+    echo "Repo identity"
+    echo "-------------"
+    _status_line "Git root:" "$_MANIFEST_REPO_ID_GIT_ROOT"
+    _status_line "Origin:" "$_MANIFEST_REPO_ID_ORIGIN"
+    if [[ -n "$_MANIFEST_REPO_ID_UPSTREAM" ]]; then
+        _status_line "Branch:" "$_MANIFEST_REPO_ID_BRANCH → $_MANIFEST_REPO_ID_UPSTREAM"
+    else
+        _status_line "Branch:" "$_MANIFEST_REPO_ID_BRANCH  (no upstream)"
+    fi
+    if [[ -n "$_MANIFEST_REPO_ID_FLEET_ROOT" ]]; then
+        _status_line "Fleet:" "${_MANIFEST_REPO_ID_FLEET_NAME}  (${_MANIFEST_REPO_ID_FLEET_ROOT})"
+        _status_line "Fleet member:" "${_MANIFEST_REPO_ID_FLEET_MEMBER:-not configured}"
+    elif [[ -n "$_MANIFEST_REPO_ID_FLEET_NAME" || -n "$_MANIFEST_REPO_ID_FLEET_MEMBER" ]]; then
+        _status_line "Fleet:" "${_MANIFEST_REPO_ID_FLEET_NAME:-hint only}"
+        _status_line "Fleet member:" "${_MANIFEST_REPO_ID_FLEET_MEMBER:-not configured}"
+    else
+        _status_line "Fleet:" "not detected"
+    fi
+    _status_line "Target:" "this Git repository only"
+    if [[ -n "$_MANIFEST_REPO_ID_WARNING" ]]; then
+        _status_line "Warning:" "$_MANIFEST_REPO_ID_WARNING"
     fi
 }
 
@@ -297,8 +408,7 @@ _manifest_status_json() {
             behind="$(echo "$lr" | awk '{print $1}')"
             ahead="$(echo "$lr" | awk '{print $2}')"
         fi
-        modified="$(git -C "$proj" status --porcelain 2>/dev/null | grep -cv '^??' || echo 0)"
-        untracked="$(git -C "$proj" status --porcelain 2>/dev/null | grep -c '^??' || echo 0)"
+        read -r modified untracked < <(_status_git_porcelain_counts "$proj")
     fi
 
     if [[ -f "$proj/VERSION" ]]; then
@@ -407,10 +517,11 @@ _manifest_status_repo() {
         _status_line "Branch:" "$branch → $upstream  ($sync_state)"
     fi
 
+    manifest_repo_identity_block "$proj"
+
     # -- Working tree -------------------------------------------------------
     local modified untracked
-    modified="$(git -C "$proj" status --porcelain 2>/dev/null | grep -cv '^??' || echo 0)"
-    untracked="$(git -C "$proj" status --porcelain 2>/dev/null | grep -c '^??' || echo 0)"
+    read -r modified untracked < <(_status_git_porcelain_counts "$proj")
     if [[ "$modified" == "0" && "$untracked" == "0" ]]; then
         _status_line "Working:" "clean"
     else
@@ -511,3 +622,4 @@ manifest_status() {
 
 export -f manifest_status
 export -f _manifest_status_json
+export -f manifest_repo_identity_block

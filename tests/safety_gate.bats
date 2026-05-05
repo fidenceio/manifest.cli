@@ -1,5 +1,7 @@
 #!/usr/bin/env bats
 
+bats_require_minimum_version 1.5.0
+
 load 'helpers/setup'
 
 setup() {
@@ -15,6 +17,7 @@ setup() {
 }
 
 teardown() {
+    chmod -R u+w "$SCRATCH" 2>/dev/null || true
     rm -rf "$SCRATCH"
 }
 
@@ -54,4 +57,15 @@ teardown() {
     # bats redirects stdin so [ -t 0 ] is false; no AUTO_CONFIRM set.
     run _confirm_global_config_write "modify" "$TARGET" "should deny"
     [ "$status" -ne 0 ]
+}
+
+@test "config cooldown state writes are silent when state dir is unwritable" {
+    mkdir -p "$SCRATCH/home/.manifest-cli"
+    chmod u-w "$SCRATCH/home/.manifest-cli"
+
+    HOME="$SCRATCH/home" MANIFEST_CLI_CONFIG_WARNING_COOLDOWN_MINUTES=1440 \
+        run --separate-stderr _manifest_config_should_emit_warnings
+
+    [ "$status" -eq 0 ]
+    [ -z "$stderr" ]
 }

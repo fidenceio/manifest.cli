@@ -134,7 +134,7 @@ _manifest_config_should_emit_warnings() {
         return 1
     fi
 
-    printf '%s\n' "$now" > "$state_file" 2>/dev/null || true
+    ( printf '%s\n' "$now" > "$state_file" ) 2>/dev/null || true
     return 0
 }
 
@@ -164,7 +164,7 @@ _manifest_config_should_run_auto_migration() {
         return 1
     fi
 
-    printf '%s\n' "$now" > "$state_file" 2>/dev/null || true
+    ( printf '%s\n' "$now" > "$state_file" ) 2>/dev/null || true
     return 0
 }
 
@@ -626,6 +626,12 @@ set_default_configuration() {
     # PR Policy
     export MANIFEST_CLI_PR_PROFILE="${MANIFEST_CLI_PR_PROFILE:-solo}"
     export MANIFEST_CLI_PR_ENFORCE_READY="${MANIFEST_CLI_PR_ENFORCE_READY:-true}"
+
+    # Fleet-aware repo identity hints. These are verified against fleet config
+    # when present; they are not authoritative by themselves.
+    export MANIFEST_CLI_FLEET_NAME="${MANIFEST_CLI_FLEET_NAME:-}"
+    export MANIFEST_CLI_FLEET_MEMBER="${MANIFEST_CLI_FLEET_MEMBER:-}"
+    export MANIFEST_CLI_FLEET_ROOT="${MANIFEST_CLI_FLEET_ROOT:-}"
 
 }
 

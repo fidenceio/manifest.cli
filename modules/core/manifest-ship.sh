@@ -18,6 +18,7 @@
 # COMMANDS:
 #   manifest ship repo <type>           Full release (tag + push + Homebrew)
 #   manifest ship repo <type> --local   Local-only (no tag, no push)
+#   manifest ship repo resume           Resume post-release steps after failure
 #   manifest ship fleet <type>          Coordinated fleet release
 #   manifest ship fleet <type> --local  Coordinated fleet local-only
 #
@@ -53,6 +54,10 @@ manifest_ship_repo() {
         case "$1" in
             patch|minor|major|revision)
                 increment_type="$1"; shift ;;
+            resume)
+                manifest_ship_repo_resume "$@"
+                return $?
+                ;;
             -p) increment_type="patch"; shift ;;
             -m) increment_type="minor"; shift ;;
             -M) increment_type="major"; shift ;;
@@ -61,17 +66,19 @@ manifest_ship_repo() {
             -i|--interactive) interactive=true; shift ;;
             -h|--help)
                 _render_help \
-                    "manifest ship repo <patch|minor|major|revision> [--local] [-i]" \
+                    "manifest ship repo <patch|minor|major|revision>|resume [--local] [-i]" \
                     "Publish a release: version bump, docs, commit, tag, push." \
                     "Options" "  patch | -p          Increment patch version (e.g. 1.2.3 -> 1.2.4)
   minor | -m          Increment minor version (e.g. 1.2.3 -> 1.3.0)
   major | -M          Increment major version (e.g. 1.2.3 -> 2.0.0)
   revision | -r       Increment revision (e.g. 1.2.3 -> 1.2.3.1)
   --local             Local only — no tag, push, or Homebrew update
-  -i, --interactive   Enable interactive safety prompts" \
+  -i, --interactive   Enable interactive safety prompts
+  resume              Continue safe post-release steps for current VERSION/tag" \
                     "Examples" "  manifest ship repo patch
   manifest ship repo minor --local
-  manifest ship repo -M -i"
+  manifest ship repo -M -i
+  manifest ship repo resume"
                 return 0
                 ;;
             *)
@@ -96,6 +103,11 @@ manifest_ship_repo() {
         echo "Ship (local): $increment_type — no remote operations"
     else
         echo "Ship: $increment_type"
+    fi
+
+    if declare -F manifest_repo_identity_block >/dev/null 2>&1; then
+        manifest_repo_identity_block "$PWD"
+        echo ""
     fi
 
     manifest_ship_workflow "$increment_type" "$interactive" "$publish_release"
