@@ -25,6 +25,8 @@
 | Document | Description |
 | -------- | ----------- |
 | [Fleet Design Spec](FLEET_DESIGN_SPEC.md) | Polyrepo orchestration architecture |
+| [Improvement Tracker](IMPROVEMENT_TRACKER.md) | Active and completed engineering work queue |
+| [v46.7.0 Release Run Handoff](RELEASE_RUN_HANDOFF_v46.7.0.md) | Ship-run state, recovery steps, and new release-flow issues |
 | [North Star](NORTH_STAR.md) | Strategic direction and 12-month priorities |
 | [Security Analysis](SECURITY_ANALYSIS_REPORT.md) | Security audit report |
 
