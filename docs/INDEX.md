@@ -1,6 +1,6 @@
 # Manifest CLI Documentation
 
-**Version:** 46.9.0 | **Updated:** 2026-04-06
+**Version:** 46.9.0 | **Updated:** 2026-05-05
 
 ---
 
@@ -28,7 +28,7 @@
 | [Improvement Tracker](IMPROVEMENT_TRACKER.md) | Active and completed engineering work queue |
 | [v46.7.0 Release Run Handoff](RELEASE_RUN_HANDOFF_v46.7.0.md) | Ship-run state, recovery steps, and new release-flow issues |
 | [North Star](NORTH_STAR.md) | Strategic direction and 12-month priorities |
-| [Security Analysis](SECURITY_ANALYSIS_REPORT.md) | Security audit report |
+| [Security Notes](SECURITY_ANALYSIS_REPORT.md) | Current security posture and historical audit pointer |
 
 ## Current Release
 
