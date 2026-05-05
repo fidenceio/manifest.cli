@@ -171,6 +171,18 @@ Each recommendation is a discrete unit of work. Check off when complete.
 - [x] **33. Fix `manifest status` working-tree count rendering.** Replaced the `grep -c ... || echo 0` pipelines with `_status_git_porcelain_counts`, which emits one normalized modified/untracked pair for text and JSON output.
 - [x] **34. Harden Homebrew postinstall and test it as an installed command.** Homebrew formula test now smoke-tests `manifest status` as the installed command. Config cooldown marker writes are now stderr-silent when the runtime state directory is unwritable, keeping installed/postinstall config repair non-noisy and non-fatal. The test runner now prepends Homebrew Bash when `bats` would otherwise resolve to macOS Bash 3.2.
 
+### Config surface coverage (lifted from a 2026-04-26 audit)
+
+- [ ] **35. Lift remaining env-only settings into YAML.** Promote 13 user-facing toggles from `MANIFEST_CLI_*` env-only to first-class YAML keys, keeping env vars as overrides for CI and backward compatibility.
+  - **High priority:**
+    - `release.canonical_repo_slugs` — replaces env-only `MANIFEST_CLI_CANONICAL_REPO_SLUGS`. Deprecate the legacy `MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS` alias (already accepted as a fallback per item #27; warn on use).
+    - `ship.interactive` — today's `MANIFEST_CLI_INTERACTIVE_MODE`. Distinct from `debug.interactive`, which controls a different surface.
+    - `fleet.mode`, `fleet.root`, `fleet.config_filename` — today's `MANIFEST_CLI_FLEET_MODE` / `_ROOT` / `_CONFIG_FILENAME`.
+  - **Medium priority:** `automation.auto_confirm` (`MANIFEST_CLI_AUTO_CONFIRM`), `deprecations.quiet` (`MANIFEST_CLI_QUIET_DEPRECATIONS`), `network.offline` (`MANIFEST_CLI_OFFLINE_MODE`), `cloud.skip` (`MANIFEST_CLI_CLOUD_SKIP`), `cloud.api_key_env` (secret-reference form for `MANIFEST_CLI_CLOUD_API_KEY`), `security.private_files` (`MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES`).
+  - **Schema drift fixes:** add the following mapped-but-undocumented keys to `examples/manifest.config.yaml.example` — `version.regex`, `version.validation`, `debug.enabled`, `debug.verbose`, `debug.log_level`, `debug.interactive`, `pr.profile`, `pr.enforce_ready`. Either wire `project.team → MANIFEST_CLI_PROJECT_TEAM` or remove `project.team` from the example.
+  - **Out of scope (keep env-only):** bootstrap and re-exec vars (`MANIFEST_CLI_BASH_PATH`, `MANIFEST_CLI_BASH_REEXEC`), installer-only state (`MANIFEST_CLI_INSTALL_LOCATION`, `MANIFEST_CLI_LOCAL_BIN`, `MANIFEST_CLI_NAME`, `MANIFEST_CLI_TAP`, `MANIFEST_CLI_MIN_BASH_VERSION`), core module discovery (`MANIFEST_CLI_CORE_*_DIR`), OS detection (`MANIFEST_CLI_OS_*`), time result state (`MANIFEST_CLI_TIME_TIMESTAMP` / `_SERVER` / `_OFFSET` / `_METHOD`), logging constants (`MANIFEST_CLI_SHARED_LOG_LEVEL_*`), and config-discovery vars needed before YAML loads (`MANIFEST_CLI_GLOBAL_CONFIG`, `MANIFEST_CLI_CONFIG_FILES`, `MANIFEST_CLI_CONFIG_SCHEMA_VERSION_CURRENT`).
+  - Audit context: as of 2026-04-26, 76 keys were YAML-mapped, 13 user-facing toggles were env-only, and 8 mapped keys were absent from the example file. `release.tag_target` (item #27 era) has since shipped.
+
 ---
 
 ## 4 · Suggested sequencing
