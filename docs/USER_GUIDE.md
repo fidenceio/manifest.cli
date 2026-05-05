@@ -248,7 +248,7 @@ manifest ship fleet patch --except docs         # Ship every service except 'doc
 Fleet commands use action-first syntax:
 
 ```bash
-manifest status --verbose          # Fleet status
+manifest status fleet              # Fleet repository status table
 manifest discover fleet --depth 3  # Find new repos
 manifest add fleet ./new-service --dry-run   # Preview service YAML
 manifest validate fleet            # Check configuration

@@ -4,7 +4,7 @@
 # Manifest Status Module (Tier 4 #17)
 # =============================================================================
 #
-# Implements: manifest status
+# Implements: manifest status [repo|fleet]
 #
 # PURPOSE:
 #   Read-only snapshot of "what would happen if I ship now?". Zero side
@@ -15,7 +15,7 @@
 #   - Branch / upstream sync state
 #   - Working-tree pending changes
 #   - Current VERSION + previews of patch/minor/major bumps
-#   - Single-repo vs fleet mode + fleet member count
+#   - Single-repo status, or a fleet repository table when run at a fleet root
 #   - Config layers detected
 # =============================================================================
 
@@ -50,6 +50,225 @@ _status_preview_bump() {
 # Render a single line aligned at column 14 for label, then value.
 _status_line() {
     printf "  %-12s %s\n" "$1" "$2"
+}
+
+_status_fleet_config_file() {
+    local proj="$1"
+    if [[ -f "$proj/manifest.fleet.config.yaml" ]]; then
+        echo "$proj/manifest.fleet.config.yaml"
+    elif [[ -f "$proj/manifest.fleet.yaml" ]]; then
+        echo "$proj/manifest.fleet.yaml"
+    fi
+}
+
+_status_fleet_member_count() {
+    local config_file="$1"
+    if command -v yq >/dev/null 2>&1; then
+        yq e '.services | length' "$config_file" 2>/dev/null || echo "?"
+    else
+        echo "?"
+    fi
+}
+
+_status_resolve_member_path() {
+    local root="$1"
+    local raw_path="$2"
+    if [[ -z "$raw_path" || "$raw_path" == "null" ]]; then
+        echo ""
+    elif [[ "$raw_path" == /* ]]; then
+        echo "$raw_path"
+    else
+        echo "$root/${raw_path#./}"
+    fi
+}
+
+_status_repo_version() {
+    local path="$1"
+    if [[ -f "$path/VERSION" ]]; then
+        tr -d '[:space:]' < "$path/VERSION"
+    else
+        echo "n/a"
+    fi
+}
+
+_status_repo_branch() {
+    local path="$1"
+    git -C "$path" branch --show-current 2>/dev/null || echo "detached"
+}
+
+_status_repo_state() {
+    local path="$1"
+    local expected_branch="${2:-}"
+    if [[ ! -d "$path" ]]; then
+        echo "missing"
+    elif ! git -C "$path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        echo "not-git"
+    elif [[ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]]; then
+        echo "dirty"
+    else
+        local branch
+        branch="$(_status_repo_branch "$path")"
+        if [[ -n "$expected_branch" && "$expected_branch" != "null" && "$branch" != "$expected_branch" ]]; then
+            echo "branch"
+        else
+            echo "clean"
+        fi
+    fi
+}
+
+_status_repo_latest_commit() {
+    local path="$1"
+    if [[ -d "$path" ]] && git -C "$path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        git -C "$path" log -1 --oneline 2>/dev/null || echo "n/a"
+    else
+        echo "n/a"
+    fi
+}
+
+_status_repo_latest_commit_timestamp() {
+    local path="$1"
+    if [[ -d "$path" ]] && git -C "$path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        local epoch=""
+        epoch="$(git -C "$path" log -1 --format=%ct 2>/dev/null || echo "")"
+        if [[ -z "$epoch" ]]; then
+            echo "n/a"
+        elif date -r "$epoch" '+%Y-%m-%d %H:%M:%S %Z' >/dev/null 2>&1; then
+            date -r "$epoch" '+%Y-%m-%d %H:%M:%S %Z'
+        else
+            date -d "@$epoch" '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo "n/a"
+        fi
+    else
+        echo "n/a"
+    fi
+}
+
+_manifest_status_fleet_json() {
+    local proj="$1"
+    local config_file
+    config_file="$(_status_fleet_config_file "$proj")"
+    if [[ -z "$config_file" ]]; then
+        printf '{"fleet":null,"repositories":[]}\n'
+        return 0
+    fi
+    if ! command -v yq >/dev/null 2>&1; then
+        log_error "manifest status fleet requires yq"
+        return 1
+    fi
+
+    local fleet_name
+    fleet_name="$(yq e '.fleet.name // "fleet"' "$config_file" 2>/dev/null)"
+    local repos_json="" service first=true
+    while IFS= read -r service; do
+        [[ -z "$service" ]] && continue
+        local raw_path path branch state version commit commit_timestamp expected_branch
+        raw_path="$(SERVICE="$service" yq e '.services[strenv(SERVICE)].path // ""' "$config_file" 2>/dev/null)"
+        path="$(_status_resolve_member_path "$proj" "$raw_path")"
+        expected_branch="$(SERVICE="$service" yq e '.services[strenv(SERVICE)].branch // ""' "$config_file" 2>/dev/null)"
+        if [[ -d "$path" ]] && git -C "$path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            branch="$(_status_repo_branch "$path")"
+        else
+            branch="n/a"
+        fi
+        state="$(_status_repo_state "$path" "$expected_branch")"
+        version="$(_status_repo_version "$path")"
+        commit="$(_status_repo_latest_commit "$path")"
+        commit_timestamp="$(_status_repo_latest_commit_timestamp "$path")"
+        local item
+        item="{$(_json_kv_str "name" "$service"),$(_json_kv_str "path" "$path"),$(_json_kv_str "branch" "$branch"),$(_json_kv_str "state" "$state"),$(_json_kv_str "version" "$version"),$(_json_kv_str "latest_commit_timestamp" "$commit_timestamp"),$(_json_kv_str "latest_commit" "$commit")}"
+        if [[ "$first" == "true" ]]; then
+            repos_json="$item"
+            first=false
+        else
+            repos_json="$repos_json,$item"
+        fi
+    done < <(yq e '.services | keys | .[]' "$config_file" 2>/dev/null)
+
+    printf '{"fleet":{%s,%s},"repositories":[%s]}\n' \
+        "$(_json_kv_str "name" "$fleet_name")" \
+        "$(_json_kv_str "root" "$proj")" \
+        "$repos_json"
+}
+
+_manifest_status_fleet() {
+    local proj="$1"
+    local emit_json="${2:-false}"
+    local config_file
+    config_file="$(_status_fleet_config_file "$proj")"
+
+    if [[ -z "$config_file" ]]; then
+        if [[ "$emit_json" == "true" ]]; then
+            printf '{"fleet":null,"repositories":[]}\n'
+        else
+            echo ""
+            echo "Manifest status"
+            echo "==============="
+            echo ""
+            _status_line "Fleet:" "(not a fleet root)"
+            _status_line "Path:" "$proj"
+            echo ""
+        fi
+        return 0
+    fi
+
+    if [[ "$emit_json" == "true" ]]; then
+        _manifest_status_fleet_json "$proj"
+        return $?
+    fi
+
+    if ! command -v yq >/dev/null 2>&1; then
+        log_error "manifest status fleet requires yq"
+        return 1
+    fi
+
+    local fleet_name total=0 clean=0 dirty=0 other=0
+    fleet_name="$(yq e '.fleet.name // "fleet"' "$config_file" 2>/dev/null)"
+
+    local rows=()
+    local service
+    while IFS= read -r service; do
+        [[ -z "$service" ]] && continue
+        local raw_path path expected_branch branch state version commit commit_timestamp
+        raw_path="$(SERVICE="$service" yq e '.services[strenv(SERVICE)].path // ""' "$config_file" 2>/dev/null)"
+        expected_branch="$(SERVICE="$service" yq e '.services[strenv(SERVICE)].branch // ""' "$config_file" 2>/dev/null)"
+        path="$(_status_resolve_member_path "$proj" "$raw_path")"
+        if [[ -d "$path" ]] && git -C "$path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            branch="$(_status_repo_branch "$path")"
+        else
+            branch="n/a"
+        fi
+        state="$(_status_repo_state "$path" "$expected_branch")"
+        version="$(_status_repo_version "$path")"
+        commit="$(_status_repo_latest_commit "$path")"
+        commit_timestamp="$(_status_repo_latest_commit_timestamp "$path")"
+        rows+=("$(printf "%-36s  %-12s  %-8s  %-9s  %-25s  %s" "$service" "$branch" "$state" "$version" "$commit_timestamp" "$commit")")
+        total=$((total + 1))
+        case "$state" in
+            clean) clean=$((clean + 1)) ;;
+            dirty) dirty=$((dirty + 1)) ;;
+            *) other=$((other + 1)) ;;
+        esac
+    done < <(yq e '.services | keys | .[]' "$config_file" 2>/dev/null)
+
+    echo ""
+    echo "Manifest status"
+    echo "==============="
+    echo ""
+    _status_line "Fleet:" "$fleet_name"
+    _status_line "Root:" "$proj"
+    _status_line "Repos:" "$total total, $clean clean, $dirty dirty, $other other"
+    echo ""
+    printf "%-36s  %-12s  %-8s  %-9s  %-25s  %s\n" "Repo" "Branch" "State" "Version" "Timestamp" "Latest commit"
+    printf "%-36s  %-12s  %-8s  %-9s  %-25s  %s\n" "------------------------------------" "------------" "--------" "---------" "-------------------------" "----------------------------------------"
+    local row
+    for row in "${rows[@]}"; do
+        printf "%s\n" "$row"
+    done
+    echo ""
+    echo "Next actions"
+    echo "  manifest status repo      Show status for this repo only"
+    echo "  manifest status fleet     Show this fleet table explicitly"
+    echo "  manifest refresh fleet    Re-scan fleet membership"
+    echo ""
 }
 
 # JSON sibling of manifest_status — same data, machine-readable.
@@ -89,10 +308,12 @@ _manifest_status_json() {
         major_v="$(_status_preview_bump "$current_version" "major")"
     fi
 
-    if [[ -f "$proj/manifest.fleet.config.yaml" ]]; then
+    local fleet_config
+    fleet_config="$(_status_fleet_config_file "$proj")"
+    if [[ -n "$fleet_config" ]]; then
         fleet_mode="fleet"
         if command -v yq >/dev/null 2>&1; then
-            fleet_count="$(yq e '.services | length' "$proj/manifest.fleet.config.yaml" 2>/dev/null || echo "")"
+            fleet_count="$(yq e '.services | length' "$fleet_config" 2>/dev/null || echo "")"
         fi
     elif [[ -f "$proj/manifest.fleet.tsv" ]]; then
         fleet_mode="fleet-phase1"
@@ -135,26 +356,9 @@ _manifest_status_json() {
         "$(_json_kv_raw "config" "$config_json")"
 }
 
-manifest_status() {
-    local emit_json=false
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --json) emit_json=true; shift ;;
-            -h|--help)
-                _render_help \
-                    "manifest status [--json]" \
-                    "Read-only snapshot of repo, version, and what 'ship' would do." \
-                    "Options" "  --json    Emit machine-readable JSON instead of the human view"
-                return 0
-                ;;
-            *)
-                _render_help_error "Unknown option: $1" "manifest status [--json]"
-                return 1
-                ;;
-        esac
-    done
-
-    local proj="${PROJECT_ROOT:-$(pwd)}"
+_manifest_status_repo() {
+    local proj="$1"
+    local emit_json="${2:-false}"
     cd "$proj" 2>/dev/null || { echo "❌ Cannot enter $proj"; return 1; }
 
     if [[ "$emit_json" == "true" ]]; then
@@ -232,11 +436,11 @@ manifest_status() {
     # -- Single-repo vs fleet ----------------------------------------------
     local fleet_mode="single-repo"
     local fleet_count=""
-    if [[ -f "$proj/manifest.fleet.config.yaml" ]]; then
+    local fleet_config
+    fleet_config="$(_status_fleet_config_file "$proj")"
+    if [[ -n "$fleet_config" ]]; then
         fleet_mode="fleet"
-        if command -v yq >/dev/null 2>&1; then
-            fleet_count="$(yq e '.services | length' "$proj/manifest.fleet.config.yaml" 2>/dev/null || echo "?")"
-        fi
+        fleet_count="$(_status_fleet_member_count "$fleet_config")"
     elif [[ -f "$proj/manifest.fleet.tsv" ]]; then
         fleet_mode="fleet (init phase 1 — TSV pending review)"
     fi
@@ -256,6 +460,53 @@ manifest_status() {
 
     echo ""
     return 0
+}
+
+manifest_status() {
+    local emit_json=false
+    local scope="auto"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            repo|fleet) scope="$1"; shift ;;
+            --json) emit_json=true; shift ;;
+            -v|--verbose)
+                scope="fleet"
+                shift
+                ;;
+            -h|--help)
+                _render_help \
+                    "manifest status [repo|fleet] [--json]" \
+                    "Read-only snapshot of repo or fleet state." \
+                    "Scopes" "  repo     Force current-repo status
+  fleet    Force fleet repository table" \
+                    "Options" "  --json   Emit machine-readable JSON instead of the human view" \
+                    "Examples" "  manifest status
+  manifest status repo
+  manifest status fleet"
+                return 0
+                ;;
+            *)
+                _render_help_error "Unknown option: $1" "manifest status [repo|fleet] [--json]"
+                return 1
+                ;;
+        esac
+    done
+
+    local proj="${PROJECT_ROOT:-$(pwd)}"
+    cd "$proj" 2>/dev/null || { echo "❌ Cannot enter $proj"; return 1; }
+
+    if [[ "$scope" == "auto" ]]; then
+        if [[ -n "$(_status_fleet_config_file "$proj")" ]]; then
+            scope="fleet"
+        else
+            scope="repo"
+        fi
+    fi
+
+    case "$scope" in
+        repo) _manifest_status_repo "$proj" "$emit_json" ;;
+        fleet) _manifest_status_fleet "$proj" "$emit_json" ;;
+    esac
 }
 
 export -f manifest_status

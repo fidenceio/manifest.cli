@@ -652,7 +652,7 @@ routes are not dispatcher routes.
 manifest init fleet                    # Scaffold fleet
 manifest init fleet --dry-run          # Preview current init phase
 manifest quickstart fleet --dry-run    # Auto-discover preview, skip TSV selection
-manifest status --verbose              # Fleet status when in fleet mode
+manifest status fleet                  # Fleet repository status table
 manifest discover fleet --depth 3      # Find new repos (alias for update --dry-run)
 manifest update fleet                  # Re-scan membership
 manifest update fleet --dry-run        # Preview changes
