@@ -1,6 +1,6 @@
 # Manifest CLI Archive — v46
 
-26 archived documents from the v46 series.
+28 archived documents from the v46 series.
 
 | Document | Version | Date |
 | --- | --- | --- |
@@ -30,5 +30,7 @@
 | [Changelog v46.11.3](CHANGELOG_v46.11.3.md) | 46.11.3 | 2026-05-05 |
 | [Release Notes v46.12.0](RELEASE_v46.12.0.md) | 46.12.0 | 2026-05-05 |
 | [Changelog v46.12.0](CHANGELOG_v46.12.0.md) | 46.12.0 | 2026-05-05 |
+| [Release Notes v46.12.1](RELEASE_v46.12.1.md) | 46.12.1 | 2026-05-05 |
+| [Changelog v46.12.1](CHANGELOG_v46.12.1.md) | 46.12.1 | 2026-05-05 |
 
 [Back to archive index](../INDEX.md)
