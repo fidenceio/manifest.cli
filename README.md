@@ -24,7 +24,7 @@ The bottleneck of modern dev work has shifted. Writing the code is no longer the
 1. **Explicit over implicit.** You name the bump (`patch | minor | major | revision`). No "auto-detect what changed" magic.
 2. **Local before remote.** `--local` previews every release op on your machine. Push only when you're sure.
 3. **Read-only diagnostics are first-class.** `status` and `doctor` exist precisely because the rest of the CLI is consequential. Look before you ship.
-4. **Tested and CI-gated.** A bats-core suite (35+ cases) exercises YAML layering, version bumps, canonical-repo detection, the safety gate, and `status`. CI runs them on macOS and Linux on every push.
+4. **Tested and CI-gated.** A broad bats-core suite exercises release flow, YAML layering, version bumps, canonical-repo detection, safety gates, status output, Homebrew packaging, and recovery paths. CI runs it on macOS and Linux on every push.
 
 ---
 
@@ -70,9 +70,9 @@ manifest status             # what would happen if I shipped now?
 
 ---
 
-## A 30-second tour (real output)
+## A 30-second tour
 
-Each block below is captured verbatim from the commands as they run today on this repo — not mocked, not aspirational.
+Each block below shows the current command shape from this repo -- representative, not aspirational.
 
 **`manifest status`** — read-only snapshot. Auto-detects repo vs fleet context; use `manifest status repo` or `manifest status fleet` to force a scope.
 
@@ -81,15 +81,23 @@ Manifest status
 ===============
   Repository:  fidenceio/manifest.cli  (canonical — Homebrew formula updates here)
   Branch:      main → origin/main  (in sync)
-  Working:     20 modified, 9 untracked
-  Version:     44.1.1
-               patch → 44.1.2
-               minor → 44.2.0
-               major → 45.0.0
+
+Repo identity
+-------------
+  Git root:    /Users/you/coderepos/manifest/fidenceio.manifest.cli
+  Origin:      fidenceio/manifest.cli
+  Branch:      main → origin/main
+  Fleet:       not detected
+  Target:      this Git repository only
+  Working:     clean
+  Version:     46.9.0
+               patch → 46.9.1
+               minor → 46.10.0
+               major → 47.0.0
   Mode:        single-repo
   Config:      ✓ global   /Users/you/.manifest-cli/manifest.config.global.yaml
-               · project  ./manifest.config.yaml
-               · local    ./manifest.config.local.yaml
+               · project  /Users/you/coderepos/manifest/fidenceio.manifest.cli/manifest.config.yaml
+               · local    /Users/you/coderepos/manifest/fidenceio.manifest.cli/manifest.config.local.yaml
 ```
 
 **`manifest doctor`** — every dependency, every config layer, every repo state, in one screen.
@@ -412,23 +420,24 @@ Manifest includes layered security protections:
 
 ## Testing
 
-Manifest ships with a [bats-core](https://github.com/bats-core/bats-core) test suite covering YAML layering, version-bump logic, canonical-repo detection, the global-config safety gate, and `status`. CI runs the suite on Ubuntu and macOS on every push and pull request.
+Manifest ships with a [bats-core](https://github.com/bats-core/bats-core) test suite covering release flow, YAML layering, version-bump logic, canonical-repo detection, config safety gates, fleet workflows, JSON output, Homebrew packaging, and recovery paths. CI runs the suite on Ubuntu and macOS on every push and pull request.
 
 ```sh
-brew install bats-core         # one-time
-./scripts/run-tests.sh         # 35 tests, ~2 seconds
+./scripts/run-tests.sh
 ```
 
-Test layout:
+Test layout includes:
 
 ```text
 tests/
-├── helpers/setup.bash       Shared scratch dirs and module loaders
-├── yaml.bats                Parser detection, set/get round-trip, layered precedence
-├── version.bats             patch / minor / major / revision bump logic
-├── canonical_repo.bats      origin URL parsing, allowlist gate
-├── safety_gate.bats         AUTO_CONFIRM, session cache, destructive-op denial
-└── status.bats              Bump preview, non-git fallback, version display
+├── helpers/setup.bash         Shared scratch dirs and module loaders
+├── ship_resume.bats           Post-push recovery behavior
+├── tag_target.bats            Exact tag naming and push semantics
+├── homebrew_wrapper.bats      Installed-wrapper and formula smoke tests
+├── status.bats                Repo identity, working-tree counts, JSON status
+├── fleet_*.bats               Fleet init, refresh, ship, filtering, and dry-run flows
+├── config_*.bats              YAML-backed config and safety gates
+└── *_*.bats                   Focused regression coverage for command surfaces
 ```
 
 CI workflow: [.github/workflows/test.yml](.github/workflows/test.yml). Adding new tests is documented in [tests/README.md](tests/README.md).
