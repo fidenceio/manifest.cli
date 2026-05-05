@@ -461,7 +461,7 @@ generate_docs_index() {
 | Document | Description |
 | -------- | ----------- |
 | [Command Reference](COMMAND_REFERENCE.md) | Every command, flag, and option |
-| [Git Hooks](GIT_HOOKS.md) | Pre-commit secret protection and hook management |
+| [YAML config example](../examples/manifest.config.yaml.example) | Full schema with all keys + comments |
 
 ## Current Release
 

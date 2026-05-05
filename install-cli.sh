@@ -633,7 +633,7 @@ display_post_install_info() {
 EOF
     if [ -f ".git/hooks/pre-commit" ] && grep -q "Manifest CLI Pre-Commit Hook" ".git/hooks/pre-commit" 2>/dev/null; then
         echo
-        print_status "🔒 Pre-commit security hook installed (docs/GIT_HOOKS.md)"
+        print_status "🔒 Pre-commit security hook installed (see docs/USER_GUIDE.md, Git Hooks section)"
     fi
     echo
 }
