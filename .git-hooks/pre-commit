@@ -166,9 +166,9 @@ echo -e "${BLUE}[5/5] Running Manifest CLI security module (if available)...${NC
 # Manifest CLI repo; otherwise use the installed command.
 SECURITY_CMD=()
 if [ -x "$PROJECT_ROOT/scripts/manifest-cli.sh" ] && [ -f "$PROJECT_ROOT/modules/core/manifest-core.sh" ]; then
-    SECURITY_CMD=("$PROJECT_ROOT/scripts/manifest-cli.sh" security --check)
+    SECURITY_CMD=(env -u MANIFEST_CLI_BASH_REEXEC "$PROJECT_ROOT/scripts/manifest-cli.sh" security --check)
 elif command -v manifest >/dev/null 2>&1; then
-    SECURITY_CMD=(manifest security --check)
+    SECURITY_CMD=(env -u MANIFEST_CLI_BASH_REEXEC manifest security --check)
 fi
 
 if [ ${#SECURITY_CMD[@]} -gt 0 ]; then
