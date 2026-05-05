@@ -159,6 +159,10 @@ Each recommendation is a discrete unit of work. Check off when complete.
 
 - [x] **28. GitHub Actions CI** — `.github/workflows/test.yml` runs the bats suite + smoke-tests `version`, `help`, `status`, `doctor` on `ubuntu-latest` and `macos-latest` for every push to main and every PR. `manifest --version` badge added to README.
 
+### Fleet UX follow-ups (added 2026-05-04)
+
+- [ ] **29. Fleet-aware repo identity preflight for `ship repo`.** In third-party use, especially from VS Code multi-root workspaces, the user may have several disparate repositories open at once. `manifest ship repo <type>` currently means "ship the enclosing Git repository for the terminal working directory"; that is correct mechanically but not explicit enough in a fleet. Before any mutation, `ship repo` should print the current Git root, origin slug, local branch/upstream, enclosing fleet root/name when detected, and matching fleet member name when configured. `manifest status repo` should show the same identity block read-only. Add a concise repo-local fleet hint whose variable names explain the relationship: `fleet.name` and `fleet.member` in project config, plus optional git-ignored `fleet.root` when the fleet root is not discoverable by walking upward. Treat the hint as a claim to verify against fleet config, not as authority. If the Git root is inside a fleet but does not match a configured member, warn before proceeding. If the Git root is the fleet root, explicitly say this targets only the fleet-root repo and is not `ship fleet`. This resolves the ambiguity where the editor's visible workspace folder, terminal cwd, fleet root, and target repo may differ.
+
 ---
 
 ## 4 · Suggested sequencing
