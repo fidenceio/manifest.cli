@@ -1,6 +1,6 @@
 # Manifest CLI Documentation
 
-**Version:** 46.11.2 | **Updated:** 2026-05-05
+**Version:** 46.11.3 | **Updated:** 2026-05-05
 
 ---
 
@@ -34,8 +34,8 @@
 
 | Document | Description |
 | -------- | ----------- |
-| [Release Notes v46.11.2](RELEASE_v46.11.2.md) | What's new in this release |
-| [Changelog v46.11.2](CHANGELOG_v46.11.2.md) | Detailed change log |
+| [Release Notes v46.11.3](RELEASE_v46.11.3.md) | What's new in this release |
+| [Changelog v46.11.3](CHANGELOG_v46.11.3.md) | Detailed change log |
 | [Archived Releases](zArchive/) | Previous version documentation |
 
 ---
