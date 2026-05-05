@@ -16,9 +16,8 @@
 
 | Document | Description |
 | -------- | ----------- |
-| [Command Reference](COMMAND_REFERENCE.md) | Every command, flag, and option (v42 structure) |
+| [Command Reference](COMMAND_REFERENCE.md) | Every command, flag, and option |
 | [YAML config example](../examples/manifest.config.yaml.example) | Full schema with all keys + comments |
-| [Git Hooks](GIT_HOOKS.md) | Pre-commit secret protection and hook management |
 
 ## Architecture
 
@@ -26,7 +25,6 @@
 | -------- | ----------- |
 | [Fleet Design Spec](FLEET_DESIGN_SPEC.md) | Polyrepo orchestration architecture |
 | [Improvement Tracker](IMPROVEMENT_TRACKER.md) | Active and completed engineering work queue |
-| [v46.7.0 Release Run Handoff](RELEASE_RUN_HANDOFF_v46.7.0.md) | Ship-run state, recovery steps, and new release-flow issues |
 | [North Star](NORTH_STAR.md) | Strategic direction and 12-month priorities |
 | [Security Notes](SECURITY_ANALYSIS_REPORT.md) | Current security posture and historical audit pointer |
 

@@ -1,13 +1,13 @@
 # Manifest CLI Command Reference
 
 Complete reference for all commands, flags, and options.
-Reflects the v42 command dispatcher in `modules/core/manifest-core.sh`.
+Reflects the current command dispatcher in `modules/core/manifest-core.sh`.
 
 ---
 
 ## Command Model
 
-Manifest v42 uses a `verb scope` pattern for core journey commands:
+Manifest uses a `verb scope` pattern for core journey commands (introduced in v42):
 
 ```bash
 manifest <verb> <scope> [type] [options]
@@ -267,7 +267,7 @@ Safety rules:
 
 ## `manifest prep`
 
-Prepare workspace: connect remotes, pull latest. This is the v42 meaning of "prep" — it replaces the old `manifest sync`.
+Prepare workspace: connect remotes, pull latest. Replaces the old `manifest sync` command.
 
 **Source:** [manifest-prep.sh](../modules/core/manifest-prep.sh) `manifest_prep_dispatch()`
 

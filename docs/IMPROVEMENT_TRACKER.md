@@ -344,8 +344,6 @@ Resolved: **#24**. (After this batch: 28/28 done. Tracker complete.)
 
 The user requested `manifest ship repo minor`. The installed Homebrew command failed before dispatch with the YAML mapping / Bash startup error, so the repo-local CLI was used to complete the release. `v46.7.0` was created, pushed, and the Homebrew tap was updated, but the run exposed more new problems than old tracker items closed.
 
-Durable handoff: [RELEASE_RUN_HANDOFF_v46.7.0.md](RELEASE_RUN_HANDOFF_v46.7.0.md).
-
 New tracker items opened: **#30-#34**.
 
 Final release state:

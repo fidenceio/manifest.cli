@@ -19,4 +19,4 @@ Git does not version files under `.git/hooks/`. Keeping canonical hook scripts i
 
 ## Related Docs
 
-- `docs/GIT_HOOKS.md`
+- `docs/USER_GUIDE.md` — Git Hooks section

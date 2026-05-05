@@ -415,7 +415,7 @@ Manifest includes layered security protections:
 - **Security audit** via `manifest security`, with `manifest security --check` for read-only automation
 - **Installation directory guard** prevents running from the CLI install directory
 
-> See [Git Hooks](docs/GIT_HOOKS.md) for hook installation and recovery procedures.
+> See the [Git Hooks](docs/USER_GUIDE.md#git-hooks) section of the User Guide for hook installation and recovery procedures.
 
 ---
 
@@ -564,7 +564,6 @@ Homebrew installation handles all dependencies automatically. The install script
 | [Examples](docs/EXAMPLES.md) | Real-world workflow recipes |
 | [Installation](docs/INSTALLATION.md) | Setup, upgrade, and troubleshooting |
 | [Fleet Design Spec](docs/FLEET_DESIGN_SPEC.md) | Polyrepo architecture and design |
-| [Git Hooks](docs/GIT_HOOKS.md) | Secret protection and hook management |
 | [YAML config example](examples/manifest.config.yaml.example) | Full schema with all keys + comments |
 | [North Star](docs/NORTH_STAR.md) | Strategic direction and priorities |
 | [Release Notes](docs/RELEASE_v46.11.3.md) | Current release details |
