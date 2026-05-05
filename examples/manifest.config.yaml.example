@@ -97,7 +97,9 @@ docs:
   review:
     enabled: true
     outputs: "commit_body,report,release_notes"
-    report_dir: "docs/documentation-reviews"
+    report_dir: ""          # Empty (default): write to .git/manifest-doc-review/, never committed.
+                            # Set to a working-tree path (e.g., "docs/documentation-reviews")
+                            # to opt in to committed reports.
     provider: "local"       # local | command
     command: ""             # Called as: command REPORT_FILE PROJECT_ROOT
     required: false         # Fail commit if provider fails

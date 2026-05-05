@@ -46,7 +46,19 @@ _manifest_doc_review_state_dir() {
 _manifest_doc_review_report_path() {
     local project_root="${1:-$PROJECT_ROOT}"
     local stamp="${2:-$(date -u +"%Y%m%dT%H%M%SZ")}"
-    local report_dir="${MANIFEST_CLI_DOC_REVIEW_REPORT_DIR:-docs/documentation-reviews}"
+    local report_dir="${MANIFEST_CLI_DOC_REVIEW_REPORT_DIR:-}"
+
+    # Default (empty): write to the git state dir so reports never land in
+    # the working tree. Set MANIFEST_CLI_DOC_REVIEW_REPORT_DIR (or
+    # docs.review.report_dir in YAML) to a working-tree path to opt in to
+    # committed reports.
+    if [[ -z "$report_dir" ]]; then
+        local state_dir
+        state_dir="$(_manifest_doc_review_state_dir "$project_root")" || return 1
+        printf '%s\n' "$state_dir/DOC_REVIEW_${stamp}.md"
+        return 0
+    fi
+
     mkdir -p "$project_root/$report_dir" || return 1
     printf '%s\n' "$project_root/$report_dir/DOC_REVIEW_${stamp}.md"
 }

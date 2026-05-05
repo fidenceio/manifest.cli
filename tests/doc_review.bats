@@ -18,7 +18,11 @@ setup() {
     unset MANIFEST_CLI_DOC_REVIEW_COMMAND
     unset MANIFEST_CLI_DOC_REVIEW_REQUIRED
     unset MANIFEST_CLI_DOC_REVIEW_OUTPUTS
-    unset MANIFEST_CLI_DOC_REVIEW_REPORT_DIR
+    # Default report_dir is empty (writes to .git/manifest-doc-review/, never committed).
+    # Most tests in this file exercise the opt-in committed-report path; explicitly
+    # set the working-tree directory here so those assertions hold. The dedicated
+    # default-behavior test below unsets the variable.
+    export MANIFEST_CLI_DOC_REVIEW_REPORT_DIR="docs/documentation-reviews"
 }
 
 teardown() {
@@ -142,4 +146,19 @@ teardown() {
     [ "$status" -eq 0 ]
     report="$(ls docs/reviews/DOC_REVIEW_*.md)"
     [ -f "$report" ]
+}
+
+@test "default report_dir routes reports to .git/manifest-doc-review/, not the working tree" {
+    mkdir -p modules/core
+    echo "# change" > modules/core/manifest-core.sh
+
+    unset MANIFEST_CLI_DOC_REVIEW_REPORT_DIR
+
+    run manifest_smart_documentation_review "Add command"
+
+    [ "$status" -eq 0 ]
+    report="$(ls .git/manifest-doc-review/DOC_REVIEW_*.md 2>/dev/null)"
+    [ -f "$report" ]
+    grep -q "command_surface_changed: 1" "$report"
+    [ ! -d "docs/documentation-reviews" ]
 }
