@@ -53,6 +53,35 @@ teardown() {
     [ "$(git rev-parse release-1.0.0-rc^{commit})" = "$FIRST_SHA" ]
 }
 
+@test "manifest_release_tag_name: honors configured prefix and suffix" {
+    MANIFEST_CLI_GIT_TAG_PREFIX="release-" \
+    MANIFEST_CLI_GIT_TAG_SUFFIX="-rc" \
+        run manifest_release_tag_name "1.0.0"
+    [ "$status" -eq 0 ]
+    [ "$output" = "release-1.0.0-rc" ]
+}
+
+@test "push_changes: pushes the exact configured release tag" {
+    local remote="$SCRATCH/remote.git"
+    git init --bare -q "$remote"
+    git remote add origin "$remote"
+    local branch
+    branch="$(git branch --show-current)"
+
+    MANIFEST_CLI_GIT_DEFAULT_BRANCH="$branch" \
+    MANIFEST_CLI_GIT_TAG_PREFIX="release-" \
+    MANIFEST_CLI_GIT_TAG_SUFFIX="-rc" \
+        run create_tag "1.0.0"
+    [ "$status" -eq 0 ]
+
+    MANIFEST_CLI_GIT_DEFAULT_BRANCH="$branch" \
+    MANIFEST_CLI_GIT_TAG_PREFIX="release-" \
+    MANIFEST_CLI_GIT_TAG_SUFFIX="-rc" \
+        run push_changes "1.0.0"
+    [ "$status" -eq 0 ]
+    git --git-dir="$remote" rev-parse "release-1.0.0-rc^{commit}" >/dev/null
+}
+
 @test "create_tag: fails when target sha does not exist" {
     run create_tag "1.0.0" "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
     [ "$status" -ne 0 ]

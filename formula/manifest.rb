@@ -105,7 +105,7 @@ class Manifest < Formula
   end
 
   test do
-    system bin/"manifest", "--help"
+    system bin/"manifest", "status"
   end
 
   def caveats

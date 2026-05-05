@@ -269,12 +269,18 @@ resolve_tag_target_sha() {
     esac
 }
 
+manifest_release_tag_name() {
+    local version="$1"
+    local tag_prefix="${MANIFEST_CLI_GIT_TAG_PREFIX:-v}"
+    local tag_suffix="${MANIFEST_CLI_GIT_TAG_SUFFIX:-}"
+    echo "${tag_prefix}${version}${tag_suffix}"
+}
+
 create_tag() {
     local version="$1"
     local target_sha="${2:-}"
-    local tag_prefix="${MANIFEST_CLI_GIT_TAG_PREFIX:-v}"
-    local tag_suffix="${MANIFEST_CLI_GIT_TAG_SUFFIX:-}"
-    local tag_name="${tag_prefix}${version}${tag_suffix}"
+    local tag_name
+    tag_name="$(manifest_release_tag_name "$version")"
 
     echo "🏷️  Creating git tag..."
     echo "   Tag: $tag_name"
@@ -308,7 +314,8 @@ create_tag() {
 
 push_changes() {
     local version="$1"
-    local tag_name="v$version"
+    local tag_name
+    tag_name="$(manifest_release_tag_name "$version")"
     local default_branch="${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}"
     
     echo "🚀 Pushing to all remotes..."
@@ -325,8 +332,8 @@ push_changes() {
     for remote in $remotes; do
         echo "   Pushing to $remote..."
         
-        # Push branch and tags together in one operation to reduce SSH connections
-        if ! git_retry "📤 Pushing $default_branch branch and tags to $remote" "git push --progress $remote $default_branch $tag_name"; then
+        # Push branch and the exact release tag together in one operation.
+        if ! git_retry "📤 Pushing $default_branch branch and $tag_name to $remote" "git push --progress $remote $default_branch $tag_name"; then
             echo "   ❌ Failed to push to $remote"
             return 1
         fi

@@ -162,6 +162,13 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     # -------------------------------------------------------------------------
     ["pr.profile"]="MANIFEST_CLI_PR_PROFILE"
     ["pr.enforce_ready"]="MANIFEST_CLI_PR_ENFORCE_READY"
+
+    # -------------------------------------------------------------------------
+    # fleet — repo-local hints for fleet-aware single-repo commands
+    # -------------------------------------------------------------------------
+    ["fleet.name"]="MANIFEST_CLI_FLEET_NAME"
+    ["fleet.member"]="MANIFEST_CLI_FLEET_MEMBER"
+    ["fleet.root"]="MANIFEST_CLI_FLEET_ROOT"
 )
 
 # Build the reverse map (ENV var -> YAML path) programmatically

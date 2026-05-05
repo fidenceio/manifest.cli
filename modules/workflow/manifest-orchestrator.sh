@@ -52,9 +52,12 @@ emit_ship_failure_report() {
     git status --short --branch 2>/dev/null || echo "   (unavailable)"
     echo ""
     echo "🛠️  Recovery commands:"
-    echo "   Retry push:  git push origin ${branch} --follow-tags"
     if [ -n "$tag_name" ] && [ "$tag_name" != "none" ]; then
+        echo "   Retry push:  git push origin ${branch} ${tag_name}"
+        echo "   Resume:      manifest ship repo resume"
         echo "   Remove tag:  git tag -d ${tag_name}"
+    else
+        echo "   Retry push:  git push origin ${branch}"
     fi
     if [ -n "$start_sha" ]; then
         echo "   Roll back:   git reset --hard ${start_sha}"
@@ -114,6 +117,155 @@ manifest_check_github_actions_for_head() {
     echo "GitHub Actions: failed"
     echo "   Inspect: gh run view $run_id --log-failed"
     return 1
+}
+
+manifest_ship_post_push_steps() {
+    local new_version="$1"
+    local workflow_start_sha="$2"
+    local workflow_tag_name="$3"
+    local workflow_push_status="${4:-success}"
+    local workflow_homebrew_status="skipped"
+
+    # Update Homebrew formula only for the Manifest CLI canonical repository.
+    if [ -f "$PROJECT_ROOT/formula/manifest.rb" ] && should_update_homebrew_for_repo; then
+        workflow_homebrew_status="attempted"
+        echo "🍺 Updating Homebrew formula..."
+        if update_homebrew_formula; then
+            # Commit the formula change to this repo
+            if [ -n "$(git status --porcelain formula/manifest.rb 2>/dev/null)" ]; then
+                git add formula/manifest.rb
+                if ! git commit -m "Update Homebrew formula to v$new_version"; then
+                    workflow_homebrew_status="failed"
+                    log_error "Failed to commit Homebrew formula update."
+                    emit_ship_failure_report "homebrew_commit" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+                    return 1
+                fi
+                if ! git push origin "${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}"; then
+                    workflow_homebrew_status="failed"
+                    log_error "Failed to push Homebrew formula commit."
+                    emit_ship_failure_report "homebrew_push" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+                    return 1
+                fi
+            fi
+            workflow_homebrew_status="success"
+            echo "✅ Homebrew formula updated"
+        else
+            workflow_homebrew_status="failed"
+            log_error "Homebrew formula update failed; aborting ship workflow."
+            emit_ship_failure_report "homebrew_update" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+            return 1
+        fi
+        echo ""
+    elif [ -f "$PROJECT_ROOT/formula/manifest.rb" ]; then
+        workflow_homebrew_status="skipped_non_canonical_repo"
+        local origin_slug=""
+        origin_slug="$(manifest_origin_repo_slug || echo "unknown")"
+        echo "🍺 Skipping Homebrew formula update for non-canonical repo: ${origin_slug}"
+        echo ""
+    fi
+
+    # Upgrade local Manifest CLI installation to the just-published version.
+    echo "🔄 Upgrading local Manifest CLI installation..."
+    if command -v brew &>/dev/null; then
+        if brew update &>/dev/null && brew upgrade manifest 2>&1; then
+            echo "✅ Local installation upgraded to v$new_version via Homebrew"
+        else
+            echo "⚠️  Homebrew upgrade did not complete — try 'brew update && brew upgrade manifest' manually"
+        fi
+    else
+        if manifest upgrade --force 2>&1; then
+            echo "✅ Local installation upgraded to v$new_version"
+        else
+            echo "⚠️  Local upgrade did not complete — try 'manifest upgrade --force' manually"
+        fi
+    fi
+    echo ""
+
+    _MANIFEST_SHIP_LAST_HOMEBREW_STATUS="$workflow_homebrew_status"
+    return 0
+}
+
+manifest_ship_repo_resume() {
+    if ! ensure_repository_root; then
+        log_error "Repository root validation failed"
+        return 1
+    fi
+    PROJECT_ROOT="$(pwd)"
+    export PROJECT_ROOT
+
+    local version tag_name tag_commit branch remote_branch_status remote_tag_status dirty_files non_formula_dirty
+    version="$(tr -d '[:space:]' < "$PROJECT_ROOT/VERSION" 2>/dev/null || echo "")"
+    if [[ -z "$version" ]]; then
+        log_error "Cannot resume ship: VERSION file is missing or empty."
+        return 1
+    fi
+    tag_name="$(manifest_release_tag_name "$version")"
+    branch="$(git branch --show-current 2>/dev/null || echo "")"
+    if [[ -z "$branch" ]]; then
+        log_error "Cannot resume ship: detached HEAD is not supported."
+        return 1
+    fi
+
+    if ! tag_commit="$(git rev-parse "${tag_name}^{commit}" 2>/dev/null)"; then
+        log_error "Cannot resume ship: local tag ${tag_name} does not exist."
+        log_error "Run a normal ship workflow or create the release tag first."
+        return 1
+    fi
+    if ! git merge-base --is-ancestor "$tag_commit" HEAD 2>/dev/null; then
+        log_error "Cannot resume ship: ${tag_name} does not point at an ancestor of HEAD."
+        return 1
+    fi
+
+    dirty_files="$(git status --porcelain 2>/dev/null || true)"
+    non_formula_dirty="$(printf '%s\n' "$dirty_files" | awk '$2 != "formula/manifest.rb" && $0 != "" { print; found=1 } END { exit found ? 0 : 1 }' || true)"
+    if [[ -n "$non_formula_dirty" ]]; then
+        log_error "Cannot resume ship with unrelated working-tree changes:"
+        printf '%s\n' "$non_formula_dirty"
+        return 1
+    fi
+
+    remote_branch_status="unknown"
+    remote_tag_status="unknown"
+    if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+        remote_branch_status="present"
+    else
+        remote_branch_status="missing or unreachable"
+    fi
+    if git ls-remote --exit-code --tags origin "$tag_name" >/dev/null 2>&1; then
+        remote_tag_status="present"
+    else
+        remote_tag_status="missing or unreachable"
+    fi
+
+    echo ""
+    echo "Ship resume"
+    echo "==========="
+    echo "   version:       $version"
+    echo "   tag:           $tag_name ($tag_commit)"
+    echo "   branch:        $branch"
+    echo "   remote branch: $remote_branch_status"
+    echo "   remote tag:    $remote_tag_status"
+    if [[ -n "$dirty_files" ]]; then
+        echo "   working tree:  formula/manifest.rb pending"
+    else
+        echo "   working tree:  clean"
+    fi
+    echo ""
+
+    if ! push_changes "$version"; then
+        log_error "Resume failed while pushing branch/tag."
+        emit_ship_failure_report "resume_push" "$(git rev-parse HEAD 2>/dev/null || echo "")" "$version" "$tag_name" "failed" "skipped"
+        return 1
+    fi
+    echo ""
+
+    if ! manifest_ship_post_push_steps "$version" "$(git rev-parse HEAD 2>/dev/null || echo "")" "$tag_name" "success"; then
+        return 1
+    fi
+
+    update_repository_metadata
+    echo ""
+    echo "✅ Ship resume completed for v${version}"
 }
 
 # Main ship workflow: version bump, docs, commit, tag, push, Homebrew.
@@ -389,7 +541,7 @@ manifest_ship_workflow() {
     echo ""
     
     if [ "$publish_release" = "true" ]; then
-        workflow_tag_name="v${new_version}"
+        workflow_tag_name="$(manifest_release_tag_name "$new_version")"
 
         # Resolve which commit the release tag should point at.
         # version_commit — the explicit "Bump version to X" commit, even when
@@ -420,59 +572,10 @@ manifest_ship_workflow() {
         workflow_push_status="success"
         echo ""
 
-        # Update Homebrew formula only for the Manifest CLI canonical repository.
-        if [ -f "$PROJECT_ROOT/formula/manifest.rb" ] && should_update_homebrew_for_repo; then
-            workflow_homebrew_status="attempted"
-            echo "🍺 Updating Homebrew formula..."
-            if update_homebrew_formula; then
-                # Commit the formula change to this repo
-                if [ -n "$(git status --porcelain formula/manifest.rb 2>/dev/null)" ]; then
-                    git add formula/manifest.rb
-                    if ! git commit -m "Update Homebrew formula to v$new_version"; then
-                        workflow_homebrew_status="failed"
-                        log_error "Failed to commit Homebrew formula update."
-                        emit_ship_failure_report "homebrew_commit" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
-                        return 1
-                    fi
-                    if ! git push origin main; then
-                        workflow_homebrew_status="failed"
-                        log_error "Failed to push Homebrew formula commit."
-                        emit_ship_failure_report "homebrew_push" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
-                        return 1
-                    fi
-                fi
-                workflow_homebrew_status="success"
-                echo "✅ Homebrew formula updated"
-            else
-                workflow_homebrew_status="failed"
-                log_error "Homebrew formula update failed; aborting ship workflow."
-                emit_ship_failure_report "homebrew_update" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
-                return 1
-            fi
-            echo ""
-        elif [ -f "$PROJECT_ROOT/formula/manifest.rb" ]; then
-            workflow_homebrew_status="skipped_non_canonical_repo"
-            local origin_slug=""
-            origin_slug="$(manifest_origin_repo_slug || echo "unknown")"
-            echo "🍺 Skipping Homebrew formula update for non-canonical repo: ${origin_slug}"
-            echo ""
+        if ! manifest_ship_post_push_steps "$new_version" "$workflow_start_sha" "$workflow_tag_name" "$workflow_push_status"; then
+            return 1
         fi
-        # Upgrade local Manifest CLI installation to the just-published version
-        echo "🔄 Upgrading local Manifest CLI installation..."
-        if command -v brew &>/dev/null; then
-            if brew update &>/dev/null && brew upgrade manifest 2>&1; then
-                echo "✅ Local installation upgraded to v$new_version via Homebrew"
-            else
-                echo "⚠️  Homebrew upgrade did not complete — try 'brew update && brew upgrade manifest' manually"
-            fi
-        else
-            if manifest upgrade --force 2>&1; then
-                echo "✅ Local installation upgraded to v$new_version"
-            else
-                echo "⚠️  Local upgrade did not complete — try 'manifest upgrade --force' manually"
-            fi
-        fi
-        echo ""
+        workflow_homebrew_status="${_MANIFEST_SHIP_LAST_HOMEBREW_STATUS:-skipped}"
 
         workflow_actions_status="attempted"
         local workflow_final_head_sha
@@ -506,7 +609,7 @@ manifest_ship_workflow() {
     echo "📋 Summary:"
     echo "   - Version: $new_version"
     if [ "$publish_release" = "true" ]; then
-        echo "   - Tag: v$new_version"
+        echo "   - Tag: $workflow_tag_name"
         echo "   - Remotes: All pushed successfully"
         echo "   - GitHub Actions: $workflow_actions_status"
     else

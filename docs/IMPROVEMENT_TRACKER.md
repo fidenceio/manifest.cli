@@ -161,15 +161,15 @@ Each recommendation is a discrete unit of work. Check off when complete.
 
 ### Fleet UX follow-ups (added 2026-05-04)
 
-- [ ] **29. Fleet-aware repo identity preflight for `ship repo`.** In third-party use, especially from VS Code multi-root workspaces, the user may have several disparate repositories open at once. `manifest ship repo <type>` currently means "ship the enclosing Git repository for the terminal working directory"; that is correct mechanically but not explicit enough in a fleet. Before any mutation, `ship repo` should print the current Git root, origin slug, local branch/upstream, enclosing fleet root/name when detected, and matching fleet member name when configured. `manifest status repo` should show the same identity block read-only. Add a concise repo-local fleet hint whose variable names explain the relationship: `fleet.name` and `fleet.member` in project config, plus optional git-ignored `fleet.root` when the fleet root is not discoverable by walking upward. Treat the hint as a claim to verify against fleet config, not as authority. If the Git root is inside a fleet but does not match a configured member, warn before proceeding. If the Git root is the fleet root, explicitly say this targets only the fleet-root repo and is not `ship fleet`. This resolves the ambiguity where the editor's visible workspace folder, terminal cwd, fleet root, and target repo may differ.
+- [x] **29. Fleet-aware repo identity preflight for `ship repo`.** Added a shared repo identity block that prints Git root, origin slug, branch/upstream, detected fleet root/name, verified fleet member, target scope, and mismatch/root warnings. `manifest ship repo <type>` prints the block before mutation; `manifest status repo` prints the same block read-only. Added `fleet.name`, `fleet.member`, and `fleet.root` project-config hint mappings; hints are verified against fleet config when available and warned on mismatch.
 
 ### Release workflow regressions exposed by v46.7.0 (added 2026-05-05)
 
 - [x] **30. Fix installed Homebrew CLI startup under Bash 3.2.** `manifest status`, `manifest ship repo minor`, and Homebrew postinstall all failed from the installed Cellar path with `manifest-yaml.sh: line 31: version.format: syntax error: invalid arithmetic operator`. Fixed by making Homebrew Bash a required formula dependency and generating an installed wrapper that re-execs into Bash 5 before sourcing `manifest-core.sh`. Added `tests/homebrew_wrapper.bats` to lock the wrapper ordering and dependency status.
-- [ ] **31. Add ship resume/recovery for post-push failures.** During `v46.7.0`, the workflow committed the release and created `v46.7.0`, failed at `push_changes`, then manual push succeeded. The workflow had no supported "resume after push" path, so Homebrew formula update and local upgrade had to be run manually. Add `manifest ship repo resume` or an idempotent recovery mode that detects version/tag/push state and continues with skipped post-push steps.
-- [ ] **32. Make tag push semantics exact and recovery text correct.** The failure report suggested `git push origin main --follow-tags`, but the lightweight tag still required `git push origin v46.7.0`. Either create annotated tags so `--follow-tags` is correct, push the explicit tag in `push_changes`, or update recovery output to use the exact tag push. Tests should cover the generated recovery command text at minimum.
-- [ ] **33. Fix `manifest status` working-tree count rendering.** `manifest status` rendered `Working: 2 modified, 0` followed by `0 untracked`. Likely cause: `grep -c ... || echo 0` emits a counted `0` and then the fallback `0` when grep returns no matches. Replace these pipelines with count helpers that normalize output to a single integer.
-- [ ] **34. Harden Homebrew postinstall and test it as an installed command.** `brew upgrade manifest` installed `46.7.0` but postinstall failed when it ran `manifest config doctor --fix --file ...`. Add a packaging/install smoke test that invokes the installed wrapper under the same shell path Homebrew uses, and make postinstall non-destructive and non-fatal when global config repair fails.
+- [x] **31. Add ship resume/recovery for post-push failures.** Added `manifest ship repo resume`. It refuses ambiguous state, requires the current `VERSION` tag to exist locally and point at an ancestor of `HEAD`, refuses unrelated working-tree changes, prints detected branch/tag/remote state, pushes the exact branch/tag refs, then resumes the shared post-push tail.
+- [x] **32. Make tag push semantics exact and recovery text correct.** Added `manifest_release_tag_name()` and routed tag creation, tag pushing, Homebrew tarball tag selection, release summaries, and failure recovery text through the same exact tag name. Recovery output now suggests `git push origin <branch> <tag>` plus `manifest ship repo resume`, not `--follow-tags`.
+- [x] **33. Fix `manifest status` working-tree count rendering.** Replaced the `grep -c ... || echo 0` pipelines with `_status_git_porcelain_counts`, which emits one normalized modified/untracked pair for text and JSON output.
+- [x] **34. Harden Homebrew postinstall and test it as an installed command.** Homebrew formula test now smoke-tests `manifest status` as the installed command. Config cooldown marker writes are now stderr-silent when the runtime state directory is unwritable, keeping installed/postinstall config repair non-noisy and non-fatal. The test runner now prepends Homebrew Bash when `bats` would otherwise resolve to macOS Bash 3.2.
 
 ---
 
@@ -343,3 +343,17 @@ Final release state:
 - Homebrew tap: `58d84ad Update formula to v46.7.0`
 - Homebrew formula SHA: `cbefe6648491575a9fe86544c067e6c96d446d6e22f444737c1b1fdbde0bd61b`
 - Known unresolved in the installed `v46.7.0` package: `manifest` still fails at startup after `brew upgrade manifest` until a build containing item #30 is installed.
+
+### Session 2026-05-05 — release recovery and fleet identity closeout
+
+Resolved: **#29, #31, #32, #33, #34**.
+
+Key changes:
+
+- `manifest ship repo resume` resumes safe post-release work from an existing `VERSION`/tag state.
+- Release tag naming is centralized and push/recovery text uses the exact tag ref.
+- `manifest status` no longer emits split working-tree count lines.
+- `manifest ship repo` and `manifest status repo` show the same repo/fleet identity block.
+- Homebrew installed-command smoke coverage now uses `manifest status`; config cooldown state writes are silent when unwritable.
+
+Verification: `/opt/homebrew/bin/bash scripts/run-tests.sh` → **248/248 bats tests passing**.

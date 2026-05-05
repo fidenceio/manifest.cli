@@ -55,6 +55,71 @@ teardown() {
     echo "$output" | grep -q "major → 4.0.0"
 }
 
+@test "status: working-tree counts render as one clean line" {
+    cd "$SCRATCH"
+    git init -q
+    git config user.email t@e.com
+    git config user.name t
+    echo "1.0.0" > VERSION
+    git add VERSION
+    git commit -qm "initial"
+
+    run manifest_status
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Working:.*clean"
+    ! echo "$output" | grep -qx "0 modified, 0"
+    ! echo "$output" | grep -qx "0 untracked"
+}
+
+@test "status: working-tree counts separate modified and untracked files" {
+    cd "$SCRATCH"
+    git init -q
+    git config user.email t@e.com
+    git config user.name t
+    echo "1.0.0" > VERSION
+    git add VERSION
+    git commit -qm "initial"
+    echo "1.0.1" > VERSION
+    echo "new" > extra.txt
+
+    run manifest_status
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Working:.*1 modified, 1 untracked"
+}
+
+@test "status repo: identity block detects enclosing fleet member" {
+    if ! command -v yq >/dev/null 2>&1; then
+        skip "yq not installed"
+    fi
+
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet-config.sh"
+
+    mkdir -p "$SCRATCH/fleet/svc-a"
+    git -C "$SCRATCH/fleet/svc-a" init -q
+    git -C "$SCRATCH/fleet/svc-a" config user.email t@e.com
+    git -C "$SCRATCH/fleet/svc-a" config user.name t
+    echo "1.0.0" > "$SCRATCH/fleet/svc-a/VERSION"
+    git -C "$SCRATCH/fleet/svc-a" add VERSION
+    git -C "$SCRATCH/fleet/svc-a" commit -qm "initial"
+
+    cat > "$SCRATCH/fleet/manifest.fleet.config.yaml" <<'YAML'
+fleet:
+  name: test-fleet
+services:
+  svc-a:
+    path: ./svc-a
+YAML
+
+    cd "$SCRATCH/fleet/svc-a"
+    run manifest_status repo
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Repo identity"
+    echo "$output" | grep -q "Fleet:.*test-fleet"
+    echo "$output" | grep -q "Fleet member:.*svc-a"
+    echo "$output" | grep -q "Target:.*this Git repository only"
+}
+
 @test "status: fleet root prints repo table with version, timestamp, and latest commit" {
     if ! command -v yq >/dev/null 2>&1; then
         skip "yq not installed"
@@ -68,6 +133,8 @@ teardown() {
     git -C "$SCRATCH/svc-a" add VERSION
     GIT_AUTHOR_DATE="2026-05-01T12:00:00Z" GIT_COMMITTER_DATE="2026-05-01T12:00:00Z" \
         git -C "$SCRATCH/svc-a" commit -qm "Initial A"
+    local branch_a
+    branch_a="$(git -C "$SCRATCH/svc-a" branch --show-current)"
 
     git -C "$SCRATCH/svc-b" init -q
     git -C "$SCRATCH/svc-b" config user.email t@e.com
@@ -76,18 +143,20 @@ teardown() {
     git -C "$SCRATCH/svc-b" add VERSION
     GIT_AUTHOR_DATE="2026-05-02T12:00:00Z" GIT_COMMITTER_DATE="2026-05-02T12:00:00Z" \
         git -C "$SCRATCH/svc-b" commit -qm "Initial B"
+    local branch_b
+    branch_b="$(git -C "$SCRATCH/svc-b" branch --show-current)"
     echo "dirty" > "$SCRATCH/svc-b/dirty.txt"
 
-    cat > "$SCRATCH/manifest.fleet.yaml" <<'YAML'
+    cat > "$SCRATCH/manifest.fleet.yaml" <<YAML
 fleet:
   name: test-fleet
 services:
   svc-a:
     path: ./svc-a
-    branch: master
+    branch: $branch_a
   svc-b:
     path: ./svc-b
-    branch: master
+    branch: $branch_b
 YAML
 
     cd "$SCRATCH"
@@ -95,6 +164,6 @@ YAML
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Fleet:.*test-fleet"
     echo "$output" | grep -q "Repo.*Branch.*State.*Version.*Timestamp.*Latest commit"
-    echo "$output" | grep -q "svc-a.*master.*clean.*1.2.3.*2026-05-01 12:00:00 UTC.*Initial A"
-    echo "$output" | grep -q "svc-b.*master.*dirty.*2.0.0.*2026-05-02 12:00:00 UTC.*Initial B"
+    echo "$output" | grep -q "svc-a.*${branch_a}.*clean.*1.2.3.*2026-05-01.*Initial A"
+    echo "$output" | grep -q "svc-b.*${branch_b}.*dirty.*2.0.0.*2026-05-02.*Initial B"
 }

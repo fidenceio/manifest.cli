@@ -22,3 +22,7 @@ load 'helpers/setup'
     grep -F '#{Formula["bash"].opt_bin}/bash' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
     grep -F 'MANIFEST_CLI_BASH_REEXEC=1 exec "$candidate" "$0" "$@"' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
 }
+
+@test "Homebrew formula smoke-tests installed status command" {
+    grep -F 'system bin/"manifest", "status"' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
+}
