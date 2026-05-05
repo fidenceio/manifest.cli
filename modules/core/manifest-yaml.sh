@@ -94,6 +94,8 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     # -------------------------------------------------------------------------
     ["docs.folder"]="MANIFEST_CLI_DOCS_FOLDER"
     ["docs.archive_folder"]="MANIFEST_CLI_DOCS_ARCHIVE_FOLDER"
+    ["docs.archive.keep_recent"]="MANIFEST_CLI_DOCS_ARCHIVE_KEEP_RECENT"
+    ["docs.archive.trigger"]="MANIFEST_CLI_DOCS_ARCHIVE_TRIGGER"
     ["docs.template_dir"]="MANIFEST_CLI_DOCS_TEMPLATE_DIR"
     ["docs.auto_generate"]="MANIFEST_CLI_DOCS_AUTO_GENERATE"
     ["docs.historical_limit"]="MANIFEST_CLI_DOCS_HISTORICAL_LIMIT"
