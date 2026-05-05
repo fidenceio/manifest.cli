@@ -71,7 +71,6 @@ coverage. Keep env vars as overrides for CI and backward compatibility.
 | `MANIFEST_CLI_FLEET_ROOT` | `fleet.root` | Explicit fleet root | High if fleet remains first-class |
 | `MANIFEST_CLI_FLEET_CONFIG_FILENAME` | `fleet.config_filename` | Fleet config discovery | High if fleet remains first-class |
 | `MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES` | `security.private_files` | Security scanner private-file list | Medium |
-| `MANIFEST_CLI_SKIP_SECURITY_REPORT` | `security.skip_report` | Security report generation toggle | Medium |
 
 ## Env-Only Internals To Keep Out Of YAML
 

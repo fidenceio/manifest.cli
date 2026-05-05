@@ -13,7 +13,7 @@ common secret-leak paths before they reach your Git history.
 | Secret patterns | Scans staged content for tokens, API keys, and credentials |
 | `.gitignore` safety | Verifies `.gitignore` is properly configured |
 | Large files | Warns before accidentally committing binaries or archives |
-| Manifest security | Integrates with `manifest security` when available |
+| Manifest security | Integrates with `manifest security --check` when available |
 
 ---
 
@@ -48,7 +48,7 @@ git commit -m "safe commit"
 git commit --no-verify -m "emergency change"
 ```
 
-Use bypass sparingly. Always follow up with a manual `manifest security` run
+Use bypass sparingly. Always follow up with a manual `manifest security --check` run
 to verify no secrets were committed.
 
 ---
@@ -58,4 +58,4 @@ to verify no secrets were committed.
 - Keep `.git-hooks/pre-commit` version-controlled in your repository
 - Reinstall the hook after pulling changes to the hook file
 - Pair local hooks with CI security checks for defense in depth
-- Use `manifest security` as a periodic audit on top of the pre-commit hook
+- Use `manifest security --check` as a periodic read-only audit on top of the pre-commit hook

@@ -733,10 +733,10 @@ manifest_test_dry_run() {
     
     # Test security
     echo "🔒 Security Testing:"
-    if manifest security >/dev/null 2>&1; then
+    if manifest security --check >/dev/null 2>&1; then
         echo "   ✅ Security audit passed"
     else
-        echo "   ⚠️  Security audit had issues (check with 'manifest security')"
+        echo "   ⚠️  Security audit had issues (check with 'manifest security --check')"
     fi
     echo ""
     

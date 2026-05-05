@@ -119,7 +119,7 @@ Use `refresh` between releases to keep docs current without bumping the version.
 
 ```bash
 manifest revert               # Revert to previous version
-manifest security             # Run security audit
+manifest security --check     # Run read-only security checks
 manifest upgrade              # Check for and install CLI updates
 ```
 
@@ -324,7 +324,7 @@ For the full configuration schema with comments on every key, see
 ## Security and Maintenance
 
 ```bash
-manifest security           # Run security audit
+manifest security --check   # Run read-only security checks
 manifest upgrade --check    # Check for updates (no install)
 manifest upgrade            # Install latest version
 manifest upgrade --force    # Force upgrade regardless of version

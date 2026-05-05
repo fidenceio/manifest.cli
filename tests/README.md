@@ -27,6 +27,7 @@ The runner exits 2 if `bats` is missing.
 | `tests/version.bats` | `bump_version` for patch / minor / major / revision; rejection of bad input |
 | `tests/canonical_repo.bats` | `manifest_origin_repo_slug` URL parsing, `should_update_homebrew_for_repo` allowlist gate |
 | `tests/safety_gate.bats` | `_confirm_global_config_write` bypass / session cache / destructive-op behavior |
+| `tests/security_check.bats` | `manifest security --check` read-only behavior and pre-commit hook integration |
 
 ## Conventions
 

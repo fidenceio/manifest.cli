@@ -162,19 +162,26 @@ fi
 # =============================================================================
 echo -e "${BLUE}[5/5] Running Manifest CLI security module (if available)...${NC}"
 
-# Check if manifest-cli is available
-if command -v manifest >/dev/null 2>&1; then
-    # Run the security audit in quiet mode
-    # Set environment variable to skip report generation (prevents timestamp changes)
-    export MANIFEST_CLI_SKIP_SECURITY_REPORT=true
-    if manifest security > /dev/null 2>&1; then
+# Prefer this repo's working-tree CLI when the hook is running inside the
+# Manifest CLI repo; otherwise use the installed command.
+SECURITY_CMD=()
+if [ -x "$PROJECT_ROOT/scripts/manifest-cli.sh" ] && [ -f "$PROJECT_ROOT/modules/core/manifest-core.sh" ]; then
+    SECURITY_CMD=("$PROJECT_ROOT/scripts/manifest-cli.sh" security --check)
+elif command -v manifest >/dev/null 2>&1; then
+    SECURITY_CMD=(manifest security --check)
+fi
+
+if [ ${#SECURITY_CMD[@]} -gt 0 ]; then
+    # Run the security audit in read-only mode.
+    security_output=""
+    if security_output="$("${SECURITY_CMD[@]}" 2>&1)"; then
         echo -e "${GREEN}   ✅ Manifest CLI security audit passed${NC}"
     else
         echo -e "${YELLOW}   ⚠️  WARNING: Manifest CLI security audit found issues${NC}"
-        echo -e "${YELLOW}      Run 'manifest security' for details${NC}"
+        echo "$security_output" | sed 's/^/      /'
+        echo -e "${YELLOW}      Run 'manifest security --check' for details${NC}"
         WARNINGS=$((WARNINGS + 1))
     fi
-    unset MANIFEST_CLI_SKIP_SECURITY_REPORT
 else
     echo -e "${YELLOW}   ⚠️  INFO: Manifest CLI not installed, skipping advanced security audit${NC}"
     echo -e "${YELLOW}      Install with: ./install-cli.sh${NC}"

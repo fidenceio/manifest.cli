@@ -258,7 +258,7 @@ manifest config doctor --fix           # Auto-fix deprecated settings
 ## Security and Maintenance
 
 ```bash
-manifest security                      # Run security audit
+manifest security --check              # Run read-only security checks
 manifest upgrade --check               # Check for updates (no install)
 manifest upgrade                       # Install latest version
 manifest uninstall                     # Remove Manifest CLI
