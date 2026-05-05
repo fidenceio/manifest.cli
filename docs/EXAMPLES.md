@@ -212,7 +212,7 @@ manifest ship fleet patch --except docs,playground
 ### Direct Fleet Operations
 
 ```bash
-manifest status --verbose              # Fleet status
+manifest status fleet                  # Fleet repository status table
 manifest discover fleet --depth 3      # Find new repos
 manifest add fleet ./services/new-api --name "new-api" --type service --dry-run
 manifest validate fleet                # Check configuration

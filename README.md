@@ -5,7 +5,7 @@
 When you can spin up four features in parallel, you also need to ship four features without dropping any. Manifest handles versions, tags, changelogs, docs, and the multi-repo coordination so the human stays in flow.
 
 [![tests](https://github.com/fidenceio/manifest.cli/actions/workflows/test.yml/badge.svg)](https://github.com/fidenceio/manifest.cli/actions/workflows/test.yml)
-**Version** `46.4.2` · **Platform** macOS · Linux · FreeBSD · **Requires** Bash 5+, Git, yq v4+
+**Version** `46.5.0` · **Platform** macOS · Linux · FreeBSD · **Requires** Bash 5+, Git, yq v4+
 
 ---
 
@@ -74,7 +74,7 @@ manifest status             # what would happen if I shipped now?
 
 Each block below is captured verbatim from the commands as they run today on this repo — not mocked, not aspirational.
 
-**`manifest status`** — read-only snapshot. Shows where you are, what would change, and which config layers are loaded.
+**`manifest status`** — read-only snapshot. Auto-detects repo vs fleet context; use `manifest status repo` or `manifest status fleet` to force a scope.
 
 ```text
 Manifest status
@@ -209,7 +209,7 @@ Short flags: `-p` (patch), `-m` (minor), `-M` (major), `-r` (revision), `-i` (in
 
 | Command | Purpose |
 | ------- | ------- |
-| `manifest status` | Repo + version + sync state + next-bump previews + config layers |
+| `manifest status` | Repo status, or fleet repo table with branch/state/version/timestamp/latest commit |
 | `manifest doctor` | Dependency, configuration, and repository health check |
 | `manifest config list \| get \| describe` | Discover all 80+ configuration keys + their layer source |
 
@@ -321,7 +321,7 @@ manifest ship fleet minor --local
 Fleet commands use action-first syntax:
 
 ```bash
-manifest status --verbose
+manifest status fleet
 manifest discover fleet --depth 3
 manifest add fleet ./services/new-api --name "new-api" --dry-run
 manifest validate fleet
@@ -557,7 +557,7 @@ Homebrew installation handles all dependencies automatically. The install script
 | [Git Hooks](docs/GIT_HOOKS.md) | Secret protection and hook management |
 | [YAML config example](examples/manifest.config.yaml.example) | Full schema with all keys + comments |
 | [North Star](docs/NORTH_STAR.md) | Strategic direction and priorities |
-| [Release Notes](docs/RELEASE_v46.4.2.md) | Current release details |
+| [Release Notes](docs/RELEASE_v46.5.0.md) | Current release details |
 
 ---
 
