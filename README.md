@@ -11,7 +11,7 @@ When you can spin up four features in parallel, you also need to ship four featu
 
 ## Why it exists
 
-The bottleneck of modern dev work has shifted. Writing the code is no longer the slow part — keeping shipping coherent across many repos and many in-flight changes is. Manifest is built for that:
+The bottleneck of modern dev work has shifted. Writing the code is no longer the slow part — maintaining coherent shipping across repos and in-flight changes is. Manifest solves this.
 
 - **One command per repo, the same command across a fleet.** `manifest ship repo patch` and `manifest ship fleet patch` do the same five things — version bump, docs, commit, tag, push — at one repo or across all of them, with synced version metadata.
 - **Read-only first.** `manifest status` answers "what would happen if I shipped now?" before you act. `manifest doctor` answers "is my environment OK?" with a single command.
