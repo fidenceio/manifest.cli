@@ -4,8 +4,6 @@
 
 | Document | Version | Date |
 | --- | --- | --- |
-| [Release Notes v46.12.0](RELEASE_v46.12.0.md) | 46.12.0 | 2026-05-05 |
-| [Changelog v46.12.0](CHANGELOG_v46.12.0.md) | 46.12.0 | 2026-05-05 |
 | [Release Notes v46.12.2](RELEASE_v46.12.2.md) | 46.12.2 | 2026-05-05 |
 | [Changelog v46.12.2](CHANGELOG_v46.12.2.md) | 46.12.2 | 2026-05-05 |
 | [Release Notes v46.13.0](RELEASE_v46.13.0.md) | 46.13.0 | 2026-05-05 |
@@ -24,5 +22,7 @@
 | [Changelog v46.13.6](CHANGELOG_v46.13.6.md) | 46.13.6 | 2026-05-06 |
 | [Release Notes v46.13.7](RELEASE_v46.13.7.md) | 46.13.7 | 2026-05-06 |
 | [Changelog v46.13.7](CHANGELOG_v46.13.7.md) | 46.13.7 | 2026-05-06 |
+| [Release Notes v46.13.8](RELEASE_v46.13.8.md) | 46.13.8 | 2026-05-06 |
+| [Changelog v46.13.8](CHANGELOG_v46.13.8.md) | 46.13.8 | 2026-05-06 |
 
 [Back to archive index](../INDEX.md)
