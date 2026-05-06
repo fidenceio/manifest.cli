@@ -64,14 +64,22 @@ _manifest_git_changes_auto_commit_bullets() {
     if _manifest_git_changes_files_match "$files" '(^|/)tests/'; then
         _manifest_git_changes_emit_once "Add regression coverage for the changed CLI workflow" emitted
     fi
+    if _manifest_git_changes_files_match "$files" '^CHANGELOG\.md$'; then
+        _manifest_git_changes_emit_once "Backfill and clarify release history in the root changelog" emitted
+    fi
     if _manifest_git_changes_files_match "$files" '(^|/)README\.md$|(^|/)docs/|(^|/)tests/README\.md$'; then
         _manifest_git_changes_emit_once "Document the updated CLI workflow and release contract" emitted
     fi
 
     if [[ -z "$emitted" ]]; then
-        local count
+        local count noun
         count="$(printf '%s\n' "$files" | sed '/^[[:space:]]*$/d' | wc -l | tr -d ' ')"
-        _manifest_git_changes_emit_once "Update ${count:-multiple} files before release" emitted
+        if [[ "$count" == "1" ]]; then
+            noun="file"
+        else
+            noun="files"
+        fi
+        _manifest_git_changes_emit_once "Update ${count:-multiple} $noun before release" emitted
     fi
 }
 

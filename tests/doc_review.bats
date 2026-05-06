@@ -109,6 +109,19 @@ teardown() {
     [[ "$output" != *"Auto-commit before Manifest process"* ]]
 }
 
+@test "root changelog auto-commit gets a descriptive release note" {
+    git tag v0.9.0
+    echo "# Changelog" > CHANGELOG.md
+    git add CHANGELOG.md
+    git commit -q -m "Auto-commit before Manifest process (CHANGELOG.md) [TS: 2026-05-06 16:21:44 UTC]"
+
+    run get_git_changes "1.0.0"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Backfill and clarify release history in the root changelog"* ]]
+    [[ "$output" != *"Update 1 files before release"* ]]
+}
+
 @test "commit_changes fails when required documentation provider fails" {
     mkdir -p modules/core
     echo "# change" > modules/core/manifest-core.sh
