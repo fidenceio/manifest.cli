@@ -1,5 +1,10 @@
 # Changelog
 
+## [47.3.3] - 2026-05-06
+
+**Release Type:** Patch — no user-facing changes.
+
+
 ## [47.3.2] - 2026-05-06
 
 **Release Type:** Patch
@@ -87,12 +92,3 @@
 - Added `manifest ship repo patch --explain` and related ship recipe explain paths
 - Added a containerized Manifest CLI test runner so test dependencies stay out of the host environment
 - Updated shell completions, command reference, README, and regression coverage for the recipe workflow
-
-
-## [47.0.1] - 2026-05-06
-
-**Release Type:** Patch
-
-### Changes
-
-- Release-only patch: refreshed version metadata, README version markers, docs index, tag, and Homebrew formula after `47.0.0`
