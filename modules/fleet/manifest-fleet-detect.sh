@@ -420,13 +420,16 @@ _classify_repository() {
     local repo_dir="$1"
     local dirname
     dirname=$(basename "$repo_dir")
+    local normalized_name
+    normalized_name=$(echo "$dirname" | tr '[:upper:]' '[:lower:]' | tr '._ ' '---' | sed 's/--*/-/g; s/^-//; s/-$//')
 
     # Infrastructure indicators
     if [[ -d "$repo_dir/terraform" ]] || \
        [[ -f "$repo_dir/main.tf" ]] || \
        [[ -d "$repo_dir/ansible" ]] || \
        [[ -f "$repo_dir/Pulumi.yaml" ]] || \
-       [[ -d "$repo_dir/cloudformation" ]]; then
+       [[ -d "$repo_dir/cloudformation" ]] || \
+       [[ "$normalized_name" == *homebrew-tap* ]]; then
         echo "infrastructure"
         return
     fi
@@ -445,7 +448,9 @@ _classify_repository() {
     # Tool indicators (CLI tools, scripts)
     if [[ -d "$repo_dir/cmd" ]] || \
        [[ "$dirname" == *-cli ]] || \
+       [[ "$normalized_name" == *-cli ]] || \
        [[ "$dirname" == *-tool ]] || \
+       [[ "$normalized_name" == *-tool ]] || \
        [[ "$dirname" == *-script* ]]; then
         echo "tool"
         return
@@ -1180,6 +1185,17 @@ diff_discovered_repos() {
 
     # Process discovered repos
     local discovered_paths=()
+    local root_dir="${MANIFEST_FLEET_ROOT:-$(dirname "$manifest_file")}"
+    if [[ -n "${manifest_paths[.]:-}" ]] && _is_git_repository "$root_dir"; then
+        local root_service="${manifest_paths[.]}"
+        local root_type="${manifest_types[$root_service]:-service}"
+        local root_branch root_version root_url
+        root_branch=$(_get_repo_default_branch "$root_dir")
+        root_version=$(_get_repo_version "$root_dir")
+        root_url=$(_get_repo_remote_url "$root_dir")
+        discovered_paths+=(".")
+        echo "=	$root_service	.	$root_type	$root_branch	$root_version	$root_url	false"
+    fi
     while IFS=$'\t' read -r name path type branch version url is_sub; do
         [[ -z "$name" ]] && continue
 
