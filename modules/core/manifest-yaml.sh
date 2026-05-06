@@ -103,6 +103,9 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     ["docs.review.provider"]="MANIFEST_CLI_DOC_REVIEW_PROVIDER"
     ["docs.review.command"]="MANIFEST_CLI_DOC_REVIEW_COMMAND"
     ["docs.review.required"]="MANIFEST_CLI_DOC_REVIEW_REQUIRED"
+    ["docs.release_notes.provider"]="MANIFEST_CLI_RELEASE_NOTES_PROVIDER"
+    ["docs.release_notes.command"]="MANIFEST_CLI_RELEASE_NOTES_COMMAND"
+    ["docs.release_notes.required"]="MANIFEST_CLI_RELEASE_NOTES_REQUIRED"
 
     # -------------------------------------------------------------------------
     # files — file and directory paths

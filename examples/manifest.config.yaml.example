@@ -112,6 +112,17 @@ docs:
     provider: "local"       # local | command
     command: ""             # Called as: command REPORT_FILE PROJECT_ROOT
     required: false         # Fail commit if provider fails
+  release_notes:
+    # Per-ship release-notes synthesis. Manifest builds a request file
+    # (metadata + cleaned commit subjects + changed files + the prompt)
+    # and invokes the provider as `command REQUEST_FILE OUTPUT_FILE`.
+    # The provider's output is validated (bullets only, no preamble,
+    # max 15 bullets) before it replaces the local body in CHANGELOG.md.
+    # See examples/release-notes-providers/example-provider.sh for the
+    # contract; any LLM (Claude, GPT, local model) works.
+    provider: "local"       # local (use built-in generator) | command
+    command: ""             # Path to provider script
+    required: false         # If true, provider failure aborts the ship
 
 # -----------------------------------------------------------------------------
 # Trusted Timestamps (HTTPS)

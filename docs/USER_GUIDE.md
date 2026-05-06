@@ -115,6 +115,47 @@ manifest refresh repo --commit     # Also commit the refreshed files
 
 Use `refresh` between releases to keep docs current without bumping the version.
 
+### Release-Notes Provider Hook
+
+By default, every `manifest ship` produces a release-notes bullet list from
+the cleaned commit subjects since the last tag. The local generator is
+boilerplate-free: a single `### Changes` section, narrative bullets, no
+counts table. Empty ranges produce a one-liner `**Release Type:** Patch — no
+user-facing changes.` and no body.
+
+If you want richer prose, you can plug in any LLM:
+
+```yaml
+# manifest.config.yaml
+docs:
+  release_notes:
+    provider: command
+    command: /absolute/path/to/your-provider.sh
+    required: false   # true → ship aborts on provider failure
+```
+
+The provider is called as `your-provider.sh REQUEST_FILE OUTPUT_FILE`:
+
+- `REQUEST_FILE` is markdown Manifest writes for you. It contains the prompt,
+  the version metadata, the cleaned commit subjects, and the changed-file
+  list. **Manifest owns the prompt and the output schema** — your provider
+  is a thin transport that hands the request to an LLM and writes the
+  response back.
+- `OUTPUT_FILE` is where you write the LLM's response. Manifest validates
+  the response before splicing it into `CHANGELOG.md`:
+  - Bullets only (lines starting with a `-` followed by a space); preamble
+    before the first bullet and prose after the last bullet are stripped.
+  - Banned LLM-preamble phrases ("As an AI…", "Sure, here…", etc.) cause
+    the output to be rejected.
+  - Hard cap at 15 bullets; excess is truncated.
+- Any LLM works (Claude, GPT, a local model). See
+  [examples/release-notes-providers/example-provider.sh](../examples/release-notes-providers/example-provider.sh)
+  for the contract and a stub you can copy.
+
+If the provider exits non-zero or its output fails validation, Manifest logs
+a warning and falls back to the local generator. Set `required: true` to
+abort the ship instead.
+
 ### Other Common Operations
 
 ```bash

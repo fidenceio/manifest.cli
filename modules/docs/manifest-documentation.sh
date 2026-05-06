@@ -447,11 +447,15 @@ _manifest_build_changelog_entry() {
     fi
 
     printf '## [%s] - %s\n\n' "$version" "$release_date"
-    [[ -n "$rtype" ]] && printf '**Release Type:** %s\n\n' "$rtype"
     if [[ -n "$body" ]]; then
+        [[ -n "$rtype" ]] && printf '**Release Type:** %s\n\n' "$rtype"
         printf '%s\n' "$body"
     else
-        printf '### Summary\nNo notable user-facing changes were detected since the previous release tag.\n'
+        if [[ -n "$rtype" ]]; then
+            printf '**Release Type:** %s — no user-facing changes.\n' "$rtype"
+        else
+            printf 'No user-facing changes.\n'
+        fi
     fi
 }
 
@@ -579,10 +583,216 @@ _manifest_prune_root_changelog() {
     rm -f "$tmp"
 }
 
+# -----------------------------------------------------------------------------
+# Release-notes synthesis hook (provider-agnostic)
+# -----------------------------------------------------------------------------
+# Manifest owns the prompt template, the request format, and the validation
+# rules for the entry body. The provider command is a thin transport: read
+# the request file ($1), call any LLM/service, write a markdown bullet list
+# to the output file ($2). No provider-specific text leaks into CHANGELOG.md.
+
+# Build the request file the provider receives.
+_manifest_release_notes_build_request() {
+    local request_file="$1"
+    local version="$2"
+    local release_type="$3"
+    local timestamp="$4"
+    local changes_file="$5"
+    local project_root="$6"
+
+    local release_date="${timestamp%% *}"
+    [[ -n "$release_date" ]] || release_date="$(date -u '+%Y-%m-%d')"
+
+    local project_slug=""
+    if [[ -n "${MANIFEST_CLI_PROJECT_NAME:-}" ]]; then
+        project_slug="$MANIFEST_CLI_PROJECT_NAME"
+    elif declare -F manifest_origin_repo_slug >/dev/null 2>&1; then
+        project_slug="$(manifest_origin_repo_slug 2>/dev/null || true)"
+    fi
+
+    {
+        cat <<'EOF'
+# Manifest Release Notes Request
+
+## Instructions
+
+Generate the body of a release-notes section. Output ONLY a markdown bullet
+list — lines starting with `- ` — and nothing else.
+
+Do NOT output:
+- Headings, subheadings, or section titles.
+- A version number, date, or release-type line.
+- Preamble, summary paragraphs, closing prose, or framing language.
+- References to yourself, the assistant, the LLM, or the provider.
+
+Each bullet should be:
+- One sentence in past-tense imperative voice (for example "Added X",
+  "Fixed Y", "Replaced Z with W").
+- Concise but specific — name what changed and, where useful, why a user
+  cares.
+- Free of internal jargon or implementation-only detail. Group related
+  commits into a single bullet when sensible. Drop trivial bookkeeping.
+
+Hard limit: 15 bullets.
+
+EOF
+        printf '## Metadata\n\n'
+        printf -- '- version: %s\n' "$version"
+        printf -- '- release_type: %s\n' "$release_type"
+        printf -- '- date: %s\n' "$release_date"
+        [[ -n "$project_slug" ]] && printf -- '- project: %s\n' "$project_slug"
+
+        printf '\n## Commit subjects\n\n'
+        awk '
+            /^### Changes[[:space:]]*$/ { in_body=1; next }
+            in_body && /^[[:space:]]*$/ { next }
+            in_body { print }
+        ' "$changes_file" 2>/dev/null || true
+
+        printf '\n## Changed files\n\n'
+        if declare -F _manifest_doc_review_changed_files >/dev/null 2>&1; then
+            _manifest_doc_review_changed_files "$project_root" 2>/dev/null \
+                | sed 's/^/- /' || true
+        fi
+    } > "$request_file"
+}
+
+# Sanitize a provider's output. Strips preamble before the first bullet,
+# trailing prose after the last bullet, rejects banned LLM-preamble
+# phrases, and caps at 15 bullets. On success, prints cleaned content to
+# stdout and returns 0. On any rejection, returns non-zero (no stdout).
+_manifest_release_notes_validate_output() {
+    local raw_file="$1"
+    [[ -f "$raw_file" ]] || return 1
+
+    local cleaned
+    cleaned="$(awk '
+        BEGIN { started=0; ended=0; n=0; last_bullet=0 }
+        !started && /^- / { started=1 }
+        started && !ended {
+            if (/^- /) {
+                lines[++n] = $0
+                last_bullet = n
+            } else if (/^[[:space:]]+/) {
+                lines[++n] = $0
+            } else if (/^[[:space:]]*$/) {
+                lines[++n] = ""
+            } else {
+                ended = 1
+            }
+        }
+        END {
+            if (last_bullet == 0) exit 1
+            bullets = 0
+            for (i=1; i<=last_bullet; i++) {
+                if (lines[i] ~ /^- /) {
+                    bullets++
+                    if (bullets > 15) exit
+                }
+                print lines[i]
+            }
+        }
+    ' "$raw_file")" || return 1
+
+    [[ -n "$cleaned" ]] || return 1
+
+    case "$cleaned" in
+        *"As an AI"*|*"As a language model"*|*"Sure, here"*|*"Here are the"*|*"I'll generate"*|*"I'd be happy"*)
+            return 1
+            ;;
+    esac
+
+    printf '%s\n' "$cleaned"
+}
+
+# Returns 1 if MANIFEST_CLI_RELEASE_NOTES_REQUIRED is truthy (caller
+# should abort), 0 otherwise (caller falls back to local generator).
+_manifest_release_notes_required_failure() {
+    if is_truthy "${MANIFEST_CLI_RELEASE_NOTES_REQUIRED:-false}"; then
+        return 1
+    fi
+    return 0
+}
+
+# Run the configured release-notes provider. On success, replaces the
+# `### Changes` body in changes_file with the validated provider output.
+# On failure, returns 0 to fall through to the local body unless
+# MANIFEST_CLI_RELEASE_NOTES_REQUIRED is truthy (then returns 1).
+_manifest_release_notes_run_provider() {
+    local version="$1"
+    local release_type="$2"
+    local timestamp="$3"
+    local changes_file="$4"
+    local project_root="${PROJECT_ROOT:-$(pwd)}"
+    local provider="${MANIFEST_CLI_RELEASE_NOTES_PROVIDER:-local}"
+
+    case "$provider" in
+        ""|local)
+            return 0
+            ;;
+        command)
+            ;;
+        *)
+            log_warning "Unknown release-notes provider: '$provider' (using local generator)"
+            _manifest_release_notes_required_failure || return 1
+            return 0
+            ;;
+    esac
+
+    if [[ -z "${MANIFEST_CLI_RELEASE_NOTES_COMMAND:-}" ]]; then
+        log_warning "Release-notes provider 'command' has no MANIFEST_CLI_RELEASE_NOTES_COMMAND (using local generator)"
+        _manifest_release_notes_required_failure || return 1
+        return 0
+    fi
+
+    if [[ ! -x "$MANIFEST_CLI_RELEASE_NOTES_COMMAND" ]]; then
+        log_warning "Release-notes provider command is not executable: ${MANIFEST_CLI_RELEASE_NOTES_COMMAND} (using local generator)"
+        _manifest_release_notes_required_failure || return 1
+        return 0
+    fi
+
+    local request_file output_file
+    request_file="$(mktemp)"
+    output_file="$(mktemp)"
+    : > "$output_file"
+
+    _manifest_release_notes_build_request \
+        "$request_file" "$version" "$release_type" "$timestamp" \
+        "$changes_file" "$project_root"
+
+    log_info "Invoking release-notes provider"
+    if ! "$MANIFEST_CLI_RELEASE_NOTES_COMMAND" "$request_file" "$output_file"; then
+        log_warning "Release-notes provider exited non-zero (using local generator)"
+        rm -f "$request_file" "$output_file"
+        _manifest_release_notes_required_failure || return 1
+        return 0
+    fi
+
+    local validated
+    if ! validated="$(_manifest_release_notes_validate_output "$output_file")"; then
+        log_warning "Release-notes provider output failed validation (using local generator)"
+        rm -f "$request_file" "$output_file"
+        _manifest_release_notes_required_failure || return 1
+        return 0
+    fi
+
+    local new_changes
+    new_changes="$(mktemp)"
+    {
+        printf '## Highlights for v%s\n\n### Changes\n\n' "$version"
+        printf '%s\n' "$validated"
+    } > "$new_changes"
+    mv "$new_changes" "$changes_file"
+
+    rm -f "$request_file" "$output_file"
+    log_success "Release-notes provider supplied entry body"
+    return 0
+}
+
 # Update repository metadata
 update_repository_metadata() {
     log_info "Updating repository metadata..."
-    
+
     # This is a placeholder for repository metadata updates
     # Could include updating GitHub repository description, topics, etc.
     # For now, just log that it's being called
@@ -606,7 +816,18 @@ generate_documents() {
     # Get and analyze changes
     get_git_changes "$version" > "$changes_file"
     analyze_changes "$version" "$changes_file"
-    
+
+    # If a release-notes provider is configured, hand it the analyzed
+    # bullets + changed files and let it synthesize the entry body. The
+    # helper rewrites changes_file in place on success; on failure it
+    # warns and falls back unless docs.release_notes.required is true.
+    if ! _manifest_release_notes_run_provider \
+        "$version" "$release_type" "$timestamp" "$changes_file"; then
+        rm -f "$changes_file"
+        log_error "Release-notes provider failure (required=true) — aborting document generation"
+        return 1
+    fi
+
     # Prepend a Keep-a-Changelog entry to root CHANGELOG.md for this version.
     if ! prepend_root_changelog_entry "$PROJECT_ROOT" "$version" "$timestamp" "$release_type" "$changes_file"; then
         log_warning "Root CHANGELOG.md update failed, but continuing..."
