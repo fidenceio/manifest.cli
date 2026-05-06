@@ -72,6 +72,9 @@ manifest_recipe_id_for_command() {
         "ship repo major") echo "manifest.builtin.ship.repo.major" ;;
         "ship repo revision") echo "manifest.builtin.ship.repo.revision" ;;
         "ship fleet patch") echo "manifest.builtin.ship.fleet.patch" ;;
+        "ship fleet minor") echo "manifest.builtin.ship.fleet.minor" ;;
+        "ship fleet major") echo "manifest.builtin.ship.fleet.major" ;;
+        "ship fleet revision") echo "manifest.builtin.ship.fleet.revision" ;;
         *) return 1 ;;
     esac
 }
@@ -183,6 +186,9 @@ manifest_recipe_run() {
         "manifest ship repo major") manifest_ship_repo major "$@" ;;
         "manifest ship repo revision") manifest_ship_repo revision "$@" ;;
         "manifest ship fleet patch") manifest_ship_fleet patch "$@" ;;
+        "manifest ship fleet minor") manifest_ship_fleet minor "$@" ;;
+        "manifest ship fleet major") manifest_ship_fleet major "$@" ;;
+        "manifest ship fleet revision") manifest_ship_fleet revision "$@" ;;
         "manifest prep repo") manifest_prep_repo "$@" ;;
         "manifest refresh repo") manifest_refresh_repo "$@" ;;
         "manifest pr ready") manifest_pr_ready "$@" ;;

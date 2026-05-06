@@ -24,6 +24,8 @@ run_manifest_from_plain_dir() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"manifest.builtin.ship.repo.patch"* ]]
     [[ "$output" == *"manifest ship repo patch"* ]]
+    [[ "$output" == *"manifest.builtin.ship.fleet.minor"* ]]
+    [[ "$output" == *"manifest ship fleet minor"* ]]
     [[ "$output" != *"Not in a Git repository"* ]]
 }
 
@@ -48,4 +50,15 @@ run_manifest_from_plain_dir() {
     [[ "$output" == *"ID:         manifest.builtin.ship.repo.patch"* ]]
     [[ "$output" == *"Definition:"* ]]
     [[ "$output" != *"Not in a Git repository"* ]]
+}
+
+@test "ship fleet explain supports every advertised release type" {
+    for release_type in patch minor major revision; do
+        run_manifest_from_plain_dir ship fleet "$release_type" --explain
+        [ "$status" -eq 0 ]
+        [[ "$output" == *"ID:         manifest.builtin.ship.fleet.$release_type"* ]]
+        [[ "$output" == *"Command:    manifest ship fleet $release_type"* ]]
+        [[ "$output" != *"No built-in recipe is registered"* ]]
+        [[ "$output" != *"Not in a Git repository"* ]]
+    done
 }

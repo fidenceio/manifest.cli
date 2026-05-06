@@ -1,0 +1,31 @@
+id: manifest.builtin.ship.fleet.revision
+title: Ship Fleet Revision
+kind: builtin
+command: manifest ship fleet revision
+scope: fleet
+summary: Publish a coordinated revision release across a fleet.
+entrypoint: manifest_ship_fleet
+inputs:
+  release_type:
+    type: enum
+    values: [revision]
+    default: revision
+    required: true
+  local:
+    type: boolean
+    default: false
+steps:
+  - id: load-fleet
+    uses: manifest.fleet.load
+  - id: prep-fleet
+    uses: manifest.fleet.prep
+    with:
+      release_type: revision
+  - id: refresh-fleet-docs
+    uses: manifest.fleet.docs
+  - id: create-prs
+    uses: manifest.fleet.pr.create
+    when: publish_release
+  - id: queue-prs
+    uses: manifest.fleet.pr.queue
+    when: publish_release
