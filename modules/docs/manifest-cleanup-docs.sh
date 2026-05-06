@@ -292,18 +292,29 @@ _manifest_archive_regenerate_indexes() {
 }
 
 # Append a sweep entry to docs/zArchive/.archive-log.md so each archive
-# move is auditable. Args:
+# action is auditable. Args:
 #   $1 = version that triggered the sweep
 #   $2 = full UTC timestamp string ("YYYY-MM-DD HH:MM:SS UTC")
-#   $3 = retain spec (or empty to omit)
-#   $@ = "src|dest" pairs (project-root-relative paths)
-_manifest_archive_append_move_log() {
+#   $3 = retain spec
+#   $4 = number of move entries that follow
+#   $@ = first $4 args are "src|dest" move pairs, remaining are pruned-file paths
+#        (all project-root-relative)
+_manifest_archive_append_log_entry() {
     local version="$1"
     local timestamp="$2"
-    local retain="${3:-}"
-    shift 3
-    local count=$#
-    [[ "$count" -gt 0 ]] || return 0
+    local retain="$3"
+    local move_count="$4"
+    shift 4
+
+    local -a moves=() prunes=()
+    local i=0
+    while [[ "$i" -lt "$move_count" ]]; do
+        moves+=("$1"); shift; i=$((i+1))
+    done
+    prunes=("$@")
+
+    local total=$(( ${#moves[@]} + ${#prunes[@]} ))
+    [[ "$total" -gt 0 ]] || return 0
 
     local archive_dir log_file
     archive_dir="$(get_zarchive_dir)"
@@ -314,28 +325,41 @@ _manifest_archive_append_move_log() {
         cat > "$log_file" <<'EOF'
 # Manifest CLI Archive Move Log
 
-Append-only record of files relocated from active `docs/` to `zArchive/`
-by `manifest ship` and `manifest docs cleanup`. Each section below
-records one sweep, newest at the bottom.
+Append-only record of archive activity by `manifest ship` and
+`manifest docs cleanup`. Each section below records one sweep, newest
+at the bottom. Moves come from the active-docs sweep; prunes come
+from the `docs.retain` retention policy.
 
 EOF
     fi
 
-    local date plural=""
-    date="${timestamp%% *}"
-    [[ "$count" -ne 1 ]] && plural="s"
-
     {
-        printf '## %s — v%s sweep\n\n' "$date" "$version"
+        printf '## %s — v%s sweep\n\n' "${timestamp%% *}" "$version"
         printf 'Timestamp: %s\n' "$timestamp"
         [[ -n "$retain" ]] && printf 'Retain: %s\n' "$retain"
-        printf 'Moved %d file%s:\n' "$count" "$plural"
-        local pair src dest
-        for pair in "$@"; do
-            src="${pair%%|*}"
-            dest="${pair##*|}"
-            printf -- '- %s → %s\n' "$src" "$dest"
-        done
+
+        if [[ ${#moves[@]} -gt 0 ]]; then
+            local plural=""
+            [[ ${#moves[@]} -ne 1 ]] && plural="s"
+            printf 'Moved %d file%s:\n' "${#moves[@]}" "$plural"
+            local pair src dest
+            for pair in "${moves[@]}"; do
+                src="${pair%%|*}"
+                dest="${pair##*|}"
+                printf -- '- %s → %s\n' "$src" "$dest"
+            done
+        fi
+
+        if [[ ${#prunes[@]} -gt 0 ]]; then
+            local plural=""
+            [[ ${#prunes[@]} -ne 1 ]] && plural="s"
+            printf 'Pruned %d file%s (over retention cap):\n' "${#prunes[@]}" "$plural"
+            local p
+            for p in "${prunes[@]}"; do
+                printf -- '- %s\n' "$p"
+            done
+        fi
+
         printf '\n'
     } >> "$log_file"
 }
@@ -379,14 +403,20 @@ _manifest_parse_retention() {
     esac
 }
 
-# Main cleanup function - handles archiving and general cleanup.
-# Reads docs.retain from env to decide what to retain in active docs/.
-# Spec forms: "N versions", "N days", or "off" (skip archive phase).
+# Main cleanup function. Two-phase archive maintenance:
+#   Phase A — sweep: move every previous-version file out of active docs/
+#             into zArchive/v<major>/. Always runs (no config); active docs/
+#             holds at most one version's docs at a time.
+#   Phase B — prune: enforce docs.retain on the archive itself by deleting
+#             RELEASE/CHANGELOG files whose version is older than the cap.
+#             SECURITY_ANALYSIS_REPORT_v* files are excluded — those are
+#             point-in-time audit artifacts, not release docs.
+# Both phases honor MANIFEST_CLI_DOCS_ARCHIVE_FORCE for the uncommitted-edit
+# safety guard.
 main_cleanup() {
     local version="${1:-}"
     local timestamp="${2:-}"
 
-    # Get trusted timestamp if not provided
     if [ -z "$timestamp" ]; then
         get_time_timestamp >/dev/null
         timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
@@ -403,101 +433,39 @@ main_cleanup() {
     log_info "Version: $version"
     log_info "Timestamp: $timestamp"
 
-    # Change to project root
     cd "$PROJECT_ROOT"
 
-    local archive_phase=1
-    if [[ "$retain_kind" == "off" ]]; then
-        log_info "Archive sweep skipped (retain=off)"
-        archive_phase=0
-    fi
+    local zarchive_dir
+    zarchive_dir="$(get_zarchive_dir)"
 
-    # Archive old documentation
-    local moved_count=0
-    if [[ -n "$version" && "$archive_phase" -eq 1 ]]; then
-        log_info "Archiving old documentation for version $version (retain=${retain_spec})..."
-
+    # ---- Phase A: active-docs sweep ----------------------------------------
+    local moved_count=0 skipped_count=0
+    local -a move_entries=()
+    if [[ -n "$version" ]]; then
+        log_info "Archiving previous version documentation..."
         ensure_zarchive_dir
 
-        local skipped_count=0
-        local zarchive_dir
-        zarchive_dir="$(get_zarchive_dir)"
-        local -a candidates=() candidate_versions=() archive_log_entries=()
-
-        # Pass 1: enumerate archivable files in active docs/ along with
-        # their version tags. Strict allowlist: only well-formed
-        # RELEASE/CHANGELOG/SECURITY files with a SemVer-shaped version.
-        # Hand-authored docs sharing a prefix (e.g.,
-        # RELEASE_RUN_HANDOFF_v46.7.0.md) are not eligible.
-        local f filename file_version
+        local f filename
         while IFS= read -r f; do
             [[ -f "$f" ]] || continue
             filename="$(basename "$f")"
             [[ "$filename" =~ $_MANIFEST_ARCHIVABLE_REGEX ]] || continue
-            file_version="$(printf '%s' "$filename" | sed -nE 's/^[A-Z_]+_v([0-9]+\.[0-9]+\.[0-9]+).*/\1/p')"
-            [[ -n "$file_version" ]] || continue
-            candidates+=("$f")
-            candidate_versions+=("$file_version")
-        done < <(find "$(get_docs_folder "$PROJECT_ROOT")" -maxdepth 1 -type f -name "*.md")
 
-        # Pass 2: decide which candidates to keep based on retention.
-        local -a to_keep=()
-        local i
-        case "$retain_kind" in
-            versions)
-                # Top-N distinct versions across {current_version} ∪ candidates,
-                # sorted version-aware descending. Files whose version is in the
-                # kept set stay; others archive.
-                local kept_versions
-                kept_versions="$( { printf '%s\n' "$version"; printf '%s\n' "${candidate_versions[@]}"; } | sort -u -V -r | head -n "$retain_value" )"
-                local v
-                for v in "${candidate_versions[@]}"; do
-                    if grep -qFx "$v" <<< "$kept_versions"; then
-                        to_keep+=(1)
-                    else
-                        to_keep+=(0)
-                    fi
-                done
-                ;;
-            days)
-                # `find -mtime +N` matches files older than N*24h (portable
-                # across BSD and GNU find). Keep newer ones.
-                local c
-                for c in "${candidates[@]}"; do
-                    if [[ -n "$(find "$c" -maxdepth 0 -mtime "+${retain_value}" 2>/dev/null)" ]]; then
-                        to_keep+=(0)
-                    else
-                        to_keep+=(1)
-                    fi
-                done
-                ;;
-        esac
-
-        # Pass 3: archive files that did not make the keep set.
-        for ((i=0; i<${#candidates[@]}; i++)); do
-            local file="${candidates[i]}"
-            filename="$(basename "$file")"
-
-            if [[ "${to_keep[i]}" -eq 1 ]]; then
+            # Skip the current version's own files.
+            if [[ "$filename" == *"v$version"* ]]; then
                 skipped_count=$((skipped_count + 1))
                 continue
             fi
 
-            # Slot into the v<major>/ subdirectory so the archive stays
-            # browsable instead of becoming a flat dump.
             local file_major
             file_major="$(printf '%s' "$filename" | sed -E 's/^[A-Z_]+_v([0-9]+)\..*/\1/')"
             local target_dir="${zarchive_dir}/v${file_major}"
             mkdir -p "$target_dir"
             local dest="${target_dir}/${filename}"
 
-            # Pre-move safety check: refuse to relocate a file the user
-            # is mid-editing. A hand-edit (security retraction, typo fix)
-            # would otherwise be silently moved by the sweep. Set
-            # MANIFEST_CLI_DOCS_ARCHIVE_FORCE=1 to bypass in CI.
             if ! is_truthy "${MANIFEST_CLI_DOCS_ARCHIVE_FORCE:-}"; then
                 local porcelain
-                porcelain="$(git status --porcelain -- "$file" 2>/dev/null || true)"
+                porcelain="$(git status --porcelain -- "$f" 2>/dev/null || true)"
                 if [[ -n "$porcelain" ]]; then
                     log_error "Refusing to archive ${filename} — file has uncommitted changes:"
                     log_error "  ${porcelain}"
@@ -506,25 +474,111 @@ main_cleanup() {
                 fi
             fi
 
-            if mv "$file" "$dest" 2>/dev/null; then
+            if mv "$f" "$dest" 2>/dev/null; then
                 log_success "Moved: ${filename} → v${file_major}/"
                 moved_count=$((moved_count + 1))
-                archive_log_entries+=("${file#"$PROJECT_ROOT"/}|${dest#"$PROJECT_ROOT"/}")
+                move_entries+=("${f#"$PROJECT_ROOT"/}|${dest#"$PROJECT_ROOT"/}")
             else
                 log_warning "Failed to move: $filename"
             fi
-        done
+        done < <(find "$(get_docs_folder "$PROJECT_ROOT")" -maxdepth 1 -type f -name "*.md")
 
         log_success "Archived $moved_count files, skipped $skipped_count files"
+    fi
 
-        if [[ ${#archive_log_entries[@]} -gt 0 ]]; then
-            _manifest_archive_append_move_log "$version" "$timestamp" "$retain_spec" "${archive_log_entries[@]}"
+    # ---- Phase B: archive retention prune ----------------------------------
+    local pruned_count=0
+    local -a prune_entries=()
+    if [[ "$retain_kind" != "off" && -d "$zarchive_dir" ]]; then
+        log_info "Enforcing archive retention (retain=${retain_spec})..."
+
+        local -a archived_files=() archived_versions=()
+        local af bn av
+        while IFS= read -r af; do
+            [[ -f "$af" ]] || continue
+            bn="$(basename "$af")"
+            # Only RELEASE_v* and CHANGELOG_v* are subject to retention;
+            # SECURITY_ANALYSIS_REPORT_v* files are point-in-time audits
+            # and stay in the archive indefinitely.
+            [[ "$bn" =~ ^(RELEASE|CHANGELOG)_v[0-9]+\.[0-9]+\.[0-9]+\.md$ ]] || continue
+            av="$(printf '%s' "$bn" | sed -nE 's/^[A-Z]+_v([0-9]+\.[0-9]+\.[0-9]+).*/\1/p')"
+            [[ -n "$av" ]] || continue
+            archived_files+=("$af")
+            archived_versions+=("$av")
+        done < <(find "$zarchive_dir" -mindepth 2 -maxdepth 2 -type f -name "*.md" 2>/dev/null)
+
+        local -a to_prune=()
+        local i
+        case "$retain_kind" in
+            versions)
+                local kept_versions=""
+                if [[ ${#archived_versions[@]} -gt 0 ]]; then
+                    kept_versions="$(printf '%s\n' "${archived_versions[@]}" | sort -u -V -r | head -n "$retain_value")"
+                fi
+                local v
+                for v in "${archived_versions[@]}"; do
+                    if grep -qFx "$v" <<< "$kept_versions"; then
+                        to_prune+=(0)
+                    else
+                        to_prune+=(1)
+                    fi
+                done
+                ;;
+            days)
+                local c
+                for c in "${archived_files[@]}"; do
+                    if [[ -n "$(find "$c" -maxdepth 0 -mtime "+${retain_value}" 2>/dev/null)" ]]; then
+                        to_prune+=(1)
+                    else
+                        to_prune+=(0)
+                    fi
+                done
+                ;;
+        esac
+
+        for ((i=0; i<${#archived_files[@]}; i++)); do
+            [[ "${to_prune[i]}" -eq 1 ]] || continue
+            local af="${archived_files[i]}"
+            local bn
+            bn="$(basename "$af")"
+
+            # Pre-delete safety: refuse to delete a file with uncommitted
+            # *edits* (the user's hand-edit they haven't committed yet).
+            # Untracked files are excluded — those include the entries
+            # Phase A just moved into the archive in this same run, which
+            # are transient and safe to prune. Same FORCE bypass as Phase A.
+            if ! is_truthy "${MANIFEST_CLI_DOCS_ARCHIVE_FORCE:-}"; then
+                local porcelain
+                porcelain="$(git status --porcelain -- "$af" 2>/dev/null | grep -vE '^\?\?' || true)"
+                if [[ -n "$porcelain" ]]; then
+                    log_error "Refusing to prune ${bn} — file has uncommitted changes:"
+                    log_error "  ${porcelain}"
+                    log_error "Commit, revert, or set MANIFEST_CLI_DOCS_ARCHIVE_FORCE=1 to bypass."
+                    return 1
+                fi
+            fi
+
+            if rm -f "$af"; then
+                log_success "Pruned: ${af#"$PROJECT_ROOT"/}"
+                pruned_count=$((pruned_count + 1))
+                prune_entries+=("${af#"$PROJECT_ROOT"/}")
+            else
+                log_warning "Failed to prune: $bn"
+            fi
+        done
+
+        if [[ "$pruned_count" -gt 0 ]]; then
+            log_success "Pruned $pruned_count files from archive"
         fi
     fi
 
-    # Regenerate the archive indexes if anything was moved or if the
-    # archive layout exists. Idempotent: rebuilds from current file state.
-    if [[ "$moved_count" -gt 0 ]] || [[ -d "$(get_zarchive_dir)" ]]; then
+    # ---- Append a single log entry covering both phases --------------------
+    if [[ "$moved_count" -gt 0 || "$pruned_count" -gt 0 ]]; then
+        _manifest_archive_append_log_entry "$version" "$timestamp" "$retain_spec" "$moved_count" "${move_entries[@]}" "${prune_entries[@]}"
+    fi
+
+    # Regenerate the archive indexes (idempotent rebuild from file state).
+    if [[ "$moved_count" -gt 0 || "$pruned_count" -gt 0 ]] || [[ -d "$zarchive_dir" ]]; then
         _manifest_archive_regenerate_indexes
     fi
 

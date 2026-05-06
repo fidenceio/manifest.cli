@@ -21,11 +21,15 @@ teardown() {
     unset MANIFEST_CLI_DOCS_RETAIN
 }
 
-seed_committed_release() {
+# Seed an archived RELEASE+CHANGELOG pair under zArchive/v<major>/, committed.
+seed_archived_pair() {
     local version="$1"
-    local file="docs/RELEASE_v${version}.md"
-    echo "# Release v${version}" > "$file"
-    git add "$file" && git commit -q -m "seed v${version}"
+    local major="${version%%.*}"
+    local dir="docs/zArchive/v${major}"
+    mkdir -p "$dir"
+    echo "# Release v${version}" > "${dir}/RELEASE_v${version}.md"
+    echo "# Changelog v${version}" > "${dir}/CHANGELOG_v${version}.md"
+    git add "${dir}" && git commit -q -m "seed archive v${version}"
 }
 
 # -----------------------------------------------------------------------------
@@ -63,109 +67,161 @@ seed_committed_release() {
 }
 
 # -----------------------------------------------------------------------------
-# versions-mode retention
+# Phase A: active-docs sweep is unconditional
 # -----------------------------------------------------------------------------
 
-@test "retain='1 version': only current stays; older archives" {
-    export MANIFEST_CLI_DOCS_RETAIN="1 version"
-    seed_committed_release "46.0.0"
-    seed_committed_release "46.5.0"
+@test "active sweep moves previous version's docs regardless of retain setting" {
+    export MANIFEST_CLI_DOCS_RETAIN="off"   # retention off, but Phase A still runs
+    echo "v46.10.0 release" > docs/RELEASE_v46.10.0.md
+    git add docs/RELEASE_v46.10.0.md && git commit -q -m "seed active v46.10.0"
 
     run main_cleanup "46.13.0" "2026-05-05 23:00:00 UTC"
     [ "$status" -eq 0 ]
-    [ ! -f "docs/RELEASE_v46.0.0.md" ]
-    [ ! -f "docs/RELEASE_v46.5.0.md" ]
-    [ -f "docs/zArchive/v46/RELEASE_v46.0.0.md" ]
-    [ -f "docs/zArchive/v46/RELEASE_v46.5.0.md" ]
-}
-
-@test "retain='3 versions': top 3 distinct stay (current included in sort)" {
-    export MANIFEST_CLI_DOCS_RETAIN="3 versions"
-    seed_committed_release "46.10.0"
-    seed_committed_release "46.11.0"
-    seed_committed_release "46.12.0"
-    seed_committed_release "46.13.0"
-
-    run main_cleanup "46.14.0" "2026-05-05 23:00:00 UTC"
-    [ "$status" -eq 0 ]
-    # Top 3 of {46.14.0, 46.13.0, 46.12.0, 46.11.0, 46.10.0} = 14, 13, 12.
-    [ -f "docs/RELEASE_v46.13.0.md" ]
-    [ -f "docs/RELEASE_v46.12.0.md" ]
-    [ ! -f "docs/RELEASE_v46.11.0.md" ]
     [ ! -f "docs/RELEASE_v46.10.0.md" ]
-    [ -f "docs/zArchive/v46/RELEASE_v46.11.0.md" ]
     [ -f "docs/zArchive/v46/RELEASE_v46.10.0.md" ]
 }
 
-@test "retain='10 versions' (default): nothing archives when fewer than 10 candidates" {
-    # set_default_configuration set MANIFEST_CLI_DOCS_RETAIN="10 versions" already.
-    seed_committed_release "46.10.0"
-    seed_committed_release "46.11.0"
+# -----------------------------------------------------------------------------
+# Phase B: versions-mode prune
+# -----------------------------------------------------------------------------
+
+@test "retain='3 versions': keeps top 3 archived versions; older are pruned" {
+    export MANIFEST_CLI_DOCS_RETAIN="3 versions"
+    seed_archived_pair "46.10.0"
+    seed_archived_pair "46.11.0"
+    seed_archived_pair "46.12.0"
+    seed_archived_pair "46.13.0"
+    seed_archived_pair "46.14.0"
+
+    run main_cleanup "46.15.0" "2026-05-05 23:00:00 UTC"
+    [ "$status" -eq 0 ]
+    # Top 3 of {14, 13, 12, 11, 10} = 14, 13, 12.
+    [ -f "docs/zArchive/v46/RELEASE_v46.14.0.md" ]
+    [ -f "docs/zArchive/v46/CHANGELOG_v46.14.0.md" ]
+    [ -f "docs/zArchive/v46/RELEASE_v46.13.0.md" ]
+    [ -f "docs/zArchive/v46/RELEASE_v46.12.0.md" ]
+    [ ! -f "docs/zArchive/v46/RELEASE_v46.11.0.md" ]
+    [ ! -f "docs/zArchive/v46/CHANGELOG_v46.11.0.md" ]
+    [ ! -f "docs/zArchive/v46/RELEASE_v46.10.0.md" ]
+}
+
+@test "retain='10 versions' (default): nothing pruned when archive has fewer than 10" {
+    seed_archived_pair "46.10.0"
+    seed_archived_pair "46.11.0"
 
     run main_cleanup "46.13.0" "2026-05-05 23:00:00 UTC"
     [ "$status" -eq 0 ]
-    [ -f "docs/RELEASE_v46.10.0.md" ]
-    [ -f "docs/RELEASE_v46.11.0.md" ]
+    [ -f "docs/zArchive/v46/RELEASE_v46.10.0.md" ]
+    [ -f "docs/zArchive/v46/RELEASE_v46.11.0.md" ]
 }
 
 # -----------------------------------------------------------------------------
-# off mode
+# Phase B: off mode
 # -----------------------------------------------------------------------------
 
-@test "retain='off': sweep skipped entirely" {
+@test "retain='off': archive grows unbounded; nothing pruned" {
     export MANIFEST_CLI_DOCS_RETAIN="off"
-    seed_committed_release "46.0.0"
+    seed_archived_pair "20.0.0"
+    seed_archived_pair "30.0.0"
+    seed_archived_pair "40.0.0"
 
     run main_cleanup "46.13.0" "2026-05-05 23:00:00 UTC"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Archive sweep skipped (retain=off)"
-    [ -f "docs/RELEASE_v46.0.0.md" ]
-    [ ! -f "docs/zArchive/v46/RELEASE_v46.0.0.md" ]
+    [ -f "docs/zArchive/v20/RELEASE_v20.0.0.md" ]
+    [ -f "docs/zArchive/v30/RELEASE_v30.0.0.md" ]
+    [ -f "docs/zArchive/v40/RELEASE_v40.0.0.md" ]
 }
 
 # -----------------------------------------------------------------------------
-# days-mode retention (uses find -mtime)
+# Phase B: SECURITY_ANALYSIS_REPORT files are excluded from retention
 # -----------------------------------------------------------------------------
 
-@test "retain='10 days': old files archive, recent stay" {
+@test "retain prunes RELEASE/CHANGELOG but never SECURITY_ANALYSIS_REPORT" {
+    export MANIFEST_CLI_DOCS_RETAIN="1 version"
+    seed_archived_pair "20.0.0"
+    seed_archived_pair "46.13.0"
+    mkdir -p docs/zArchive/v20
+    echo "# Audit v20.0.0" > docs/zArchive/v20/SECURITY_ANALYSIS_REPORT_v20.0.0.md
+    git add docs/zArchive/v20/SECURITY_ANALYSIS_REPORT_v20.0.0.md && git commit -q -m "seed audit"
+
+    run main_cleanup "46.14.0" "2026-05-05 23:00:00 UTC"
+    [ "$status" -eq 0 ]
+    # v20 release docs pruned (not in top 1)…
+    [ ! -f "docs/zArchive/v20/RELEASE_v20.0.0.md" ]
+    [ ! -f "docs/zArchive/v20/CHANGELOG_v20.0.0.md" ]
+    # …but the audit stays.
+    [ -f "docs/zArchive/v20/SECURITY_ANALYSIS_REPORT_v20.0.0.md" ]
+}
+
+# -----------------------------------------------------------------------------
+# Phase B: days-mode (uses find -mtime)
+# -----------------------------------------------------------------------------
+
+@test "retain='10 days': archived files older than N days are pruned" {
     export MANIFEST_CLI_DOCS_RETAIN="10 days"
-    seed_committed_release "46.0.0"
-    seed_committed_release "46.5.0"
-    # Set mtime: v46.0.0 to 30 days ago, v46.5.0 to today.
-    touch -t 202604010000 docs/RELEASE_v46.0.0.md
-    touch docs/RELEASE_v46.5.0.md
+    seed_archived_pair "46.0.0"
+    seed_archived_pair "46.5.0"
+    # Set mtime: v46.0.0 to 30 days ago; v46.5.0 to today.
+    touch -t 202604010000 docs/zArchive/v46/RELEASE_v46.0.0.md
+    touch -t 202604010000 docs/zArchive/v46/CHANGELOG_v46.0.0.md
+    touch docs/zArchive/v46/RELEASE_v46.5.0.md
+    touch docs/zArchive/v46/CHANGELOG_v46.5.0.md
 
     run main_cleanup "46.13.0" "2026-05-05 23:00:00 UTC"
     [ "$status" -eq 0 ]
-    [ ! -f "docs/RELEASE_v46.0.0.md" ]
-    [ -f "docs/zArchive/v46/RELEASE_v46.0.0.md" ]
-    [ -f "docs/RELEASE_v46.5.0.md" ]
+    [ ! -f "docs/zArchive/v46/RELEASE_v46.0.0.md" ]
+    [ ! -f "docs/zArchive/v46/CHANGELOG_v46.0.0.md" ]
+    [ -f "docs/zArchive/v46/RELEASE_v46.5.0.md" ]
+    [ -f "docs/zArchive/v46/CHANGELOG_v46.5.0.md" ]
 }
 
 # -----------------------------------------------------------------------------
-# malformed config
+# Phase B: pre-delete safety check honors uncommitted edits
+# -----------------------------------------------------------------------------
+
+@test "prune refuses to delete an archived file with uncommitted edits" {
+    export MANIFEST_CLI_DOCS_RETAIN="1 version"
+    seed_archived_pair "20.0.0"
+    seed_archived_pair "46.13.0"
+    # Hand-edit the v20 file (security retraction simulation).
+    echo "RETRACTED" >> docs/zArchive/v20/RELEASE_v20.0.0.md
+
+    run main_cleanup "46.14.0" "2026-05-05 23:00:00 UTC"
+    [ "$status" -ne 0 ]
+    echo "$output" | grep -q "Refusing to prune"
+    echo "$output" | grep -q "uncommitted changes"
+    # File still present.
+    [ -f "docs/zArchive/v20/RELEASE_v20.0.0.md" ]
+}
+
+# -----------------------------------------------------------------------------
+# Malformed config
 # -----------------------------------------------------------------------------
 
 @test "main_cleanup errors out on a malformed retain spec" {
     export MANIFEST_CLI_DOCS_RETAIN="banana"
-    seed_committed_release "46.0.0"
 
     run main_cleanup "46.13.0" "2026-05-05 23:00:00 UTC"
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "Invalid docs.retain spec"
-    [ -f "docs/RELEASE_v46.0.0.md" ]
 }
 
 # -----------------------------------------------------------------------------
-# move log carries the retain spec
+# Move log captures both moves and prunes
 # -----------------------------------------------------------------------------
 
-@test "move log records the retain spec used" {
+@test "move log records moves and prunes in one entry" {
     export MANIFEST_CLI_DOCS_RETAIN="1 version"
-    seed_committed_release "46.0.0"
+    seed_archived_pair "20.0.0"          # 2 files, will be pruned (Phase B)
+    echo "v46.13.4" > docs/RELEASE_v46.13.4.md
+    git add docs/RELEASE_v46.13.4.md && git commit -q -m "seed active v46.13.4"
 
-    run main_cleanup "46.13.0" "2026-05-05 23:00:00 UTC"
+    run main_cleanup "46.14.0" "2026-05-05 23:00:00 UTC"
     [ "$status" -eq 0 ]
     [ -f "docs/zArchive/.archive-log.md" ]
     grep -q "Retain: 1 version" docs/zArchive/.archive-log.md
+    grep -q "Moved 1 file:" docs/zArchive/.archive-log.md
+    grep -q "Pruned 2 files (over retention cap):" docs/zArchive/.archive-log.md
+    grep -q "RELEASE_v46.13.4.md" docs/zArchive/.archive-log.md
+    grep -q "RELEASE_v20.0.0.md" docs/zArchive/.archive-log.md
 }
