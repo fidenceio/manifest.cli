@@ -423,7 +423,7 @@ Manifest includes layered security protections:
 
 ## Testing
 
-Manifest ships with a [bats-core](https://github.com/bats-core/bats-core) test suite covering release flow, YAML layering, version-bump logic, canonical-repo detection, config safety gates, fleet workflows, JSON output, Homebrew packaging, and recovery paths. CI runs the suite on Ubuntu and macOS on every push and pull request.
+Manifest ships with a [bats-core](https://github.com/bats-core/bats-core) test suite covering release flow, YAML layering, version-bump logic, canonical-repo detection, config safety gates, fleet workflows, JSON output, Homebrew packaging, local tap refresh, and recovery paths. CI runs the suite on Ubuntu and macOS on every push and pull request.
 
 ```sh
 ./scripts/run-tests-container.sh
@@ -436,6 +436,7 @@ tests/
 ├── helpers/setup.bash         Shared scratch dirs and module loaders
 ├── ship_resume.bats           Post-push recovery behavior
 ├── tag_target.bats            Exact tag naming and push semantics
+├── homebrew_tap_refresh.bats  Safe local Homebrew tap checkout refresh
 ├── homebrew_wrapper.bats      Installed-wrapper and formula smoke tests
 ├── recipe.bats                Recipe introspection and ship --explain
 ├── status.bats                Repo identity, working-tree counts, JSON status

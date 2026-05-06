@@ -178,6 +178,75 @@ manifest_repo_display_name() {
     basename "$project_root"
 }
 
+manifest_git_safe_fast_forward_checkout() {
+    local checkout_dir="$1"
+    local expected_slug="${2:-}"
+    local branch="${3:-main}"
+    local remote="${4:-origin}"
+
+    if [[ -z "$checkout_dir" || ! -d "$checkout_dir" ]]; then
+        echo "missing"
+        return 2
+    fi
+
+    if ! git -C "$checkout_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        echo "not_git"
+        return 2
+    fi
+
+    local origin_slug=""
+    origin_slug="$(manifest_origin_repo_slug "$checkout_dir" || echo "")"
+    if [[ -n "$expected_slug" && "$origin_slug" != "$expected_slug" ]]; then
+        echo "wrong_remote:${origin_slug:-unknown}"
+        return 2
+    fi
+
+    local current_branch=""
+    current_branch="$(git -C "$checkout_dir" symbolic-ref --short -q HEAD 2>/dev/null || echo "")"
+    if [[ "$current_branch" != "$branch" ]]; then
+        echo "wrong_branch:${current_branch:-detached}"
+        return 2
+    fi
+
+    if [[ -n "$(git -C "$checkout_dir" status --porcelain 2>/dev/null)" ]]; then
+        echo "dirty"
+        return 2
+    fi
+
+    if ! git -C "$checkout_dir" fetch "$remote" "$branch" >/dev/null 2>&1; then
+        echo "fetch_failed"
+        return 1
+    fi
+
+    local local_rev remote_rev base_rev
+    local_rev="$(git -C "$checkout_dir" rev-parse HEAD 2>/dev/null || echo "")"
+    remote_rev="$(git -C "$checkout_dir" rev-parse "$remote/$branch" 2>/dev/null || echo "")"
+    base_rev="$(git -C "$checkout_dir" merge-base HEAD "$remote/$branch" 2>/dev/null || echo "")"
+
+    if [[ -z "$local_rev" || -z "$remote_rev" || -z "$base_rev" ]]; then
+        echo "rev_check_failed"
+        return 1
+    fi
+
+    if [[ "$local_rev" == "$remote_rev" ]]; then
+        echo "current"
+        return 0
+    fi
+
+    if [[ "$base_rev" != "$local_rev" ]]; then
+        echo "divergent"
+        return 2
+    fi
+
+    if git -C "$checkout_dir" merge --ff-only "$remote/$branch" >/dev/null 2>&1; then
+        echo "updated"
+        return 0
+    fi
+
+    echo "ff_failed"
+    return 1
+}
+
 # -----------------------------------------------------------------------------
 # Function: _manifest_require_gh
 # -----------------------------------------------------------------------------

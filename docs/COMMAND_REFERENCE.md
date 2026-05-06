@@ -420,7 +420,7 @@ manifest ship repo patch --local   # Everything except tag/push/Homebrew
 manifest ship repo patch --explain # Show the built-in recipe definition
 ```
 
-**Full mode** (default): sync, bump version, generate docs, archive old docs, validate markdown, commit, tag, push to all remotes, update Homebrew formula (canonical repo only).
+**Full mode** (default): sync, bump version, generate docs, archive old docs, validate markdown, commit, tag, push to all remotes, update Homebrew formula (canonical repo only), and safely fast-forward clean local Homebrew tap checkouts that the release process updated remotely.
 
 **Local mode** (`--local`): Everything except creating a tag, pushing to remotes, and updating Homebrew. Equivalent to the old `manifest prep <type>`.
 
@@ -477,7 +477,7 @@ release-note/changelog attachment.
 12. `validate_repository()` — post-commit check
 13. *(if not --local)* `create_tag()` — Git tag
 14. *(if not --local)* `push_changes()` — push to remotes
-15. *(if not --local)* `update_homebrew_formula()` — Homebrew (canonical repo only)
+15. *(if not --local)* `update_homebrew_formula()` — Homebrew (canonical repo only), including safe refresh of clean local tap checkouts
 16. *(if not --local)* Local installed Manifest CLI upgrade
 17. *(if not --local and MANIFEST_CLI_GITHUB_ACTIONS_WAIT=true)* GitHub Actions status watch for the published HEAD
 18. `update_repository_metadata()` — final metadata update
