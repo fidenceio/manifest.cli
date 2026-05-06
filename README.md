@@ -5,7 +5,7 @@
 When you can spin up four features in parallel, you also need to ship four features without dropping any. Manifest handles versions, tags, changelogs, docs, and the multi-repo coordination so the human stays in flow.
 
 [![tests](https://github.com/fidenceio/manifest.cli/actions/workflows/test.yml/badge.svg)](https://github.com/fidenceio/manifest.cli/actions/workflows/test.yml)
-**Version** `46.13.4` · **Platform** macOS · Linux · FreeBSD · **Requires** Bash 5+, Git, yq v4+
+**Version** `46.13.5` · **Platform** macOS · Linux · FreeBSD · **Requires** Bash 5+, Git, yq v4+
 
 ---
 
@@ -566,7 +566,7 @@ Homebrew installation handles all dependencies automatically. The install script
 | [Fleet Design Spec](docs/FLEET_DESIGN_SPEC.md) | Polyrepo architecture and design |
 | [YAML config example](examples/manifest.config.yaml.example) | Full schema with all keys + comments |
 | [North Star](docs/NORTH_STAR.md) | Strategic direction and priorities |
-| [Release Notes](docs/RELEASE_v46.13.4.md) | Current release details |
+| [Release Notes](docs/RELEASE_v46.13.5.md) | Current release details |
 
 ---
 
