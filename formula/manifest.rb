@@ -30,13 +30,6 @@ class Manifest < Formula
           return 0
         fi
 
-        if [ "${MANIFEST_CLI_BASH_REEXEC:-0}" = "1" ]; then
-          echo "Manifest CLI requires Bash 5+." >&2
-          echo "Current shell: bash ${BASH_VERSION:-unknown}" >&2
-          echo "Install Bash 5+ and retry." >&2
-          return 1
-        fi
-
         local candidate major
         local candidates=(
           "${MANIFEST_CLI_BASH_PATH:-}"

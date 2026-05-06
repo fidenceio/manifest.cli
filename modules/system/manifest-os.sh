@@ -23,21 +23,19 @@ MANIFEST_CLI_OS_SED_CMD=""
 
 # Bash version detection function
 detect_bash_version() {
-    if command -v bash >/dev/null 2>&1; then
-        MANIFEST_CLI_OS_BASH_VERSION=$(bash --version | head -n1 | grep -oE 'version [0-9]+\.[0-9]+' | cut -d' ' -f2)
-        if [ -n "$MANIFEST_CLI_OS_BASH_VERSION" ]; then
-            MANIFEST_CLI_OS_BASH_MAJOR=$(echo "$MANIFEST_CLI_OS_BASH_VERSION" | cut -d'.' -f1)
-            MANIFEST_CLI_OS_BASH_MINOR=$(echo "$MANIFEST_CLI_OS_BASH_VERSION" | cut -d'.' -f2)
-            
-            # Check for double bracket support (bash 2.02+)
-            if [ "$MANIFEST_CLI_OS_BASH_MAJOR" -gt 2 ] || ([ "$MANIFEST_CLI_OS_BASH_MAJOR" -eq 2 ] && [ "$MANIFEST_CLI_OS_BASH_MINOR" -ge 2 ]); then
-                MANIFEST_CLI_OS_BASH_SUPPORTS_DOUBLE_BRACKETS=true
-            fi
-            
-            # Check for associative arrays (bash 4.0+)
-            if [ "$MANIFEST_CLI_OS_BASH_MAJOR" -ge 4 ]; then
-                MANIFEST_CLI_OS_BASH_SUPPORTS_ASSOCIATIVE_ARRAYS=true
-            fi
+    if [ -n "${BASH_VERSION:-}" ]; then
+        MANIFEST_CLI_OS_BASH_VERSION="${BASH_VERSION%%[^0-9.]*}"
+        MANIFEST_CLI_OS_BASH_MAJOR="${BASH_VERSINFO[0]:-0}"
+        MANIFEST_CLI_OS_BASH_MINOR="${BASH_VERSINFO[1]:-0}"
+
+        # Check for double bracket support (bash 2.02+)
+        if [ "$MANIFEST_CLI_OS_BASH_MAJOR" -gt 2 ] || ([ "$MANIFEST_CLI_OS_BASH_MAJOR" -eq 2 ] && [ "$MANIFEST_CLI_OS_BASH_MINOR" -ge 2 ]); then
+            MANIFEST_CLI_OS_BASH_SUPPORTS_DOUBLE_BRACKETS=true
+        fi
+
+        # Check for associative arrays (bash 4.0+)
+        if [ "$MANIFEST_CLI_OS_BASH_MAJOR" -ge 4 ]; then
+            MANIFEST_CLI_OS_BASH_SUPPORTS_ASSOCIATIVE_ARRAYS=true
         fi
     else
         MANIFEST_CLI_OS_BASH_VERSION="Unknown"
