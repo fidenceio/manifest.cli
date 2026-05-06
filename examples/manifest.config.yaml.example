@@ -90,17 +90,14 @@ git:
 docs:
   folder: "docs"
   archive_folder: "docs/zArchive"
-  archive:
-    keep_recent: 1            # Number of prior minors (or majors on major bump)
-                              # whose files stay in active docs/ alongside the
-                              # current one. 0 = keep only current; raise for
-                              # more in-place context.
-    trigger: "minor_or_major" # When the archive sweep runs:
-                              #   every_ship     - on every ship (legacy behavior)
-                              #   minor_or_major - only on minor or major bumps (default)
-                              #   major_only     - only on major bumps
-                              #   manual         - never automatically; only via
-                              #                    `manifest docs cleanup`
+  retain: "10 versions"       # How long old release docs stay in active docs/.
+                              #   "N versions" - keep the N most recent versions
+                              #                  (the rest archive on next ship)
+                              #   "N days"     - keep files from the last N days
+                              #                  (older ones archive; uses mtime)
+                              #   "off"        - never auto-archive
+                              # Default is "10 versions". Set to "1 version" for
+                              # legacy "archive previous on every ship" behavior.
   auto_generate: true
   historical_limit: 20
   filename_pattern: "RELEASE_vVERSION.md"

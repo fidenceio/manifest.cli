@@ -15,6 +15,8 @@ setup() {
     git add VERSION && git commit -q -m "init repo"
     PROJECT_ROOT="$SCRATCH"
     export PROJECT_ROOT
+    # Force per-test retention to "1 version" so seeded files predictably archive.
+    export MANIFEST_CLI_DOCS_RETAIN="1 version"
 }
 
 teardown() {
