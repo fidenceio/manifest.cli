@@ -1704,14 +1704,16 @@ EOF
     local start_file="$root_dir/manifest.fleet.tsv"
     local all_dirs
     all_dirs=$(discover_all_directories "$root_dir" "$depth")
+    local refresh_inventory
+    refresh_inventory=$(filter_start_inventory_git_repos "$all_dirs")
 
-    if [[ -n "$all_dirs" && "$dry_run" == "true" ]]; then
+    if [[ -n "$refresh_inventory" && "$dry_run" == "true" ]]; then
         echo ""
         echo "Would refresh manifest.fleet.tsv from current scan"
-    elif [[ -n "$all_dirs" ]]; then
+    elif [[ -n "$refresh_inventory" ]]; then
         # merge_start_tsv writes TSV to stdout and "NEW:<count>" to stderr
         local merge_stderr
-        merge_stderr=$(merge_start_tsv "$all_dirs" "$start_file" "$root_dir" "$depth" 2>&1 > "${start_file}.tmp")
+        merge_stderr=$(merge_start_tsv "$refresh_inventory" "$start_file" "$root_dir" "$depth" 2>&1 > "${start_file}.tmp")
         mv "${start_file}.tmp" "$start_file"
 
         local tsv_new_count=0
