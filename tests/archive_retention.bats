@@ -18,7 +18,7 @@ setup() {
 teardown() {
     cd /tmp
     rm -rf "$SCRATCH"
-    unset MANIFEST_CLI_DOCS_ARCHIVE_TRIGGER MANIFEST_CLI_DOCS_ARCHIVE_KEEP_RECENT
+    unset MANIFEST_CLI_DOCS_RETAIN
 }
 
 seed_committed_release() {
@@ -29,186 +29,143 @@ seed_committed_release() {
 }
 
 # -----------------------------------------------------------------------------
-# Trigger gating
+# parse helper (white-box)
 # -----------------------------------------------------------------------------
 
-@test "trigger=every_ship: sweep runs on patch bump" {
-    MANIFEST_CLI_DOCS_ARCHIVE_TRIGGER=every_ship
-    MANIFEST_CLI_DOCS_ARCHIVE_KEEP_RECENT=0
-    seed_committed_release "46.0.0"
-
-    run main_cleanup "46.13.2" "2026-05-05 23:00:00 UTC" "patch"
-    [ "$status" -eq 0 ]
-    [ ! -f "docs/RELEASE_v46.0.0.md" ]
-    [ -f "docs/zArchive/v46/RELEASE_v46.0.0.md" ]
+@test "parse retention: '10 versions' → versions / 10" {
+    local k v
+    _manifest_parse_retention "10 versions" k v
+    [ "$k" = "versions" ]
+    [ "$v" = "10" ]
 }
 
-@test "trigger=minor_or_major: sweep skips on patch bump" {
-    MANIFEST_CLI_DOCS_ARCHIVE_TRIGGER=minor_or_major
-    seed_committed_release "46.0.0"
-
-    run main_cleanup "46.13.2" "2026-05-05 23:00:00 UTC" "patch"
-    [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Archive sweep skipped"
-    # File stays put.
-    [ -f "docs/RELEASE_v46.0.0.md" ]
-    [ ! -f "docs/zArchive/v46/RELEASE_v46.0.0.md" ]
+@test "parse retention: '30 days' → days / 30" {
+    local k v
+    _manifest_parse_retention "30 days" k v
+    [ "$k" = "days" ]
+    [ "$v" = "30" ]
 }
 
-@test "trigger=minor_or_major: sweep runs on minor bump" {
-    MANIFEST_CLI_DOCS_ARCHIVE_TRIGGER=minor_or_major
-    MANIFEST_CLI_DOCS_ARCHIVE_KEEP_RECENT=0
-    seed_committed_release "46.0.0"
-
-    run main_cleanup "46.13.0" "2026-05-05 23:00:00 UTC" "minor"
-    [ "$status" -eq 0 ]
-    [ ! -f "docs/RELEASE_v46.0.0.md" ]
-    [ -f "docs/zArchive/v46/RELEASE_v46.0.0.md" ]
+@test "parse retention: 'off' / empty → off" {
+    local k v
+    _manifest_parse_retention "off" k v
+    [ "$k" = "off" ]
+    _manifest_parse_retention "" k v
+    [ "$k" = "off" ]
 }
 
-@test "trigger=major_only: skips on minor, runs on major" {
-    MANIFEST_CLI_DOCS_ARCHIVE_TRIGGER=major_only
-    MANIFEST_CLI_DOCS_ARCHIVE_KEEP_RECENT=0
-    seed_committed_release "45.6.0"
-
-    run main_cleanup "46.0.0" "2026-05-05 23:00:00 UTC" "minor"
-    [ "$status" -eq 0 ]
-    [ -f "docs/RELEASE_v45.6.0.md" ]
-
-    run main_cleanup "47.0.0" "2026-05-05 23:00:00 UTC" "major"
-    [ "$status" -eq 0 ]
-    [ ! -f "docs/RELEASE_v45.6.0.md" ]
-    [ -f "docs/zArchive/v45/RELEASE_v45.6.0.md" ]
+@test "parse retention: malformed input returns 1" {
+    local k v
+    run _manifest_parse_retention "ten versions" k v
+    [ "$status" -ne 0 ]
+    run _manifest_parse_retention "5 weeks" k v
+    [ "$status" -ne 0 ]
 }
 
-@test "trigger=manual: skips when called with bump_type" {
-    MANIFEST_CLI_DOCS_ARCHIVE_TRIGGER=manual
-    seed_committed_release "46.0.0"
+# -----------------------------------------------------------------------------
+# versions-mode retention
+# -----------------------------------------------------------------------------
 
-    run main_cleanup "46.13.0" "2026-05-05 23:00:00 UTC" "minor"
-    [ "$status" -eq 0 ]
-    [ -f "docs/RELEASE_v46.0.0.md" ]
-}
-
-@test "trigger=manual: runs when invoked without bump_type" {
-    MANIFEST_CLI_DOCS_ARCHIVE_TRIGGER=manual
-    MANIFEST_CLI_DOCS_ARCHIVE_KEEP_RECENT=0
+@test "retain='1 version': only current stays; older archives" {
+    export MANIFEST_CLI_DOCS_RETAIN="1 version"
     seed_committed_release "46.0.0"
+    seed_committed_release "46.5.0"
 
     run main_cleanup "46.13.0" "2026-05-05 23:00:00 UTC"
     [ "$status" -eq 0 ]
     [ ! -f "docs/RELEASE_v46.0.0.md" ]
+    [ ! -f "docs/RELEASE_v46.5.0.md" ]
     [ -f "docs/zArchive/v46/RELEASE_v46.0.0.md" ]
+    [ -f "docs/zArchive/v46/RELEASE_v46.5.0.md" ]
 }
 
-# -----------------------------------------------------------------------------
-# Retention math (minor granularity)
-# -----------------------------------------------------------------------------
-
-@test "keep_recent=0 (minor bump): only current minor stays" {
-    MANIFEST_CLI_DOCS_ARCHIVE_TRIGGER=every_ship
-    MANIFEST_CLI_DOCS_ARCHIVE_KEEP_RECENT=0
-    seed_committed_release "46.11.0"
-    seed_committed_release "46.12.0"
-    seed_committed_release "46.13.0"
-
-    run main_cleanup "46.13.0" "2026-05-05 23:00:00 UTC" "minor"
-    [ "$status" -eq 0 ]
-    [ -f "docs/RELEASE_v46.13.0.md" ]
-    [ ! -f "docs/RELEASE_v46.12.0.md" ]
-    [ ! -f "docs/RELEASE_v46.11.0.md" ]
-    [ -f "docs/zArchive/v46/RELEASE_v46.12.0.md" ]
-    [ -f "docs/zArchive/v46/RELEASE_v46.11.0.md" ]
-}
-
-@test "keep_recent=1 (minor bump): current + previous minor stay" {
-    MANIFEST_CLI_DOCS_ARCHIVE_TRIGGER=every_ship
-    MANIFEST_CLI_DOCS_ARCHIVE_KEEP_RECENT=1
-    seed_committed_release "46.11.0"
-    seed_committed_release "46.12.0"
-    seed_committed_release "46.13.0"
-
-    run main_cleanup "46.13.0" "2026-05-05 23:00:00 UTC" "minor"
-    [ "$status" -eq 0 ]
-    [ -f "docs/RELEASE_v46.13.0.md" ]
-    [ -f "docs/RELEASE_v46.12.0.md" ]
-    [ ! -f "docs/RELEASE_v46.11.0.md" ]
-    [ -f "docs/zArchive/v46/RELEASE_v46.11.0.md" ]
-}
-
-@test "keep_recent=2 (minor bump): current + 2 previous minors stay" {
-    MANIFEST_CLI_DOCS_ARCHIVE_TRIGGER=every_ship
-    MANIFEST_CLI_DOCS_ARCHIVE_KEEP_RECENT=2
+@test "retain='3 versions': top 3 distinct stay (current included in sort)" {
+    export MANIFEST_CLI_DOCS_RETAIN="3 versions"
     seed_committed_release "46.10.0"
     seed_committed_release "46.11.0"
     seed_committed_release "46.12.0"
     seed_committed_release "46.13.0"
 
-    run main_cleanup "46.13.0" "2026-05-05 23:00:00 UTC" "minor"
+    run main_cleanup "46.14.0" "2026-05-05 23:00:00 UTC"
     [ "$status" -eq 0 ]
+    # Top 3 of {46.14.0, 46.13.0, 46.12.0, 46.11.0, 46.10.0} = 14, 13, 12.
     [ -f "docs/RELEASE_v46.13.0.md" ]
     [ -f "docs/RELEASE_v46.12.0.md" ]
-    [ -f "docs/RELEASE_v46.11.0.md" ]
+    [ ! -f "docs/RELEASE_v46.11.0.md" ]
     [ ! -f "docs/RELEASE_v46.10.0.md" ]
+    [ -f "docs/zArchive/v46/RELEASE_v46.11.0.md" ]
     [ -f "docs/zArchive/v46/RELEASE_v46.10.0.md" ]
 }
 
-@test "minor bump always archives a different-major file regardless of keep_recent" {
-    MANIFEST_CLI_DOCS_ARCHIVE_TRIGGER=every_ship
-    MANIFEST_CLI_DOCS_ARCHIVE_KEEP_RECENT=99
-    seed_committed_release "45.6.0"
-    seed_committed_release "46.13.0"
+@test "retain='10 versions' (default): nothing archives when fewer than 10 candidates" {
+    # set_default_configuration set MANIFEST_CLI_DOCS_RETAIN="10 versions" already.
+    seed_committed_release "46.10.0"
+    seed_committed_release "46.11.0"
 
-    run main_cleanup "46.13.0" "2026-05-05 23:00:00 UTC" "minor"
+    run main_cleanup "46.13.0" "2026-05-05 23:00:00 UTC"
     [ "$status" -eq 0 ]
-    [ -f "docs/RELEASE_v46.13.0.md" ]
-    [ ! -f "docs/RELEASE_v45.6.0.md" ]
-    [ -f "docs/zArchive/v45/RELEASE_v45.6.0.md" ]
+    [ -f "docs/RELEASE_v46.10.0.md" ]
+    [ -f "docs/RELEASE_v46.11.0.md" ]
 }
 
 # -----------------------------------------------------------------------------
-# Retention math (major granularity)
+# off mode
 # -----------------------------------------------------------------------------
 
-@test "keep_recent=0 (major bump): only current major stays" {
-    MANIFEST_CLI_DOCS_ARCHIVE_TRIGGER=every_ship
-    MANIFEST_CLI_DOCS_ARCHIVE_KEEP_RECENT=0
-    seed_committed_release "45.6.0"
+@test "retain='off': sweep skipped entirely" {
+    export MANIFEST_CLI_DOCS_RETAIN="off"
     seed_committed_release "46.0.0"
 
-    run main_cleanup "46.0.0" "2026-05-05 23:00:00 UTC" "major"
+    run main_cleanup "46.13.0" "2026-05-05 23:00:00 UTC"
     [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Archive sweep skipped (retain=off)"
     [ -f "docs/RELEASE_v46.0.0.md" ]
-    [ ! -f "docs/RELEASE_v45.6.0.md" ]
-    [ -f "docs/zArchive/v45/RELEASE_v45.6.0.md" ]
+    [ ! -f "docs/zArchive/v46/RELEASE_v46.0.0.md" ]
 }
 
-@test "keep_recent=1 (major bump): current + previous major stay" {
-    MANIFEST_CLI_DOCS_ARCHIVE_TRIGGER=every_ship
-    MANIFEST_CLI_DOCS_ARCHIVE_KEEP_RECENT=1
-    seed_committed_release "44.10.1"
-    seed_committed_release "45.6.0"
-    seed_committed_release "46.0.0"
+# -----------------------------------------------------------------------------
+# days-mode retention (uses find -mtime)
+# -----------------------------------------------------------------------------
 
-    run main_cleanup "46.0.0" "2026-05-05 23:00:00 UTC" "major"
+@test "retain='10 days': old files archive, recent stay" {
+    export MANIFEST_CLI_DOCS_RETAIN="10 days"
+    seed_committed_release "46.0.0"
+    seed_committed_release "46.5.0"
+    # Set mtime: v46.0.0 to 30 days ago, v46.5.0 to today.
+    touch -t 202604010000 docs/RELEASE_v46.0.0.md
+    touch docs/RELEASE_v46.5.0.md
+
+    run main_cleanup "46.13.0" "2026-05-05 23:00:00 UTC"
     [ "$status" -eq 0 ]
-    [ -f "docs/RELEASE_v46.0.0.md" ]
-    [ -f "docs/RELEASE_v45.6.0.md" ]
-    [ ! -f "docs/RELEASE_v44.10.1.md" ]
-    [ -f "docs/zArchive/v44/RELEASE_v44.10.1.md" ]
+    [ ! -f "docs/RELEASE_v46.0.0.md" ]
+    [ -f "docs/zArchive/v46/RELEASE_v46.0.0.md" ]
+    [ -f "docs/RELEASE_v46.5.0.md" ]
 }
 
 # -----------------------------------------------------------------------------
-# Move log header carries trigger/bump/keep_recent
+# malformed config
 # -----------------------------------------------------------------------------
 
-@test "move log records trigger, bump, and keep_recent" {
-    MANIFEST_CLI_DOCS_ARCHIVE_TRIGGER=every_ship
-    MANIFEST_CLI_DOCS_ARCHIVE_KEEP_RECENT=0
+@test "main_cleanup errors out on a malformed retain spec" {
+    export MANIFEST_CLI_DOCS_RETAIN="banana"
     seed_committed_release "46.0.0"
 
-    run main_cleanup "46.13.0" "2026-05-05 23:00:00 UTC" "minor"
+    run main_cleanup "46.13.0" "2026-05-05 23:00:00 UTC"
+    [ "$status" -ne 0 ]
+    echo "$output" | grep -q "Invalid docs.retain spec"
+    [ -f "docs/RELEASE_v46.0.0.md" ]
+}
+
+# -----------------------------------------------------------------------------
+# move log carries the retain spec
+# -----------------------------------------------------------------------------
+
+@test "move log records the retain spec used" {
+    export MANIFEST_CLI_DOCS_RETAIN="1 version"
+    seed_committed_release "46.0.0"
+
+    run main_cleanup "46.13.0" "2026-05-05 23:00:00 UTC"
     [ "$status" -eq 0 ]
     [ -f "docs/zArchive/.archive-log.md" ]
-    grep -q "Sweep: trigger=every_ship; bump=minor; keep_recent=0" docs/zArchive/.archive-log.md
+    grep -q "Retain: 1 version" docs/zArchive/.archive-log.md
 }

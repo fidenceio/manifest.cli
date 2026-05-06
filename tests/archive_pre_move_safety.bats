@@ -15,6 +15,9 @@ setup() {
     git add VERSION && git commit -q -m "init repo"
     PROJECT_ROOT="$SCRATCH"
     export PROJECT_ROOT
+    # Force the sweep to archive every non-current candidate so each test's
+    # single seeded file moves predictably.
+    export MANIFEST_CLI_DOCS_RETAIN="1 version"
 }
 
 teardown() {

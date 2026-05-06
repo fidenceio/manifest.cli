@@ -295,17 +295,13 @@ _manifest_archive_regenerate_indexes() {
 # move is auditable. Args:
 #   $1 = version that triggered the sweep
 #   $2 = full UTC timestamp string ("YYYY-MM-DD HH:MM:SS UTC")
-#   $3 = trigger value (or empty to omit)
-#   $4 = bump type (or empty to omit)
-#   $5 = keep_recent value (or empty to omit)
+#   $3 = retain spec (or empty to omit)
 #   $@ = "src|dest" pairs (project-root-relative paths)
 _manifest_archive_append_move_log() {
     local version="$1"
     local timestamp="$2"
-    local trigger="${3:-}"
-    local bump_type="${4:-}"
-    local keep_recent="${5:-}"
-    shift 5
+    local retain="${3:-}"
+    shift 3
     local count=$#
     [[ "$count" -gt 0 ]] || return 0
 
@@ -332,19 +328,7 @@ EOF
     {
         printf '## %s — v%s sweep\n\n' "$date" "$version"
         printf 'Timestamp: %s\n' "$timestamp"
-        if [[ -n "$trigger" || -n "$bump_type" || -n "$keep_recent" ]]; then
-            local meta=""
-            [[ -n "$trigger" ]] && meta="trigger=${trigger}"
-            if [[ -n "$bump_type" ]]; then
-                [[ -n "$meta" ]] && meta="${meta}; "
-                meta="${meta}bump=${bump_type}"
-            fi
-            if [[ -n "$keep_recent" ]]; then
-                [[ -n "$meta" ]] && meta="${meta}; "
-                meta="${meta}keep_recent=${keep_recent}"
-            fi
-            printf 'Sweep: %s\n' "$meta"
-        fi
+        [[ -n "$retain" ]] && printf 'Retain: %s\n' "$retain"
         printf 'Moved %d file%s:\n' "$count" "$plural"
         local pair src dest
         for pair in "$@"; do
@@ -356,77 +340,51 @@ EOF
     } >> "$log_file"
 }
 
-# Decide whether the archive sweep should run for a given trigger and
-# bump type. Returns 0 (run) or 1 (skip).
-_manifest_archive_should_run() {
-    local trigger="$1"
-    local bump_type="$2"
+# Parse a docs.retain spec into kind and value.
+#   "N versions" → kind=versions, value=N
+#   "N days"     → kind=days, value=N
+#   "off" or ""  → kind=off, value=0
+# Returns 0 on success, 1 on malformed input. Output written to the named
+# variables in $2 (kind) and $3 (value).
+_manifest_parse_retention() {
+    local raw="$1"
+    local _outkind="$2"
+    local _outval="$3"
 
-    case "$trigger" in
-        every_ship) return 0 ;;
-        minor_or_major)
-            [[ "$bump_type" == "minor" || "$bump_type" == "major" ]]
+    raw="$(printf '%s' "$raw" | tr -s '[:space:]' ' ')"
+    raw="${raw# }"; raw="${raw% }"
+
+    if [[ -z "$raw" || "$raw" == "off" ]]; then
+        printf -v "$_outkind" '%s' "off"
+        printf -v "$_outval" '%s' "0"
+        return 0
+    fi
+
+    local num="${raw%% *}"
+    local unit="${raw#* }"
+    [[ "$num" =~ ^[0-9]+$ ]] || return 1
+
+    case "$unit" in
+        version|versions)
+            printf -v "$_outkind" '%s' "versions"
+            printf -v "$_outval" '%s' "$num"
             ;;
-        major_only)
-            [[ "$bump_type" == "major" ]]
-            ;;
-        manual)
-            return 1
+        day|days)
+            printf -v "$_outkind" '%s' "days"
+            printf -v "$_outval" '%s' "$num"
             ;;
         *)
-            log_warning "Unknown docs.archive.trigger: '${trigger}'; defaulting to minor_or_major"
-            [[ "$bump_type" == "minor" || "$bump_type" == "major" ]]
+            return 1
             ;;
     esac
 }
 
-# Decide whether a file should stay in active docs/ (return 0) or be
-# archived (return 1) under the configured retention.
-#   $1 = filename (basename, e.g., "RELEASE_v46.13.0.md")
-#   $2 = current version ("46.13.0")
-#   $3 = bump type ("major"|"minor"|"patch"|"" — empty defaults to minor granularity)
-#   $4 = keep_recent (non-negative integer)
-#
-# Granularity:
-#   - bump=major: retain files in current major and the previous keep_recent majors.
-#   - otherwise: retain files in current major's last keep_recent+1 minors;
-#     anything in a different major is archived.
-# Files whose name does not encode a SemVer version are conservatively kept.
-_manifest_archive_should_keep() {
-    local filename="$1"
-    local current_version="$2"
-    local bump_type="${3:-}"
-    local keep_recent="${4:-1}"
-
-    local file_version
-    file_version="$(printf '%s' "$filename" | sed -nE 's/^[A-Z_]+_v([0-9]+\.[0-9]+\.[0-9]+).*/\1/p')"
-    [[ -n "$file_version" ]] || return 0
-
-    local file_major file_minor cur_major cur_minor _ignore
-    IFS=. read -r file_major file_minor _ignore <<< "$file_version"
-    IFS=. read -r cur_major cur_minor _ignore <<< "$current_version"
-
-    if [[ "$bump_type" == "major" ]]; then
-        local major_boundary=$((cur_major - keep_recent))
-        [[ "$file_major" -ge "$major_boundary" ]]
-        return $?
-    fi
-
-    if [[ "$file_major" -ne "$cur_major" ]]; then
-        return 1
-    fi
-    local minor_boundary=$((cur_minor - keep_recent))
-    [[ "$file_minor" -ge "$minor_boundary" ]]
-}
-
 # Main cleanup function - handles archiving and general cleanup.
-# Args: version, timestamp, optional bump_type ("major"|"minor"|"patch").
-# When bump_type is provided, the configured docs.archive.trigger gates
-# whether to sweep at all. Manual invocations (empty bump_type) always run.
+# Reads docs.retain from env to decide what to retain in active docs/.
+# Spec forms: "N versions", "N days", or "off" (skip archive phase).
 main_cleanup() {
     local version="${1:-}"
     local timestamp="${2:-}"
-    local bump_type="${3:-}"
 
     # Get trusted timestamp if not provided
     if [ -z "$timestamp" ]; then
@@ -434,8 +392,12 @@ main_cleanup() {
         timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
     fi
 
-    local trigger="${MANIFEST_CLI_DOCS_ARCHIVE_TRIGGER:-minor_or_major}"
-    local keep_recent="${MANIFEST_CLI_DOCS_ARCHIVE_KEEP_RECENT:-1}"
+    local retain_spec="${MANIFEST_CLI_DOCS_RETAIN:-10 versions}"
+    local retain_kind retain_value
+    if ! _manifest_parse_retention "$retain_spec" retain_kind retain_value; then
+        log_error "Invalid docs.retain spec: '${retain_spec}' (expected 'N versions', 'N days', or 'off')"
+        return 1
+    fi
 
     log_info "Starting repository cleanup..."
     log_info "Version: $version"
@@ -444,47 +406,79 @@ main_cleanup() {
     # Change to project root
     cd "$PROJECT_ROOT"
 
-    # Trigger gating: if a bump_type was provided (automatic invocation
-    # from the orchestrator) and the trigger says no, skip the archive
-    # phase. Manual `manifest docs cleanup` calls don't pass bump_type
-    # and always proceed.
     local archive_phase=1
-    if [[ -n "$bump_type" ]] && ! _manifest_archive_should_run "$trigger" "$bump_type"; then
-        log_info "Archive sweep skipped (trigger=${trigger}, bump=${bump_type})"
+    if [[ "$retain_kind" == "off" ]]; then
+        log_info "Archive sweep skipped (retain=off)"
         archive_phase=0
     fi
 
     # Archive old documentation
     local moved_count=0
     if [[ -n "$version" && "$archive_phase" -eq 1 ]]; then
-        log_info "Archiving old documentation for version $version..."
+        log_info "Archiving old documentation for version $version (retain=${retain_spec})..."
 
         ensure_zarchive_dir
 
         local skipped_count=0
         local zarchive_dir
         zarchive_dir="$(get_zarchive_dir)"
-        local -a archive_log_entries=()
+        local -a candidates=() candidate_versions=() archive_log_entries=()
 
-        # Walk the active docs/ directory only (-maxdepth 1) to avoid
-        # touching anything already archived under v<major>/ subfolders.
-        while IFS= read -r file; do
-            [[ -f "$file" ]] || continue
-            local filename
+        # Pass 1: enumerate archivable files in active docs/ along with
+        # their version tags. Strict allowlist: only well-formed
+        # RELEASE/CHANGELOG/SECURITY files with a SemVer-shaped version.
+        # Hand-authored docs sharing a prefix (e.g.,
+        # RELEASE_RUN_HANDOFF_v46.7.0.md) are not eligible.
+        local f filename file_version
+        while IFS= read -r f; do
+            [[ -f "$f" ]] || continue
+            filename="$(basename "$f")"
+            [[ "$filename" =~ $_MANIFEST_ARCHIVABLE_REGEX ]] || continue
+            file_version="$(printf '%s' "$filename" | sed -nE 's/^[A-Z_]+_v([0-9]+\.[0-9]+\.[0-9]+).*/\1/p')"
+            [[ -n "$file_version" ]] || continue
+            candidates+=("$f")
+            candidate_versions+=("$file_version")
+        done < <(find "$(get_docs_folder "$PROJECT_ROOT")" -maxdepth 1 -type f -name "*.md")
+
+        # Pass 2: decide which candidates to keep based on retention.
+        local -a to_keep=()
+        local i
+        case "$retain_kind" in
+            versions)
+                # Top-N distinct versions across {current_version} ∪ candidates,
+                # sorted version-aware descending. Files whose version is in the
+                # kept set stay; others archive.
+                local kept_versions
+                kept_versions="$( { printf '%s\n' "$version"; printf '%s\n' "${candidate_versions[@]}"; } | sort -u -V -r | head -n "$retain_value" )"
+                local v
+                for v in "${candidate_versions[@]}"; do
+                    if grep -qFx "$v" <<< "$kept_versions"; then
+                        to_keep+=(1)
+                    else
+                        to_keep+=(0)
+                    fi
+                done
+                ;;
+            days)
+                # `find -mtime +N` matches files older than N*24h (portable
+                # across BSD and GNU find). Keep newer ones.
+                local c
+                for c in "${candidates[@]}"; do
+                    if [[ -n "$(find "$c" -maxdepth 0 -mtime "+${retain_value}" 2>/dev/null)" ]]; then
+                        to_keep+=(0)
+                    else
+                        to_keep+=(1)
+                    fi
+                done
+                ;;
+        esac
+
+        # Pass 3: archive files that did not make the keep set.
+        for ((i=0; i<${#candidates[@]}; i++)); do
+            local file="${candidates[i]}"
             filename="$(basename "$file")"
 
-            # Strict allowlist: only well-formed RELEASE/CHANGELOG/SECURITY
-            # files with a SemVer-shaped version. Hand-authored docs that
-            # share a prefix (e.g., RELEASE_RUN_HANDOFF_v46.7.0.md) are
-            # not eligible.
-            if ! [[ "$filename" =~ $_MANIFEST_ARCHIVABLE_REGEX ]]; then
-                continue
-            fi
-
-            # Retention: keep current minor + previous keep_recent minors
-            # in active docs/ (or current major + previous keep_recent
-            # majors on a major bump). Anything outside is archived.
-            if _manifest_archive_should_keep "$filename" "$version" "$bump_type" "$keep_recent"; then
+            if [[ "${to_keep[i]}" -eq 1 ]]; then
                 skipped_count=$((skipped_count + 1))
                 continue
             fi
@@ -519,12 +513,12 @@ main_cleanup() {
             else
                 log_warning "Failed to move: $filename"
             fi
-        done < <(find "$(get_docs_folder "$PROJECT_ROOT")" -maxdepth 1 -type f -name "*.md")
+        done
 
         log_success "Archived $moved_count files, skipped $skipped_count files"
 
         if [[ ${#archive_log_entries[@]} -gt 0 ]]; then
-            _manifest_archive_append_move_log "$version" "$timestamp" "$trigger" "$bump_type" "$keep_recent" "${archive_log_entries[@]}"
+            _manifest_archive_append_move_log "$version" "$timestamp" "$retain_spec" "${archive_log_entries[@]}"
         fi
     fi
 
