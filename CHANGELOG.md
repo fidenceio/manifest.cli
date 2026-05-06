@@ -1,5 +1,15 @@
 # Changelog
 
+## [47.4.5] - 2026-05-06
+
+**Release Type:** Patch
+
+### Changes
+
+- Add regression coverage for the changed CLI workflow
+- Backfill and clarify release history in the root changelog
+
+
 ## [47.4.4] - 2026-05-06
 
 **Release Type:** Patch — no user-facing changes.
@@ -67,12 +77,3 @@
 - Wire first-class CLI commands to inspectable built-in recipe definitions
 - Add regression coverage for the changed CLI workflow
 - Document the updated CLI workflow and release contract
-
-
-## [47.2.0] - 2026-05-06
-
-**Release Type:** Minor
-
-### Changes
-
-- Add regression coverage for the changed CLI workflow
