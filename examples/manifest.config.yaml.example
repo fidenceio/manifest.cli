@@ -90,14 +90,17 @@ git:
 docs:
   folder: "docs"
   archive_folder: "docs/zArchive"
-  retain: "10 versions"       # How long old release docs stay in active docs/.
-                              #   "N versions" - keep the N most recent versions
-                              #                  (the rest archive on next ship)
-                              #   "N days"     - keep files from the last N days
-                              #                  (older ones archive; uses mtime)
-                              #   "off"        - never auto-archive
-                              # Default is "10 versions". Set to "1 version" for
-                              # legacy "archive previous on every ship" behavior.
+  retain: "10 versions"       # How much archive history to keep. Active docs/
+                              # always holds exactly the current version; the
+                              # previous version moves to archive on every ship.
+                              # `retain` controls the archive itself:
+                              #   "N versions" - keep the N most recent archived
+                              #                  versions; older ones are deleted
+                              #   "N days"     - delete archived files older than
+                              #                  N days (uses mtime)
+                              #   "off"        - never delete; archive grows
+                              # SECURITY_ANALYSIS_REPORT_v* files are point-in-time
+                              # audits and are never auto-deleted.
   auto_generate: true
   historical_limit: 20
   filename_pattern: "RELEASE_vVERSION.md"
