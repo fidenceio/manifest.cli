@@ -36,7 +36,7 @@ YAML
 
 write_selected_tsv() {
     cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
-true	svc	./svc	service	false			0.0.0
+true	svc	./svc	service	false		
 TSV
 }
 
@@ -59,8 +59,8 @@ YAML
 
 write_root_selected_tsv() {
     cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
-true	rootworkspace	.	infrastructure	true			0.0.0
-true	svc	./svc	service	true			0.0.0
+true	rootworkspace	.	infrastructure	true		
+true	svc	./svc	service	true		
 TSV
 }
 
@@ -196,6 +196,21 @@ TSV
     [ "$(cat "$SCRATCH/work/manifest.fleet.tsv")" = "$before" ]
 }
 
+@test "refresh fleet writes TSV from git repos, not every subdirectory" {
+    mkdir -p "$SCRATCH/work/svc/src"
+    git -C "$SCRATCH/work" init -q
+    git -C "$SCRATCH/work/svc" init -q
+    write_root_fleet_config
+    write_root_selected_tsv
+
+    run_manifest refresh fleet
+
+    [ "$status" -eq 0 ]
+    grep -q $'^true\trootworkspace\t.\tinfrastructure\ttrue' "$SCRATCH/work/manifest.fleet.tsv"
+    grep -q $'^true\tsvc\tsvc\tservice\ttrue' "$SCRATCH/work/manifest.fleet.tsv"
+    ! grep -q $'\tsvc/src\t' "$SCRATCH/work/manifest.fleet.tsv"
+}
+
 @test "refresh fleet --dry-run classifies dotted CLI and Homebrew tap repo names" {
     mkdir -p "$SCRATCH/work/fidenceio.manifest.cli" "$SCRATCH/work/fidenceio.homebrew.tap/Formula"
     git -C "$SCRATCH/work" init -q
@@ -216,8 +231,8 @@ services:
     branch: "main"
 YAML
     cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
-true	fidenceiomanifestcli	./fidenceio.manifest.cli	tool	true			0.0.0
-true	fidenceiohomebrewtap	./fidenceio.homebrew.tap	infrastructure	true			0.0.0
+true	fidenceiomanifestcli	./fidenceio.manifest.cli	tool	true		
+true	fidenceiohomebrewtap	./fidenceio.homebrew.tap	infrastructure	true		
 TSV
     before="$(cat "$SCRATCH/work/manifest.fleet.tsv")"
 
