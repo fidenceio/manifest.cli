@@ -103,7 +103,7 @@ teardown() {
 }
 
 @test "follow-up patch runner invokes manifest with recursion sentinel" {
-    manifest() {
+    manifest_exec_manifest() {
         echo "sentinel=${MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE:-}"
         echo "args=$*"
     }
@@ -113,5 +113,29 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"Running follow-up patch"* ]]
     [[ "$output" == *"sentinel=1"* ]]
+    [[ "$output" == *"args=ship repo patch"* ]]
+}
+
+@test "child manifest helper clears inherited bash re-exec sentinel" {
+    local bin_dir="$SCRATCH/bin"
+    mkdir -p "$bin_dir"
+    cat > "$bin_dir/manifest" <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'sentinel=%s\n' "${MANIFEST_CLI_BASH_REEXEC:-}"
+printf 'active=%s\n' "${MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE:-}"
+printf 'args=%s\n' "$*"
+SCRIPT
+    chmod +x "$bin_dir/manifest"
+    export PATH="$bin_dir:$PATH"
+    export MANIFEST_CLI_BASH_REEXEC=1
+
+    MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE=1
+    run manifest_exec_manifest ship repo patch
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"sentinel="* ]]
+    [[ "$output" != *"sentinel=1"* ]]
+    [[ "$output" == *"active=1"* ]]
     [[ "$output" == *"args=ship repo patch"* ]]
 }

@@ -1,6 +1,6 @@
-# Bash 5 Runtime TODO
+# Bash 5 Runtime Fix
 
-**Status:** Active implementation plan
+**Status:** Implemented locally, pending patch release
 **Created:** 2026-05-06
 **Goal:** Manifest CLI must run under Bash 5+ everywhere. Bash 3.2 may start a wrapper on macOS, but it must never reach CLI modules or nested Manifest execution.
 
@@ -23,22 +23,26 @@ Wrappers may begin execution under an older shell only long enough to locate and
 
 ## Implementation Checklist
 
-- [ ] Centralize Bash 5 resolution so repo-local and Homebrew wrappers do not drift.
-- [ ] Replace inherited `MANIFEST_CLI_BASH_REEXEC=1` behavior with a process-local guard or a safe child invocation helper.
-- [ ] Add a helper for Manifest calling Manifest, preserving workflow guards while clearing only Bash re-exec state.
-- [ ] Update `manifest_ship_run_followup_patch` to use the safe helper.
-- [ ] Update runtime Bash reporting to use `$BASH_VERSION` and `${BASH_VERSINFO}` from the current process.
-- [ ] Audit installed wrapper generation in `formula/manifest.rb`.
-- [ ] Audit repo-local wrappers in `scripts/manifest-cli.sh` and `scripts/manifest-cli-wrapper.sh`.
-- [ ] Audit generated hooks and hook tests so they intentionally clear inherited Bash re-exec state.
-- [ ] Audit subprocess call sites for direct `manifest`, `bash -lc`, `/bin/bash`, and `command -v bash` usage.
-- [ ] Add tests for nested Manifest execution with inherited `MANIFEST_CLI_BASH_REEXEC=1`.
-- [ ] Add tests for follow-up patch invocation under a simulated old PATH Bash.
-- [ ] Add tests proving status reports the current Bash runtime.
-- [ ] Add or update Homebrew wrapper tests for the centralized Bash 5 guard.
-- [ ] Run the focused container tests.
-- [ ] Run the full container test suite.
+- [x] Remove the inherited `MANIFEST_CLI_BASH_REEXEC=1` hard stop from repo-local wrappers.
+- [x] Remove the inherited `MANIFEST_CLI_BASH_REEXEC=1` hard stop from the Homebrew wrapper template.
+- [x] Add a helper for Manifest calling Manifest, preserving workflow guards while clearing only Bash re-exec state.
+- [x] Update `manifest_ship_run_followup_patch` to use the safe helper.
+- [x] Update runtime Bash reporting to use `$BASH_VERSION` and `${BASH_VERSINFO}` from the current process.
+- [x] Audit installed wrapper generation in `formula/manifest.rb`.
+- [x] Audit repo-local wrappers in `scripts/manifest-cli.sh` and `scripts/manifest-cli-wrapper.sh`.
+- [x] Confirm generated hooks intentionally clear inherited Bash re-exec state.
+- [x] Audit subprocess call sites for direct `manifest`, `bash -lc`, `/bin/bash`, and `command -v bash` usage.
+- [x] Add tests for nested Manifest execution with inherited `MANIFEST_CLI_BASH_REEXEC=1`.
+- [x] Add tests for follow-up patch invocation through the safe helper.
+- [x] Add tests proving status reports the current Bash runtime.
+- [x] Update Homebrew wrapper tests for the Bash 5 guard.
+- [x] Run the focused container tests.
+- [x] Run the full container test suite.
 - [ ] Ship a patch release after verification.
+
+## Remaining Hardening
+
+- [ ] Extract the duplicated wrapper guard into a generated/shared source if wrapper drift becomes a recurring issue. The current fix keeps the small wrapper snippets aligned and tested without introducing a new bootstrap dependency.
 
 ## Likely Files
 
@@ -61,6 +65,13 @@ Wrappers may begin execution under an older shell only long enough to locate and
 ./scripts/run-tests-container.sh tests/security_check.bats
 ./scripts/run-tests-container.sh tests/status.bats
 ./scripts/run-tests-container.sh
+```
+
+Local verification before release:
+
+```bash
+env MANIFEST_CLI_BASH_REEXEC=1 ./scripts/manifest-cli.sh --version
+env MANIFEST_CLI_BASH_REEXEC=1 ./scripts/manifest-cli.sh status repo
 ```
 
 After shipping:

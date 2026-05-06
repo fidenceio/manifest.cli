@@ -178,6 +178,18 @@ manifest_repo_display_name() {
     basename "$project_root"
 }
 
+manifest_exec_manifest() {
+    local -a env_args=(env -u MANIFEST_CLI_BASH_REEXEC)
+
+    # Preserve the release recursion guard when callers set it as a shell-local
+    # temporary assignment before invoking this function.
+    if [[ -n "${MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE:-}" ]]; then
+        env_args+=("MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE=$MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE")
+    fi
+
+    "${env_args[@]}" manifest "$@"
+}
+
 manifest_git_safe_fast_forward_checkout() {
     local checkout_dir="$1"
     local expected_slug="${2:-}"

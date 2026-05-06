@@ -208,7 +208,7 @@ manifest_ship_run_followup_patch() {
     echo ""
     echo "🔁 Running follow-up patch under the upgraded Manifest CLI..."
     echo "   Reason: canonical CLI ships may upgrade release behavior mid-run; the follow-up patch exercises the newly installed version once."
-    MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE=1 manifest ship repo patch
+    MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE=1 manifest_exec_manifest ship repo patch
 }
 
 manifest_ship_repo_resume() {

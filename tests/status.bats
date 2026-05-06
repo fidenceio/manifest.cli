@@ -167,3 +167,22 @@ YAML
     echo "$output" | grep -q "svc-a.*${branch_a}.*clean.*1.2.3.*2026-05-01.*Initial A"
     echo "$output" | grep -q "svc-b.*${branch_b}.*dirty.*2.0.0.*2026-05-02.*Initial B"
 }
+
+@test "runtime bash detection reports current interpreter, not PATH bash" {
+    local fake_bin="$SCRATCH/fake-bin"
+    mkdir -p "$fake_bin"
+    cat > "$fake_bin/bash" <<'SCRIPT'
+#!/usr/bin/env sh
+echo "GNU bash, version 3.2.57(1)-release"
+SCRIPT
+    chmod +x "$fake_bin/bash"
+    PATH="$fake_bin:$PATH"
+
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/system/manifest-os.sh" >/dev/null
+    detect_bash_version
+
+    [ "$MANIFEST_CLI_OS_BASH_MAJOR" = "${BASH_VERSINFO[0]}" ]
+    [ "$MANIFEST_CLI_OS_BASH_MINOR" = "${BASH_VERSINFO[1]}" ]
+    [[ "$MANIFEST_CLI_OS_BASH_VERSION" != "3.2"* ]]
+}
