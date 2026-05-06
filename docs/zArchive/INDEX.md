@@ -16,7 +16,7 @@ representing point-in-time security analyses are retained.
 | [v24](v24/INDEX.md) | 4 | 2025-10-24 | Security audits |
 | [v36](v36/INDEX.md) | 1 | 2026-03-11 | Security audit |
 | [v44](v44/INDEX.md) | 1 | 2026-04-25 | Security audit |
-| [v46](v46/INDEX.md) | 20 | 2026-05-04 – 2026-05-06 | Release docs |
+| [v46](v46/INDEX.md) | 20 | 2026-05-05 – 2026-05-06 | Release docs |
 
 **Total:** 30 documents across 7 major versions.
 
