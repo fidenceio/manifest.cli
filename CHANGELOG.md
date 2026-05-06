@@ -1,5 +1,20 @@
 # Changelog
 
+## [46.13.9] - 2026-05-06
+
+**Release Type:** Patch
+
+### Summary
+- Notable changes: 1
+- New features: 0
+- Improvements: 0
+- Bug fixes: 0
+- Breaking changes: 0
+- Documentation updates: 1
+
+### Documentation
+- Update CHANGELOG.md to v46.13.8
+
 ## [46.13.8] - 2026-05-06
 
 **Release Type:** Patch
@@ -124,26 +139,3 @@ No notable user-facing changes were detected since the previous release tag. Onl
 
 ### Documentation
 - Backfill v46 entries in root CHANGELOG (tracker #37)
-
-## [46.12.0] - 2026-05-05
-
-**Release Type:** Minor
-
-### Summary
-- Notable changes: 7
-- New features: 0
-- Improvements: 2
-- Bug fixes: 0
-- Breaking changes: 0
-- Documentation updates: 5
-
-### Improvements
-- Regroup zArchive into v<major>/ subfolders with auto-generated indexes
-- Fold GIT_HOOKS into USER_GUIDE; lift CONFIG_SURFACE_AUDIT backlog to IMPROVEMENT_TRACKER
-
-### Documentation
-- Add tracker items #36–#41 for deferred Phase 2 doc-system work
-- Boilerplate-free release notes; strict archive policy with auto-regenerated indexes
-- Delete 438 boilerplate-stub release notes/changelogs from zArchive
-- Stop committing doc-review reports by default; default report_dir to git state dir
-- Delete six consolidated audit/handoff docs; clean cross-references; drop v42 wording
