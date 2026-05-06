@@ -1,5 +1,14 @@
 # Changelog
 
+## [47.1.4] - 2026-05-06
+
+**Release Type:** Patch
+
+### Changes
+
+- Update 1 files before release
+
+
 ## [47.1.3] - 2026-05-06
 
 **Release Type:** Patch
@@ -92,15 +101,3 @@
 ### Changes
 
 - Release-only patch: refreshed version metadata, README version markers, docs index, tag, and Homebrew formula after `46.13.11`
-
-
-## [46.13.11] - 2026-05-06
-
-**Release Type:** Patch
-
-### Changes
-
-- Removed obsolete `docs.historical_limit` and `docs.filename_pattern` configuration in favor of the active `docs.retain` retention model
-- Simplified fleet documentation generation so fleet releases update root changelog/index surfaces instead of creating per-version fleet release/changelog files
-- Updated config wizard, configuration display, and example YAML files to match the current docs retention contract
-- Removed the one-shot `prune-archive-stubs.sh` script after archive-stub cleanup became part of the maintained docs flow
