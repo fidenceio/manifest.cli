@@ -240,10 +240,10 @@ docs:
   # Control which document types are created during fleet docs generation.
   #
   generate:
-    release_notes: true               # RELEASE_v<version>.md
-    changelog: true                   # CHANGELOG_v<version>.md
-    index: true                       # INDEX.md
+    index: true                       # INDEX.md (links to per-service docs)
     readme_version: true              # Update README.md version section
+    # Note: per-version RELEASE/CHANGELOG files are no longer generated.
+    # Fleet-root CHANGELOG.md gets a prepended entry on each fleet bump.
 
 # =============================================================================
 # FLEET OPERATIONS

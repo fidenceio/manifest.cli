@@ -572,8 +572,6 @@ set_default_configuration() {
     export MANIFEST_CLI_DOCS_RETAIN="${MANIFEST_CLI_DOCS_RETAIN:-10 versions}"
     export MANIFEST_CLI_DOCS_TEMPLATE_DIR="${MANIFEST_CLI_DOCS_TEMPLATE_DIR:-}"
     export MANIFEST_CLI_DOCS_AUTO_GENERATE="${MANIFEST_CLI_DOCS_AUTO_GENERATE:-true}"
-    export MANIFEST_CLI_DOCS_HISTORICAL_LIMIT="${MANIFEST_CLI_DOCS_HISTORICAL_LIMIT:-20}"
-    export MANIFEST_CLI_DOCS_FILENAME_PATTERN="${MANIFEST_CLI_DOCS_FILENAME_PATTERN:-RELEASE_vVERSION.md}"
     export MANIFEST_CLI_DOC_REVIEW="${MANIFEST_CLI_DOC_REVIEW:-true}"
     export MANIFEST_CLI_DOC_REVIEW_OUTPUTS="${MANIFEST_CLI_DOC_REVIEW_OUTPUTS:-commit_body,report,release_notes}"
     export MANIFEST_CLI_DOC_REVIEW_REPORT_DIR="${MANIFEST_CLI_DOC_REVIEW_REPORT_DIR:-}"
@@ -720,9 +718,9 @@ _manifest_config_prompt_value() {
 #   5-9: git: default, feature, hotfix, release, bugfix
 #  10-13: time: server1..4
 #  14-17: time: timeout, retries, verify, timezone
-#  18-20: docs: folder, archive, historical_limit
-#  21-22: auto_update: enabled, cooldown
-#  23-24: pr: profile, enforce_ready
+#  18-19: docs: folder, archive
+#  20-21: auto_update: enabled, cooldown
+#  22-23: pr: profile, enforce_ready
 #
 # Bypassed (returns 0 immediately) when MANIFEST_CLI_AUTO_CONFIRM=1 — for CI
 # / `manifest config --auto-confirm` use cases. The same env var the
@@ -770,7 +768,6 @@ _manifest_config_review_and_confirm() {
     echo "Docs / automation / PR:"
     printf "  %-30s %s\n" "docs.folder" "$docs_folder"
     printf "  %-30s %s\n" "docs.archive_folder" "$docs_archive"
-    printf "  %-30s %s\n" "docs.historical_limit" "$docs_limit"
     printf "  %-30s %s\n" "auto_update.enabled" "$auto_update"
     printf "  %-30s %s\n" "auto_update.cooldown" "$update_cooldown"
     printf "  %-30s %s\n" "pr.profile" "$pr_profile"
@@ -812,7 +809,7 @@ configure_interactive() {
     local project_name project_description organization
     local default_branch feature_prefix hotfix_prefix release_prefix bugfix_prefix
     local time_server1 time_server2 time_server3 time_server4 time_timeout time_retries time_verify timezone
-    local docs_folder docs_archive docs_limit
+    local docs_folder docs_archive
     local auto_update update_cooldown pr_profile pr_enforce_ready
 
     project_name=$(_manifest_config_prompt_value "Project name" "${MANIFEST_CLI_PROJECT_NAME:-$inferred_repo_name}")
@@ -842,7 +839,6 @@ configure_interactive() {
     echo "Docs + automation:"
     docs_folder=$(_manifest_config_prompt_value "Docs folder" "${MANIFEST_CLI_DOCS_FOLDER:-docs}")
     docs_archive=$(_manifest_config_prompt_value "Docs archive folder" "${MANIFEST_CLI_DOCS_ARCHIVE_FOLDER:-docs/zArchive}")
-    docs_limit=$(_manifest_config_prompt_value "Historical docs limit" "${MANIFEST_CLI_DOCS_HISTORICAL_LIMIT:-20}")
     auto_update=$(_manifest_config_prompt_value "Auto-upgrade enabled (true/false)" "${MANIFEST_CLI_AUTO_UPDATE:-true}")
     update_cooldown=$(_manifest_config_prompt_value "Upgrade cooldown (minutes)" "${MANIFEST_CLI_UPDATE_COOLDOWN:-30}")
 
@@ -859,10 +855,6 @@ configure_interactive() {
         log_warning "Invalid time server retries '$time_retries'; using existing/default value."
         time_retries="${MANIFEST_CLI_TIME_RETRIES:-3}"
     fi
-    if ! [[ "$docs_limit" =~ ^[0-9]+$ ]]; then
-        log_warning "Invalid docs limit '$docs_limit'; using existing/default value."
-        docs_limit="${MANIFEST_CLI_DOCS_HISTORICAL_LIMIT:-20}"
-    fi
     if ! [[ "$update_cooldown" =~ ^[0-9]+$ ]]; then
         log_warning "Invalid upgrade cooldown '$update_cooldown'; using existing/default value."
         update_cooldown="${MANIFEST_CLI_UPDATE_COOLDOWN:-30}"
@@ -876,7 +868,7 @@ configure_interactive() {
         "$default_branch" "$feature_prefix" "$hotfix_prefix" "$release_prefix" "$bugfix_prefix" \
         "$time_server1" "$time_server2" "$time_server3" "$time_server4" \
         "$time_timeout" "$time_retries" "$time_verify" "$timezone" \
-        "$docs_folder" "$docs_archive" "$docs_limit" \
+        "$docs_folder" "$docs_archive" \
         "$auto_update" "$update_cooldown" \
         "$pr_profile" "$pr_enforce_ready"; then
         echo ""
@@ -902,7 +894,6 @@ configure_interactive() {
     set_yaml_value "$config_file" "time.timezone" "$timezone"
     set_yaml_value "$config_file" "docs.folder" "$docs_folder"
     set_yaml_value "$config_file" "docs.archive_folder" "$docs_archive"
-    set_yaml_value "$config_file" "docs.historical_limit" "$docs_limit"
     set_yaml_value "$config_file" "auto_update.enabled" "$auto_update"
     set_yaml_value "$config_file" "auto_update.cooldown" "$update_cooldown"
     set_yaml_value "$config_file" "pr.profile" "$pr_profile"
@@ -1123,8 +1114,7 @@ show_configuration() {
     echo "📚 Documentation Configuration:"
     echo "   Docs Folder: ${MANIFEST_CLI_DOCS_FOLDER}"
     echo "   Archive Folder: ${MANIFEST_CLI_DOCS_ARCHIVE_FOLDER}"
-    echo "   Filename Pattern: ${MANIFEST_CLI_DOCS_FILENAME_PATTERN}"
-    echo "   Historical Limit: ${MANIFEST_CLI_DOCS_HISTORICAL_LIMIT}"
+    echo "   Retain: ${MANIFEST_CLI_DOCS_RETAIN}"
     echo ""
     
     echo "🏢 Project Configuration:"

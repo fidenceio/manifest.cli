@@ -162,8 +162,6 @@ readonly MANIFEST_FLEET_DEFAULT_DOCS_PER_SERVICE_ENABLED="true"
 readonly MANIFEST_FLEET_DEFAULT_DOCS_PER_SERVICE_FOLDER="docs"
 
 # What document types to generate
-readonly MANIFEST_FLEET_DEFAULT_DOCS_GEN_RELEASE_NOTES="true"
-readonly MANIFEST_FLEET_DEFAULT_DOCS_GEN_CHANGELOG="true"
 readonly MANIFEST_FLEET_DEFAULT_DOCS_GEN_INDEX="true"
 readonly MANIFEST_FLEET_DEFAULT_DOCS_GEN_README_VERSION="true"
 
@@ -716,8 +714,6 @@ get_fleet_config_value() {
         "docs_fleet_root_detail_level") yaml_path=".docs.fleet_root.detail_level" ;;
         "docs_per_service_enabled")   yaml_path=".docs.per_service.enabled" ;;
         "docs_per_service_folder")    yaml_path=".docs.per_service.folder" ;;
-        "docs_gen_release_notes")     yaml_path=".docs.generate.release_notes" ;;
-        "docs_gen_changelog")         yaml_path=".docs.generate.changelog" ;;
         "docs_gen_index")             yaml_path=".docs.generate.index" ;;
         "docs_gen_readme_version")    yaml_path=".docs.generate.readme_version" ;;
     esac

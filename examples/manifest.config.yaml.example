@@ -102,8 +102,6 @@ docs:
                               # SECURITY_ANALYSIS_REPORT_v* files are point-in-time
                               # audits and are never auto-deleted.
   auto_generate: true
-  historical_limit: 20
-  filename_pattern: "RELEASE_vVERSION.md"
   template_dir: ""
   review:
     enabled: true
