@@ -78,7 +78,7 @@ manifest ship repo minor       # Full minor release
 manifest ship repo major -i    # Major release with interactive safety prompts
 ```
 
-Ship runs: sync, version bump, documentation generation, markdown validation, commit, Git tag, push to all remotes, and Homebrew formula update (in the canonical repository). When the canonical CLI release updates the Homebrew tap, Manifest also refreshes any clean local tap checkout it can safely fast-forward, including sibling workspace checkouts such as `fidenceio.homebrew.tap`.
+Ship runs: sync, version bump, documentation generation, markdown validation, commit, Git tag, push to all remotes, and Homebrew formula update (in the canonical repository). When the canonical CLI release updates the Homebrew tap, Manifest also refreshes any clean local tap checkout it can safely fast-forward, including sibling workspace checkouts such as `fidenceio.homebrew.tap`. Canonical CLI `minor`, `major`, and `revision` ships then run one guarded follow-up patch under the upgraded installed CLI so release-process changes take effect immediately. Set `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH=false` to skip that follow-up.
 
 #### Tag Placement (`release.tag_target`)
 
