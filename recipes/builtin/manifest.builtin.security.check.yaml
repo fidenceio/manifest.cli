@@ -1,0 +1,13 @@
+id: manifest.builtin.security.check
+title: Security Check
+kind: builtin
+command: manifest security --check
+scope: repo
+summary: Run Manifest's read-only repository security checks.
+entrypoint: manifest_security
+inputs: {}
+steps:
+  - id: inspect-files
+    uses: manifest.security.inspect_files
+  - id: inspect-git
+    uses: manifest.security.inspect_git

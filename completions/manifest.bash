@@ -10,7 +10,7 @@ _manifest_complete() {
     words=("${COMP_WORDS[@]}")
 
     # Top-level commands shown in `manifest --help`
-    local top_cmds="config init quickstart plan reconcile status discover update add validate prep refresh docs ship pr doctor security upgrade uninstall version help"
+    local top_cmds="config init quickstart plan reconcile status recipe discover update add validate prep refresh docs ship pr doctor security upgrade uninstall version help"
     local scopes="repo fleet"
     local bumps="patch minor major revision"
     local config_subs="show list get set unset describe doctor setup time"
@@ -26,6 +26,10 @@ _manifest_complete() {
             case "${words[1]}" in
                 init|quickstart|plan|reconcile|discover|update|add|validate|prep|refresh|docs|ship)
                     COMPREPLY=( $(compgen -W "$scopes" -- "$cur") )
+                    return 0
+                    ;;
+                recipe)
+                    COMPREPLY=( $(compgen -W "list show explain run help" -- "$cur") )
                     return 0
                     ;;
                 config)
@@ -45,7 +49,7 @@ _manifest_complete() {
                     return 0
                     ;;
                 "ship repo"|"ship fleet")
-                    COMPREPLY=( $(compgen -W "$bumps --local --dry-run -i --interactive" -- "$cur") )
+                    COMPREPLY=( $(compgen -W "$bumps --local --dry-run --explain -i --interactive" -- "$cur") )
                     return 0
                     ;;
                 "plan fleet")
@@ -82,7 +86,7 @@ _manifest_complete() {
         return 0
     fi
     if [[ "$cur" == --* ]]; then
-        COMPREPLY=( $(compgen -W "--help --local --dry-run --layer --fix --json" -- "$cur") )
+        COMPREPLY=( $(compgen -W "--help --local --dry-run --explain --layer --fix --json" -- "$cur") )
         return 0
     fi
 }

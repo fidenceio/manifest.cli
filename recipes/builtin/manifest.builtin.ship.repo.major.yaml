@@ -1,0 +1,39 @@
+id: manifest.builtin.ship.repo.major
+title: Ship Repo Major
+kind: builtin
+command: manifest ship repo major
+scope: repo
+summary: Publish a major release for the current repository.
+entrypoint: manifest_ship_repo
+inputs:
+  release_type:
+    type: enum
+    values: [major]
+    default: major
+    required: true
+  local:
+    type: boolean
+    default: false
+  interactive:
+    type: boolean
+    default: false
+steps:
+  - id: identify-repo
+    uses: manifest.repo.identity
+  - id: bump-version
+    uses: manifest.version.bump
+    with:
+      release_type: major
+  - id: generate-docs
+    uses: manifest.docs.generate
+  - id: commit-release
+    uses: manifest.git.commit_release
+  - id: tag-release
+    uses: manifest.git.tag_release
+    when: publish_release
+  - id: push-release
+    uses: manifest.git.push_release
+    when: publish_release
+  - id: publish-homebrew
+    uses: manifest.homebrew.publish
+    when: publish_release

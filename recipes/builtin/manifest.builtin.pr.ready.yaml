@@ -1,0 +1,13 @@
+id: manifest.builtin.pr.ready
+title: PR Ready
+kind: builtin
+command: manifest pr ready
+scope: repo
+summary: Mark or validate a pull request as ready using the configured PR policy.
+entrypoint: manifest_pr_ready
+inputs: {}
+steps:
+  - id: inspect-pr
+    uses: manifest.pr.inspect
+  - id: mark-ready
+    uses: manifest.pr.ready

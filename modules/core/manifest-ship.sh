@@ -49,6 +49,7 @@ manifest_ship_repo() {
     local increment_type=""
     local local_only=false
     local interactive=false
+    local explain=false
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -64,6 +65,7 @@ manifest_ship_repo() {
             -r) increment_type="revision"; shift ;;
             --local) local_only=true; shift ;;
             -i|--interactive) interactive=true; shift ;;
+            --explain) explain=true; shift ;;
             -h|--help)
                 _render_help \
                     "manifest ship repo <patch|minor|major|revision>|resume [--local] [-i]" \
@@ -74,6 +76,7 @@ manifest_ship_repo() {
   revision | -r       Increment revision (e.g. 1.2.3 -> 1.2.3.1)
   --local             Local only — no tag, push, or Homebrew update
   -i, --interactive   Enable interactive safety prompts
+  --explain           Show the built-in recipe definition without running it
   resume              Continue safe post-release steps for current VERSION/tag" \
                     "Examples" "  manifest ship repo patch
   manifest ship repo minor --local
@@ -95,6 +98,11 @@ manifest_ship_repo() {
             "ship repo requires a release type" \
             "manifest ship repo <patch|minor|major|revision> [--local] [-i]"
         return 1
+    fi
+
+    if [[ "$explain" == "true" ]]; then
+        manifest_recipe_explain_command "ship" "repo" "$increment_type"
+        return $?
     fi
 
     local publish_release="true"
@@ -127,6 +135,7 @@ manifest_ship_repo() {
 manifest_ship_fleet() {
     local increment_type=""
     local local_only=false
+    local explain=false
     local fleet_args=()
 
     while [[ $# -gt 0 ]]; do
@@ -134,12 +143,14 @@ manifest_ship_fleet() {
             patch|minor|major|revision)
                 increment_type="$1"; shift ;;
             --local) local_only=true; shift ;;
+            --explain) explain=true; shift ;;
             -h|--help)
                 _render_help \
                     "manifest ship fleet <patch|minor|major|revision> [--local] [fleet options]" \
                     "Coordinated fleet release across all services." \
                     "Options" "  patch | minor | major | revision   Release type
   --local                  Local only — no push, no PRs
+  --explain                Show the built-in recipe definition without running it
   --noprep                 Skip per-service prep step (requires clean trees)
   --safe                   Insert checks/ready gate before queueing
   --method <merge|squash|rebase>
@@ -165,6 +176,11 @@ manifest_ship_fleet() {
             "ship fleet requires a release type" \
             "manifest ship fleet <patch|minor|major|revision> [--local]"
         return 1
+    fi
+
+    if [[ "$explain" == "true" ]]; then
+        manifest_recipe_explain_command "ship" "fleet" "$increment_type"
+        return $?
     fi
 
     if [[ "$local_only" == "true" ]]; then
