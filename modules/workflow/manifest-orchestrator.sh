@@ -501,41 +501,19 @@ manifest_ship_workflow() {
     fi
     echo ""
     
-    # Update main CHANGELOG.md for GitHub visibility
-    # If the root CHANGELOG.md has user-crafted content (not a Manifest template),
-    # only update version references. Otherwise, replace with latest version changelog.
-    echo "📝 Updating main CHANGELOG.md for GitHub..."
-    local latest_changelog="$(get_docs_folder "$PROJECT_ROOT")/CHANGELOG_v$new_version.md"
-    local root_changelog="$PROJECT_ROOT/CHANGELOG.md"
-    if [[ -f "$root_changelog" ]] && grep -qE '\[[0-9]+\.[0-9]+\.[0-9]+\]' "$root_changelog" 2>/dev/null; then
-        # Root CHANGELOG has Keep-a-Changelog-style [version] entries — user-crafted.
-        # Update inline version references only (e.g., version strings in headers).
-        local prev_version=""
-        prev_version=$(grep -oE '\[[0-9]+\.[0-9]+\.[0-9]+\]' "$root_changelog" | head -1 | tr -d '[]')
-        if [[ -n "$prev_version" ]] && [[ "$prev_version" != "$new_version" ]]; then
-            sed -i'' -e "s|\`${prev_version}\`|\`${new_version}\`|g" "$root_changelog"
-            # Clean up sed backup files (macOS)
-            rm -f "${root_changelog}-e"
-        fi
-        git add CHANGELOG.md
-        if git diff --cached --quiet -- CHANGELOG.md; then
-            echo "✅ Main CHANGELOG.md already up to date"
-        else
-            git commit -m "Update main CHANGELOG.md to v$new_version"
-            echo "✅ Main CHANGELOG.md updated for GitHub"
-        fi
-    elif [[ -f "$latest_changelog" ]]; then
-        # Root CHANGELOG is a template or missing — replace with latest version changelog
-        cp "$latest_changelog" "$root_changelog"
-        git add CHANGELOG.md
-        if git diff --cached --quiet -- CHANGELOG.md; then
-            echo "✅ Main CHANGELOG.md already up to date"
-        else
-            git commit -m "Update main CHANGELOG.md to v$new_version"
-            echo "✅ Main CHANGELOG.md updated for GitHub"
-        fi
+    # Regenerate root CHANGELOG.md from active + archived per-version
+    # changelogs. Archive is already capped by docs.retain (Phase B prune
+    # in main_cleanup), so the root file inherits the same retention with
+    # no extra logic. Hand-crafted content in the root file is not
+    # preserved across ships.
+    echo "📝 Regenerating root CHANGELOG.md..."
+    regenerate_root_changelog "$PROJECT_ROOT" "$new_version"
+    git add CHANGELOG.md
+    if git diff --cached --quiet -- CHANGELOG.md; then
+        echo "✅ Root CHANGELOG.md already up to date"
     else
-        echo "⚠️  Latest changelog not found: $latest_changelog"
+        git commit -m "Update CHANGELOG.md to v$new_version"
+        echo "✅ Root CHANGELOG.md updated"
     fi
     echo ""
     
