@@ -1,192 +1,149 @@
 # Changelog
 
-All notable changes to Manifest CLI are documented here.
-This project uses [Semantic Versioning](https://semver.org/).
+## [46.13.8] - 2026-05-06
+
+**Release Type:** Patch
+
+### Summary
+No notable user-facing changes were detected since the previous release tag. Only release automation or filtered bookkeeping commits were present.
+
+## [46.13.7] - 2026-05-06
+
+**Release Type:** Patch
+
+### Summary
+- Notable changes: 1
+- New features: 0
+- Improvements: 0
+- Bug fixes: 0
+- Breaking changes: 0
+- Documentation updates: 1
+
+### Documentation
+- Auto-regenerate root CHANGELOG.md on every ship
+
+## [46.13.6] - 2026-05-06
+
+**Release Type:** Patch
+
+### Summary
+No notable user-facing changes were detected since the previous release tag. Only release automation or filtered bookkeeping commits were present.
+
+## [46.13.5] - 2026-05-06
+
+**Release Type:** Patch
+
+### Summary
+- Notable changes: 2
+- New features: 0
+- Improvements: 0
+- Bug fixes: 0
+- Breaking changes: 0
+- Documentation updates: 2
+
+### Documentation
+- Recast docs.retain to govern archive retention, not active-docs filtering
+- Refactor docs.archive retention to a single docs.retain spec
+
+## [46.13.4] - 2026-05-05
+
+**Release Type:** Patch
+
+### Summary
+No notable user-facing changes were detected since the previous release tag. Only release automation or filtered bookkeeping commits were present.
+
+## [46.13.3] - 2026-05-05
+
+**Release Type:** Patch
+
+### Summary
+- Notable changes: 2
+- New features: 0
+- Improvements: 1
+- Bug fixes: 0
+- Breaking changes: 0
+- Documentation updates: 1
+
+### Improvements
+- Configurable archive retention (tracker #38)
+
+### Documentation
+- Decline tracker #41 (manifest docs archive subcommands)
+
+## [46.13.2] - 2026-05-05
+
+**Release Type:** Patch
+
+### Summary
+No notable user-facing changes were detected since the previous release tag. Only release automation or filtered bookkeeping commits were present.
+
+## [46.13.1] - 2026-05-05
+
+**Release Type:** Patch
+
+### Summary
+- Notable changes: 1
+- New features: 0
+- Improvements: 1
+- Bug fixes: 0
+- Breaking changes: 0
+- Documentation updates: 0
+
+### Improvements
+- Archive move log (tracker #40)
+
+## [46.13.0] - 2026-05-05
+
+**Release Type:** Minor
+
+### Summary
+- Notable changes: 2
+- New features: 0
+- Improvements: 1
+- Bug fixes: 0
+- Breaking changes: 0
+- Documentation updates: 1
+
+### Improvements
+- Pre-move safety check on archive sweep (tracker #39)
+
+### Documentation
+- Prune doc-review-only and missed-timing archive stubs (tracker #42)
+
+## [46.12.2] - 2026-05-05
+
+**Release Type:** Patch
+
+### Summary
+- Notable changes: 1
+- New features: 0
+- Improvements: 0
+- Bug fixes: 0
+- Breaking changes: 0
+- Documentation updates: 1
+
+### Documentation
+- Backfill v46 entries in root CHANGELOG (tracker #37)
 
 ## [46.12.0] - 2026-05-05
 
 **Release Type:** Minor
 
-### Documentation System Cleanup
-
-- Regrouped `docs/zArchive/` into `v<major>/` subfolders with auto-generated
-  `INDEX.md` files per major and at the top level. Archive sweeps now use an
-  anchored allowlist regex.
-- Deleted 438 boilerplate-stub release notes and changelogs from the archive;
-  44 substantive survivors retained. Release-note generation now produces
-  boilerplate-free output by default.
-- Consolidated six standalone audit/handoff docs: `GIT_HOOKS` folded into
-  `USER_GUIDE`, `CONFIG_SURFACE_AUDIT` lifted to `IMPROVEMENT_TRACKER`, the
-  remaining four removed. Cross-references cleaned up; "v42 dispatcher" wording
-  dropped.
-- Doc-review reports are no longer committed by default —
-  `MANIFEST_CLI_DOC_REVIEW_REPORT_DIR` now defaults to
-  `.git/manifest-doc-review/`. Set it to `docs/documentation-reviews` to opt
-  back in to committed reports.
-- Added Phase 2 tracker items #36–#41 covering LLM-backed release notes,
-  CHANGELOG backfill, configurable archive retention, pre-move safety check,
-  archive move log, and a `manifest docs archive` CLI surface.
-
-## [46.7.0] - 2026-05-05
-
-**Release Type:** Minor
-
-### Homebrew Formula Fix
-
-- Corrected the Homebrew formula SHA for v46.6.0.
-
-## [46.3.0] - 2026-05-04
-
-**Release Type:** Minor
-
-### GitHub Actions Integration
-
-- Made the post-ship wait for GitHub Actions opt-in. Local ships no longer
-  block on a remote workflow run by default.
-- Surfaced GitHub Actions status after `manifest ship` completes.
-
-## [46.0.0] - 2026-05-04
-
-**Release Type:** Major
-
-### Fleet Adoption Planning
-
-- Added fleet adoption planning. The v46 line introduces the multi-repo fleet
-  workflow; see `docs/FLEET_DESIGN_SPEC.md` for the current model.
-
-## [45.6.0] - 2026-04-29
-
-**Release Type:** Minor
-
-### Forgiveness Contract for Config Values
-
-- Added shared helpers `is_truthy`, `is_falsy`, `normalize_enum_value`, and `_trim_ws`
-  in `modules/core/manifest-shared-utils.sh`. Truthy/falsy now accept the
-  forgiving grammar `1|true|yes|on` / `0|false|no|off|''` (case-insensitive,
-  whitespace-tolerant) instead of strict literal `1`/`0`.
-- `load_yaml_to_env` trims leading/trailing whitespace from every loaded value.
-  A trailing space in YAML used to silently break every downstream string
-  comparison; now it is normalized at the boundary.
-- `resolve_tag_target_sha` (`release.tag_target` dispatch) normalizes the
-  enum value (trim + lowercase) before matching, so `Version_Commit`,
-  `" release_head "`, and `Final_Release_Commit` all resolve correctly.
-- Boolean dispatch sites swapped to `is_truthy` in `manifest-config.sh` (3 sites),
-  `manifest-security.sh`, and `manifest-orchestrator.sh`. `MANIFEST_CLI_AUTO_CONFIRM=true`,
-  `MANIFEST_CLI_QUIET_DEPRECATIONS=yes`, etc., now do what users expect.
-- 24 new bats tests across `truthy.bats`, `yaml.bats`, `tag_target.bats`,
-  and `deprecation.bats` lock the contract.
-
-## [44.10.1] - 2026-04-27
-
-**Release Type:** Patch
-
-### `release.tag_target` — Configurable Release Tag Placement
-
-- Added `release.tag_target` config key (`MANIFEST_CLI_RELEASE_TAG_TARGET`)
-  that controls which commit the release tag points at:
-  - `version_commit` (new default) — tag the explicit "Bump version to X" commit.
-  - `release_head` — tag HEAD at tag-creation time (post-CHANGELOG, pre-Homebrew).
-- `create_tag` now accepts an optional second argument (target SHA); empty
-  falls through to HEAD-tagging for backward compatibility.
-
-### Behavior Change
-
-- **The default release tag now points at the version commit, not HEAD.**
-  Before v44.10.1, the tag pointed at whatever HEAD was when the tag was
-  created — typically the CHANGELOG commit. Repos with automation that reads
-  `git for-each-ref` or `git rev-list <tag>..main` and expects post-CHANGELOG
-  content inside the tag should set `release.tag_target: "release_head"` to
-  restore the old behavior. The Homebrew formula commit is intentionally
-  outside the tag in both cases (the SHA256 chicken-and-egg).
-
-## [43.0.0] - 2026-04-06
-
-**Release Type:** Major
-
-### Architecture: Plugin Extraction
-
-- Extracted PR, cloud, testing, and auto-upgrade modules (~7,000 lines) to Manifest Cloud repo
-- Added plugin loader (`manifest-plugin-loader.sh`) for optional Cloud-provided modules
-- Added stub files that print guidance when Cloud modules are not installed
-- Deleted dead duplicate `manifest-mcp-connector-new.sh`
-- CLI core journey (config, init, prep, refresh, ship) works fully standalone
-- Commands requiring Cloud modules now marked `[Cloud]` in help text
-- Modules removed from CLI: `modules/cloud/`, `modules/pr/`, `modules/testing/`, `modules/workflow/manifest-auto-upgrade.sh`
-- Modules added to CLI: `modules/core/manifest-plugin-loader.sh`, `modules/stubs/` (4 stub files)
-
-### Breaking Changes
-
-- `manifest pr`, `manifest test`, `manifest cloud`, `manifest agent` now require Manifest Cloud installation
-- `manifest upgrade` via manual install requires Manifest Cloud; Homebrew upgrade path unaffected
-- `manifest ship fleet` (non-local) requires Manifest Cloud for PR operations
-
-## [39.2.2] - 2026-04-04
-
-**Release Type:** Patch
-
-### Fixes
-
-- Fixed CHANGELOG.md detection pattern to match `## [version]` format (not just `^[`)
-- Fixed INDEX.md sed to update version in link display text (not just filenames)
-- Fixed sed backup file cleanup for README.md on macOS
-- Added release note link updating to README.md sed pass
-
-## [39.2.1] - 2026-04-04
-
-**Release Type:** Patch
+### Summary
+- Notable changes: 7
+- New features: 0
+- Improvements: 2
+- Bug fixes: 0
+- Breaking changes: 0
+- Documentation updates: 5
 
 ### Improvements
+- Regroup zArchive into v<major>/ subfolders with auto-generated indexes
+- Fold GIT_HOOKS into USER_GUIDE; lift CONFIG_SURFACE_AUDIT backlog to IMPROVEMENT_TRACKER
 
-- Upgraded installed CLI via Homebrew to activate documentation preservation fixes
-- Restored polished documentation
-
-## [39.2.0] - 2026-04-04
-
-**Release Type:** Minor
-
-### Documentation Preservation
-
-- Documentation generation now preserves user-crafted README, CHANGELOG, and INDEX content
-- `update_readme_version()` updates inline version strings only (no metadata block prepend)
-- `generate_docs_index()` updates version references in place instead of replacing the file
-- Root CHANGELOG.md is preserved when it contains Keep-a-Changelog-style entries
-- Comprehensive documentation overhaul across all 12 files
-- README rewritten as a polished GitHub landing page
-
-## [39.1.0] - 2026-04-04
-
-**Release Type:** Minor
-
-### Documentation Overhaul
-
-- Comprehensive documentation overhaul across all 12 documentation files
-- Command Reference expanded with full flag tables and fleet subcommand sections
-- Installation guide enhanced with troubleshooting table
-
-## [39.0.0] - 2026-04-04
-
-**Release Type:** Major
-
-### New Features
-
-- **Smart `.gitignore` scaffolding** — `ensure_gitignore_smart()` handles three scenarios:
-  no file (create), empty file (overwrite with defaults), existing entries (create `.gitignore.manifest` reference)
-- **Fleet auto-discovery by default** — `manifest fleet init` discovers repositories automatically;
-  use `--bare` to skip discovery
-- **Best-practice `.gitignore` template** — comprehensive ignore file
-
-### Breaking Changes (v39.0.0)
-
-- `manifest fleet init` runs discovery by default (previously required `--discover` flag)
-- `--discover` / `--no-discover` flags replaced by `--bare`
-
-## [38.2.0] - 2026-04-04
-
-Maintenance release with Homebrew formula updates.
-
----
-
-For version-specific changelogs, see [docs/](docs/).
-For archived releases, see [docs/zArchive/](docs/zArchive/).
-
-<!-- Maintained by Manifest CLI -->
+### Documentation
+- Add tracker items #36–#41 for deferred Phase 2 doc-system work
+- Boilerplate-free release notes; strict archive policy with auto-regenerated indexes
+- Delete 438 boilerplate-stub release notes/changelogs from zArchive
+- Stop committing doc-review reports by default; default report_dir to git state dir
+- Delete six consolidated audit/handoff docs; clean cross-references; drop v42 wording
