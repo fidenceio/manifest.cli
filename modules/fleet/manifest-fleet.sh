@@ -1255,7 +1255,7 @@ _fleet_sync_dry_run() {
     local service path url is_submodule
 
     for service in $MANIFEST_FLEET_SERVICES; do
-        ((total++))
+        ((total += 1))
         path=$(get_fleet_service_property "$service" "path")
         url=$(get_fleet_service_property "$service" "url")
         is_submodule=$(get_fleet_service_property "$service" "submodule" "false")
@@ -1263,30 +1263,30 @@ _fleet_sync_dry_run() {
         if [[ ! -d "$path" ]]; then
             if [[ "$pull_only" == "true" ]]; then
                 echo "  $service: would skip (pull-only, path missing)"
-                ((would_skip++))
+                ((would_skip += 1))
             elif [[ "$is_submodule" == "true" ]]; then
                 echo "  $service: would fail (submodule path missing — needs parent 'submodule update --init')"
-                ((would_fail++))
+                ((would_fail += 1))
             elif [[ -z "$url" ]]; then
                 echo "  $service: would fail (no URL)"
-                ((would_fail++))
+                ((would_fail += 1))
             elif ! _fleet_validate_clone_path "$path"; then
                 echo "  $service: would fail (invalid path: $path)"
-                ((would_fail++))
+                ((would_fail += 1))
             else
                 echo "  $service: would clone from $url -> $path"
-                ((would_clone++))
+                ((would_clone += 1))
             fi
         else
             if [[ "$clone_only" == "true" ]]; then
                 echo "  $service: would skip (clone-only, path exists)"
-                ((would_skip++))
+                ((would_skip += 1))
             elif [[ ! -d "$path/.git" ]] && [[ "$is_submodule" != "true" ]]; then
                 echo "  $service: would skip (not a git repo)"
-                ((would_skip++))
+                ((would_skip += 1))
             else
                 echo "  $service: would pull --rebase ($path)"
-                ((would_pull++))
+                ((would_pull += 1))
             fi
         fi
     done
@@ -1705,7 +1705,10 @@ EOF
     local all_dirs
     all_dirs=$(discover_all_directories "$root_dir" "$depth")
 
-    if [[ -n "$all_dirs" ]]; then
+    if [[ -n "$all_dirs" && "$dry_run" == "true" ]]; then
+        echo ""
+        echo "Would refresh manifest.fleet.tsv from current scan"
+    elif [[ -n "$all_dirs" ]]; then
         # merge_start_tsv writes TSV to stdout and "NEW:<count>" to stderr
         local merge_stderr
         merge_stderr=$(merge_start_tsv "$all_dirs" "$start_file" "$root_dir" "$depth" 2>&1 > "${start_file}.tmp")

@@ -40,6 +40,30 @@ true	svc	./svc	service	false			0.0.0
 TSV
 }
 
+write_root_fleet_config() {
+    cat > "$SCRATCH/work/manifest.fleet.config.yaml" <<'YAML'
+fleet:
+  name: "test-fleet"
+  versioning: "none"
+services:
+  rootworkspace:
+    path: "."
+    type: "infrastructure"
+    branch: "main"
+  svc:
+    path: "./svc"
+    type: "service"
+    branch: "main"
+YAML
+}
+
+write_root_selected_tsv() {
+    cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
+true	rootworkspace	.	infrastructure	true			0.0.0
+true	svc	./svc	service	true			0.0.0
+TSV
+}
+
 @test "init fleet --dry-run phase 1 previews TSV creation and writes nothing" {
     mkdir -p "$SCRATCH/work/svc" "$SCRATCH/work/plain"
     git -C "$SCRATCH/work/svc" init -q
@@ -118,4 +142,90 @@ TSV
     [[ "$output" == *"No changes written"* ]]
     [ ! -d "$SCRATCH/work/docs" ]
     [ ! -d "$SCRATCH/work/svc/docs" ]
+}
+
+@test "prep fleet --dry-run lists sync plan and exits successfully" {
+    mkdir -p "$SCRATCH/work/svc"
+    git -C "$SCRATCH/work" init -q
+    git -C "$SCRATCH/work/svc" init -q
+    write_fleet_config
+    write_selected_tsv
+
+    run_manifest prep fleet --dry-run
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"MANIFEST FLEET SYNC (DRY RUN)"* ]]
+    [[ "$output" == *"svc: would pull --rebase"* ]]
+    [[ "$output" == *"Plan:"*"1 pull"* ]]
+    [[ "$output" == *"No changes written"* ]]
+}
+
+@test "refresh fleet --dry-run does not rewrite manifest.fleet.tsv" {
+    mkdir -p "$SCRATCH/work/svc"
+    git -C "$SCRATCH/work" init -q
+    git -C "$SCRATCH/work/svc" init -q
+    write_fleet_config
+    write_selected_tsv
+    before="$(cat "$SCRATCH/work/manifest.fleet.tsv")"
+
+    run_manifest refresh fleet --dry-run
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"MANIFEST FLEET UPDATE (dry-run)"* ]]
+    [[ "$output" == *"Would refresh manifest.fleet.tsv"* ]]
+    [[ "$output" == *"Dry run complete"* ]]
+    [ "$(cat "$SCRATCH/work/manifest.fleet.tsv")" = "$before" ]
+    [ ! -f "$SCRATCH/work/manifest.fleet.tsv.tmp" ]
+}
+
+@test "refresh fleet --dry-run treats configured fleet root as discovered" {
+    mkdir -p "$SCRATCH/work/svc"
+    git -C "$SCRATCH/work" init -q
+    git -C "$SCRATCH/work/svc" init -q
+    write_root_fleet_config
+    write_root_selected_tsv
+    before="$(cat "$SCRATCH/work/manifest.fleet.tsv")"
+
+    run_manifest refresh fleet --dry-run
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"MANIFEST FLEET UPDATE (dry-run)"* ]]
+    [[ "$output" != *"Missing repositories"* ]]
+    [[ "$output" == *"- Missing:   0"* ]]
+    [[ "$output" == *"Would refresh manifest.fleet.tsv"* ]]
+    [ "$(cat "$SCRATCH/work/manifest.fleet.tsv")" = "$before" ]
+}
+
+@test "refresh fleet --dry-run classifies dotted CLI and Homebrew tap repo names" {
+    mkdir -p "$SCRATCH/work/fidenceio.manifest.cli" "$SCRATCH/work/fidenceio.homebrew.tap/Formula"
+    git -C "$SCRATCH/work" init -q
+    git -C "$SCRATCH/work/fidenceio.manifest.cli" init -q
+    git -C "$SCRATCH/work/fidenceio.homebrew.tap" init -q
+    cat > "$SCRATCH/work/manifest.fleet.config.yaml" <<'YAML'
+fleet:
+  name: "test-fleet"
+  versioning: "none"
+services:
+  fidenceiomanifestcli:
+    path: "./fidenceio.manifest.cli"
+    type: "tool"
+    branch: "main"
+  fidenceiohomebrewtap:
+    path: "./fidenceio.homebrew.tap"
+    type: "infrastructure"
+    branch: "main"
+YAML
+    cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
+true	fidenceiomanifestcli	./fidenceio.manifest.cli	tool	true			0.0.0
+true	fidenceiohomebrewtap	./fidenceio.homebrew.tap	infrastructure	true			0.0.0
+TSV
+    before="$(cat "$SCRATCH/work/manifest.fleet.tsv")"
+
+    run_manifest refresh fleet --dry-run
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"MANIFEST FLEET UPDATE (dry-run)"* ]]
+    [[ "$output" == *"~ Changed:   0"* ]]
+    [[ "$output" == *"= Unchanged: 2"* ]]
+    [ "$(cat "$SCRATCH/work/manifest.fleet.tsv")" = "$before" ]
 }
