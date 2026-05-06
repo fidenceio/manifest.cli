@@ -131,6 +131,83 @@ should_update_homebrew_for_repo() {
     manifest_is_canonical_repo "$@"
 }
 
+manifest_homebrew_tap_checkout_candidates() {
+    local primary_tap_dir="${1:-}"
+    local workspace_parent=""
+    workspace_parent="$(dirname "$PROJECT_ROOT" 2>/dev/null || echo "")"
+
+    local candidates=""
+    if [[ -n "${MANIFEST_CLI_HOMEBREW_TAP_CHECKOUT:-}" ]]; then
+        candidates="${candidates}${MANIFEST_CLI_HOMEBREW_TAP_CHECKOUT}"$'\n'
+    fi
+    if [[ -n "$primary_tap_dir" ]]; then
+        candidates="${candidates}${primary_tap_dir}"$'\n'
+    fi
+    if command -v brew &>/dev/null; then
+        candidates="${candidates}$(brew --prefix 2>/dev/null)/Library/Taps/fidenceio/homebrew-tap"$'\n'
+    fi
+    if [[ -n "$workspace_parent" && "$workspace_parent" != "." ]]; then
+        candidates="${candidates}${workspace_parent}/fidenceio.homebrew.tap"$'\n'
+        candidates="${candidates}${workspace_parent}/homebrew-tap"$'\n'
+    fi
+
+    local seen="|"
+    local candidate=""
+    while IFS= read -r candidate; do
+        [[ -n "$candidate" ]] || continue
+        case "$seen" in
+            *"|$candidate|"*) continue ;;
+        esac
+        seen="${seen}${candidate}|"
+        echo "$candidate"
+    done <<< "$candidates"
+}
+
+manifest_refresh_homebrew_tap_checkouts() {
+    local primary_tap_dir="${1:-}"
+    local branch="${MANIFEST_CLI_HOMEBREW_TAP_BRANCH:-main}"
+    local expected_slug="${MANIFEST_CLI_HOMEBREW_TAP_SLUG-fidenceio/homebrew-tap}"
+    local refreshed=0
+    local skipped=0
+    local failed=0
+    local candidate=""
+
+    while IFS= read -r candidate; do
+        [[ -n "$candidate" ]] || continue
+        [[ -d "$candidate" ]] || continue
+
+        local result=""
+        local status=0
+        result="$(manifest_git_safe_fast_forward_checkout "$candidate" "$expected_slug" "$branch" "origin")"
+        status=$?
+
+        case "$status:$result" in
+            0:updated)
+                echo "   ✅ Refreshed local Homebrew tap checkout: $candidate"
+                refreshed=$((refreshed + 1))
+                ;;
+            0:current)
+                echo "   ✅ Local Homebrew tap checkout already current: $candidate"
+                refreshed=$((refreshed + 1))
+                ;;
+            2:*)
+                echo "   ⚠️  Skipped local Homebrew tap checkout: $candidate ($result)"
+                skipped=$((skipped + 1))
+                ;;
+            *)
+                echo "   ⚠️  Could not refresh local Homebrew tap checkout: $candidate ($result)"
+                failed=$((failed + 1))
+                ;;
+        esac
+    done < <(manifest_homebrew_tap_checkout_candidates "$primary_tap_dir")
+
+    if [[ "$refreshed" -gt 0 || "$skipped" -gt 0 || "$failed" -gt 0 ]]; then
+        echo "   Homebrew tap checkout refresh: ${refreshed} current/updated, ${skipped} skipped, ${failed} failed"
+    fi
+
+    return 0
+}
+
 # Update Homebrew formula in both this repo and the tap repo
 update_homebrew_formula() {
     if ! should_update_homebrew_for_repo; then
@@ -195,7 +272,7 @@ update_homebrew_formula() {
         if (
             set -e
             cd "$tap_dir"
-            git pull --rebase origin main
+            git pull --ff-only origin main
         ); then
             :
         else
@@ -220,6 +297,8 @@ update_homebrew_formula() {
         echo "   ⚠️  Homebrew tap not found locally — formula updated in this repo only"
         echo "   Push formula/manifest.rb to the homebrew-tap repo manually"
     fi
+
+    manifest_refresh_homebrew_tap_checkouts "$tap_dir"
 
     echo "🍺 Homebrew formula update complete"
 }
