@@ -1,5 +1,10 @@
 # Changelog
 
+## [47.3.1] - 2026-05-06
+
+**Release Type:** Patch — no user-facing changes.
+
+
 ## [47.3.0] - 2026-05-06
 
 **Release Type:** Minor
@@ -94,12 +99,3 @@
 - Added an example release-notes provider script showing how an external LLM transport should read Manifest requests and return validated bullets
 - Reworked local changelog generation to emit concise `### Changes` bullets and tighter empty-release entries
 - Updated the release workflow, user guide, examples, and tests around release-note providers and root changelog behavior
-
-
-## [46.13.14] - 2026-05-06
-
-**Release Type:** Patch
-
-### Changes
-
-- Release-only patch: refreshed version metadata, README version markers, docs index, tag, and Homebrew formula after `46.13.13`
