@@ -5,7 +5,7 @@
 When you can spin up four features in parallel, you also need to ship four features without dropping any. Manifest handles versions, tags, changelogs, docs, and the multi-repo coordination so the human stays in flow.
 
 [![tests](https://github.com/fidenceio/manifest.cli/actions/workflows/test.yml/badge.svg)](https://github.com/fidenceio/manifest.cli/actions/workflows/test.yml)
-**Version** `47.4.5` · **Platform** macOS · Linux · FreeBSD · **Requires** Bash 5+, Git, yq v4+
+**Version** `47.4.6` · **Platform** macOS · Linux · FreeBSD · **Requires** Bash 5+, Git, yq v4+
 
 ---
 
