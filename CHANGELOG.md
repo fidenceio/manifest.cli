@@ -1,5 +1,15 @@
 # Changelog
 
+## [47.3.2] - 2026-05-06
+
+**Release Type:** Patch
+
+### Changes
+
+- Add regression coverage for the changed CLI workflow
+- Document the updated CLI workflow and release contract
+
+
 ## [47.3.1] - 2026-05-06
 
 **Release Type:** Patch — no user-facing changes.
@@ -86,16 +96,3 @@
 ### Changes
 
 - Release-only patch: refreshed version metadata, README version markers, docs index, tag, and Homebrew formula after `47.0.0`
-
-
-## [47.0.0] - 2026-05-06
-
-**Release Type:** Major
-
-### Changes
-
-- Added provider-agnostic release-notes generation with a Manifest-owned request format, prompt contract, and bullet-only validation
-- Added `docs.release_notes.provider`, `docs.release_notes.command`, and `docs.release_notes.required` YAML-backed settings
-- Added an example release-notes provider script showing how an external LLM transport should read Manifest requests and return validated bullets
-- Reworked local changelog generation to emit concise `### Changes` bullets and tighter empty-release entries
-- Updated the release workflow, user guide, examples, and tests around release-note providers and root changelog behavior
