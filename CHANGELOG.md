@@ -1,5 +1,15 @@
 # Changelog
 
+## [47.4.3] - 2026-05-06
+
+**Release Type:** Patch
+
+### Changes
+
+- Add regression coverage for the changed CLI workflow
+- Document the updated CLI workflow and release contract
+
+
 ## [47.4.2] - 2026-05-06
 
 **Release Type:** Patch
@@ -70,12 +80,3 @@
 ### Changes
 
 - Backfilled and clarified release history in the root changelog
-
-
-## [47.1.3] - 2026-05-06
-
-**Release Type:** Patch
-
-### Changes
-
-- Release-only patch: refreshed version metadata, README version markers, docs index, tag, and Homebrew formula after `47.1.2`
