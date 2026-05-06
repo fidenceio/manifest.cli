@@ -6,7 +6,7 @@
 
 ### Changes
 
-- Update 1 files before release
+- Backfilled and clarified release history in the root changelog
 
 
 ## [47.1.3] - 2026-05-06
