@@ -54,15 +54,17 @@ EOF
     ! echo "$output" | grep -q '^## Highlights for v'
 }
 
-@test "build entry: empty changes file → fallback summary" {
+@test "build entry: empty changes file → release-type line carries the no-changes suffix" {
     local empty="${SCRATCH}/empty.md"
     : > "$empty"
 
     run _manifest_build_changelog_entry "1.0.0" "2026-05-05 12:00:00 UTC" "minor" "$empty"
     [ "$status" -eq 0 ]
     echo "$output" | grep -qE '^## \[1\.0\.0\] - 2026-05-05$'
-    echo "$output" | grep -q '^\*\*Release Type:\*\* Minor$'
-    echo "$output" | grep -q "No notable user-facing changes"
+    echo "$output" | grep -qx '^\*\*Release Type:\*\* Minor — no user-facing changes\.$'
+    # No filler Summary section, no leftover narrative paragraph.
+    ! echo "$output" | grep -q '^### '
+    ! echo "$output" | grep -q "No notable user-facing changes were detected"
 }
 
 # -----------------------------------------------------------------------------

@@ -459,11 +459,12 @@ manifest_ship_workflow() {
     # Generate documentation using new architecture
     local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
     echo "📚 Generating documentation and release notes..."
-    if generate_documents "$new_version" "$timestamp" "$increment_type"; then
-        echo "✅ Documentation generated successfully"
-    else
-        echo "⚠️  Documentation generation had issues, but continuing..."
+    if ! generate_documents "$new_version" "$timestamp" "$increment_type"; then
+        log_error "Document generation aborted; aborting ship workflow."
+        emit_ship_failure_report "doc_generation" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+        return 1
     fi
+    echo "✅ Documentation generated successfully"
     echo ""
     
     # Archive previous version documentation to zArchive (now that new version is created)

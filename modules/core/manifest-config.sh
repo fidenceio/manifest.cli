@@ -578,6 +578,9 @@ set_default_configuration() {
     export MANIFEST_CLI_DOC_REVIEW_PROVIDER="${MANIFEST_CLI_DOC_REVIEW_PROVIDER:-local}"
     export MANIFEST_CLI_DOC_REVIEW_COMMAND="${MANIFEST_CLI_DOC_REVIEW_COMMAND:-}"
     export MANIFEST_CLI_DOC_REVIEW_REQUIRED="${MANIFEST_CLI_DOC_REVIEW_REQUIRED:-false}"
+    export MANIFEST_CLI_RELEASE_NOTES_PROVIDER="${MANIFEST_CLI_RELEASE_NOTES_PROVIDER:-local}"
+    export MANIFEST_CLI_RELEASE_NOTES_COMMAND="${MANIFEST_CLI_RELEASE_NOTES_COMMAND:-}"
+    export MANIFEST_CLI_RELEASE_NOTES_REQUIRED="${MANIFEST_CLI_RELEASE_NOTES_REQUIRED:-false}"
     
     # File and directory names
     export MANIFEST_CLI_README_FILE="${MANIFEST_CLI_README_FILE:-README.md}"
@@ -1115,6 +1118,10 @@ show_configuration() {
     echo "   Docs Folder: ${MANIFEST_CLI_DOCS_FOLDER}"
     echo "   Archive Folder: ${MANIFEST_CLI_DOCS_ARCHIVE_FOLDER}"
     echo "   Retain: ${MANIFEST_CLI_DOCS_RETAIN}"
+    echo "   Release Notes Provider: ${MANIFEST_CLI_RELEASE_NOTES_PROVIDER}"
+    if [ -n "${MANIFEST_CLI_RELEASE_NOTES_COMMAND}" ]; then
+        echo "   Release Notes Command: ${MANIFEST_CLI_RELEASE_NOTES_COMMAND}"
+    fi
     echo ""
     
     echo "🏢 Project Configuration:"

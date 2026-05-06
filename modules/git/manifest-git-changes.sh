@@ -33,28 +33,19 @@ get_git_changes() {
     echo  # Add final newline
 }
 
-# Analyze code changes and categorize them
+# Analyze raw git changes into a single-section narrative body. The output
+# overwrites changes_file with `## Highlights for v<version>` followed by a
+# `### Changes` section listing one bullet per surviving commit subject. When
+# no bullets survive, only the highlights header is emitted; the empty-body
+# fallback in _manifest_build_changelog_entry takes over from there.
 analyze_changes() {
     local version="$1"
     local changes_file="$2"
-    
-    log_info "Analyzing code changes for version $version..."
-    
-    local new_features=()
-    local improvements=()
-    local bug_fixes=()
-    local breaking_changes=()
-    local documentation=()
-    local total_changes=0
 
-    _manifest_add_change_item() {
-        local _array_name="$1"
-        local _item="$2"
-        local -n _array_ref="$_array_name"
-        _array_ref+=("- $_item")
-    }
-    
-    # Analyze git changes
+    log_info "Analyzing code changes for version $version..."
+
+    local bullets=()
+
     while IFS= read -r line; do
         [[ -n "$line" ]] || continue
         [[ "$line" == "#"* ]] && continue
@@ -64,90 +55,32 @@ analyze_changes() {
         change="${change%"${change##*[![:space:]]}"}"
         [[ -n "$change" ]] || continue
 
-        total_changes=$((total_changes + 1))
-        local change_lc
-        change_lc="$(printf '%s' "$change" | tr '[:upper:]' '[:lower:]')"
-        
-        # Categorize changes based on keywords
-        case "$change_lc" in
-            *"breaking"*|*"break:"*|*"!:"*)
-                _manifest_add_change_item breaking_changes "$change"
-                ;;
-            *"fix"*|*"bug"*|*"issue"*|*"repair"*|*"correct"*)
-                _manifest_add_change_item bug_fixes "$change"
-                ;;
-            *"doc"*|*"documentation"*|*"readme"*|*"changelog"*|*"release note"*)
-                _manifest_add_change_item documentation "$change"
-                ;;
-            *"feat"*|*"feature"*|*"add"*|*"new"*|*"introduce"*|*"support"*)
-                _manifest_add_change_item new_features "$change"
-                ;;
-            *"refactor"*|*"improve"*|*"optimize"*|*"enhance"*|*"update"*|*"cleanup"*|*"harden"*)
-                _manifest_add_change_item improvements "$change"
-                ;;
-            *)
-                _manifest_add_change_item improvements "$change"
+        # Strip a single trailing period so bullets read like the
+        # hand-curated gold-standard entries (no period on simple imperatives).
+        change="${change%.}"
+
+        # Capitalize a lowercase ASCII first letter so subjects coming from
+        # `git log` in lowercase still render consistently.
+        local first="${change:0:1}"
+        case "$first" in
+            [a-z])
+                change="$(printf '%s' "$first" | tr '[:lower:]' '[:upper:]')${change:1}"
                 ;;
         esac
+
+        bullets+=("- $change")
     done < "$changes_file"
-    
-    # Write analysis to file
+
     {
-        cat << EOF
-## Highlights for v$version
-
-### Summary
-EOF
-
-        if [[ "$total_changes" -eq 0 ]]; then
-            cat << EOF
-No notable user-facing changes were detected since the previous release tag. Only release automation or filtered bookkeeping commits were present.
-EOF
-        else
-            cat << EOF
-- Notable changes: $total_changes
-- New features: ${#new_features[@]}
-- Improvements: ${#improvements[@]}
-- Bug fixes: ${#bug_fixes[@]}
-- Breaking changes: ${#breaking_changes[@]}
-- Documentation updates: ${#documentation[@]}
-EOF
-        fi
-
-        if [[ "${#breaking_changes[@]}" -gt 0 ]]; then
-            printf '\n### Breaking Changes\n'
-            printf '%s\n' "${breaking_changes[@]}"
-        fi
-        if [[ "${#new_features[@]}" -gt 0 ]]; then
-            printf '\n### New Features\n'
-            printf '%s\n' "${new_features[@]}"
-        fi
-        if [[ "${#improvements[@]}" -gt 0 ]]; then
-            printf '\n### Improvements\n'
-            printf '%s\n' "${improvements[@]}"
-        fi
-        if [[ "${#bug_fixes[@]}" -gt 0 ]]; then
-            printf '\n### Bug Fixes\n'
-            printf '%s\n' "${bug_fixes[@]}"
-        fi
-        if [[ "${#documentation[@]}" -gt 0 ]]; then
-            printf '\n### Documentation\n'
-            printf '%s\n' "${documentation[@]}"
+        printf '## Highlights for v%s\n' "$version"
+        if [[ "${#bullets[@]}" -gt 0 ]]; then
+            printf '\n### Changes\n\n'
+            printf '%s\n' "${bullets[@]}"
         fi
     } > "$changes_file"
 
-    if [[ "$total_changes" -eq 0 ]]; then
-        log_success "Change analysis completed"
-        log_info "No notable changes found"
-        return 0
-    fi
-
     log_success "Change analysis completed"
-    log_info "New features: ${#new_features[@]}"
-    log_info "Improvements: ${#improvements[@]}"
-    log_info "Bug fixes: ${#bug_fixes[@]}"
-    log_info "Breaking changes: ${#breaking_changes[@]}"
-    log_info "Documentation: ${#documentation[@]}"
+    log_info "Bullets: ${#bullets[@]}"
 }
 
 # Main function for command-line usage
