@@ -500,23 +500,7 @@ manifest_ship_workflow() {
         return 1
     fi
     echo ""
-    
-    # Regenerate root CHANGELOG.md from active + archived per-version
-    # changelogs. Archive is already capped by docs.retain (Phase B prune
-    # in main_cleanup), so the root file inherits the same retention with
-    # no extra logic. Hand-crafted content in the root file is not
-    # preserved across ships.
-    echo "📝 Regenerating root CHANGELOG.md..."
-    regenerate_root_changelog "$PROJECT_ROOT" "$new_version"
-    git add CHANGELOG.md
-    if git diff --cached --quiet -- CHANGELOG.md; then
-        echo "✅ Root CHANGELOG.md already up to date"
-    else
-        git commit -m "Update CHANGELOG.md to v$new_version"
-        echo "✅ Root CHANGELOG.md updated"
-    fi
-    echo ""
-    
+
     # Validate repository state after commit
     echo "🔍 Validating repository state..."
     validate_repository || true
