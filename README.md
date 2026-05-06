@@ -199,6 +199,7 @@ manifest <verb> <scope> [options]
 | `manifest prep repo\|fleet` | Connect remotes, pull latest |
 | `manifest refresh repo\|fleet` | Regenerate docs, metadata, fleet membership |
 | `manifest ship repo\|fleet <type>` | Publish release (bump + docs + tag + push) |
+| `manifest recipe <list\|show\|explain\|run>` | Inspect and explicitly run workflow recipes |
 
 ### Ship Options
 
@@ -206,6 +207,7 @@ manifest <verb> <scope> [options]
 | ------ | ------ |
 | `manifest ship repo patch` | Full publish: bump, docs, commit, tag, push, Homebrew |
 | `manifest ship repo minor --local` | Everything except tag, push, and Homebrew |
+| `manifest ship repo patch --explain` | Show the built-in recipe definition without running it |
 | `manifest ship repo major -i` | Interactive mode with safety prompts |
 | `manifest ship fleet patch --safe` | Fleet release with checks and readiness gates |
 
@@ -424,7 +426,7 @@ Manifest includes layered security protections:
 Manifest ships with a [bats-core](https://github.com/bats-core/bats-core) test suite covering release flow, YAML layering, version-bump logic, canonical-repo detection, config safety gates, fleet workflows, JSON output, Homebrew packaging, and recovery paths. CI runs the suite on Ubuntu and macOS on every push and pull request.
 
 ```sh
-./scripts/run-tests.sh
+./scripts/run-tests-container.sh
 ```
 
 Test layout includes:
@@ -435,6 +437,7 @@ tests/
 ├── ship_resume.bats           Post-push recovery behavior
 ├── tag_target.bats            Exact tag naming and push semantics
 ├── homebrew_wrapper.bats      Installed-wrapper and formula smoke tests
+├── recipe.bats                Recipe introspection and ship --explain
 ├── status.bats                Repo identity, working-tree counts, JSON status
 ├── fleet_*.bats               Fleet init, refresh, ship, filtering, and dry-run flows
 ├── config_*.bats              YAML-backed config and safety gates

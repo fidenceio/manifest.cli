@@ -1,0 +1,13 @@
+id: manifest.builtin.refresh.repo
+title: Refresh Repo
+kind: builtin
+command: manifest refresh repo
+scope: repo
+summary: Regenerate repository documentation and metadata without publishing a release.
+entrypoint: manifest_refresh_repo
+inputs: {}
+steps:
+  - id: generate-docs
+    uses: manifest.docs.generate
+  - id: refresh-metadata
+    uses: manifest.repo.metadata

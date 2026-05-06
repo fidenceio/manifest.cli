@@ -32,6 +32,7 @@ Supporting commands (`pr`, `config`, `test`, etc.) do not require a scope.
 | `manifest prep repo\|fleet` | Connect remotes, pull latest |
 | `manifest refresh repo\|fleet` | Regenerate docs, metadata, membership |
 | `manifest ship repo\|fleet <type>` | Publish a release |
+| `manifest recipe <sub>` | Inspect and explicitly run workflow recipes |
 
 ### Supporting
 
@@ -368,6 +369,38 @@ manifest refresh fleet --commit    # Commit refreshed files across fleet
 
 ---
 
+## `manifest recipe`
+
+Inspect the recipe definitions that back first-class Manifest workflows.
+Built-in recipes live in [recipes/builtin](../recipes/builtin), and the schema
+lives at [docs/contracts/recipe.schema.json](contracts/recipe.schema.json).
+
+```bash
+manifest recipe list
+manifest recipe show manifest.builtin.ship.repo.patch
+manifest recipe explain manifest.builtin.ship.repo.patch
+manifest recipe run manifest.builtin.ship.repo.patch --local
+```
+
+First-class commands remain stable. For example, `manifest ship repo patch`
+is still the canonical command, and `manifest ship repo patch --explain`
+shows the recipe definition that declares that workflow. Project recipes may
+compose or extend built-ins explicitly, but they do not silently override
+reserved built-in command mappings.
+
+**Source:** [manifest-recipe.sh](../modules/recipe/manifest-recipe.sh) `manifest_recipe_dispatch()`
+
+**Subcommands:**
+
+| Subcommand | Description |
+| ---------- | ----------- |
+| `list` | List built-in and project recipes |
+| `show <id>` | Print the recipe YAML |
+| `explain <id>` | Show command mapping, definition path, and ordered steps |
+| `run <id>` | Run a wired recipe explicitly |
+
+---
+
 ## `manifest ship`
 
 Publish a release. The highest-consequence command in the CLI.
@@ -384,6 +417,7 @@ manifest ship repo minor           # Full minor release
 manifest ship repo major -i        # Major release with interactive prompts
 manifest ship repo revision        # Revision release (e.g., 1.0.0.1)
 manifest ship repo patch --local   # Everything except tag/push/Homebrew
+manifest ship repo patch --explain # Show the built-in recipe definition
 ```
 
 **Full mode** (default): sync, bump version, generate docs, archive old docs, validate markdown, commit, tag, push to all remotes, update Homebrew formula (canonical repo only).
@@ -416,11 +450,14 @@ release-note/changelog attachment.
 | Flag | Description |
 | ---- | ----------- |
 | `--local` | Local-only mode (no tag, push, or Homebrew) |
+| `--explain` | Show the built-in recipe definition without running it |
 | `-i`, `--interactive` | Enable interactive safety prompts |
 | `-p` | Patch (short flag) |
 | `-m` | Minor (short flag) |
 | `-M` | Major (short flag) |
 | `-r` | Revision (short flag) |
+
+**Defined by:** `manifest.builtin.ship.repo.<type>` in [recipes/builtin](../recipes/builtin)
 
 **Delegates to:** `manifest_ship_workflow()` in `manifest-orchestrator.sh`
 

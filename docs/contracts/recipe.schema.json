@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://manifest.dev/schemas/manifest.recipe.schema.json",
+  "title": "Manifest Recipe",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "title", "kind", "command", "scope", "inputs", "steps"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["builtin", "project"]
+    },
+    "command": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scope": {
+      "type": "string",
+      "enum": ["repo", "fleet"]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "extends": {
+      "type": "string"
+    },
+    "entrypoint": {
+      "type": "string"
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["string", "boolean", "enum"]
+          },
+          "default": {},
+          "required": {
+            "type": "boolean"
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "uses"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "uses": {
+            "type": "string"
+          },
+          "when": {
+            "type": "string"
+          },
+          "with": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}

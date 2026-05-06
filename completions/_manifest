@@ -21,6 +21,7 @@ _manifest() {
         'plan:Generate an adoption plan'
         'reconcile:Validate and apply an adoption plan'
         'status:Read-only snapshot'
+        'recipe:Inspect and run workflow recipes'
         'discover:Discover resources without writing changes'
         'update:Update fleet membership'
         'add:Add a resource to Manifest-managed configuration'
@@ -38,11 +39,12 @@ _manifest() {
         'help:Show help'
     )
 
-    local -a scopes bumps config_subs pr_subs layers
+    local -a scopes bumps config_subs pr_subs recipe_subs layers
     scopes=(repo fleet)
     bumps=(patch minor major revision)
     config_subs=(show list get set unset describe doctor setup time)
     pr_subs=(create status checks ready merge update queue policy help)
+    recipe_subs=(list show explain run help)
     layers=(global project local)
 
     _arguments -C \
@@ -63,6 +65,9 @@ _manifest() {
                 config)
                     _values 'config subcommand' "${config_subs[@]}"
                     ;;
+                recipe)
+                    _values 'recipe subcommand' "${recipe_subs[@]}"
+                    ;;
                 pr)
                     _values 'pr subcommand' "${pr_subs[@]}"
                     ;;
@@ -74,7 +79,7 @@ _manifest() {
                     _values 'option' --depth --all-folders --force --dry-run --name --create-repo-private --create-repo-public --help
                     ;;
                 "ship repo"|"ship fleet")
-                    _values 'release type / option' "${bumps[@]}" --local --dry-run -i --interactive
+                    _values 'release type / option' "${bumps[@]}" --local --dry-run --explain -i --interactive
                     ;;
                 "plan fleet")
                     _values 'option' --apply --do --dry-run --depth --safety-cap --plan --name --force --help
@@ -94,7 +99,7 @@ _manifest() {
             if [[ $words[$((CURRENT-1))] == "--layer" ]]; then
                 _values 'layer' "${layers[@]}"
             else
-                _values 'option' --help --local --dry-run --layer --fix --json
+                _values 'option' --help --local --dry-run --explain --layer --fix --json
             fi
             ;;
     esac

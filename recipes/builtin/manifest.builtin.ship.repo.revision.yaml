@@ -1,0 +1,39 @@
+id: manifest.builtin.ship.repo.revision
+title: Ship Repo Revision
+kind: builtin
+command: manifest ship repo revision
+scope: repo
+summary: Publish a revision release for the current repository.
+entrypoint: manifest_ship_repo
+inputs:
+  release_type:
+    type: enum
+    values: [revision]
+    default: revision
+    required: true
+  local:
+    type: boolean
+    default: false
+  interactive:
+    type: boolean
+    default: false
+steps:
+  - id: identify-repo
+    uses: manifest.repo.identity
+  - id: bump-version
+    uses: manifest.version.bump
+    with:
+      release_type: revision
+  - id: generate-docs
+    uses: manifest.docs.generate
+  - id: commit-release
+    uses: manifest.git.commit_release
+  - id: tag-release
+    uses: manifest.git.tag_release
+    when: publish_release
+  - id: push-release
+    uses: manifest.git.push_release
+    when: publish_release
+  - id: publish-homebrew
+    uses: manifest.homebrew.publish
+    when: publish_release

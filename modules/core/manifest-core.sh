@@ -78,6 +78,7 @@ source "$MANIFEST_CLI_CORE_MODULES_DIR/fleet/manifest-fleet.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-init.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-prep.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-refresh.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/recipe/manifest-recipe.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-ship.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-status.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-doctor.sh"
@@ -339,6 +340,16 @@ _manifest_cli_has_help_flag() {
     return 1
 }
 
+_manifest_cli_has_explain_flag() {
+    local arg
+    for arg in "$@"; do
+        case "$arg" in
+            --explain) return 0 ;;
+        esac
+    done
+    return 1
+}
+
 _manifest_cli_is_help_request() {
     local command="${1:-}"
     shift || true
@@ -455,6 +466,23 @@ main() {
             export PROJECT_ROOT
             load_configuration "$PROJECT_ROOT" "false"
             ;;
+        "recipe")
+            if [[ "${1:-}" == "run" ]] && ! _manifest_cli_is_help_request "$command" "$@"; then
+                if ! ensure_repository_root; then
+                    log_error "Repository root validation failed"
+                    return 1
+                fi
+
+                PROJECT_ROOT="$(pwd)"
+                export PROJECT_ROOT
+                load_configuration "$PROJECT_ROOT"
+                check_auto_upgrade
+            else
+                PROJECT_ROOT="$(pwd)"
+                export PROJECT_ROOT
+                load_configuration "$PROJECT_ROOT" "false"
+            fi
+            ;;
         "docs"|"pr"|"quickstart"|"plan"|"reconcile"|"discover"|"add"|"update"|"validate")
             if [[ "${1:-}" == "fleet" ]] || _manifest_cli_is_help_request "$command" "$@"; then
                 PROJECT_ROOT="$(pwd)"
@@ -473,7 +501,7 @@ main() {
             fi
             ;;
         *)
-            if _manifest_cli_is_help_request "$command" "$@"; then
+            if _manifest_cli_is_help_request "$command" "$@" || { [[ "$command" == "ship" ]] && _manifest_cli_has_explain_flag "$@"; }; then
                 PROJECT_ROOT="$(pwd)"
                 export PROJECT_ROOT
                 load_configuration "$PROJECT_ROOT" "false"
@@ -658,6 +686,10 @@ EOF
 
         "refresh")
             manifest_refresh_dispatch "$@"
+            ;;
+
+        "recipe")
+            manifest_recipe_dispatch "$@"
             ;;
 
         "discover")
@@ -1196,6 +1228,7 @@ Usage: manifest <command> [scope] [options]
     config                              Setup wizard / show configuration
     init repo|fleet                     Scaffold repo or fleet
     status                              Read-only snapshot (next bump, sync state)
+    recipe                              Inspect/run workflow recipe definitions
     prep repo|fleet                     Connect remotes, pull latest
     refresh repo|fleet                  Regenerate docs, metadata, membership
     ship repo|fleet <patch|minor|major> Publish release (version + tag + push)

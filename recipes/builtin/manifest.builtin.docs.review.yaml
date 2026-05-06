@@ -1,0 +1,13 @@
+id: manifest.builtin.docs.review
+title: Docs Review
+kind: builtin
+command: manifest docs review
+scope: repo
+summary: Review generated documentation using the configured docs review provider.
+entrypoint: manifest_doc_review
+inputs: {}
+steps:
+  - id: collect-docs
+    uses: manifest.docs.collect
+  - id: run-review-provider
+    uses: manifest.docs.review

@@ -134,7 +134,7 @@ YAML
 @test "reconcile fleet blocks target collisions" {
     mkdir -p "$SCRATCH/work/plain" "$SCRATCH/work/existing"
     write_plan
-    perl -0pi -e 's/target_path: "plain"/target_path: "existing"/' "$SCRATCH/work/manifest.fleet.plan.yaml"
+    yq e '.entries[0].target_path = "existing"' -i "$SCRATCH/work/manifest.fleet.plan.yaml"
 
     run_manifest reconcile fleet
 
