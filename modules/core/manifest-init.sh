@@ -195,8 +195,7 @@ Repository documentation and release metadata.
 | Current Version | \`$current_version\` |
 | Release Date | \`$timestamp\` |
 | Git Tag | \`v$current_version\` |
-| Release Notes | [$docs_dir_name/RELEASE_v$current_version.md]($docs_dir_name/RELEASE_v$current_version.md) |
-| Changelog | [$docs_dir_name/CHANGELOG_v$current_version.md]($docs_dir_name/CHANGELOG_v$current_version.md) |
+| Changelog | [CHANGELOG.md](CHANGELOG.md) |
 | Last Updated | \`$timestamp\` |
 <!-- manifest:readme-version:end -->
 
@@ -259,21 +258,15 @@ EOF
 
     local release_date
     release_date="$(date -u +'%Y-%m-%d')"
-    local docs_dir_name
-    docs_dir_name="$(basename "$(get_docs_folder "$project_root")")"
 
     cat > "$changelog_file" << EOF
 # Changelog
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
-
-<!-- manifest:root-changelog:start -->
 ## [$current_version] - $release_date
 
-See [$docs_dir_name/CHANGELOG_v$current_version.md]($docs_dir_name/CHANGELOG_v$current_version.md) for the detailed changelog and [$docs_dir_name/RELEASE_v$current_version.md]($docs_dir_name/RELEASE_v$current_version.md) for release notes.
-<!-- manifest:root-changelog:end -->
+Initial release.
 EOF
 }
 

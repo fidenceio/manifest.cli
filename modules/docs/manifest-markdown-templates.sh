@@ -97,64 +97,6 @@ markdown_table_row() {
     echo "${row}|"
 }
 
-# Template for release notes
-generate_release_notes_template() {
-    local version="$1"
-    local timestamp="$2"
-    local release_type="$3"
-    local repo_name
-    repo_name="$(manifest_repo_display_name "$PROJECT_ROOT")"
-    local docs_dir_name
-    docs_dir_name="$(basename "$(get_docs_folder "$PROJECT_ROOT")")"
-    local archive_dir_name
-    archive_dir_name="$(basename "$(get_zarchive_dir)")"
-
-    if manifest_is_canonical_repo "$PROJECT_ROOT"; then
-        cat << EOF
-# Release v${version}
-
-**Release Date:** ${timestamp}
-**Release Type:** ${release_type}
-EOF
-        return 0
-    fi
-
-    cat << EOF
-# Release v${version}
-
-**Repository:** ${repo_name}
-**Release Date:** ${timestamp}
-**Release Type:** ${release_type}
-EOF
-}
-
-# Template for changelog
-generate_changelog_template() {
-    local version="$1"
-    local timestamp="$2"
-    local release_type="$3"
-    local repo_name
-    repo_name="$(manifest_repo_display_name "$PROJECT_ROOT")"
-
-    if manifest_is_canonical_repo "$PROJECT_ROOT"; then
-        cat << EOF
-# Changelog v${version}
-
-**Release Date:** ${timestamp}
-**Release Type:** ${release_type}
-EOF
-        return 0
-    fi
-
-    cat << EOF
-# Changelog v${version}
-
-**Repository:** ${repo_name}
-**Release Date:** ${timestamp}
-**Release Type:** ${release_type}
-EOF
-}
-
 # Template for README version update
 generate_readme_version_section() {
     local version="$1"
@@ -195,8 +137,7 @@ EOF
 | Current Version | \`${version}\` |
 | Release Date | \`${timestamp}\` |
 | Git Tag | \`v${version}\` |
-| Release Notes | [${docs_dir_name}/RELEASE_v${version}.md](${docs_dir_name}/RELEASE_v${version}.md) |
-| Changelog | [${docs_dir_name}/CHANGELOG_v${version}.md](${docs_dir_name}/CHANGELOG_v${version}.md) |
+| Changelog | [CHANGELOG.md](CHANGELOG.md) |
 | Last Updated | \`${timestamp}\` |
 EOF
 }
@@ -323,12 +264,6 @@ EOF
 # Main function for command-line usage
 main() {
     case "${1:-help}" in
-        "release")
-            generate_release_notes_template "${2:-}" "${3:-}" "${4:-}"
-            ;;
-        "changelog")
-            generate_changelog_template "${2:-}" "${3:-}" "${4:-}"
-            ;;
         "readme")
             generate_readme_version_section "${2:-}" "${3:-}"
             ;;
@@ -351,8 +286,6 @@ main() {
             echo "Usage: $0 [command] [args...]"
             echo ""
             echo "Commands:"
-            echo "  release [version] [timestamp] [type]     - Generate release notes template"
-            echo "  changelog [version] [timestamp] [type]   - Generate changelog template"
             echo "  readme [version] [timestamp]             - Generate README version section"
             echo "  help [command] [description] [emoji] [examples] - Generate command help"
             echo "  config [title] [description] [variables] - Generate config section"
@@ -361,8 +294,6 @@ main() {
             echo "  help                                     - Show this help"
             echo ""
             echo "Examples:"
-            echo "  $0 release 15.28.0 '2025-01-27 10:00:00 UTC' minor"
-            echo "  $0 changelog 15.28.0 '2025-01-27 10:00:00 UTC' patch"
             echo "  $0 readme 15.28.0 '2025-01-27 10:00:00 UTC'"
             ;;
         *)

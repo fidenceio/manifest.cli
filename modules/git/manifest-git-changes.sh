@@ -9,7 +9,7 @@ source "$MANIFEST_GIT_CHANGES_SCRIPT_DIR/manifest-doc-review.sh"
 
 # Commits Manifest CLI writes during its own pipeline. Filter these from
 # generated changelogs so Manifest's bookkeeping never pollutes user docs.
-MANIFEST_COMMIT_NOISE_REGEX='^- (Auto-commit (before Manifest process|changes)|Bump version to |Update Homebrew formula to |Update formula to |Update main CHANGELOG\.md to |Refresh docs and metadata for )'
+MANIFEST_COMMIT_NOISE_REGEX='^- (Auto-commit (before Manifest process|changes)|Bump version to |Update Homebrew formula to |Update formula to |Update main CHANGELOG\.md to |Update CHANGELOG\.md to |Refresh docs and metadata for )'
 
 # Get git changes since last tag
 get_git_changes() {
