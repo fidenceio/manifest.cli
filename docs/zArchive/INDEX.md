@@ -14,14 +14,10 @@ representing point-in-time security analyses are retained.
 | [v22](v22/INDEX.md) | 2 | 2025-09-22 | Security audits |
 | [v23](v23/INDEX.md) | 1 | 2025-10-24 | Security audit |
 | [v24](v24/INDEX.md) | 4 | 2025-10-24 | Security audits |
-| [v35](v35/INDEX.md) | 2 | 2026-03-08 | Release docs |
 | [v36](v36/INDEX.md) | 1 | 2026-03-11 | Security audit |
-| [v38](v38/INDEX.md) | 2 | 2026-04-04 | Release docs |
-| [v39](v39/INDEX.md) | 6 | 2026-04-04 | Release docs |
 | [v44](v44/INDEX.md) | 1 | 2026-04-25 | Security audit |
-| [v45](v45/INDEX.md) | 2 | 2026-04-29 | Release docs |
-| [v46](v46/INDEX.md) | 16 | 2026-05-04 – 2026-05-05 | Release docs |
+| [v46](v46/INDEX.md) | 20 | 2026-05-04 – 2026-05-06 | Release docs |
 
-**Total:** 38 documents across 11 major versions.
+**Total:** 30 documents across 7 major versions.
 
 [Back to current docs](../INDEX.md)
