@@ -1,7 +1,7 @@
 # Bash 5 Runtime TODO
 
-**Status:** Active implementation plan  
-**Created:** 2026-05-06  
+**Status:** Active implementation plan
+**Created:** 2026-05-06
 **Goal:** Manifest CLI must run under Bash 5+ everywhere. Bash 3.2 may start a wrapper on macOS, but it must never reach CLI modules or nested Manifest execution.
 
 ## Problem
