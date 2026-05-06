@@ -1,5 +1,10 @@
 # Changelog
 
+## [47.0.1] - 2026-05-06
+
+**Release Type:** Patch — no user-facing changes.
+
+
 ## [47.0.0] - 2026-05-06
 
 **Release Type:** Major
