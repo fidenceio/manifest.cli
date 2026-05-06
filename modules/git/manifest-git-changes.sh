@@ -7,9 +7,73 @@
 MANIFEST_GIT_CHANGES_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$MANIFEST_GIT_CHANGES_SCRIPT_DIR/manifest-doc-review.sh"
 
-# Commits Manifest CLI writes during its own pipeline. Filter these from
-# generated changelogs so Manifest's bookkeeping never pollutes user docs.
-MANIFEST_COMMIT_NOISE_REGEX='^- (Auto-commit (before Manifest process|changes)|Bump version to |Update Homebrew formula to |Update formula to |Update main CHANGELOG\.md to |Update CHANGELOG\.md to |Refresh docs and metadata for )'
+# Commits Manifest CLI writes during its own pipeline. Filter pure bookkeeping
+# from generated changelogs so Manifest's release mechanics never pollute user
+# docs. Auto-commit subjects are handled separately because those commits often
+# contain the user's real work under a generic Manifest-generated subject.
+MANIFEST_COMMIT_NOISE_SUBJECT_REGEX='^(Bump version to |Update Homebrew formula to |Update formula to |Update main CHANGELOG\.md to |Update CHANGELOG\.md to |Refresh docs and metadata for )'
+
+_manifest_git_changes_file_list_for_commit() {
+    local commit="$1"
+    git show --format= --name-only "$commit" 2>/dev/null | sed '/^[[:space:]]*$/d'
+}
+
+_manifest_git_changes_files_match() {
+    local files="$1"
+    local pattern="$2"
+    printf '%s\n' "$files" | grep -Eq "$pattern"
+}
+
+_manifest_git_changes_emit_once() {
+    local bullet="$1"
+    local seen_var="$2"
+    local seen="${!seen_var:-}"
+
+    case "
+$seen
+" in
+        *"
+$bullet
+"*) return 0 ;;
+    esac
+
+    printf -- '- %s\n' "$bullet"
+    printf -v "$seen_var" '%s%s\n' "$seen" "$bullet"
+}
+
+_manifest_git_changes_auto_commit_bullets() {
+    local commit="$1"
+    local files
+    files="$(_manifest_git_changes_file_list_for_commit "$commit")"
+    [[ -n "$files" ]] || return 0
+
+    local emitted=""
+
+    if _manifest_git_changes_files_match "$files" '(^|/)modules/recipe/|(^|/)recipes/builtin/|(^|/)docs/contracts/recipe\.schema\.json$'; then
+        _manifest_git_changes_emit_once "Add recipe-backed workflow definitions and recipe introspection support" emitted
+    fi
+    if _manifest_git_changes_files_match "$files" '(^|/)modules/core/manifest-ship\.sh$|(^|/)modules/core/manifest-core\.sh$'; then
+        _manifest_git_changes_emit_once "Wire first-class CLI commands to inspectable built-in recipe definitions" emitted
+    fi
+    if _manifest_git_changes_files_match "$files" '(^|/)completions/'; then
+        _manifest_git_changes_emit_once "Update shell completions for new command options" emitted
+    fi
+    if _manifest_git_changes_files_match "$files" '(^|/)scripts/run-tests-container\.sh$'; then
+        _manifest_git_changes_emit_once "Add a containerized test runner for Manifest CLI" emitted
+    fi
+    if _manifest_git_changes_files_match "$files" '(^|/)tests/'; then
+        _manifest_git_changes_emit_once "Add regression coverage for the changed CLI workflow" emitted
+    fi
+    if _manifest_git_changes_files_match "$files" '(^|/)README\.md$|(^|/)docs/|(^|/)tests/README\.md$'; then
+        _manifest_git_changes_emit_once "Document the updated CLI workflow and release contract" emitted
+    fi
+
+    if [[ -z "$emitted" ]]; then
+        local count
+        count="$(printf '%s\n' "$files" | sed '/^[[:space:]]*$/d' | wc -l | tr -d ' ')"
+        _manifest_git_changes_emit_once "Update ${count:-multiple} files before release" emitted
+    fi
+}
 
 # Get git changes since last tag
 get_git_changes() {
@@ -27,8 +91,24 @@ get_git_changes() {
         log_info "No previous tags found, getting all changes" >&2
     fi
 
-    git log --oneline --pretty=format:"- %s" ${range:+"$range"} 2>/dev/null \
-        | grep -E -v "$MANIFEST_COMMIT_NOISE_REGEX" || true
+    local commit subject
+    while IFS= read -r commit; do
+        [[ -n "$commit" ]] || continue
+        subject="$(git log -1 --pretty=%s "$commit" 2>/dev/null || true)"
+        [[ -n "$subject" ]] || continue
+
+        case "$subject" in
+            Auto-commit\ before\ Manifest\ process*|Auto-commit\ changes*)
+                _manifest_git_changes_auto_commit_bullets "$commit"
+                ;;
+            *)
+                if [[ "$subject" =~ $MANIFEST_COMMIT_NOISE_SUBJECT_REGEX ]]; then
+                    continue
+                fi
+                printf -- '- %s\n' "$subject"
+                ;;
+        esac
+    done < <(git log --reverse --format='%H' ${range:+"$range"} 2>/dev/null || true)
     manifest_doc_review_release_notes_since "$range" || true
     echo  # Add final newline
 }
