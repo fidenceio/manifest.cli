@@ -1,5 +1,14 @@
 # Changelog
 
+## [47.2.0] - 2026-05-06
+
+**Release Type:** Minor
+
+### Changes
+
+- Add regression coverage for the changed CLI workflow
+
+
 ## [47.1.4] - 2026-05-06
 
 **Release Type:** Patch
@@ -92,12 +101,3 @@
 ### Changes
 
 - Removed stale active per-version `RELEASE_v46.13.10.md` and `CHANGELOG_v46.13.10.md` artifacts after consolidating release history into the root changelog/archive flow
-
-
-## [46.13.12] - 2026-05-06
-
-**Release Type:** Patch
-
-### Changes
-
-- Release-only patch: refreshed version metadata, README version markers, docs index, tag, and Homebrew formula after `46.13.11`
