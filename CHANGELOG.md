@@ -2,17 +2,32 @@
 
 ## [47.1.3] - 2026-05-06
 
-**Release Type:** Patch — no user-facing changes.
+**Release Type:** Patch
+
+### Changes
+
+- Release-only patch: refreshed version metadata, README version markers, docs index, tag, and Homebrew formula after `47.1.2`
 
 
 ## [47.1.2] - 2026-05-06
 
-**Release Type:** Patch — no user-facing changes.
+**Release Type:** Patch
+
+### Changes
+
+- Fixed changelog generation so substantive Manifest auto-commit release commits are summarized instead of filtered out as release noise
+- Added category-based changelog bullets for recipe, command-surface, completion, test, container-runner, and documentation changes
+- Added regression coverage proving auto-commit release changes no longer collapse to an empty changelog
+- Backfilled the `47.1.0` changelog entry with the recipe-backed CLI changes it actually shipped
 
 
 ## [47.1.1] - 2026-05-06
 
-**Release Type:** Patch — no user-facing changes.
+**Release Type:** Patch
+
+### Changes
+
+- Release-only patch: refreshed version metadata, README version markers, docs index, tag, and Homebrew formula after `47.1.0`
 
 
 ## [47.1.0] - 2026-05-06
@@ -32,44 +47,60 @@
 
 ## [47.0.1] - 2026-05-06
 
-**Release Type:** Patch — no user-facing changes.
+**Release Type:** Patch
+
+### Changes
+
+- Release-only patch: refreshed version metadata, README version markers, docs index, tag, and Homebrew formula after `47.0.0`
 
 
 ## [47.0.0] - 2026-05-06
 
 **Release Type:** Major
 
-### Summary
-No notable user-facing changes were detected since the previous release tag. Only release automation or filtered bookkeeping commits were present.
+### Changes
+
+- Added provider-agnostic release-notes generation with a Manifest-owned request format, prompt contract, and bullet-only validation
+- Added `docs.release_notes.provider`, `docs.release_notes.command`, and `docs.release_notes.required` YAML-backed settings
+- Added an example release-notes provider script showing how an external LLM transport should read Manifest requests and return validated bullets
+- Reworked local changelog generation to emit concise `### Changes` bullets and tighter empty-release entries
+- Updated the release workflow, user guide, examples, and tests around release-note providers and root changelog behavior
 
 
 ## [46.13.14] - 2026-05-06
 
 **Release Type:** Patch
 
-### Summary
-No notable user-facing changes were detected since the previous release tag. Only release automation or filtered bookkeeping commits were present.
+### Changes
+
+- Release-only patch: refreshed version metadata, README version markers, docs index, tag, and Homebrew formula after `46.13.13`
 
 
 ## [46.13.13] - 2026-05-06
 
 **Release Type:** Patch
 
-### Summary
-No notable user-facing changes were detected since the previous release tag. Only release automation or filtered bookkeeping commits were present.
+### Changes
+
+- Removed stale active per-version `RELEASE_v46.13.10.md` and `CHANGELOG_v46.13.10.md` artifacts after consolidating release history into the root changelog/archive flow
 
 
 ## [46.13.12] - 2026-05-06
 
 **Release Type:** Patch
 
-### Summary
-No notable user-facing changes were detected since the previous release tag. Only release automation or filtered bookkeeping commits were present.
+### Changes
+
+- Release-only patch: refreshed version metadata, README version markers, docs index, tag, and Homebrew formula after `46.13.11`
 
 
 ## [46.13.11] - 2026-05-06
 
 **Release Type:** Patch
 
-### Summary
-No notable user-facing changes were detected since the previous release tag. Only release automation or filtered bookkeeping commits were present.
+### Changes
+
+- Removed obsolete `docs.historical_limit` and `docs.filename_pattern` configuration in favor of the active `docs.retain` retention model
+- Simplified fleet documentation generation so fleet releases update root changelog/index surfaces instead of creating per-version fleet release/changelog files
+- Updated config wizard, configuration display, and example YAML files to match the current docs retention contract
+- Removed the one-shot `prune-archive-stubs.sh` script after archive-stub cleanup became part of the maintained docs flow
