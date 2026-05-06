@@ -1,5 +1,13 @@
 # Changelog
 
+## [46.13.11] - 2026-05-06
+
+**Release Type:** Patch
+
+### Summary
+No notable user-facing changes were detected since the previous release tag. Only release automation or filtered bookkeeping commits were present.
+
+
 ## [46.13.10] - 2026-05-06
 
 **Release Type:** Patch

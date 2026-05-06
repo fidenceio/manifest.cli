@@ -4,7 +4,7 @@
 
 | Document | Version | Date |
 | --- | --- | --- |
-| [Release Notes v46.13.9](RELEASE_v46.13.9.md) | 46.13.9 | 2026-05-06 |
-| [Changelog v46.13.9](CHANGELOG_v46.13.9.md) | 46.13.9 | 2026-05-06 |
+| [Document v46.13.9](CHANGELOG_v46.13.9.md) | 46.13.9 | 2026-05-06 |
+| [Document v46.13.9](RELEASE_v46.13.9.md) | 46.13.9 | 2026-05-06 |
 
 [Back to archive index](../INDEX.md)
