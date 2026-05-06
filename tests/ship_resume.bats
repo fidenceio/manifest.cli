@@ -54,3 +54,64 @@ teardown() {
     [ "$status" -ne 0 ]
     [[ "$output" == *"local tag v1.2.3 does not exist"* ]]
 }
+
+@test "follow-up patch gate allows canonical non-patch full release" {
+    should_update_homebrew_for_repo() { return 0; }
+    unset MANIFEST_CLI_SHIP_FOLLOWUP_PATCH MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE
+
+    run manifest_ship_should_run_followup_patch "minor" "true"
+
+    [ "$status" -eq 0 ]
+}
+
+@test "follow-up patch gate refuses patch releases" {
+    should_update_homebrew_for_repo() { return 0; }
+    unset MANIFEST_CLI_SHIP_FOLLOWUP_PATCH MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE
+
+    run manifest_ship_should_run_followup_patch "patch" "true"
+
+    [ "$status" -ne 0 ]
+}
+
+@test "follow-up patch gate refuses local-only releases" {
+    should_update_homebrew_for_repo() { return 0; }
+    unset MANIFEST_CLI_SHIP_FOLLOWUP_PATCH MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE
+
+    run manifest_ship_should_run_followup_patch "minor" "false"
+
+    [ "$status" -ne 0 ]
+}
+
+@test "follow-up patch gate respects disable env var" {
+    should_update_homebrew_for_repo() { return 0; }
+    export MANIFEST_CLI_SHIP_FOLLOWUP_PATCH=false
+    unset MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE
+
+    run manifest_ship_should_run_followup_patch "minor" "true"
+
+    [ "$status" -ne 0 ]
+}
+
+@test "follow-up patch gate refuses recursive runs" {
+    should_update_homebrew_for_repo() { return 0; }
+    export MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE=1
+    unset MANIFEST_CLI_SHIP_FOLLOWUP_PATCH
+
+    run manifest_ship_should_run_followup_patch "minor" "true"
+
+    [ "$status" -ne 0 ]
+}
+
+@test "follow-up patch runner invokes manifest with recursion sentinel" {
+    manifest() {
+        echo "sentinel=${MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE:-}"
+        echo "args=$*"
+    }
+
+    run manifest_ship_run_followup_patch
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Running follow-up patch"* ]]
+    [[ "$output" == *"sentinel=1"* ]]
+    [[ "$output" == *"args=ship repo patch"* ]]
+}

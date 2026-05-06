@@ -213,6 +213,8 @@ manifest <verb> <scope> [options]
 
 Release types: `patch` | `minor` | `major` | `revision`
 
+Canonical Manifest CLI `minor`, `major`, and `revision` ships automatically run one guarded follow-up patch after the installed CLI is upgraded, so release-process changes are exercised by the newly installed version. Disable with `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH=false`.
+
 Short flags: `-p` (patch), `-m` (minor), `-M` (major), `-r` (revision), `-i` (interactive)
 
 ### Read-Only Diagnostics

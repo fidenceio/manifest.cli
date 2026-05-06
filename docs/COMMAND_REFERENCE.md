@@ -420,7 +420,7 @@ manifest ship repo patch --local   # Everything except tag/push/Homebrew
 manifest ship repo patch --explain # Show the built-in recipe definition
 ```
 
-**Full mode** (default): sync, bump version, generate docs, archive old docs, validate markdown, commit, tag, push to all remotes, update Homebrew formula (canonical repo only), and safely fast-forward clean local Homebrew tap checkouts that the release process updated remotely.
+**Full mode** (default): sync, bump version, generate docs, archive old docs, validate markdown, commit, tag, push to all remotes, update Homebrew formula (canonical repo only), and safely fast-forward clean local Homebrew tap checkouts that the release process updated remotely. Canonical CLI `minor`, `major`, and `revision` ships also run one guarded follow-up patch under the upgraded installed CLI; set `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH=false` to skip it.
 
 **Local mode** (`--local`): Everything except creating a tag, pushing to remotes, and updating Homebrew. Equivalent to the old `manifest prep <type>`.
 
@@ -481,6 +481,7 @@ release-note/changelog attachment.
 16. *(if not --local)* Local installed Manifest CLI upgrade
 17. *(if not --local and MANIFEST_CLI_GITHUB_ACTIONS_WAIT=true)* GitHub Actions status watch for the published HEAD
 18. `update_repository_metadata()` — final metadata update
+19. *(canonical CLI non-patch ships only)* one guarded follow-up `manifest ship repo patch` under the upgraded installed CLI
 
 **Failure handling:** If any step after commit fails, the orchestrator emits a Ship Failure Report with recovery commands (retry push, remove tag, roll back).
 

@@ -185,6 +185,32 @@ manifest_ship_post_push_steps() {
     return 0
 }
 
+manifest_ship_should_run_followup_patch() {
+    local increment_type="$1"
+    local publish_release="${2:-false}"
+
+    [[ "$publish_release" == "true" ]] || return 1
+    [[ "$increment_type" != "patch" ]] || return 1
+    [[ -z "${MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE:-}" ]] || return 1
+
+    if is_falsy "${MANIFEST_CLI_SHIP_FOLLOWUP_PATCH:-true}"; then
+        return 1
+    fi
+
+    if ! should_update_homebrew_for_repo; then
+        return 1
+    fi
+
+    return 0
+}
+
+manifest_ship_run_followup_patch() {
+    echo ""
+    echo "🔁 Running follow-up patch under the upgraded Manifest CLI..."
+    echo "   Reason: canonical CLI ships may upgrade release behavior mid-run; the follow-up patch exercises the newly installed version once."
+    MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE=1 manifest ship repo patch
+}
+
 manifest_ship_repo_resume() {
     if ! ensure_repository_root; then
         log_error "Repository root validation failed"
@@ -588,6 +614,10 @@ manifest_ship_workflow() {
     echo "   - Offset: $MANIFEST_CLI_TIME_OFFSET seconds"
     echo "   - Uncertainty: ±$MANIFEST_CLI_TIME_UNCERTAINTY seconds"
     echo "   - Method: $MANIFEST_CLI_TIME_METHOD"
+
+    if manifest_ship_should_run_followup_patch "$increment_type" "$publish_release"; then
+        manifest_ship_run_followup_patch
+    fi
 }
 
 # Test/dry-run function for safety
