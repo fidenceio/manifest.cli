@@ -1,5 +1,14 @@
 # Changelog
 
+## [47.4.0] - 2026-05-06
+
+**Release Type:** Minor
+
+### Changes
+
+- Add regression coverage for the changed CLI workflow
+
+
 ## [47.3.3] - 2026-05-06
 
 **Release Type:** Patch — no user-facing changes.
@@ -77,18 +86,3 @@
 ### Changes
 
 - Release-only patch: refreshed version metadata, README version markers, docs index, tag, and Homebrew formula after `47.1.0`
-
-
-## [47.1.0] - 2026-05-06
-
-**Release Type:** Minor
-
-### Changes
-
-- Added recipe-backed workflow definitions and recipe introspection support
-- Wired first-class CLI commands to inspectable built-in recipe definitions
-- Added built-in recipe schema and initial recipes for ship, prep, refresh, docs, PR, and security workflows
-- Added `manifest recipe list`, `show`, `explain`, and explicit `run` command support
-- Added `manifest ship repo patch --explain` and related ship recipe explain paths
-- Added a containerized Manifest CLI test runner so test dependencies stay out of the host environment
-- Updated shell completions, command reference, README, and regression coverage for the recipe workflow
