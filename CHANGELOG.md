@@ -1,5 +1,16 @@
 # Changelog
 
+## [47.3.0] - 2026-05-06
+
+**Release Type:** Minor
+
+### Changes
+
+- Wire first-class CLI commands to inspectable built-in recipe definitions
+- Add regression coverage for the changed CLI workflow
+- Document the updated CLI workflow and release contract
+
+
 ## [47.2.0] - 2026-05-06
 
 **Release Type:** Minor
@@ -92,12 +103,3 @@
 ### Changes
 
 - Release-only patch: refreshed version metadata, README version markers, docs index, tag, and Homebrew formula after `46.13.13`
-
-
-## [46.13.13] - 2026-05-06
-
-**Release Type:** Patch
-
-### Changes
-
-- Removed stale active per-version `RELEASE_v46.13.10.md` and `CHANGELOG_v46.13.10.md` artifacts after consolidating release history into the root changelog/archive flow
