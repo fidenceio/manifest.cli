@@ -91,6 +91,24 @@ teardown() {
     [[ "$output" == *"documentation files"* ]]
 }
 
+@test "auto-commit release changes are summarized instead of filtered out" {
+    git tag v0.9.0
+    mkdir -p modules/recipe recipes/builtin docs/contracts tests
+    echo "# recipe module" > modules/recipe/manifest-recipe.sh
+    echo "id: manifest.builtin.ship.repo.patch" > recipes/builtin/manifest.builtin.ship.repo.patch.yaml
+    echo "{}" > docs/contracts/recipe.schema.json
+    echo "# tests" > tests/recipe.bats
+    git add modules/recipe/manifest-recipe.sh recipes/builtin/manifest.builtin.ship.repo.patch.yaml docs/contracts/recipe.schema.json tests/recipe.bats
+    git commit -q -m "Auto-commit before Manifest process (4 files: modules/recipe/manifest-recipe.sh, ...) [TS: 2026-05-06 15:19:55 UTC]"
+
+    run get_git_changes "1.0.0"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Add recipe-backed workflow definitions and recipe introspection support"* ]]
+    [[ "$output" == *"Add regression coverage for the changed CLI workflow"* ]]
+    [[ "$output" != *"Auto-commit before Manifest process"* ]]
+}
+
 @test "commit_changes fails when required documentation provider fails" {
     mkdir -p modules/core
     echo "# change" > modules/core/manifest-core.sh
