@@ -445,14 +445,23 @@ _fleet_status_json() {
 # -----------------------------------------------------------------------------
 fleet_quickstart() {
     local original_args=("$@")
-    local dry_run=false
+    local dry_run=true
     local fleet_name=""
     local force=false
     local create_repo_visibility=""
+    local execution_mode="preview"
+    local _local_only=false
+    local remaining_args=()
+
+    if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+        return 1
+    fi
+    [[ "$execution_mode" == "apply" ]] && dry_run=false
+    original_args=("${remaining_args[@]}")
+    set -- "${remaining_args[@]}"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --dry-run) dry_run=true; shift ;;
             -n|--name)
                 if [[ -z "${2:-}" ]] || [[ "${2:-}" == --* ]]; then
                     log_error "--name requires a value"
@@ -527,10 +536,11 @@ fleet_quickstart() {
         echo "Would scan:      $total directories"
         echo "Would list:      $git_count existing git repos in manifest.fleet.tsv"
         echo ""
-        echo "No changes written. Re-run without --dry-run to apply."
+        manifest_execution_footer "manifest quickstart fleet -y"
         return 0
     fi
 
+    manifest_execution_apply_header
     _fleet_init --_quickstart "${original_args[@]}"
 }
 
@@ -1516,9 +1526,18 @@ _fleet_sync_parallel() {
 fleet_update() {
     local depth=5
     local skip_init_check=false
-    local dry_run=false
+    local dry_run=true
     local json_output=false
     local quiet=false
+    local execution_mode="preview"
+    local _local_only=false
+    local remaining_args=()
+
+    if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+        return 1
+    fi
+    [[ "$execution_mode" == "apply" ]] && dry_run=false
+    set -- "${remaining_args[@]}"
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -1530,15 +1549,15 @@ fleet_update() {
                 fi
                 depth="$2"; shift 2 ;;
             --_from-init) skip_init_check=true; shift ;;
-            --dry-run) dry_run=true; shift ;;
             --json) json_output=true; dry_run=true; shift ;;
             -q|--quiet) quiet=true; dry_run=true; shift ;;
             -h|--help|help)
                 _render_help \
-                    "manifest update fleet [--depth N] [--dry-run] [--json] [--quiet]" \
+                    "manifest update fleet [-y|--yes] [--dry-run] [--depth N] [--json] [--quiet]" \
                     "Re-scan fleet membership and add newly discovered repositories." \
-                    "Options" "  --depth N    Maximum search depth (default: 5)
-  --dry-run    Preview only; do not modify manifest.fleet.config.yaml
+                    "Options" "  --dry-run    Explicit preview; do not modify manifest.fleet.config.yaml
+  -y, --yes    Apply fleet membership updates
+  --depth N    Maximum search depth (default: 5)
   --json       Output JSON summary
   --quiet, -q  Only output new repo lines"
                 return 0
@@ -1861,24 +1880,111 @@ _fleet_filter_services() {
     echo "$result"
 }
 
+_fleet_service_release_reason() {
+    local service="$1"
+    local path="$2"
+    local excluded
+    excluded=$(get_fleet_service_property "$service" "excluded" "false")
+
+    if [[ "$excluded" == "true" ]]; then
+        echo "excluded"
+        return 1
+    fi
+    if [[ -z "$path" || ! -d "$path" ]]; then
+        echo "missing path"
+        return 1
+    fi
+    if [[ ! -d "$path/.git" ]]; then
+        echo "not a git repo"
+        return 1
+    fi
+
+    local release_enabled
+    release_enabled=$(get_fleet_service_property "$service" "release_enabled" "")
+    if [[ -n "$release_enabled" ]] && is_falsy "$release_enabled"; then
+        echo "release disabled"
+        return 1
+    fi
+    if [[ -n "$release_enabled" ]] && is_truthy "$release_enabled"; then
+        echo "release enabled"
+        return 0
+    fi
+
+    case "$service:$path" in
+        *homebrew*tap*|*Homebrew*Tap*)
+            echo "formula-only"
+            return 1
+            ;;
+    esac
+
+    local root_dir="${MANIFEST_FLEET_ROOT:-$(pwd)}"
+    if [[ "$path" == "." || "$path" == "$root_dir" || "$(cd "$path" 2>/dev/null && pwd)" == "$root_dir" ]]; then
+        echo "fleet root infrastructure"
+        return 1
+    fi
+
+    if [[ -f "$path/VERSION" ]]; then
+        echo "has VERSION"
+        return 0
+    fi
+
+    echo "no VERSION"
+    return 1
+}
+
+_fleet_ship_plan() {
+    local increment_type="$1"
+    local local_only="$2"
+    local releaseable_count=0
+    local skipped_count=0
+
+    echo ""
+    echo "Fleet ship plan ($increment_type)"
+    echo ""
+    printf '%-36s %-10s %-16s %s\n' "Service" "Effect" "Decision" "Path / reason"
+    printf '%-36s %-10s %-16s %s\n' "-------" "------" "--------" "-------------"
+
+    local service path reason effect decision
+    for service in $MANIFEST_FLEET_SERVICES; do
+        path=$(get_fleet_service_property "$service" "path")
+        if reason=$(_fleet_service_release_reason "$service" "$path"); then
+            releaseable_count=$((releaseable_count + 1))
+            effect="release"
+            if [[ "$local_only" == "true" ]]; then
+                decision="would local"
+            else
+                decision="would ship"
+            fi
+            printf '%-36s %-10s %-16s %s\n' "$service" "$effect" "$decision" "$path"
+        else
+            skipped_count=$((skipped_count + 1))
+            printf '%-36s %-10s %-16s %s\n' "$service" "read" "skip" "$path ($reason)"
+        fi
+    done
+
+    echo ""
+    echo "Plan summary: $releaseable_count releaseable, $skipped_count skipped"
+    return 0
+}
+
 # -----------------------------------------------------------------------------
 # Function: fleet_ship
 # -----------------------------------------------------------------------------
 # Highest-level coordinated fleet workflow:
-#   (optional) prep -> pr fleet create -> (optional checks/ready) -> pr fleet queue
+#   preview by default -> direct ship of releaseable services with -y.
+# PR orchestration belongs under `manifest pr fleet ...`, never here.
 # -----------------------------------------------------------------------------
 fleet_ship() {
-    if ! _fleet_require_initialized "ship"; then
+    local execution_mode="preview"
+    local local_only=false
+    local remaining_args=()
+    if ! manifest_execution_parse execution_mode local_only remaining_args "$@"; then
         return 1
     fi
+    set -- "${remaining_args[@]}"
 
     local increment_type="patch"
     local run_prep=true
-    local safe=false
-    local method="squash"
-    local force=false
-    local no_delete_branch=false
-    local draft=false
     local any_failures=0
     local only_filter=""
     local except_filter=""
@@ -1893,29 +1999,13 @@ fleet_ship() {
                 run_prep=false
                 shift
                 ;;
-            --safe)
-                safe=true
-                shift
+            --safe|--force|--no-delete-branch|--draft)
+                log_error "$1 belongs under 'manifest pr fleet ...', not 'manifest ship fleet'."
+                return 1
                 ;;
             --method)
-                if [ -z "${2:-}" ] || [[ "${2:-}" == --* ]]; then
-                    log_error "--method requires a value: merge|squash|rebase"
-                    return 1
-                fi
-                method="$2"
-                shift 2
-                ;;
-            --force)
-                force=true
-                shift
-                ;;
-            --no-delete-branch)
-                no_delete_branch=true
-                shift
-                ;;
-            --draft)
-                draft=true
-                shift
+                log_error "--method belongs under 'manifest pr fleet queue', not 'manifest ship fleet'."
+                return 1
                 ;;
             --only)
                 if [ -z "${2:-}" ] || [[ "${2:-}" == --* ]]; then
@@ -1935,21 +2025,20 @@ fleet_ship() {
                 ;;
             -h|--help)
                 cat << 'EOF'
-Usage: manifest ship fleet [patch|minor|major|revision] [options]
+Usage: manifest ship fleet [patch|minor|major|revision] [-y|--yes] [--dry-run] [--local] [options]
 
 Options:
-  --noprep                  Skip per-service prep step
-  --safe                    Run checks/ready gate before queueing
-  --method <merge|squash|rebase>
-  --force                   Bypass readiness gate during queue
-  --no-delete-branch        Keep source branches after queue
-  --draft                   Create draft PRs
+  --dry-run                 Explicit preview; no writes, commits, tags, pushes, or PRs
+  -y, --yes                 Apply the fleet release plan
+  --local                   With -y, apply local release prep only
+  --noprep                  Skip per-service prep step during apply
   --only <name[,name...]>   Ship only the named service(s) (repeatable)
   --except <name[,name...]> Ship all services except the named one(s) (repeatable)
 
 Flow:
-  default: prep fleet -> docs fleet -> pr fleet create -> pr fleet queue
-  --safe:  prep fleet -> docs fleet -> pr fleet create -> pr fleet checks -> pr fleet ready -> pr fleet queue
+  default: preview release plan
+  -y:      direct ship of releaseable services
+  PR work: manifest pr fleet ...
 
 --only and --except are mutually exclusive.
 EOF
@@ -1967,8 +2056,7 @@ EOF
         return 1
     fi
 
-    if [[ ! "$method" =~ ^(merge|squash|rebase)$ ]]; then
-        log_error "Invalid --method value: '$method' (expected merge|squash|rebase)"
+    if ! _fleet_require_initialized "ship"; then
         return 1
     fi
 
@@ -1986,29 +2074,25 @@ EOF
         echo "🎯 Filter applied: $filtered"
     fi
 
-    # Filter args forwarded to manifest_fleet_pr_dispatch — Cloud plugin honors
-    # them so its own service iteration matches the local filter.
-    local pr_filter_args=()
-    [ -n "$only_filter" ]   && pr_filter_args+=(--only   "$only_filter")
-    [ -n "$except_filter" ] && pr_filter_args+=(--except "$except_filter")
-
-    # Determine step count based on whether safe mode adds extra steps
-    local total_steps=5
-    if [ "$safe" = "true" ]; then
-        total_steps=6
+    if [[ "$execution_mode" == "preview" ]]; then
+        _fleet_ship_plan "$increment_type" "$local_only"
+        local replay_command="manifest ship fleet $increment_type"
+        [[ "$local_only" == "true" ]] && replay_command="$replay_command --local"
+        [[ -n "$only_filter" ]] && replay_command="$replay_command --only $only_filter"
+        [[ -n "$except_filter" ]] && replay_command="$replay_command --except $except_filter"
+        manifest_execution_footer "$replay_command -y"
+        MANIFEST_FLEET_SERVICES="$_saved_services"
+        return 0
     fi
 
-    echo "🚢 Starting fleet ship workflow ($increment_type)"
+    echo "Starting fleet ship workflow ($increment_type)"
+    _fleet_ship_plan "$increment_type" "$local_only"
+    echo ""
 
     # One-shot block so we always restore $MANIFEST_FLEET_SERVICES on exit.
     local _rc=0
     while :; do
-        if [ "$run_prep" = "true" ]; then
-            echo "🔧 Step 1/$total_steps: Running prep across fleet services..."
-            if ! _fleet_prep_run "$increment_type"; then
-                _rc=1; break
-            fi
-        else
+        if [ "$run_prep" != "true" ]; then
             echo "⏭️  Skipping fleet prep (--noprep)."
             for service in $MANIFEST_FLEET_SERVICES; do
                 local path
@@ -2027,31 +2111,36 @@ EOF
             fi
         fi
 
-        # --- Fleet docs generation ---
-        echo "📄 Step 2/$total_steps: Generating fleet documentation..."
-        local docs_strategy
-        docs_strategy=$(get_fleet_docs_strategy)
-        fleet_docs_generate "$increment_type" || {
-            log_warning "Fleet docs generation had issues, continuing..."
-        }
+        echo "Step 1/1: Shipping releaseable services directly..."
+        local service path reason ship_args
+        for service in $MANIFEST_FLEET_SERVICES; do
+            path=$(get_fleet_service_property "$service" "path")
+            if ! reason=$(_fleet_service_release_reason "$service" "$path"); then
+                echo "  - $service: skipped ($reason)"
+                continue
+            fi
+            echo "  - $service: shipping $increment_type"
+            (
+                cd "$path" || exit 1
+                PROJECT_ROOT="$PWD"
+                export PROJECT_ROOT
+                if [[ "$local_only" == "true" ]]; then
+                    manifest_ship_repo "$increment_type" "--local" "-y"
+                else
+                    manifest_ship_repo "$increment_type" "-y"
+                fi
+            ) || {
+                echo "  - $service: ship failed"
+                any_failures=1
+                _rc=1
+                break
+            }
+        done
 
-        echo "🔀 Step 3/$total_steps: Creating or reusing PRs across fleet..."
-        local create_args=("${pr_filter_args[@]}")
-        [ "$draft" = "true" ] && create_args+=("--draft")
-        manifest_fleet_pr_dispatch create "${create_args[@]}" || { _rc=1; break; }
-
-        if [ "$safe" = "true" ]; then
-            echo "🧪 Step 4/$total_steps: Verifying checks and readiness across fleet..."
-            manifest_fleet_pr_dispatch checks "${pr_filter_args[@]}" || { _rc=1; break; }
-            manifest_fleet_pr_dispatch ready  "${pr_filter_args[@]}" || { _rc=1; break; }
+        if [[ "$any_failures" -eq 1 ]]; then
+            log_error "Fleet ship failed. Review completed service commits/tags before retrying."
+            break
         fi
-
-        local queue_step=$((total_steps))
-        echo "📥 Step ${queue_step}/${total_steps}: Queueing PRs across fleet..."
-        local queue_args=("${pr_filter_args[@]}" --method "$method")
-        [ "$force" = "true" ] && queue_args+=("--force")
-        [ "$no_delete_branch" = "true" ] && queue_args+=("--no-delete-branch")
-        manifest_fleet_pr_dispatch queue "${queue_args[@]}" || { _rc=1; break; }
 
         echo "✅ Fleet ship workflow complete."
         break
@@ -2114,13 +2203,20 @@ fleet_add() {
     local path_or_url=""
     local service_name=""
     local service_type=""
-    local dry_run=false
+    local dry_run=true
+    local execution_mode="preview"
+    local _local_only=false
+    local remaining_args=()
+
+    if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+        return 1
+    fi
+    [[ "$execution_mode" == "apply" ]] && dry_run=false
+    set -- "${remaining_args[@]}"
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --dry-run)
-                dry_run=true; shift ;;
             --name)
                 if [ -z "${2:-}" ] || [[ "${2:-}" == --* ]]; then
                     log_error "--name requires a value"
@@ -2135,7 +2231,7 @@ fleet_add() {
                 service_type="$2"; shift 2 ;;
             -h|--help|help)
                 _render_help \
-                    "manifest add fleet <path-or-url> [--name NAME] [--type TYPE] [--dry-run]" \
+                    "manifest add fleet <path-or-url> [-y|--yes] [--dry-run] [--name NAME] [--type TYPE]" \
                     "Add a local path or remote URL to fleet membership."
                 return 0
                 ;;
@@ -2238,10 +2334,11 @@ fleet_add() {
         echo ""
         echo "$yaml_content"
         echo ""
-        echo "No changes written. Re-run without --dry-run to apply."
+        manifest_execution_footer "manifest add fleet $path_or_url -y"
         return 0
     fi
 
+    manifest_execution_apply_header
     if [[ -f "$config_file" ]]; then
         if append_services_to_manifest "$config_file" "$yaml_content"; then
             echo "✓ Added '$service_name' to $config_file"

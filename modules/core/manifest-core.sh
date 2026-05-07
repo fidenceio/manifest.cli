@@ -33,6 +33,7 @@ export PROJECT_ROOT
 
 # Source shared utilities first
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-shared-utils.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-execution-policy.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-shared-functions.sh"
 
 # Source YAML module before config (config depends on YAML functions)
@@ -468,13 +469,41 @@ _manifest_pr_fleet_dispatch() {
     fi
     if [[ "$pr_subcommand" == "help" || "$pr_subcommand" == "-h" || "$pr_subcommand" == "--help" ]]; then
         _render_help \
-            "manifest pr fleet [queue|create|status|checks|ready] [options]" \
-            "Run fleet-wide PR operations." \
+            "manifest pr fleet [queue|create|status|checks|ready] [-y|--yes] [--dry-run] [options]" \
+            "Preview or run fleet-wide PR operations." \
             "Examples" "  manifest pr fleet
   manifest pr fleet create
-  manifest pr fleet queue --method squash"
+  manifest pr fleet create -y
+  manifest pr fleet queue --method squash -y"
         return 0
     fi
+
+    case "$pr_subcommand" in
+        create|ready|queue)
+            local execution_mode="preview"
+            local _local_only=false
+            local remaining_args=()
+            if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+                return 1
+            fi
+            set -- "${remaining_args[@]}"
+            if [[ "$execution_mode" == "preview" ]]; then
+                local replay_command="manifest pr fleet $pr_subcommand"
+                local operation_label="$pr_subcommand"
+                if [[ $# -gt 0 ]]; then
+                    replay_command+=" $*"
+                    operation_label+=" $*"
+                fi
+                manifest_execution_preview_header "manifest pr fleet $pr_subcommand"
+                echo "Would run fleet PR operation: $operation_label"
+                manifest_execution_footer "$replay_command -y"
+                return 0
+            fi
+            manifest_execution_apply_header
+            export MANIFEST_CLI_EXECUTION_MODE="apply"
+            ;;
+    esac
+
     if declare -F manifest_fleet_pr_dispatch >/dev/null 2>&1; then
         manifest_fleet_pr_dispatch "$pr_subcommand" "$@"
     else
@@ -959,7 +988,21 @@ EOF
                     manifest_pr_merge "$@"
                     ;;
                 "queue")
-                    manifest_pr_queue "$@"
+                    local execution_mode="preview"
+                    local _local_only=false
+                    local remaining_args=()
+                    if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+                        return 1
+                    fi
+                    if [[ "$execution_mode" == "preview" ]]; then
+                        manifest_execution_preview_header "manifest pr queue"
+                        echo "Would run PR queue operation: ${remaining_args[*]}"
+                        manifest_execution_footer "manifest pr queue ${remaining_args[*]} -y"
+                        return 0
+                    fi
+                    manifest_execution_apply_header
+                    export MANIFEST_CLI_EXECUTION_MODE="apply"
+                    manifest_pr_queue "${remaining_args[@]}"
                     ;;
                 "policy")
                     local policy_subcommand="${1:-show}"
@@ -1212,23 +1255,38 @@ EOF
                 fleet_docs_dispatch "$@"
                 return $?
             fi
+            local execution_mode="preview"
+            local _local_only=false
+            local docs_args=()
+            if ! manifest_execution_parse execution_mode _local_only docs_args "$@"; then
+                return 1
+            fi
+            set -- "${docs_args[@]}"
             if _manifest_cli_has_help_token "$@"; then
                 _render_help \
-                    "manifest docs <fleet> [subcommand] [options]" \
+                    "manifest docs [metadata|cleanup|fleet] [-y|--yes] [--dry-run]" \
                     "Generate or inspect documentation for a Manifest-managed resource." \
-                    "Scopes" "  fleet   Generate fleet documentation"
+                    "Scopes" "  fleet   Generate fleet documentation" \
+                    "Options" "  --dry-run   Explicit preview; no writes
+  -y, --yes   Apply documentation writes"
                 return 0
             fi
             local subcommand="$1"
             case "$subcommand" in
                 "metadata")
+                    if [[ "$execution_mode" == "preview" ]]; then
+                        manifest_execution_preview_header "manifest docs metadata"
+                        echo "Would update repository metadata."
+                        manifest_execution_footer "manifest docs metadata -y"
+                        return 0
+                    fi
+                    manifest_execution_apply_header
                     update_repository_metadata
                     ;;
                 "homebrew")
                     echo "Homebrew formula is updated automatically by 'manifest ship'"
                     ;;
                 "cleanup")
-                    echo "Moving historical documentation to zArchive..."
                     local cleanup_version=""
                     if [ -f "$MANIFEST_CLI_VERSION_FILE" ]; then
                         cleanup_version=$(cat "$MANIFEST_CLI_VERSION_FILE")
@@ -1240,6 +1298,14 @@ EOF
                     get_time_timestamp >/dev/null
                     local cleanup_timestamp
                     cleanup_timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+                    if [[ "$execution_mode" == "preview" ]]; then
+                        manifest_execution_preview_header "manifest docs cleanup"
+                        echo "Would move historical documentation to zArchive for v$cleanup_version."
+                        manifest_execution_footer "manifest docs cleanup -y"
+                        return 0
+                    fi
+                    manifest_execution_apply_header
+                    echo "Moving historical documentation to zArchive..."
                     main_cleanup "$cleanup_version" "$cleanup_timestamp"
                     ;;
                 *)
@@ -1253,6 +1319,13 @@ EOF
                     fi
                     get_time_timestamp >/dev/null
                     local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
+                    if [[ "$execution_mode" == "preview" ]]; then
+                        manifest_execution_preview_header "manifest docs"
+                        echo "Would generate documentation for v$current_version."
+                        manifest_execution_footer "manifest docs -y"
+                        return 0
+                    fi
+                    manifest_execution_apply_header
                     generate_documents "$current_version" "$timestamp" "patch"
                     ;;
             esac

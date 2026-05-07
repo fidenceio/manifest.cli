@@ -19,6 +19,24 @@ manifest <verb> <scope> [type] [options]
 
 Supporting commands (`pr`, `config`, `test`, etc.) do not require a scope.
 
+## Execution Policy
+
+Manifest is safe by default for every command that can write files, commit,
+tag, push, create PRs, merge, queue, or mutate remote state.
+
+| Form | Behavior |
+| ---- | -------- |
+| `command` | Preview only |
+| `command --dry-run` | Explicit preview |
+| `command -y` / `command --yes` | Apply |
+| `command --local` | Preview local-only effects |
+| `command --local -y` | Apply local-only effects |
+
+`--dry-run` and `-y` are contradictory and return an error when combined.
+`--force` may bypass a command-specific readiness gate, but it does not imply
+apply. PR operations live under `manifest pr ...`; `manifest ship ...` does not
+create or queue PRs.
+
 ---
 
 ## Top-Level Commands
@@ -409,20 +427,22 @@ Publish a release. The highest-consequence command in the CLI.
 
 ### `manifest ship repo`
 
-Ship a single repo: version bump, documentation, commit, tag, push, Homebrew update.
+Preview or ship a single repo: version bump, documentation, commit, tag, push, Homebrew update.
 
 ```bash
-manifest ship repo patch           # Full patch release
-manifest ship repo minor           # Full minor release
-manifest ship repo major -i        # Major release with interactive prompts
-manifest ship repo revision        # Revision release (e.g., 1.0.0.1)
-manifest ship repo patch --local   # Everything except tag/push/Homebrew
+manifest ship repo patch           # Preview full patch release
+manifest ship repo patch -y        # Apply full patch release
+manifest ship repo major -i -y     # Apply major release with interactive prompts
+manifest ship repo patch --local   # Preview local-only release
+manifest ship repo patch --local -y # Apply local-only release
 manifest ship repo patch --explain # Show the built-in recipe definition
 ```
 
-**Full mode** (default): sync, bump version, generate docs, archive old docs, validate markdown, commit, tag, push to all remotes, update Homebrew formula (canonical repo only), and safely fast-forward clean local Homebrew tap checkouts that the release process updated remotely. Canonical CLI `minor`, `major`, and `revision` ships also run one guarded follow-up patch under the upgraded installed CLI; set `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH=false` to skip it.
+**Preview mode** (default): prints the release plan and writes nothing.
 
-**Local mode** (`--local`): Everything except creating a tag, pushing to remotes, and updating Homebrew. Equivalent to the old `manifest prep <type>`.
+**Apply mode** (`-y` / `--yes`): sync, bump version, generate docs, archive old docs, validate markdown, commit, tag, push to all remotes, update Homebrew formula (canonical repo only), and safely fast-forward clean local Homebrew tap checkouts that the release process updated remotely. Canonical CLI `minor`, `major`, and `revision` ships also run one guarded follow-up patch under the upgraded installed CLI; set `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH=false` to skip it.
+
+**Local apply mode** (`--local -y`): Everything except creating a tag, pushing to remotes, and updating Homebrew. Equivalent to the old `manifest prep <type>`.
 
 Before any `commit_changes()` call stages files, Manifest runs a smart documentation review. The default provider is local and deterministic: it inspects the dirty tree, classifies changed files, reports whether documentation-impacting changes have matching docs updates, adds a concise review body to the commit, writes a neutral committed report under `docs/documentation-reviews/`, and feeds the review summary into generated release notes/changelogs.
 
@@ -449,7 +469,9 @@ release-note/changelog attachment.
 
 | Flag | Description |
 | ---- | ----------- |
-| `--local` | Local-only mode (no tag, push, or Homebrew) |
+| `--dry-run` | Explicit preview; no writes |
+| `-y`, `--yes` | Apply the release plan |
+| `--local` | Local-only scope when combined with `-y` |
 | `--explain` | Show the built-in recipe definition without running it |
 | `-i`, `--interactive` | Enable interactive safety prompts |
 | `-p` | Patch (short flag) |
@@ -481,7 +503,7 @@ release-note/changelog attachment.
 16. *(if not --local)* Local installed Manifest CLI upgrade
 17. *(if not --local and MANIFEST_CLI_GITHUB_ACTIONS_WAIT=true)* GitHub Actions status watch for the published HEAD
 18. `update_repository_metadata()` — final metadata update
-19. *(canonical CLI non-patch ships only)* one guarded follow-up `manifest ship repo patch` under the upgraded installed CLI
+19. *(canonical CLI non-patch ships only)* one guarded follow-up `manifest ship repo patch -y` under the upgraded installed CLI
 
 **Failure handling:** If any step after commit fails, the orchestrator emits a Ship Failure Report with recovery commands (retry push, remove tag, roll back).
 
@@ -499,18 +521,19 @@ Value matching is whitespace- and case-tolerant. Unknown values fall back to `ve
 
 ### `manifest ship fleet`
 
-Coordinated fleet release across all repositories.
+Preview or apply a coordinated fleet release across release-enabled repositories.
 
 ```bash
-manifest ship fleet minor                       # Coordinated minor release
-manifest ship fleet patch --safe                # With checks and readiness gates
-manifest ship fleet minor --local               # Local-only across fleet
-manifest ship fleet patch --method squash       # Squash merge strategy
-manifest ship fleet minor --draft               # Create draft PRs
+manifest ship fleet minor                       # Preview coordinated minor release
+manifest ship fleet minor -y                    # Apply coordinated minor release
+manifest ship fleet minor --local -y            # Apply local-only across fleet
 manifest ship fleet patch --noprep              # Skip per-service prep step
 manifest ship fleet patch --only api,worker     # Ship only the named services
 manifest ship fleet patch --except docs         # Ship every service except 'docs'
 ```
+
+`ship fleet` is release-only. It does not create, ready, queue, or merge PRs.
+Use `manifest pr fleet ...` explicitly for PR workflows.
 
 **Flags:**
 
@@ -693,15 +716,19 @@ manifest init fleet --dry-run          # Preview current init phase
 manifest quickstart fleet --dry-run    # Auto-discover preview, skip TSV selection
 manifest status fleet                  # Fleet repository status table
 manifest discover fleet --depth 3      # Find new repos (alias for update --dry-run)
-manifest update fleet                  # Re-scan membership
+manifest update fleet                  # Preview membership rescan
+manifest update fleet -y               # Apply membership rescan
 manifest update fleet --dry-run        # Preview changes
 manifest add fleet ./path --name "svc" --dry-run # Preview service YAML
 manifest validate fleet                # Validate config
-manifest prep fleet --parallel         # Clone/pull all
-manifest refresh fleet                 # Re-scan + regenerate docs
+manifest prep fleet --parallel         # Preview clone/pull all
+manifest prep fleet --parallel -y      # Apply clone/pull all
+manifest refresh fleet                 # Preview re-scan + regenerate docs
+manifest refresh fleet -y              # Apply re-scan + regenerate docs
 manifest docs fleet --dry-run          # Preview fleet documentation writes
-manifest pr fleet queue --method squash  # Fleet PR operations
-manifest ship fleet minor --safe       # Coordinated release
+manifest pr fleet queue --method squash -y # Fleet PR operations
+manifest ship fleet minor              # Preview coordinated release
+manifest ship fleet minor -y           # Apply coordinated release
 ```
 
 **Service types for `add fleet`:** `service`, `library`, `infrastructure`, `tool`

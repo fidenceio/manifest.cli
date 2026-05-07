@@ -56,7 +56,7 @@ Line two." \
 
     run manifest_ship_repo --help
     [ "$status" -eq 0 ]
-    echo "$output" | grep -qFx "Usage: manifest ship repo <patch|minor|major|revision>|resume [--local] [-i]"
+    echo "$output" | grep -qFx "Usage: manifest ship repo <patch|minor|major|revision>|resume [-y|--yes] [--dry-run] [--local] [-i]"
     echo "$output" | grep -qFx "Options:"
     echo "$output" | grep -qFx "Examples:"
 }
@@ -66,13 +66,12 @@ Line two." \
 
     run manifest_ship_fleet --help
     [ "$status" -eq 0 ]
-    # Hidden flags from tracker item #25 must be visible:
+    # Fleet ship is release-only. PR flags live under manifest pr fleet.
     echo "$output" | grep -q -- "--noprep"
-    echo "$output" | grep -q -- "--safe"
-    echo "$output" | grep -q -- "--method"
-    echo "$output" | grep -q -- "--draft"
-    echo "$output" | grep -q -- "--force"
-    echo "$output" | grep -q -- "--no-delete-branch"
+    echo "$output" | grep -q -- "--dry-run"
+    echo "$output" | grep -q -- "-y, --yes"
+    ! echo "$output" | grep -q -- "--method"
+    ! echo "$output" | grep -q -- "--draft"
     # Flow section should be present so users see the pipeline.
     echo "$output" | grep -qFx "Flow:"
 }

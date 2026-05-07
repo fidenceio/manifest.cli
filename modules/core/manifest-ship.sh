@@ -50,6 +50,13 @@ manifest_ship_repo() {
     local local_only=false
     local interactive=false
     local explain=false
+    local execution_mode="preview"
+    local remaining_args=()
+
+    if ! manifest_execution_parse execution_mode local_only remaining_args "$@"; then
+        return 1
+    fi
+    set -- "${remaining_args[@]}"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -63,24 +70,26 @@ manifest_ship_repo() {
             -m) increment_type="minor"; shift ;;
             -M) increment_type="major"; shift ;;
             -r) increment_type="revision"; shift ;;
-            --local) local_only=true; shift ;;
             -i|--interactive) interactive=true; shift ;;
             --explain) explain=true; shift ;;
             -h|--help)
                 _render_help \
-                    "manifest ship repo <patch|minor|major|revision>|resume [--local] [-i]" \
-                    "Publish a release: version bump, docs, commit, tag, push." \
+                    "manifest ship repo <patch|minor|major|revision>|resume [-y|--yes] [--dry-run] [--local] [-i]" \
+                    "Preview or publish a release: version bump, docs, commit, tag, push." \
                     "Options" "  patch | -p          Increment patch version (e.g. 1.2.3 -> 1.2.4)
   minor | -m          Increment minor version (e.g. 1.2.3 -> 1.3.0)
   major | -M          Increment major version (e.g. 1.2.3 -> 2.0.0)
   revision | -r       Increment revision (e.g. 1.2.3 -> 1.2.3.1)
-  --local             Local only — no tag, push, or Homebrew update
+  --dry-run           Explicit preview; no writes, commits, tags, or pushes
+  -y, --yes           Apply the release plan
+  --local             With -y, local only — no tag, push, or Homebrew update
   -i, --interactive   Enable interactive safety prompts
   --explain           Show the built-in recipe definition without running it
   resume              Continue safe post-release steps for current VERSION/tag" \
                     "Examples" "  manifest ship repo patch
-  manifest ship repo minor --local
-  manifest ship repo -M -i
+  manifest ship repo patch -y
+  manifest ship repo minor --local -y
+  manifest ship repo -M -i -y
   manifest ship repo resume"
                 return 0
                 ;;
@@ -104,6 +113,37 @@ manifest_ship_repo() {
         manifest_recipe_explain_command "ship" "repo" "$increment_type"
         return $?
     fi
+
+    if [[ "$execution_mode" == "preview" ]]; then
+        if [[ "$local_only" == "true" ]]; then
+            echo "Ship repo preview (local): $increment_type — no changes written"
+        else
+            echo "Ship repo preview: $increment_type — no changes written"
+        fi
+        echo ""
+        if declare -F manifest_repo_identity_block >/dev/null 2>&1; then
+            manifest_repo_identity_block "$PWD"
+            echo ""
+        fi
+        echo "Would perform:"
+        echo "  - Validate repository identity and release readiness"
+        echo "  - Increment VERSION using release type: $increment_type"
+        echo "  - Regenerate release documentation and changelog"
+        echo "  - Commit release files"
+        if [[ "$local_only" == "true" ]]; then
+            echo "  - Skip tag, push, and Homebrew publishing (--local)"
+        else
+            echo "  - Create release tag"
+            echo "  - Push branch and tag"
+            echo "  - Run downstream publish hooks when configured"
+        fi
+        local replay_command="manifest ship repo $increment_type"
+        [[ "$local_only" == "true" ]] && replay_command="$replay_command --local"
+        manifest_execution_footer "$replay_command -y"
+        return 0
+    fi
+
+    manifest_execution_apply_header
 
     local publish_release="true"
     if [[ "$local_only" == "true" ]]; then
@@ -137,33 +177,38 @@ manifest_ship_fleet() {
     local local_only=false
     local explain=false
     local fleet_args=()
+    local execution_mode="preview"
+    local remaining_args=()
+
+    if ! manifest_execution_parse execution_mode local_only remaining_args "$@"; then
+        return 1
+    fi
+    set -- "${remaining_args[@]}"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
             patch|minor|major|revision)
                 increment_type="$1"; shift ;;
-            --local) local_only=true; shift ;;
             --explain) explain=true; shift ;;
             -h|--help)
                 _render_help \
-                    "manifest ship fleet <patch|minor|major|revision> [--local] [fleet options]" \
-                    "Coordinated fleet release across all services." \
+                    "manifest ship fleet <patch|minor|major|revision> [-y|--yes] [--dry-run] [--local] [fleet options]" \
+                    "Preview or publish a coordinated fleet release across eligible services." \
                     "Options" "  patch | minor | major | revision   Release type
-  --local                  Local only — no push, no PRs
+  --dry-run                Explicit preview; no writes, commits, tags, pushes, or PRs
+  -y, --yes                Apply the fleet release plan
+  --local                  With -y, local only — no push, no tags
   --explain                Show the built-in recipe definition without running it
   --noprep                 Skip per-service prep step (requires clean trees)
-  --safe                   Insert checks/ready gate before queueing
-  --method <merge|squash|rebase>
-                           PR merge strategy (default: squash)
-  --force                  Bypass readiness gate during queue
-  --no-delete-branch       Keep source branches after queue
-  --draft                  Create draft PRs" \
-                    "Flow" "  default:  prep fleet -> docs fleet -> pr fleet create -> pr fleet queue
-  --safe:   prep fleet -> docs fleet -> pr fleet create -> pr fleet checks -> pr fleet ready -> pr fleet queue" \
+  --only <name[,name...]>  Ship only selected services
+  --except <name[,name...]> Ship all services except selected services" \
+                    "Flow" "  preview:  load fleet -> render per-service release plan
+  apply:    load fleet -> ship release-enabled services directly
+  PR work:  use manifest pr fleet ... explicitly" \
                     "Examples" "  manifest ship fleet patch
-  manifest ship fleet minor --local
-  manifest ship fleet major --safe --method squash
-  manifest ship fleet patch --noprep --draft"
+  manifest ship fleet patch -y
+  manifest ship fleet minor --local -y
+  manifest ship fleet patch --only fidenceiomanifestcli"
                 return 0
                 ;;
             *)
@@ -184,11 +229,23 @@ manifest_ship_fleet() {
     fi
 
     if [[ "$local_only" == "true" ]]; then
-        echo "Ship fleet (local): $increment_type — no remote operations"
-        fleet_prep "$increment_type" "${fleet_args[@]}"
+        if [[ "$execution_mode" == "preview" ]]; then
+            echo "Ship fleet preview (local): $increment_type — no changes written"
+            fleet_ship "$increment_type" "--dry-run" "--local" "${fleet_args[@]}"
+        else
+            manifest_execution_apply_header
+            echo "Ship fleet (local): $increment_type — no remote operations"
+            fleet_ship "$increment_type" "--local" "-y" "${fleet_args[@]}"
+        fi
     else
-        echo "Ship fleet: $increment_type"
-        fleet_ship "$increment_type" "${fleet_args[@]}"
+        if [[ "$execution_mode" == "preview" ]]; then
+            echo "Ship fleet preview: $increment_type — no changes written"
+            fleet_ship "$increment_type" "--dry-run" "${fleet_args[@]}"
+        else
+            manifest_execution_apply_header
+            echo "Ship fleet: $increment_type"
+            fleet_ship "$increment_type" "-y" "${fleet_args[@]}"
+        fi
     fi
 }
 

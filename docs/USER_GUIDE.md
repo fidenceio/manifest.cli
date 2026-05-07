@@ -22,6 +22,15 @@ Every journey command takes a **scope**: `repo` (single repository) or `fleet` (
 
 Supported release types: `patch`, `minor`, `major`, `revision`.
 
+Manifest is safe by default:
+
+```text
+command          preview only
+command --dry-run explicit preview
+command -y       apply the plan
+command --local -y apply local-only changes
+```
+
 Fleet adoption has two extra commands before the normal fleet journey:
 `manifest plan fleet` generates an editable plan, and `manifest reconcile fleet`
 validates or applies it. Both are dry-run by default.
@@ -34,8 +43,9 @@ validates or applies it. Both are dry-run by default.
 # View all available commands
 manifest --help
 
-# Scaffold your project (creates VERSION, CHANGELOG.md, docs/, .gitignore)
+# Preview project scaffold, then apply it
 manifest init repo
+manifest init repo -y
 
 # Review your current configuration
 manifest config show
@@ -54,7 +64,8 @@ manifest config setup
 ### Prepare Your Workspace
 
 ```bash
-manifest prep repo             # Connect remotes if missing, pull latest
+manifest prep repo             # Preview remote prep
+manifest prep repo -y          # Connect remotes if missing, pull latest
 ```
 
 If no remote is configured and you are in a terminal, Manifest prompts for a remote URL.
@@ -62,20 +73,19 @@ If no remote is configured and you are in a terminal, Manifest prompts for a rem
 ### Preview a Release Locally
 
 ```bash
-manifest ship repo patch --local    # Patch release, local only
-manifest ship repo minor --local    # Minor release, local only
-manifest ship repo -M --local       # Major release, short flag
-manifest ship repo revision --local # Revision (e.g., 1.0.0.1)
+manifest ship repo patch --local    # Preview local-only patch release
+manifest ship repo patch --local -y # Apply local-only patch release
+manifest ship repo -M --local -y    # Apply local-only major release
 ```
 
-The `--local` flag runs the full pipeline (sync, bump, docs, commit) but skips tagging, pushing, and Homebrew updates. Nothing leaves your machine.
+The `--local` flag limits the apply scope. It still previews unless you add `-y`.
 
 ### Publish a Release
 
 ```bash
-manifest ship repo patch       # Full patch release
-manifest ship repo minor       # Full minor release
-manifest ship repo major -i    # Major release with interactive safety prompts
+manifest ship repo patch       # Preview full patch release
+manifest ship repo patch -y    # Apply full patch release
+manifest ship repo major -i -y # Apply major release with interactive safety prompts
 ```
 
 Ship runs: sync, version bump, documentation generation, markdown validation, commit, Git tag, push to all remotes, and Homebrew formula update (in the canonical repository). When the canonical CLI release updates the Homebrew tap, Manifest also refreshes any clean local tap checkout it can safely fast-forward, including sibling workspace checkouts such as `fidenceio.homebrew.tap`. Canonical CLI `minor`, `major`, and `revision` ships then run one guarded follow-up patch under the upgraded installed CLI so release-process changes take effect immediately. Set `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH=false` to skip that follow-up.
@@ -275,14 +285,15 @@ manifest refresh fleet --dry-run   # Preview changes without applying
 ### Ship Fleet Release
 
 ```bash
-manifest ship fleet minor                       # Coordinated minor release
-manifest ship fleet patch --safe                # With checks and readiness gates
-manifest ship fleet minor --local               # Local-only across fleet
-manifest ship fleet patch --method squash       # Squash merge strategy
-manifest ship fleet minor --draft               # Create draft PRs
+manifest ship fleet minor                       # Preview coordinated minor release
+manifest ship fleet minor -y                    # Apply coordinated minor release
+manifest ship fleet minor --local -y            # Apply local-only across fleet
 manifest ship fleet patch --only api,worker     # Ship only the named services
 manifest ship fleet patch --except docs         # Ship every service except 'docs'
 ```
+
+Fleet PR work is explicit: use `manifest pr fleet ... -y` when you want PR creation,
+queueing, or readiness operations.
 
 ### Direct Fleet Commands
 

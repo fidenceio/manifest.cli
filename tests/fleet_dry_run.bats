@@ -160,6 +160,44 @@ TSV
     [[ "$output" == *"No changes written"* ]]
 }
 
+@test "prep fleet defaults to preview" {
+    mkdir -p "$SCRATCH/work/svc"
+    git -C "$SCRATCH/work" init -q
+    git -C "$SCRATCH/work/svc" init -q
+    write_fleet_config
+    write_selected_tsv
+
+    run_manifest prep fleet
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"MANIFEST FLEET SYNC (DRY RUN)"* ]]
+    [[ "$output" == *"No changes written"* ]]
+}
+
+@test "ship fleet defaults to preview and does not call PR dispatch" {
+    mkdir -p "$SCRATCH/work/svc"
+    git -C "$SCRATCH/work" init -q
+    git -C "$SCRATCH/work/svc" init -q
+    echo "1.2.3" > "$SCRATCH/work/svc/VERSION"
+    write_fleet_config
+    write_selected_tsv
+    cat >> "$SCRATCH/work/manifest.fleet.config.yaml" <<'YAML'
+  svc:
+    path: "./svc"
+    type: "service"
+    branch: "main"
+YAML
+
+    run_manifest ship fleet patch
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Ship fleet preview"* ]]
+    [[ "$output" == *"Fleet ship plan"* ]]
+    [[ "$output" == *"would ship"* ]]
+    [[ "$output" != *"PR feature requires Manifest Cloud"* ]]
+    [ "$(cat "$SCRATCH/work/svc/VERSION")" = "1.2.3" ]
+}
+
 @test "refresh fleet --dry-run does not rewrite manifest.fleet.tsv" {
     mkdir -p "$SCRATCH/work/svc"
     git -C "$SCRATCH/work" init -q
@@ -203,7 +241,7 @@ TSV
     write_root_fleet_config
     write_root_selected_tsv
 
-    run_manifest refresh fleet
+    run_manifest refresh fleet -y
 
     [ "$status" -eq 0 ]
     grep -q $'^true\trootworkspace\t.\tinfrastructure\ttrue' "$SCRATCH/work/manifest.fleet.tsv"

@@ -50,6 +50,7 @@ run_manifest() {
     run bash -c '
         export MANIFEST_CLI_CORE_MODULES_DIR="$TEST_REPO_ROOT/modules"
         source "$TEST_REPO_ROOT/modules/core/manifest-shared-utils.sh"
+        source "$TEST_REPO_ROOT/modules/core/manifest-execution-policy.sh"
         source "$TEST_REPO_ROOT/modules/core/manifest-shared-functions.sh"
         source "$TEST_REPO_ROOT/modules/core/manifest-yaml.sh"
         source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet.sh"
@@ -109,7 +110,7 @@ run_manifest() {
 @test "init fleet phase 1 defaults to compact repo-depth TSV" {
     mkdir -p "$SCRATCH/apps/web/src" "$SCRATCH/services/api/internal"
 
-    run_manifest
+    run_manifest -y
 
     [ "$status" -eq 0 ]
     [ -f "$SCRATCH/manifest.fleet.tsv" ]
@@ -124,7 +125,7 @@ run_manifest() {
 @test "init fleet phase 1 TSV uses freshness metadata instead of VERSION column" {
     mkdir -p "$SCRATCH/apps/web"
 
-    run_manifest
+    run_manifest -y
 
     [ "$status" -eq 0 ]
     grep -q '^# Last scanned: ' "$SCRATCH/manifest.fleet.tsv"
@@ -160,7 +161,7 @@ TSV
 @test "init fleet --all-folders writes exhaustive TSV" {
     mkdir -p "$SCRATCH/apps/web/src"
 
-    run_manifest --all-folders --depth 3
+    run_manifest --all-folders --depth 3 -y
 
     [ "$status" -eq 0 ]
     [ -f "$SCRATCH/manifest.fleet.tsv" ]

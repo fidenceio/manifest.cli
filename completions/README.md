@@ -40,7 +40,7 @@ After installing, restart your shell or run `compinit` again.
 
 - `manifest <TAB>` → all top-level commands
 - `manifest init <TAB>` → `repo  fleet`
-- `manifest ship repo <TAB>` → `patch minor major revision --local --dry-run`
+- `manifest ship repo <TAB>` → `patch minor major revision -y --yes --local --dry-run`
 - `manifest config <TAB>` → `show list get set unset describe doctor setup time`
 - `manifest config get <TAB>` → all 83 config keys (cached after first lookup)
 - `manifest config set --layer <TAB>` → `global  project  local`

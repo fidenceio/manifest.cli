@@ -5,6 +5,9 @@ command: manifest ship repo patch
 scope: repo
 summary: Publish a patch release for the current repository.
 entrypoint: manifest_ship_repo
+execution:
+  default_mode: preview
+  requires_yes_for: [local-write, remote-write]
 inputs:
   release_type:
     type: enum
@@ -20,20 +23,27 @@ inputs:
 steps:
   - id: identify-repo
     uses: manifest.repo.identity
+    effect: read
   - id: bump-version
     uses: manifest.version.bump
+    effect: local-write
     with:
       release_type: patch
   - id: generate-docs
     uses: manifest.docs.generate
+    effect: local-write
   - id: commit-release
     uses: manifest.git.commit_release
+    effect: local-write
   - id: tag-release
     uses: manifest.git.tag_release
+    effect: local-write
     when: publish_release
   - id: push-release
     uses: manifest.git.push_release
+    effect: remote-write
     when: publish_release
   - id: publish-homebrew
     uses: manifest.homebrew.publish
+    effect: remote-write
     when: publish_release

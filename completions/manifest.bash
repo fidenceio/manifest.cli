@@ -45,11 +45,11 @@ _manifest_complete() {
         3)
             case "${words[1]} ${words[2]}" in
                 "init fleet")
-                    COMPREPLY=( $(compgen -W "--depth --all-folders --force --dry-run --name --create-repo-private --create-repo-public --help" -- "$cur") )
+                    COMPREPLY=( $(compgen -W "-y --yes --depth --all-folders --force --dry-run --name --create-repo-private --create-repo-public --help" -- "$cur") )
                     return 0
                     ;;
                 "ship repo"|"ship fleet")
-                    COMPREPLY=( $(compgen -W "$bumps --local --dry-run --explain -i --interactive" -- "$cur") )
+                    COMPREPLY=( $(compgen -W "$bumps -y --yes --local --dry-run --explain -i --interactive --only --except --noprep" -- "$cur") )
                     return 0
                     ;;
                 "plan fleet")
@@ -86,7 +86,7 @@ _manifest_complete() {
         return 0
     fi
     if [[ "$cur" == --* ]]; then
-        COMPREPLY=( $(compgen -W "--help --local --dry-run --explain --layer --fix --json" -- "$cur") )
+        COMPREPLY=( $(compgen -W "--help -y --yes --local --dry-run --explain --layer --fix --json" -- "$cur") )
         return 0
     fi
 }

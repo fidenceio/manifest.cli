@@ -35,6 +35,23 @@
     "entrypoint": {
       "type": "string"
     },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default_mode": {
+          "type": "string",
+          "enum": ["preview", "apply"]
+        },
+        "requires_yes_for": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["local-write", "remote-write", "pr"]
+          }
+        }
+      }
+    },
     "inputs": {
       "type": "object",
       "additionalProperties": {
@@ -75,6 +92,10 @@
           },
           "uses": {
             "type": "string"
+          },
+          "effect": {
+            "type": "string",
+            "enum": ["read", "local-write", "remote-write", "pr"]
           },
           "when": {
             "type": "string"

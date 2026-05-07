@@ -145,11 +145,12 @@ manifest_recipe_explain() {
     fi
     echo ""
     echo "Steps:"
-    yq e -r '.steps[] | [.id, .uses, (.when // "")] | @tsv' "$file" | while IFS=$'\t' read -r step_id uses when_clause; do
+    yq e -r '.steps[] | [.id, .uses, (.effect // "unspecified"), (.when // "")] | @tsv' "$file" | while IFS=$'\t' read -r step_id uses effect when_clause; do
+        local suffix=" {effect: $effect}"
         if [[ -n "$when_clause" ]]; then
-            echo "  - $step_id -> $uses [$when_clause]"
+            echo "  - $step_id -> $uses$suffix [$when_clause]"
         else
-            echo "  - $step_id -> $uses"
+            echo "  - $step_id -> $uses$suffix"
         fi
     done
 }
