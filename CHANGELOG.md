@@ -1,5 +1,10 @@
 # Changelog
 
+## [47.5.2] - 2026-05-07
+
+**Release Type:** Patch — no user-facing changes.
+
+
 ## [47.5.1] - 2026-05-07
 
 **Release Type:** Patch
@@ -78,8 +83,3 @@
 ### Changes
 
 - Add regression coverage for the changed CLI workflow
-
-
-## [47.3.3] - 2026-05-06
-
-**Release Type:** Patch — no user-facing changes.
