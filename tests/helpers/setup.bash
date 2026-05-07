@@ -21,6 +21,8 @@ load_modules() {
     # shellcheck disable=SC1091
     source "$TEST_REPO_ROOT/modules/core/manifest-shared-utils.sh"
     # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/core/manifest-execution-policy.sh"
+    # shellcheck disable=SC1091
     source "$TEST_REPO_ROOT/modules/core/manifest-shared-functions.sh"
     # shellcheck disable=SC1091
     source "$TEST_REPO_ROOT/modules/core/manifest-yaml.sh"

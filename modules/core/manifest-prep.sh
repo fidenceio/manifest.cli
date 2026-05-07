@@ -36,11 +36,19 @@ _MANIFEST_PREP_LOADED=1
 # Absorbs the old sync_repository() behavior.
 # -----------------------------------------------------------------------------
 manifest_prep_repo() {
-    local dry_run=false
+    local dry_run=true
     local create_repo_visibility=""
+    local execution_mode="preview"
+    local _local_only=false
+    local remaining_args=()
+    if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+        return 1
+    fi
+    [[ "$execution_mode" == "apply" ]] && dry_run=false
+    set -- "${remaining_args[@]}"
+
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --dry-run) dry_run=true; shift ;;
             --create-repo-private)
                 create_repo_visibility=$(_manifest_parse_create_repo_flag "$create_repo_visibility" "private") || return 1
                 shift ;;
@@ -49,14 +57,16 @@ manifest_prep_repo() {
                 shift ;;
             -h|--help)
                 _render_help \
-                    "manifest prep repo [--dry-run] [--create-repo-private|--create-repo-public]" \
+                    "manifest prep repo [-y|--yes] [--dry-run] [--create-repo-private|--create-repo-public]" \
                     "Prepare workspace: add remote if missing, pull latest from all remotes." \
-                    "Options" "  --dry-run                  Print what would happen; no remote calls
+                    "Options" "  --dry-run                  Explicit preview; no remote calls
+  -y, --yes                  Apply the prep plan
   --create-repo-private      When no remote exists, create a private GitHub repo (gh repo create) and add as origin
   --create-repo-public       When no remote exists, create a public GitHub repo (gh repo create) and add as origin" \
                     "Examples" "  manifest prep repo
   manifest prep repo --dry-run
-  manifest prep repo --create-repo-private"
+  manifest prep repo -y
+  manifest prep repo --create-repo-private -y"
                 return 0
                 ;;
             *)
@@ -90,7 +100,7 @@ manifest_prep_repo() {
                 echo "  no remotes configured — would prompt for an origin URL"
             fi
             echo ""
-            echo "No changes written. Re-run without --dry-run to apply."
+            manifest_execution_footer "manifest prep repo -y"
             echo ""
             return 0
         fi
@@ -146,11 +156,12 @@ manifest_prep_repo() {
             printf "  %-12s %s\n" "$r" "$url"
         done <<< "$remotes"
         echo ""
-        echo "No changes written. Re-run without --dry-run to apply."
+        manifest_execution_footer "manifest prep repo -y"
         echo ""
         return 0
     fi
 
+    manifest_execution_apply_header
     # Pull latest from all remotes (delegates to existing sync_repository)
     sync_repository
 }
@@ -169,22 +180,35 @@ manifest_prep_repo() {
 # -----------------------------------------------------------------------------
 manifest_prep_fleet() {
     local fleet_args=()
+    local execution_mode="preview"
+    local _local_only=false
+    local remaining_args=()
+    if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+        return 1
+    fi
+    if [[ "$execution_mode" == "preview" ]]; then
+        fleet_args+=("--dry-run")
+    else
+        manifest_execution_apply_header
+    fi
+    set -- "${remaining_args[@]}"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -p|--parallel) fleet_args+=("--parallel"); shift ;;
             --clone-only) fleet_args+=("--clone-only"); shift ;;
             --pull-only) fleet_args+=("--pull-only"); shift ;;
-            --dry-run) fleet_args+=("--dry-run"); shift ;;
             -h|--help)
                 _render_help \
-                    "manifest prep fleet [--parallel] [--clone-only] [--pull-only] [--dry-run]" \
+                    "manifest prep fleet [-y|--yes] [--dry-run] [--parallel] [--clone-only] [--pull-only]" \
                     "Prepare fleet workspace: clone missing repos, pull existing ones." \
-                    "Options" "  -p, --parallel     Run operations in parallel
+                    "Options" "  --dry-run          Explicit preview; no clones, no pulls
+  -y, --yes          Apply the prep plan
+  -p, --parallel     Run operations in parallel
   --clone-only       Only clone missing repos (skip pull)
-  --pull-only        Only pull existing repos (skip clone)
-  --dry-run          Print what would happen; no clones, no pulls" \
+  --pull-only        Only pull existing repos (skip clone)" \
                     "Examples" "  manifest prep fleet
+  manifest prep fleet -y
   manifest prep fleet --parallel
   manifest prep fleet --clone-only
   manifest prep fleet --dry-run"

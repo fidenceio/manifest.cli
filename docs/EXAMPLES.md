@@ -10,9 +10,11 @@ Real-world workflow recipes for common operations using the v42 command structur
 
 ```bash
 mkdir my-project && cd my-project
-manifest init repo                     # Creates VERSION, CHANGELOG.md, docs/, .gitignore, git init
+manifest init repo                     # Preview VERSION, CHANGELOG.md, docs/, .gitignore, git init
+manifest init repo -y                  # Create VERSION, CHANGELOG.md, docs/, .gitignore, git init
 manifest config setup                  # Interactive configuration wizard
-manifest prep repo                     # Prompts for remote URL, pulls latest
+manifest prep repo                     # Preview remote prep
+manifest prep repo -y                  # Prompts for remote URL, pulls latest
 ```
 
 ### Existing Repository
@@ -34,8 +36,10 @@ git add .
 git commit -m "fix: address edge case in parser"
 manifest test all
 manifest ship repo patch --local       # Preview: bump, docs, commit — no push
+manifest ship repo patch --local -y    # Apply local-only release prep
 # Review the changes...
-manifest ship repo patch               # Full publish: tag, push, Homebrew
+manifest ship repo patch               # Preview full publish: tag, push, Homebrew
+manifest ship repo patch -y            # Apply full publish
 ```
 
 ### Minor Release (Direct Publish)
@@ -191,16 +195,17 @@ manifest refresh fleet --dry-run       # Preview what would change
 
 ```bash
 # Full release with safety checks
-manifest ship fleet minor --safe
+manifest ship fleet minor
+manifest ship fleet minor -y
 
 # Local preview across fleet (no push)
-manifest ship fleet patch --local
+manifest ship fleet patch --local -y
 
 # Fleet release with squash merge strategy
-manifest ship fleet minor --method squash
+manifest pr fleet queue --method squash
 
 # Fleet draft PRs
-manifest ship fleet patch --draft
+manifest pr fleet create --draft
 
 # Ship a subset of the fleet
 manifest ship fleet patch --only api,worker
@@ -217,7 +222,7 @@ manifest discover fleet --depth 3      # Find new repos
 manifest add fleet ./services/new-api --name "new-api" --type service --dry-run
 manifest validate fleet                # Check configuration
 manifest docs fleet --dry-run          # Preview docs generation
-manifest pr fleet queue --method squash  # Fleet-wide PR merge
+manifest pr fleet queue --method squash -y  # Fleet-wide PR queue
 ```
 
 ---

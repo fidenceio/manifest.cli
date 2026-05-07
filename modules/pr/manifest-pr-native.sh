@@ -46,17 +46,26 @@ _pr_require_repo() {
 manifest_pr_create() {
     local args=()
     local draft=false
+    local execution_mode="preview"
+    local _local_only=false
+    local remaining_args=()
+    if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+        return 1
+    fi
+    set -- "${remaining_args[@]}"
+
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --draft)        draft=true; shift ;;
             -h|--help)
                 _render_help \
-                    "manifest pr create [--draft] [--title <t>] [--body <b>] [--base <branch>]" \
-                    "Create a pull request from the current branch via the GitHub CLI (gh).
+                    "manifest pr create [-y|--yes] [--dry-run] [--draft] [--title <t>] [--body <b>] [--base <branch>]" \
+                    "Preview or create a pull request from the current branch via the GitHub CLI (gh).
 Any flag not handled here is forwarded to 'gh pr create'." \
                     "Examples" "  manifest pr create
-  manifest pr create --draft
-  manifest pr create --title 'fix: foo' --body 'closes #123'"
+  manifest pr create -y
+  manifest pr create --draft -y
+  manifest pr create --title 'fix: foo' --body 'closes #123' -y"
                 return 0
                 ;;
             *)              args+=("$1"); shift ;;
@@ -74,6 +83,17 @@ Any flag not handled here is forwarded to 'gh pr create'." \
     fi
     cmd+=("${args[@]}")
 
+    if [[ "$execution_mode" == "preview" ]]; then
+        manifest_execution_preview_header "manifest pr create"
+        echo "Would run: ${cmd[*]}"
+        local replay_command="manifest pr create"
+        [[ "$draft" == "true" ]] && replay_command="$replay_command --draft"
+        [[ ${#args[@]} -gt 0 ]] && replay_command="$replay_command ${args[*]}"
+        manifest_execution_footer "$replay_command -y"
+        return 0
+    fi
+
+    manifest_execution_apply_header
     echo "→ ${cmd[*]}"
     "${cmd[@]}"
 }
@@ -116,12 +136,27 @@ manifest_pr_checks() {
 # manifest pr ready [<number-or-branch>]
 # -----------------------------------------------------------------------------
 manifest_pr_ready() {
+    local execution_mode="preview"
+    local _local_only=false
+    local remaining_args=()
+    if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+        return 1
+    fi
+    set -- "${remaining_args[@]}"
+
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
         _render_help \
-            "manifest pr ready [<number-or-branch>]" \
+            "manifest pr ready [-y|--yes] [--dry-run] [<number-or-branch>]" \
             "Mark a draft PR as ready for review."
         return 0
     fi
+    if [[ "$execution_mode" == "preview" ]]; then
+        manifest_execution_preview_header "manifest pr ready"
+        echo "Would run: gh pr ready $*"
+        manifest_execution_footer "manifest pr ready $* -y"
+        return 0
+    fi
+    manifest_execution_apply_header
     _manifest_require_gh || return 1
     _pr_require_repo || return 1
     gh pr ready "$@"
@@ -131,22 +166,38 @@ manifest_pr_ready() {
 # manifest pr merge [<number-or-branch>] [--squash|--merge|--rebase] [--auto]
 # -----------------------------------------------------------------------------
 manifest_pr_merge() {
+    local execution_mode="preview"
+    local _local_only=false
+    local remaining_args=()
+    if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+        return 1
+    fi
+    set -- "${remaining_args[@]}"
+
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
         _render_help \
-            "manifest pr merge [<number-or-branch>] [--squash|--merge|--rebase] [--auto]" \
+            "manifest pr merge [-y|--yes] [--dry-run] [<number-or-branch>] [--squash|--merge|--rebase] [--auto]" \
             "Merge a PR. Default is squash. --auto enables GitHub auto-merge once checks pass.
 For richer queue/policy control, see Cloud's 'manifest pr queue'." \
             "Examples" "  manifest pr merge
-  manifest pr merge --merge
-  manifest pr merge 123 --auto"
+  manifest pr merge -y
+  manifest pr merge --merge -y
+  manifest pr merge 123 --auto -y"
         return 0
     fi
-    _manifest_require_gh || return 1
-    _pr_require_repo || return 1
     local args=("$@")
     if ! printf '%s\n' "${args[@]}" | grep -q -- '--squash\|--merge\|--rebase'; then
         args+=(--squash)
     fi
+    if [[ "$execution_mode" == "preview" ]]; then
+        manifest_execution_preview_header "manifest pr merge"
+        echo "Would run: gh pr merge ${args[*]}"
+        manifest_execution_footer "manifest pr merge ${args[*]} -y"
+        return 0
+    fi
+    manifest_execution_apply_header
+    _manifest_require_gh || return 1
+    _pr_require_repo || return 1
     gh pr merge "${args[@]}"
 }
 
@@ -155,12 +206,27 @@ For richer queue/policy control, see Cloud's 'manifest pr queue'." \
 # -----------------------------------------------------------------------------
 # Updates a PR's branch with the latest from base (rebase or merge).
 manifest_pr_update() {
+    local execution_mode="preview"
+    local _local_only=false
+    local remaining_args=()
+    if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+        return 1
+    fi
+    set -- "${remaining_args[@]}"
+
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
         _render_help \
-            "manifest pr update [<number-or-branch>] [--rebase|--merge]" \
+            "manifest pr update [-y|--yes] [--dry-run] [<number-or-branch>] [--rebase|--merge]" \
             "Bring a PR branch up to date with its base."
         return 0
     fi
+    if [[ "$execution_mode" == "preview" ]]; then
+        manifest_execution_preview_header "manifest pr update"
+        echo "Would run: gh pr update-branch $*"
+        manifest_execution_footer "manifest pr update $* -y"
+        return 0
+    fi
+    manifest_execution_apply_header
     _manifest_require_gh || return 1
     _pr_require_repo || return 1
     gh pr update-branch "$@"

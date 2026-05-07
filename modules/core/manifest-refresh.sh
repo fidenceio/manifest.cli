@@ -46,21 +46,30 @@ _MANIFEST_REFRESH_LOADED=1
 # -----------------------------------------------------------------------------
 manifest_refresh_repo() {
     local do_commit=false
-    local dry_run=false
+    local dry_run=true
+    local execution_mode="preview"
+    local _local_only=false
+    local remaining_args=()
+    if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+        return 1
+    fi
+    [[ "$execution_mode" == "apply" ]] && dry_run=false
+    set -- "${remaining_args[@]}"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --commit) do_commit=true; shift ;;
-            --dry-run) dry_run=true; shift ;;
             -h|--help)
                 _render_help \
-                    "manifest refresh repo [--commit] [--dry-run]" \
+                    "manifest refresh repo [-y|--yes] [--dry-run] [--commit]" \
                     "Regenerate docs and metadata without changing the version." \
-                    "Options" "  --commit    Also commit refreshed files after regeneration
-  --dry-run   Print what would happen; no docs regen, no writes" \
+                    "Options" "  --dry-run   Explicit preview; no docs regen, no writes
+  -y, --yes   Apply the refresh plan
+  --commit    Also commit refreshed files after regeneration" \
                     "Examples" "  manifest refresh repo
   manifest refresh repo --dry-run
-  manifest refresh repo --commit"
+  manifest refresh repo -y
+  manifest refresh repo --commit -y"
                 return 0
                 ;;
             *)
@@ -104,11 +113,14 @@ manifest_refresh_repo() {
             echo "  • Commit refreshed files (--commit)"
         fi
         echo ""
-        echo "No changes written. Re-run without --dry-run to apply."
+        local replay_command="manifest refresh repo"
+        [[ "$do_commit" == "true" ]] && replay_command="$replay_command --commit"
+        manifest_execution_footer "$replay_command -y"
         echo ""
         return 0
     fi
 
+    manifest_execution_apply_header
     # Get trusted timestamp
     get_time_timestamp >/dev/null 2>&1
     local timestamp
@@ -170,24 +182,37 @@ manifest_refresh_repo() {
 #   --commit    Commit refreshed files across fleet
 # -----------------------------------------------------------------------------
 manifest_refresh_fleet() {
-    local dry_run=false
+    local dry_run=true
     local do_commit=false
     local fleet_args=()
+    local execution_mode="preview"
+    local _local_only=false
+    local remaining_args=()
+    if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+        return 1
+    fi
+    if [[ "$execution_mode" == "preview" ]]; then
+        fleet_args+=("--dry-run")
+    else
+        dry_run=false
+    fi
+    set -- "${remaining_args[@]}"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --dry-run) dry_run=true; fleet_args+=("--dry-run"); shift ;;
             --commit) do_commit=true; shift ;;
             -h|--help)
                 _render_help \
-                    "manifest refresh fleet [--dry-run] [--commit]" \
+                    "manifest refresh fleet [-y|--yes] [--dry-run] [--commit]" \
                     "Re-scan fleet membership, regenerate docs, validate config." \
-                    "Options" "  --dry-run    Preview changes without applying
+                    "Options" "  --dry-run    Explicit preview; no writes
+  -y, --yes    Apply the refresh plan
   --commit     Stage and commit refreshed metadata across fleet root + services
                (no version bump, no tag — use 'ship fleet' for releases)" \
                     "Examples" "  manifest refresh fleet
   manifest refresh fleet --dry-run
-  manifest refresh fleet --commit"
+  manifest refresh fleet -y
+  manifest refresh fleet --commit -y"
                 return 0
                 ;;
             *)
@@ -205,20 +230,26 @@ manifest_refresh_fleet() {
 
     # Re-scan fleet membership (fleet_update handles discovery + merge)
     echo "Re-scanning fleet membership..."
-    fleet_update "${fleet_args[@]}"
+    if [[ "$dry_run" == "true" ]]; then
+        fleet_update "${fleet_args[@]}"
+    else
+        fleet_update "-y" "${fleet_args[@]}"
+    fi
     echo ""
 
     if [[ "$dry_run" == "true" ]]; then
         if [[ "$do_commit" == "true" ]]; then
             echo "Would commit refreshed metadata across fleet root + services."
-            echo "No changes written. Re-run without --dry-run to apply."
+            manifest_execution_footer "manifest refresh fleet --commit -y"
             echo ""
         else
             echo "Dry run complete — no further changes."
+            manifest_execution_footer "manifest refresh fleet -y"
         fi
         return 0
     fi
 
+    manifest_execution_apply_header
     # Validate fleet configuration
     echo "Validating fleet configuration..."
     fleet_validate

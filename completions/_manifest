@@ -76,10 +76,10 @@ _manifest() {
         arg3)
             case "$words[2] $words[3]" in
                 "init fleet")
-                    _values 'option' --depth --all-folders --force --dry-run --name --create-repo-private --create-repo-public --help
+                    _values 'option' -y --yes --depth --all-folders --force --dry-run --name --create-repo-private --create-repo-public --help
                     ;;
                 "ship repo"|"ship fleet")
-                    _values 'release type / option' "${bumps[@]}" --local --dry-run --explain -i --interactive
+                    _values 'release type / option' "${bumps[@]}" -y --yes --local --dry-run --explain -i --interactive --only --except --noprep
                     ;;
                 "plan fleet")
                     _values 'option' --apply --do --dry-run --depth --safety-cap --plan --name --force --help
@@ -99,7 +99,7 @@ _manifest() {
             if [[ $words[$((CURRENT-1))] == "--layer" ]]; then
                 _values 'layer' "${layers[@]}"
             else
-                _values 'option' --help --local --dry-run --explain --layer --fix --json
+                _values 'option' --help -y --yes --local --dry-run --explain --layer --fix --json
             fi
             ;;
     esac

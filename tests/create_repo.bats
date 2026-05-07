@@ -204,7 +204,7 @@ teardown() {
         printf "true\tghost\t./ghost\trepo\tfalse\t\t\t0.0.0\n"
     } > manifest.fleet.tsv
 
-    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet
+    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet -y
     echo "$output" | grep -q "Missing: 1"
     echo "$output" | grep -q "Issues to resolve:"
     echo "$output" | grep -q "Missing paths"
@@ -222,7 +222,7 @@ teardown() {
     source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet-detect.sh"
     cd "$SCRATCH"
 
-    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet --create-repo-private
+    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet --create-repo-private -y
     echo "$output" | grep -q "applies in Phase 2"
     echo "$output" | grep -q "after editing manifest.fleet.tsv"
 }
@@ -251,7 +251,7 @@ teardown() {
     # Don't actually contact gh.
     _manifest_require_gh() { return 0; }
 
-    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet --create-repo-private -n test-fleet
+    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet --create-repo-private -n test-fleet -y
     [ -f "$SCRATCH/calls.log" ]
     grep -q "stub:.*svc_a:false:private" "$SCRATCH/calls.log"
 }
@@ -346,7 +346,7 @@ teardown() {
         printf "true\tghost\t./ghost\trepo\tfalse\t\t\t0.0.0\n"
     } > manifest.fleet.tsv
 
-    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet
+    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet -y
     [ "$status" -eq 2 ]
 }
 
@@ -365,7 +365,7 @@ teardown() {
     _manifest_require_gh() { return 0; }
     _manifest_gh_repo_create() { return 1; }
 
-    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet --create-repo-private -n test-fleet
+    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet --create-repo-private -n test-fleet -y
     [ "$status" -eq 1 ]
 }
 
@@ -381,7 +381,7 @@ teardown() {
         printf "true\tsvc_clean\t./svc_clean\trepo\tfalse\t\t\t0.0.0\n"
     } > manifest.fleet.tsv
 
-    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet
+    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet -y
     [ "$status" -eq 0 ]
 }
 

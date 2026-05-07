@@ -745,11 +745,22 @@ EOF
 fleet_docs_dispatch() {
     local subcmd="${1:-generate}"
     shift 2>/dev/null || true
+    local execution_mode="preview"
+    local _local_only=false
+    local remaining_args=()
 
     case "$subcmd" in
         generate)
             _fleet_ensure_initialized || return 1
-            fleet_docs_generate "$@"
+            if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+                return 1
+            fi
+            if [[ "$execution_mode" == "preview" ]]; then
+                fleet_docs_generate --dry-run "${remaining_args[@]}"
+            else
+                manifest_execution_apply_header
+                fleet_docs_generate "${remaining_args[@]}"
+            fi
             ;;
         status)
             _fleet_ensure_initialized || return 1
@@ -759,13 +770,29 @@ fleet_docs_dispatch() {
             fleet_docs_help
             ;;
         # Allow passing flags directly to generate (e.g., manifest docs fleet --fleet-only)
-        --fleet-only|--services-only|--strategy|--dry-run)
+        --fleet-only|--services-only|--strategy|--dry-run|-y|--yes)
             _fleet_ensure_initialized || return 1
-            fleet_docs_generate "$subcmd" "$@"
+            if ! manifest_execution_parse execution_mode _local_only remaining_args "$subcmd" "$@"; then
+                return 1
+            fi
+            if [[ "$execution_mode" == "preview" ]]; then
+                fleet_docs_generate --dry-run "${remaining_args[@]}"
+            else
+                manifest_execution_apply_header
+                fleet_docs_generate "${remaining_args[@]}"
+            fi
             ;;
         patch|minor|major|revision)
             _fleet_ensure_initialized || return 1
-            fleet_docs_generate "$subcmd" "$@"
+            if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+                return 1
+            fi
+            if [[ "$execution_mode" == "preview" ]]; then
+                fleet_docs_generate "$subcmd" --dry-run "${remaining_args[@]}"
+            else
+                manifest_execution_apply_header
+                fleet_docs_generate "$subcmd" "${remaining_args[@]}"
+            fi
             ;;
         *)
             log_error "Unknown docs subcommand: $subcmd"

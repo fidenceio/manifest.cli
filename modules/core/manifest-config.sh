@@ -352,6 +352,14 @@ config_doctor() {
     local fix="false"
     local dry_run="false"
     local config_file="$MANIFEST_CLI_GLOBAL_CONFIG"
+    local execution_mode="preview"
+    local _local_only=false
+    local remaining_args=()
+
+    if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+        return 1
+    fi
+    set -- "${remaining_args[@]}"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -369,11 +377,15 @@ config_doctor() {
                 ;;
             *)
                 echo "Unknown option for config doctor: $1"
-                echo "Usage: manifest config doctor [--fix] [--dry-run] [--file <path>]"
+                echo "Usage: manifest config doctor [--fix] [-y|--yes] [--dry-run] [--file <path>]"
                 return 1
                 ;;
         esac
     done
+
+    if [[ "$fix" == "true" && "$execution_mode" == "preview" ]]; then
+        dry_run="true"
+    fi
 
     if [ ! -f "$config_file" ]; then
         echo "⚠️  Config file not found: $config_file"
@@ -420,6 +432,7 @@ config_doctor() {
         if [ "$dry_run" = "true" ]; then
             _manifest_config_apply_migrations "$config_file" "$dry_run"
         else
+            manifest_execution_apply_header
             if [ "$config_file" = "$MANIFEST_CLI_GLOBAL_CONFIG" ] && \
                ! _confirm_global_config_write "modify" "$config_file" "applying ${#issues[@]} configuration migration(s)"; then
                 echo "Migration cancelled."
@@ -436,7 +449,7 @@ config_doctor() {
 
         if [ "$dry_run" = "true" ]; then
             echo ""
-            echo "ℹ️  Dry-run complete. Re-run with --fix to apply."
+            echo "ℹ️  Preview complete. Re-run with --fix -y to apply."
         else
             echo ""
             echo "✅ Safe migrations applied."

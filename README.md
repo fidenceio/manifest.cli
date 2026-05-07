@@ -13,7 +13,8 @@ When you can spin up four features in parallel, you also need to ship four featu
 
 The bottleneck of modern dev work has shifted. Writing the code is no longer the slow part — maintaining coherent shipping across repos and in-flight changes is. Manifest solves this.
 
-- **One command per repo, the same command across a fleet.** `manifest ship repo patch` and `manifest ship fleet patch` do the same five things — version bump, docs, commit, tag, push — at one repo or across all of them, with synced version metadata.
+- **One command per repo, the same command across a fleet.** `manifest ship repo patch` and `manifest ship fleet patch` preview the same release mechanics at one repo or across all eligible fleet services.
+- **Safe by default.** Mutating commands preview unless you add `-y` or `--yes`. `--dry-run` is the explicit preview spelling; `--local -y` applies local-only changes.
 - **Read-only first.** `manifest status` answers "what would happen if I shipped now?" before you act. `manifest doctor` answers "is my environment OK?" with a single command.
 - **No silent surprises.** Auto-migrations and global-config writes go through a confirmation gate (`MANIFEST_CLI_AUTO_CONFIRM=1` for CI). The CLI never rewrites your settings without telling you.
 - **PRs are first-class and Cloud-free.** `manifest pr create / status / checks / ready / merge / update` ride on top of `gh` — no paid dependency for what GitHub already gives you. Cloud extends with `pr queue` (auto-merge orchestration) and `pr policy`.
@@ -22,7 +23,7 @@ The bottleneck of modern dev work has shifted. Writing the code is no longer the
 ### Design principles
 
 1. **Explicit over implicit.** You name the bump (`patch | minor | major | revision`). No "auto-detect what changed" magic.
-2. **Local before remote.** `--local` previews every release op on your machine. Push only when you're sure.
+2. **Preview before apply.** Bare mutating commands show the plan. Add `-y` to apply it.
 3. **Read-only diagnostics are first-class.** `status` and `doctor` exist precisely because the rest of the CLI is consequential. Look before you ship.
 4. **Tested and CI-gated.** A broad bats-core suite exercises release flow, YAML layering, version bumps, canonical-repo detection, safety gates, status output, Homebrew packaging, and recovery paths. CI runs it on macOS and Linux on every push.
 
@@ -46,18 +47,24 @@ curl -fsSL https://raw.githubusercontent.com/fidenceio/manifest.cli/main/install
 ```bash
 cd your-project
 
-# 1. Scaffold required files (VERSION, CHANGELOG.md, docs/, .gitignore)
+# 1. Preview required files (VERSION, CHANGELOG.md, docs/, .gitignore)
 manifest init repo
 
-# 2. Connect remotes and pull latest
-manifest prep repo
+# Apply the scaffold
+manifest init repo -y
 
-# 3. Ship a patch release (version bump + docs + tag + push)
+# 2. Preview remote prep, then apply when ready
+manifest prep repo
+manifest prep repo -y
+
+# 3. Preview a patch release (version bump + docs + tag + push)
 manifest ship repo patch
 
-# Or preview locally first, then publish when ready
-manifest ship repo minor --local    # Local only — nothing pushed
-manifest ship repo minor            # Full publish
+# Apply when ready
+manifest ship repo patch -y
+
+# Local-only apply: writes local release prep, no push/tag/Homebrew
+manifest ship repo minor --local -y
 ```
 
 ### Verify Installation
@@ -205,11 +212,13 @@ manifest <verb> <scope> [options]
 
 | Option | Effect |
 | ------ | ------ |
-| `manifest ship repo patch` | Full publish: bump, docs, commit, tag, push, Homebrew |
-| `manifest ship repo minor --local` | Everything except tag, push, and Homebrew |
+| `manifest ship repo patch` | Preview full publish: bump, docs, commit, tag, push, Homebrew |
+| `manifest ship repo patch -y` | Apply full publish |
+| `manifest ship repo minor --local -y` | Apply everything except tag, push, and Homebrew |
 | `manifest ship repo patch --explain` | Show the built-in recipe definition without running it |
 | `manifest ship repo major -i` | Interactive mode with safety prompts |
-| `manifest ship fleet patch --safe` | Fleet release with checks and readiness gates |
+| `manifest ship fleet patch` | Preview releaseable fleet services |
+| `manifest ship fleet patch -y` | Apply direct release for releaseable fleet services |
 
 Release types: `patch` | `minor` | `major` | `revision`
 
@@ -323,10 +332,10 @@ manifest refresh fleet --dry-run
 
 # Coordinated release
 manifest ship fleet minor
-manifest ship fleet patch --safe
+manifest ship fleet minor -y
 
 # Preview fleet release locally
-manifest ship fleet minor --local
+manifest ship fleet minor --local -y
 ```
 
 ### Direct Fleet Commands
@@ -339,7 +348,7 @@ manifest discover fleet --depth 3
 manifest add fleet ./services/new-api --name "new-api" --dry-run
 manifest validate fleet
 manifest docs fleet --dry-run
-manifest pr fleet queue --method squash
+manifest pr fleet queue --method squash -y
 ```
 
 > See [Fleet Design Spec](docs/FLEET_DESIGN_SPEC.md) for architecture details.
@@ -352,7 +361,8 @@ Native operations require only `gh` ([GitHub CLI](https://cli.github.com/)). Ins
 
 ```bash
 manifest pr                         # Show current PR or prompt to create
-manifest pr create --draft          # Create a PR (any unrecognized flags forward to gh)
+manifest pr create --draft          # Preview PR creation
+manifest pr create --draft -y       # Create a PR (any unrecognized flags forward to gh)
 manifest pr checks --watch          # Watch CI checks in real-time
 manifest pr ready                   # Mark a draft PR as ready
 manifest pr merge --squash          # Merge (default is squash)

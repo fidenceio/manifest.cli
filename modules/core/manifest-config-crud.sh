@@ -221,12 +221,20 @@ manifest_config_get() {
 # -----------------------------------------------------------------------------
 manifest_config_set() {
     local layer="local"
+    local execution_mode="preview"
+    local _local_only=false
+    local remaining_args=()
+    if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+        return 1
+    fi
+    set -- "${remaining_args[@]}"
+
     while [[ "${1:-}" == --* || "${1:-}" == -* ]]; do
         case "$1" in
             --layer) layer="$2"; shift 2 ;;
             -h|--help)
                 _render_help \
-                    "manifest config set [--layer global|project|local] <key> <value>" \
+                    "manifest config set [-y|--yes] [--dry-run] [--layer global|project|local] <key> <value>" \
                     "Set a config key in a specific layer.
 Default layer is 'local' (git-ignored). Writing 'global' prompts for
 confirmation via the global-config safety gate." \
@@ -262,6 +270,15 @@ confirmation via the global-config safety gate." \
         return 1
     fi
 
+    if [[ "$execution_mode" == "preview" ]]; then
+        manifest_execution_preview_header "manifest config set"
+        echo "Would set ${layer}:${path} = ${value}"
+        echo "Would write: ${file}"
+        manifest_execution_footer "manifest config set --layer $layer $key $value -y"
+        return 0
+    fi
+
+    manifest_execution_apply_header
     if [[ "$layer" == "global" ]]; then
         if ! _confirm_global_config_write "modify" "$file" "set $path = $value"; then
             return 1
@@ -279,12 +296,20 @@ confirmation via the global-config safety gate." \
 # -----------------------------------------------------------------------------
 manifest_config_unset() {
     local layer="local"
+    local execution_mode="preview"
+    local _local_only=false
+    local remaining_args=()
+    if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+        return 1
+    fi
+    set -- "${remaining_args[@]}"
+
     while [[ "${1:-}" == --* || "${1:-}" == -* ]]; do
         case "$1" in
             --layer) layer="$2"; shift 2 ;;
             -h|--help)
                 _render_help \
-                    "manifest config unset [--layer global|project|local] <key>" \
+                    "manifest config unset [-y|--yes] [--dry-run] [--layer global|project|local] <key>" \
                     "Remove a config key from a specific layer." \
                     "Examples" "  manifest config unset git.default_branch
   manifest config unset --layer project version.format"
@@ -315,6 +340,15 @@ manifest_config_unset() {
         return 0
     fi
 
+    if [[ "$execution_mode" == "preview" ]]; then
+        manifest_execution_preview_header "manifest config unset"
+        echo "Would unset ${layer}:${path}"
+        echo "Would write: ${file}"
+        manifest_execution_footer "manifest config unset --layer $layer $key -y"
+        return 0
+    fi
+
+    manifest_execution_apply_header
     if [[ "$layer" == "global" ]]; then
         if ! _confirm_global_config_write "modify" "$file" "unset $path"; then
             return 1

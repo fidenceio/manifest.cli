@@ -33,6 +33,28 @@ teardown() {
     [ ! -d "$SCRATCH/.git" ]
 }
 
+@test "init repo defaults to preview and writes nothing" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
+    cd "$SCRATCH"
+
+    PROJECT_ROOT="$SCRATCH" run manifest_init_repo
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Dry run"
+    echo "$output" | grep -q "No changes written"
+    [ ! -f "$SCRATCH/VERSION" ]
+    [ ! -d "$SCRATCH/.git" ]
+}
+
+@test "execution policy rejects contradictory dry-run and yes flags" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
+    cd "$SCRATCH"
+
+    PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run -y
+    [ "$status" -ne 0 ]
+    echo "$output" | grep -q "Cannot combine --dry-run with -y"
+    [ ! -f "$SCRATCH/VERSION" ]
+}
+
 @test "init repo --dry-run: marks existing files as 'exists', not 'would create'" {
     source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
     cd "$SCRATCH"
@@ -78,6 +100,18 @@ teardown() {
     echo "$output" | grep -q "No changes written"
 }
 
+@test "prep repo defaults to preview and makes no remote calls" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-prep.sh"
+    cd "$SCRATCH"
+    git init -q
+    git remote add origin https://example.invalid/example.git
+
+    PROJECT_ROOT="$SCRATCH" run manifest_prep_repo
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Dry run"
+    echo "$output" | grep -q "Remotes that would be pulled"
+}
+
 @test "prep repo --dry-run: no remote configured -> reports plan, no prompt" {
     source "$TEST_REPO_ROOT/modules/core/manifest-prep.sh"
     cd "$SCRATCH"
@@ -106,6 +140,18 @@ teardown() {
     echo "$output" | grep -q "Version: 2.5.4 (unchanged)"
     echo "$output" | grep -q "Would perform"
     echo "$output" | grep -q "Regenerate documentation"
+    echo "$output" | grep -q "No changes written"
+}
+
+@test "refresh repo defaults to preview" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-refresh.sh"
+    cd "$SCRATCH"
+    git init -q
+    echo "2.5.4" > VERSION
+
+    PROJECT_ROOT="$SCRATCH" run manifest_refresh_repo
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Dry run"
     echo "$output" | grep -q "No changes written"
 }
 

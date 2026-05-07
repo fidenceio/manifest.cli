@@ -527,13 +527,21 @@ EOF
 # -----------------------------------------------------------------------------
 manifest_init_repo() {
     local force=false
-    local dry_run=false
+    local dry_run=true
     local create_repo_visibility=""
+    local execution_mode="preview"
+    local _local_only=false
+    local remaining_args=()
+
+    if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+        return 1
+    fi
+    [[ "$execution_mode" == "apply" ]] && dry_run=false
+    set -- "${remaining_args[@]}"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -f|--force) force=true; shift ;;
-            --dry-run) dry_run=true; shift ;;
             --create-repo-private)
                 create_repo_visibility=$(_manifest_parse_create_repo_flag "$create_repo_visibility" "private") || return 1
                 shift ;;
@@ -542,17 +550,19 @@ manifest_init_repo() {
                 shift ;;
             -h|--help)
                 _render_help \
-                    "manifest init repo [--force] [--dry-run] [--create-repo-private|--create-repo-public]" \
+                    "manifest init repo [-y|--yes] [--dry-run] [--force] [--create-repo-private|--create-repo-public]" \
                     "Scaffold a single repository: VERSION, CHANGELOG.md, README.md, docs/, .gitignore.
 Idempotent — safe to re-run. Optionally creates a GitHub repo via 'gh repo create'." \
-                    "Options" "  -f, --force                Re-create files even if they already exist
-  --dry-run                  Print what would be created/updated; no writes
+                    "Options" "  --dry-run                  Explicit preview; no writes
+  -y, --yes                  Apply the scaffold plan
+  -f, --force                Re-create files even if they already exist
   --create-repo-private      Create a private GitHub repo (gh repo create) and add as origin
   --create-repo-public       Create a public GitHub repo (gh repo create) and add as origin" \
                     "Examples" "  manifest init repo
   manifest init repo --dry-run
-  manifest init repo --create-repo-private
-  manifest init repo --force --create-repo-public"
+  manifest init repo -y
+  manifest init repo --create-repo-private -y
+  manifest init repo --force --create-repo-public -y"
                 return 0
                 ;;
             *)
@@ -605,11 +615,12 @@ Idempotent — safe to re-run. Optionally creates a GitHub repo via 'gh repo cre
             fi
         fi
         echo ""
-        echo "No changes written. Re-run without --dry-run to apply."
+        manifest_execution_footer "manifest init repo -y"
         echo ""
         return 0
     fi
 
+    manifest_execution_apply_header
     echo ""
     echo "Initializing repository: $project_root"
     echo ""
@@ -745,7 +756,7 @@ _manifest_init_fleet_dry_run_phase1() {
         echo "Would defer:     GitHub repo creation flag applies in Phase 2 (--create-repo-$create_repo_visibility)"
     fi
     echo ""
-    echo "No changes written. Re-run without --dry-run to apply."
+    echo "No changes written. Re-run with -y to apply this plan."
 }
 
 _manifest_init_fleet_dry_run_phase2() {
@@ -805,17 +816,26 @@ _manifest_init_fleet_dry_run_phase2() {
         echo "Re-run with --force to apply defaults, or edit SELECT values first."
     fi
     echo ""
-    echo "No changes written. Re-run without --dry-run to apply."
+    echo "No changes written. Re-run with -y to apply this plan."
 }
 
 manifest_init_fleet() {
     local depth=2
     local force=false
-    local dry_run=false
+    local dry_run=true
     local fleet_name=""
     local create_repo_visibility=""
     local all_folders=false
     local fleet_args=()
+    local execution_mode="preview"
+    local _local_only=false
+    local remaining_args=()
+
+    if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+        return 1
+    fi
+    [[ "$execution_mode" == "apply" ]] && dry_run=false
+    set -- "${remaining_args[@]}"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -826,7 +846,6 @@ manifest_init_fleet() {
                 fi
                 depth="$2"; shift 2 ;;
             -f|--force) force=true; shift ;;
-            --dry-run) dry_run=true; shift ;;
             --all-folders) all_folders=true; shift ;;
             -n|--name)
                 if [[ -z "${2:-}" ]] || [[ "${2:-}" == --* ]]; then
@@ -842,25 +861,26 @@ manifest_init_fleet() {
                 shift ;;
             -h|--help)
                 _render_help \
-                    "manifest init fleet [--depth N] [--all-folders] [--force] [--dry-run] [--name NAME] [--create-repo-private|--create-repo-public]" \
+                    "manifest init fleet [-y|--yes] [--dry-run] [--depth N] [--all-folders] [--force] [--name NAME] [--create-repo-private|--create-repo-public]" \
                     "Two-phase fleet initialization." \
                     "Phases" "  Phase 1 (no TSV yet):  Scan directories, ask repo depth per
                          top-level folder when interactive, then write
                          manifest.fleet.tsv for review.
   Phase 2 (TSV exists):  Read selections, scaffold each repo, write
                          manifest.fleet.config.yaml." \
-                    "Options" "  --depth N                  Scan guardrail in Phase 1 (default: 2)
+                    "Options" "  --dry-run                  Explicit preview; no writes
+  -y, --yes                  Apply the current fleet init phase
+  --depth N                  Scan guardrail in Phase 1 (default: 2)
   --all-folders              Write every scanned folder to the TSV
   -f, --force                Overwrite existing files (re-runs Phase 1 + skips guard)
-  --dry-run                  Preview Phase 1 or Phase 2 without writing files
   -n, --name                 Fleet name (prompted if not provided)
   --create-repo-private      In Phase 2, create a private GitHub repo for each scaffolded dir
   --create-repo-public       In Phase 2, create a public GitHub repo for each scaffolded dir" \
                     "Examples" "  manifest init fleet                 # Phase 1: discover
   manifest init fleet --dry-run       # Preview current phase
   vim manifest.fleet.tsv             # edit SELECT column
-  manifest init fleet                 # Phase 2: apply selections
-  manifest init fleet --create-repo-private   # Phase 2 + create private GitHub repos" \
+  manifest init fleet -y              # Apply current phase
+  manifest init fleet --create-repo-private -y   # Phase 2 + create private GitHub repos" \
                     "Exit codes (Phase 2)" "  0  All directories initialized (and gh ok if requested)
   1  One or more directories failed to init or to create their gh repo
   2  TSV references one or more directories that don't exist on disk"
@@ -888,6 +908,7 @@ manifest_init_fleet() {
             return $?
         fi
 
+        manifest_execution_apply_header
         echo ""
         echo "Phase 1/2: Discovering directories…"
         echo "After this completes, review manifest.fleet.tsv and adjust SELECT=true/false,"
@@ -936,6 +957,7 @@ manifest_init_fleet() {
     fi
 
     echo ""
+    manifest_execution_apply_header
     echo "Phase 2/2: Applying TSV selections…"
     echo ""
 

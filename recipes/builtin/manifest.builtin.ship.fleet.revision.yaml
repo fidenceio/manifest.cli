@@ -5,6 +5,9 @@ command: manifest ship fleet revision
 scope: fleet
 summary: Publish a coordinated revision release across a fleet.
 entrypoint: manifest_ship_fleet
+execution:
+  default_mode: preview
+  requires_yes_for: [local-write, remote-write]
 inputs:
   release_type:
     type: enum
@@ -17,15 +20,13 @@ inputs:
 steps:
   - id: load-fleet
     uses: manifest.fleet.load
+    effect: read
   - id: prep-fleet
-    uses: manifest.fleet.prep
+    uses: manifest.fleet.release_plan
+    effect: read
     with:
       release_type: revision
-  - id: refresh-fleet-docs
-    uses: manifest.fleet.docs
-  - id: create-prs
-    uses: manifest.fleet.pr.create
-    when: publish_release
-  - id: queue-prs
-    uses: manifest.fleet.pr.queue
-    when: publish_release
+  - id: ship-releaseable-services
+    uses: manifest.fleet.ship_services
+    effect: remote-write
+    when: apply
