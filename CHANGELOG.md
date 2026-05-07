@@ -1,5 +1,18 @@
 # Changelog
 
+## [47.5.0] - 2026-05-07
+
+**Release Type:** Minor
+
+### Changes
+
+- Add recipe-backed workflow definitions and recipe introspection support
+- Wire first-class CLI commands to inspectable built-in recipe definitions
+- Update shell completions for new command options
+- Add regression coverage for the changed CLI workflow
+- Document the updated CLI workflow and release contract
+
+
 ## [47.4.6] - 2026-05-06
 
 **Release Type:** Patch
@@ -71,8 +84,3 @@
 
 - Add regression coverage for the changed CLI workflow
 - Document the updated CLI workflow and release contract
-
-
-## [47.3.1] - 2026-05-06
-
-**Release Type:** Patch — no user-facing changes.
