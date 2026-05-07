@@ -113,7 +113,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"Running follow-up patch"* ]]
     [[ "$output" == *"sentinel=1"* ]]
-    [[ "$output" == *"args=ship repo patch"* ]]
+    [[ "$output" == *"args=ship repo patch -y"* ]]
 }
 
 @test "child manifest helper clears inherited bash re-exec sentinel" {
