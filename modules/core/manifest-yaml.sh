@@ -55,6 +55,10 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     # release — release artifact policy
     # -------------------------------------------------------------------------
     ["release.tag_target"]="MANIFEST_CLI_RELEASE_TAG_TARGET"
+    ["github.release.enabled"]="MANIFEST_CLI_GITHUB_RELEASE_ENABLED"
+    ["github.release.required"]="MANIFEST_CLI_GITHUB_RELEASE_REQUIRED"
+    ["github.release.draft"]="MANIFEST_CLI_GITHUB_RELEASE_DRAFT"
+    ["github.release.prerelease"]="MANIFEST_CLI_GITHUB_RELEASE_PRERELEASE"
 
     # -------------------------------------------------------------------------
     # git — git workflow configuration
@@ -321,7 +325,7 @@ parse_yaml_with_yq() {
     # The 'e' command evaluates the expression
     # We use -r for raw output (no quotes around strings)
     local value
-    value=$(yq e "$yaml_path // \"\"" "$yaml_file" 2>/dev/null)
+    value=$(yq e -r "$yaml_path" "$yaml_file" 2>/dev/null)
 
     # Check if value is "null" (yq's representation of missing keys)
     if [[ "$value" == "null" ]] || [[ -z "$value" ]]; then

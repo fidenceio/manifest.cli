@@ -47,3 +47,7 @@ steps:
     uses: manifest.homebrew.publish
     effect: remote-write
     when: publish_release
+  - id: create-github-release
+    uses: github.release.create
+    effect: remote-write
+    when: publish_release && github.release.enabled

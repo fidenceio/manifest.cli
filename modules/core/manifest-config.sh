@@ -540,6 +540,10 @@ set_default_configuration() {
 
     # Release Policy
     export MANIFEST_CLI_RELEASE_TAG_TARGET="${MANIFEST_CLI_RELEASE_TAG_TARGET:-version_commit}"
+    export MANIFEST_CLI_GITHUB_RELEASE_ENABLED="${MANIFEST_CLI_GITHUB_RELEASE_ENABLED:-true}"
+    export MANIFEST_CLI_GITHUB_RELEASE_REQUIRED="${MANIFEST_CLI_GITHUB_RELEASE_REQUIRED:-false}"
+    export MANIFEST_CLI_GITHUB_RELEASE_DRAFT="${MANIFEST_CLI_GITHUB_RELEASE_DRAFT:-false}"
+    export MANIFEST_CLI_GITHUB_RELEASE_PRERELEASE="${MANIFEST_CLI_GITHUB_RELEASE_PRERELEASE:-false}"
     
     # Branch Naming Configuration
     export MANIFEST_CLI_GIT_DEFAULT_BRANCH="${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}"
@@ -1110,6 +1114,7 @@ show_configuration() {
     echo "   Tag Prefix: ${MANIFEST_CLI_GIT_TAG_PREFIX}"
     echo "   Tag Suffix: ${MANIFEST_CLI_GIT_TAG_SUFFIX}"
     echo "   Release Tag Target: ${MANIFEST_CLI_RELEASE_TAG_TARGET}"
+    echo "   GitHub Release: ${MANIFEST_CLI_GITHUB_RELEASE_ENABLED}"
     echo "   Push Strategy: ${MANIFEST_CLI_GIT_PUSH_STRATEGY}"
     echo "   Pull Strategy: ${MANIFEST_CLI_GIT_PULL_STRATEGY}"
     echo "   Timeout: ${MANIFEST_CLI_GIT_TIMEOUT} seconds"

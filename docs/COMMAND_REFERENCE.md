@@ -427,7 +427,7 @@ Publish a release. The highest-consequence command in the CLI.
 
 ### `manifest ship repo`
 
-Preview or ship a single repo: version bump, documentation, commit, tag, push, Homebrew update.
+Preview or ship a single repo: version bump, documentation, commit, tag, push, Homebrew update, and GitHub Release creation when enabled.
 
 ```bash
 manifest ship repo patch           # Preview full patch release
@@ -438,9 +438,9 @@ manifest ship repo patch --local -y # Apply local-only release
 manifest ship repo patch --explain # Show the built-in recipe definition
 ```
 
-**Preview mode** (default): prints the release plan and writes nothing.
+**Preview mode** (default): prints the release plan and writes nothing. The plan includes current and next version, a short narrative summary, pending working-tree files that would be auto-committed, and release documentation artifacts.
 
-**Apply mode** (`-y` / `--yes`): sync, bump version, generate docs, archive old docs, validate markdown, commit, tag, push to all remotes, update Homebrew formula (canonical repo only), and safely fast-forward clean local Homebrew tap checkouts that the release process updated remotely. Canonical CLI `minor`, `major`, and `revision` ships also run one guarded follow-up patch under the upgraded installed CLI; set `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH=false` to skip it.
+**Apply mode** (`-y` / `--yes`): sync, bump version, generate docs, archive old docs, validate markdown, commit, tag, push to all remotes, update Homebrew formula (canonical repo only), create a matching GitHub Release when enabled, and safely fast-forward clean local Homebrew tap checkouts that the release process updated remotely. Canonical CLI `minor`, `major`, and `revision` ships also run one guarded follow-up patch under the upgraded installed CLI; set `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH=false` to skip it.
 
 **Local apply mode** (`--local -y`): Everything except creating a tag, pushing to remotes, and updating Homebrew. Equivalent to the old `manifest prep <type>`.
 
@@ -500,14 +500,17 @@ release-note/changelog attachment.
 13. *(if not --local)* `create_tag()` — Git tag
 14. *(if not --local)* `push_changes()` — push to remotes
 15. *(if not --local)* `update_homebrew_formula()` — Homebrew (canonical repo only), including safe refresh of clean local tap checkouts
-16. *(if not --local)* Local installed Manifest CLI upgrade
-17. *(if not --local and MANIFEST_CLI_GITHUB_ACTIONS_WAIT=true)* GitHub Actions status watch for the published HEAD
-18. `update_repository_metadata()` — final metadata update
-19. *(canonical CLI non-patch ships only)* one guarded follow-up `manifest ship repo patch -y` under the upgraded installed CLI
+16. *(if not --local)* `manifest_create_github_release_for_tag()` — idempotent matching GitHub Release when enabled
+17. *(if not --local)* Local installed Manifest CLI upgrade
+18. *(if not --local and MANIFEST_CLI_GITHUB_ACTIONS_WAIT=true)* GitHub Actions status watch for the published HEAD
+19. `update_repository_metadata()` — final metadata update
+20. *(canonical CLI non-patch ships only)* one guarded follow-up `manifest ship repo patch -y` under the upgraded installed CLI
 
 **Failure handling:** If any step after commit fails, the orchestrator emits a Ship Failure Report with recovery commands (retry push, remove tag, roll back).
 
 **GitHub Actions status:** The Actions watch is opt-in because release artifacts are already pushed by the time CI runs, and waiting would slow the default ship path. Enable it with `MANIFEST_CLI_GITHUB_ACTIONS_WAIT=true`, or tune it with `MANIFEST_CLI_GITHUB_ACTIONS_TIMEOUT_SECONDS` and `MANIFEST_CLI_GITHUB_ACTIONS_POLL_SECONDS`.
+
+**GitHub Release creation:** Manifest creates a matching GitHub Release after the release tag is pushed when `github.release.enabled` is true. The step is idempotent: an existing Release is reported and left alone. Missing `gh`, missing authentication, or non-GitHub origins skip the step unless `github.release.required` is true. Configure with `github.release.enabled`, `github.release.required`, `github.release.draft`, and `github.release.prerelease`.
 
 **Tag target** (step 13): the SHA the tag points at is resolved by `resolve_tag_target_sha()` in [manifest-git.sh](../modules/git/manifest-git.sh) from `MANIFEST_CLI_RELEASE_TAG_TARGET` (YAML key `release.tag_target`):
 
