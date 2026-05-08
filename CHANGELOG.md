@@ -1,5 +1,10 @@
 # Changelog
 
+## [47.6.1] - 2026-05-08
+
+**Release Type:** Patch — no user-facing changes.
+
+
 ## [47.6.0] - 2026-05-08
 
 **Release Type:** Minor
@@ -81,8 +86,3 @@
 ### Changes
 
 - Document the updated CLI workflow and release contract
-
-
-## [47.4.1] - 2026-05-06
-
-**Release Type:** Patch — no user-facing changes.
