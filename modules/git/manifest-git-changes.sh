@@ -41,18 +41,26 @@ $bullet
     printf -v "$seen_var" '%s%s\n' "$seen" "$bullet"
 }
 
-_manifest_git_changes_auto_commit_bullets() {
-    local commit="$1"
-    local files
-    files="$(_manifest_git_changes_file_list_for_commit "$commit")"
+manifest_git_changes_bullets_for_files() {
+    local files="$1"
+    local emitted=""
+    local github_release_changed=false
     [[ -n "$files" ]] || return 0
 
-    local emitted=""
-
-    if _manifest_git_changes_files_match "$files" '(^|/)modules/recipe/|(^|/)recipes/builtin/|(^|/)docs/contracts/recipe\.schema\.json$'; then
+    if _manifest_git_changes_files_match "$files" '(^|/)modules/workflow/manifest-orchestrator\.sh$|(^|/)modules/core/manifest-yaml\.sh$|(^|/)modules/core/manifest-config\.sh$'; then
+        github_release_changed=true
+        _manifest_git_changes_emit_once "Add GitHub Release publishing support" emitted
+    fi
+    if _manifest_git_changes_files_match "$files" '(^|/)modules/core/manifest-ship\.sh$'; then
+        _manifest_git_changes_emit_once "Add smart ship preview summaries" emitted
+    fi
+    if _manifest_git_changes_files_match "$files" '(^|/)docs/|(^|/)README\.md$|(^|/)examples/'; then
+        _manifest_git_changes_emit_once "Update release copy and configuration examples" emitted
+    fi
+    if [[ "$github_release_changed" != "true" ]] && _manifest_git_changes_files_match "$files" '(^|/)modules/recipe/|(^|/)recipes/builtin/|(^|/)docs/contracts/recipe\.schema\.json$'; then
         _manifest_git_changes_emit_once "Add recipe-backed workflow definitions and recipe introspection support" emitted
     fi
-    if _manifest_git_changes_files_match "$files" '(^|/)modules/core/manifest-ship\.sh$|(^|/)modules/core/manifest-core\.sh$'; then
+    if _manifest_git_changes_files_match "$files" '(^|/)modules/core/manifest-core\.sh$'; then
         _manifest_git_changes_emit_once "Wire first-class CLI commands to inspectable built-in recipe definitions" emitted
     fi
     if _manifest_git_changes_files_match "$files" '(^|/)completions/'; then
@@ -67,10 +75,6 @@ _manifest_git_changes_auto_commit_bullets() {
     if _manifest_git_changes_files_match "$files" '^CHANGELOG\.md$'; then
         _manifest_git_changes_emit_once "Backfill and clarify release history in the root changelog" emitted
     fi
-    if _manifest_git_changes_files_match "$files" '(^|/)README\.md$|(^|/)docs/|(^|/)tests/README\.md$'; then
-        _manifest_git_changes_emit_once "Document the updated CLI workflow and release contract" emitted
-    fi
-
     if [[ -z "$emitted" ]]; then
         local count noun
         count="$(printf '%s\n' "$files" | sed '/^[[:space:]]*$/d' | wc -l | tr -d ' ')"
@@ -81,6 +85,13 @@ _manifest_git_changes_auto_commit_bullets() {
         fi
         _manifest_git_changes_emit_once "Update ${count:-multiple} $noun before release" emitted
     fi
+}
+
+_manifest_git_changes_auto_commit_bullets() {
+    local commit="$1"
+    local files
+    files="$(_manifest_git_changes_file_list_for_commit "$commit")"
+    manifest_git_changes_bullets_for_files "$files"
 }
 
 # Get git changes since last tag

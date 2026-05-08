@@ -66,6 +66,16 @@ release:
   tag_target: "version_commit"
 
 # -----------------------------------------------------------------------------
+# GitHub
+# -----------------------------------------------------------------------------
+github:
+  release:
+    enabled: true       # Create a matching GitHub Release after tag push.
+    required: false     # If true, a GitHub Release failure fails the ship run.
+    draft: false
+    prerelease: false
+
+# -----------------------------------------------------------------------------
 # Git
 # -----------------------------------------------------------------------------
 git:

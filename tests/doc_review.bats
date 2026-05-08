@@ -109,6 +109,25 @@ teardown() {
     [[ "$output" != *"Auto-commit before Manifest process"* ]]
 }
 
+@test "auto-commit GitHub release and preview work gets smart release notes" {
+    git tag v0.9.0
+    mkdir -p modules/workflow modules/core examples tests
+    echo "# orchestrator" > modules/workflow/manifest-orchestrator.sh
+    echo "# ship" > modules/core/manifest-ship.sh
+    echo "github:" > examples/manifest.config.yaml.example
+    echo "# tests" > tests/github_actions_status.bats
+    git add modules/workflow/manifest-orchestrator.sh modules/core/manifest-ship.sh examples/manifest.config.yaml.example tests/github_actions_status.bats
+    git commit -q -m "Auto-commit before Manifest process (4 files: modules/workflow/manifest-orchestrator.sh, ...) [TS: 2026-05-08 12:00:00 UTC]"
+
+    run get_git_changes "1.0.0"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Add GitHub Release publishing support"* ]]
+    [[ "$output" == *"Add smart ship preview summaries"* ]]
+    [[ "$output" == *"Update release copy and configuration examples"* ]]
+    [[ "$output" == *"Add regression coverage for the changed CLI workflow"* ]]
+}
+
 @test "root changelog auto-commit gets a descriptive release note" {
     git tag v0.9.0
     echo "# Changelog" > CHANGELOG.md

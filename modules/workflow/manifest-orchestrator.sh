@@ -119,12 +119,116 @@ manifest_check_github_actions_for_head() {
     return 1
 }
 
+manifest_should_create_github_release() {
+    ! is_falsy "${MANIFEST_CLI_GITHUB_RELEASE_ENABLED:-true}"
+}
+
+manifest_github_release_notes_for_version() {
+    local version="$1"
+    local changelog="${PROJECT_ROOT:-$PWD}/CHANGELOG.md"
+    local notes=""
+
+    if [[ -f "$changelog" ]]; then
+        notes="$(awk -v version="$version" '
+            $0 ~ "^## \\[" version "\\]" { found = 1; next }
+            found && $0 ~ "^## \\[" { exit }
+            found { print }
+        ' "$changelog" 2>/dev/null || true)"
+    fi
+
+    if [[ -z "${notes//[[:space:]]/}" ]]; then
+        notes="Release v${version}. See CHANGELOG.md for release history."
+    fi
+
+    printf '%s\n' "$notes"
+}
+
+manifest_github_origin_repo_slug() {
+    local repo_url=""
+    repo_url="$(git -C "${PROJECT_ROOT:-$PWD}" remote get-url origin 2>/dev/null || echo "")"
+
+    if [[ "$repo_url" =~ ^git@github\.com:([^/]+)/([^/]+)\.git$ ]]; then
+        echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+        return 0
+    fi
+    if [[ "$repo_url" =~ ^https?://github\.com/([^/]+)/([^/]+)$ ]]; then
+        local org="${BASH_REMATCH[1]}"
+        local repo="${BASH_REMATCH[2]%.git}"
+        echo "${org}/${repo}"
+        return 0
+    fi
+
+    echo ""
+    return 1
+}
+
+manifest_create_github_release_for_tag() {
+    local version="$1"
+    local tag_name="$2"
+    local repo_slug title notes
+
+    if ! manifest_should_create_github_release; then
+        echo "GitHub Release: skipped (disabled by MANIFEST_CLI_GITHUB_RELEASE_ENABLED)"
+        return 2
+    fi
+    if [[ -z "$version" || -z "$tag_name" || "$tag_name" == "none" ]]; then
+        echo "GitHub Release: skipped (no release tag available)"
+        return 2
+    fi
+    if ! command -v gh >/dev/null 2>&1; then
+        echo "GitHub Release: skipped (gh not installed)"
+        return 2
+    fi
+    if ! gh auth status >/dev/null 2>&1; then
+        echo "GitHub Release: skipped (gh not authenticated)"
+        return 2
+    fi
+
+    repo_slug="$(manifest_github_origin_repo_slug || echo "")"
+    if [[ -z "$repo_slug" ]]; then
+        echo "GitHub Release: skipped (origin is not a GitHub repository)"
+        return 2
+    fi
+
+    if gh release view "$tag_name" --repo "$repo_slug" >/dev/null 2>&1; then
+        echo "GitHub Release: exists ($tag_name)"
+        return 0
+    fi
+
+    title="$(manifest_repo_display_name) ${tag_name}"
+    notes="$(manifest_github_release_notes_for_version "$version")"
+
+    local args=(release create "$tag_name" --repo "$repo_slug" --title "$title" --notes "$notes")
+    if is_truthy "${MANIFEST_CLI_GITHUB_RELEASE_DRAFT:-false}"; then
+        args+=(--draft)
+    fi
+    if is_truthy "${MANIFEST_CLI_GITHUB_RELEASE_PRERELEASE:-false}"; then
+        args+=(--prerelease)
+    fi
+
+    echo "🐙 Creating GitHub Release..."
+    echo "   Repo:  $repo_slug"
+    echo "   Tag:   $tag_name"
+    if gh "${args[@]}"; then
+        echo "GitHub Release: created ($tag_name)"
+        return 0
+    fi
+
+    echo "GitHub Release: failed"
+    echo "   Retry: gh release create $tag_name --repo $repo_slug --title \"$title\" --notes-file CHANGELOG.md"
+    if is_truthy "${MANIFEST_CLI_GITHUB_RELEASE_REQUIRED:-false}"; then
+        return 1
+    fi
+    return 2
+}
+
 manifest_ship_post_push_steps() {
     local new_version="$1"
     local workflow_start_sha="$2"
     local workflow_tag_name="$3"
     local workflow_push_status="${4:-success}"
     local workflow_homebrew_status="skipped"
+    local workflow_github_release_status="skipped"
 
     # Update Homebrew formula only for the Manifest CLI canonical repository.
     if [ -f "$PROJECT_ROOT/formula/manifest.rb" ] && should_update_homebrew_for_repo; then
@@ -164,6 +268,20 @@ manifest_ship_post_push_steps() {
         echo ""
     fi
 
+    workflow_github_release_status="attempted"
+    if manifest_create_github_release_for_tag "$new_version" "$workflow_tag_name" "$release_type" "$previous_version"; then
+        workflow_github_release_status="success"
+    else
+        local github_release_rc=$?
+        if [[ "$github_release_rc" -eq 1 ]]; then
+            workflow_github_release_status="failed"
+            emit_ship_failure_report "github_release" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+            return 1
+        fi
+        workflow_github_release_status="skipped"
+    fi
+    echo ""
+
     # Upgrade local Manifest CLI installation to the just-published version.
     echo "🔄 Upgrading local Manifest CLI installation..."
     if command -v brew &>/dev/null; then
@@ -182,6 +300,7 @@ manifest_ship_post_push_steps() {
     echo ""
 
     _MANIFEST_SHIP_LAST_HOMEBREW_STATUS="$workflow_homebrew_status"
+    _MANIFEST_SHIP_LAST_GITHUB_RELEASE_STATUS="$workflow_github_release_status"
     return 0
 }
 
@@ -304,6 +423,7 @@ manifest_ship_workflow() {
     local workflow_tag_name="none"
     local workflow_push_status="not_attempted"
     local workflow_homebrew_status="not_applicable"
+    local workflow_github_release_status="not_applicable"
     local workflow_actions_status="not_applicable"
     local workflow_version_commit_sha=""
 
@@ -569,6 +689,7 @@ manifest_ship_workflow() {
             return 1
         fi
         workflow_homebrew_status="${_MANIFEST_SHIP_LAST_HOMEBREW_STATUS:-skipped}"
+        workflow_github_release_status="${_MANIFEST_SHIP_LAST_GITHUB_RELEASE_STATUS:-skipped}"
 
         workflow_actions_status="attempted"
         local workflow_final_head_sha
@@ -604,6 +725,7 @@ manifest_ship_workflow() {
     if [ "$publish_release" = "true" ]; then
         echo "   - Tag: $workflow_tag_name"
         echo "   - Remotes: All pushed successfully"
+        echo "   - GitHub Release: $workflow_github_release_status"
         echo "   - GitHub Actions: $workflow_actions_status"
     else
         echo "   - Tag: (not created in prep mode)"

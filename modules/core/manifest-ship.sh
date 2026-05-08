@@ -34,6 +34,162 @@ if [[ -n "${_MANIFEST_SHIP_LOADED:-}" ]]; then
 fi
 _MANIFEST_SHIP_LOADED=1
 
+manifest_ship_preview_next_version() {
+    local increment_type="$1"
+    local repo_root="${PROJECT_ROOT:-$PWD}"
+
+    if [[ -f "$repo_root/VERSION" ]] && declare -F get_next_version >/dev/null 2>&1; then
+        (cd "$repo_root" && get_next_version "$increment_type" 2>/dev/null) || echo "unknown"
+    else
+        echo "unknown"
+    fi
+}
+
+manifest_ship_preview_dirty_files() {
+    local repo_root="${1:-${PROJECT_ROOT:-$PWD}}"
+    local porcelain total shown line
+    porcelain="$(git -C "$repo_root" status --porcelain -uall 2>/dev/null || true)"
+
+    if [[ -z "$porcelain" ]]; then
+        echo "  - Working tree: clean; no pre-release auto-commit needed"
+        return 0
+    fi
+
+    total="$(printf '%s\n' "$porcelain" | grep -c .)"
+    echo "  - Working tree: $total pending file(s) would be auto-committed before release"
+    shown=0
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        shown=$((shown + 1))
+        if [[ "$shown" -le 12 ]]; then
+            echo "      ${line}"
+        fi
+    done <<< "$porcelain"
+    if [[ "$total" -gt 12 ]]; then
+        echo "      ... $((total - 12)) more"
+    fi
+}
+
+manifest_ship_preview_join_items() {
+    local count="$#"
+    local i=1
+    local item
+
+    for item in "$@"; do
+        if [[ "$i" -gt 1 ]]; then
+            if [[ "$count" -eq 2 ]]; then
+                printf ' and '
+            elif [[ "$i" -eq "$count" ]]; then
+                printf ', and '
+            else
+                printf ', '
+            fi
+        fi
+        printf '%s' "$item"
+        i=$((i + 1))
+    done
+}
+
+manifest_ship_preview_summary() {
+    local repo_root="${1:-${PROJECT_ROOT:-$PWD}}"
+    local files bullets
+    files="$(git -C "$repo_root" status --porcelain -uall 2>/dev/null | sed 's/^...//' || true)"
+
+    if [[ -z "$files" ]]; then
+        echo "  No pending source changes are queued for this release."
+        return 0
+    fi
+
+    if declare -F manifest_git_changes_bullets_for_files >/dev/null 2>&1; then
+        bullets="$(manifest_git_changes_bullets_for_files "$files")"
+        manifest_ship_preview_summary_from_bullets "$bullets"
+        return 0
+    fi
+
+    local total
+    total="$(printf '%s\n' "$files" | grep -c .)"
+    echo "  Updated ${total:-multiple} pending file(s) for this release."
+}
+
+manifest_ship_preview_summary_from_bullets() {
+    local bullets="$1"
+    local added=()
+    local updated=()
+    local other=()
+    local line change
+
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        change="${line#- }"
+        case "$change" in
+            Add\ *) added+=("${change#Add }") ;;
+            Update\ *) updated+=("${change#Update }") ;;
+            Document\ *) updated+=("${change#Document }") ;;
+            Backfill\ *) updated+=("${change#Backfill }") ;;
+            Wire\ *) updated+=("${change#Wire }") ;;
+            *) other+=("$change") ;;
+        esac
+    done <<< "$bullets"
+
+    if [[ "${#added[@]}" -eq 0 && "${#updated[@]}" -eq 0 ]]; then
+        if [[ "${#other[@]}" -gt 0 ]]; then
+            printf '  %s.\n' "$(manifest_ship_preview_join_items "${other[@]}")"
+        else
+            echo "  No categorized release-note summary is available yet."
+        fi
+        return 0
+    fi
+
+    if [[ "${#added[@]}" -gt 0 ]]; then
+        printf '  Added %s.\n' "$(manifest_ship_preview_join_items "${added[@]}")"
+    fi
+    if [[ "${#updated[@]}" -gt 0 ]]; then
+        printf '  Updated %s.\n' "$(manifest_ship_preview_join_items "${updated[@]}")"
+    fi
+}
+
+manifest_ship_preview_plan() {
+    local increment_type="$1"
+    local local_only="$2"
+    local repo_root="${PROJECT_ROOT:-$PWD}"
+    local current_version next_version tag_name
+
+    current_version="$(tr -d '[:space:]' < "$repo_root/VERSION" 2>/dev/null || echo "unknown")"
+    next_version="$(manifest_ship_preview_next_version "$increment_type")"
+    if [[ "$next_version" != "unknown" ]] && declare -F manifest_release_tag_name >/dev/null 2>&1; then
+        tag_name="$(manifest_release_tag_name "$next_version")"
+    elif [[ "$next_version" != "unknown" ]]; then
+        tag_name="v${next_version}"
+    else
+        tag_name="unknown"
+    fi
+
+    if [[ "$local_only" == "true" ]]; then
+        echo "Ship repo preview (local)"
+    else
+        echo "Ship repo preview"
+    fi
+    echo "================="
+    echo "  Release type:   $increment_type"
+    echo "  Current version: $current_version"
+    echo "  Next version:    $next_version"
+    echo "  Release tag:     $tag_name"
+    echo "  Writes:          none in preview mode"
+    echo ""
+
+    echo "What's new"
+    echo "----------"
+    manifest_ship_preview_summary "$repo_root"
+    echo ""
+    manifest_ship_preview_dirty_files "$repo_root"
+    echo "  - VERSION: update $current_version -> $next_version"
+    echo "  - CHANGELOG.md: prepend the $next_version release entry"
+    echo "  - README.md and docs/INDEX.md: refresh displayed current-version metadata when needed"
+    echo "  - docs/: regenerate release documentation and command/reference indexes"
+    echo "  - docs/zArchive/: archive superseded release/changelog artifacts according to docs.retain"
+    echo "  - Documentation review: inspect changed source/docs before release commits"
+}
+
 # -----------------------------------------------------------------------------
 # Function: manifest_ship_repo
 # -----------------------------------------------------------------------------
@@ -115,28 +271,7 @@ manifest_ship_repo() {
     fi
 
     if [[ "$execution_mode" == "preview" ]]; then
-        if [[ "$local_only" == "true" ]]; then
-            echo "Ship repo preview (local): $increment_type — no changes written"
-        else
-            echo "Ship repo preview: $increment_type — no changes written"
-        fi
-        echo ""
-        if declare -F manifest_repo_identity_block >/dev/null 2>&1; then
-            manifest_repo_identity_block "$PWD"
-            echo ""
-        fi
-        echo "Would perform:"
-        echo "  - Validate repository identity and release readiness"
-        echo "  - Increment VERSION using release type: $increment_type"
-        echo "  - Regenerate release documentation and changelog"
-        echo "  - Commit release files"
-        if [[ "$local_only" == "true" ]]; then
-            echo "  - Skip tag, push, and Homebrew publishing (--local)"
-        else
-            echo "  - Create release tag"
-            echo "  - Push branch and tag"
-            echo "  - Run downstream publish hooks when configured"
-        fi
+        manifest_ship_preview_plan "$increment_type" "$local_only"
         local replay_command="manifest ship repo $increment_type"
         [[ "$local_only" == "true" ]] && replay_command="$replay_command --local"
         manifest_execution_footer "$replay_command -y"

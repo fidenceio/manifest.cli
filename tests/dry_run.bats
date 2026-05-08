@@ -125,6 +125,44 @@ teardown() {
 }
 
 # -----------------------------------------------------------------------------
+# ship repo preview
+# -----------------------------------------------------------------------------
+
+@test "ship repo preview describes file and documentation effects" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-status.sh"
+    source "$TEST_REPO_ROOT/modules/git/manifest-git.sh"
+    source "$TEST_REPO_ROOT/modules/git/manifest-git-changes.sh"
+    source "$TEST_REPO_ROOT/modules/core/manifest-ship.sh"
+    cd "$SCRATCH"
+    git init -q
+    git remote add origin git@github.com:example/project.git
+    echo "1.2.3" > VERSION
+    echo "pending docs" > docs-note.md
+    mkdir -p modules/core docs tests
+    echo "preview work" > modules/core/manifest-ship.sh
+    echo "release docs" > docs/COMMAND_REFERENCE.md
+    echo "coverage" > tests/dry_run.bats
+
+    PROJECT_ROOT="$SCRATCH" run manifest_ship_repo minor
+
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Ship repo preview"
+    echo "$output" | grep -q "Release type:   minor"
+    echo "$output" | grep -q "Current version: 1.2.3"
+    echo "$output" | grep -q "Next version:    1.3.0"
+    echo "$output" | grep -q "What's new"
+    echo "$output" | grep -q "Added smart ship preview summaries"
+    echo "$output" | grep -q "Updated release copy and configuration examples"
+    echo "$output" | grep -q "Working tree: 5 pending file(s) would be auto-committed"
+    echo "$output" | grep -q "VERSION: update 1.2.3 -> 1.3.0"
+    echo "$output" | grep -q "CHANGELOG.md: prepend the 1.3.0 release entry"
+    echo "$output" | grep -q "docs/: regenerate release documentation"
+    ! echo "$output" | grep -q "Repo identity"
+    ! echo "$output" | grep -q "Git and publish plan"
+    echo "$output" | grep -q "No changes written"
+}
+
+# -----------------------------------------------------------------------------
 # refresh repo --dry-run
 # -----------------------------------------------------------------------------
 

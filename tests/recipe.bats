@@ -42,6 +42,7 @@ run_manifest_from_plain_dir() {
     [[ "$output" == *"Ship Repo Patch"* ]]
     [[ "$output" == *"Command:    manifest ship repo patch"* ]]
     [[ "$output" == *"bump-version -> manifest.version.bump"* ]]
+    [[ "$output" == *"create-github-release -> github.release.create {effect: remote-write} [publish_release && github.release.enabled]"* ]]
 }
 
 @test "ship repo explain uses the built-in recipe without requiring git" {
