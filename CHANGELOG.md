@@ -1,5 +1,17 @@
 # Changelog
 
+## [47.6.0] - 2026-05-08
+
+**Release Type:** Minor
+
+### Changes
+
+- Add GitHub Release publishing support
+- Add smart ship preview summaries
+- Update release copy and configuration examples
+- Add regression coverage for the changed CLI workflow
+
+
 ## [47.5.2] - 2026-05-07
 
 **Release Type:** Patch — no user-facing changes.
@@ -74,12 +86,3 @@
 ## [47.4.1] - 2026-05-06
 
 **Release Type:** Patch — no user-facing changes.
-
-
-## [47.4.0] - 2026-05-06
-
-**Release Type:** Minor
-
-### Changes
-
-- Add regression coverage for the changed CLI workflow
