@@ -1,12 +1,14 @@
 # Manifest CLI User Guide
 
-This guide covers how to use Manifest CLI as it is currently implemented (v42 command structure).
+This guide covers the current Manifest CLI workflow: first-class commands,
+inspectable recipes, safe preview/apply behavior, release docs, and fleet
+orchestration.
 
 ---
 
 ## The Five-Stage Journey
 
-Manifest v42 organizes commands around a five-stage workflow that mirrors how developers actually work with a repository:
+Manifest organizes commands around a five-stage workflow that mirrors how developers actually work with a repository:
 
 ```text
 config  -->  init  -->  prep  -->  refresh  -->  ship
@@ -35,6 +37,28 @@ Fleet adoption has two extra commands before the normal fleet journey:
 `manifest plan fleet` generates an editable plan, and `manifest reconcile fleet`
 validates or applies it. Both are dry-run by default.
 
+### First-Class Commands And Recipes
+
+First-class commands are the stable interface for humans, scripts, and CI:
+`manifest ship repo patch`, `manifest ship fleet minor`, `manifest status repo`,
+`manifest pr checks`, and the rest of the documented command surface. These
+commands own parsing, help text, safety policy, and user-facing output.
+
+Recipes are YAML definitions that make those workflows inspectable. Built-in
+recipes live in `recipes/builtin`, project recipes may live in
+`.manifest/recipes`, and each recipe declares ordered steps plus effect metadata:
+`read`, `local-write`, `remote-write`, or `pr`.
+
+```bash
+manifest recipe list
+manifest recipe explain manifest.builtin.ship.repo.patch
+manifest recipe show manifest.builtin.ship.repo.patch
+manifest ship repo patch --explain
+```
+
+Use first-class commands to do the work; use recipes to inspect what those
+commands are going to do.
+
 ---
 
 ## First-Time Setup
@@ -50,8 +74,8 @@ manifest init repo -y
 # Review your current configuration
 manifest config show
 
-# Run the full test suite to verify installation
-manifest test all
+# Validate dependencies, config, and repository state
+manifest doctor
 
 # Launch the interactive configuration wizard
 manifest config setup
@@ -90,6 +114,24 @@ manifest ship repo major -i -y # Apply major release with interactive safety pro
 
 Ship runs: sync, version bump, documentation generation, markdown validation, commit, Git tag, push to all remotes, and Homebrew formula update (in the canonical repository). When the canonical CLI release updates the Homebrew tap, Manifest also refreshes any clean local tap checkout it can safely fast-forward, including sibling workspace checkouts such as `fidenceio.homebrew.tap`. Canonical CLI `minor`, `major`, and `revision` ships then run one guarded follow-up patch under the upgraded installed CLI so release-process changes take effect immediately. Set `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH=false` to skip that follow-up.
 
+Preview output includes a `What's new` section. That summary is derived from the
+same change-analysis path used for `CHANGELOG.md`, generated release docs, and
+GitHub Release notes, so release copy stays aligned across local preview and
+published artifacts.
+
+When `github.release.enabled` is true, repo ship creates or reuses the matching
+GitHub Release after the tag is pushed. Missing `gh`, missing authentication, or
+a non-GitHub origin skips the step unless `github.release.required` is true.
+
+```yaml
+github:
+  release:
+    enabled: true
+    required: false
+    draft: false
+    prerelease: false
+```
+
 #### Tag Placement (`release.tag_target`)
 
 The release tag can point at either of two commits:
@@ -112,9 +154,7 @@ release:
   tag_target: "version_commit"   # or "release_head"
 ```
 
-The value is whitespace- and case-tolerant (`Version_Commit`, `" release_head "` all work). The deprecated alias `final_release_commit` continues to work but emits a warning — switch to `release_head`.
-
-> **Behavior change in v44.10.1.** Before v44.10.1, the release tag always pointed at HEAD at tag-creation time (effectively `release_head`). v44.10.1 introduced this option and changed the default to `version_commit`. If your automation reads `git for-each-ref` or `git rev-list <tag>..main` and expects post-CHANGELOG content inside the tag, set `release.tag_target: "release_head"` to restore the old behavior.
+The value is whitespace- and case-tolerant (`Version_Commit`, `" release_head "` all work).
 
 ### Regenerate Documentation
 
@@ -310,34 +350,22 @@ manifest docs fleet --dry-run      # Preview docs generation
 
 ---
 
-## Test Suites
+## Testing Manifest CLI
 
-Manifest includes 14 test suites:
+The Manifest CLI repo uses a containerized bats-core test runner. Use it when
+developing the CLI so dependencies and generated output stay inside the project
+test container:
 
 ```bash
-manifest test all           # Run everything
-manifest test versions      # Version increment logic
-manifest test security      # Security checks
-manifest test config        # Configuration loading
-manifest test docs          # Documentation generation
-manifest test git           # Git operations
-manifest test time          # Timestamp verification
-manifest test os            # OS detection
-manifest test modules       # Module loading
-manifest test integration   # End-to-end integration
-manifest test cloud         # Manifest Cloud connectivity
-manifest test agent         # Agent functionality
-manifest test zsh           # Zsh compatibility
-manifest test bash5         # Bash 5 compatibility
-manifest test bash          # Basic Bash functionality
+./scripts/run-tests-container.sh
+./scripts/run-tests-container.sh tests/recipe.bats
+./scripts/run-tests-container.sh tests/github_actions_status.bats
 ```
 
-Flags:
-
-- `--strict-redact` — sanitize logs for sharing (removes paths, tokens)
-- `--no-strict-redact` — keep raw output
-
-Test logs are written to `~/.manifest-cli/logs/tests/<run-id>/`.
+The suite covers release flow, YAML layering, recipe introspection, version
+bump logic, canonical-repo detection, config safety gates, fleet workflows,
+JSON output, Homebrew packaging, local tap refresh, and recovery paths. CI runs
+the same test surface on Ubuntu and macOS.
 
 ---
 
@@ -459,21 +487,10 @@ decisions but is never a hard runtime requirement.
 
 ---
 
-## Legacy Command Compatibility
+## Internal Plumbing
 
-All pre-v42 commands continue to work. Some have changed meaning:
-
-| Old Command | New Equivalent | Notes |
-| ----------- | -------------- | ----- |
-| `manifest prep patch` | `manifest ship repo patch --local` | Shows deprecation warning |
-| `manifest ship patch` | `manifest ship repo patch` | Automatic redirect |
-| `manifest sync` | `manifest prep repo` | Automatic redirect |
-| `manifest fleet <action>` | `manifest <action> fleet` | Removed object-first fleet routes |
-| `manifest update` | `manifest upgrade` | Use explicit upgrade command |
-| `manifest docs` | `manifest refresh repo` | Still works as plumbing |
-| `manifest cleanup` | `manifest refresh repo` | Still works as plumbing |
-| `manifest time` | `manifest config time` | Still works |
-| `manifest commit "msg"` | *(plumbing)* | Still works |
-| `manifest version patch` | *(plumbing)* | Still works |
-
-If you have scripts using the old commands, they will continue to function. Update them at your convenience.
+Use the first-class commands for normal work. The CLI also keeps a small set of
+plumbing commands for generated docs, archive cleanup, trusted timestamp display,
+timestamped commits, and isolated version bumps. They are available for
+automation and internal workflows, but the supported user workflow is the
+journey command set plus `status`, `doctor`, `config`, `recipe`, and `pr`.

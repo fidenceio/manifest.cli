@@ -1,6 +1,6 @@
 # Manifest CLI Examples
 
-Real-world workflow recipes for common operations using the v42 command structure.
+Real-world command examples for current Manifest CLI workflows.
 
 ---
 
@@ -34,7 +34,7 @@ manifest config show                   # Review effective configuration
 ```bash
 git add .
 git commit -m "fix: address edge case in parser"
-manifest test all
+manifest doctor
 manifest ship repo patch --local       # Preview: bump, docs, commit — no push
 manifest ship repo patch --local -y    # Apply local-only release prep
 # Review the changes...
@@ -45,15 +45,19 @@ manifest ship repo patch -y            # Apply full publish
 ### Minor Release (Direct Publish)
 
 ```bash
-manifest ship repo minor
+manifest ship repo minor      # Preview the full minor release
+manifest ship repo minor -y   # Apply the release
 ```
 
-This runs the full workflow: sync, version bump, docs generation, markdown validation, commit, tag, push, Homebrew update.
+The apply run syncs, bumps the version, generates docs, validates markdown,
+commits, tags, pushes, updates Homebrew when applicable, and creates or reuses
+the matching GitHub Release when enabled.
 
 ### Major Release with Interactive Prompts
 
 ```bash
-manifest ship repo major -i
+manifest ship repo major -i      # Preview with interactive option selected
+manifest ship repo major -i -y   # Apply with interactive safety prompts
 ```
 
 Interactive mode adds confirmation prompts and offers a dry-run before executing.
@@ -73,6 +77,19 @@ manifest ship repo -M                  # Major
 manifest ship repo -r                  # Revision
 manifest ship repo -p -i              # Patch + interactive
 ```
+
+### Inspect the Recipe Behind Ship
+
+```bash
+manifest ship repo patch --explain
+manifest recipe list
+manifest recipe explain manifest.builtin.ship.repo.patch
+manifest recipe show manifest.builtin.ship.repo.patch
+```
+
+Recipes expose the ordered workflow steps and their effects (`read`,
+`local-write`, `remote-write`, or `pr`) while the first-class command remains
+the stable command to run.
 
 ---
 
@@ -290,21 +307,3 @@ MANIFEST_CLI_CLOUD_SKIP=true manifest ship repo minor
 ```
 
 ---
-
-## Migrating from Pre-v42 Commands
-
-If you have scripts using old commands, here are the equivalents:
-
-```bash
-# Old                              # New (v42)
-manifest prep patch                 manifest ship repo patch --local
-manifest ship patch                 manifest ship repo patch
-manifest sync                       manifest prep repo
-manifest docs                       manifest refresh repo
-manifest cleanup                    manifest refresh repo
-manifest fleet <action>             manifest <action> fleet
-manifest update                     manifest update fleet / manifest upgrade
-```
-
-Fleet commands use action-first syntax. Object-first `manifest fleet <action>`
-routes are intentionally not retained.
