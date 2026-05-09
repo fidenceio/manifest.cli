@@ -15,6 +15,8 @@ The bottleneck of modern dev work has shifted. Writing the code is no longer the
 
 - **One command per repo, the same command across a fleet.** `manifest ship repo patch` and `manifest ship fleet patch` preview the same release mechanics at one repo or across all eligible fleet services.
 - **Safe by default.** Mutating commands preview unless you add `-y` or `--yes`. `--dry-run` is the explicit preview spelling; `--local -y` applies local-only changes.
+- **First-class commands, inspectable recipes.** Stable CLI commands stay short and memorable, while recipe YAML makes the backing workflow steps, effects, and conditions inspectable with `--explain`.
+- **Release output comes from one source.** Ship preview summaries, `CHANGELOG.md`, generated docs, and GitHub Release notes all flow from the release-note analysis path instead of separate hand-written summaries.
 - **Read-only first.** `manifest status` answers "what would happen if I shipped now?" before you act. `manifest doctor` answers "is my environment OK?" with a single command.
 - **No silent surprises.** Auto-migrations and global-config writes go through a confirmation gate (`MANIFEST_CLI_AUTO_CONFIRM=1` for CI). The CLI never rewrites your settings without telling you.
 - **PRs are first-class and Cloud-free.** `manifest pr create / status / checks / ready / merge / update` ride on top of `gh` — no paid dependency for what GitHub already gives you. Cloud extends with `pr queue` (auto-merge orchestration) and `pr policy`.
@@ -97,10 +99,10 @@ Repo identity
   Fleet:       not detected
   Target:      this Git repository only
   Working:     clean
-  Version:     46.9.0
-               patch → 46.9.1
-               minor → 46.10.0
-               major → 47.0.0
+  Version:     47.6.2
+               patch → 47.6.3
+               minor → 47.7.0
+               major → 48.0.0
   Mode:        single-repo
   Config:      ✓ global   /Users/you/.manifest-cli/manifest.config.global.yaml
                · project  /Users/you/coderepos/manifest/fidenceio.manifest.cli/manifest.config.yaml
@@ -182,7 +184,7 @@ You then get `manifest <TAB>` for top commands, `manifest plan <TAB>` -> `fleet`
 
 ## Command Model
 
-Manifest v42 organizes commands around a five-stage journey that mirrors how developers actually work with a repository:
+Manifest organizes release work around a five-stage journey that mirrors how developers actually work with a repository:
 
 ```text
 config  -->  init  -->  prep  -->  refresh  -->  ship
@@ -226,6 +228,39 @@ Canonical Manifest CLI `minor`, `major`, and `revision` ships automatically run 
 
 Short flags: `-p` (patch), `-m` (minor), `-M` (major), `-r` (revision), `-i` (interactive)
 
+### First-Class Commands And Recipes
+
+First-class commands are the public interface: `manifest ship repo patch`,
+`manifest status fleet`, `manifest pr checks`, and similar commands are what
+humans and scripts should call. They own argument parsing, safety policy,
+help text, and the stable UX.
+
+Recipes are the inspectable workflow definitions behind those commands. Built-in
+recipes live in [recipes/builtin](recipes/builtin), project recipes may live in
+`.manifest/recipes`, and the schema lives at
+[docs/contracts/recipe.schema.json](docs/contracts/recipe.schema.json).
+
+```bash
+manifest recipe list
+manifest recipe explain manifest.builtin.ship.repo.patch
+manifest recipe show manifest.builtin.ship.repo.patch
+manifest ship repo patch --explain
+```
+
+Recipe steps declare what they use and what they affect:
+
+| Effect | Meaning |
+| ------ | ------- |
+| `read` | Inspects repo, config, or fleet state |
+| `local-write` | Writes local files, commits, or tags |
+| `remote-write` | Pushes, publishes, or mutates external state |
+| `pr` | Creates, updates, queues, or merges pull requests |
+
+The current repo ship recipes expose the release flow as ordered steps:
+identify repo, bump version, generate docs, commit, tag, push, publish
+Homebrew when applicable, and create or reuse the matching GitHub Release when
+enabled.
+
 ### Read-Only Diagnostics
 
 | Command | Purpose |
@@ -263,20 +298,12 @@ Short flags: `-p` (patch), `-m` (minor), `-M` (major), `-r` (revision), `-i` (in
 
 > Commands marked \[Cloud\] require [Manifest Cloud](https://github.com/fidenceio/fidenceio.manifest.cloud) to be installed. The CLI works fully without Cloud for the core journey (config, init, prep, refresh, ship).
 
-### Internal Plumbing And Removed Routes
+### Internal Plumbing
 
-| Old Command | Routes To |
-| ----------- | --------- |
-| `manifest prep patch` | `manifest ship repo patch --local` (with deprecation warning) |
-| `manifest ship patch` | `manifest ship repo patch` |
-| `manifest sync` | `manifest prep repo` |
-| `manifest fleet <action>` | Removed; use `manifest <action> fleet` |
-| `manifest time` | `display_time_info` |
-| `manifest update` | Removed as an upgrade alias; use `manifest upgrade` |
-| `manifest docs` | Documentation generation (plumbing) |
-| `manifest cleanup` | Archive old docs (plumbing) |
-| `manifest commit <msg>` | Commit with timestamp (plumbing) |
-| `manifest version <type>` | Bump version only (plumbing) |
+Most users should stay on the first-class commands above. A few internal routes
+still exist for generated docs, archive cleanup, timestamp display, timestamped
+commits, and isolated version bumps, but the supported workflow surface is the
+journey command set plus `status`, `doctor`, `config`, `recipe`, and `pr`.
 
 > See [Command Reference](docs/COMMAND_REFERENCE.md) for the complete surface area.
 
@@ -412,6 +439,26 @@ manifest config describe git.tag_prefix           # Per-layer values + env-var n
 
 > See [examples/manifest.config.yaml.example](examples/manifest.config.yaml.example) for the complete YAML config schema.
 
+### GitHub Releases
+
+Repo ship creates a matching GitHub Release after the tag is pushed when
+`github.release.enabled` is true. The step is idempotent: if the Release already
+exists, Manifest reports it and continues. Missing `gh`, missing authentication,
+or a non-GitHub origin skips the step unless `github.release.required` is true.
+
+```yaml
+github:
+  release:
+    enabled: true
+    required: false
+    draft: false
+    prerelease: false
+```
+
+Release notes come from the refreshed `CHANGELOG.md` entry for the version, so
+preview summaries, changelog text, generated docs, and GitHub Release bodies are
+kept aligned by the same release-note pipeline.
+
 ### Safety gate for global config
 
 Anything that modifies or deletes `~/.manifest-cli/manifest.config.global.yaml` (auto-migrations, `config doctor --fix`, `config set --layer global`, `uninstall`) goes through `_confirm_global_config_write`. Modifications prompt once; destructive operations require typing `yes` twice. CI/scripted contexts can opt in with `MANIFEST_CLI_AUTO_CONFIRM=1`.
@@ -474,12 +521,13 @@ manifest.cli/
 │   │   ├── manifest-plugin-loader.sh    Plugin loader for optional Cloud modules
 │   │   ├── manifest-config.sh           Layered YAML config loading
 │   │   ├── manifest-yaml.sh             yq-based YAML parser + env var mapping
-│   │   ├── manifest-init.sh             init repo|fleet (v42)
-│   │   ├── manifest-prep.sh             prep repo|fleet (v42)
-│   │   ├── manifest-refresh.sh          refresh repo|fleet (v42)
-│   │   ├── manifest-ship.sh             ship repo|fleet (v42)
+│   │   ├── manifest-init.sh             init repo|fleet
+│   │   ├── manifest-prep.sh             prep repo|fleet
+│   │   ├── manifest-refresh.sh          refresh repo|fleet
+│   │   ├── manifest-ship.sh             ship repo|fleet preview/apply dispatcher
 │   │   ├── manifest-shared-functions.sh Version math, file scaffolding
 │   │   └── manifest-shared-utils.sh     Logging, formatting, guards
+│   ├── recipe/         Inspectable workflow definitions and command mapping
 │   ├── workflow/       Orchestration engine (prep/ship pipeline)
 │   ├── fleet/          Fleet dispatcher, config, detection, docs
 │   ├── git/            Git operations and change analysis
@@ -494,7 +542,7 @@ manifest.cli/
 └── VERSION             Current version file
 ```
 
-Optional modules (PR, cloud, testing, auto-upgrade) live in the [Manifest Cloud](https://github.com/fidenceio/fidenceio.manifest.cloud) repo under `cli-plugins/` and are loaded at runtime when installed to `~/.manifest-cloud/cli-plugins/`.
+Optional Cloud extensions live in the [Manifest Cloud](https://github.com/fidenceio/fidenceio.manifest.cloud) repo under `cli-plugins/` and are loaded at runtime when installed to `~/.manifest-cloud/cli-plugins/`. Native PR commands are built into this repo as `gh` wrappers; Cloud can extend them with queue and policy behavior.
 
 ### Data Flow
 
@@ -522,16 +570,19 @@ manifest-core.sh :: main()
     │                           ├── commit_changes()           [git module]
     │                           ├── create_tag()               [git module]
     │                           ├── push_changes()             [git module]
-    │                           └── update_homebrew_formula()   [core module]
+    │                           ├── update_homebrew_formula()   [core module]
+    │                           └── manifest_create_github_release_for_tag()
+    │
+    ├─ Recipe dispatch ──► manifest-recipe.sh
+    │                       ├── manifest recipe list/show/explain/run
+    │                       └── command --explain mappings for ship recipes
     │
     ├─ Fleet dispatch ──► manifest-fleet.sh :: fleet_main()
     │                       ├── fleet-config.sh   (YAML parsing)
     │                       ├── fleet-detect.sh   (auto-discovery)
     │                       └── fleet-docs.sh     (unified docs)
     │
-    ├─ PR dispatch ──► manifest-pr.sh        [Cloud plugin]
-    │
-    └─ Legacy aliases ──► (route to new implementations)
+    └─ PR dispatch ──► manifest-pr-native.sh, then optional Cloud plugin
 ```
 
 ### Configuration Pipeline
@@ -577,12 +628,12 @@ Homebrew installation handles all dependencies automatically. The install script
 | -------- | ----------- |
 | [User Guide](docs/USER_GUIDE.md) | Complete usage guide with workflows |
 | [Command Reference](docs/COMMAND_REFERENCE.md) | Every command, flag, and option |
-| [Examples](docs/EXAMPLES.md) | Real-world workflow recipes |
+| [Examples](docs/EXAMPLES.md) | Real-world command examples |
 | [Installation](docs/INSTALLATION.md) | Setup, upgrade, and troubleshooting |
 | [Fleet Design Spec](docs/FLEET_DESIGN_SPEC.md) | Polyrepo architecture and design |
 | [YAML config example](examples/manifest.config.yaml.example) | Full schema with all keys + comments |
 | [North Star](docs/NORTH_STAR.md) | Strategic direction and priorities |
-| [Release Notes](docs/RELEASE_v46.13.10.md) | Current release details |
+| [Changelog](CHANGELOG.md) | Current release history |
 
 ---
 

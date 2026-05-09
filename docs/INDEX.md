@@ -1,6 +1,6 @@
 # Manifest CLI Documentation
 
-**Version:** 47.6.2 | **Updated:** 2026-05-05
+**Version:** 47.6.2 | **Updated:** 2026-05-08
 
 ---
 
@@ -10,7 +10,7 @@
 | -------- | ----------- |
 | [Installation Guide](INSTALLATION.md) | Setup, upgrade, uninstall, and troubleshooting |
 | [User Guide](USER_GUIDE.md) | Workflows, daily commands, and configuration |
-| [Examples](EXAMPLES.md) | Real-world workflow recipes |
+| [Examples](EXAMPLES.md) | Real-world command examples |
 
 ## Reference
 
@@ -25,18 +25,17 @@
 | -------- | ----------- |
 | [Fleet Design Spec](FLEET_DESIGN_SPEC.md) | Polyrepo orchestration architecture |
 | [Bash 5 Runtime TODO](BASH_5_RUNTIME_TODO.md) | Active plan to enforce Bash 5+ across wrappers, subprocesses, and nested Manifest calls |
-| [Safe-by-Default Execution TODO](SAFE_BY_DEFAULT_EXECUTION_TODO.md) | Planned breaking change to make mutating commands preview by default and require `-y` to apply |
+| [Safe-by-Default Execution Notes](SAFE_BY_DEFAULT_EXECUTION_TODO.md) | Execution policy, recipe effects, and remaining hardening work |
 | [Improvement Tracker](IMPROVEMENT_TRACKER.md) | Active and completed engineering work queue |
 | [North Star](NORTH_STAR.md) | Strategic direction and 12-month priorities |
 | [Security Notes](SECURITY_ANALYSIS_REPORT.md) | Current security posture and historical audit pointer |
 
-## Current Release
+## Release History
 
 | Document | Description |
 | -------- | ----------- |
-| [Release Notes v46.13.10](RELEASE_v46.13.10.md) | What's new in this release |
-| [Changelog v46.13.10](CHANGELOG_v46.13.10.md) | Detailed change log |
-| [Archived Releases](zArchive/INDEX.md) | Previous version documentation, grouped by major |
+| [Root Changelog](../CHANGELOG.md) | Current release history |
+| [Archived Releases](zArchive/INDEX.md) | Versioned release documentation, grouped by major |
 
 ---
 
@@ -46,14 +45,17 @@
 # Install
 brew tap fidenceio/tap && brew install manifest
 
-# Scaffold a new project
+# Preview and apply project scaffold
 manifest init repo
+manifest init repo -y
 
-# Connect remotes and pull latest
+# Preview and apply remote prep
 manifest prep repo
+manifest prep repo -y
 
-# Ship a patch release
+# Preview and apply a patch release
 manifest ship repo patch
+manifest ship repo patch -y
 
 # Preview a release locally first
 manifest ship repo minor --local

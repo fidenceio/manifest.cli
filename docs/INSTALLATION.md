@@ -104,14 +104,11 @@ which manifest
 # View help
 manifest --help
 
-# Run full test suite
-manifest test all
-
 # Review configuration
 manifest config show
 
 # Validate dependencies
-manifest config doctor
+manifest doctor
 ```
 
 ---
@@ -123,9 +120,11 @@ cd your-project
 
 # Scaffold required files (VERSION, CHANGELOG.md, docs/, .gitignore)
 manifest init repo
+manifest init repo -y
 
 # Connect remotes and pull latest
 manifest prep repo
+manifest prep repo -y
 
 # Review your configuration
 manifest config show
@@ -160,12 +159,12 @@ On macOS, this offers the Homebrew installation path. Configuration is preserved
 | ------- | --- |
 | `manifest: command not found` | Ensure `~/.local/bin` is on your `PATH` |
 | Wrong version running | Check with `which manifest` and `manifest --help` |
-| Tests failing | Run `manifest config doctor --fix` to repair deprecated settings |
+| Tests failing | Run `manifest doctor` and use the repo's containerized test runner when developing Manifest CLI |
 | Bash version issues | Install Bash 5+ via Homebrew: `brew install bash` |
 | `yq is not installed` | Install yq: `brew install yq` (see Installing yq Manually above) |
 | `yq is not Mike Farah's Go version` | Uninstall Python yq (`pip uninstall yq`), install Go yq (`brew install yq`) |
 | YAML config not loading | Run `manifest config doctor` to diagnose config issues |
 | Network errors | Check connectivity; use `MANIFEST_CLI_OFFLINE_MODE=true` for offline work |
 
-For persistent issues, run `manifest test all --no-strict-redact` and review logs
-at `~/.manifest-cli/logs/tests/`.
+For persistent issues in the Manifest CLI repo, run `./scripts/run-tests-container.sh`
+and review the emitted test log paths.

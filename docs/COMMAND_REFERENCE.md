@@ -7,7 +7,7 @@ Reflects the current command dispatcher in `modules/core/manifest-core.sh`.
 
 ## Command Model
 
-Manifest uses a `verb scope` pattern for core journey commands (introduced in v42):
+Manifest uses a `verb scope` pattern for core journey commands:
 
 ```bash
 manifest <verb> <scope> [type] [options]
@@ -67,7 +67,7 @@ create or queue PRs.
 | `manifest uninstall [--force]` | Remove Manifest CLI |
 | `manifest reinstall` | Full uninstall + reinstall |
 | `manifest security` | Security audit and report generation |
-| `manifest test [suite]` | Run diagnostic tests |
+| `manifest test [suite]` | Run Cloud-provided diagnostic tests when the plugin is installed |
 
 ### Cloud / Agent
 
@@ -82,20 +82,15 @@ create or queue PRs.
 | ------- | ----------- |
 | `manifest revert` | Roll back to a previous version |
 
-### Hidden Plumbing And Removed Routes
+### Hidden Plumbing
 
-| Command | Routes To |
-| ------- | --------- |
-| `manifest prep <type>` | `manifest ship repo <type> --local` (deprecation warning) |
-| `manifest ship <type>` | `manifest ship repo <type>` |
-| `manifest sync` | `manifest prep repo` |
-| `manifest fleet <action>` | Removed; use `manifest <action> fleet` |
+| Command | Purpose |
+| ------- | ------- |
 | `manifest time` | Time info display |
-| `manifest update` | Removed as an upgrade alias; use `manifest upgrade` |
-| `manifest docs [sub]` | Documentation generation (plumbing) |
-| `manifest cleanup` | Archive old docs (plumbing) |
-| `manifest commit <msg>` | Commit with timestamp (plumbing) |
-| `manifest version <type>` | Bump version only (plumbing) |
+| `manifest docs [sub]` | Documentation generation |
+| `manifest cleanup` | Archive old docs |
+| `manifest commit <msg>` | Commit with trusted timestamp |
+| `manifest version <type>` | Bump version only |
 
 ---
 
@@ -321,11 +316,7 @@ manifest prep fleet --pull-only    # Only pull existing repos
 | `--clone-only` | Only clone missing repos (skip pull) |
 | `--pull-only` | Only pull existing repos (skip clone) |
 
-**Delegates to:** `fleet_sync()` in `manifest-fleet.sh`
-
-### Legacy: `manifest prep <type>`
-
-The old `manifest prep patch` (local release preview) now routes to `manifest ship repo <type> --local` with a deprecation warning. This is handled by the dispatch function detecting `patch|minor|major|revision` as a scope argument.
+**Delegates to:** `_fleet_sync()` in `manifest-fleet.sh`
 
 ---
 
@@ -400,9 +391,10 @@ manifest recipe explain manifest.builtin.ship.repo.patch
 manifest recipe run manifest.builtin.ship.repo.patch --local
 ```
 
-First-class commands remain stable. For example, `manifest ship repo patch`
-is still the canonical command, and `manifest ship repo patch --explain`
-shows the recipe definition that declares that workflow. Project recipes may
+First-class commands are the canonical entry points. For example,
+`manifest ship repo patch` is the command to run, and
+`manifest ship repo patch --explain` shows the recipe definition that declares
+that workflow. Project recipes may
 compose or extend built-ins explicitly, but they do not silently override
 reserved built-in command mappings.
 
@@ -442,7 +434,7 @@ manifest ship repo patch --explain # Show the built-in recipe definition
 
 **Apply mode** (`-y` / `--yes`): sync, bump version, generate docs, archive old docs, validate markdown, commit, tag, push to all remotes, update Homebrew formula (canonical repo only), create a matching GitHub Release when enabled, and safely fast-forward clean local Homebrew tap checkouts that the release process updated remotely. Canonical CLI `minor`, `major`, and `revision` ships also run one guarded follow-up patch under the upgraded installed CLI; set `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH=false` to skip it.
 
-**Local apply mode** (`--local -y`): Everything except creating a tag, pushing to remotes, and updating Homebrew. Equivalent to the old `manifest prep <type>`.
+**Local apply mode** (`--local -y`): Everything except creating a tag, pushing to remotes, updating Homebrew, creating a GitHub Release, or watching GitHub Actions.
 
 Before any `commit_changes()` call stages files, Manifest runs a smart documentation review. The default provider is local and deterministic: it inspects the dirty tree, classifies changed files, reports whether documentation-impacting changes have matching docs updates, adds a concise review body to the commit, writes a neutral committed report under `docs/documentation-reviews/`, and feeds the review summary into generated release notes/changelogs.
 
@@ -516,9 +508,8 @@ release-note/changelog attachment.
 
 | Value | Tagged commit |
 | ----- | ------------- |
-| `version_commit` (default since v44.10.1) | Captured SHA of the "Bump version to X" commit |
+| `version_commit` (default) | Captured SHA of the "Bump version to X" commit |
 | `release_head` | HEAD at tag-creation time (post-CHANGELOG, pre-Homebrew) |
-| `final_release_commit` | Deprecated alias for `release_head`; emits a warning |
 
 Value matching is whitespace- and case-tolerant. Unknown values fall back to `version_commit` and emit a warning to stderr. The Homebrew formula commit is intentionally outside the tag in all cases (see [USER_GUIDE.md#tag-placement-releasetag_target](USER_GUIDE.md#tag-placement-releasetag_target) for the chicken-and-egg explanation).
 
@@ -552,13 +543,7 @@ Use `manifest pr fleet ...` explicitly for PR workflows.
 
 `--only` and `--except` are mutually exclusive. The filter applies to per-service prep, fleet doc generation, and the PR dispatch (the Cloud-side dispatcher receives the same flags).
 
-**Delegates to:** `fleet_ship()` (full mode) or `fleet_prep()` (local mode) in `manifest-fleet.sh`
-
-### Legacy: `manifest ship <type>`
-
-The old `manifest ship patch` (no scope) routes to `manifest ship repo patch` automatically.
-
----
+**Delegates to:** `fleet_ship()` in `manifest-fleet.sh`; local mode passes `--local` through that same fleet ship path.
 
 ## `manifest pr`
 
@@ -615,35 +600,24 @@ manifest pr help               # PR help
 
 ## `manifest test`
 
-Run diagnostic test suites.
+Run extended diagnostic suites when the Manifest Cloud test plugin is installed.
+Without that plugin, the command prints an install hint and points to basic
+diagnostics.
 
 ```bash
-manifest test                  # Basic repository status test
-manifest test all              # All test suites
-manifest test versions         # Version increment logic
-manifest test security         # Security checks
-manifest test config           # Configuration loading
-manifest test docs             # Documentation generation
-manifest test git              # Git operations
-manifest test time             # Timestamp verification
-manifest test os               # OS detection
-manifest test modules          # Module loading
-manifest test integration      # End-to-end tests
-manifest test cloud            # Cloud connectivity
-manifest test agent            # Agent functionality
-manifest test zsh              # Zsh compatibility
-manifest test bash5            # Bash 5 compatibility
-manifest test bash             # Basic Bash tests
+manifest test all
+manifest test cloud
+manifest test agent
 ```
 
-**Flags:**
+For Manifest CLI development, use the repository test runner instead:
 
-| Flag | Description |
-| ---- | ----------- |
-| `--strict-redact` | Sanitize logs for sharing |
-| `--no-strict-redact` | Keep raw output |
+```bash
+./scripts/run-tests-container.sh
+./scripts/run-tests-container.sh tests/recipe.bats
+```
 
-**Source:** `manifest-test.sh`
+**Source:** `modules/stubs/manifest-test-stub.sh`, or a Cloud plugin when installed.
 
 ---
 

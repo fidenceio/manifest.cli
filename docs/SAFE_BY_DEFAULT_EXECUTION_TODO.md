@@ -1,12 +1,12 @@
-# Safe-by-Default Execution TODO
+# Safe-by-Default Execution Notes
 
-**Status:** Planned breaking change
+**Status:** Implemented for the core journey and ship paths; remaining work tracks edge commands and Cloud integrations.
 **Created:** 2026-05-06
-**Goal:** Make every mutating Manifest command preview by default, require `-y` or `--yes` to apply, and keep PR operations out of release shipping.
+**Goal:** Keep every mutating Manifest workflow preview-first, require `-y` or `--yes` to apply, and keep PR operations out of release shipping.
 
-## Decision
+## Current Contract
 
-Manifest CLI should use one execution contract everywhere:
+Manifest CLI uses one execution contract for the public workflow surface:
 
 ```text
 default = preview
@@ -15,7 +15,11 @@ default = preview
 --local -y = apply local writes only
 ```
 
-This is intentionally breaking. The current command surface mixes "dry-run by default", "dry-run only when typed", "local preview", immediate writes, remote publish, and PR queueing. That makes high-consequence commands hard to reason about. The new contract makes the safe path the default and the mutating path explicit.
+`manifest_execution_parse()` in `modules/core/manifest-execution-policy.sh`
+centralizes the contract for `ship` and other migrated commands. `--dry-run`
+and `-y` are contradictory; `--local` narrows scope but does not authorize
+writes by itself; `MANIFEST_CLI_AUTO_CONFIRM=1` answers prompts only after
+apply mode is already selected.
 
 ## Ecosystem Operating Model
 
@@ -29,20 +33,17 @@ Manifest Cloud enforces remote/policy/queue behavior.
 No layer silently escalates preview into apply.
 ```
 
-| Component | Responsibility | Required change |
+| Component | Responsibility | Current state |
 | --- | --- | --- |
-| Manifest CLI | Own the user-facing execution contract and normalize `preview|apply`, `local|remote`, and service scope | Centralize parsing and make every mutating command preview by default |
-| Manifest Fleet | Expand one command across many repos without changing intent | Render a per-service plan first; apply only to eligible selected services with `-y` |
-| Manifest Cloud | Own Cloud APIs, queueing, policy, and hosted automation | Reject mutating requests unless apply intent is explicit and traceable |
-| Recipes | Make workflows explainable and reusable | Add effect metadata to every step and block effectful execution without `-y` |
-| Manifest CLI canonical repo | Dogfood the contract first | Use this repo as the reference implementation and release vehicle |
-| Manifest Cloud repo | Consume and enforce the same contract | Add API/request-level preview/apply fields and tests |
-| Homebrew Tap | Distribution-only formula repo | Default `release.enabled: false`; never independently version through Fleet ship |
-| Workspace fleet | End-to-end practice environment | Validate the five-repo fleet with preview and apply paths before public release |
-| Marketing/docs | Teach the behavior clearly | Message "command previews, command -y applies" everywhere users learn Manifest |
-| Fidence Cloud import docs | Platform planning artifact | Include this as release/workflow policy when Cloud imports Manifest plans |
+| Manifest CLI | Own the user-facing execution contract and normalize `preview|apply`, `local|remote`, and service scope | Core journey docs teach preview-first and `-y` apply |
+| Manifest Fleet | Expand one command across many repos without changing intent | Fleet ship previews by default and applies only with `-y` |
+| Manifest Cloud | Own Cloud APIs, queueing, policy, and hosted automation | Keep Cloud mutating behavior behind explicit PR/Cloud commands |
+| Recipes | Make workflows explainable and reusable | Built-in ship recipes declare ordered steps and effect metadata |
+| Manifest CLI canonical repo | Dogfood the contract first | Repo ship, GitHub Release creation, Homebrew publishing, and follow-up patch are covered by release tests |
+| Homebrew Tap | Distribution-only formula repo | Updated only from the canonical CLI release path |
+| Documentation | Teach the behavior clearly | Public docs use "command previews, command -y applies" wording |
 
-## Non-Negotiable Rules
+## Verification Checklist
 
 - [ ] A command that can mutate local files, commits, tags, pushes, remotes, PRs, or queues must preview by default.
 - [ ] `--dry-run` must be accepted as an explicit spelling of the default preview mode on every mutating command.
@@ -54,7 +55,7 @@ No layer silently escalates preview into apply.
 - [ ] Recipes must declare whether a step is read-only, local-write, or remote-write so preview/apply behavior is visible before execution.
 - [ ] Help text, examples, completions, tests, and docs must all teach the same contract.
 
-## Recommendations
+## Remaining Hardening
 
 - [ ] Build the shared execution-policy module first. Do not retrofit one command at a time with ad hoc parsing.
 - [ ] Treat this as a major release. The change is safer, but it intentionally changes long-standing behavior.
@@ -121,7 +122,7 @@ No layer silently escalates preview into apply.
 | Repeated `-y` or `--yes` | Accept as idempotent. |
 | Repeated `--dry-run` | Accept as idempotent. |
 | Unknown execution flag | Fail through the shared help/error template. |
-| Legacy `--apply` or `--do` flags | Either deprecate into `-y` with one warning or reject consistently; choose before implementation. |
+| Alternate apply flags (`--apply` or `--do`) | Either normalize into `-y` with one warning or reject consistently; choose before implementation. |
 
 ### Repo State
 
