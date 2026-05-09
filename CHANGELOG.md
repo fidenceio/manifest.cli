@@ -1,5 +1,14 @@
 # Changelog
 
+## [47.6.3] - 2026-05-09
+
+**Release Type:** Patch
+
+### Changes
+
+- Update release copy and configuration examples
+
+
 ## [47.6.2] - 2026-05-08
 
 **Release Type:** Patch — no user-facing changes.
@@ -72,13 +81,3 @@
 ## [47.4.4] - 2026-05-06
 
 **Release Type:** Patch — no user-facing changes.
-
-
-## [47.4.3] - 2026-05-06
-
-**Release Type:** Patch
-
-### Changes
-
-- Add regression coverage for the changed CLI workflow
-- Document the updated CLI workflow and release contract
