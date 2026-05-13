@@ -4,7 +4,7 @@
   "title": "Manifest Recipe",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "title", "kind", "command", "scope", "inputs", "steps"],
+  "required": ["id", "title", "kind", "command", "scope", "execution", "inputs", "steps"],
   "properties": {
     "id": {
       "type": "string",
@@ -38,6 +38,7 @@
     "execution": {
       "type": "object",
       "additionalProperties": false,
+      "required": ["default_mode", "requires_yes_for"],
       "properties": {
         "default_mode": {
           "type": "string",
@@ -85,7 +86,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "uses"],
+        "required": ["id", "uses", "effect"],
         "properties": {
           "id": {
             "type": "string"

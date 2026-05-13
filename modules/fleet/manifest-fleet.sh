@@ -1910,6 +1910,25 @@ _fleet_service_release_reason() {
         return 0
     fi
 
+    local release_strategy
+    release_strategy=$(get_fleet_service_property "$service" "release_strategy" "")
+    case "$release_strategy" in
+        none)
+            echo "release strategy none"
+            return 1
+            ;;
+        direct)
+            echo "release strategy direct"
+            return 0
+            ;;
+        "")
+            ;;
+        *)
+            echo "unsupported release strategy: $release_strategy"
+            return 1
+            ;;
+    esac
+
     case "$service:$path" in
         *homebrew*tap*|*Homebrew*Tap*)
             echo "formula-only"

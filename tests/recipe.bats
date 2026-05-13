@@ -45,6 +45,41 @@ run_manifest_from_plain_dir() {
     [[ "$output" == *"create-github-release -> github.release.create {effect: remote-write} [publish_release && github.release.enabled]"* ]]
 }
 
+@test "built-in recipes declare execution policy and step effects" {
+    local file missing
+    missing=""
+
+    while IFS= read -r file; do
+        if [ "$(yq e 'has("execution")' "$file")" != "true" ]; then
+            missing="$missing $file:execution"
+        fi
+        if [ "$(yq e '.execution.default_mode // ""' "$file")" != "preview" ]; then
+            missing="$missing $file:execution.default_mode"
+        fi
+        if [ "$(yq e '(.execution.requires_yes_for | type) == "!!seq"' "$file")" != "true" ]; then
+            missing="$missing $file:execution.requires_yes_for"
+        fi
+        if [ "$(yq e '[.steps[] | select(has("effect") | not)] | length' "$file")" != "0" ]; then
+            missing="$missing $file:steps.effect"
+        fi
+    done < <(find "$TEST_REPO_ROOT/recipes/builtin" -type f -name '*.yaml' | sort)
+
+    [ -z "$missing" ]
+}
+
+@test "built-in ship recipes do not declare PR effects" {
+    local file offenders
+    offenders=""
+
+    while IFS= read -r file; do
+        if [ "$(yq e '[.steps[] | select(.effect == "pr")] | length' "$file")" != "0" ]; then
+            offenders="$offenders $file"
+        fi
+    done < <(find "$TEST_REPO_ROOT/recipes/builtin" -type f -name 'manifest.builtin.ship.*.yaml' | sort)
+
+    [ -z "$offenders" ]
+}
+
 @test "ship repo explain uses the built-in recipe without requiring git" {
     run_manifest_from_plain_dir ship repo patch --explain
     [ "$status" -eq 0 ]

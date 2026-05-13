@@ -1,6 +1,6 @@
 # Bash 5 Runtime Fix
 
-**Status:** Implemented locally, pending patch release
+**Status:** Shipped in the v47.6.3 patch release
 **Created:** 2026-05-06
 **Goal:** Manifest CLI must run under Bash 5+ everywhere. Bash 3.2 may start a wrapper on macOS, but it must never reach CLI modules or nested Manifest execution.
 
@@ -38,7 +38,7 @@ Wrappers may begin execution under an older shell only long enough to locate and
 - [x] Update Homebrew wrapper tests for the Bash 5 guard.
 - [x] Run the focused container tests.
 - [x] Run the full container test suite.
-- [ ] Ship a patch release after verification.
+- [x] Ship a patch release after verification. Released in v47.6.3 on 2026-05-09.
 
 ## Remaining Hardening
 

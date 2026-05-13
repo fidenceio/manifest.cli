@@ -5,9 +5,14 @@ command: manifest prep repo
 scope: repo
 summary: Prepare the current repository by validating remotes and pulling the latest state.
 entrypoint: manifest_prep_repo
+execution:
+  default_mode: preview
+  requires_yes_for: [local-write]
 inputs: {}
 steps:
   - id: validate-repo
     uses: manifest.repo.validate
+    effect: read
   - id: sync-repo
     uses: manifest.git.sync
+    effect: local-write

@@ -5,9 +5,14 @@ command: manifest refresh repo
 scope: repo
 summary: Regenerate repository documentation and metadata without publishing a release.
 entrypoint: manifest_refresh_repo
+execution:
+  default_mode: preview
+  requires_yes_for: [local-write]
 inputs: {}
 steps:
   - id: generate-docs
     uses: manifest.docs.generate
+    effect: local-write
   - id: refresh-metadata
     uses: manifest.repo.metadata
+    effect: local-write
