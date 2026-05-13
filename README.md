@@ -260,6 +260,11 @@ Recipe steps declare what they use and what they affect:
 | `remote-write` | Pushes, publishes, or mutates external state |
 | `pr` | Creates, updates, queues, or merges pull requests |
 
+Mapped first-class commands validate those effects before local apply. For
+example, `manifest ship repo patch --local -y` may write local release files and
+commits, but it refuses any recipe path that would activate a `remote-write`
+step.
+
 The current repo ship recipes expose the release flow as ordered steps:
 identify repo, bump version, generate docs, commit, tag, push, publish
 Homebrew when applicable, and create or reuse the matching GitHub Release when

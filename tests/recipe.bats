@@ -88,6 +88,37 @@ run_manifest_from_plain_dir() {
     [ -z "$offenders" ]
 }
 
+@test "local apply validation allows every mapped ship recipe" {
+    load_modules "recipe/manifest-recipe.sh"
+
+    local scope release_type
+    for scope in repo fleet; do
+        for release_type in patch minor major revision; do
+            run manifest_recipe_validate_command_effects ship "$scope" "$release_type" apply true false
+            [ "$status" -eq 0 ]
+        done
+    done
+}
+
+@test "local apply validation rejects active remote-write steps" {
+    load_modules "recipe/manifest-recipe.sh"
+    local recipe="$SCRATCH/work/unsafe.yaml"
+
+    cat > "$recipe" <<'YAML'
+id: manifest.test.unsafe
+steps:
+  - id: push-release
+    uses: manifest.git.push_release
+    effect: remote-write
+    when: apply
+YAML
+
+    run manifest_recipe_validate_local_apply_file "$recipe" "manifest test unsafe" apply true false
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Refusing local apply"* ]]
+    [[ "$output" == *"push-release"* ]]
+}
+
 @test "ship repo explain uses the built-in recipe without requiring git" {
     run_manifest_from_plain_dir ship repo patch --explain
     [ "$status" -eq 0 ]
