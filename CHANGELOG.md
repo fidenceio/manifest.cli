@@ -1,5 +1,10 @@
 # Changelog
 
+## [47.8.3] - 2026-05-13
+
+**Release Type:** Patch — no user-facing changes.
+
+
 ## [47.8.2] - 2026-05-13
 
 **Release Type:** Patch
@@ -68,8 +73,3 @@
 - Add smart ship preview summaries
 - Update release copy and configuration examples
 - Add regression coverage for the changed CLI workflow
-
-
-## [47.5.2] - 2026-05-07
-
-**Release Type:** Patch — no user-facing changes.
