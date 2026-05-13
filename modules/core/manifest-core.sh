@@ -1380,7 +1380,7 @@ Usage: manifest <command> [scope] [options]
     config                              Setup wizard / show configuration
     init repo|fleet                     Scaffold repo or fleet
     status                              Read-only snapshot (next bump, sync state)
-    recipe                              Inspect/run workflow recipe definitions
+    recipe                              Inspect workflow recipe definitions
     prep repo|fleet                     Connect remotes, pull latest
     refresh repo|fleet                  Regenerate docs, metadata, membership
     ship repo|fleet <patch|minor|major> Publish release (version + tag + push)

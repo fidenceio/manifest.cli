@@ -12,7 +12,7 @@ load 'helpers/setup'
 @test "zsh completion includes plan and reconcile" {
     grep -q "'plan:Generate an adoption plan'" "$TEST_REPO_ROOT/completions/_manifest"
     grep -q "'reconcile:Validate and apply an adoption plan'" "$TEST_REPO_ROOT/completions/_manifest"
-    grep -q "'recipe:Inspect and run workflow recipes'" "$TEST_REPO_ROOT/completions/_manifest"
+    grep -q "'recipe:Inspect workflow recipes'" "$TEST_REPO_ROOT/completions/_manifest"
     grep -Eq 'init\|quickstart\|plan\|reconcile' "$TEST_REPO_ROOT/completions/_manifest"
 }
 
@@ -23,8 +23,10 @@ load 'helpers/setup'
 }
 
 @test "completions expose recipe and explain surfaces" {
-    grep -q 'list show explain run help' "$TEST_REPO_ROOT/completions/manifest.bash"
+    grep -q 'list show explain help' "$TEST_REPO_ROOT/completions/manifest.bash"
+    ! grep -q 'list show explain run help' "$TEST_REPO_ROOT/completions/manifest.bash"
     grep -q -- '--explain' "$TEST_REPO_ROOT/completions/manifest.bash"
-    grep -q 'recipe_subs=(list show explain run help)' "$TEST_REPO_ROOT/completions/_manifest"
+    grep -q 'recipe_subs=(list show explain help)' "$TEST_REPO_ROOT/completions/_manifest"
+    ! grep -q 'recipe_subs=(list show explain run help)' "$TEST_REPO_ROOT/completions/_manifest"
     grep -q -- '--explain' "$TEST_REPO_ROOT/completions/_manifest"
 }

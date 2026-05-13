@@ -29,7 +29,7 @@ _manifest_complete() {
                     return 0
                     ;;
                 recipe)
-                    COMPREPLY=( $(compgen -W "list show explain run help" -- "$cur") )
+                    COMPREPLY=( $(compgen -W "list show explain help" -- "$cur") )
                     return 0
                     ;;
                 config)

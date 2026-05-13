@@ -50,7 +50,7 @@ create or queue PRs.
 | `manifest prep repo\|fleet` | Connect remotes, pull latest |
 | `manifest refresh repo\|fleet` | Regenerate docs, metadata, membership |
 | `manifest ship repo\|fleet <type>` | Publish a release |
-| `manifest recipe <sub>` | Inspect and explicitly run workflow recipes |
+| `manifest recipe <sub>` | Inspect workflow recipes behind first-class commands |
 
 ### Supporting
 
@@ -388,7 +388,6 @@ lives at [docs/contracts/recipe.schema.json](contracts/recipe.schema.json).
 manifest recipe list
 manifest recipe show manifest.builtin.ship.repo.patch
 manifest recipe explain manifest.builtin.ship.repo.patch
-manifest recipe run manifest.builtin.ship.repo.patch --local
 ```
 
 First-class commands are the canonical entry points. For example,
@@ -397,6 +396,11 @@ First-class commands are the canonical entry points. For example,
 that workflow. Project recipes may
 compose or extend built-ins explicitly, but they do not silently override
 reserved built-in command mappings.
+
+Direct recipe execution is intentionally not part of the public workflow model.
+It is ambiguous which user-facing command, safety policy, and help text should
+own the operation. Add or extend a first-class command instead, then expose the
+recipe through `--explain`.
 
 **Source:** [manifest-recipe.sh](../modules/recipe/manifest-recipe.sh) `manifest_recipe_dispatch()`
 
@@ -407,7 +411,6 @@ reserved built-in command mappings.
 | `list` | List built-in and project recipes |
 | `show <id>` | Print the recipe YAML |
 | `explain <id>` | Show command mapping, definition path, and ordered steps |
-| `run <id>` | Run a wired recipe explicitly |
 
 ---
 

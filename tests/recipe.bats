@@ -45,6 +45,14 @@ run_manifest_from_plain_dir() {
     [[ "$output" == *"create-github-release -> github.release.create {effect: remote-write} [publish_release && github.release.enabled]"* ]]
 }
 
+@test "recipe help advertises inspection only" {
+    run_manifest_from_plain_dir recipe help
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"manifest recipe <list|show|explain> [id]"* ]]
+    [[ "$output" == *"Inspect Manifest workflow recipes behind first-class commands."* ]]
+    [[ "$output" != *"run <id>"* ]]
+}
+
 @test "built-in recipes declare execution policy and step effects" {
     local file missing
     missing=""

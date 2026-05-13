@@ -48,6 +48,9 @@ Recipes are YAML definitions that make those workflows inspectable. Built-in
 recipes live in `recipes/builtin`, project recipes may live in
 `.manifest/recipes`, and each recipe declares ordered steps plus effect metadata:
 `read`, `local-write`, `remote-write`, or `pr`.
+Recipes are not the commands to run. They are contracts behind first-class
+commands, so execution stays attached to a clear public command, help text, and
+safe-by-default policy.
 
 ```bash
 manifest recipe list

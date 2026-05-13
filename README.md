@@ -208,7 +208,7 @@ manifest <verb> <scope> [options]
 | `manifest prep repo\|fleet` | Connect remotes, pull latest |
 | `manifest refresh repo\|fleet` | Regenerate docs, metadata, fleet membership |
 | `manifest ship repo\|fleet <type>` | Publish release (bump + docs + tag + push) |
-| `manifest recipe <list\|show\|explain\|run>` | Inspect and explicitly run workflow recipes |
+| `manifest recipe <list\|show\|explain>` | Inspect workflow recipes behind first-class commands |
 
 ### Ship Options
 
@@ -239,6 +239,10 @@ Recipes are the inspectable workflow definitions behind those commands. Built-in
 recipes live in [recipes/builtin](recipes/builtin), project recipes may live in
 `.manifest/recipes`, and the schema lives at
 [docs/contracts/recipe.schema.json](docs/contracts/recipe.schema.json).
+Recipes are not the command surface users are expected to run directly. If a
+workflow is meant to be executed, it should have a named command such as
+`manifest ship repo patch` or `manifest pr create`; the recipe exists so that
+command can be inspected, tested, and documented consistently.
 
 ```bash
 manifest recipe list
@@ -574,7 +578,7 @@ manifest-core.sh :: main()
     │                           └── manifest_create_github_release_for_tag()
     │
     ├─ Recipe dispatch ──► manifest-recipe.sh
-    │                       ├── manifest recipe list/show/explain/run
+    │                       ├── manifest recipe list/show/explain
     │                       └── command --explain mappings for ship recipes
     │
     ├─ Fleet dispatch ──► manifest-fleet.sh :: fleet_main()
