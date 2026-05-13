@@ -5,9 +5,14 @@ command: manifest security --check
 scope: repo
 summary: Run Manifest's read-only repository security checks.
 entrypoint: manifest_security
+execution:
+  default_mode: preview
+  requires_yes_for: []
 inputs: {}
 steps:
   - id: inspect-files
     uses: manifest.security.inspect_files
+    effect: read
   - id: inspect-git
     uses: manifest.security.inspect_git
+    effect: read

@@ -534,14 +534,17 @@ Use `manifest pr fleet ...` explicitly for PR workflows.
 | Flag | Description |
 | ---- | ----------- |
 | `--local` | Local-only mode across fleet |
-| `--safe` | Run checks/ready gate before queueing |
 | `--noprep` | Skip per-service prep step |
-| `--method <strategy>` | Merge strategy: `merge`, `squash`, `rebase` |
-| `--draft` | Create draft PRs |
 | `--only <name[,name...]>` | Ship only the named service(s); repeatable |
 | `--except <name[,name...]>` | Ship every service except those named; repeatable |
 
-`--only` and `--except` are mutually exclusive. The filter applies to per-service prep, fleet doc generation, and the PR dispatch (the Cloud-side dispatcher receives the same flags).
+`--only` and `--except` are mutually exclusive. The filter applies to the release plan and apply path.
+
+Release eligibility is conservative: services with `VERSION` are releaseable by
+default, Homebrew tap/formula repositories and the fleet root are skipped, and
+services without `VERSION` are skipped unless explicitly configured with
+`services.<name>.release.enabled: true` and
+`services.<name>.release.strategy: direct`.
 
 **Delegates to:** `fleet_ship()` in `manifest-fleet.sh`; local mode passes `--local` through that same fleet ship path.
 

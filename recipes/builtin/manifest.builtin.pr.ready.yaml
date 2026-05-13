@@ -5,9 +5,14 @@ command: manifest pr ready
 scope: repo
 summary: Mark or validate a pull request as ready using the configured PR policy.
 entrypoint: manifest_pr_ready
+execution:
+  default_mode: preview
+  requires_yes_for: [pr]
 inputs: {}
 steps:
   - id: inspect-pr
     uses: manifest.pr.inspect
+    effect: read
   - id: mark-ready
     uses: manifest.pr.ready
+    effect: pr

@@ -216,8 +216,8 @@ No layer silently escalates preview into apply.
 - [ ] Add this contract to Manifest Cloud planning docs before Cloud implementation.
 - [ ] Add a Cloud API requirement: mutating endpoints require explicit `execution_mode=apply`.
 - [ ] Add a Cloud audit requirement: every apply request records actor, source, command, scope, and plan hash.
-- [ ] Add a Fleet config requirement for `release.enabled` and `release.strategy`.
-- [ ] Mark Homebrew Tap as release-disabled in the workspace fleet config.
+- [x] Add a Fleet config requirement for `release.enabled` and `release.strategy`.
+- [x] Mark Homebrew Tap as release-disabled in the workspace fleet config.
 - [ ] Add Workspace fleet dogfood acceptance criteria covering all five repos.
 - [ ] Add marketing/docs migration language before the major release ships.
 - [ ] Decide whether legacy `--apply` / `--do` are accepted as deprecated aliases or rejected.
@@ -253,7 +253,7 @@ No layer silently escalates preview into apply.
 - [ ] Convert `docs repo`, `docs fleet`, and docs cleanup/archive paths to preview by default.
 - [ ] Convert `config set`, `config unset`, and `config doctor --fix` to preview by default.
 - [ ] Convert `ship repo` to preview by default; require `-y` for version/docs/commit/tag/push.
-- [ ] Convert `ship fleet` to preview by default; require `-y` for direct release of eligible services.
+- [x] Convert `ship fleet` to preview by default; require `-y` for direct release of eligible services.
 - [ ] Convert native PR commands so `pr create`, `ready`, `merge`, `queue`, and fleet equivalents preview by default and require `-y`.
 - [ ] Audit `uninstall` and `reinstall`; require `-y` before destructive local-machine changes.
 - [ ] Audit legacy aliases and deprecation paths so aliases inherit the same policy.
@@ -262,42 +262,42 @@ No layer silently escalates preview into apply.
 
 ### Phase 3 - Fleet Ship Boundary Fix
 
-- [ ] Remove `manifest_fleet_pr_dispatch create` from `fleet_ship`.
-- [ ] Remove `manifest_fleet_pr_dispatch checks` from `fleet_ship`.
-- [ ] Remove `manifest_fleet_pr_dispatch ready` from `fleet_ship`.
-- [ ] Remove `manifest_fleet_pr_dispatch queue` from `fleet_ship`.
-- [ ] Define releaseable fleet services conservatively:
-  - [ ] has `VERSION` -> releaseable by default
-  - [ ] no `VERSION` -> skipped by default
-  - [ ] Homebrew Tap -> skipped as formula-only
-  - [ ] fleet root workspace -> skipped unless explicitly configured
-- [ ] Add service-level release config for overrides:
+- [x] Remove `manifest_fleet_pr_dispatch create` from `fleet_ship`.
+- [x] Remove `manifest_fleet_pr_dispatch checks` from `fleet_ship`.
+- [x] Remove `manifest_fleet_pr_dispatch ready` from `fleet_ship`.
+- [x] Remove `manifest_fleet_pr_dispatch queue` from `fleet_ship`.
+- [x] Define releaseable fleet services conservatively:
+  - [x] has `VERSION` -> releaseable by default
+  - [x] no `VERSION` -> skipped by default
+  - [x] Homebrew Tap -> skipped as formula-only
+  - [x] fleet root workspace -> skipped unless explicitly configured
+- [x] Add service-level release config for overrides:
   - `release.enabled: true|false`
   - `release.strategy: direct|none`
-- [ ] Preserve `--only` and `--except` filtering across preview and apply.
-- [ ] Produce a fleet ship plan table before any apply work.
+- [x] Preserve `--only` and `--except` filtering across preview and apply.
+- [x] Produce a fleet ship plan table before any apply work.
 - [ ] Stop with a clear message if a fleet requires PR review first; tell the user to run `manifest pr fleet ... -y` explicitly.
 - [ ] Add fleet partial-failure recovery output.
 - [ ] Recompute fleet plan at apply time and warn if it differs from a previous preview.
-- [ ] Add explicit behavior for releaseable/non-releaseable mixed fleets.
+- [x] Add explicit behavior for releaseable/non-releaseable mixed fleets.
 
 ### Phase 4 - Recipes
 
-- [ ] Extend the recipe schema with step effect metadata:
+- [x] Extend the recipe schema with step effect metadata:
   - `effect: read`
   - `effect: local-write`
   - `effect: remote-write`
   - `effect: pr`
-- [ ] Add recipe-level execution policy:
+- [x] Add recipe-level execution policy:
   - `default_mode: preview`
   - `requires_yes_for: [local-write, remote-write, pr]`
-- [ ] Update all built-in repo ship recipes.
-- [ ] Update all built-in fleet ship recipes and remove PR steps from them.
-- [ ] Update PR recipes so PR effects are explicit and require `-y`.
-- [ ] Make `manifest recipe explain` show effect levels per step.
+- [x] Update all built-in repo ship recipes.
+- [x] Update all built-in fleet ship recipes and remove PR steps from them.
+- [x] Update PR recipes so PR effects are explicit and require `-y`.
+- [x] Make `manifest recipe explain` show effect levels per step.
 - [ ] Make `manifest recipe run <id>` preview by default and require `-y` for effectful steps.
-- [ ] Add schema tests so a built-in recipe cannot omit effect metadata.
-- [ ] Add recipe validation that rejects PR effects in built-in ship recipes.
+- [x] Add schema tests so a built-in recipe cannot omit effect metadata.
+- [x] Add recipe validation that rejects PR effects in built-in ship recipes.
 - [ ] Add recipe validation for `--local -y` so remote-write steps cannot execute.
 
 ### Phase 5 - User Experience
@@ -333,9 +333,9 @@ No layer silently escalates preview into apply.
 - [ ] Add apply tests for focused local-only commands.
 - [ ] Add guarded remote-effect tests with stubs for git/gh so no real remote is touched.
 - [ ] Add tests proving `MANIFEST_CLI_AUTO_CONFIRM=1` does not imply apply.
-- [ ] Add tests proving `ship fleet` never calls PR dispatch.
+- [x] Add tests proving `ship fleet` never calls PR dispatch.
 - [ ] Add tests proving PR commands do not execute without `-y`.
-- [ ] Add recipe schema tests for effect metadata.
+- [x] Add recipe schema tests for effect metadata.
 - [ ] Add docs/completion tests for `-y`, `--yes`, and safe-by-default examples.
 - [ ] Run targeted container tests after each phase.
 - [ ] Run the full container suite before shipping.

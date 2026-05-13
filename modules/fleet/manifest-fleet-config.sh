@@ -530,6 +530,8 @@ load_fleet_config() {
 #   Sets MANIFEST_FLEET_SERVICE_<NAME>_EXCLUDED
 #   Sets MANIFEST_FLEET_SERVICE_<NAME>_SUBMODULE
 #   Sets MANIFEST_FLEET_SERVICE_<NAME>_DESCRIPTION
+#   Sets MANIFEST_FLEET_SERVICE_<NAME>_RELEASE_ENABLED
+#   Sets MANIFEST_FLEET_SERVICE_<NAME>_RELEASE_STRATEGY
 # -----------------------------------------------------------------------------
 _load_all_service_configs() {
     local fleet_root="$1"
@@ -562,7 +564,15 @@ _load_all_service_configs() {
         printf -v "MANIFEST_FLEET_SERVICE_${var_name}_SUBMODULE" '%s' "false"
 
         # Defaults for per-service properties
-        local team="" excluded="false" description=""
+        local team="" excluded="false" description="" release_enabled="" release_strategy=""
+
+        # Per-service release policy from the fleet root config. The nested
+        # form keeps release behavior grouped with other service metadata:
+        # services.<name>.release.enabled / services.<name>.release.strategy.
+        if [[ -f "$MANIFEST_FLEET_CONFIG_FILE" ]]; then
+            release_enabled=$(SERVICE_NAME="$name" parse_yaml_with_yq "$MANIFEST_FLEET_CONFIG_FILE" '.services[strenv(SERVICE_NAME)].release.enabled' 2>/dev/null || true)
+            release_strategy=$(SERVICE_NAME="$name" parse_yaml_with_yq "$MANIFEST_FLEET_CONFIG_FILE" '.services[strenv(SERVICE_NAME)].release.strategy' 2>/dev/null || true)
+        fi
 
         # Per-service config from the repo's own manifest.fleet.config.yaml
         local svc_config="$abs_path/manifest.fleet.config.yaml"
@@ -570,6 +580,8 @@ _load_all_service_configs() {
             team=$(get_yaml_value "$svc_config" ".team" "" 2>/dev/null) || true
             excluded=$(get_yaml_value "$svc_config" ".exclude_from_fleet_bump" "false" 2>/dev/null) || true
             description=$(get_yaml_value "$svc_config" ".description" "" 2>/dev/null) || true
+            release_enabled=$(get_yaml_value "$svc_config" ".release.enabled" "$release_enabled" 2>/dev/null) || true
+            release_strategy=$(get_yaml_value "$svc_config" ".release.strategy" "$release_strategy" 2>/dev/null) || true
 
             # Allow per-service overrides of TSV-sourced values
             local svc_type svc_branch
@@ -582,6 +594,8 @@ _load_all_service_configs() {
         printf -v "MANIFEST_FLEET_SERVICE_${var_name}_TEAM" '%s' "$team"
         printf -v "MANIFEST_FLEET_SERVICE_${var_name}_EXCLUDED" '%s' "$excluded"
         printf -v "MANIFEST_FLEET_SERVICE_${var_name}_DESCRIPTION" '%s' "$description"
+        printf -v "MANIFEST_FLEET_SERVICE_${var_name}_RELEASE_ENABLED" '%s' "$release_enabled"
+        printf -v "MANIFEST_FLEET_SERVICE_${var_name}_RELEASE_STRATEGY" '%s' "$release_strategy"
 
         log_debug "Loaded service config: $name (path=$abs_path, type=$type)"
     done < "$tsv_file"

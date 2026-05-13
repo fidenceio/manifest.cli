@@ -5,9 +5,14 @@ command: manifest docs review
 scope: repo
 summary: Review generated documentation using the configured docs review provider.
 entrypoint: manifest_doc_review
+execution:
+  default_mode: preview
+  requires_yes_for: []
 inputs: {}
 steps:
   - id: collect-docs
     uses: manifest.docs.collect
+    effect: read
   - id: run-review-provider
     uses: manifest.docs.review
+    effect: read
