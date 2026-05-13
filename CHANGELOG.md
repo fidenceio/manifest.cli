@@ -1,5 +1,10 @@
 # Changelog
 
+## [47.8.0] - 2026-05-13
+
+**Release Type:** Minor — no user-facing changes.
+
+
 ## [47.7.1] - 2026-05-13
 
 **Release Type:** Patch — no user-facing changes.
@@ -72,13 +77,3 @@
 - Update shell completions for new command options
 - Add regression coverage for the changed CLI workflow
 - Document the updated CLI workflow and release contract
-
-
-## [47.4.6] - 2026-05-06
-
-**Release Type:** Patch
-
-### Changes
-
-- Add recipe-backed workflow definitions and recipe introspection support
-- Add regression coverage for the changed CLI workflow
