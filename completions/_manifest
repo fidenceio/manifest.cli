@@ -21,7 +21,7 @@ _manifest() {
         'plan:Generate an adoption plan'
         'reconcile:Validate and apply an adoption plan'
         'status:Read-only snapshot'
-        'recipe:Inspect and run workflow recipes'
+        'recipe:Inspect workflow recipes'
         'discover:Discover resources without writing changes'
         'update:Update fleet membership'
         'add:Add a resource to Manifest-managed configuration'
@@ -44,7 +44,7 @@ _manifest() {
     bumps=(patch minor major revision)
     config_subs=(show list get set unset describe doctor setup time)
     pr_subs=(create status checks ready merge update queue policy help)
-    recipe_subs=(list show explain run help)
+    recipe_subs=(list show explain help)
     layers=(global project local)
 
     _arguments -C \

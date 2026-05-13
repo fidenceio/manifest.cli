@@ -38,7 +38,7 @@ No layer silently escalates preview into apply.
 | Manifest CLI | Own the user-facing execution contract and normalize `preview|apply`, `local|remote`, and service scope | Core journey docs teach preview-first and `-y` apply |
 | Manifest Fleet | Expand one command across many repos without changing intent | Fleet ship previews by default and applies only with `-y` |
 | Manifest Cloud | Own Cloud APIs, queueing, policy, and hosted automation | Keep Cloud mutating behavior behind explicit PR/Cloud commands |
-| Recipes | Make workflows explainable and reusable | Built-in ship recipes declare ordered steps and effect metadata |
+| Recipes | Make workflows explainable and testable behind first-class commands | Built-in ship recipes declare ordered steps and effect metadata |
 | Manifest CLI canonical repo | Dogfood the contract first | Repo ship, GitHub Release creation, Homebrew publishing, and follow-up patch are covered by release tests |
 | Homebrew Tap | Distribution-only formula repo | Updated only from the canonical CLI release path |
 | Documentation | Teach the behavior clearly | Public docs use "command previews, command -y applies" wording |
@@ -65,7 +65,7 @@ No layer silently escalates preview into apply.
 - [ ] Keep `MANIFEST_CLI_AUTO_CONFIRM=1` separate from `-y`. Automation may answer prompts, but it must not authorize mutation.
 - [ ] Move PR orchestration out of `ship fleet` before broad command migration so the highest-risk semantic bug is fixed early.
 - [ ] Define a service releaseability model in fleet config instead of relying only on file presence over time.
-- [ ] Prefer a single "plan then apply" renderer for repo, fleet, recipe, PR, and Cloud-backed commands.
+- [ ] Prefer a single "plan then apply" renderer for repo, fleet, PR, and Cloud-backed commands.
 - [ ] Include exact replay commands in every preview so users do not have to infer how to apply.
 - [ ] Make Cloud APIs require explicit apply intent even when called by automation, not only when called through the CLI.
 - [ ] Keep the Homebrew Tap formula-only and release-disabled by default.
@@ -102,7 +102,7 @@ No layer silently escalates preview into apply.
 | `manifest pr repo ...` | Preview PR operation | Execute requested PR operation | yes | yes |
 | `manifest pr fleet ...` | Preview fleet PR operation | Execute requested fleet PR operation | yes | yes |
 | `manifest recipe list/show/explain` | Read recipe metadata | Same | no | no |
-| `manifest recipe run <id>` | Preview recipe execution plan | Execute recipe steps | according to recipe step effects | only if recipe explicitly calls `pr` |
+| `manifest recipe run <id>` | Hidden compatibility shim only | Deprecated; use the mapped first-class command | no new public contract | no new public contract |
 | `manifest uninstall` | Preview uninstall changes | Remove installed files/config references | local machine only | no |
 | `manifest reinstall` | Preview reinstall steps | Reinstall | network/local install effects | no |
 
@@ -190,12 +190,12 @@ No layer silently escalates preview into apply.
 | Edge case | Decision |
 | --- | --- |
 | Recipe has missing effect metadata | Schema/test failure; built-in recipe cannot ship. |
-| Recipe mixes read and write steps | Preview shows all steps; apply runs only after `-y`. |
+| Recipe mixes read and write steps | The mapped first-class command previews the plan and applies only after `-y`. |
 | Recipe has PR step under ship command | Invalid built-in recipe. |
-| User recipe calls external command | Require declared effect and display command path before apply. |
-| Recipe step effect is `remote-write` with `--local -y` | Skip or fail according to recipe policy; never run remote effect. |
+| User recipe calls external command | Do not expose direct execution; first add a named command that owns parsing, policy, and help text. |
+| Recipe step effect is `remote-write` with `--local -y` | The mapped first-class command must skip or fail according to policy; never run remote effect. |
 | Recipe explain | Always read-only and must show effect metadata. |
-| Recipe run with `--dry-run -y` | Error as contradictory. |
+| Recipe run | Hidden/deprecated compatibility shim; not a product path to harden as a new command surface. |
 
 ### Docs, Config, and Install
 
@@ -295,10 +295,10 @@ No layer silently escalates preview into apply.
 - [x] Update all built-in fleet ship recipes and remove PR steps from them.
 - [x] Update PR recipes so PR effects are explicit and require `-y`.
 - [x] Make `manifest recipe explain` show effect levels per step.
-- [ ] Make `manifest recipe run <id>` preview by default and require `-y` for effectful steps.
+- [x] Do not promote `manifest recipe run <id>` as a public command surface; recipes are inspectable contracts behind named commands.
 - [x] Add schema tests so a built-in recipe cannot omit effect metadata.
 - [x] Add recipe validation that rejects PR effects in built-in ship recipes.
-- [ ] Add recipe validation for `--local -y` so remote-write steps cannot execute.
+- [ ] Validate mapped first-class commands so `--local -y` cannot execute recipe steps with `remote-write` effects.
 
 ### Phase 5 - User Experience
 

@@ -89,7 +89,8 @@ manifest recipe show manifest.builtin.ship.repo.patch
 
 Recipes expose the ordered workflow steps and their effects (`read`,
 `local-write`, `remote-write`, or `pr`) while the first-class command remains
-the stable command to run.
+the stable command to run. Do not run recipes directly; add or use a named
+command when a workflow should execute.
 
 ---
 

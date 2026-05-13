@@ -181,6 +181,7 @@ manifest_recipe_run() {
     fi
 
     command="$(_manifest_recipe_value "$file" ".command")"
+    log_deprecated "manifest recipe run" "${command:-mapped first-class command}" "recipes are inspectable contracts; run the named command instead"
     case "$command" in
         "manifest ship repo patch") manifest_ship_repo patch "$@" ;;
         "manifest ship repo minor") manifest_ship_repo minor "$@" ;;
@@ -221,18 +222,17 @@ manifest_recipe_dispatch() {
             ;;
         help|-h|--help)
             _render_help \
-                "manifest recipe <list|show|explain|run> [id]" \
-                "Inspect and run Manifest workflow recipes." \
+                "manifest recipe <list|show|explain> [id]" \
+                "Inspect Manifest workflow recipes behind first-class commands." \
                 "Commands" "  list                List available built-in and project recipes
   show <id>           Print the recipe YAML definition
-  explain <id>        Explain command mapping and ordered steps
-  run <id> [options]  Run a wired recipe explicitly" \
+  explain <id>        Explain command mapping and ordered steps" \
                 "Examples" "  manifest recipe list
   manifest recipe explain manifest.builtin.ship.repo.patch
   manifest ship repo patch --explain"
             ;;
         *)
-            _render_help_error "Unknown recipe command: $subcommand" "manifest recipe <list|show|explain|run> [id]"
+            _render_help_error "Unknown recipe command: $subcommand" "manifest recipe <list|show|explain> [id]"
             return 1
             ;;
     esac
