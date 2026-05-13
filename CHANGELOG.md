@@ -1,5 +1,18 @@
 # Changelog
 
+## [47.8.2] - 2026-05-13
+
+**Release Type:** Patch
+
+### Changes
+
+- Update release copy and configuration examples
+- Add recipe-backed workflow definitions and recipe introspection support
+- Wire first-class CLI commands to inspectable built-in recipe definitions
+- Update shell completions for new command options
+- Add regression coverage for the changed CLI workflow
+
+
 ## [47.8.1] - 2026-05-13
 
 **Release Type:** Patch — no user-facing changes.
@@ -60,12 +73,3 @@
 ## [47.5.2] - 2026-05-07
 
 **Release Type:** Patch — no user-facing changes.
-
-
-## [47.5.1] - 2026-05-07
-
-**Release Type:** Patch
-
-### Changes
-
-- Add regression coverage for the changed CLI workflow
