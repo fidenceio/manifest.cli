@@ -1,5 +1,17 @@
 # Changelog
 
+## [47.8.4] - 2026-05-13
+
+**Release Type:** Patch
+
+### Changes
+
+- Add smart ship preview summaries
+- Update release copy and configuration examples
+- Add recipe-backed workflow definitions and recipe introspection support
+- Add regression coverage for the changed CLI workflow
+
+
 ## [47.8.3] - 2026-05-13
 
 **Release Type:** Patch — no user-facing changes.
@@ -61,15 +73,3 @@
 ## [47.6.1] - 2026-05-08
 
 **Release Type:** Patch — no user-facing changes.
-
-
-## [47.6.0] - 2026-05-08
-
-**Release Type:** Minor
-
-### Changes
-
-- Add GitHub Release publishing support
-- Add smart ship preview summaries
-- Update release copy and configuration examples
-- Add regression coverage for the changed CLI workflow
