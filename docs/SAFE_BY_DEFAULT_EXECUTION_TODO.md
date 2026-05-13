@@ -298,7 +298,7 @@ No layer silently escalates preview into apply.
 - [x] Do not promote `manifest recipe run <id>` as a public command surface; recipes are inspectable contracts behind named commands.
 - [x] Add schema tests so a built-in recipe cannot omit effect metadata.
 - [x] Add recipe validation that rejects PR effects in built-in ship recipes.
-- [ ] Validate mapped first-class commands so `--local -y` cannot execute recipe steps with `remote-write` effects.
+- [x] Validate mapped first-class commands so `--local -y` cannot execute recipe steps with `remote-write` effects.
 
 ### Phase 5 - User Experience
 
@@ -331,7 +331,7 @@ No layer silently escalates preview into apply.
 - [ ] Add a command-surface inventory test that verifies every mutating command accepts `--dry-run`, `-y`, and `--yes`.
 - [ ] Add no-write tests for each preview path using git porcelain and file snapshots.
 - [ ] Add apply tests for focused local-only commands.
-- [ ] Add guarded remote-effect tests with stubs for git/gh so no real remote is touched.
+- [x] Add guarded remote-effect tests so local apply rejects active `remote-write` recipe steps before dispatch.
 - [ ] Add tests proving `MANIFEST_CLI_AUTO_CONFIRM=1` does not imply apply.
 - [x] Add tests proving `ship fleet` never calls PR dispatch.
 - [ ] Add tests proving PR commands do not execute without `-y`.

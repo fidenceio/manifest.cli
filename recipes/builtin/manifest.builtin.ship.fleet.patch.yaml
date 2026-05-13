@@ -24,7 +24,11 @@ steps:
   - id: prep-fleet
     uses: manifest.fleet.release_plan
     effect: read
-  - id: ship-releaseable-services
+  - id: prep-releaseable-services-local
+    uses: manifest.fleet.ship_services
+    effect: local-write
+    when: apply && local
+  - id: publish-releaseable-services
     uses: manifest.fleet.ship_services
     effect: remote-write
-    when: apply
+    when: apply && publish_release

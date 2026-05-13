@@ -62,6 +62,10 @@ manifest ship repo patch --explain
 Use first-class commands to do the work; use recipes to inspect what those
 commands are going to do.
 
+Local apply is guarded by those recipe effects. `manifest ship repo patch
+--local -y` can prepare the release locally, but mapped commands reject any
+active `remote-write` step before the workflow starts.
+
 ---
 
 ## First-Time Setup

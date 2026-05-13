@@ -402,6 +402,10 @@ It is ambiguous which user-facing command, safety policy, and help text should
 own the operation. Add or extend a first-class command instead, then expose the
 recipe through `--explain`.
 
+Mapped first-class commands validate recipe effects before local apply. A
+`--local -y` command can run local-write steps, but it refuses any active
+`remote-write` recipe step before dispatching the workflow.
+
 **Source:** [manifest-recipe.sh](../modules/recipe/manifest-recipe.sh) `manifest_recipe_dispatch()`
 
 **Subcommands:**

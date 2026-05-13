@@ -165,6 +165,122 @@ manifest_recipe_explain_command() {
     manifest_recipe_explain "$recipe_id"
 }
 
+_manifest_recipe_trim_condition_token() {
+    local token="$1"
+
+    token="${token#"${token%%[![:space:]]*}"}"
+    token="${token%"${token##*[![:space:]]}"}"
+    token="${token//(/}"
+    token="${token//)/}"
+    echo "$token"
+}
+
+_manifest_recipe_condition_token_active() {
+    local token="$1"
+    local execution_mode="$2"
+    local local_only="$3"
+    local publish_release="$4"
+    local negate=false
+
+    token="$(_manifest_recipe_trim_condition_token "$token")"
+    while [[ "$token" == !* ]]; do
+        negate=true
+        token="${token#!}"
+        token="$(_manifest_recipe_trim_condition_token "$token")"
+    done
+
+    local active=true
+    case "$token" in
+        ""|true) active=true ;;
+        false) active=false ;;
+        apply) [[ "$execution_mode" == "apply" ]] && active=true || active=false ;;
+        preview) [[ "$execution_mode" == "preview" ]] && active=true || active=false ;;
+        local) [[ "$local_only" == "true" ]] && active=true || active=false ;;
+        publish_release) [[ "$publish_release" == "true" ]] && active=true || active=false ;;
+        github.release.enabled) is_truthy "${MANIFEST_CLI_GITHUB_RELEASE_ENABLED:-true}" && active=true || active=false ;;
+        *)
+            # Unknown conditions are treated as active so policy validation fails
+            # closed instead of allowing an unmodeled remote write in local mode.
+            active=true
+            ;;
+    esac
+
+    if [[ "$negate" == "true" ]]; then
+        [[ "$active" == "true" ]] && active=false || active=true
+    fi
+
+    [[ "$active" == "true" ]]
+}
+
+_manifest_recipe_when_active() {
+    local when_clause="$1"
+    local execution_mode="$2"
+    local local_only="$3"
+    local publish_release="$4"
+    local token
+
+    [[ -n "$when_clause" ]] || return 0
+    while IFS= read -r token; do
+        if ! _manifest_recipe_condition_token_active "$token" "$execution_mode" "$local_only" "$publish_release"; then
+            return 1
+        fi
+    done <<< "${when_clause//&&/$'\n'}"
+
+    return 0
+}
+
+manifest_recipe_validate_local_apply_file() {
+    local file="$1"
+    local label="$2"
+    local execution_mode="$3"
+    local local_only="$4"
+    local publish_release="$5"
+    local step_id when_clause offenders=""
+
+    if [[ "$execution_mode" != "apply" || "$local_only" != "true" ]]; then
+        return 0
+    fi
+
+    while IFS=$'\t' read -r step_id when_clause; do
+        [[ -n "$step_id" ]] || continue
+        if _manifest_recipe_when_active "$when_clause" "$execution_mode" "$local_only" "$publish_release"; then
+            offenders="${offenders}${offenders:+, }${step_id}"
+        fi
+    done < <(yq e -r '.steps[] | select(.effect == "remote-write") | [.id, (.when // "")] | @tsv' "$file")
+
+    if [[ -n "$offenders" ]]; then
+        log_error "Refusing local apply because recipe '$label' would activate remote-write step(s): $offenders"
+        echo "Use the non-local command with -y when remote publish effects are intended."
+        return 1
+    fi
+
+    return 0
+}
+
+manifest_recipe_validate_command_effects() {
+    local command="$1"
+    local scope="$2"
+    local release_type="$3"
+    local execution_mode="$4"
+    local local_only="$5"
+    local publish_release="$6"
+    local recipe_id file
+
+    if ! recipe_id="$(manifest_recipe_id_for_command "$command" "$scope" "$release_type")"; then
+        log_error "No built-in recipe is registered for: manifest $command $scope $release_type"
+        return 1
+    fi
+
+    if ! file="$(_manifest_recipe_file_for_id "$recipe_id")"; then
+        log_error "Recipe not found: $recipe_id"
+        return 1
+    fi
+
+    manifest_recipe_validate_local_apply_file \
+        "$file" "manifest $command $scope $release_type" \
+        "$execution_mode" "$local_only" "$publish_release"
+}
+
 manifest_recipe_run() {
     local id="$1"
     local file command
@@ -243,5 +359,7 @@ export -f manifest_recipe_list
 export -f manifest_recipe_show
 export -f manifest_recipe_explain
 export -f manifest_recipe_explain_command
+export -f manifest_recipe_validate_local_apply_file
+export -f manifest_recipe_validate_command_effects
 export -f manifest_recipe_run
 export -f manifest_recipe_dispatch

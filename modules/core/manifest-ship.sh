@@ -278,11 +278,19 @@ manifest_ship_repo() {
         return 0
     fi
 
-    manifest_execution_apply_header
-
     local publish_release="true"
     if [[ "$local_only" == "true" ]]; then
         publish_release="false"
+    fi
+
+    if ! manifest_recipe_validate_command_effects \
+        "ship" "repo" "$increment_type" "$execution_mode" "$local_only" "$publish_release"; then
+        return 1
+    fi
+
+    manifest_execution_apply_header
+
+    if [[ "$local_only" == "true" ]]; then
         echo "Ship (local): $increment_type — no remote operations"
     else
         echo "Ship: $increment_type"
@@ -361,6 +369,14 @@ manifest_ship_fleet() {
     if [[ "$explain" == "true" ]]; then
         manifest_recipe_explain_command "ship" "fleet" "$increment_type"
         return $?
+    fi
+
+    local publish_release="true"
+    [[ "$local_only" == "true" ]] && publish_release="false"
+
+    if ! manifest_recipe_validate_command_effects \
+        "ship" "fleet" "$increment_type" "$execution_mode" "$local_only" "$publish_release"; then
+        return 1
     fi
 
     if [[ "$local_only" == "true" ]]; then
