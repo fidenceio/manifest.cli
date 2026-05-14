@@ -227,18 +227,26 @@ manifest upgrade              # Check for and install CLI updates
 
 ```bash
 manifest pr                   # Interactive PR wizard (TTY mode)
-manifest pr create            # Create a new pull request
-manifest pr create --draft --labels "feature,v2"
-manifest pr update            # Update PR metadata
+manifest pr create            # Preview PR creation
+manifest pr create -y         # Create a new pull request
+manifest pr create --draft --labels "feature,v2" -y
+manifest pr update            # Preview branch update
+manifest pr update -y         # Update PR branch
 manifest pr status            # Show PR status
 manifest pr checks            # Show CI check results
 manifest pr checks --watch    # Watch checks in real-time
-manifest pr ready             # Evaluate merge readiness
-manifest pr queue             # Queue auto-merge
-manifest pr queue --method squash --force
+manifest pr ready             # Preview marking draft PR ready
+manifest pr ready -y          # Mark draft PR ready
+manifest pr queue             # Preview auto-merge queueing
+manifest pr queue --method squash -y
 manifest pr policy show       # Display PR policy profile
 manifest pr policy validate   # Validate against policy
 ```
+
+Mutating PR commands follow the same safe-by-default policy as journey
+commands. Bare `create`, `ready`, `merge`, `update`, `queue`, and fleet PR
+commands preview the GitHub action; add `-y` or `--yes` to apply. Read-only
+commands such as `status`, `checks`, and `policy show` run without apply mode.
 
 ---
 
@@ -339,8 +347,9 @@ manifest ship fleet patch --only api,worker     # Ship only the named services
 manifest ship fleet patch --except docs         # Ship every service except 'docs'
 ```
 
-Fleet PR work is explicit: use `manifest pr fleet ... -y` when you want PR creation,
-queueing, or readiness operations.
+Fleet PR work is explicit: bare `manifest pr fleet ...` previews, and
+`manifest pr fleet ... -y` applies PR creation, queueing, or readiness
+operations.
 
 Fleet release previews always show the fleet name, root, config file, `Scope: fleet`, selected
 service count, active filter, and the included repository table before any apply

@@ -72,9 +72,6 @@ Any flag not handled here is forwarded to 'gh pr create'." \
         esac
     done
 
-    _manifest_require_gh || return 1
-    _pr_require_repo || return 1
-
     local cmd=(gh pr create)
     [[ "$draft" == "true" ]] && cmd+=(--draft)
     # Default to filling title/body from commits if user didn't pass them.
@@ -94,6 +91,8 @@ Any flag not handled here is forwarded to 'gh pr create'." \
     fi
 
     manifest_execution_apply_header
+    _manifest_require_gh || return 1
+    _pr_require_repo || return 1
     echo "→ ${cmd[*]}"
     "${cmd[@]}"
 }
@@ -249,7 +248,7 @@ manifest_pr_interactive() {
 
     echo "No PR exists for the current branch."
     if [[ -t 0 ]]; then
-        printf "Create one now? (y/N) "
+        printf "Preview a PR creation plan now? (y/N) "
         local ans
         read -r ans
         if [[ "$ans" =~ ^[Yy]$ ]]; then
@@ -269,12 +268,16 @@ Manifest PR — native (gh wrapper)
 
 Usage:
   manifest pr                       Show current PR or prompt to create
-  manifest pr create [--draft]      Create a PR from current branch
+  manifest pr create [-y|--yes] [--dry-run] [--draft]
+                                     Preview or create a PR from current branch
   manifest pr status [<n|branch>]   View PR details
   manifest pr checks [<n|branch>]   Show CI check status (--watch to poll)
-  manifest pr ready [<n|branch>]    Mark a draft PR as ready
-  manifest pr merge [<n|branch>]    Merge a PR (defaults to squash)
-  manifest pr update [<n|branch>]   Update PR branch with base
+  manifest pr ready [-y|--yes] [--dry-run] [<n|branch>]
+                                     Preview or mark a draft PR as ready
+  manifest pr merge [-y|--yes] [--dry-run] [<n|branch>]
+                                     Preview or merge a PR (defaults to squash)
+  manifest pr update [-y|--yes] [--dry-run] [<n|branch>]
+                                     Preview or update PR branch with base
   manifest pr fleet [queue|create|status|checks|ready]
                                      Fleet-wide PR operations
 

@@ -119,10 +119,13 @@ manifest docs cleanup                  # Archive old docs to zArchive
 ### Create and Merge a PR
 
 ```bash
-manifest pr create --labels "feature,ready"
+manifest pr create --labels "feature,ready"  # Preview PR creation
+manifest pr create --labels "feature,ready" -y
 manifest pr checks --watch             # Watch CI in real-time
-manifest pr ready                      # Evaluate merge readiness
-manifest pr queue --method squash      # Queue auto-merge
+manifest pr ready                      # Preview marking draft PR ready
+manifest pr ready -y
+manifest pr queue --method squash      # Preview auto-merge queueing
+manifest pr queue --method squash -y
 ```
 
 ### Review PR Status Across the Team

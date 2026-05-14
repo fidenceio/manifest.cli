@@ -43,7 +43,7 @@ _manifest() {
     scopes=(repo fleet)
     bumps=(patch minor major revision)
     config_subs=(show list get set unset describe doctor setup time)
-    pr_subs=(create status checks ready merge update queue policy help)
+    pr_subs=(create status checks ready merge update queue policy fleet help)
     recipe_subs=(list show explain help)
     layers=(global project local)
 
@@ -86,6 +86,15 @@ _manifest() {
                     ;;
                 "reconcile fleet")
                     _values 'option' --apply --do --dry-run --plan --commit --push --force --adopt-submodules --help
+                    ;;
+                "pr create")
+                    _values 'option' -y --yes --dry-run --draft --title --body --base --labels --reviewers --help
+                    ;;
+                "pr ready"|"pr merge"|"pr update"|"pr queue")
+                    _values 'option' -y --yes --dry-run --method --force --auto --squash --merge --rebase --help
+                    ;;
+                "pr fleet")
+                    _values 'fleet PR subcommand / option' create status checks ready queue help -y --yes --dry-run --method --force --help
                     ;;
                 "config get"|"config describe"|"config unset"|"config set")
                     _manifest_keys

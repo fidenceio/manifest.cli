@@ -591,17 +591,19 @@ Pull request lifecycle management.
 
 ```bash
 manifest pr                    # Interactive PR wizard (TTY mode)
-manifest pr create             # Create a pull request
-manifest pr create --draft --labels "feature" --reviewers "user1"
-manifest pr update             # Update PR metadata
-manifest pr update --labels "ready" --reviewers "user2"
+manifest pr create             # Preview pull request creation
+manifest pr create -y          # Create a pull request
+manifest pr create --draft --labels "feature" --reviewers "user1" -y
+manifest pr update             # Preview branch update
+manifest pr update -y          # Update PR branch
 manifest pr status             # Show PR status
 manifest pr status --pr 42     # Status for a specific PR
 manifest pr checks             # Show CI check results
 manifest pr checks --watch     # Watch checks in real-time
-manifest pr ready              # Evaluate merge readiness
-manifest pr queue              # Queue auto-merge
-manifest pr queue --method squash --force
+manifest pr ready              # Preview marking draft PR ready
+manifest pr ready -y           # Mark draft PR ready
+manifest pr queue              # Preview auto-merge queueing
+manifest pr queue --method squash -y
 manifest pr policy show        # Display PR policy profile
 manifest pr policy validate    # Validate against policy
 manifest pr help               # PR help
@@ -626,6 +628,8 @@ manifest pr help               # PR help
 
 | Flag | Description |
 | ---- | ----------- |
+| `--dry-run` | Explicit preview for mutating PR operations |
+| `-y`, `--yes` | Apply mutating PR operations |
 | `--pr <selector>` | Target a specific PR (number or branch) |
 | `--labels <list>` | Comma-separated label list |
 | `--reviewers <list>` | Comma-separated reviewer list |
@@ -633,6 +637,10 @@ manifest pr help               # PR help
 | `--method <strategy>` | Merge strategy: `merge`, `squash`, `rebase` |
 | `--force` | Force the operation |
 | `--watch` | Watch checks in real-time |
+
+Bare mutating PR commands preview. Use `-y` or `--yes` to create, mark ready,
+merge, update, or queue. Read-only PR commands such as `status`, `checks`, and
+`policy show` do not require apply mode.
 
 **Source:** `manifest-pr.sh`
 
