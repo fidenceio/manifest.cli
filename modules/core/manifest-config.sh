@@ -363,6 +363,16 @@ config_doctor() {
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            "-h"|"--help"|"help")
+                echo "Usage: manifest config doctor [--fix] [-y|--yes] [--dry-run] [--file <path>]"
+                echo ""
+                echo "Options:"
+                echo "  --dry-run     Explicit preview; no config writes"
+                echo "  -y, --yes     Apply fixes when used with --fix"
+                echo "  --fix         Repair detected config drift"
+                echo "  --file <path> Inspect a specific config file"
+                return 0
+                ;;
             "--fix")
                 fix="true"
                 shift

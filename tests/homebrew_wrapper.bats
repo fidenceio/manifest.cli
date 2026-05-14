@@ -27,3 +27,8 @@ load 'helpers/setup'
 @test "Homebrew formula smoke-tests installed status command" {
     grep -F 'system bin/"manifest", "status"' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
 }
+
+@test "Homebrew formula installs shell completions" {
+    grep -F 'bash_completion.install "completions/manifest.bash" => "manifest"' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
+    grep -F 'zsh_completion.install "completions/_manifest"' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
+}

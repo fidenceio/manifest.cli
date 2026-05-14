@@ -328,7 +328,8 @@ No layer silently escalates preview into apply.
 
 ### Phase 6 - Tests
 
-- [ ] Add a command-surface inventory test that verifies every mutating command accepts `--dry-run`, `-y`, and `--yes`.
+- [x] Add a command-surface inventory test that verifies every mutating command accepts `--dry-run`, `-y`, and `--yes`.
+  - Covered by `tests/command_surface_inventory.bats`; this also tightened stale help for quickstart/add/update/docs fleet and config doctor.
 - [ ] Add no-write tests for each preview path using git porcelain and file snapshots.
 - [ ] Add apply tests for focused local-only commands.
 - [x] Add guarded remote-effect tests so local apply rejects active `remote-write` recipe steps before dispatch.

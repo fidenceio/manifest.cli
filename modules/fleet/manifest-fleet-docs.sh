@@ -709,7 +709,7 @@ fleet_docs_status() {
 # -----------------------------------------------------------------------------
 fleet_docs_help() {
     cat << 'EOF'
-Usage: manifest docs fleet [subcommand] [options]
+Usage: manifest docs fleet [subcommand] [-y|--yes] [--dry-run] [options]
 
 Subcommands:
   generate          Generate fleet documentation (default)
@@ -722,6 +722,7 @@ Generate Options:
   --fleet-only      Only generate fleet-root docs
   --services-only   Only generate per-service docs
   --dry-run         Preview planned docs writes without changing files
+  -y, --yes         Apply planned docs writes
   patch|minor|major Release type (default: patch)
 
 Configuration:
@@ -738,6 +739,7 @@ Configuration:
 Examples:
   manifest docs fleet                     # Generate per configured strategy
   manifest docs fleet generate            # Same as above
+  manifest docs fleet generate -y         # Apply configured generation
   manifest docs fleet status              # Show docs configuration
   manifest docs fleet generate --fleet-only   # Only fleet-root docs
   manifest docs fleet generate --strategy both  # Override strategy

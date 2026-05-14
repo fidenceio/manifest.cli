@@ -481,7 +481,7 @@ fleet_quickstart() {
 
     if [[ "${original_args[0]:-}" == "help" || "${original_args[0]:-}" == "-h" || "${original_args[0]:-}" == "--help" ]]; then
         _render_help \
-            "manifest quickstart fleet [--name NAME] [--force] [--dry-run]" \
+            "manifest quickstart fleet [-y|--yes] [--dry-run] [--name NAME] [--force]" \
             "Initialize a fleet by auto-discovering existing git repositories."
         return 0
     fi
@@ -2481,9 +2481,10 @@ COMMAND DETAILS:
     Quick fleet setup — auto-discovers existing git repos, skips selection.
     Equivalent to: manifest init fleet (without the TSV selection step).
     Options:
+      -y, --yes         Apply the quickstart plan
+      --dry-run          Preview files and discovery without writing
       --name, -n NAME    Fleet name
       --force, -f        Overwrite existing manifest.fleet.config.yaml
-      --dry-run          Preview files and discovery without writing
 
   manifest plan fleet [options]
     Generate manifest.fleet.plan.yaml for fleet adoption.
@@ -2512,8 +2513,9 @@ COMMAND DETAILS:
   manifest update fleet [options]
     Re-scan workspace and add new repos to manifest.fleet.config.yaml.
     Options:
-      --depth N          Maximum search depth (default: 5)
+      -y, --yes          Apply fleet membership updates
       --dry-run          Preview only — do not modify manifest.fleet.config.yaml
+      --depth N          Maximum search depth (default: 5)
       --json             Output JSON summary (implies --dry-run)
       --quiet, -q        Only output new repo lines (implies --dry-run)
 
@@ -2526,9 +2528,10 @@ COMMAND DETAILS:
   manifest add fleet <path-or-url> [options]
     Add a service to the fleet.
     Options:
+      -y, --yes          Apply fleet membership updates
+      --dry-run          Preview YAML without modifying manifest.fleet.config.yaml
       --name NAME        Service name
       --type TYPE        Service type (service|library|infrastructure|tool)
-      --dry-run          Preview YAML without modifying manifest.fleet.config.yaml
 
   manifest pr fleet [options]
     Preferred shorthand for: manifest pr fleet queue [options]
@@ -2558,7 +2561,7 @@ COMMAND DETAILS:
       --no-delete-branch
       --draft
 
-  manifest docs fleet [subcommand] [options]
+  manifest docs fleet [subcommand] [-y|--yes] [--dry-run] [options]
     Generate fleet documentation per configured strategy.
     Subcommands:
       generate          Generate docs (default)
@@ -2569,6 +2572,7 @@ COMMAND DETAILS:
       --fleet-only      Only generate fleet-root docs
       --services-only   Only generate per-service docs
       --dry-run         Preview planned docs writes without changing files
+      -y, --yes         Apply planned docs writes
 
 CONFIGURATION:
 

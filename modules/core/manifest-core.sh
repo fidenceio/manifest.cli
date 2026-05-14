@@ -643,8 +643,12 @@ main() {
                     shift || true
                     if _manifest_cli_has_help_token "$@"; then
                         _render_help \
-                            "manifest quickstart fleet [--name NAME] [--force] [--dry-run]" \
-                            "Initialize a fleet by auto-discovering existing git repositories."
+                            "manifest quickstart fleet [-y|--yes] [--dry-run] [--name NAME] [--force]" \
+                            "Initialize a fleet by auto-discovering existing git repositories." \
+                            "Options" "  --dry-run      Explicit preview; no writes
+  -y, --yes      Apply the quickstart plan
+  --name NAME    Fleet name
+  --force        Overwrite existing generated files"
                         return 0
                     fi
                     fleet_quickstart "$@"
@@ -839,8 +843,12 @@ EOF
                     shift || true
                     if _manifest_cli_has_help_token "$@"; then
                         _render_help \
-                            "manifest add fleet <path-or-url> [--name NAME] [--type TYPE] [--dry-run]" \
-                            "Add a local path or remote URL to fleet membership."
+                            "manifest add fleet <path-or-url> [-y|--yes] [--dry-run] [--name NAME] [--type TYPE]" \
+                            "Add a local path or remote URL to fleet membership." \
+                            "Options" "  --dry-run      Explicit preview; do not modify manifest.fleet.config.yaml
+  -y, --yes      Apply fleet membership updates
+  --name NAME    Service name
+  --type TYPE    Service type"
                         return 0
                     fi
                     fleet_add "$@"
@@ -868,10 +876,11 @@ EOF
                     shift || true
                     if _manifest_cli_has_help_token "$@"; then
                         _render_help \
-                            "manifest update fleet [--depth N] [--dry-run] [--json] [--quiet]" \
+                            "manifest update fleet [-y|--yes] [--dry-run] [--depth N] [--json] [--quiet]" \
                             "Re-scan fleet membership and add newly discovered repositories." \
-                            "Options" "  --depth N    Maximum search depth (default: 5)
-  --dry-run    Preview only; do not modify manifest.fleet.config.yaml
+                            "Options" "  --dry-run    Explicit preview; do not modify manifest.fleet.config.yaml
+  -y, --yes    Apply fleet membership updates
+  --depth N    Maximum search depth (default: 5)
   --json       Output JSON summary
   --quiet, -q  Only output new repo lines"
                         return 0

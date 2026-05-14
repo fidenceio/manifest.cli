@@ -5,7 +5,7 @@
 When you can spin up four features in parallel, you also need to ship four features without dropping any. Manifest handles versions, tags, changelogs, docs, and the multi-repo coordination so the human stays in flow.
 
 [![tests](https://github.com/fidenceio/manifest.cli/actions/workflows/test.yml/badge.svg)](https://github.com/fidenceio/manifest.cli/actions/workflows/test.yml)
-**Version** `47.8.6` · **Platform** macOS · Linux · FreeBSD · **Requires** Bash, Git, and yq versions from `modules/core/manifest-requirements.sh`
+**Version** `47.8.6` · **Platform** macOS · Linux · FreeBSD · **Requires** Bash, Git, yq, and Docker requirements from `modules/core/manifest-requirements.sh`
 
 ---
 
@@ -169,16 +169,26 @@ Cloud-only (requires Manifest Cloud):
   manifest pr policy show|validate  Org policy enforcement
 ```
 
-**Tab completion** — drop one file in your shell's completions dir.
+**IDE and terminal command recognition** — the installer wires Manifest into
+standard bash/zsh completion locations when possible, so integrated terminals in
+VS Code, Cursor, Windsurf, Antigravity, and similar editors can complete
+`manifest` commands through the user's shell.
 
 ```sh
-# bash
+# Manual bash setup, if automatic setup was skipped
 ln -s $(pwd)/completions/manifest.bash $(brew --prefix)/etc/bash_completion.d/manifest
-# zsh
+
+# Manual zsh setup, if automatic setup was skipped
 ln -s $(pwd)/completions/_manifest $(brew --prefix)/share/zsh/site-functions/_manifest
 ```
 
 You then get `manifest <TAB>` for top commands, `manifest plan <TAB>` -> `fleet`, `manifest config get <TAB>` -> all 80+ config keys, etc. See [completions/README.md](completions/README.md).
+
+The installer also writes AI/editor command catalogs under
+`~/.manifest-cli/ide/`, including `manifest-cli-commands.md`,
+`manifest-cli-commands.json`, `AGENTS.md`, and `CLAUDE.md`. These give
+assistants such as Claude and ChatGPT/Codex a concise, safe-by-default command
+contract to reference.
 
 ---
 
@@ -637,10 +647,11 @@ _MANIFEST_YAML_TO_ENV[] bidirectional map      ← In manifest-yaml.sh
 | Bash | 5.0+ | Shell runtime (macOS ships 3.2) | `brew install bash` |
 | Git | Any recent | Version control operations | `brew install git` |
 | yq | 4.0+ (Mike Farah's Go version) | YAML configuration parsing | `brew install yq` |
+| Docker | Running engine | Containerized execution and tests | `brew install --cask docker` |
 | curl | Any | HTTPS timestamps, API calls | Usually pre-installed |
 | coreutils | Any (optional) | Cross-platform date/stat | `brew install coreutils` |
 
-Homebrew installation handles all dependencies automatically. The install script and runtime checks read version requirements from `modules/core/manifest-requirements.sh`.
+The install script checks Homebrew first, then Docker, then final system validation. Runtime checks read requirements from `modules/core/manifest-requirements.sh`.
 
 ---
 
