@@ -22,6 +22,8 @@ version:
   separator: "."
   components: "major,minor,patch"
   max_values: "0,0,0"          # 0 = unlimited
+  regex: "^[0-9]+(\\.[0-9]+)*$"
+  validation: true
 
   component_position:
     major: 1
@@ -63,7 +65,14 @@ version:
 # Deprecated: "final_release_commit" — alias for "release_head", will warn.
 # Tolerant of surrounding whitespace and case (Version_Commit, " release_head ").
 release:
+  canonical_repo_slugs: "fidenceio/manifest.cli,fidenceio/fidenceio.manifest.cli"
   tag_target: "version_commit"
+
+# -----------------------------------------------------------------------------
+# Ship
+# -----------------------------------------------------------------------------
+ship:
+  interactive: false           # Prompt during ship flows when running in a TTY.
 
 # -----------------------------------------------------------------------------
 # GitHub
@@ -194,6 +203,63 @@ project:
   description: ""
   organization: ""
   team: ""
+
+# -----------------------------------------------------------------------------
+# Fleet
+# -----------------------------------------------------------------------------
+fleet:
+  mode: "auto"                       # auto | true | false
+  root: ""                           # Optional explicit fleet root.
+  config_filename: "manifest.fleet.config.yaml"
+  name: ""                           # Repo-local identity hint.
+  member: ""                         # Repo-local identity hint.
+
+# -----------------------------------------------------------------------------
+# Automation
+# -----------------------------------------------------------------------------
+automation:
+  auto_confirm: false                # Prompt automation only; does not imply -y.
+
+# -----------------------------------------------------------------------------
+# Deprecations
+# -----------------------------------------------------------------------------
+deprecations:
+  quiet: false
+
+# -----------------------------------------------------------------------------
+# Network
+# -----------------------------------------------------------------------------
+network:
+  offline: false
+
+# -----------------------------------------------------------------------------
+# Cloud
+# -----------------------------------------------------------------------------
+cloud:
+  skip: false
+  api_key_env: "MANIFEST_CLI_CLOUD_API_KEY"  # Name of env var that holds the secret.
+
+# -----------------------------------------------------------------------------
+# Security
+# -----------------------------------------------------------------------------
+security:
+  private_files: ".env,.env.development,.env.test,.env.production,.env.staging,manifest.config.local.yaml"
+
+# -----------------------------------------------------------------------------
+# Debugging
+# -----------------------------------------------------------------------------
+debug:
+  enabled: false
+  verbose: false
+  log_level: "INFO"
+  interactive: false
+
+# -----------------------------------------------------------------------------
+# Pull Requests
+# -----------------------------------------------------------------------------
+pr:
+  profile: "solo"              # solo | team | regulated
+  enforce_ready: true
 
 # -----------------------------------------------------------------------------
 # Config

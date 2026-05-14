@@ -83,6 +83,32 @@ EOF
     [ "$output" = "docs.review.outputs" ]
 }
 
+@test "yaml: maps config-surface keys lifted from env-only settings" {
+    run yaml_path_to_env_var "release.canonical_repo_slugs"
+    [ "$status" -eq 0 ]
+    [ "$output" = "MANIFEST_CLI_CANONICAL_REPO_SLUGS" ]
+
+    run yaml_path_to_env_var "ship.interactive"
+    [ "$status" -eq 0 ]
+    [ "$output" = "MANIFEST_CLI_INTERACTIVE_MODE" ]
+
+    run yaml_path_to_env_var "fleet.config_filename"
+    [ "$status" -eq 0 ]
+    [ "$output" = "MANIFEST_CLI_FLEET_CONFIG_FILENAME" ]
+
+    run yaml_path_to_env_var "automation.auto_confirm"
+    [ "$status" -eq 0 ]
+    [ "$output" = "MANIFEST_CLI_AUTO_CONFIRM" ]
+
+    run yaml_path_to_env_var "cloud.api_key_env"
+    [ "$status" -eq 0 ]
+    [ "$output" = "MANIFEST_CLI_CLOUD_API_KEY_ENV" ]
+
+    run env_var_to_yaml_path "MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES"
+    [ "$status" -eq 0 ]
+    [ "$output" = "security.private_files" ]
+}
+
 @test "yaml: set_yaml_value creates a file and writes a nested key" {
     set_yaml_value "$YAML" "git.tag_prefix" "v"
     [ -f "$YAML" ]
@@ -121,6 +147,47 @@ EOF
     [ "$MANIFEST_CLI_DOC_REVIEW_REPORT_DIR" = "docs/reviews" ]
 }
 
+@test "yaml: load_yaml_to_env exports lifted config-surface keys" {
+    set_yaml_value "$YAML" "release.canonical_repo_slugs" "example/cli"
+    set_yaml_value "$YAML" "ship.interactive" "true"
+    set_yaml_value "$YAML" "fleet.mode" "false"
+    set_yaml_value "$YAML" "fleet.root" "../fleet"
+    set_yaml_value "$YAML" "fleet.config_filename" "fleet.yaml"
+    set_yaml_value "$YAML" "automation.auto_confirm" "true"
+    set_yaml_value "$YAML" "deprecations.quiet" "true"
+    set_yaml_value "$YAML" "network.offline" "true"
+    set_yaml_value "$YAML" "cloud.skip" "true"
+    set_yaml_value "$YAML" "cloud.api_key_env" "TEST_MANIFEST_CLOUD_KEY"
+    set_yaml_value "$YAML" "security.private_files" ".secret,manifest.config.local.yaml"
+    unset MANIFEST_CLI_CANONICAL_REPO_SLUGS MANIFEST_CLI_INTERACTIVE_MODE MANIFEST_CLI_FLEET_MODE MANIFEST_CLI_FLEET_ROOT MANIFEST_CLI_FLEET_CONFIG_FILENAME
+    unset MANIFEST_CLI_AUTO_CONFIRM MANIFEST_CLI_QUIET_DEPRECATIONS MANIFEST_CLI_OFFLINE_MODE MANIFEST_CLI_CLOUD_SKIP MANIFEST_CLI_CLOUD_API_KEY_ENV MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES
+
+    load_yaml_to_env "$YAML"
+
+    [ "$MANIFEST_CLI_CANONICAL_REPO_SLUGS" = "example/cli" ]
+    [ "$MANIFEST_CLI_INTERACTIVE_MODE" = "true" ]
+    [ "$MANIFEST_CLI_FLEET_MODE" = "false" ]
+    [ "$MANIFEST_CLI_FLEET_ROOT" = "../fleet" ]
+    [ "$MANIFEST_CLI_FLEET_CONFIG_FILENAME" = "fleet.yaml" ]
+    [ "$MANIFEST_CLI_AUTO_CONFIRM" = "true" ]
+    [ "$MANIFEST_CLI_QUIET_DEPRECATIONS" = "true" ]
+    [ "$MANIFEST_CLI_OFFLINE_MODE" = "true" ]
+    [ "$MANIFEST_CLI_CLOUD_SKIP" = "true" ]
+    [ "$MANIFEST_CLI_CLOUD_API_KEY_ENV" = "TEST_MANIFEST_CLOUD_KEY" ]
+    [ "$MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES" = ".secret,manifest.config.local.yaml" ]
+}
+
+@test "yaml: load_yaml_to_env replaces array-backed vars cleanly" {
+    MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES=(".env" ".env.test" "manifest.config.local.yaml")
+    set_yaml_value "$YAML" "security.private_files" ".secret,local.yaml"
+
+    load_yaml_to_env "$YAML"
+
+    run bash -c 'source "$1/tests/helpers/setup.bash"; load_modules "system/manifest-security.sh"; unset MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES; MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES="$2"; _manifest_security_private_env_files' _ "$TEST_REPO_ROOT" "$MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES"
+    [ "$status" -eq 0 ]
+    [ "$output" = $'.secret\nlocal.yaml' ]
+}
+
 @test "yaml: load_yaml_to_env preserves unrelated env values when key absent (layered precedence)" {
     set_yaml_value "$YAML" "git.tag_prefix" "v"
     export MANIFEST_CLI_GIT_DEFAULT_BRANCH="preserved"
@@ -157,4 +224,24 @@ EOF
     [ "$output" = "120" ]
     run get_yaml_value "$YAML" ".time.cache_cleanup_period"
     [ "$output" = "3600" ]
+}
+
+@test "config: process env overrides YAML layers and cloud api key refs hydrate secrets" {
+    mkdir -p "$SCRATCH/project" "$SCRATCH/home"
+    cat > "$SCRATCH/project/manifest.config.yaml" <<'YAML'
+ship:
+  interactive: false
+cloud:
+  api_key_env: "TEST_MANIFEST_CLOUD_KEY"
+YAML
+
+    run env \
+        HOME="$SCRATCH/home" \
+        PROJECT_ROOT="$SCRATCH/project" \
+        MANIFEST_CLI_INTERACTIVE_MODE=true \
+        TEST_MANIFEST_CLOUD_KEY=secret-from-env \
+        bash -c 'source "$1/tests/helpers/setup.bash"; load_modules "core/manifest-config.sh"; load_configuration "$PROJECT_ROOT" "false" >/dev/null; printf "%s|%s|%s" "$MANIFEST_CLI_INTERACTIVE_MODE" "$MANIFEST_CLI_CLOUD_API_KEY_ENV" "$MANIFEST_CLI_CLOUD_API_KEY"' _ "$TEST_REPO_ROOT"
+
+    [ "$status" -eq 0 ]
+    [ "$output" = "true|TEST_MANIFEST_CLOUD_KEY|secret-from-env" ]
 }
