@@ -255,7 +255,7 @@ No layer silently escalates preview into apply.
 - [x] Convert `ship repo` to preview by default; require `-y` for version/docs/commit/tag/push.
 - [x] Convert `ship fleet` to preview by default; require `-y` for direct release of eligible services.
 - [x] Convert native PR commands so `pr create`, `ready`, `merge`, `update`, `queue`, and fleet equivalents preview by default and require `-y`.
-- [ ] Audit `uninstall` and `reinstall`; require `-y` before destructive local-machine changes.
+- [x] Audit `uninstall` and `reinstall`; require `-y` before destructive local-machine changes.
 - [ ] Audit legacy aliases and deprecation paths so aliases inherit the same policy.
 - [ ] Audit scripts and generated hooks that call Manifest recursively; add explicit `-y` only where apply is intended.
 - [ ] Audit CI workflows and release automation that currently call mutating commands without `-y`.

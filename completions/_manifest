@@ -71,6 +71,12 @@ _manifest() {
                 pr)
                     _values 'pr subcommand' "${pr_subs[@]}"
                     ;;
+                uninstall)
+                    _values 'option' -y --yes --dry-run --force --help
+                    ;;
+                reinstall)
+                    _values 'option' -y --yes --dry-run --help
+                    ;;
             esac
             ;;
         arg3)

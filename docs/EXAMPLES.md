@@ -288,8 +288,10 @@ manifest config doctor --fix           # Auto-fix deprecated settings
 manifest security --check              # Run read-only security checks
 manifest upgrade --check               # Check for updates (no install)
 manifest upgrade                       # Install latest version
-manifest uninstall                     # Remove Manifest CLI
-manifest reinstall                     # Full uninstall + reinstall
+manifest uninstall                     # Preview Manifest CLI removal
+manifest uninstall -y                  # Remove Manifest CLI
+manifest reinstall                     # Preview full uninstall + reinstall
+manifest reinstall -y                  # Apply full uninstall + reinstall
 ```
 
 ### Install Git Hooks

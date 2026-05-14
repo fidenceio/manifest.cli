@@ -64,8 +64,8 @@ create or queue PRs.
 | Command | Description |
 | ------- | ----------- |
 | `manifest upgrade [flags]` | Check for and install updates |
-| `manifest uninstall [--force]` | Remove Manifest CLI |
-| `manifest reinstall` | Full uninstall + reinstall |
+| `manifest uninstall [-y] [--force]` | Preview or remove Manifest CLI |
+| `manifest reinstall [-y]` | Preview or run full uninstall + reinstall |
 | `manifest security` | Security audit and report generation |
 | `manifest test [suite]` | Run Cloud-provided diagnostic tests when the plugin is installed |
 

@@ -172,8 +172,9 @@ manifest config show
 ## Uninstall
 
 ```bash
-manifest uninstall          # Interactive uninstall
-manifest uninstall --force  # Skip confirmation
+manifest uninstall          # Preview uninstall changes
+manifest uninstall -y       # Apply uninstall interactively
+manifest uninstall --force -y  # Apply and skip extra confirmations
 ```
 
 ---
@@ -183,7 +184,8 @@ manifest uninstall --force  # Skip confirmation
 Full uninstall and clean reinstall:
 
 ```bash
-manifest reinstall
+manifest reinstall          # Preview reinstall steps
+manifest reinstall -y       # Apply full uninstall + reinstall
 ```
 
 On macOS, this offers the Homebrew installation path. Configuration is preserved during migration.
