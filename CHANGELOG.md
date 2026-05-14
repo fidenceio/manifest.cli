@@ -1,5 +1,14 @@
 # Changelog
 
+## [47.12.4] - 2026-05-14
+
+**Release Type:** Patch
+
+### Changes
+
+- Ignore unrelated manifest executables on uninstall
+
+
 ## [47.12.3] - 2026-05-14
 
 **Release Type:** Patch
@@ -74,13 +83,3 @@
 ## [47.10.1] - 2026-05-14
 
 **Release Type:** Patch — no user-facing changes.
-
-
-## [47.10.0] - 2026-05-14
-
-**Release Type:** Minor
-
-### Changes
-
-- Update release copy and configuration examples
-- Add regression coverage for the changed CLI workflow
