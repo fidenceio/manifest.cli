@@ -432,6 +432,74 @@ ensure_repository_root() {
     return 0
 }
 
+manifest_repo_scope_require_git() {
+    local replay_command="${1:-manifest status repo}"
+    local current_dir
+    current_dir="$(pwd)"
+
+    if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        return 0
+    fi
+
+    log_error "repo scope requires running inside a Git repository."
+    log_error "Current directory: $current_dir"
+    log_error ""
+    log_error "Run from the intended repository folder:"
+    log_error "  cd /path/to/repo"
+    log_error "  $replay_command"
+    return 1
+}
+
+manifest_repo_scope_confirm_apply() {
+    local project_root="${1:-${PROJECT_ROOT:-$(pwd)}}"
+    local replay_command="${2:-manifest command -y}"
+    local git_root branch origin answer
+
+    if ! manifest_repo_scope_require_git "$replay_command"; then
+        return 1
+    fi
+
+    git_root="$(git -C "$project_root" rev-parse --show-toplevel 2>/dev/null || echo "$project_root")"
+    branch="$(git -C "$git_root" branch --show-current 2>/dev/null || echo "(detached)")"
+    origin="$(git -C "$git_root" remote get-url origin 2>/dev/null || echo "(no origin remote)")"
+
+    echo ""
+    if declare -F manifest_repo_identity_block >/dev/null 2>&1; then
+        manifest_repo_identity_block "$git_root"
+        echo ""
+    fi
+    echo "Apply target repository"
+    echo "-----------------------"
+    echo "  Changes will be made to this Git repository only."
+    echo "  Git root: $git_root"
+    echo "  Origin:   $origin"
+    echo "  Branch:   $branch"
+    echo "  Command:  $replay_command"
+    echo ""
+
+    if [[ ! -t 0 ]]; then
+        log_error "Repo confirmation requires an interactive terminal."
+        log_error "Run this from the intended repository folder, preview with:"
+        log_error "  ${replay_command% -y}"
+        log_error "Then apply interactively with:"
+        log_error "  $replay_command"
+        return 1
+    fi
+
+    printf "Apply to this repository? [y/N] "
+    read -r answer || return 1
+    case "$answer" in
+        y|Y|yes|YES|Yes)
+            echo "Confirmed repository target: $git_root"
+            return 0
+            ;;
+        *)
+            log_error "Repository target was not confirmed; no changes written."
+            return 1
+            ;;
+    esac
+}
+
 get_modules_dir() {
     local script_dir="$(get_script_dir)"
     # If we're in a module subdirectory, go up to modules root
@@ -619,6 +687,7 @@ export -f _render_help _render_help_error _manifest_hash_short
 export -f _json_escape _json_kv_str _json_kv_raw _json_value
 export -f get_script_dir get_script_parent_dir get_project_root get_modules_dir
 export -f is_installation_directory validate_repository_root ensure_repository_root
+export -f manifest_repo_scope_require_git manifest_repo_scope_confirm_apply
 export -f show_network_error show_file_error show_git_error show_config_error
 export -f show_validation_error show_permission_error show_dependency_error
 export -f sanitize_filename sanitize_version sanitize_path validate_version_format

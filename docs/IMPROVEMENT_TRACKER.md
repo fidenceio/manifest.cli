@@ -224,14 +224,13 @@ The six-commit doc cleanup landing on 2026-05-05 (commits c1dc622..3610eea) addr
 
 - [x] **43. Safe-by-default execution contract.** Core journey and ship paths now preview by default, `--dry-run` is the explicit preview spelling, and `-y` / `--yes` is required to apply. `--local` limits scope but does not authorize mutation by itself. `ship` is release-only; PR behavior belongs under `manifest pr ...`. Remaining edge-command and Cloud hardening is tracked in [Safe-by-Default Execution Notes](SAFE_BY_DEFAULT_EXECUTION_TODO.md).
 
-- [ ] **44. Explicit repo selector for repo-scoped commands.** The identity
-  preflight makes the selected repo visible, but `manifest ship repo` still
-  selects by shell working directory only. Add a global `manifest -C <path> ...`
-  option that changes to the target path before dispatch, then prints the same
-  repo identity block before preview/apply. After fleet membership naming is
-  stable, add a fleet-aware selector such as `manifest ship repo patch --member
-  <name>`. Reject conflicting selectors, document that `repo` remains a scope
-  keyword rather than a selector, and cover preview/apply behavior in tests.
+- [x] **44. Explicit `.git` root confirmation for repo-scoped commands.**
+  Keep `repo` literal: it means the enclosing Git repository resolved from the
+  shell working directory. Repo-scoped commands fail outside an existing Git
+  repository, and repo-scoped apply commands show the resolved target repo and
+  require an interactive `y/N` confirmation before mutation. `-y` selects apply
+  mode, but it does not skip this target confirmation. Path and fleet-member
+  selectors are intentionally deferred.
 
 **Sequencing:** ~~#37~~, ~~#38~~, ~~#39~~, ~~#40~~, and ~~#42~~ shipped 2026-05-05. ~~#41~~ declined 2026-05-05 (filesystem already covers it). ~~#36~~ shipped 2026-05-06 as a local-rewrite plus provider-agnostic hook (no bundled LLM scripts). Doc-system Phase 2 is fully closed.
 

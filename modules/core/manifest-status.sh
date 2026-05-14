@@ -576,9 +576,15 @@ _manifest_status_repo() {
 manifest_status() {
     local emit_json=false
     local scope="auto"
+    local explicit_repo_scope=false
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            repo|fleet) scope="$1"; shift ;;
+            repo)
+                scope="$1"
+                explicit_repo_scope=true
+                shift
+                ;;
+            fleet) scope="$1"; shift ;;
             --json) emit_json=true; shift ;;
             -v|--verbose)
                 scope="fleet"
@@ -605,6 +611,12 @@ manifest_status() {
 
     local proj="${PROJECT_ROOT:-$(pwd)}"
     cd "$proj" 2>/dev/null || { echo "❌ Cannot enter $proj"; return 1; }
+
+    if [[ "$explicit_repo_scope" == "true" ]]; then
+        if ! manifest_repo_scope_require_git "manifest status repo"; then
+            return 1
+        fi
+    fi
 
     if [[ "$scope" == "auto" ]]; then
         if [[ -n "$(_status_fleet_config_file "$proj")" ]]; then
