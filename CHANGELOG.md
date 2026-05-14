@@ -1,5 +1,10 @@
 # Changelog
 
+## [47.9.1] - 2026-05-14
+
+**Release Type:** Patch — no user-facing changes.
+
+
 ## [47.9.0] - 2026-05-14
 
 **Release Type:** Minor
@@ -86,8 +91,3 @@
 ## [47.8.1] - 2026-05-13
 
 **Release Type:** Patch — no user-facing changes.
-
-
-## [47.8.0] - 2026-05-13
-
-**Release Type:** Minor — no user-facing changes.
