@@ -11,7 +11,7 @@
 | **yq** | 4.0+ (Mike Farah's Go version) | Yes | YAML configuration parsing |
 | **Docker** | Running engine | Yes | Required for the containerized execution model |
 | **curl** | Any | Recommended | HTTPS timestamps, API calls, install script |
-| **coreutils** | Any | Optional | Cross-platform `date`/`stat` on macOS |
+| **coreutils** | Any | Yes | Cross-platform timeout, `date`, and `stat` behavior |
 
 **Important:** The supported dependency versions are defined in `modules/core/manifest-requirements.sh`. The CLI, installer, doctor, and Homebrew wrapper use that same contract.
 
@@ -24,7 +24,7 @@ brew tap fidenceio/tap
 brew install manifest
 ```
 
-This installs the CLI, sets up the `manifest` command, and pulls in Bash 5, Git, and yq as dependencies automatically. Docker must also be installed and running.
+This installs the CLI, sets up the `manifest` command, and pulls in Bash 5, Git, yq, and coreutils as dependencies automatically. Docker must also be installed and running.
 
 ### Upgrade
 
@@ -52,13 +52,14 @@ The install script:
 
 1. Validates the required Bash version (with per-platform install instructions if missing)
 2. Validates the required yq version and vendor (detects wrong version, provides install commands)
-3. Ensures Homebrew first on macOS, then offers to install Docker Desktop with `brew install --cask docker`
-4. Validates Docker is installed and the engine is reachable
-5. Uses Homebrew when available (preferred path)
-6. Falls back to manual installation at `~/.manifest-cli` with a launcher in `~/.local/bin`
-7. Installs bash/zsh completions for normal terminals and IDE integrated terminals
-8. Writes IDE and AI assistant command catalogs under `~/.manifest-cli/ide/`
-9. Migrates configuration from legacy locations automatically
+3. Validates coreutils timeout support (`gtimeout` on macOS, `timeout` elsewhere)
+4. Ensures Homebrew first on macOS, then offers to install Docker Desktop with `brew install --cask docker`
+5. Validates Docker is installed and the engine is reachable
+6. Uses Homebrew when available (preferred path)
+7. Falls back to manual installation at `~/.manifest-cli` with a launcher in `~/.local/bin`
+8. Installs bash/zsh completions for normal terminals and IDE integrated terminals
+9. Writes IDE and AI assistant command catalogs under `~/.manifest-cli/ide/`
+10. Migrates configuration from legacy locations automatically
 
 ### IDE and AI Assistant Support
 

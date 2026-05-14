@@ -114,14 +114,9 @@ setup_macos_commands() {
     
     # Check if coreutils is installed for timeout
     if ! command -v gtimeout &> /dev/null; then
-        echo "   ⚠️  gtimeout not found, installing coreutils..."
-        if command -v brew &> /dev/null; then
-            brew install coreutils
-            MANIFEST_CLI_OS_TIMEOUT_CMD="gtimeout"
-        else
-            echo "   ⚠️  Homebrew not found, using fallback timeout method"
-            MANIFEST_CLI_OS_TIMEOUT_CMD="timeout_fallback"
-        fi
+        echo "   ⚠️  gtimeout not found, using fallback timeout method"
+        echo "   ℹ️  Install coreutils for the supported macOS timeout command"
+        MANIFEST_CLI_OS_TIMEOUT_CMD="timeout_fallback"
     fi
 }
 

@@ -79,7 +79,7 @@ print_subheader() {
 
 # Check if command exists
 # Print the right install command for the current OS/distro for a given pkg.
-# Pkg names: bash, yq, git, curl, docker. Falls back to a documentation URL.
+# Pkg names: bash, yq, git, curl, docker, coreutils. Falls back to a documentation URL.
 _install_hint() {
     local pkg="$1"
     if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -93,6 +93,7 @@ _install_hint() {
         case "$pkg" in
             yq) echo "sudo snap install yq  OR  see https://github.com/mikefarah/yq#install" ;;
             docker) echo "see https://docs.docker.com/engine/install/" ;;
+            coreutils) echo "sudo apt-get install coreutils" ;;
             *)  echo "sudo apt-get install $pkg" ;;
         esac
         return
@@ -117,6 +118,7 @@ _install_hint() {
         case "$pkg" in
             yq) echo "sudo pacman -S go-yq" ;;
             docker) echo "sudo pacman -S docker && sudo systemctl enable --now docker" ;;
+            coreutils) echo "sudo pacman -S coreutils" ;;
             *)  echo "sudo pacman -S $pkg" ;;
         esac
         return
@@ -124,6 +126,7 @@ _install_hint() {
     case "$pkg" in
         yq) echo "see your distro's package manager or https://github.com/mikefarah/yq#install" ;;
         docker) echo "see https://docs.docker.com/engine/install/" ;;
+        coreutils) echo "see your distro's coreutils package" ;;
         *) echo "see your distro's package manager" ;;
     esac
 }
@@ -326,6 +329,15 @@ validate_system() {
     else
         print_error "❌ Git is required for Manifest repo operations."
         print_error "   Install:  $(_install_hint git)"
+        errors=$((errors + 1))
+    fi
+
+    # coreutils
+    if manifest_requirement_coreutils_timeout_command; then
+        print_success "✅ ${MANIFEST_CLI_REQUIRED_COREUTILS_LABEL} is available"
+    else
+        print_error "❌ ${MANIFEST_CLI_REQUIRED_COREUTILS_LABEL} is required."
+        print_error "   Install:  $(_install_hint coreutils)"
         errors=$((errors + 1))
     fi
 

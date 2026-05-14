@@ -55,8 +55,9 @@ init_repo_fixture() {
 
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Repo identity"
+    echo "$output" | grep -q "Current repo:.*example/repo"
     echo "$output" | grep -q "Git root:.*$SCRATCH"
-    echo "$output" | grep -q "Target:.*this Git repository only"
+    echo "$output" | grep -q "Mutation scope:.*this Git repository only"
     ! echo "$output" | grep -q "Apply to this repository"
     ! echo "$output" | grep -q "Apply target repository"
 }
@@ -68,6 +69,7 @@ init_repo_fixture() {
 
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "Repo identity"
+    echo "$output" | grep -q "Current repo:.*example/repo"
     echo "$output" | grep -q "Apply target repository"
     echo "$output" | grep -q "Changes will be made to this Git repository only"
     echo "$output" | grep -q "Git root:"

@@ -7,9 +7,30 @@ load 'helpers/setup'
 
     [ "$MANIFEST_CLI_REQUIRED_DOCKER_COMMAND" = "docker" ]
     [ -n "$MANIFEST_CLI_REQUIRED_DOCKER_LABEL" ]
+    [ -n "$MANIFEST_CLI_REQUIRED_COREUTILS_LABEL" ]
 
     declare -F manifest_requirement_docker_command_exists >/dev/null
     declare -F manifest_requirement_docker_engine_is_running >/dev/null
+    declare -F manifest_requirement_coreutils_timeout_command >/dev/null
+}
+
+@test "requirements preserve Bash 5 and Mike Farah yq as runtime contract" {
+    load_modules
+
+    [ "$MANIFEST_CLI_REQUIRED_BASH_MAJOR" = "5" ]
+    [ "$MANIFEST_CLI_REQUIRED_YQ_MAJOR" = "4" ]
+    [[ "$MANIFEST_CLI_REQUIRED_YQ_VENDOR" == *"github.com/mikefarah/yq"* ]]
+
+    grep -F '| Bash | 5.0+ |' "$TEST_REPO_ROOT/README.md" >/dev/null
+    grep -F '| yq | 4.0+ (Mike Farah' "$TEST_REPO_ROOT/README.md" >/dev/null
+    grep -F '| coreutils | Any |' "$TEST_REPO_ROOT/README.md" >/dev/null
+    ! grep -F 'MANIFEST_CLI_REQUIRED_SCRIPT' "$TEST_REPO_ROOT/modules/core/manifest-requirements.sh" >/dev/null
+}
+
+@test "OS detection never installs host dependencies during runtime setup" {
+    ! grep -F 'brew install coreutils' "$TEST_REPO_ROOT/modules/system/manifest-os.sh" >/dev/null
+    grep -F 'using fallback timeout method' "$TEST_REPO_ROOT/modules/system/manifest-os.sh" >/dev/null
+    grep -F 'Install coreutils for the supported macOS timeout command' "$TEST_REPO_ROOT/modules/system/manifest-os.sh" >/dev/null
 }
 
 @test "installer handles Homebrew before Docker before final validation" {

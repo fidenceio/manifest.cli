@@ -451,7 +451,7 @@ Manifest does not accept a repo path or fleet-member selector on `ship repo`.
 Path selectors and fleet-member selectors are intentionally deferred so `.git`
 root selection remains the source of truth.
 
-**Preview mode** (default): prints the resolved repo identity first, then the release plan, and writes nothing. The plan includes current and next version, a short narrative summary, pending working-tree files that would be auto-committed, and release documentation artifacts.
+**Preview mode** (default): prints the resolved repo identity first, including `You are in:`, then the release plan, and writes nothing. The plan includes current and next version, a short narrative summary, pending working-tree files that would be auto-committed, and release documentation artifacts.
 
 **Apply mode** (`-y` / `--yes`): prints the resolved repo identity and an
 explicit target summary, then prompts `Apply to this repository? [y/N]` before
@@ -562,8 +562,8 @@ Use `manifest pr fleet ...` explicitly for PR workflows.
 
 Preview and apply both start with a fleet scope block showing the fleet name,
 root path, config file, command scope, selected service count, and active filter.
-The plan then lists the included repositories with service name, type, branch,
-release/read effect, decision, and path or skip reason. This is the authoritative
+The status and ship plan then list `Included repositories` with service name, type, branch,
+release/read effect, decision, and path or skip reason where relevant. This is the authoritative
 answer to "which repos will this fleet command touch?"
 
 **Flags:**

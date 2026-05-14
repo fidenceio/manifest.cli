@@ -9,6 +9,13 @@ load 'helpers/setup'
     [[ "$output" != *'=> :recommended'* ]]
 }
 
+@test "Homebrew formula installs coreutils as a required dependency" {
+    run grep -F 'depends_on "coreutils"' "$TEST_REPO_ROOT/formula/manifest.rb"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" != *'=> :optional'* ]]
+}
+
 @test "Homebrew wrapper re-execs into Bash 5 before sourcing core modules" {
     run grep -n 'ensure_bash5_or_reexec "$@"' "$TEST_REPO_ROOT/formula/manifest.rb"
     [ "$status" -eq 0 ]
