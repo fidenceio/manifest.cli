@@ -70,21 +70,32 @@ init_repo_fixture() {
     echo "$output" | grep -q "Repo identity"
     echo "$output" | grep -q "Apply target repository"
     echo "$output" | grep -q "Changes will be made to this Git repository only"
-    echo "$output" | grep -q "Git root: $SCRATCH"
+    echo "$output" | grep -q "Git root:"
+    echo "$output" | grep -Fq "$SCRATCH"
     echo "$output" | grep -q "Repo confirmation requires an interactive terminal"
     ! echo "$output" | grep -q "Applying because -y/--yes was provided"
     [ "$(cat "$SCRATCH/VERSION")" = "1.2.3" ]
 }
 
 @test "repo confirmation refuses a declined interactive prompt" {
+    if [ "${MANIFEST_CLI_ENABLE_PTY_TESTS:-0}" != "1" ]; then
+        skip "PTY prompt test is opt-in; script is not a Manifest runtime dependency"
+    fi
+
     if ! command -v script >/dev/null 2>&1; then
         skip "script command unavailable"
     fi
-    if ! script -q -c true /dev/null >/dev/null 2>&1; then
-        skip "script command does not support util-linux -c syntax"
+    if ! script -q -e -c true /dev/null >/dev/null 2>&1; then
+        skip "script command does not support util-linux -e -c syntax"
     fi
 
     init_repo_fixture
+    script_status=0
+    script -q -e -c "bash -c 'echo manifest-script-smoke; exit 7'" /dev/null > "$SCRATCH/script-smoke.out" 2>&1 || script_status="$?"
+    if [ "$script_status" -ne 7 ] || ! grep -q "manifest-script-smoke" "$SCRATCH/script-smoke.out"; then
+        skip "script command cannot execute bash child commands portably"
+    fi
+
     cat > "$SCRATCH/confirm-repo.sh" <<SH
 #!/usr/bin/env bash
 set -e
@@ -96,7 +107,11 @@ manifest_repo_scope_confirm_apply "$SCRATCH" "manifest ship repo patch -y"
 SH
     chmod +x "$SCRATCH/confirm-repo.sh"
 
-    run bash -lc "printf 'n\n' | script -q -c '$SCRATCH/confirm-repo.sh' /dev/null"
+    status=0
+    output="$(bash -lc "printf 'n\n' | script -q -e -c 'bash $SCRATCH/confirm-repo.sh' /dev/null" 2>&1)" || status="$?"
+    if [ "$status" -eq 127 ]; then
+        skip "script command cannot execute the confirmation fixture portably"
+    fi
 
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "Apply target repository"
