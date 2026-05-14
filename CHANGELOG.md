@@ -1,5 +1,14 @@
 # Changelog
 
+## [47.10.2] - 2026-05-14
+
+**Release Type:** Patch
+
+### Changes
+
+- Add regression coverage for the changed CLI workflow
+
+
 ## [47.10.1] - 2026-05-14
 
 **Release Type:** Patch — no user-facing changes.
@@ -76,17 +85,4 @@
 ### Changes
 
 - Update release copy and configuration examples
-- Add regression coverage for the changed CLI workflow
-
-
-## [47.8.5] - 2026-05-14
-
-**Release Type:** Patch
-
-### Changes
-
-- Add GitHub Release publishing support
-- Add smart ship preview summaries
-- Update release copy and configuration examples
-- Wire first-class CLI commands to inspectable built-in recipe definitions
 - Add regression coverage for the changed CLI workflow
