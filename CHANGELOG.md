@@ -1,5 +1,10 @@
 # Changelog
 
+## [47.10.1] - 2026-05-14
+
+**Release Type:** Patch — no user-facing changes.
+
+
 ## [47.10.0] - 2026-05-14
 
 **Release Type:** Minor
@@ -84,16 +89,4 @@
 - Add smart ship preview summaries
 - Update release copy and configuration examples
 - Wire first-class CLI commands to inspectable built-in recipe definitions
-- Add regression coverage for the changed CLI workflow
-
-
-## [47.8.4] - 2026-05-13
-
-**Release Type:** Patch
-
-### Changes
-
-- Add smart ship preview summaries
-- Update release copy and configuration examples
-- Add recipe-backed workflow definitions and recipe introspection support
 - Add regression coverage for the changed CLI workflow
