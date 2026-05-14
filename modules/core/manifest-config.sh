@@ -91,7 +91,7 @@ _manifest_config_warn() {
 #
 # ENV:
 #   MANIFEST_CLI_AUTO_CONFIRM=1            bypass prompt (CI / scripted)
-#   _MANIFEST_GLOBAL_CONFIG_AUTHORIZED=1   session-cached approval (modify only)
+#   MANIFEST_CLI_GLOBAL_CONFIG_AUTHORIZED=1   session-cached approval (modify only)
 # -----------------------------------------------------------------------------
 _confirm_global_config_write() {
     local action="$1"
@@ -100,11 +100,11 @@ _confirm_global_config_write() {
 
     if is_truthy "${MANIFEST_CLI_AUTO_CONFIRM:-0}"; then
         _manifest_config_warn "Auto-confirming $action of $target ($reason) [MANIFEST_CLI_AUTO_CONFIRM=${MANIFEST_CLI_AUTO_CONFIRM}]"
-        export _MANIFEST_GLOBAL_CONFIG_AUTHORIZED=1
+        export MANIFEST_CLI_GLOBAL_CONFIG_AUTHORIZED=1
         return 0
     fi
 
-    if [ "$action" = "modify" ] && [ "${_MANIFEST_GLOBAL_CONFIG_AUTHORIZED:-0}" = "1" ]; then
+    if [ "$action" = "modify" ] && [ "${MANIFEST_CLI_GLOBAL_CONFIG_AUTHORIZED:-0}" = "1" ]; then
         return 0
     fi
 
@@ -140,7 +140,7 @@ _confirm_global_config_write() {
             ;;
     esac
 
-    export _MANIFEST_GLOBAL_CONFIG_AUTHORIZED=1
+    export MANIFEST_CLI_GLOBAL_CONFIG_AUTHORIZED=1
     return 0
 }
 

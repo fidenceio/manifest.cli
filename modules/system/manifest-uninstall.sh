@@ -20,9 +20,9 @@ find_installation_locations() {
         "/usr/local/share/manifest-cli"
     )
     
-    # Add user-specified location if set (legacy + current env names)
-    if [ -n "$MANIFEST_INSTALL_LOCATION" ]; then
-        common_locations+=("$MANIFEST_INSTALL_LOCATION")
+    # Add user-specified locations if set
+    if [ -n "$MANIFEST_CLI_INSTALL_LOCATION" ]; then
+        common_locations+=("$MANIFEST_CLI_INSTALL_LOCATION")
     fi
     if [ -n "$MANIFEST_CLI_INSTALL_DIR" ]; then
         common_locations+=("$MANIFEST_CLI_INSTALL_DIR")

@@ -295,7 +295,7 @@ _refresh_fleet_commit_changes() {
     echo "Committing refreshed fleet metadata..."
 
     # Fleet root (config + tsv + fleet-root docs)
-    local root_dir="${MANIFEST_FLEET_ROOT:-$(pwd)}"
+    local root_dir="${MANIFEST_CLI_FLEET_ROOT:-$(pwd)}"
     if [[ -d "$root_dir/.git" ]]; then
         if [[ -n "$(git -C "$root_dir" status --porcelain 2>/dev/null)" ]]; then
             if git -C "$root_dir" add . && git -C "$root_dir" commit -m "$commit_msg" >/dev/null; then
@@ -313,7 +313,7 @@ _refresh_fleet_commit_changes() {
 
     # Each service
     local service path excluded
-    for service in $MANIFEST_FLEET_SERVICES; do
+    for service in $MANIFEST_CLI_FLEET_SERVICES; do
         path=$(get_fleet_service_property "$service" "path")
         excluded=$(get_fleet_service_property "$service" "excluded" "false")
 

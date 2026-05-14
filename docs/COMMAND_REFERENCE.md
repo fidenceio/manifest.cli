@@ -483,8 +483,8 @@ Documentation review environment hooks:
 
 The same settings are available in `manifest.config.yaml` under `docs.review.*`.
 For `provider=command`, Manifest exports sidecar paths before invoking the command:
-`MANIFEST_DOC_REVIEW_COMMIT_SUBJECT_FILE`, `MANIFEST_DOC_REVIEW_COMMIT_BODY_FILE`,
-and `MANIFEST_DOC_REVIEW_RELEASE_NOTE_FILE`. A provider can write those files to
+`MANIFEST_CLI_DOC_REVIEW_COMMIT_SUBJECT_FILE`, `MANIFEST_CLI_DOC_REVIEW_COMMIT_BODY_FILE`,
+and `MANIFEST_CLI_DOC_REVIEW_RELEASE_NOTE_FILE`. A provider can write those files to
 override the commit subject, replace the commit body attachment, or replace the
 release-note/changelog attachment.
 

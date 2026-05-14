@@ -3,7 +3,7 @@
 # Tests for #24: 'manifest ship fleet --only / --except <service>' filtering.
 #
 # The filter is implemented inside fleet_ship via a service-list override of
-# $MANIFEST_FLEET_SERVICES, plus forwarding of --only/--except to
+# $MANIFEST_CLI_FLEET_SERVICES, plus forwarding of --only/--except to
 # manifest_fleet_pr_dispatch (Cloud plugin honors them). These tests exercise:
 #   - the _fleet_filter_services helper directly
 #   - argument parsing in fleet_ship (mutual exclusion, missing values, help)
@@ -17,7 +17,7 @@ setup() {
     # shellcheck disable=SC1091
     source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet.sh"
     # Stub log_error/log_warning so we can capture without coloring noise.
-    export MANIFEST_FLEET_SERVICES="alpha bravo charlie"
+    export MANIFEST_CLI_FLEET_SERVICES="alpha bravo charlie"
 }
 
 teardown() {
@@ -73,7 +73,7 @@ teardown() {
 }
 
 @test "filter: word-boundary match — 'alpha' does not match 'alpha-svc'" {
-    MANIFEST_FLEET_SERVICES="alpha-svc bravo"
+    MANIFEST_CLI_FLEET_SERVICES="alpha-svc bravo"
     run _fleet_filter_services "alpha" ""
     [ "$status" -ne 0 ]
     [[ "$output" == *"not in the fleet"* ]]
@@ -144,9 +144,9 @@ services:
       strategy: none
 YAML
     mkdir -p "$SCRATCH/alpha" "$SCRATCH/bravo"
-    export MANIFEST_FLEET_ROOT="$SCRATCH"
-    export MANIFEST_FLEET_CONFIG_FILE="$SCRATCH/manifest.fleet.config.yaml"
-    export MANIFEST_FLEET_SERVICES="alpha bravo"
+    export MANIFEST_CLI_FLEET_ROOT="$SCRATCH"
+    export MANIFEST_CLI_FLEET_CONFIG_FILE="$SCRATCH/manifest.fleet.config.yaml"
+    export MANIFEST_CLI_FLEET_SERVICES="alpha bravo"
 
     _load_all_service_configs "$SCRATCH"
 
@@ -161,8 +161,8 @@ YAML
     echo "1.0.0" > "$SCRATCH/alpha/VERSION"
     echo "1.0.0" > "$SCRATCH/bravo/VERSION"
     echo "1.0.0" > "$SCRATCH/tap/VERSION"
-    export MANIFEST_FLEET_ROOT="$SCRATCH"
-    export MANIFEST_FLEET_SERVICES="alpha bravo tap"
+    export MANIFEST_CLI_FLEET_ROOT="$SCRATCH"
+    export MANIFEST_CLI_FLEET_SERVICES="alpha bravo tap"
     export SHIPPED_SERVICES_FILE="$SCRATCH/shipped.log"
     : > "$SHIPPED_SERVICES_FILE"
 

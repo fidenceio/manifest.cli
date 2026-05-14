@@ -14,7 +14,7 @@ teardown() {
     # state cannot leak between tests when the suite is filtered or
     # re-ordered. GH_STUB_* belong to the gh_stub harness and would
     # similarly leak across tests if any test forgot to clean up.
-    unset _MANIFEST_GH_VALIDATED_AT MANIFEST_GH_VALIDATION_TTL
+    unset _MANIFEST_GH_VALIDATED_AT MANIFEST_CLI_GH_VALIDATION_TTL
     unset GH_STUB_LOG GH_STUB_EXIT GH_STUB_AUTH_EXIT GH_STUB_STDOUT GH_STUB_STDERR
 }
 
@@ -272,7 +272,7 @@ teardown() {
 
     # Skip the require-gh check by seeding the memo cache.
     _MANIFEST_GH_VALIDATED_AT=$(date +%s)
-    MANIFEST_GH_VALIDATION_TTL=300
+    MANIFEST_CLI_GH_VALIDATION_TTL=300
 
     # Stub `gh` so we can detect any invocation. Function definitions
     # shadow PATH lookups in bash.
@@ -293,7 +293,7 @@ teardown() {
 
     # Force the cache to be considered fresh by seeding the timestamp.
     _MANIFEST_GH_VALIDATED_AT=$(date +%s)
-    MANIFEST_GH_VALIDATION_TTL=300
+    MANIFEST_CLI_GH_VALIDATION_TTL=300
 
     # Even with no `gh` on PATH, the memo should short-circuit and return 0.
     PATH="/usr/bin:/bin" run _manifest_require_gh
@@ -307,7 +307,7 @@ teardown() {
 
     # Stale timestamp + tiny TTL forces a re-check.
     _MANIFEST_GH_VALIDATED_AT=1
-    MANIFEST_GH_VALIDATION_TTL=1
+    MANIFEST_CLI_GH_VALIDATION_TTL=1
 
     run _manifest_require_gh
     [ "$status" -ne 0 ]

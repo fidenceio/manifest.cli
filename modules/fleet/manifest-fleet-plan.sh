@@ -7,14 +7,14 @@
 # Builds a generated, editable adoption plan for messy polyrepo workspaces.
 # Commands are dry-run by default; --apply and --do are exact aliases.
 
-if [[ -n "${_MANIFEST_FLEET_PLAN_LOADED:-}" ]]; then
+if [[ -n "${_MANIFEST_CLI_FLEET_PLAN_LOADED:-}" ]]; then
     return 0
 fi
-_MANIFEST_FLEET_PLAN_LOADED=1
+_MANIFEST_CLI_FLEET_PLAN_LOADED=1
 
-readonly MANIFEST_FLEET_PLAN_MODULE_VERSION="1.0.0"
-readonly MANIFEST_FLEET_PLAN_MODULE_NAME="manifest-fleet-plan"
-readonly MANIFEST_FLEET_DEFAULT_PLAN_FILE="manifest.fleet.plan.yaml"
+readonly MANIFEST_CLI_FLEET_PLAN_MODULE_VERSION="1.0.0"
+readonly MANIFEST_CLI_FLEET_PLAN_MODULE_NAME="manifest-fleet-plan"
+readonly MANIFEST_CLI_FLEET_DEFAULT_PLAN_FILE="manifest.fleet.plan.yaml"
 
 _fleet_plan_yaml_quote() {
     local value="${1:-}"
@@ -315,7 +315,7 @@ fleet_plan() {
     local apply=false commit=false push=false force=false
     local depth="auto"
     local safety_cap=10
-    local plan_file="$(pwd)/$MANIFEST_FLEET_DEFAULT_PLAN_FILE"
+    local plan_file="$(pwd)/$MANIFEST_CLI_FLEET_DEFAULT_PLAN_FILE"
     local fleet_name=""
 
     if ! _fleet_parse_apply_contract apply commit push force "$@"; then

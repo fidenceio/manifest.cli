@@ -6,13 +6,13 @@
 #
 # Validates and reconciles manifest.fleet.plan.yaml. Dry-run by default.
 
-if [[ -n "${_MANIFEST_FLEET_APPLY_LOADED:-}" ]]; then
+if [[ -n "${_MANIFEST_CLI_FLEET_APPLY_LOADED:-}" ]]; then
     return 0
 fi
-_MANIFEST_FLEET_APPLY_LOADED=1
+_MANIFEST_CLI_FLEET_APPLY_LOADED=1
 
-readonly MANIFEST_FLEET_APPLY_MODULE_VERSION="1.0.0"
-readonly MANIFEST_FLEET_APPLY_MODULE_NAME="manifest-fleet-apply"
+readonly MANIFEST_CLI_FLEET_APPLY_MODULE_VERSION="1.0.0"
+readonly MANIFEST_CLI_FLEET_APPLY_MODULE_NAME="manifest-fleet-apply"
 
 _fleet_plan_require_yq() {
     if ! command -v yq >/dev/null 2>&1; then
@@ -357,7 +357,7 @@ _fleet_apply_plan() {
 
 fleet_reconcile() {
     local apply=false commit=false push=false force=false
-    local plan_file="$(pwd)/$MANIFEST_FLEET_DEFAULT_PLAN_FILE"
+    local plan_file="$(pwd)/$MANIFEST_CLI_FLEET_DEFAULT_PLAN_FILE"
     local adopt_submodules=false
 
     if ! _fleet_parse_apply_contract apply commit push force "$@"; then

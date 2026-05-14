@@ -27,6 +27,38 @@ load 'helpers/setup'
     ! grep -F 'MANIFEST_CLI_REQUIRED_SCRIPT' "$TEST_REPO_ROOT/modules/core/manifest-requirements.sh" >/dev/null
 }
 
+@test "Manifest-owned environment variables use MANIFEST_CLI namespace" {
+    local search_paths=(
+        "$TEST_REPO_ROOT/modules"
+        "$TEST_REPO_ROOT/tests"
+        "$TEST_REPO_ROOT/scripts"
+        "$TEST_REPO_ROOT/install-cli.sh"
+        "$TEST_REPO_ROOT/formula"
+        "$TEST_REPO_ROOT/completions"
+        "$TEST_REPO_ROOT/.github"
+        "$TEST_REPO_ROOT/README.md"
+        "$TEST_REPO_ROOT/docs/COMMAND_REFERENCE.md"
+        "$TEST_REPO_ROOT/docs/IMPROVEMENT_TRACKER.md"
+    )
+    local offenders="" file line text var
+
+    while IFS=: read -r file line text; do
+        while [[ "$text" =~ (^|[^A-Za-z0-9_])(MANIFEST_[A-Z0-9_]*) ]]; do
+            var="${BASH_REMATCH[2]}"
+            case "$var" in
+                MANIFEST_CLI|MANIFEST_CLI_*) ;;
+                *) offenders+="${file}:${line}:${var}"$'\n' ;;
+            esac
+            text="${text#*"${BASH_REMATCH[2]}"}"
+        done
+    done < <(grep -R -n -E '(^|[^A-Za-z0-9_])MANIFEST_[A-Z0-9_]+' "${search_paths[@]}" 2>/dev/null || true)
+
+    if [ -n "$offenders" ]; then
+        printf '%s' "$offenders" >&2
+        return 1
+    fi
+}
+
 @test "OS detection never installs host dependencies during runtime setup" {
     ! grep -F 'brew install coreutils' "$TEST_REPO_ROOT/modules/system/manifest-os.sh" >/dev/null
     grep -F 'using fallback timeout method' "$TEST_REPO_ROOT/modules/system/manifest-os.sh" >/dev/null

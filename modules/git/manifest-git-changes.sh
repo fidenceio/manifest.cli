@@ -4,14 +4,14 @@
 # Handles git change analysis and categorization
 
 # Git changes module - uses PROJECT_ROOT from core module
-MANIFEST_GIT_CHANGES_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$MANIFEST_GIT_CHANGES_SCRIPT_DIR/manifest-doc-review.sh"
+MANIFEST_CLI_GIT_CHANGES_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$MANIFEST_CLI_GIT_CHANGES_SCRIPT_DIR/manifest-doc-review.sh"
 
 # Commits Manifest CLI writes during its own pipeline. Filter pure bookkeeping
 # from generated changelogs so Manifest's release mechanics never pollute user
 # docs. Auto-commit subjects are handled separately because those commits often
 # contain the user's real work under a generic Manifest-generated subject.
-MANIFEST_COMMIT_NOISE_SUBJECT_REGEX='^(Bump version to |Update Homebrew formula to |Update formula to |Update main CHANGELOG\.md to |Update CHANGELOG\.md to |Refresh docs and metadata for )'
+MANIFEST_CLI_COMMIT_NOISE_SUBJECT_REGEX='^(Bump version to |Update Homebrew formula to |Update formula to |Update main CHANGELOG\.md to |Update CHANGELOG\.md to |Refresh docs and metadata for )'
 
 _manifest_git_changes_file_list_for_commit() {
     local commit="$1"
@@ -121,7 +121,7 @@ get_git_changes() {
                 _manifest_git_changes_auto_commit_bullets "$commit"
                 ;;
             *)
-                if [[ "$subject" =~ $MANIFEST_COMMIT_NOISE_SUBJECT_REGEX ]]; then
+                if [[ "$subject" =~ $MANIFEST_CLI_COMMIT_NOISE_SUBJECT_REGEX ]]; then
                     continue
                 fi
                 printf -- '- %s\n' "$subject"

@@ -474,7 +474,7 @@ set_yaml_value() {
     fi
 
     # Use yq's env() operator to avoid shell injection through value
-    if ! _MANIFEST_YQ_VAL="$value" yq e ".${dotpath} = env(_MANIFEST_YQ_VAL)" -i "$yaml_file" 2>/dev/null; then
+    if ! MANIFEST_CLI_YQ_VAL="$value" yq e ".${dotpath} = env(MANIFEST_CLI_YQ_VAL)" -i "$yaml_file" 2>/dev/null; then
         log_error "set_yaml_value: yq failed to set '${dotpath}' in $yaml_file"
         return 1
     fi
@@ -536,7 +536,7 @@ write_full_yaml() {
         env_var="${_MANIFEST_YAML_TO_ENV[$yaml_path]}"
         env_value="${!env_var:-}"
         if [[ -n "$env_value" ]]; then
-            if ! _MANIFEST_YQ_VAL="$env_value" yq e ".${yaml_path} = env(_MANIFEST_YQ_VAL)" -i "$yaml_file" 2>/dev/null; then
+            if ! MANIFEST_CLI_YQ_VAL="$env_value" yq e ".${yaml_path} = env(MANIFEST_CLI_YQ_VAL)" -i "$yaml_file" 2>/dev/null; then
                 log_warning "write_full_yaml: yq failed to set '${yaml_path}'"
             else
                 written_count=$((written_count + 1))

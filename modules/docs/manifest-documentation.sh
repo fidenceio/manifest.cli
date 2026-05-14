@@ -16,14 +16,14 @@ source "$(dirname "$MANIFEST_CLI_SCRIPT_DIR")/git/manifest-git-changes.sh"
 source "$(dirname "$MANIFEST_CLI_SCRIPT_DIR")/docs/manifest-markdown-templates.sh"
 source "$(dirname "$MANIFEST_CLI_SCRIPT_DIR")/docs/manifest-markdown-validation.sh"
 
-MANIFEST_README_VERSION_START="<!-- manifest:readme-version:start -->"
-MANIFEST_README_VERSION_END="<!-- manifest:readme-version:end -->"
-MANIFEST_ROOT_CHANGELOG_START="<!-- manifest:root-changelog:start -->"
-MANIFEST_ROOT_CHANGELOG_END="<!-- manifest:root-changelog:end -->"
-MANIFEST_INDEX_METADATA_START="<!-- manifest:index-metadata:start -->"
-MANIFEST_INDEX_METADATA_END="<!-- manifest:index-metadata:end -->"
-MANIFEST_INDEX_CURRENT_RELEASE_START="<!-- manifest:index-current-release:start -->"
-MANIFEST_INDEX_CURRENT_RELEASE_END="<!-- manifest:index-current-release:end -->"
+MANIFEST_CLI_README_VERSION_START="<!-- manifest:readme-version:start -->"
+MANIFEST_CLI_README_VERSION_END="<!-- manifest:readme-version:end -->"
+MANIFEST_CLI_ROOT_CHANGELOG_START="<!-- manifest:root-changelog:start -->"
+MANIFEST_CLI_ROOT_CHANGELOG_END="<!-- manifest:root-changelog:end -->"
+MANIFEST_CLI_INDEX_METADATA_START="<!-- manifest:index-metadata:start -->"
+MANIFEST_CLI_INDEX_METADATA_END="<!-- manifest:index-metadata:end -->"
+MANIFEST_CLI_INDEX_CURRENT_RELEASE_START="<!-- manifest:index-current-release:start -->"
+MANIFEST_CLI_INDEX_CURRENT_RELEASE_END="<!-- manifest:index-current-release:end -->"
 
 manifest_file_has_managed_block() {
     local file="$1"
@@ -150,14 +150,14 @@ write_external_docs_index() {
     cat > "$index_file" << EOF
 # ${repo_name} Documentation
 
-${MANIFEST_INDEX_METADATA_START}
+${MANIFEST_CLI_INDEX_METADATA_START}
 $(cat "$metadata_file")
-${MANIFEST_INDEX_METADATA_END}
+${MANIFEST_CLI_INDEX_METADATA_END}
 
 ## Current Release
-${MANIFEST_INDEX_CURRENT_RELEASE_START}
+${MANIFEST_CLI_INDEX_CURRENT_RELEASE_START}
 $(cat "$current_release_file")
-${MANIFEST_INDEX_CURRENT_RELEASE_END}
+${MANIFEST_CLI_INDEX_CURRENT_RELEASE_END}
 EOF
 
     rm -f "$metadata_file" "$current_release_file"
@@ -237,8 +237,8 @@ update_readme_version() {
         create_default_readme "$readme_file"
     fi
 
-    if manifest_file_has_managed_block "$readme_file" "$MANIFEST_README_VERSION_START" "$MANIFEST_README_VERSION_END"; then
-        manifest_replace_managed_block "$readme_file" "$MANIFEST_README_VERSION_START" "$MANIFEST_README_VERSION_END" "$version_section_file"
+    if manifest_file_has_managed_block "$readme_file" "$MANIFEST_CLI_README_VERSION_START" "$MANIFEST_CLI_README_VERSION_END"; then
+        manifest_replace_managed_block "$readme_file" "$MANIFEST_CLI_README_VERSION_START" "$MANIFEST_CLI_README_VERSION_END" "$version_section_file"
     else
         log_info "Preserving existing README formatting; no Manifest-managed version block found."
     fi
@@ -335,14 +335,14 @@ EOF
     if [[ -f "$index_file" ]]; then
         if manifest_is_legacy_generated_index "$index_file"; then
             write_external_docs_index "$index_file" "$version"
-        elif manifest_file_has_managed_block "$index_file" "$MANIFEST_INDEX_METADATA_START" "$MANIFEST_INDEX_METADATA_END" && manifest_file_has_managed_block "$index_file" "$MANIFEST_INDEX_CURRENT_RELEASE_START" "$MANIFEST_INDEX_CURRENT_RELEASE_END"; then
+        elif manifest_file_has_managed_block "$index_file" "$MANIFEST_CLI_INDEX_METADATA_START" "$MANIFEST_CLI_INDEX_METADATA_END" && manifest_file_has_managed_block "$index_file" "$MANIFEST_CLI_INDEX_CURRENT_RELEASE_START" "$MANIFEST_CLI_INDEX_CURRENT_RELEASE_END"; then
             local metadata_file current_release_file
             metadata_file=$(mktemp)
             current_release_file=$(mktemp)
             generate_external_index_metadata_block "$version" > "$metadata_file"
             generate_external_index_current_release_block "$version" > "$current_release_file"
-            manifest_replace_managed_block "$index_file" "$MANIFEST_INDEX_METADATA_START" "$MANIFEST_INDEX_METADATA_END" "$metadata_file"
-            manifest_replace_managed_block "$index_file" "$MANIFEST_INDEX_CURRENT_RELEASE_START" "$MANIFEST_INDEX_CURRENT_RELEASE_END" "$current_release_file"
+            manifest_replace_managed_block "$index_file" "$MANIFEST_CLI_INDEX_METADATA_START" "$MANIFEST_CLI_INDEX_METADATA_END" "$metadata_file"
+            manifest_replace_managed_block "$index_file" "$MANIFEST_CLI_INDEX_CURRENT_RELEASE_START" "$MANIFEST_CLI_INDEX_CURRENT_RELEASE_END" "$current_release_file"
             rm -f "$metadata_file" "$current_release_file"
         else
             log_info "Preserving existing documentation index formatting; no Manifest-managed blocks found."

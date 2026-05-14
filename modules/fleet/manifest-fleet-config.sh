@@ -39,14 +39,14 @@
 # =============================================================================
 
 # Prevent multiple sourcing
-if [[ -n "${_MANIFEST_FLEET_CONFIG_LOADED:-}" ]]; then
+if [[ -n "${_MANIFEST_CLI_FLEET_CONFIG_LOADED:-}" ]]; then
     return 0
 fi
-_MANIFEST_FLEET_CONFIG_LOADED=1
+_MANIFEST_CLI_FLEET_CONFIG_LOADED=1
 
 # Module metadata (useful for debugging and version tracking)
-readonly MANIFEST_FLEET_CONFIG_MODULE_VERSION="1.0.0"
-readonly MANIFEST_FLEET_CONFIG_MODULE_NAME="manifest-fleet-config"
+readonly MANIFEST_CLI_FLEET_CONFIG_MODULE_VERSION="1.0.0"
+readonly MANIFEST_CLI_FLEET_CONFIG_MODULE_NAME="manifest-fleet-config"
 
 # =============================================================================
 # DEFAULT CONFIGURATION VALUES
@@ -63,14 +63,14 @@ readonly MANIFEST_FLEET_CONFIG_MODULE_NAME="manifest-fleet-config"
 #   - "auto"  : Check for manifest.fleet.config.yaml in current or parent directories
 #   - "true"  : Force fleet mode, fail if no fleet found
 #   - "false" : Disable fleet mode entirely, operate as single repo
-readonly MANIFEST_FLEET_DEFAULT_MODE="auto"
+readonly MANIFEST_CLI_FLEET_DEFAULT_MODE="auto"
 
 # Maximum directory depth to search for manifest.fleet.config.yaml when auto-detecting
 # Prevents infinite loops in deeply nested structures
-readonly MANIFEST_FLEET_DEFAULT_MAX_SEARCH_DEPTH=10
+readonly MANIFEST_CLI_FLEET_DEFAULT_MAX_SEARCH_DEPTH=10
 
 # Filename for fleet configuration (can be customized per organization)
-readonly MANIFEST_FLEET_DEFAULT_CONFIG_FILENAME="manifest.fleet.config.yaml"
+readonly MANIFEST_CLI_FLEET_DEFAULT_CONFIG_FILENAME="manifest.fleet.config.yaml"
 
 # -----------------------------------------------------------------------------
 # Fleet Versioning Defaults
@@ -82,10 +82,10 @@ readonly MANIFEST_FLEET_DEFAULT_CONFIG_FILENAME="manifest.fleet.config.yaml"
 #   - "date"      : Date-based versioning (YYYY.MM.DD)
 #   - "semver"    : Semantic versioning (X.Y.Z)
 #   - "increment" : Simple incrementing integer (1, 2, 3...)
-readonly MANIFEST_FLEET_DEFAULT_VERSIONING="date"
+readonly MANIFEST_CLI_FLEET_DEFAULT_VERSIONING="date"
 
 # Fleet version file location (relative to fleet root)
-readonly MANIFEST_FLEET_DEFAULT_VERSION_FILE="FLEET_VERSION"
+readonly MANIFEST_CLI_FLEET_DEFAULT_VERSION_FILE="FLEET_VERSION"
 
 # -----------------------------------------------------------------------------
 # Fleet Operations Defaults
@@ -93,44 +93,44 @@ readonly MANIFEST_FLEET_DEFAULT_VERSION_FILE="FLEET_VERSION"
 
 # Default version bump type when none specified
 # Options: "patch" | "minor" | "major" | "revision"
-readonly MANIFEST_FLEET_DEFAULT_BUMP_TYPE="patch"
+readonly MANIFEST_CLI_FLEET_DEFAULT_BUMP_TYPE="patch"
 
 # Whether to run operations in parallel across services
-readonly MANIFEST_FLEET_DEFAULT_PARALLEL="true"
+readonly MANIFEST_CLI_FLEET_DEFAULT_PARALLEL="true"
 
 # Maximum concurrent operations when running in parallel
 # Higher values = faster but more resource intensive
-readonly MANIFEST_FLEET_DEFAULT_MAX_PARALLEL=4
+readonly MANIFEST_CLI_FLEET_DEFAULT_MAX_PARALLEL=4
 
 # Commit strategy for fleet operations
 # Options: "per-service" | "atomic"
 #   - "per-service" : One commit per service (cleaner history, easier rollback)
 #   - "atomic"      : Single commit for all changes (monorepo-style)
-readonly MANIFEST_FLEET_DEFAULT_COMMIT_STRATEGY="per-service"
+readonly MANIFEST_CLI_FLEET_DEFAULT_COMMIT_STRATEGY="per-service"
 
 # Push strategy for fleet operations
 # Options: "immediate" | "batched" | "manual"
 #   - "immediate" : Push each service as it completes
 #   - "batched"   : Push all services after all operations complete
 #   - "manual"    : Don't push, user will push manually
-readonly MANIFEST_FLEET_DEFAULT_PUSH_STRATEGY="batched"
+readonly MANIFEST_CLI_FLEET_DEFAULT_PUSH_STRATEGY="batched"
 
 # -----------------------------------------------------------------------------
 # Fleet Changelog Defaults
 # -----------------------------------------------------------------------------
 
 # Generate unified fleet changelog
-readonly MANIFEST_FLEET_DEFAULT_UNIFIED_CHANGELOG="true"
+readonly MANIFEST_CLI_FLEET_DEFAULT_UNIFIED_CHANGELOG="true"
 
 # Detail level for per-service sections in unified changelog
 # Options: "full" | "summary" | "minimal"
 #   - "full"    : Include entire per-service changelog
 #   - "summary" : Key sections only (features, fixes, breaking)
 #   - "minimal" : Just version and one-line description
-readonly MANIFEST_FLEET_DEFAULT_CHANGELOG_DETAIL="summary"
+readonly MANIFEST_CLI_FLEET_DEFAULT_CHANGELOG_DETAIL="summary"
 
 # Include dependency compatibility matrix in fleet changelog
-readonly MANIFEST_FLEET_DEFAULT_CHANGELOG_MATRIX="true"
+readonly MANIFEST_CLI_FLEET_DEFAULT_CHANGELOG_MATRIX="true"
 
 # -----------------------------------------------------------------------------
 # Fleet Docs Defaults
@@ -141,45 +141,45 @@ readonly MANIFEST_FLEET_DEFAULT_CHANGELOG_MATRIX="true"
 #   - "fleet-root"  : One docs/ folder at the fleet root only
 #   - "per-service"  : Each service gets its own docs/ folder (default)
 #   - "both"         : Fleet root AND per-service docs folders
-readonly MANIFEST_FLEET_DEFAULT_DOCS_STRATEGY="per-service"
+readonly MANIFEST_CLI_FLEET_DEFAULT_DOCS_STRATEGY="per-service"
 
 # Whether to generate docs at fleet root level
-readonly MANIFEST_FLEET_DEFAULT_DOCS_FLEET_ROOT_ENABLED="false"
+readonly MANIFEST_CLI_FLEET_DEFAULT_DOCS_FLEET_ROOT_ENABLED="false"
 
 # Docs folder name at fleet root (relative to fleet root)
-readonly MANIFEST_FLEET_DEFAULT_DOCS_FLEET_ROOT_FOLDER="docs"
+readonly MANIFEST_CLI_FLEET_DEFAULT_DOCS_FLEET_ROOT_FOLDER="docs"
 
 # Detail level for fleet-root documentation
 # Options: "summary" | "index"
 #   - "summary" : Aggregated changes from all services
 #   - "index"   : Lightweight version list with links to per-service docs
-readonly MANIFEST_FLEET_DEFAULT_DOCS_FLEET_ROOT_DETAIL_LEVEL="summary"
+readonly MANIFEST_CLI_FLEET_DEFAULT_DOCS_FLEET_ROOT_DETAIL_LEVEL="summary"
 
 # Whether to generate per-service docs
-readonly MANIFEST_FLEET_DEFAULT_DOCS_PER_SERVICE_ENABLED="true"
+readonly MANIFEST_CLI_FLEET_DEFAULT_DOCS_PER_SERVICE_ENABLED="true"
 
 # Docs folder name within each service (relative to service root)
-readonly MANIFEST_FLEET_DEFAULT_DOCS_PER_SERVICE_FOLDER="docs"
+readonly MANIFEST_CLI_FLEET_DEFAULT_DOCS_PER_SERVICE_FOLDER="docs"
 
 # What document types to generate
-readonly MANIFEST_FLEET_DEFAULT_DOCS_GEN_INDEX="true"
-readonly MANIFEST_FLEET_DEFAULT_DOCS_GEN_README_VERSION="true"
+readonly MANIFEST_CLI_FLEET_DEFAULT_DOCS_GEN_INDEX="true"
+readonly MANIFEST_CLI_FLEET_DEFAULT_DOCS_GEN_README_VERSION="true"
 
 # -----------------------------------------------------------------------------
 # Fleet Validation Defaults
 # -----------------------------------------------------------------------------
 
 # Require clean git status before fleet operations
-readonly MANIFEST_FLEET_DEFAULT_REQUIRE_CLEAN="true"
+readonly MANIFEST_CLI_FLEET_DEFAULT_REQUIRE_CLEAN="true"
 
 # Enforce dependency version constraints
-readonly MANIFEST_FLEET_DEFAULT_ENFORCE_DEPS="true"
+readonly MANIFEST_CLI_FLEET_DEFAULT_ENFORCE_DEPS="true"
 
 # Allow operations on non-default branches
-readonly MANIFEST_FLEET_DEFAULT_ALLOW_BRANCH_OPS="false"
+readonly MANIFEST_CLI_FLEET_DEFAULT_ALLOW_BRANCH_OPS="false"
 
 # Strict mode: treat warnings as errors
-readonly MANIFEST_FLEET_DEFAULT_STRICT="false"
+readonly MANIFEST_CLI_FLEET_DEFAULT_STRICT="false"
 
 # -----------------------------------------------------------------------------
 # Fleet Submodule Defaults
@@ -190,11 +190,11 @@ readonly MANIFEST_FLEET_DEFAULT_STRICT="false"
 #   - "include"  : Process submodules as part of parent service
 #   - "exclude"  : Ignore submodules entirely
 #   - "separate" : Treat submodules as independent fleet services
-readonly MANIFEST_FLEET_DEFAULT_SUBMODULE_HANDLING="include"
+readonly MANIFEST_CLI_FLEET_DEFAULT_SUBMODULE_HANDLING="include"
 
 # Submodule update strategy
 # Options: "checkout" | "rebase" | "merge"
-readonly MANIFEST_FLEET_DEFAULT_SUBMODULE_UPDATE="checkout"
+readonly MANIFEST_CLI_FLEET_DEFAULT_SUBMODULE_UPDATE="checkout"
 
 # =============================================================================
 # MODULE STATE VARIABLES
@@ -203,27 +203,27 @@ readonly MANIFEST_FLEET_DEFAULT_SUBMODULE_UPDATE="checkout"
 # They are populated by load_fleet_config() and read by get_fleet_*() functions.
 
 # Fleet root directory (absolute path)
-declare -g MANIFEST_FLEET_ROOT=""
+declare -g MANIFEST_CLI_FLEET_ROOT=""
 
 # Fleet configuration file path (absolute path to manifest.fleet.config.yaml)
-declare -g MANIFEST_FLEET_CONFIG_FILE=""
+declare -g MANIFEST_CLI_FLEET_CONFIG_FILE=""
 
 # Whether fleet mode is active
-declare -g MANIFEST_FLEET_ACTIVE="false"
+declare -g MANIFEST_CLI_FLEET_ACTIVE="false"
 
 # Associative arrays for service configuration
 # Note: Bash 3.x (macOS default) doesn't support associative arrays well,
-# so we use a naming convention: MANIFEST_FLEET_SERVICE_<NAME>_<PROPERTY>
+# so we use a naming convention: MANIFEST_CLI_FLEET_SERVICE_<NAME>_<PROPERTY>
 # This is populated by parse_fleet_yaml()
 
 # List of service names (space-separated for Bash 3.x compatibility)
-declare -g MANIFEST_FLEET_SERVICES=""
+declare -g MANIFEST_CLI_FLEET_SERVICES=""
 
 # Fleet metadata
-declare -g MANIFEST_FLEET_NAME=""
-declare -g MANIFEST_FLEET_DESCRIPTION=""
-declare -g MANIFEST_FLEET_VERSIONING=""
-declare -g MANIFEST_FLEET_VERSION=""
+declare -g MANIFEST_CLI_FLEET_NAME=""
+declare -g MANIFEST_CLI_FLEET_DESCRIPTION=""
+declare -g MANIFEST_CLI_FLEET_VERSIONING=""
+declare -g MANIFEST_CLI_FLEET_VERSION=""
 
 # =============================================================================
 # YAML PARSING FUNCTIONS
@@ -296,7 +296,7 @@ get_yaml_services() {
 #
 # ARGUMENTS:
 #   $1 - Starting directory (defaults to current directory)
-#   $2 - Maximum depth to search (defaults to MANIFEST_FLEET_DEFAULT_MAX_SEARCH_DEPTH)
+#   $2 - Maximum depth to search (defaults to MANIFEST_CLI_FLEET_DEFAULT_MAX_SEARCH_DEPTH)
 #
 # RETURNS:
 #   Echoes the absolute path to the fleet root (directory containing manifest.fleet.config.yaml)
@@ -311,8 +311,8 @@ get_yaml_services() {
 # -----------------------------------------------------------------------------
 find_fleet_root() {
     local start_dir="${1:-$(pwd)}"
-    local max_depth="${2:-$MANIFEST_FLEET_DEFAULT_MAX_SEARCH_DEPTH}"
-    local config_filename="${MANIFEST_CLI_FLEET_CONFIG_FILENAME:-$MANIFEST_FLEET_DEFAULT_CONFIG_FILENAME}"
+    local max_depth="${2:-$MANIFEST_CLI_FLEET_DEFAULT_MAX_SEARCH_DEPTH}"
+    local config_filename="${MANIFEST_CLI_FLEET_CONFIG_FILENAME:-$MANIFEST_CLI_FLEET_DEFAULT_CONFIG_FILENAME}"
 
     # Resolve to absolute path
     local current_dir
@@ -367,8 +367,8 @@ find_fleet_root() {
 #   1 if fleet mode is disabled
 #
 # SIDE EFFECTS:
-#   Sets MANIFEST_FLEET_ROOT if fleet is found
-#   Sets MANIFEST_FLEET_ACTIVE to "true" or "false"
+#   Sets MANIFEST_CLI_FLEET_ROOT if fleet is found
+#   Sets MANIFEST_CLI_FLEET_ACTIVE to "true" or "false"
 #
 # EXAMPLE:
 #   if is_fleet_mode_enabled; then
@@ -378,12 +378,12 @@ find_fleet_root() {
 #   fi
 # -----------------------------------------------------------------------------
 is_fleet_mode_enabled() {
-    local fleet_mode="${MANIFEST_CLI_FLEET_MODE:-$MANIFEST_FLEET_DEFAULT_MODE}"
+    local fleet_mode="${MANIFEST_CLI_FLEET_MODE:-$MANIFEST_CLI_FLEET_DEFAULT_MODE}"
     local explicit_root="${MANIFEST_CLI_FLEET_ROOT:-}"
 
     # Handle explicit disable
     if [[ "$fleet_mode" == "false" ]]; then
-        MANIFEST_FLEET_ACTIVE="false"
+        MANIFEST_CLI_FLEET_ACTIVE="false"
         log_debug "Fleet mode explicitly disabled"
         return 1
     fi
@@ -397,7 +397,7 @@ is_fleet_mode_enabled() {
             fleet_root="$explicit_root"
         else
             log_error "Configured MANIFEST_CLI_FLEET_ROOT does not exist: $explicit_root"
-            MANIFEST_FLEET_ACTIVE="false"
+            MANIFEST_CLI_FLEET_ACTIVE="false"
             return 1
         fi
     else
@@ -409,25 +409,25 @@ is_fleet_mode_enabled() {
     if [[ "$fleet_mode" == "true" ]]; then
         if [[ -z "$fleet_root" ]]; then
             log_error "Fleet mode forced but no manifest.fleet.config.yaml found"
-            MANIFEST_FLEET_ACTIVE="false"
+            MANIFEST_CLI_FLEET_ACTIVE="false"
             return 1
         fi
-        MANIFEST_FLEET_ROOT="$fleet_root"
-        MANIFEST_FLEET_ACTIVE="true"
+        MANIFEST_CLI_FLEET_ROOT="$fleet_root"
+        MANIFEST_CLI_FLEET_ACTIVE="true"
         log_debug "Fleet mode enabled (forced): $fleet_root"
         return 0
     fi
 
     # Auto mode: enable if found
     if [[ -n "$fleet_root" ]]; then
-        MANIFEST_FLEET_ROOT="$fleet_root"
-        MANIFEST_FLEET_ACTIVE="true"
+        MANIFEST_CLI_FLEET_ROOT="$fleet_root"
+        MANIFEST_CLI_FLEET_ACTIVE="true"
         log_debug "Fleet mode enabled (auto-detected): $fleet_root"
         return 0
     fi
 
     # Auto mode: no fleet found, disable
-    MANIFEST_FLEET_ACTIVE="false"
+    MANIFEST_CLI_FLEET_ACTIVE="false"
     log_debug "Fleet mode disabled (no fleet config found)"
     return 1
 }
@@ -450,13 +450,13 @@ is_fleet_mode_enabled() {
 #   1 if fleet mode is disabled or configuration invalid
 #
 # SIDE EFFECTS:
-#   Populates all MANIFEST_FLEET_* variables
-#   Sets service-specific variables as MANIFEST_FLEET_SERVICE_<NAME>_<PROP>
+#   Populates all MANIFEST_CLI_FLEET_* variables
+#   Sets service-specific variables as MANIFEST_CLI_FLEET_SERVICE_<NAME>_<PROP>
 #
 # EXAMPLE:
 #   if load_fleet_config; then
-#       echo "Fleet: $MANIFEST_FLEET_NAME"
-#       echo "Services: $MANIFEST_FLEET_SERVICES"
+#       echo "Fleet: $MANIFEST_CLI_FLEET_NAME"
+#       echo "Services: $MANIFEST_CLI_FLEET_SERVICES"
 #   fi
 # -----------------------------------------------------------------------------
 load_fleet_config() {
@@ -464,7 +464,7 @@ load_fleet_config() {
 
     # Check if fleet mode is enabled
     if [[ -n "$fleet_root" ]]; then
-        MANIFEST_FLEET_ROOT="$fleet_root"
+        MANIFEST_CLI_FLEET_ROOT="$fleet_root"
     fi
 
     if ! is_fleet_mode_enabled; then
@@ -472,42 +472,42 @@ load_fleet_config() {
     fi
 
     # Set configuration file path
-    local config_filename="${MANIFEST_CLI_FLEET_CONFIG_FILENAME:-$MANIFEST_FLEET_DEFAULT_CONFIG_FILENAME}"
-    MANIFEST_FLEET_CONFIG_FILE="$MANIFEST_FLEET_ROOT/$config_filename"
+    local config_filename="${MANIFEST_CLI_FLEET_CONFIG_FILENAME:-$MANIFEST_CLI_FLEET_DEFAULT_CONFIG_FILENAME}"
+    MANIFEST_CLI_FLEET_CONFIG_FILE="$MANIFEST_CLI_FLEET_ROOT/$config_filename"
 
-    if [[ ! -f "$MANIFEST_FLEET_CONFIG_FILE" ]]; then
-        log_error "Fleet configuration file not found: $MANIFEST_FLEET_CONFIG_FILE"
+    if [[ ! -f "$MANIFEST_CLI_FLEET_CONFIG_FILE" ]]; then
+        log_error "Fleet configuration file not found: $MANIFEST_CLI_FLEET_CONFIG_FILE"
         return 1
     fi
 
-    log_info "Loading fleet configuration from: $MANIFEST_FLEET_CONFIG_FILE"
+    log_info "Loading fleet configuration from: $MANIFEST_CLI_FLEET_CONFIG_FILE"
 
     # Parse fleet metadata
-    MANIFEST_FLEET_NAME=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" ".fleet.name" "unnamed-fleet")
-    MANIFEST_FLEET_DESCRIPTION=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" ".fleet.description" "")
-    MANIFEST_FLEET_VERSIONING=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" ".fleet.versioning" "$MANIFEST_FLEET_DEFAULT_VERSIONING")
+    MANIFEST_CLI_FLEET_NAME=$(get_yaml_value "$MANIFEST_CLI_FLEET_CONFIG_FILE" ".fleet.name" "unnamed-fleet")
+    MANIFEST_CLI_FLEET_DESCRIPTION=$(get_yaml_value "$MANIFEST_CLI_FLEET_CONFIG_FILE" ".fleet.description" "")
+    MANIFEST_CLI_FLEET_VERSIONING=$(get_yaml_value "$MANIFEST_CLI_FLEET_CONFIG_FILE" ".fleet.versioning" "$MANIFEST_CLI_FLEET_DEFAULT_VERSIONING")
 
     # Load fleet version if versioning is enabled
-    if [[ "$MANIFEST_FLEET_VERSIONING" != "none" ]]; then
-        local version_file="${MANIFEST_FLEET_ROOT}/$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" ".fleet.version_file" "$MANIFEST_FLEET_DEFAULT_VERSION_FILE")"
+    if [[ "$MANIFEST_CLI_FLEET_VERSIONING" != "none" ]]; then
+        local version_file="${MANIFEST_CLI_FLEET_ROOT}/$(get_yaml_value "$MANIFEST_CLI_FLEET_CONFIG_FILE" ".fleet.version_file" "$MANIFEST_CLI_FLEET_DEFAULT_VERSION_FILE")"
         if [[ -f "$version_file" ]]; then
-            MANIFEST_FLEET_VERSION=$(cat "$version_file" 2>/dev/null)
+            MANIFEST_CLI_FLEET_VERSION=$(cat "$version_file" 2>/dev/null)
         fi
     fi
 
     # Parse services from manifest.fleet.tsv (the service inventory)
-    MANIFEST_FLEET_SERVICES=$(get_fleet_services "$MANIFEST_FLEET_ROOT")
+    MANIFEST_CLI_FLEET_SERVICES=$(get_fleet_services "$MANIFEST_CLI_FLEET_ROOT")
 
-    if [[ -z "$MANIFEST_FLEET_SERVICES" ]]; then
+    if [[ -z "$MANIFEST_CLI_FLEET_SERVICES" ]]; then
         log_warning "No services found in manifest.fleet.tsv"
     fi
 
     # Load per-service configuration from TSV + optional YAML overrides
-    _load_all_service_configs "$MANIFEST_FLEET_ROOT"
+    _load_all_service_configs "$MANIFEST_CLI_FLEET_ROOT"
 
     local _svc_count=0
-    for _ in $MANIFEST_FLEET_SERVICES; do _svc_count=$((_svc_count + 1)); done
-    log_success "Fleet configuration loaded: $MANIFEST_FLEET_NAME ($_svc_count services)"
+    for _ in $MANIFEST_CLI_FLEET_SERVICES; do _svc_count=$((_svc_count + 1)); done
+    log_success "Fleet configuration loaded: $MANIFEST_CLI_FLEET_NAME ($_svc_count services)"
     return 0
 }
 
@@ -522,16 +522,16 @@ load_fleet_config() {
 #   $1 - Fleet root directory
 #
 # SIDE EFFECTS:
-#   Sets MANIFEST_FLEET_SERVICE_<NAME>_PATH
-#   Sets MANIFEST_FLEET_SERVICE_<NAME>_URL
-#   Sets MANIFEST_FLEET_SERVICE_<NAME>_TYPE
-#   Sets MANIFEST_FLEET_SERVICE_<NAME>_BRANCH
-#   Sets MANIFEST_FLEET_SERVICE_<NAME>_TEAM
-#   Sets MANIFEST_FLEET_SERVICE_<NAME>_EXCLUDED
-#   Sets MANIFEST_FLEET_SERVICE_<NAME>_SUBMODULE
-#   Sets MANIFEST_FLEET_SERVICE_<NAME>_DESCRIPTION
-#   Sets MANIFEST_FLEET_SERVICE_<NAME>_RELEASE_ENABLED
-#   Sets MANIFEST_FLEET_SERVICE_<NAME>_RELEASE_STRATEGY
+#   Sets MANIFEST_CLI_FLEET_SERVICE_<NAME>_PATH
+#   Sets MANIFEST_CLI_FLEET_SERVICE_<NAME>_URL
+#   Sets MANIFEST_CLI_FLEET_SERVICE_<NAME>_TYPE
+#   Sets MANIFEST_CLI_FLEET_SERVICE_<NAME>_BRANCH
+#   Sets MANIFEST_CLI_FLEET_SERVICE_<NAME>_TEAM
+#   Sets MANIFEST_CLI_FLEET_SERVICE_<NAME>_EXCLUDED
+#   Sets MANIFEST_CLI_FLEET_SERVICE_<NAME>_SUBMODULE
+#   Sets MANIFEST_CLI_FLEET_SERVICE_<NAME>_DESCRIPTION
+#   Sets MANIFEST_CLI_FLEET_SERVICE_<NAME>_RELEASE_ENABLED
+#   Sets MANIFEST_CLI_FLEET_SERVICE_<NAME>_RELEASE_STRATEGY
 # -----------------------------------------------------------------------------
 _load_all_service_configs() {
     local fleet_root="$1"
@@ -553,15 +553,15 @@ _load_all_service_configs() {
         # Resolve relative path to absolute
         local abs_path="$path"
         if [[ -n "$path" ]] && [[ ! "$path" = /* ]]; then
-            abs_path="$MANIFEST_FLEET_ROOT/${path#./}"
+            abs_path="$MANIFEST_CLI_FLEET_ROOT/${path#./}"
         fi
 
         # Base properties from TSV (inventory)
-        printf -v "MANIFEST_FLEET_SERVICE_${var_name}_PATH" '%s' "$abs_path"
-        printf -v "MANIFEST_FLEET_SERVICE_${var_name}_URL" '%s' "$url"
-        printf -v "MANIFEST_FLEET_SERVICE_${var_name}_TYPE" '%s' "$type"
-        printf -v "MANIFEST_FLEET_SERVICE_${var_name}_BRANCH" '%s' "${branch:-${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}}"
-        printf -v "MANIFEST_FLEET_SERVICE_${var_name}_SUBMODULE" '%s' "false"
+        printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_PATH" '%s' "$abs_path"
+        printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_URL" '%s' "$url"
+        printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_TYPE" '%s' "$type"
+        printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_BRANCH" '%s' "${branch:-${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}}"
+        printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_SUBMODULE" '%s' "false"
 
         # Defaults for per-service properties
         local team="" excluded="false" description="" release_enabled="" release_strategy=""
@@ -569,9 +569,9 @@ _load_all_service_configs() {
         # Per-service release policy from the fleet root config. The nested
         # form keeps release behavior grouped with other service metadata:
         # services.<name>.release.enabled / services.<name>.release.strategy.
-        if [[ -f "$MANIFEST_FLEET_CONFIG_FILE" ]]; then
-            release_enabled=$(SERVICE_NAME="$name" parse_yaml_with_yq "$MANIFEST_FLEET_CONFIG_FILE" '.services[strenv(SERVICE_NAME)].release.enabled' 2>/dev/null || true)
-            release_strategy=$(SERVICE_NAME="$name" parse_yaml_with_yq "$MANIFEST_FLEET_CONFIG_FILE" '.services[strenv(SERVICE_NAME)].release.strategy' 2>/dev/null || true)
+        if [[ -f "$MANIFEST_CLI_FLEET_CONFIG_FILE" ]]; then
+            release_enabled=$(SERVICE_NAME="$name" parse_yaml_with_yq "$MANIFEST_CLI_FLEET_CONFIG_FILE" '.services[strenv(SERVICE_NAME)].release.enabled' 2>/dev/null || true)
+            release_strategy=$(SERVICE_NAME="$name" parse_yaml_with_yq "$MANIFEST_CLI_FLEET_CONFIG_FILE" '.services[strenv(SERVICE_NAME)].release.strategy' 2>/dev/null || true)
         fi
 
         # Per-service config from the repo's own manifest.fleet.config.yaml
@@ -587,15 +587,15 @@ _load_all_service_configs() {
             local svc_type svc_branch
             svc_type=$(get_yaml_value "$svc_config" ".type" "" 2>/dev/null) || true
             svc_branch=$(get_yaml_value "$svc_config" ".branch" "" 2>/dev/null) || true
-            [[ -n "$svc_type" ]] && printf -v "MANIFEST_FLEET_SERVICE_${var_name}_TYPE" '%s' "$svc_type"
-            [[ -n "$svc_branch" ]] && printf -v "MANIFEST_FLEET_SERVICE_${var_name}_BRANCH" '%s' "$svc_branch"
+            [[ -n "$svc_type" ]] && printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_TYPE" '%s' "$svc_type"
+            [[ -n "$svc_branch" ]] && printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_BRANCH" '%s' "$svc_branch"
         fi
 
-        printf -v "MANIFEST_FLEET_SERVICE_${var_name}_TEAM" '%s' "$team"
-        printf -v "MANIFEST_FLEET_SERVICE_${var_name}_EXCLUDED" '%s' "$excluded"
-        printf -v "MANIFEST_FLEET_SERVICE_${var_name}_DESCRIPTION" '%s' "$description"
-        printf -v "MANIFEST_FLEET_SERVICE_${var_name}_RELEASE_ENABLED" '%s' "$release_enabled"
-        printf -v "MANIFEST_FLEET_SERVICE_${var_name}_RELEASE_STRATEGY" '%s' "$release_strategy"
+        printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_TEAM" '%s' "$team"
+        printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_EXCLUDED" '%s' "$excluded"
+        printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_DESCRIPTION" '%s' "$description"
+        printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_RELEASE_ENABLED" '%s' "$release_enabled"
+        printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_RELEASE_STRATEGY" '%s' "$release_strategy"
 
         log_debug "Loaded service config: $name (path=$abs_path, type=$type)"
     done < "$tsv_file"
@@ -626,7 +626,7 @@ get_fleet_service_path() {
     local var_name
     var_name=$(echo "$service" | tr '[:lower:]-.' '[:upper:]__')
 
-    local path_var="MANIFEST_FLEET_SERVICE_${var_name}_PATH"
+    local path_var="MANIFEST_CLI_FLEET_SERVICE_${var_name}_PATH"
     local path="${!path_var:-}"
 
     if [[ -z "$path" ]]; then
@@ -664,7 +664,7 @@ get_fleet_service_property() {
     local prop_upper
     prop_upper=$(echo "$property" | tr '[:lower:]' '[:upper:]')
 
-    local full_var="MANIFEST_FLEET_SERVICE_${var_name}_${prop_upper}"
+    local full_var="MANIFEST_CLI_FLEET_SERVICE_${var_name}_${prop_upper}"
     local value="${!full_var:-}"
 
     if [[ -n "$value" ]]; then
@@ -732,9 +732,9 @@ get_fleet_config_value() {
         "docs_gen_readme_version")    yaml_path=".docs.generate.readme_version" ;;
     esac
 
-    if [[ -n "$yaml_path" ]] && [[ -f "${MANIFEST_FLEET_CONFIG_FILE:-}" ]]; then
+    if [[ -n "$yaml_path" ]] && [[ -f "${MANIFEST_CLI_FLEET_CONFIG_FILE:-}" ]]; then
         local yaml_value
-        if yaml_value=$(get_yaml_value "$MANIFEST_FLEET_CONFIG_FILE" "$yaml_path"); then
+        if yaml_value=$(get_yaml_value "$MANIFEST_CLI_FLEET_CONFIG_FILE" "$yaml_path"); then
             echo "$yaml_value"
             return 0
         fi
@@ -781,17 +781,17 @@ validate_fleet_config() {
     log_info "Validating fleet configuration..."
 
     # Check fleet metadata
-    if [[ -z "$MANIFEST_FLEET_NAME" ]] || [[ "$MANIFEST_FLEET_NAME" == "unnamed-fleet" ]]; then
+    if [[ -z "$MANIFEST_CLI_FLEET_NAME" ]] || [[ "$MANIFEST_CLI_FLEET_NAME" == "unnamed-fleet" ]]; then
         log_warning "Fleet name not set (using default)"
         ((warnings++))
     fi
 
     # Check services
-    if [[ -z "$MANIFEST_FLEET_SERVICES" ]]; then
+    if [[ -z "$MANIFEST_CLI_FLEET_SERVICES" ]]; then
         log_error "No services defined in fleet"
         ((errors++))
     else
-        for service in $MANIFEST_FLEET_SERVICES; do
+        for service in $MANIFEST_CLI_FLEET_SERVICES; do
             _validate_service "$service" || ((errors++))
         done
     fi
@@ -875,17 +875,17 @@ _validate_service() {
 #   list_fleet_services
 # -----------------------------------------------------------------------------
 list_fleet_services() {
-    if [[ -z "$MANIFEST_FLEET_SERVICES" ]]; then
+    if [[ -z "$MANIFEST_CLI_FLEET_SERVICES" ]]; then
         echo "No services in fleet"
         return 0
     fi
 
-    echo "Services in fleet '$MANIFEST_FLEET_NAME':"
+    echo "Services in fleet '$MANIFEST_CLI_FLEET_NAME':"
     echo ""
     printf "%-20s %-10s %-10s %-30s\n" "SERVICE" "TYPE" "STATUS" "PATH"
     printf "%-20s %-10s %-10s %-30s\n" "-------" "----" "------" "----"
 
-    for service in $MANIFEST_FLEET_SERVICES; do
+    for service in $MANIFEST_CLI_FLEET_SERVICES; do
         local path=$(get_fleet_service_property "$service" "path")
         local type=$(get_fleet_service_property "$service" "type" "service")
         local status="unknown"

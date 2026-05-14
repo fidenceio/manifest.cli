@@ -18,7 +18,7 @@ setup() {
 teardown() {
     cd /tmp
     rm -rf "$SCRATCH"
-    unset MANIFEST_FLEET_ROOT MANIFEST_FLEET_SERVICES
+    unset MANIFEST_CLI_FLEET_ROOT MANIFEST_CLI_FLEET_SERVICES
 }
 
 # Lightweight stub for get_fleet_service_property keyed off two associative
@@ -79,8 +79,8 @@ mk_repo_clean() {
 @test "_refresh_fleet_commit_changes: commits fleet root with pending changes" {
     _stub_fleet_helpers
     mk_repo_with_change "$SCRATCH/root"
-    export MANIFEST_FLEET_ROOT="$SCRATCH/root"
-    export MANIFEST_FLEET_SERVICES=""
+    export MANIFEST_CLI_FLEET_ROOT="$SCRATCH/root"
+    export MANIFEST_CLI_FLEET_SERVICES=""
 
     run _refresh_fleet_commit_changes "Refresh fleet metadata"
     [ "$status" -eq 0 ]
@@ -95,8 +95,8 @@ mk_repo_clean() {
 @test "_refresh_fleet_commit_changes: reports no-changes for clean fleet root" {
     _stub_fleet_helpers
     mk_repo_clean "$SCRATCH/root"
-    export MANIFEST_FLEET_ROOT="$SCRATCH/root"
-    export MANIFEST_FLEET_SERVICES=""
+    export MANIFEST_CLI_FLEET_ROOT="$SCRATCH/root"
+    export MANIFEST_CLI_FLEET_SERVICES=""
 
     run _refresh_fleet_commit_changes
     [ "$status" -eq 0 ]
@@ -117,8 +117,8 @@ mk_repo_clean() {
     _STUB_PATH[svc-a]="$SCRATCH/svc-a"
     _STUB_PATH[svc-b]="$SCRATCH/svc-b"
 
-    export MANIFEST_FLEET_ROOT="$SCRATCH"   # not a git repo, skipped
-    export MANIFEST_FLEET_SERVICES="svc-a svc-b"
+    export MANIFEST_CLI_FLEET_ROOT="$SCRATCH"   # not a git repo, skipped
+    export MANIFEST_CLI_FLEET_SERVICES="svc-a svc-b"
 
     run _refresh_fleet_commit_changes
     [ "$status" -eq 0 ]
@@ -139,8 +139,8 @@ mk_repo_clean() {
     _STUB_PATH[svc-skip]="$SCRATCH/svc-skip"
     _STUB_EXCLUDED[svc-skip]="true"
 
-    export MANIFEST_FLEET_ROOT="$SCRATCH"
-    export MANIFEST_FLEET_SERVICES="svc-a svc-skip"
+    export MANIFEST_CLI_FLEET_ROOT="$SCRATCH"
+    export MANIFEST_CLI_FLEET_SERVICES="svc-a svc-skip"
 
     run _refresh_fleet_commit_changes
     [ "$status" -eq 0 ]
@@ -157,8 +157,8 @@ mk_repo_clean() {
     mkdir -p "$SCRATCH/not-a-repo"   # exists but no .git
     _STUB_PATH[ghost]="$SCRATCH/not-a-repo"
 
-    export MANIFEST_FLEET_ROOT="$SCRATCH"
-    export MANIFEST_FLEET_SERVICES="ghost"
+    export MANIFEST_CLI_FLEET_ROOT="$SCRATCH"
+    export MANIFEST_CLI_FLEET_SERVICES="ghost"
 
     run _refresh_fleet_commit_changes
     [ "$status" -eq 0 ]
@@ -171,8 +171,8 @@ mk_repo_clean() {
     mk_repo_with_change "$SCRATCH/root"
     _STUB_PATH[main]="$SCRATCH/root"
 
-    export MANIFEST_FLEET_ROOT="$SCRATCH/root"
-    export MANIFEST_FLEET_SERVICES="main"
+    export MANIFEST_CLI_FLEET_ROOT="$SCRATCH/root"
+    export MANIFEST_CLI_FLEET_SERVICES="main"
 
     run _refresh_fleet_commit_changes
     [ "$status" -eq 0 ]
@@ -193,8 +193,8 @@ mk_repo_clean() {
     export -f fleet_update
 
     mk_repo_with_change "$SCRATCH/root"
-    export MANIFEST_FLEET_ROOT="$SCRATCH/root"
-    export MANIFEST_FLEET_SERVICES=""
+    export MANIFEST_CLI_FLEET_ROOT="$SCRATCH/root"
+    export MANIFEST_CLI_FLEET_SERVICES=""
 
     run manifest_refresh_fleet --dry-run --commit
     [ "$status" -eq 0 ]
