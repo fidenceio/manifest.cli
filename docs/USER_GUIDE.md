@@ -119,7 +119,7 @@ manifest ship repo patch -y    # Apply full patch release
 manifest ship repo major -i -y # Apply major release with interactive safety prompts
 ```
 
-Ship runs: sync, version bump, documentation generation, markdown validation, commit, Git tag, push to all remotes, and Homebrew formula update (in the canonical repository). When the canonical CLI release updates the Homebrew tap, Manifest also refreshes any clean local tap checkout it can safely fast-forward, including sibling workspace checkouts such as `fidenceio.homebrew.tap`. Canonical CLI `minor`, `major`, and `revision` ships then run one guarded follow-up patch under the upgraded installed CLI so release-process changes take effect immediately. Set `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH=false` to skip that follow-up.
+Ship preview starts by printing the resolved repo identity, including Git root, origin, branch/upstream, fleet membership when detected, and the reminder that `ship repo` targets only that Git repository. Ship apply then runs: sync, version bump, documentation generation, markdown validation, commit, Git tag, push to all remotes, and Homebrew formula update (in the canonical repository). When the canonical CLI release updates the Homebrew tap, Manifest also refreshes any clean local tap checkout it can safely fast-forward, including sibling workspace checkouts such as `fidenceio.homebrew.tap`. Canonical CLI `minor`, `major`, and `revision` ships then run one guarded follow-up patch under the upgraded installed CLI so release-process changes take effect immediately. Set `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH=false` to skip that follow-up.
 
 Preview output includes a `What's new` section. That summary is derived from the
 same change-analysis path used for `CHANGELOG.md`, generated release docs, and
@@ -401,7 +401,7 @@ Configuration uses YAML files loaded in priority order (later overrides earlier)
 | 3 | `manifest.config.yaml` | Project |
 | 4 (highest) | `manifest.config.local.yaml` (git-ignored) | Local overrides |
 
-All settings map to `MANIFEST_CLI_*` environment variables via a bidirectional YAML-to-env mapping in `manifest-yaml.sh`. The YAML parser is [yq v4+](https://github.com/mikefarah/yq) (Mike Farah's Go implementation), a hard dependency.
+All settings map to `MANIFEST_CLI_*` environment variables via a bidirectional YAML-to-env mapping in `manifest-yaml.sh`. The YAML parser is the yq version and vendor defined in `modules/core/manifest-requirements.sh`.
 
 For the full configuration schema with comments on every key, see
 [examples/manifest.config.yaml.example](../examples/manifest.config.yaml.example).

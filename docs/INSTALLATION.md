@@ -12,7 +12,7 @@
 | **curl** | Any | Recommended | HTTPS timestamps, API calls, install script |
 | **coreutils** | Any | Optional | Cross-platform `date`/`stat` on macOS |
 
-**Important:** The `yq` dependency must be [Mike Farah's Go implementation](https://github.com/mikefarah/yq), not the Python `yq` wrapper (`kislyuk/yq`). The install script and Homebrew formula validate this automatically.
+**Important:** The supported dependency versions are defined in `modules/core/manifest-requirements.sh`. The CLI, installer, doctor, and Homebrew wrapper use that same contract.
 
 ---
 
@@ -49,8 +49,8 @@ curl -fsSL https://raw.githubusercontent.com/fidenceio/manifest.cli/main/install
 
 The install script:
 
-1. Validates Bash 5+ is available (with per-platform install instructions if missing)
-2. Validates yq v4+ is available (detects wrong version, provides install commands)
+1. Validates the required Bash version (with per-platform install instructions if missing)
+2. Validates the required yq version and vendor (detects wrong version, provides install commands)
 3. Uses Homebrew when available (preferred path)
 4. Falls back to manual installation at `~/.manifest-cli` with a launcher in `~/.local/bin`
 5. Migrates configuration from legacy locations automatically
@@ -86,12 +86,7 @@ yq --version
 # Should show: yq (https://github.com/mikefarah/yq/) version v4.x.x
 ```
 
-If you see `yq 2.x` or `kislyuk/yq`, you have the Python wrapper — uninstall it and install the Go version instead:
-
-```bash
-pip uninstall yq           # Remove Python yq
-brew install yq            # Install Go yq
-```
+If `manifest doctor` reports the wrong `yq`, install the package listed above for your platform. Manifest rejects incompatible `yq` binaries at startup.
 
 ---
 
@@ -162,7 +157,7 @@ On macOS, this offers the Homebrew installation path. Configuration is preserved
 | Tests failing | Run `manifest doctor` and use the repo's containerized test runner when developing Manifest CLI |
 | Bash version issues | Install Bash 5+ via Homebrew: `brew install bash` |
 | `yq is not installed` | Install yq: `brew install yq` (see Installing yq Manually above) |
-| `yq is not Mike Farah's Go version` | Uninstall Python yq (`pip uninstall yq`), install Go yq (`brew install yq`) |
+| `yq does not satisfy the Manifest requirement` | Install the supported yq package for your platform |
 | YAML config not loading | Run `manifest config doctor` to diagnose config issues |
 | Network errors | Check connectivity; use `MANIFEST_CLI_OFFLINE_MODE=true` for offline work |
 

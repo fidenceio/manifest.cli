@@ -19,6 +19,8 @@ load_modules() {
     export MANIFEST_CLI_CORE_MODULES_DIR="$TEST_REPO_ROOT/modules"
     # Always-needed minimal stack: shared utils + yaml.
     # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/core/manifest-requirements.sh"
+    # shellcheck disable=SC1091
     source "$TEST_REPO_ROOT/modules/core/manifest-shared-utils.sh"
     # shellcheck disable=SC1091
     source "$TEST_REPO_ROOT/modules/core/manifest-execution-policy.sh"

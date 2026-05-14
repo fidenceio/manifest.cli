@@ -120,16 +120,11 @@ _manifest_time_effective_servers() {
     printf '%s\n' "${servers[@]}"
 }
 
-# Parse RFC 7231 HTTP Date header into Unix epoch. Tries GNU date, BSD date, python3.
+# Parse RFC 7231 HTTP Date header into Unix epoch. Tries GNU date, then BSD date.
 _parse_http_date() {
     local s="$1" epoch
     epoch=$(date -u -d "$s" +%s 2>/dev/null) && { echo "$epoch"; return 0; }
     epoch=$(date -u -jf "%a, %d %b %Y %H:%M:%S GMT" "$s" +%s 2>/dev/null) && { echo "$epoch"; return 0; }
-    if command -v python3 >/dev/null 2>&1; then
-        epoch=$(python3 -c "import email.utils,calendar,sys
-t=email.utils.parsedate_tz('$s')
-print(calendar.timegm(t[:9])) if t else sys.exit(1)" 2>/dev/null) && { echo "$epoch"; return 0; }
-    fi
     return 1
 }
 

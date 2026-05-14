@@ -46,11 +46,11 @@ manifest_doctor() {
     _doctor_section "Dependencies:"
     if command -v yq >/dev/null 2>&1; then
         local yq_ver
-        yq_ver="$(yq --version 2>&1 | head -n1)"
-        if echo "$yq_ver" | grep -q "mikefarah\|version v4"; then
+        yq_ver="$(manifest_requirement_yq_version_text yq)"
+        if manifest_requirement_yq_text_is_supported "$yq_ver"; then
             _doctor_ok "yq" "$yq_ver"
         else
-            _doctor_fail "yq" "wrong fork — need Mike Farah's Go yq v4+ ($yq_ver)"
+            _doctor_fail "yq" "need ${MANIFEST_CLI_REQUIRED_YQ_LABEL} ($yq_ver)"
         fi
     else
         _doctor_fail "yq" "missing — brew install yq"
@@ -62,10 +62,10 @@ manifest_doctor() {
         _doctor_fail "git" "missing"
     fi
 
-    if [[ "${BASH_VERSINFO[0]:-0}" -ge 4 ]]; then
+    if manifest_requirement_current_bash_is_supported; then
         _doctor_ok "Bash" "${BASH_VERSION}"
     else
-        _doctor_fail "Bash" "need 4+, got ${BASH_VERSION}"
+        _doctor_fail "Bash" "need ${MANIFEST_CLI_REQUIRED_BASH_VERSION}+, got ${BASH_VERSION}"
     fi
 
     if command -v gh >/dev/null 2>&1; then

@@ -157,7 +157,9 @@ teardown() {
     echo "$output" | grep -q "VERSION: update 1.2.3 -> 1.3.0"
     echo "$output" | grep -q "CHANGELOG.md: prepend the 1.3.0 release entry"
     echo "$output" | grep -q "docs/: regenerate release documentation"
-    ! echo "$output" | grep -q "Repo identity"
+    echo "$output" | grep -q "Repo identity"
+    echo "$output" | grep -q "Origin:.*example/project"
+    echo "$output" | grep -q "Target:.*this Git repository only"
     ! echo "$output" | grep -q "Git and publish plan"
     echo "$output" | grep -q "No changes written"
 }

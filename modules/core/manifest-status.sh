@@ -147,7 +147,6 @@ manifest_repo_identity_block() {
     local proj="${1:-$PROJECT_ROOT}"
     _manifest_repo_identity_collect "$proj"
 
-    echo ""
     echo "Repo identity"
     echo "-------------"
     _status_line "Git root:" "$_MANIFEST_REPO_ID_GIT_ROOT"
@@ -517,6 +516,7 @@ _manifest_status_repo() {
         _status_line "Branch:" "$branch → $upstream  ($sync_state)"
     fi
 
+    echo ""
     manifest_repo_identity_block "$proj"
 
     # -- Working tree -------------------------------------------------------

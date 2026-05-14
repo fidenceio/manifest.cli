@@ -5,7 +5,7 @@
 When you can spin up four features in parallel, you also need to ship four features without dropping any. Manifest handles versions, tags, changelogs, docs, and the multi-repo coordination so the human stays in flow.
 
 [![tests](https://github.com/fidenceio/manifest.cli/actions/workflows/test.yml/badge.svg)](https://github.com/fidenceio/manifest.cli/actions/workflows/test.yml)
-**Version** `47.8.4` · **Platform** macOS · Linux · FreeBSD · **Requires** Bash 5+, Git, yq v4+
+**Version** `47.8.4` · **Platform** macOS · Linux · FreeBSD · **Requires** Bash, Git, and yq versions from `modules/core/manifest-requirements.sh`
 
 ---
 
@@ -222,6 +222,19 @@ manifest <verb> <scope> [options]
 | `manifest ship fleet patch` | Preview releaseable fleet services |
 | `manifest ship fleet patch -y` | Apply direct release for releaseable fleet services |
 
+`manifest ship repo` prints the resolved repo identity before the preview/apply plan so a fleet workspace cannot hide which nested Git checkout will be released.
+
+Today `repo` is selected by the shell working directory, not by an argument:
+
+```bash
+cd /path/to/repo
+manifest ship repo patch
+```
+
+Explicit repo selection is tracked as a follow-up. The preferred shape is a
+global `manifest -C <path> ship repo patch` option, with fleet-member selection
+added separately once member names can be resolved unambiguously.
+
 Release types: `patch` | `minor` | `major` | `revision`
 
 Canonical Manifest CLI `minor`, `major`, and `revision` ships automatically run one guarded follow-up patch after the installed CLI is upgraded, so release-process changes are exercised by the newly installed version. Disable with `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH=false`.
@@ -428,7 +441,7 @@ Configuration loads in priority order (later overrides earlier):
 | 3 | `manifest.config.yaml` | Project |
 | 4 (highest) | `manifest.config.local.yaml` (git-ignored) | Local overrides |
 
-All configuration is YAML-based. Approximately 80 settings map to `MANIFEST_CLI_*` environment variables. The YAML parser is [yq v4+](https://github.com/mikefarah/yq) (Mike Farah's Go implementation), a hard dependency validated at install time.
+All configuration is YAML-based. Approximately 80 settings map to `MANIFEST_CLI_*` environment variables. The YAML parser is [yq v4+](https://github.com/mikefarah/yq) (Mike Farah's Go implementation), a hard dependency validated against `modules/core/manifest-requirements.sh`.
 
 ```bash
 manifest config               # Interactive wizard (TTY) or show config
@@ -547,7 +560,7 @@ manifest.cli/
 ├── formula/            Homebrew formula source
 ├── examples/           Configuration templates
 ├── .git-hooks/         Version-controlled pre-commit hooks
-├── install-cli.sh      Installer (validates Bash 5+, yq v4+, Git)
+├── install-cli.sh      Installer (validates centralized dependency requirements and Git)
 └── VERSION             Current version file
 ```
 
@@ -627,7 +640,7 @@ _MANIFEST_YAML_TO_ENV[] bidirectional map      ← In manifest-yaml.sh
 | curl | Any | HTTPS timestamps, API calls | Usually pre-installed |
 | coreutils | Any (optional) | Cross-platform date/stat | `brew install coreutils` |
 
-Homebrew installation handles all dependencies automatically. The install script validates Bash 5+ and yq v4+ with platform-specific error messages and install instructions.
+Homebrew installation handles all dependencies automatically. The install script and runtime checks read version requirements from `modules/core/manifest-requirements.sh`.
 
 ---
 

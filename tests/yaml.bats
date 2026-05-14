@@ -17,6 +17,30 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
+@test "yaml: detect_yaml_parser rejects yq without required vendor/version signature" {
+    mkdir -p "$SCRATCH/bin"
+    cat > "$SCRATCH/bin/yq" <<'EOF'
+#!/usr/bin/env sh
+echo "yq 4.40.5"
+EOF
+    chmod +x "$SCRATCH/bin/yq"
+
+    PATH="$SCRATCH/bin:$PATH" run detect_yaml_parser
+    [ "$status" -eq 1 ]
+    echo "$output" | grep -q "$MANIFEST_CLI_REQUIRED_YQ_LABEL"
+}
+
+@test "requirements: yq version text requires Mike Farah vendor and minimum major" {
+    run manifest_requirement_yq_text_is_supported "yq (https://github.com/mikefarah/yq/) version v4.53.2"
+    [ "$status" -eq 0 ]
+
+    run manifest_requirement_yq_text_is_supported "yq (https://example.com/yq/) version v4.53.2"
+    [ "$status" -eq 1 ]
+
+    run manifest_requirement_yq_text_is_supported "yq (https://github.com/mikefarah/yq/) version v3.4.1"
+    [ "$status" -eq 1 ]
+}
+
 @test "yaml: yaml_path_to_env_var maps known YAML paths to MANIFEST_CLI_* envs" {
     run yaml_path_to_env_var "git.tag_prefix"
     [ "$status" -eq 0 ]

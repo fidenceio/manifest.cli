@@ -190,6 +190,20 @@ manifest_ship_preview_plan() {
     echo "  - Documentation review: inspect changed source/docs before release commits"
 }
 
+manifest_ship_repo_identity_notice() {
+    local repo_root="${1:-${PROJECT_ROOT:-$PWD}}"
+
+    if declare -F manifest_repo_identity_block >/dev/null 2>&1; then
+        manifest_repo_identity_block "$repo_root"
+    else
+        echo "Repo identity"
+        echo "-------------"
+        echo "  Git root:     $(git -C "$repo_root" rev-parse --show-toplevel 2>/dev/null || echo "$repo_root")"
+        echo "  Target:       this Git repository only"
+    fi
+    echo ""
+}
+
 # -----------------------------------------------------------------------------
 # Function: manifest_ship_repo
 # -----------------------------------------------------------------------------
@@ -271,6 +285,7 @@ manifest_ship_repo() {
     fi
 
     if [[ "$execution_mode" == "preview" ]]; then
+        manifest_ship_repo_identity_notice "${PROJECT_ROOT:-$PWD}"
         manifest_ship_preview_plan "$increment_type" "$local_only"
         local replay_command="manifest ship repo $increment_type"
         [[ "$local_only" == "true" ]] && replay_command="$replay_command --local"
@@ -290,15 +305,12 @@ manifest_ship_repo() {
 
     manifest_execution_apply_header
 
+    manifest_ship_repo_identity_notice "${PROJECT_ROOT:-$PWD}"
+
     if [[ "$local_only" == "true" ]]; then
         echo "Ship (local): $increment_type — no remote operations"
     else
         echo "Ship: $increment_type"
-    fi
-
-    if declare -F manifest_repo_identity_block >/dev/null 2>&1; then
-        manifest_repo_identity_block "$PWD"
-        echo ""
     fi
 
     manifest_ship_workflow "$increment_type" "$interactive" "$publish_release"

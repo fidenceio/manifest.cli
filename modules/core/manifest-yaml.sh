@@ -15,6 +15,14 @@
 # External tool support:
 #   - yq (Mike Farah's Go version, v4+) — hard dependency
 
+# Source requirements if this module is loaded outside manifest-core.sh.
+if ! command -v manifest_requirement_yq_is_supported &>/dev/null; then
+    _manifest_yaml_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    # shellcheck disable=SC1091
+    source "$_manifest_yaml_dir/manifest-requirements.sh"
+    unset _manifest_yaml_dir
+fi
+
 # Guard: provide no-op log functions if shared-utils not yet sourced
 if ! command -v log_debug &>/dev/null; then
     log_debug()   { :; }
@@ -263,16 +271,16 @@ env_var_to_yaml_path() {
 # -----------------------------------------------------------------------------
 detect_yaml_parser() {
     if command -v yq &>/dev/null; then
-        if yq --version 2>&1 | grep -q "mikefarah\|version v4"; then
+        if manifest_requirement_yq_is_supported yq; then
             echo "yq"
             return 0
         fi
-        log_error "yq is installed but is not Mike Farah's Go version (v4+)."
+        log_error "yq is installed but does not satisfy the Manifest requirement: ${MANIFEST_CLI_REQUIRED_YQ_LABEL}."
         log_error "Install the correct version: https://github.com/mikefarah/yq#install"
         return 1
     fi
 
-    log_error "yq is not installed. Manifest CLI requires yq (v4+) for YAML configuration."
+    log_error "yq is not installed. Manifest CLI requires ${MANIFEST_CLI_REQUIRED_YQ_LABEL} for YAML configuration."
     log_error "Install: brew install yq  OR  https://github.com/mikefarah/yq#install"
     return 1
 }

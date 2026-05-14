@@ -437,7 +437,24 @@ manifest ship repo patch --local -y # Apply local-only release
 manifest ship repo patch --explain # Show the built-in recipe definition
 ```
 
-**Preview mode** (default): prints the release plan and writes nothing. The plan includes current and next version, a short narrative summary, pending working-tree files that would be auto-committed, and release documentation artifacts.
+`repo` is a scope, not a selector. The target is the enclosing Git repository
+resolved from the shell working directory; Manifest changes to that Git root
+before running the workflow. To ship a different repo today, start the command
+from that repo:
+
+```bash
+cd /path/to/repo
+manifest ship repo patch
+
+(cd /path/to/repo && manifest ship repo patch)
+```
+
+Manifest does not yet accept a repo path or fleet-member selector on
+`ship repo`. The intended follow-up surface is `manifest -C <path> ship repo
+patch` for general path selection, plus a fleet-aware member selector such as
+`manifest ship repo patch --member <name>`.
+
+**Preview mode** (default): prints the resolved repo identity first, then the release plan, and writes nothing. The plan includes current and next version, a short narrative summary, pending working-tree files that would be auto-committed, and release documentation artifacts.
 
 **Apply mode** (`-y` / `--yes`): sync, bump version, generate docs, archive old docs, validate markdown, commit, tag, push to all remotes, update Homebrew formula (canonical repo only), create a matching GitHub Release when enabled, and safely fast-forward clean local Homebrew tap checkouts that the release process updated remotely. Canonical CLI `minor`, `major`, and `revision` ships also run one guarded follow-up patch under the upgraded installed CLI; set `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH=false` to skip it.
 

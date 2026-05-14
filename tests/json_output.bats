@@ -100,11 +100,8 @@ teardown() {
     echo "$output" | grep -qE '"modified":[0-9]+'
 }
 
-@test "status --json: validates as JSON via python (when available)" {
+@test "status --json: validates as JSON via yq" {
     source "$TEST_REPO_ROOT/modules/core/manifest-status.sh"
-    if ! command -v python3 >/dev/null 2>&1; then
-        skip "python3 not installed"
-    fi
     cd "$SCRATCH"
     git init -q
     git config user.email t@e.com
@@ -112,7 +109,7 @@ teardown() {
     echo "1.2.3" > VERSION
     run manifest_status --json
     [ "$status" -eq 0 ]
-    echo "$output" | python3 -c 'import json,sys; json.loads(sys.stdin.read())'
+    echo "$output" | yq e '.' - >/dev/null
 }
 
 @test "status --json: rejects unknown options" {
@@ -151,8 +148,6 @@ EOF
     echo "$output" | grep -q '"value":"demo"'
     # Single-line JSON array.
     [ "$(echo "$output" | wc -l | tr -d ' ')" = "1" ]
-    # Validates if python is around.
-    if command -v python3 >/dev/null 2>&1; then
-        echo "$output" | python3 -c 'import json,sys; arr=json.loads(sys.stdin.read()); assert isinstance(arr, list)'
-    fi
+    echo "$output" | yq e '.' - >/dev/null
+    echo "$output" | yq e 'type == "!!seq"' - | grep -q true
 }

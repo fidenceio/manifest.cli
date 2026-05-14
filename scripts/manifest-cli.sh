@@ -5,12 +5,15 @@
 
 set -eo pipefail
 
-# Require Bash 5+ at runtime. If possible, re-exec into a newer bash.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/../modules/core/manifest-requirements.sh"
+
+# Require the centralized Bash runtime version. If possible, re-exec into it.
 ensure_bash5_or_reexec() {
-    local min_major=5
     local current_major="${BASH_VERSINFO[0]:-0}"
 
-    if [ "$current_major" -ge "$min_major" ]; then
+    if manifest_requirement_bash_is_supported_major "$current_major"; then
         return 0
     fi
 
@@ -27,16 +30,16 @@ ensure_bash5_or_reexec() {
         if [ -z "$candidate" ] || [ ! -x "$candidate" ]; then
             continue
         fi
-        major="$("$candidate" -c 'echo "${BASH_VERSINFO[0]:-0}"' 2>/dev/null || echo "0")"
-        if [ "$major" -ge "$min_major" ]; then
+        major="$(manifest_requirement_bash_major_from_command "$candidate")"
+        if manifest_requirement_bash_is_supported_major "$major"; then
             MANIFEST_CLI_BASH_REEXEC=1 exec "$candidate" "$0" "$@"
         fi
     done
 
-    echo "❌ Manifest CLI requires Bash 5+." >&2
+    echo "❌ Manifest CLI requires Bash ${MANIFEST_CLI_REQUIRED_BASH_VERSION}+." >&2
     echo "   Current shell: bash ${BASH_VERSION:-unknown}" >&2
     echo "   No compatible bash found in common locations." >&2
-    echo "   Install Bash 5+ and retry:" >&2
+    echo "   Install Bash ${MANIFEST_CLI_REQUIRED_BASH_VERSION}+ and retry:" >&2
     echo "     macOS: brew install bash" >&2
     echo "     Debian/Ubuntu: sudo apt-get install bash" >&2
     echo "     RHEL/Fedora: sudo dnf install bash" >&2
@@ -44,9 +47,6 @@ ensure_bash5_or_reexec() {
 }
 
 ensure_bash5_or_reexec "$@"
-
-# Get the directory where this script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source the core module (which sources all other modules)
 source "$SCRIPT_DIR/../modules/core/manifest-core.sh"
