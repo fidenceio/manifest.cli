@@ -40,6 +40,45 @@ find_installation_locations() {
 }
 
 # Function to find CLI binary locations
+_manifest_uninstall_resolve_path() {
+    local path="$1"
+    if command -v realpath >/dev/null 2>&1; then
+        realpath "$path" 2>/dev/null && return 0
+    fi
+    echo "$path"
+}
+
+_manifest_uninstall_binary_is_owned() {
+    local binary_path="$1"
+    [ -f "$binary_path" ] || return 1
+
+    local user_bin="${HOME}/.local/bin/manifest"
+    local configured_bin="${MANIFEST_CLI_CORE_BINARY_LOCATION:-}/manifest"
+    case "$binary_path" in
+        "$user_bin"|"$configured_bin")
+            return 0
+            ;;
+    esac
+
+    local resolved_binary
+    resolved_binary="$(_manifest_uninstall_resolve_path "$binary_path")"
+
+    local install_location resolved_location
+    while IFS= read -r install_location; do
+        [ -n "$install_location" ] || continue
+        resolved_location="$(_manifest_uninstall_resolve_path "$install_location")"
+        case "$resolved_binary" in
+            "$resolved_location"/*)
+                return 0
+                ;;
+        esac
+    done < <(find_installation_locations)
+
+    # Homebrew/manual wrappers are text scripts with Manifest-specific markers.
+    # Avoid deleting unrelated runner/system tools that only share the name.
+    grep -a -E 'Manifest CLI|manifest-cli|MANIFEST_CLI' "$binary_path" >/dev/null 2>&1
+}
+
 find_cli_binaries() {
     local binaries=()
     
@@ -52,7 +91,7 @@ find_cli_binaries() {
     
     # Check which binaries actually exist
     for binary in "${common_binaries[@]}"; do
-        if [ -f "$binary" ]; then
+        if _manifest_uninstall_binary_is_owned "$binary"; then
             binaries+=("$binary")
         fi
     done
@@ -60,7 +99,7 @@ find_cli_binaries() {
     # Include resolved PATH binary when available (e.g., Homebrew /opt/homebrew/bin/manifest)
     local resolved_manifest=""
     resolved_manifest="$(command -v manifest 2>/dev/null || echo "")"
-    if [ -n "$resolved_manifest" ] && [ -f "$resolved_manifest" ]; then
+    if [ -n "$resolved_manifest" ] && _manifest_uninstall_binary_is_owned "$resolved_manifest"; then
         local seen=false
         local existing=""
         for existing in "${binaries[@]}"; do
