@@ -232,18 +232,22 @@ manifest <verb> <scope> [options]
 | `manifest ship fleet patch` | Preview releaseable fleet services |
 | `manifest ship fleet patch -y` | Apply direct release for releaseable fleet services |
 
-`manifest ship repo` prints the resolved repo identity before the preview/apply plan so a fleet workspace cannot hide which nested Git checkout will be released.
+`manifest ship repo` prints the resolved repo identity before the preview/apply
+plan so a fleet workspace cannot hide which nested Git checkout will be
+released. Apply mode also prints an explicit target summary and asks
+`Apply to this repository? [y/N]` before mutation.
 
-Today `repo` is selected by the shell working directory, not by an argument:
+Today `repo` is selected by the enclosing `.git` repository from the shell
+working directory, not by an argument. Repo-scoped commands fail outside a Git
+repository:
 
 ```bash
 cd /path/to/repo
 manifest ship repo patch
 ```
 
-Explicit repo selection is tracked as a follow-up. The preferred shape is a
-global `manifest -C <path> ship repo patch` option, with fleet-member selection
-added separately once member names can be resolved unambiguously.
+Path and fleet-member selectors are intentionally deferred so the `.git` root
+remains the source of truth.
 
 Release types: `patch` | `minor` | `major` | `revision`
 

@@ -431,6 +431,31 @@ _manifest_cli_has_explain_flag() {
     return 1
 }
 
+_manifest_cli_is_existing_repo_scope_request() {
+    local command="${1:-}"
+    shift || true
+
+    case "$command" in
+        prep|refresh|ship|status)
+            [[ "${1:-}" == "repo" ]]
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+_manifest_cli_replay_command() {
+    local command="${1:-manifest}"
+    shift || true
+    local replay="manifest $command"
+    local arg
+    for arg in "$@"; do
+        replay+=" $arg"
+    done
+    echo "$replay"
+}
+
 _manifest_cli_is_help_request() {
     local command="${1:-}"
     shift || true
@@ -616,6 +641,11 @@ main() {
                 load_configuration "$PROJECT_ROOT" "false"
             else
                 # All other commands require a Git repository
+                if _manifest_cli_is_existing_repo_scope_request "$command" "$@"; then
+                    if ! manifest_repo_scope_require_git "$(_manifest_cli_replay_command "$command" "$@")"; then
+                        return 1
+                    fi
+                fi
                 if ! ensure_repository_root; then
                     log_error "Repository root validation failed"
                     return 1

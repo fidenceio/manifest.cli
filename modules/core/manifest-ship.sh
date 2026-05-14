@@ -284,11 +284,16 @@ manifest_ship_repo() {
         return $?
     fi
 
+    local replay_command="manifest ship repo $increment_type"
+    [[ "$local_only" == "true" ]] && replay_command="$replay_command --local"
+
+    if ! manifest_repo_scope_require_git "$replay_command"; then
+        return 1
+    fi
+
     if [[ "$execution_mode" == "preview" ]]; then
         manifest_ship_repo_identity_notice "${PROJECT_ROOT:-$PWD}"
         manifest_ship_preview_plan "$increment_type" "$local_only"
-        local replay_command="manifest ship repo $increment_type"
-        [[ "$local_only" == "true" ]] && replay_command="$replay_command --local"
         manifest_execution_footer "$replay_command -y"
         return 0
     fi
@@ -303,9 +308,11 @@ manifest_ship_repo() {
         return 1
     fi
 
-    manifest_execution_apply_header
+    if ! manifest_repo_scope_confirm_apply "${PROJECT_ROOT:-$PWD}" "$replay_command -y"; then
+        return 1
+    fi
 
-    manifest_ship_repo_identity_notice "${PROJECT_ROOT:-$PWD}"
+    manifest_execution_apply_header
 
     if [[ "$local_only" == "true" ]]; then
         echo "Ship (local): $increment_type — no remote operations"

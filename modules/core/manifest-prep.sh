@@ -77,6 +77,18 @@ manifest_prep_repo() {
     done
 
     local project_root="${PROJECT_ROOT:-$(pwd)}"
+    local replay_command="manifest prep repo"
+    [[ -n "$create_repo_visibility" ]] && replay_command="$replay_command --create-repo-$create_repo_visibility"
+
+    if ! manifest_repo_scope_require_git "$replay_command"; then
+        return 1
+    fi
+
+    if [[ "$execution_mode" == "apply" ]]; then
+        if ! manifest_repo_scope_confirm_apply "$project_root" "$replay_command -y"; then
+            return 1
+        fi
+    fi
 
     echo ""
     if [[ "$dry_run" == "true" ]]; then
@@ -100,7 +112,7 @@ manifest_prep_repo() {
                 echo "  no remotes configured — would prompt for an origin URL"
             fi
             echo ""
-            manifest_execution_footer "manifest prep repo -y"
+            manifest_execution_footer "$replay_command -y"
             echo ""
             return 0
         fi
@@ -156,7 +168,7 @@ manifest_prep_repo() {
             printf "  %-12s %s\n" "$r" "$url"
         done <<< "$remotes"
         echo ""
-        manifest_execution_footer "manifest prep repo -y"
+        manifest_execution_footer "$replay_command -y"
         echo ""
         return 0
     fi

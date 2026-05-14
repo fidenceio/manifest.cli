@@ -121,19 +121,22 @@ current Git root is the fleet root, Manifest should explicitly say that
 `ship repo` targets the fleet-root repository only and is not equivalent to
 `ship fleet`.
 
-Current selector limitation: `manifest ship repo` has no `--repo`, `--path`, or
-`--member` argument. Users must run it from inside the target checkout, for
-example `cd services/example && manifest ship repo patch`, or use a shell
-subcommand such as `(cd services/example && manifest ship repo patch)`.
+Repo scope deliberately has no `--repo`, `--path`, or `--member` selector in
+this phase. Users must run repo-scoped commands from inside the target checkout,
+for example `cd services/example && manifest ship repo patch`.
 
-Recommended follow-up:
+Apply behavior:
 
-- add a global `manifest -C <path> ...` option that changes the working
-  directory before command dispatch and preserves the same identity preflight
-- add a fleet-aware `manifest ship repo <type> --member <name>` selector after
-  fleet membership resolution is stable enough to make names unambiguous
-- reject conflicting selectors, such as `-C <path>` pointing at one repo while
-  `--member <name>` resolves to another
+- `manifest <verb> repo ...` fails outside an existing Git repository, except
+  for commands whose purpose is to initialize one.
+- Preview commands print the resolved repo identity and write nothing.
+- Apply commands require `-y` and then require a final interactive `y/N`
+  confirmation of the resolved Git root before mutation.
+- Non-interactive apply exits before mutation with helper text to rerun from the
+  intended repo folder.
+
+Fleet-aware member selection remains deferred until fleet membership resolution
+is stable enough to make names unambiguous.
 
 ### Repo-Local Fleet Hint
 

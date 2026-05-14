@@ -51,7 +51,8 @@ manifest ship repo minor -y   # Apply the release
 
 The apply run syncs, bumps the version, generates docs, validates markdown,
 commits, tags, pushes, updates Homebrew when applicable, and creates or reuses
-the matching GitHub Release when enabled.
+the matching GitHub Release when enabled. Before those mutations, Manifest shows
+the resolved Git root and asks `Apply to this repository? [y/N]`.
 
 ### Major Release with Interactive Prompts
 

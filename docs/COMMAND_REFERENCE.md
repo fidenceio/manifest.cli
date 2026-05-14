@@ -439,24 +439,31 @@ manifest ship repo patch --explain # Show the built-in recipe definition
 
 `repo` is a scope, not a selector. The target is the enclosing Git repository
 resolved from the shell working directory; Manifest changes to that Git root
-before running the workflow. To ship a different repo today, start the command
-from that repo:
+before running the workflow. Repo-scoped commands fail outside a Git repository.
+To ship a different repo today, start the command from that repo:
 
 ```bash
 cd /path/to/repo
 manifest ship repo patch
-
-(cd /path/to/repo && manifest ship repo patch)
 ```
 
-Manifest does not yet accept a repo path or fleet-member selector on
-`ship repo`. The intended follow-up surface is `manifest -C <path> ship repo
-patch` for general path selection, plus a fleet-aware member selector such as
-`manifest ship repo patch --member <name>`.
+Manifest does not accept a repo path or fleet-member selector on `ship repo`.
+Path selectors and fleet-member selectors are intentionally deferred so `.git`
+root selection remains the source of truth.
 
 **Preview mode** (default): prints the resolved repo identity first, then the release plan, and writes nothing. The plan includes current and next version, a short narrative summary, pending working-tree files that would be auto-committed, and release documentation artifacts.
 
-**Apply mode** (`-y` / `--yes`): sync, bump version, generate docs, archive old docs, validate markdown, commit, tag, push to all remotes, update Homebrew formula (canonical repo only), create a matching GitHub Release when enabled, and safely fast-forward clean local Homebrew tap checkouts that the release process updated remotely. Canonical CLI `minor`, `major`, and `revision` ships also run one guarded follow-up patch under the upgraded installed CLI; set `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH=false` to skip it.
+**Apply mode** (`-y` / `--yes`): prints the resolved repo identity and an
+explicit target summary, then prompts `Apply to this repository? [y/N]` before
+mutation. Non-interactive apply exits before mutation with helper text to rerun
+from the intended repo folder. After confirmation, apply syncs, bumps version,
+generates docs, archives old docs, validates markdown, commits, tags, pushes to
+all remotes, updates the Homebrew formula (canonical repo only), creates a
+matching GitHub Release when enabled, and safely fast-forwards clean local
+Homebrew tap checkouts that the release process updated remotely. Canonical CLI
+`minor`, `major`, and `revision` ships also run one guarded follow-up patch
+under the upgraded installed CLI; set `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH=false`
+to skip it.
 
 **Local apply mode** (`--local -y`): Everything except creating a tag, pushing to remotes, updating Homebrew, creating a GitHub Release, or watching GitHub Actions.
 

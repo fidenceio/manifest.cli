@@ -80,6 +80,18 @@ manifest_refresh_repo() {
     done
 
     local project_root="${PROJECT_ROOT:-$(pwd)}"
+    local replay_command="manifest refresh repo"
+    [[ "$do_commit" == "true" ]] && replay_command="$replay_command --commit"
+
+    if ! manifest_repo_scope_require_git "$replay_command"; then
+        return 1
+    fi
+
+    if [[ "$execution_mode" == "apply" ]]; then
+        if ! manifest_repo_scope_confirm_apply "$project_root" "$replay_command -y"; then
+            return 1
+        fi
+    fi
 
     echo ""
     if [[ "$dry_run" == "true" ]]; then
@@ -113,8 +125,6 @@ manifest_refresh_repo() {
             echo "  • Commit refreshed files (--commit)"
         fi
         echo ""
-        local replay_command="manifest refresh repo"
-        [[ "$do_commit" == "true" ]] && replay_command="$replay_command --commit"
         manifest_execution_footer "$replay_command -y"
         echo ""
         return 0
