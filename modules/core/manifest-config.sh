@@ -37,6 +37,11 @@ _manifest_config_apply_process_env_overrides() {
     local env_var
 
     for env_var in "${!_MANIFEST_CONFIG_PROCESS_ENV_OVERRIDES[@]}"; do
+        case "$(declare -p "$env_var" 2>/dev/null || true)" in
+            declare\ -a*|declare\ -A*)
+                unset "$env_var"
+                ;;
+        esac
         export "$env_var"="${_MANIFEST_CONFIG_PROCESS_ENV_OVERRIDES[$env_var]}"
         log_debug "load_configuration: process env override ${env_var}"
     done

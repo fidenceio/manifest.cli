@@ -245,3 +245,20 @@ YAML
     [ "$status" -eq 0 ]
     [ "$output" = "true|TEST_MANIFEST_CLOUD_KEY|secret-from-env" ]
 }
+
+@test "config: process env override replaces array-backed security private files" {
+    mkdir -p "$SCRATCH/project" "$SCRATCH/home"
+    cat > "$SCRATCH/project/manifest.config.yaml" <<'YAML'
+security:
+  private_files: ".yaml-secret"
+YAML
+
+    run env \
+        HOME="$SCRATCH/home" \
+        PROJECT_ROOT="$SCRATCH/project" \
+        MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES=".env-secret, manifest.config.local.yaml" \
+        bash -c 'source "$1/tests/helpers/setup.bash"; load_modules "core/manifest-config.sh" "system/manifest-security.sh"; load_configuration "$PROJECT_ROOT" "false" >/dev/null; _manifest_security_private_env_files' _ "$TEST_REPO_ROOT"
+
+    [ "$status" -eq 0 ]
+    [ "$output" = $'.env-secret\nmanifest.config.local.yaml' ]
+}

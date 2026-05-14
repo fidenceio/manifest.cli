@@ -11,9 +11,9 @@
 
 ### Changes
 
-- Add GitHub Release publishing support
-- Update release copy and configuration examples
-- Add regression coverage for the changed CLI workflow
+- Promote remaining user-facing `MANIFEST_CLI_*` settings to first-class YAML keys
+- Preserve process environment overrides above YAML layers for CI and backward compatibility
+- Add Cloud secret-reference hydration and security private-file YAML coverage
 
 
 ## [47.10.2] - 2026-05-14

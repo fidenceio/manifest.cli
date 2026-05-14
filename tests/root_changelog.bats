@@ -115,6 +115,21 @@ EOF
     ! grep -q "First take" "${SCRATCH}/CHANGELOG.md"
 }
 
+@test "docs index: inline version and updated metadata are both refreshed" {
+    mkdir -p "${SCRATCH}/docs"
+    cat > "${SCRATCH}/docs/INDEX.md" <<'EOF'
+# Manifest CLI Documentation
+
+**Version:** 1.0.0 | **Updated:** 2026-05-08
+EOF
+    manifest_is_canonical_repo() { return 0; }
+
+    run generate_docs_index "1.2.3"
+
+    [ "$status" -eq 0 ]
+    grep -qxF "**Version:** 1.2.3 | **Updated:** $(date -u '+%Y-%m-%d')" "${SCRATCH}/docs/INDEX.md"
+}
+
 @test "prepend: legacy auto-generated content is replaced, not preserved" {
     cat > "${SCRATCH}/CHANGELOG.md" <<'EOF'
 # Old Auto-Generated Changelog
