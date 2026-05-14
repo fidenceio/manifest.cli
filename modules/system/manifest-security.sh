@@ -7,6 +7,32 @@
 MANIFEST_CLI_SECURITY_CONFIG_FILE="manifest.config"
 MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES=(".env" ".env.development" ".env.test" ".env.production" ".env.staging" "manifest.config.local.yaml")
 
+_manifest_security_private_env_files() {
+    local decl
+    decl="$(declare -p MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES 2>/dev/null || true)"
+
+    case "$decl" in
+        declare\ -a*|declare\ -ax*)
+            printf '%s\n' "${MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES[@]}"
+            return 0
+            ;;
+    esac
+
+    local raw="${MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES:-}"
+    if [ -z "$raw" ]; then
+        printf '%s\n' ".env" ".env.development" ".env.test" ".env.production" ".env.staging" "manifest.config.local.yaml"
+        return 0
+    fi
+
+    local item
+    IFS=',' read -r -a _manifest_security_files <<< "$raw"
+    for item in "${_manifest_security_files[@]}"; do
+        item="${item#"${item%%[![:space:]]*}"}"
+        item="${item%"${item##*[![:space:]]}"}"
+        [ -n "$item" ] && printf '%s\n' "$item"
+    done
+}
+
 # Main security audit function
 manifest_security() {
     if [[ "${1:-}" == "help" || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
@@ -118,14 +144,14 @@ check_git_tracking() {
     fi
     
     # Check if any private files are tracked
-    for env_file in "${MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES[@]}"; do
+    while IFS= read -r env_file; do
         if [ -f "$project_root/$env_file" ]; then
             if git -C "$project_root" ls-files "$env_file" >/dev/null 2>&1; then
                 echo "      ❌ $env_file is tracked by Git (SECURITY RISK!)"
                 return 1
             fi
         fi
-    done
+    done < <(_manifest_security_private_env_files)
     
     return 0
 }
@@ -198,7 +224,7 @@ check_environment_file_security() {
     # Check if .env files exist and are properly ignored
     local security_issues=0
     
-    for env_file in "${MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES[@]}"; do
+    while IFS= read -r env_file; do
         if [ -f "$project_root/$env_file" ]; then
             # Check if file is properly ignored by Git
             if ! git -C "$project_root" check-ignore "$env_file" >/dev/null 2>&1; then
@@ -206,7 +232,7 @@ check_environment_file_security() {
                 security_issues=$((security_issues + 1))
             fi
         fi
-    done
+    done < <(_manifest_security_private_env_files)
     
     [ $security_issues -eq 0 ]
 }

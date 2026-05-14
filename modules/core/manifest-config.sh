@@ -12,6 +12,55 @@ MANIFEST_CLI_GLOBAL_CONFIG="$HOME/.manifest-cli/manifest.config.global.yaml"
 
 MANIFEST_CLI_CONFIG_SCHEMA_VERSION_CURRENT=2
 
+declare -gA _MANIFEST_CONFIG_PROCESS_ENV_OVERRIDES=()
+
+_manifest_config_capture_process_env_overrides() {
+    local entry env_var env_value
+    local mapping_decl
+
+    mapping_decl="$(declare -p _MANIFEST_ENV_TO_YAML 2>/dev/null || true)"
+    case "$mapping_decl" in
+        declare\ -A*) ;;
+        *) return 0 ;;
+    esac
+
+    while IFS= read -r entry; do
+        env_var="${entry%%=*}"
+        env_value="${entry#*=}"
+        [[ "$env_var" == MANIFEST_CLI_* ]] || continue
+        [[ -n "${_MANIFEST_ENV_TO_YAML[$env_var]:-}" ]] || continue
+        _MANIFEST_CONFIG_PROCESS_ENV_OVERRIDES["$env_var"]="$env_value"
+    done < <(env)
+}
+
+_manifest_config_apply_process_env_overrides() {
+    local env_var
+
+    for env_var in "${!_MANIFEST_CONFIG_PROCESS_ENV_OVERRIDES[@]}"; do
+        export "$env_var"="${_MANIFEST_CONFIG_PROCESS_ENV_OVERRIDES[$env_var]}"
+        log_debug "load_configuration: process env override ${env_var}"
+    done
+}
+
+_manifest_config_apply_secret_env_refs() {
+    local ref_var="${MANIFEST_CLI_CLOUD_API_KEY_ENV:-}"
+
+    if [ -z "$ref_var" ] || [ -n "${MANIFEST_CLI_CLOUD_API_KEY:-}" ]; then
+        return 0
+    fi
+
+    if [[ ! "$ref_var" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+        log_warning "Ignoring invalid cloud.api_key_env value: $ref_var"
+        return 0
+    fi
+
+    if [ -n "${!ref_var:-}" ]; then
+        export MANIFEST_CLI_CLOUD_API_KEY="${!ref_var}"
+    fi
+}
+
+_manifest_config_capture_process_env_overrides
+
 _manifest_config_warn() {
     local message="$1"
     if command -v log_warning >/dev/null 2>&1; then
@@ -510,6 +559,12 @@ load_configuration() {
         fi
     fi
 
+    # Exported MANIFEST_CLI_* values supplied at process startup are the
+    # highest-precedence layer. This keeps CI and legacy env-based automation
+    # working while the same settings become first-class YAML keys.
+    _manifest_config_apply_process_env_overrides
+    _manifest_config_apply_secret_env_refs
+
     # Fill any remaining gaps with defaults
     set_default_configuration
     auto_migrate_user_global_configuration
@@ -554,6 +609,7 @@ set_default_configuration() {
     export MANIFEST_CLI_GITHUB_RELEASE_REQUIRED="${MANIFEST_CLI_GITHUB_RELEASE_REQUIRED:-false}"
     export MANIFEST_CLI_GITHUB_RELEASE_DRAFT="${MANIFEST_CLI_GITHUB_RELEASE_DRAFT:-false}"
     export MANIFEST_CLI_GITHUB_RELEASE_PRERELEASE="${MANIFEST_CLI_GITHUB_RELEASE_PRERELEASE:-false}"
+    export MANIFEST_CLI_INTERACTIVE_MODE="${MANIFEST_CLI_INTERACTIVE_MODE:-false}"
     
     # Branch Naming Configuration
     export MANIFEST_CLI_GIT_DEFAULT_BRANCH="${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}"
@@ -635,12 +691,20 @@ set_default_configuration() {
     
     # Project Configuration
     export MANIFEST_CLI_PROJECT_NAME="${MANIFEST_CLI_PROJECT_NAME:-Manifest CLI}"
+    export MANIFEST_CLI_PROJECT_TEAM="${MANIFEST_CLI_PROJECT_TEAM:-}"
     
     # Auto-Upgrade Configuration
     export MANIFEST_CLI_AUTO_UPDATE="${MANIFEST_CLI_AUTO_UPDATE:-true}"
     export MANIFEST_CLI_UPDATE_COOLDOWN="${MANIFEST_CLI_UPDATE_COOLDOWN:-30}"
     export MANIFEST_CLI_PROJECT_DESCRIPTION="${MANIFEST_CLI_PROJECT_DESCRIPTION:-A powerful CLI tool for versioning, AI documenting, and repository operations}"
     export MANIFEST_CLI_ORGANIZATION="${MANIFEST_CLI_ORGANIZATION:-Your Organization}"
+
+    # Automation / deprecations / network / Cloud
+    export MANIFEST_CLI_AUTO_CONFIRM="${MANIFEST_CLI_AUTO_CONFIRM:-false}"
+    export MANIFEST_CLI_QUIET_DEPRECATIONS="${MANIFEST_CLI_QUIET_DEPRECATIONS:-false}"
+    export MANIFEST_CLI_OFFLINE_MODE="${MANIFEST_CLI_OFFLINE_MODE:-false}"
+    export MANIFEST_CLI_CLOUD_SKIP="${MANIFEST_CLI_CLOUD_SKIP:-false}"
+    export MANIFEST_CLI_CLOUD_API_KEY_ENV="${MANIFEST_CLI_CLOUD_API_KEY_ENV:-MANIFEST_CLI_CLOUD_API_KEY}"
     
     # Advanced Configuration
     export MANIFEST_CLI_VERSION_REGEX="${MANIFEST_CLI_VERSION_REGEX:-^[0-9]+(\.[0-9]+)*$}"
@@ -660,7 +724,9 @@ set_default_configuration() {
     # when present; they are not authoritative by themselves.
     export MANIFEST_CLI_FLEET_NAME="${MANIFEST_CLI_FLEET_NAME:-}"
     export MANIFEST_CLI_FLEET_MEMBER="${MANIFEST_CLI_FLEET_MEMBER:-}"
+    export MANIFEST_CLI_FLEET_MODE="${MANIFEST_CLI_FLEET_MODE:-auto}"
     export MANIFEST_CLI_FLEET_ROOT="${MANIFEST_CLI_FLEET_ROOT:-}"
+    export MANIFEST_CLI_FLEET_CONFIG_FILENAME="${MANIFEST_CLI_FLEET_CONFIG_FILENAME:-manifest.fleet.config.yaml}"
 
 }
 

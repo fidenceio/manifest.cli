@@ -62,11 +62,17 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     # -------------------------------------------------------------------------
     # release — release artifact policy
     # -------------------------------------------------------------------------
+    ["release.canonical_repo_slugs"]="MANIFEST_CLI_CANONICAL_REPO_SLUGS"
     ["release.tag_target"]="MANIFEST_CLI_RELEASE_TAG_TARGET"
     ["github.release.enabled"]="MANIFEST_CLI_GITHUB_RELEASE_ENABLED"
     ["github.release.required"]="MANIFEST_CLI_GITHUB_RELEASE_REQUIRED"
     ["github.release.draft"]="MANIFEST_CLI_GITHUB_RELEASE_DRAFT"
     ["github.release.prerelease"]="MANIFEST_CLI_GITHUB_RELEASE_PRERELEASE"
+
+    # -------------------------------------------------------------------------
+    # ship — release workflow behavior
+    # -------------------------------------------------------------------------
+    ["ship.interactive"]="MANIFEST_CLI_INTERACTIVE_MODE"
 
     # -------------------------------------------------------------------------
     # git — git workflow configuration
@@ -151,12 +157,22 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     ["project.name"]="MANIFEST_CLI_PROJECT_NAME"
     ["project.description"]="MANIFEST_CLI_PROJECT_DESCRIPTION"
     ["project.organization"]="MANIFEST_CLI_ORGANIZATION"
+    ["project.team"]="MANIFEST_CLI_PROJECT_TEAM"
 
     # -------------------------------------------------------------------------
     # auto_update — automatic update settings
     # -------------------------------------------------------------------------
     ["auto_update.enabled"]="MANIFEST_CLI_AUTO_UPDATE"
     ["auto_update.cooldown"]="MANIFEST_CLI_UPDATE_COOLDOWN"
+
+    # -------------------------------------------------------------------------
+    # automation / deprecations / network / cloud
+    # -------------------------------------------------------------------------
+    ["automation.auto_confirm"]="MANIFEST_CLI_AUTO_CONFIRM"
+    ["deprecations.quiet"]="MANIFEST_CLI_QUIET_DEPRECATIONS"
+    ["network.offline"]="MANIFEST_CLI_OFFLINE_MODE"
+    ["cloud.skip"]="MANIFEST_CLI_CLOUD_SKIP"
+    ["cloud.api_key_env"]="MANIFEST_CLI_CLOUD_API_KEY_ENV"
 
     # -------------------------------------------------------------------------
     # config — schema versioning
@@ -180,9 +196,16 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     # -------------------------------------------------------------------------
     # fleet — repo-local hints for fleet-aware single-repo commands
     # -------------------------------------------------------------------------
+    ["fleet.mode"]="MANIFEST_CLI_FLEET_MODE"
     ["fleet.name"]="MANIFEST_CLI_FLEET_NAME"
     ["fleet.member"]="MANIFEST_CLI_FLEET_MEMBER"
     ["fleet.root"]="MANIFEST_CLI_FLEET_ROOT"
+    ["fleet.config_filename"]="MANIFEST_CLI_FLEET_CONFIG_FILENAME"
+
+    # -------------------------------------------------------------------------
+    # security — local audit policy
+    # -------------------------------------------------------------------------
+    ["security.private_files"]="MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES"
 )
 
 # Build the reverse map (ENV var -> YAML path) programmatically
@@ -586,6 +609,11 @@ load_yaml_to_env() {
             value="${value#"${value%%[![:space:]]*}"}"
             value="${value%"${value##*[![:space:]]}"}"
             if [[ -n "$value" ]]; then
+                case "$(declare -p "$env_var" 2>/dev/null || true)" in
+                    declare\ -a*|declare\ -A*)
+                        unset "$env_var"
+                        ;;
+                esac
                 export "$env_var"="$value"
                 log_debug "load_yaml_to_env: ${env_var}=${value}"
                 loaded_count=$((loaded_count + 1))
