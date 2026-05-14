@@ -1,5 +1,14 @@
 # Changelog
 
+## [47.12.2] - 2026-05-14
+
+**Release Type:** Patch
+
+### Changes
+
+- Harden uninstall and reinstall execution policy
+
+
 ## [47.12.1] - 2026-05-14
 
 **Release Type:** Patch — no user-facing changes.
@@ -75,13 +84,3 @@
 ### Changes
 
 - Make repo confirmation tests portable
-
-
-## [47.9.2] - 2026-05-14
-
-**Release Type:** Patch
-
-### Changes
-
-- Clarify repo and fleet command scope
-- Align built-in recipes with current workflows
