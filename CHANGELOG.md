@@ -1,5 +1,14 @@
 # Changelog
 
+## [47.9.0] - 2026-05-14
+
+**Release Type:** Minor
+
+### Changes
+
+- Require repo target confirmation
+
+
 ## [47.8.8] - 2026-05-14
 
 **Release Type:** Patch
@@ -82,8 +91,3 @@
 ## [47.8.0] - 2026-05-13
 
 **Release Type:** Minor — no user-facing changes.
-
-
-## [47.7.1] - 2026-05-13
-
-**Release Type:** Patch — no user-facing changes.
