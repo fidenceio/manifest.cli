@@ -118,8 +118,11 @@ class Manifest < Formula
       To always get the latest version:
         brew update && brew upgrade manifest
 
-      To uninstall cleanly (removes config and env vars too):
+      To preview a clean uninstall:
         manifest uninstall
+
+      To uninstall cleanly (removes config and env vars too):
+        manifest uninstall -y
 
       For more information, visit: https://github.com/fidenceio/manifest.cli
     EOS
