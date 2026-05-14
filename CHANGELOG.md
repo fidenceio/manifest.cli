@@ -1,5 +1,16 @@
 # Changelog
 
+## [47.11.0] - 2026-05-14
+
+**Release Type:** Minor
+
+### Changes
+
+- Add GitHub Release publishing support
+- Update release copy and configuration examples
+- Add regression coverage for the changed CLI workflow
+
+
 ## [47.10.2] - 2026-05-14
 
 **Release Type:** Patch
@@ -75,14 +86,4 @@
 - Add GitHub Release publishing support
 - Update release copy and configuration examples
 - Wire first-class CLI commands to inspectable built-in recipe definitions
-- Add regression coverage for the changed CLI workflow
-
-
-## [47.8.6] - 2026-05-14
-
-**Release Type:** Patch
-
-### Changes
-
-- Update release copy and configuration examples
 - Add regression coverage for the changed CLI workflow
