@@ -560,6 +560,12 @@ manifest ship fleet patch --except docs         # Ship every service except 'doc
 `ship fleet` is release-only. It does not create, ready, queue, or merge PRs.
 Use `manifest pr fleet ...` explicitly for PR workflows.
 
+Preview and apply both start with a fleet scope block showing the fleet name,
+root path, config file, command scope, selected service count, and active filter.
+The plan then lists the included repositories with service name, type, branch,
+release/read effect, decision, and path or skip reason. This is the authoritative
+answer to "which repos will this fleet command touch?"
+
 **Flags:**
 
 | Flag | Description |
