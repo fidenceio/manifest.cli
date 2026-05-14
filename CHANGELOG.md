@@ -1,5 +1,14 @@
 # Changelog
 
+## [47.9.3] - 2026-05-14
+
+**Release Type:** Patch
+
+### Changes
+
+- Make repo confirmation tests portable
+
+
 ## [47.9.2] - 2026-05-14
 
 **Release Type:** Patch
@@ -83,16 +92,3 @@
 ## [47.8.3] - 2026-05-13
 
 **Release Type:** Patch — no user-facing changes.
-
-
-## [47.8.2] - 2026-05-13
-
-**Release Type:** Patch
-
-### Changes
-
-- Update release copy and configuration examples
-- Add recipe-backed workflow definitions and recipe introspection support
-- Wire first-class CLI commands to inspectable built-in recipe definitions
-- Update shell completions for new command options
-- Add regression coverage for the changed CLI workflow
