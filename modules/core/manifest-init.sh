@@ -756,7 +756,12 @@ _manifest_init_fleet_dry_run_phase1() {
         echo "Would defer:     GitHub repo creation flag applies in Phase 2 (--create-repo-$create_repo_visibility)"
     fi
     echo ""
-    echo "No changes written. Re-run with -y to apply this plan."
+    local replay_command="manifest init fleet"
+    [[ "$depth" != "2" ]] && replay_command="$replay_command --depth $depth"
+    [[ "$force" == "true" ]] && replay_command="$replay_command --force"
+    [[ -n "$create_repo_visibility" ]] && replay_command="$replay_command --create-repo-$create_repo_visibility"
+    [[ "$all_folders" == "true" ]] && replay_command="$replay_command --all-folders"
+    manifest_execution_footer "$replay_command -y"
 }
 
 _manifest_init_fleet_dry_run_phase2() {
@@ -816,7 +821,11 @@ _manifest_init_fleet_dry_run_phase2() {
         echo "Re-run with --force to apply defaults, or edit SELECT values first."
     fi
     echo ""
-    echo "No changes written. Re-run with -y to apply this plan."
+    local replay_command="manifest init fleet"
+    [[ "$force" == "true" ]] && replay_command="$replay_command --force"
+    [[ -n "$fleet_name" ]] && replay_command="$replay_command --name $fleet_name"
+    [[ -n "$create_repo_visibility" ]] && replay_command="$replay_command --create-repo-$create_repo_visibility"
+    manifest_execution_footer "$replay_command -y"
 }
 
 manifest_init_fleet() {

@@ -75,7 +75,8 @@ TSV
     [[ "$output" == *"Inventory mode:"*"repo-depth defaults"* ]]
     [[ "$output" == *"Would list:"*"TSV rows"* ]]
     [[ "$output" == *"Would create:"*"manifest.fleet.tsv"* ]]
-    [[ "$output" == *"No changes written"* ]]
+    [[ "$output" == *"No changes written. Re-run with -y to apply this plan:"* ]]
+    [[ "$output" == *"manifest init fleet -y"* ]]
     [ ! -f "$SCRATCH/work/manifest.fleet.tsv" ]
     [ ! -f "$SCRATCH/work/manifest.fleet.config.yaml" ]
 }
@@ -90,7 +91,8 @@ TSV
     [[ "$output" == *"Dry run - manifest init fleet (Phase 2/2)"* ]]
     [[ "$output" == *"Selected rows:"*"1"* ]]
     [[ "$output" == *"Would git init:"*"1"* ]]
-    [[ "$output" == *"No changes written"* ]]
+    [[ "$output" == *"No changes written. Re-run with -y to apply this plan:"* ]]
+    [[ "$output" == *"manifest init fleet --name test-fleet -y"* ]]
     [ ! -d "$SCRATCH/work/svc/.git" ]
     [ ! -f "$SCRATCH/work/manifest.fleet.config.yaml" ]
     [ ! -f "$SCRATCH/work/manifest.config.local.yaml" ]
@@ -107,7 +109,8 @@ TSV
     [[ "$output" == *"Would create:"*"manifest.fleet.config.yaml"* ]]
     [[ "$output" == *"Would create:"*"manifest.fleet.tsv"* ]]
     [[ "$output" == *"Would list:"*"existing git repos"* ]]
-    [[ "$output" == *"No changes written"* ]]
+    [[ "$output" == *"No changes written. Re-run with -y to apply this plan:"* ]]
+    [[ "$output" == *"manifest quickstart fleet -y"* ]]
     [ ! -f "$SCRATCH/work/manifest.fleet.config.yaml" ]
     [ ! -f "$SCRATCH/work/manifest.fleet.tsv" ]
 }
@@ -123,7 +126,8 @@ TSV
     [[ "$output" == *"Dry run - manifest add fleet"* ]]
     [[ "$output" == *"Would update:"*"manifest.fleet.config.yaml"* ]]
     [[ "$output" == *"new-api:"* ]]
-    [[ "$output" == *"No changes written"* ]]
+    [[ "$output" == *"No changes written. Re-run with -y to apply this plan:"* ]]
+    [[ "$output" == *"manifest add fleet ./services/new-api -y"* ]]
     [ "$(cat "$SCRATCH/work/manifest.fleet.config.yaml")" = "$before" ]
 }
 
@@ -139,7 +143,8 @@ TSV
     [[ "$output" == *"Strategy:"*"both"* ]]
     [[ "$output" == *"Would write:"*"fleet-root docs"* ]]
     [[ "$output" == *"Would write:"*"per-service docs"* ]]
-    [[ "$output" == *"No changes written"* ]]
+    [[ "$output" == *"No changes written. Re-run with -y to apply this plan:"* ]]
+    [[ "$output" == *"manifest docs fleet -y"* ]]
     [ ! -d "$SCRATCH/work/docs" ]
     [ ! -d "$SCRATCH/work/svc/docs" ]
 }
@@ -157,7 +162,8 @@ TSV
     [[ "$output" == *"MANIFEST FLEET SYNC (DRY RUN)"* ]]
     [[ "$output" == *"svc: would pull --rebase"* ]]
     [[ "$output" == *"Plan:"*"1 pull"* ]]
-    [[ "$output" == *"No changes written"* ]]
+    [[ "$output" == *"No changes written. Re-run with -y to apply this plan:"* ]]
+    [[ "$output" == *"manifest prep fleet --parallel -y"* ]]
 }
 
 @test "prep fleet defaults to preview" {
@@ -171,7 +177,8 @@ TSV
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"MANIFEST FLEET SYNC (DRY RUN)"* ]]
-    [[ "$output" == *"No changes written"* ]]
+    [[ "$output" == *"No changes written. Re-run with -y to apply this plan:"* ]]
+    [[ "$output" == *"manifest prep fleet --parallel -y"* ]]
 }
 
 @test "ship fleet defaults to preview and does not call PR dispatch" {
