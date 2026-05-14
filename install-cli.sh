@@ -1,7 +1,7 @@
 #!/bin/bash
 # Manifest CLI installer.
 #
-# Validates the host (Bash 5+, yq v4+, Git), copies the CLI tree to
+# Validates the host (centralized requirements, Git), copies the CLI tree to
 # ~/.manifest-cli, configures PATH, sets up the global YAML config, and
 # optionally installs a pre-commit security hook in the current repo.
 #
@@ -43,8 +43,9 @@ get_install_location() {
 # Set the actual installation directory
 MANIFEST_CLI_INSTALL_LOCATION="$(get_install_location)"
 
-# Version information
-MANIFEST_CLI_MIN_BASH_VERSION="5.0"
+# Version requirements
+# shellcheck disable=SC1091
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/modules/core/manifest-requirements.sh"
 
 # =============================================================================
 # Utility Functions
@@ -228,13 +229,12 @@ validate_system() {
         errors=$((errors + 1))
     fi
     
-    # Bash 5+
+    # Bash
     if command_exists bash; then
         local bash_ver
         bash_ver=$(bash --version | head -n1 | grep -oE 'version [0-9]+\.[0-9]+' | cut -d' ' -f2)
-        local major_ver="${bash_ver%%.*}"
-        if [ -n "$major_ver" ] && [ "$major_ver" -lt 5 ]; then
-            print_error "❌ Bash $bash_ver detected. Manifest CLI requires Bash 5.0+."
+        if ! manifest_requirement_bash_is_supported_major "$(manifest_requirement_semver_major "$bash_ver")"; then
+            print_error "❌ Bash $bash_ver detected. Manifest CLI requires Bash ${MANIFEST_CLI_REQUIRED_BASH_VERSION}+."
             print_error "   Install:  $(_install_hint bash)"
             errors=$((errors + 1))
         else
@@ -245,13 +245,13 @@ validate_system() {
         errors=$((errors + 1))
     fi
 
-    # yq (Mike Farah's Go fork, v4+)
-    if command_exists yq && yq --version 2>&1 | grep -q "mikefarah\|version v4"; then
+    # yq
+    if command_exists yq && manifest_requirement_yq_is_supported yq; then
         local yq_ver
-        yq_ver=$(yq --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        yq_ver=$(manifest_requirement_yq_version_text yq)
         print_success "✅ yq $yq_ver"
     else
-        print_error "❌ yq (Mike Farah's Go v4+) required for YAML config."
+        print_error "❌ ${MANIFEST_CLI_REQUIRED_YQ_LABEL} required for YAML config."
         print_error "   Install:  $(_install_hint yq)"
         errors=$((errors + 1))
     fi

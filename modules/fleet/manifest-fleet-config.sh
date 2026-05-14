@@ -25,7 +25,7 @@
 #
 # DEPENDENCIES:
 #   - manifest-shared-utils.sh (logging functions)
-#   - yq or python3 (for YAML parsing - graceful fallback if unavailable)
+#   - yq (for YAML parsing)
 #
 # USAGE:
 #   source manifest-fleet-config.sh

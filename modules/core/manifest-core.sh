@@ -32,6 +32,7 @@ export MANIFEST_CLI_CORE_BINARY_LOCATION
 export PROJECT_ROOT
 
 # Source shared utilities first
+source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-requirements.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-shared-utils.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-execution-policy.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-shared-functions.sh"

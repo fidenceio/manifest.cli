@@ -60,7 +60,7 @@ No layer silently escalates preview into apply.
 - [ ] Build the shared execution-policy module first. Do not retrofit one command at a time with ad hoc parsing.
 - [ ] Treat this as a major release. The change is safer, but it intentionally changes long-standing behavior.
 - [ ] Add plan objects before apply logic. Every mutating command should be able to produce a useful plan without doing the work.
-- [ ] Make `--dry-run` and `-y` mutually exclusive. If both are present, fail with a clear contradictory-flags error instead of guessing.
+- [x] Make `--dry-run` and `-y` mutually exclusive. If both are present, fail with a clear contradictory-flags error instead of guessing.
 - [ ] Keep `--force` separate from `-y`. `--force` may bypass a readiness gate only after `-y` has selected apply mode.
 - [ ] Keep `MANIFEST_CLI_AUTO_CONFIRM=1` separate from `-y`. Automation may answer prompts, but it must not authorize mutation.
 - [ ] Move PR orchestration out of `ship fleet` before broad command migration so the highest-risk semantic bug is fixed early.
@@ -224,8 +224,8 @@ No layer silently escalates preview into apply.
 
 ### Phase 1 - Shared Execution Policy
 
-- [ ] Add a shared execution-policy module, likely `modules/core/manifest-execution-policy.sh`.
-- [ ] Parse `--dry-run`, `-y`, `--yes`, and `--local` consistently before command-specific mutation starts.
+- [x] Add a shared execution-policy module, likely `modules/core/manifest-execution-policy.sh`.
+- [x] Parse `--dry-run`, `-y`, `--yes`, and `--local` consistently before command-specific mutation starts.
 - [ ] Export normalized state such as:
   - `MANIFEST_CLI_EXECUTION_MODE=preview|apply`
   - `MANIFEST_CLI_EFFECT_SCOPE=read|local|remote`
@@ -239,7 +239,7 @@ No layer silently escalates preview into apply.
   - `manifest_execution_render_plan_table`
 - [ ] Keep `MANIFEST_CLI_AUTO_CONFIRM=1` as prompt automation only; do not treat it as `--yes`.
 - [ ] Make unknown or misplaced execution flags fail through the shared help/error template.
-- [ ] Detect contradictory flags such as `--dry-run -y` before loading command-specific state.
+- [x] Detect contradictory flags such as `--dry-run -y` before loading command-specific state.
 - [ ] Preserve the original user command so replay hints can be generated accurately.
 - [ ] Add a plan fingerprint/hash helper for comparing preview and apply runs.
 
@@ -252,7 +252,7 @@ No layer silently escalates preview into apply.
 - [ ] Convert `refresh fleet --commit` so the commit pass requires `-y`.
 - [ ] Convert `docs repo`, `docs fleet`, and docs cleanup/archive paths to preview by default.
 - [ ] Convert `config set`, `config unset`, and `config doctor --fix` to preview by default.
-- [ ] Convert `ship repo` to preview by default; require `-y` for version/docs/commit/tag/push.
+- [x] Convert `ship repo` to preview by default; require `-y` for version/docs/commit/tag/push.
 - [x] Convert `ship fleet` to preview by default; require `-y` for direct release of eligible services.
 - [ ] Convert native PR commands so `pr create`, `ready`, `merge`, `queue`, and fleet equivalents preview by default and require `-y`.
 - [ ] Audit `uninstall` and `reinstall`; require `-y` before destructive local-machine changes.
@@ -318,7 +318,7 @@ No layer silently escalates preview into apply.
 - [ ] Update help examples so bare mutating commands show previews and applied examples include `-y`.
 - [ ] Update error messages that currently say "Re-run without --dry-run" to "Re-run with -y to apply".
 - [ ] Add a migration note for users upgrading from pre-change behavior.
-- [ ] Add one consistent contradictory-flags error:
+- [x] Add one consistent contradictory-flags error:
   - `Cannot combine --dry-run with -y/--yes. Preview is already the default; remove --dry-run to apply.`
 - [ ] Add one consistent apply banner:
   - `Applying because -y/--yes was provided.`

@@ -8,7 +8,7 @@ class Manifest < Formula
 
   depends_on "bash"
   depends_on "git" => :recommended
-  depends_on "yq" => :recommended
+  depends_on "yq"
   depends_on "coreutils" => :optional
 
   def install
@@ -22,11 +22,13 @@ class Manifest < Formula
       #!/usr/bin/env bash
       set -e
 
+      CLI_DIR="#{libexec}"
+      source "$CLI_DIR/modules/core/manifest-requirements.sh"
+
       ensure_bash5_or_reexec() {
-        local min_major=5
         local current_major="${BASH_VERSINFO[0]:-0}"
 
-        if [ "$current_major" -ge "$min_major" ]; then
+        if manifest_requirement_bash_is_supported_major "$current_major"; then
           return 0
         fi
 
@@ -45,13 +47,13 @@ class Manifest < Formula
             continue
           fi
 
-          major="$("$candidate" -c 'echo "${BASH_VERSINFO[0]:-0}"' 2>/dev/null || echo "0")"
-          if [ "$major" -ge "$min_major" ]; then
+          major="$(manifest_requirement_bash_major_from_command "$candidate")"
+          if manifest_requirement_bash_is_supported_major "$major"; then
             MANIFEST_CLI_BASH_REEXEC=1 exec "$candidate" "$0" "$@"
           fi
         done
 
-        echo "Manifest CLI requires Bash 5+." >&2
+        echo "Manifest CLI requires Bash ${MANIFEST_CLI_REQUIRED_BASH_VERSION}+." >&2
         echo "Current shell: bash ${BASH_VERSION:-unknown}" >&2
         echo "No compatible bash found in common locations." >&2
         return 1
@@ -59,7 +61,6 @@ class Manifest < Formula
 
       ensure_bash5_or_reexec "$@"
 
-      CLI_DIR="#{libexec}"
       source "$CLI_DIR/modules/core/manifest-core.sh"
       main "$@"
     EOS
