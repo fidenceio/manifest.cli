@@ -42,6 +42,8 @@ pr ready --help
 pr merge --help
 pr update --help
 pr fleet help
+uninstall --help
+reinstall --help
 EOF
 }
 

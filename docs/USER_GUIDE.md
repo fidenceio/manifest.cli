@@ -429,9 +429,11 @@ manifest security --check   # Run read-only security checks
 manifest upgrade --check    # Check for updates (no install)
 manifest upgrade            # Install latest version
 manifest upgrade --force    # Force upgrade regardless of version
-manifest uninstall          # Remove Manifest CLI
-manifest uninstall --force  # Remove without confirmation
-manifest reinstall          # Full uninstall + reinstall cycle
+manifest uninstall          # Preview Manifest CLI removal
+manifest uninstall -y       # Remove Manifest CLI
+manifest uninstall --force -y  # Remove without extra confirmations
+manifest reinstall          # Preview full uninstall + reinstall cycle
+manifest reinstall -y       # Apply full uninstall + reinstall cycle
 ```
 
 ### Git Hooks

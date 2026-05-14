@@ -78,6 +78,120 @@ find_cli_binaries() {
     printf '%s\n' "${binaries[@]}"
 }
 
+_manifest_uninstall_print_artifact_plan() {
+    local indent="${1:-  }"
+    local install_locations=($(find_installation_locations))
+    local cli_binaries=($(find_cli_binaries))
+    local homebrew_installed=false
+    if is_homebrew_installed; then
+        homebrew_installed=true
+    fi
+
+    local global_yaml="$HOME/.manifest-cli/manifest.config.global.yaml"
+    local config_files=(
+        "$HOME/.manifestrc"
+        "$HOME/.manifest-cli.conf"
+        "$HOME/.config/manifest-cli"
+        "$global_yaml"
+    )
+    local data_dirs=(
+        "$HOME/.manifest-agent"
+        "${TMPDIR:-/tmp}/manifest-cli"
+    )
+    if [[ "/tmp/manifest-cli" != "${TMPDIR:-/tmp}/manifest-cli" ]]; then
+        data_dirs+=("/tmp/manifest-cli")
+    fi
+
+    local shell_files=(
+        "$HOME/.zshrc" "$HOME/.zprofile" "$HOME/.zsh_profile"
+        "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"
+    )
+
+    local found=0
+    if [ "$homebrew_installed" = "true" ]; then
+        echo "${indent}Would uninstall Homebrew package: fidenceio/tap/manifest"
+        echo "${indent}Would untap Homebrew tap: fidenceio/tap"
+        found=1
+    fi
+
+    local location binary config_file data_dir profile_file
+    for location in "${install_locations[@]}"; do
+        echo "${indent}Would remove installation directory: $location"
+        found=1
+    done
+    for binary in "${cli_binaries[@]}"; do
+        echo "${indent}Would remove CLI binary: $binary"
+        found=1
+    done
+    for config_file in "${config_files[@]}"; do
+        if [ -f "$config_file" ] || [ -d "$config_file" ]; then
+            echo "${indent}Would remove config artifact: $config_file"
+            found=1
+        fi
+    done
+    for data_dir in "${data_dirs[@]}"; do
+        if [ -d "$data_dir" ]; then
+            echo "${indent}Would remove data directory: $data_dir"
+            found=1
+        fi
+    done
+    for profile_file in "${shell_files[@]}"; do
+        if [ -f "$profile_file" ] && grep -q -E '^[[:space:]]*(export[[:space:]]+MANIFEST_[A-Z_]+=|export[[:space:]]+PATH=.*\.manifest-cli|export[[:space:]]+PATH=.*\.local/bin.*PATH|(\.|source)[[:space:]]+.*manifest)' "$profile_file"; then
+            echo "${indent}Would remove Manifest entries from shell profile: $profile_file"
+            found=1
+        fi
+    done
+
+    if [ "$found" -eq 0 ]; then
+        echo "${indent}No Manifest CLI installation artifacts detected."
+    fi
+}
+
+preview_uninstall_manifest() {
+    local replay_command="${1:-manifest uninstall -y}"
+
+    if type manifest_execution_preview_header >/dev/null 2>&1; then
+        manifest_execution_preview_header "manifest uninstall"
+    else
+        echo "Preview - no changes written: manifest uninstall"
+    fi
+    _manifest_uninstall_print_artifact_plan "  "
+    if type manifest_execution_footer >/dev/null 2>&1; then
+        manifest_execution_footer "$replay_command"
+    else
+        echo ""
+        echo "No changes written. Re-run with -y to apply this plan:"
+        echo "  $replay_command"
+    fi
+}
+
+preview_reinstall_manifest() {
+    local replay_command="${1:-manifest reinstall -y}"
+
+    if type manifest_execution_preview_header >/dev/null 2>&1; then
+        manifest_execution_preview_header "manifest reinstall"
+    else
+        echo "Preview - no changes written: manifest reinstall"
+    fi
+    echo "Would run uninstall cleanup phase:"
+    _manifest_uninstall_print_artifact_plan "  "
+    echo ""
+    if command -v brew >/dev/null 2>&1; then
+        echo "Would reinstall through Homebrew:"
+        echo "  brew tap fidenceio/tap"
+        echo "  brew reinstall fidenceio/tap/manifest || brew reinstall manifest"
+    else
+        echo "Would reinstall through the manual installer if the Manifest Cloud installer module is available."
+    fi
+    if type manifest_execution_footer >/dev/null 2>&1; then
+        manifest_execution_footer "$replay_command"
+    else
+        echo ""
+        echo "No changes written. Re-run with -y to apply this plan:"
+        echo "  $replay_command"
+    fi
+}
+
 # Function to remove installation directory
 remove_installation_directory() {
     local install_dir="$1"
@@ -118,6 +232,7 @@ remove_cli_binary() {
 
 # Function to clean up configuration files and data directories
 cleanup_config_files() {
+    local skip_confirmations="${1:-false}"
     local global_yaml="$HOME/.manifest-cli/manifest.config.global.yaml"
     local config_files=(
         "$HOME/.manifestrc"
@@ -142,7 +257,7 @@ cleanup_config_files() {
     # Gate deletion of the global YAML behind explicit double-confirm so the
     # uninstall workflow can't silently destroy user-customized settings.
     local skip_global_yaml=0
-    if [ -f "$global_yaml" ]; then
+    if [ -f "$global_yaml" ] && [ "$skip_confirmations" != "true" ]; then
         if type _confirm_global_config_write &>/dev/null; then
             if ! _confirm_global_config_write "delete" "$global_yaml" "uninstall removing user-customized global config"; then
                 echo "ℹ️  Preserving global config: $global_yaml"
@@ -160,7 +275,7 @@ cleanup_config_files() {
             echo "Removing config file: $config_file"
             if rm -rf "$config_file"; then
                 echo "✅ Config file removed: $config_file"
-                ((cleaned++))
+                ((cleaned+=1))
             else
                 echo "❌ Failed to remove config file: $config_file"
             fi
@@ -172,7 +287,7 @@ cleanup_config_files() {
             echo "Removing data directory: $data_dir"
             if rm -rf "$data_dir"; then
                 echo "✅ Data directory removed: $data_dir"
-                ((cleaned++))
+                ((cleaned+=1))
             else
                 echo "❌ Failed to remove data directory: $data_dir"
             fi
@@ -207,14 +322,11 @@ cleanup_environment_variables() {
         #  - exports a MANIFEST_* variable
         #  - prepends .manifest-cli or .local/bin to PATH (installer-style)
         #  - sources a manifest-related rc file
-        if grep -v -E '^[[:space:]]*(export[[:space:]]+MANIFEST_[A-Z_]+=|export[[:space:]]+PATH=.*\.manifest-cli|export[[:space:]]+PATH=.*\.local/bin.*PATH|(\.|source)[[:space:]]+.*manifest)' "$profile_file" > "$temp_file"; then
-            if [ -s "$temp_file" ] && ! cmp -s "$profile_file" "$temp_file"; then
-                mv "$temp_file" "$profile_file"
-                echo "  ✅ Cleaned: $profile_file (backup: $backup_file)"
-                ((removed_count++))
-            else
-                rm -f "$temp_file" "$backup_file"
-            fi
+        grep -v -E '^[[:space:]]*(export[[:space:]]+MANIFEST_[A-Z_]+=|export[[:space:]]+PATH=.*\.manifest-cli|export[[:space:]]+PATH=.*\.local/bin.*PATH|(\.|source)[[:space:]]+.*manifest)' "$profile_file" > "$temp_file" || true
+        if ! cmp -s "$profile_file" "$temp_file"; then
+            mv "$temp_file" "$profile_file"
+            echo "  ✅ Cleaned: $profile_file (backup: $backup_file)"
+            ((removed_count+=1))
         else
             rm -f "$temp_file" "$backup_file"
         fi
@@ -292,7 +404,7 @@ uninstall_manifest() {
             echo "✅ Homebrew package removed"
         else
             echo "⚠️  brew uninstall failed"
-            ((errors++))
+            ((errors+=1))
         fi
         if brew untap fidenceio/tap 2>/dev/null; then
             echo "✅ Homebrew tap removed"
@@ -304,19 +416,19 @@ uninstall_manifest() {
     # Remove installation directories
     for location in "${install_locations[@]}"; do
         if ! remove_installation_directory "$location"; then
-            ((errors++))
+            ((errors+=1))
         fi
     done
     
     # Remove CLI binaries
     for binary in "${cli_binaries[@]}"; do
         if ! remove_cli_binary "$binary"; then
-            ((errors++))
+            ((errors+=1))
         fi
     done
     
     # Clean up configuration files
-    cleanup_config_files
+    cleanup_config_files "$skip_confirmations"
     
     # Clean up environment variables
     cleanup_environment_variables

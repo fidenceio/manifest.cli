@@ -44,3 +44,15 @@ load 'helpers/setup'
     grep -q -- '-y --yes --dry-run --draft' "$TEST_REPO_ROOT/completions/_manifest"
     grep -q -- '-y --yes --dry-run --method' "$TEST_REPO_ROOT/completions/_manifest"
 }
+
+@test "completions expose uninstall and reinstall safe-by-default flags" {
+    grep -q 'uninstall)' "$TEST_REPO_ROOT/completions/manifest.bash"
+    grep -q 'reinstall)' "$TEST_REPO_ROOT/completions/manifest.bash"
+    grep -q -- '-y --yes --dry-run --force --help' "$TEST_REPO_ROOT/completions/manifest.bash"
+    grep -q -- '-y --yes --dry-run --help' "$TEST_REPO_ROOT/completions/manifest.bash"
+
+    grep -q 'uninstall)' "$TEST_REPO_ROOT/completions/_manifest"
+    grep -q 'reinstall)' "$TEST_REPO_ROOT/completions/_manifest"
+    grep -q -- '-y --yes --dry-run --force --help' "$TEST_REPO_ROOT/completions/_manifest"
+    grep -q -- '-y --yes --dry-run --help' "$TEST_REPO_ROOT/completions/_manifest"
+}

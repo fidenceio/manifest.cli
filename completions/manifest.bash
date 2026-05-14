@@ -40,6 +40,14 @@ _manifest_complete() {
                     COMPREPLY=( $(compgen -W "$pr_subs" -- "$cur") )
                     return 0
                     ;;
+                uninstall)
+                    COMPREPLY=( $(compgen -W "-y --yes --dry-run --force --help" -- "$cur") )
+                    return 0
+                    ;;
+                reinstall)
+                    COMPREPLY=( $(compgen -W "-y --yes --dry-run --help" -- "$cur") )
+                    return 0
+                    ;;
             esac
             ;;
         3)

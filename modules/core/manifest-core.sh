@@ -1117,24 +1117,61 @@ EOF
         "uninstall")
             if _manifest_cli_has_help_token "$@"; then
                 _render_help \
-                    "manifest uninstall [--force]" \
-                    "Remove Manifest CLI installation files and optionally skip prompts with --force."
+                    "manifest uninstall [-y|--yes] [--dry-run] [--force]" \
+                    "Preview or remove Manifest CLI installation files. --force bypasses extra prompts only after -y selects apply mode."
                 return 0
             fi
-            local force_flag="false"
-            if [ "${1:-}" = "--force" ]; then
-                force_flag="true"
+            local execution_mode="preview"
+            local _local_only=false
+            local remaining_args=()
+            if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+                return 1
             fi
+            local force_flag="false"
+            local uninstall_arg
+            for uninstall_arg in "${remaining_args[@]}"; do
+                case "$uninstall_arg" in
+                    --force)
+                        force_flag="true"
+                        ;;
+                    *)
+                        _render_help_error "Unknown uninstall option: $uninstall_arg" "manifest uninstall [-y|--yes] [--dry-run] [--force]"
+                        return 1
+                        ;;
+                esac
+            done
+            if [[ "$execution_mode" == "preview" ]]; then
+                local replay_command="manifest uninstall"
+                [[ "$force_flag" == "true" ]] && replay_command+=" --force"
+                preview_uninstall_manifest "$replay_command -y"
+                return 0
+            fi
+            manifest_execution_apply_header
             uninstall_manifest "$force_flag" "$force_flag"
             ;;
 
         "reinstall")
             if _manifest_cli_has_help_token "$@"; then
                 _render_help \
-                    "manifest reinstall" \
-                    "Reinstall Manifest CLI through Homebrew or the installed provider."
+                    "manifest reinstall [-y|--yes] [--dry-run]" \
+                    "Preview or reinstall Manifest CLI through Homebrew or the installed provider."
                 return 0
             fi
+            local execution_mode="preview"
+            local _local_only=false
+            local remaining_args=()
+            if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+                return 1
+            fi
+            if [[ ${#remaining_args[@]} -gt 0 ]]; then
+                _render_help_error "Unknown reinstall option: ${remaining_args[0]}" "manifest reinstall [-y|--yes] [--dry-run]"
+                return 1
+            fi
+            if [[ "$execution_mode" == "preview" ]]; then
+                preview_reinstall_manifest "manifest reinstall -y"
+                return 0
+            fi
+            manifest_execution_apply_header
             echo "Reinstalling Manifest CLI..."
             echo ""
             if ! uninstall_manifest "true" "true"; then
