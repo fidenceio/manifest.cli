@@ -1,5 +1,15 @@
 # Changelog
 
+## [47.10.0] - 2026-05-14
+
+**Release Type:** Minor
+
+### Changes
+
+- Update release copy and configuration examples
+- Add regression coverage for the changed CLI workflow
+
+
 ## [47.9.3] - 2026-05-14
 
 **Release Type:** Patch
@@ -87,8 +97,3 @@
 - Update release copy and configuration examples
 - Add recipe-backed workflow definitions and recipe introspection support
 - Add regression coverage for the changed CLI workflow
-
-
-## [47.8.3] - 2026-05-13
-
-**Release Type:** Patch — no user-facing changes.
