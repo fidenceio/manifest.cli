@@ -3,7 +3,7 @@ title: Prep Repo
 kind: builtin
 command: manifest prep repo
 scope: repo
-summary: Prepare the current repository by validating remotes and pulling the latest state.
+summary: Preview or apply repository prep for the current Git repository, including repo-scope validation, target confirmation, remote inspection, and latest-state sync.
 entrypoint: manifest_prep_repo
 execution:
   default_mode: preview
@@ -12,6 +12,13 @@ inputs: {}
 steps:
   - id: validate-repo
     uses: manifest.repo.validate
+    effect: read
+  - id: confirm-repo-target
+    uses: manifest.repo.confirm_target
+    effect: read
+    when: apply
+  - id: inspect-remotes
+    uses: manifest.git.inspect_remotes
     effect: read
   - id: sync-repo
     uses: manifest.git.sync

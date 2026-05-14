@@ -3,7 +3,7 @@ title: Ship Repo Patch
 kind: builtin
 command: manifest ship repo patch
 scope: repo
-summary: Publish a patch release for the current repository.
+summary: Preview or publish a patch release for the current Git repository, including repo identity, target confirmation, release docs, tag/push, GitHub Release, Homebrew, and installed-CLI follow-up behavior when applicable.
 entrypoint: manifest_ship_repo
 execution:
   default_mode: preview
@@ -24,6 +24,21 @@ steps:
   - id: identify-repo
     uses: manifest.repo.identity
     effect: read
+  - id: confirm-repo-target
+    uses: manifest.repo.confirm_target
+    effect: read
+    when: apply
+  - id: sync-repo
+    uses: manifest.git.sync
+    effect: local-write
+    when: apply
+  - id: ensure-required-files
+    uses: manifest.repo.ensure_required_files
+    effect: local-write
+    when: apply
+  - id: get-trusted-timestamp
+    uses: manifest.time.trusted_timestamp
+    effect: read
   - id: bump-version
     uses: manifest.version.bump
     effect: local-write
@@ -32,9 +47,18 @@ steps:
   - id: generate-docs
     uses: manifest.docs.generate
     effect: local-write
+  - id: archive-docs
+    uses: manifest.docs.archive_sweep
+    effect: local-write
+  - id: validate-markdown
+    uses: manifest.docs.validate_markdown
+    effect: local-write
   - id: commit-release
     uses: manifest.git.commit_release
     effect: local-write
+  - id: validate-release-state
+    uses: manifest.repo.validate_release_state
+    effect: read
   - id: tag-release
     uses: manifest.git.tag_release
     effect: local-write
@@ -51,3 +75,10 @@ steps:
     uses: github.release.create
     effect: remote-write
     when: publish_release && github.release.enabled
+  - id: upgrade-installed-cli
+    uses: manifest.install.upgrade_local
+    effect: local-write
+    when: publish_release
+  - id: update-repository-metadata
+    uses: manifest.repo.metadata
+    effect: local-write
