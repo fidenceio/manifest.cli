@@ -29,6 +29,6 @@ load 'helpers/setup'
 }
 
 @test "Homebrew formula installs shell completions" {
-    grep -F 'bash_completion.install "completions/manifest.bash" => "manifest"' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
-    grep -F 'zsh_completion.install "completions/_manifest"' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
+    grep -F 'bash_completion.install libexec/"completions/manifest.bash" => "manifest"' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
+    grep -F 'zsh_completion.install libexec/"completions/_manifest"' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
 }
