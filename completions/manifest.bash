@@ -14,7 +14,7 @@ _manifest_complete() {
     local scopes="repo fleet"
     local bumps="patch minor major revision"
     local config_subs="show list get set unset describe doctor setup time"
-    local pr_subs="create status checks ready merge update queue policy help"
+    local pr_subs="create status checks ready merge update queue policy fleet help"
     local layers="global project local"
 
     case $cword in
@@ -58,6 +58,18 @@ _manifest_complete() {
                     ;;
                 "reconcile fleet")
                     COMPREPLY=( $(compgen -W "--apply --do --dry-run --plan --commit --push --force --adopt-submodules --help" -- "$cur") )
+                    return 0
+                    ;;
+                "pr create")
+                    COMPREPLY=( $(compgen -W "-y --yes --dry-run --draft --title --body --base --labels --reviewers --help" -- "$cur") )
+                    return 0
+                    ;;
+                "pr ready"|"pr merge"|"pr update"|"pr queue")
+                    COMPREPLY=( $(compgen -W "-y --yes --dry-run --method --force --auto --squash --merge --rebase --help" -- "$cur") )
+                    return 0
+                    ;;
+                "pr fleet")
+                    COMPREPLY=( $(compgen -W "create status checks ready queue help -y --yes --dry-run --method --force --help" -- "$cur") )
                     return 0
                     ;;
                 "config get"|"config describe"|"config unset")

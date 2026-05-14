@@ -30,3 +30,17 @@ load 'helpers/setup'
     ! grep -q 'recipe_subs=(list show explain run help)' "$TEST_REPO_ROOT/completions/_manifest"
     grep -q -- '--explain' "$TEST_REPO_ROOT/completions/_manifest"
 }
+
+@test "completions expose safe-by-default PR apply and preview flags" {
+    grep -q 'local pr_subs="create status checks ready merge update queue policy fleet help"' "$TEST_REPO_ROOT/completions/manifest.bash"
+    grep -q '"pr create"' "$TEST_REPO_ROOT/completions/manifest.bash"
+    grep -q '"pr fleet"' "$TEST_REPO_ROOT/completions/manifest.bash"
+    grep -q -- '-y --yes --dry-run --draft' "$TEST_REPO_ROOT/completions/manifest.bash"
+    grep -q -- '-y --yes --dry-run --method' "$TEST_REPO_ROOT/completions/manifest.bash"
+
+    grep -q 'pr_subs=(create status checks ready merge update queue policy fleet help)' "$TEST_REPO_ROOT/completions/_manifest"
+    grep -q '"pr create"' "$TEST_REPO_ROOT/completions/_manifest"
+    grep -q '"pr fleet"' "$TEST_REPO_ROOT/completions/_manifest"
+    grep -q -- '-y --yes --dry-run --draft' "$TEST_REPO_ROOT/completions/_manifest"
+    grep -q -- '-y --yes --dry-run --method' "$TEST_REPO_ROOT/completions/_manifest"
+}
