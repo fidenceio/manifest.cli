@@ -39,6 +39,15 @@ teardown() {
     find "$PROJECT_ROOT/docs/zArchive" -name 'SECURITY_ANALYSIS_REPORT_v46.10.0_*.md' | grep -q .
 }
 
+@test "security: ignored private files are not reported as tracked" {
+    touch .env
+
+    run check_git_tracking "$PROJECT_ROOT"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" != *".env is tracked by Git"* ]]
+}
+
 @test "security rejects unknown options" {
     run manifest_security --wat
 

@@ -272,6 +272,7 @@ generate_docs_index() {
             local today
             today=$(date -u '+%Y-%m-%d')
             sed -i'' -e "s|^\*\*Updated:\*\* [0-9-]*|\*\*Updated:\*\* $today|" "$index_file"
+            sed -i'' -e "s|\*\*Updated:\*\* [0-9-]*|\*\*Updated:\*\* $today|g" "$index_file"
             rm -f "${index_file}-e"
 
             log_success "Documentation index updated: $index_file"

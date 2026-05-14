@@ -146,7 +146,7 @@ check_git_tracking() {
     # Check if any private files are tracked
     while IFS= read -r env_file; do
         if [ -f "$project_root/$env_file" ]; then
-            if git -C "$project_root" ls-files "$env_file" >/dev/null 2>&1; then
+            if git -C "$project_root" ls-files --error-unmatch -- "$env_file" >/dev/null 2>&1; then
                 echo "      ❌ $env_file is tracked by Git (SECURITY RISK!)"
                 return 1
             fi
