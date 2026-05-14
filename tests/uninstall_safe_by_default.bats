@@ -84,6 +84,23 @@ create_fake_install_artifacts() {
     ! grep -q "MANIFEST_CLI_TEST" "$HOME/.zshrc"
 }
 
+@test "uninstall ignores unrelated manifest executable on PATH" {
+    create_fake_install_artifacts
+    mkdir -p "$SCRATCH/other-bin"
+    printf '#!/usr/bin/env bash\necho unrelated\n' > "$SCRATCH/other-bin/manifest"
+    chmod +x "$SCRATCH/other-bin/manifest"
+    PATH="$SCRATCH/other-bin:$PATH"
+    export PATH
+
+    run_manifest_from_plain_dir uninstall --force -y
+
+    [ "$status" -eq 0 ]
+    [ -f "$SCRATCH/other-bin/manifest" ]
+    echo "$output" | grep -q "Manifest CLI uninstalled successfully"
+    echo "$output" | grep -q "CLI binary removed: $HOME/.local/bin/manifest"
+    ! echo "$output" | grep -q "$SCRATCH/other-bin/manifest"
+}
+
 @test "uninstall and reinstall help advertise preview and apply flags" {
     run_manifest_from_plain_dir uninstall --help
     [ "$status" -eq 0 ]
