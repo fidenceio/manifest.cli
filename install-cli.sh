@@ -1,7 +1,7 @@
 #!/bin/bash
 # Manifest CLI installer.
 #
-# Validates the host (centralized requirements, Git), copies the CLI tree to
+# Validates the host (centralized requirements, Git, Docker), copies the CLI tree to
 # ~/.manifest-cli, configures PATH, sets up the global YAML config, and
 # optionally installs a pre-commit security hook in the current repo.
 #
@@ -27,6 +27,7 @@ NC='\033[0m' # No Color
 # Installation paths
 MANIFEST_CLI_LOCAL_BIN="$HOME/.local/bin"
 MANIFEST_CLI_NAME="manifest"
+MANIFEST_CLI_IDE_SUPPORT_DIR="$HOME/.manifest-cli/ide"
 
 # Function to determine the best installation directory
 get_install_location() {
@@ -78,35 +79,98 @@ print_subheader() {
 
 # Check if command exists
 # Print the right install command for the current OS/distro for a given pkg.
-# Pkg names: bash, yq, git, curl. Falls back to a documentation URL.
+# Pkg names: bash, yq, git, curl, docker. Falls back to a documentation URL.
 _install_hint() {
     local pkg="$1"
     if [[ "$OSTYPE" == "darwin"* ]]; then
+        if [[ "$pkg" == "docker" ]]; then
+            echo "brew install --cask docker"
+            return
+        fi
         echo "brew install $pkg"; return
     fi
     if command -v apt-get >/dev/null 2>&1; then
         case "$pkg" in
             yq) echo "sudo snap install yq  OR  see https://github.com/mikefarah/yq#install" ;;
+            docker) echo "see https://docs.docker.com/engine/install/" ;;
             *)  echo "sudo apt-get install $pkg" ;;
         esac
         return
     fi
-    if command -v dnf >/dev/null 2>&1; then echo "sudo dnf install $pkg"; return; fi
-    if command -v yum >/dev/null 2>&1; then echo "sudo yum install $pkg"; return; fi
-    if command -v zypper >/dev/null 2>&1; then echo "sudo zypper install $pkg"; return; fi
-    if command -v apk >/dev/null 2>&1; then echo "sudo apk add $pkg"; return; fi
+    if command -v dnf >/dev/null 2>&1; then
+        [[ "$pkg" == "docker" ]] && echo "see https://docs.docker.com/engine/install/" || echo "sudo dnf install $pkg"
+        return
+    fi
+    if command -v yum >/dev/null 2>&1; then
+        [[ "$pkg" == "docker" ]] && echo "see https://docs.docker.com/engine/install/" || echo "sudo yum install $pkg"
+        return
+    fi
+    if command -v zypper >/dev/null 2>&1; then
+        [[ "$pkg" == "docker" ]] && echo "see https://docs.docker.com/engine/install/" || echo "sudo zypper install $pkg"
+        return
+    fi
+    if command -v apk >/dev/null 2>&1; then
+        [[ "$pkg" == "docker" ]] && echo "see https://docs.docker.com/engine/install/" || echo "sudo apk add $pkg"
+        return
+    fi
     if command -v pacman >/dev/null 2>&1; then
         case "$pkg" in
             yq) echo "sudo pacman -S go-yq" ;;
+            docker) echo "sudo pacman -S docker && sudo systemctl enable --now docker" ;;
             *)  echo "sudo pacman -S $pkg" ;;
         esac
         return
     fi
-    echo "see your distro's package manager (or https://github.com/mikefarah/yq#install for yq)"
+    case "$pkg" in
+        yq) echo "see your distro's package manager or https://github.com/mikefarah/yq#install" ;;
+        docker) echo "see https://docs.docker.com/engine/install/" ;;
+        *) echo "see your distro's package manager" ;;
+    esac
 }
 
 command_exists() {
     command -v "$1" >/dev/null 2>&1
+}
+
+print_docker_help() {
+    print_error "   Install:  $(_install_hint docker)"
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        print_error "   Start:    open -a Docker"
+        print_error "   Verify:   docker info"
+    elif command_exists systemctl; then
+        print_error "   Start:    sudo systemctl enable --now docker"
+        print_error "   Verify:   docker info"
+    else
+        print_error "   Start Docker, then verify with: docker info"
+    fi
+}
+
+ensure_docker_installed() {
+    if manifest_requirement_docker_command_exists; then
+        return 0
+    fi
+
+    if [[ "$OSTYPE" == "darwin"* ]] && command_exists brew; then
+        print_status "🐳 Docker is required and is not installed"
+        print_status "Docker Desktop can be installed via Homebrew cask."
+        echo ""
+        read -p "   Install Docker Desktop now? (Y/n): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            print_status "Installing Docker Desktop..."
+            if brew install --cask docker; then
+                print_success "✅ Docker Desktop installed"
+                print_status "Start Docker Desktop before continuing:"
+                print_status "   open -a Docker"
+            else
+                print_error "❌ Docker Desktop installation failed"
+                return 1
+            fi
+        else
+            print_status "Skipping Docker installation"
+        fi
+        echo ""
+    fi
 }
 
 # Cross-platform in-place sed
@@ -256,9 +320,31 @@ validate_system() {
         errors=$((errors + 1))
     fi
 
-    # Check for essential commands
-    local required_commands=("git" "curl" "wget")
-    for cmd in "${required_commands[@]}"; do
+    # Git
+    if command_exists git; then
+        print_success "✅ git is available"
+    else
+        print_error "❌ Git is required for Manifest repo operations."
+        print_error "   Install:  $(_install_hint git)"
+        errors=$((errors + 1))
+    fi
+
+    # Docker
+    if ! manifest_requirement_docker_command_exists; then
+        print_error "❌ ${MANIFEST_CLI_REQUIRED_DOCKER_LABEL} is required."
+        print_docker_help
+        errors=$((errors + 1))
+    elif ! manifest_requirement_docker_engine_is_running; then
+        print_error "❌ Docker is installed, but the Docker engine is not running or not reachable."
+        print_docker_help
+        errors=$((errors + 1))
+    else
+        print_success "✅ Docker is installed and running"
+    fi
+
+    # Check for useful commands
+    local recommended_commands=("curl" "wget")
+    for cmd in "${recommended_commands[@]}"; do
         if command_exists "$cmd"; then
             print_success "✅ $cmd is available"
         else
@@ -430,7 +516,187 @@ copy_cli_files() {
         print_success "✅ Copied example configuration files"
     fi
 
+    # Copy shell completions for IDE-integrated terminals and regular shells.
+    if [ -d "completions" ]; then
+        cp -r "completions" "$MANIFEST_CLI_INSTALL_LOCATION/"
+        print_success "✅ Copied shell completions"
+    fi
+
     print_success "✅ All CLI files copied successfully"
+    echo ""
+}
+
+manifest_completion_source_dir() {
+    local source_dir
+    local candidates=(
+        "$MANIFEST_CLI_INSTALL_LOCATION/completions"
+        "$(pwd)/completions"
+    )
+
+    for source_dir in "${candidates[@]}"; do
+        if [ -f "$source_dir/manifest.bash" ] && [ -f "$source_dir/_manifest" ]; then
+            echo "$source_dir"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+install_shell_completions() {
+    print_subheader "🧩 Installing Shell and IDE Terminal Completions"
+
+    local source_dir
+    if ! source_dir="$(manifest_completion_source_dir)"; then
+        print_warning "⚠️  Completion files not found; skipping shell completion setup"
+        echo ""
+        return 0
+    fi
+
+    local installed=0
+    local bash_target=""
+    local zsh_target=""
+
+    if command_exists brew; then
+        local brew_prefix
+        brew_prefix="$(brew --prefix 2>/dev/null || true)"
+        if [ -n "$brew_prefix" ]; then
+            bash_target="$brew_prefix/etc/bash_completion.d/manifest"
+            zsh_target="$brew_prefix/share/zsh/site-functions/_manifest"
+        fi
+    fi
+
+    if [ -n "$bash_target" ]; then
+        mkdir -p "$(dirname "$bash_target")"
+        ln -sf "$source_dir/manifest.bash" "$bash_target"
+        print_success "✅ Bash completion installed: $bash_target"
+        installed=$((installed + 1))
+    fi
+
+    if [ -n "$zsh_target" ]; then
+        mkdir -p "$(dirname "$zsh_target")"
+        ln -sf "$source_dir/_manifest" "$zsh_target"
+        print_success "✅ Zsh completion installed: $zsh_target"
+        installed=$((installed + 1))
+    fi
+
+    if [ "$installed" -eq 0 ]; then
+        print_warning "⚠️  No standard completion directory detected"
+        print_warning "   Bash: source $source_dir/manifest.bash"
+        print_warning "   Zsh:  add $source_dir to fpath and run compinit"
+    else
+        print_status "IDE integrated terminals pick these up through their login shell."
+    fi
+
+    echo ""
+}
+
+install_ide_command_catalog() {
+    print_subheader "🧠 Installing IDE and AI Assistant Command Catalog"
+
+    mkdir -p "$MANIFEST_CLI_IDE_SUPPORT_DIR"
+
+    local command_catalog_md="$MANIFEST_CLI_IDE_SUPPORT_DIR/manifest-cli-commands.md"
+    local command_catalog_json="$MANIFEST_CLI_IDE_SUPPORT_DIR/manifest-cli-commands.json"
+    local agents_hint="$MANIFEST_CLI_IDE_SUPPORT_DIR/AGENTS.md"
+    local claude_hint="$MANIFEST_CLI_IDE_SUPPORT_DIR/CLAUDE.md"
+
+    cat > "$command_catalog_md" <<EOF
+# Manifest CLI Commands
+
+Manifest CLI is installed as \`manifest\`.
+
+Use these first-class commands before falling back to lower-level internals:
+
+- \`manifest doctor\` - validate dependencies, config, and repository state
+- \`manifest status [repo|fleet]\` - inspect current repo or fleet state
+- \`manifest init repo [--dry-run|-y]\` - scaffold repo metadata
+- \`manifest init fleet [--dry-run|-y]\` - scaffold fleet inventory
+- \`manifest prep repo [--dry-run|-y]\` - prepare remotes and repo metadata
+- \`manifest prep fleet [--dry-run|-y]\` - prepare fleet members
+- \`manifest refresh repo [--dry-run|-y]\` - refresh generated docs and metadata
+- \`manifest refresh fleet [--dry-run|-y]\` - refresh fleet inventory
+- \`manifest ship repo patch|minor|major|revision [--dry-run|-y]\` - preview or cut a repo release
+- \`manifest ship fleet patch|minor|major|revision [--dry-run|-y]\` - preview or cut fleet releases
+- \`manifest config list|get|set|unset|doctor\` - inspect and manage YAML config
+- \`manifest recipe list|show|explain\` - inspect built-in workflow contracts
+- \`manifest pr create|status|checks|ready|merge|update\` - GitHub PR helpers
+
+Behavior contract:
+
+- Mutating commands preview by default.
+- Use \`--dry-run\` for explicit preview.
+- Use \`-y\` or \`--yes\` to apply.
+- Use \`manifest <command> --help\` for exact flags.
+
+Installed docs:
+
+- $MANIFEST_CLI_INSTALL_LOCATION/docs/USER_GUIDE.md
+- $MANIFEST_CLI_INSTALL_LOCATION/docs/COMMAND_REFERENCE.md
+- $MANIFEST_CLI_INSTALL_LOCATION/completions/README.md
+EOF
+
+    cat > "$command_catalog_json" <<'EOF'
+{
+  "name": "Manifest CLI",
+  "binary": "manifest",
+  "safe_by_default": true,
+  "preview_flags": ["--dry-run"],
+  "apply_flags": ["-y", "--yes"],
+  "commands": [
+    "manifest doctor",
+    "manifest status repo",
+    "manifest status fleet",
+    "manifest init repo",
+    "manifest init fleet",
+    "manifest prep repo",
+    "manifest prep fleet",
+    "manifest refresh repo",
+    "manifest refresh fleet",
+    "manifest ship repo patch",
+    "manifest ship repo minor",
+    "manifest ship repo major",
+    "manifest ship repo revision",
+    "manifest ship fleet patch",
+    "manifest ship fleet minor",
+    "manifest ship fleet major",
+    "manifest ship fleet revision",
+    "manifest config list",
+    "manifest config get",
+    "manifest config set",
+    "manifest config unset",
+    "manifest config doctor",
+    "manifest recipe list",
+    "manifest recipe show",
+    "manifest recipe explain",
+    "manifest pr create",
+    "manifest pr status",
+    "manifest pr checks",
+    "manifest pr ready",
+    "manifest pr merge",
+    "manifest pr update"
+  ]
+}
+EOF
+
+    cat > "$agents_hint" <<EOF
+# Manifest CLI Assistant Hints
+
+Manifest CLI is available as \`manifest\`. Prefer first-class commands such as
+\`manifest status\`, \`manifest doctor\`, \`manifest init repo\`,
+\`manifest prep repo\`, \`manifest refresh repo\`, and
+\`manifest ship repo patch\`.
+
+Mutating commands preview by default. Use \`--dry-run\` for explicit preview and
+\`-y\` or \`--yes\` to apply. Full command reference:
+$MANIFEST_CLI_INSTALL_LOCATION/docs/COMMAND_REFERENCE.md
+EOF
+
+    cp "$agents_hint" "$claude_hint"
+
+    print_success "✅ Command catalog installed: $command_catalog_md"
+    print_success "✅ JSON command catalog installed: $command_catalog_json"
+    print_success "✅ Assistant hints installed: $agents_hint and $claude_hint"
     echo ""
 }
 
@@ -630,6 +896,11 @@ display_post_install_info() {
 
 📚 Docs:  $MANIFEST_CLI_INSTALL_LOCATION/docs/USER_GUIDE.md
 🌐 Repo:  https://github.com/fidenceio/manifest.cli
+
+🧠 IDE / AI assistant support:
+   Shell completions: installed for standard bash/zsh completion paths when available
+   Command catalog:   $MANIFEST_CLI_IDE_SUPPORT_DIR/manifest-cli-commands.md
+   Assistant hints:   $MANIFEST_CLI_IDE_SUPPORT_DIR/AGENTS.md and CLAUDE.md
 EOF
     if [ -f ".git/hooks/pre-commit" ] && grep -q "Manifest CLI Pre-Commit Hook" ".git/hooks/pre-commit" 2>/dev/null; then
         echo
@@ -854,6 +1125,11 @@ main() {
         echo ""
     fi
 
+    # Docker install check comes after Homebrew so macOS has one clean path:
+    # Homebrew first, Docker Desktop second, validation third.
+    ensure_docker_installed
+    validate_system
+
     # Route through Homebrew when available
     if command_exists brew; then
         print_status "🍺 Homebrew detected — installing via Homebrew"
@@ -864,6 +1140,8 @@ main() {
 
         if install_via_homebrew; then
             create_configuration
+            install_shell_completions
+            install_ide_command_catalog
             install_git_hooks
             local brew_manifest="$(brew --prefix)/bin/manifest"
             if [ -x "$brew_manifest" ] && "$brew_manifest" --help >/dev/null 2>&1; then
@@ -884,8 +1162,6 @@ main() {
         print_status "Homebrew not found — using manual installation"
         echo ""
 
-        validate_system
-
         cleanup_environment_variables
         cleanup_old_installation
         create_directories
@@ -893,6 +1169,8 @@ main() {
         create_configuration
         setup_environment_variables
         configure_path
+        install_shell_completions
+        install_ide_command_catalog
 
         if verify_installation; then
             install_git_hooks

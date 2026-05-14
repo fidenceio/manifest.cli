@@ -9,6 +9,7 @@
 | **Bash** | 5.0+ | Yes | macOS ships Bash 3.2; Homebrew installs Bash 5 automatically |
 | **Git** | Any recent | Yes | Version control operations |
 | **yq** | 4.0+ (Mike Farah's Go version) | Yes | YAML configuration parsing |
+| **Docker** | Running engine | Yes | Required for the containerized execution model |
 | **curl** | Any | Recommended | HTTPS timestamps, API calls, install script |
 | **coreutils** | Any | Optional | Cross-platform `date`/`stat` on macOS |
 
@@ -23,7 +24,7 @@ brew tap fidenceio/tap
 brew install manifest
 ```
 
-This installs the CLI, sets up the `manifest` command, and pulls in Bash 5, Git, and yq as dependencies automatically.
+This installs the CLI, sets up the `manifest` command, and pulls in Bash 5, Git, and yq as dependencies automatically. Docker must also be installed and running.
 
 ### Upgrade
 
@@ -51,9 +52,49 @@ The install script:
 
 1. Validates the required Bash version (with per-platform install instructions if missing)
 2. Validates the required yq version and vendor (detects wrong version, provides install commands)
-3. Uses Homebrew when available (preferred path)
-4. Falls back to manual installation at `~/.manifest-cli` with a launcher in `~/.local/bin`
-5. Migrates configuration from legacy locations automatically
+3. Ensures Homebrew first on macOS, then offers to install Docker Desktop with `brew install --cask docker`
+4. Validates Docker is installed and the engine is reachable
+5. Uses Homebrew when available (preferred path)
+6. Falls back to manual installation at `~/.manifest-cli` with a launcher in `~/.local/bin`
+7. Installs bash/zsh completions for normal terminals and IDE integrated terminals
+8. Writes IDE and AI assistant command catalogs under `~/.manifest-cli/ide/`
+9. Migrates configuration from legacy locations automatically
+
+### IDE and AI Assistant Support
+
+The installer sets up shell completions in standard bash/zsh locations when
+those locations are available. VS Code, Cursor, Windsurf, Antigravity, and other
+editors that use your normal login shell can then complete `manifest` commands
+inside their integrated terminals.
+
+The installer also writes a concise command catalog for AI/editor assistants:
+
+```text
+~/.manifest-cli/ide/manifest-cli-commands.md
+~/.manifest-cli/ide/manifest-cli-commands.json
+~/.manifest-cli/ide/AGENTS.md
+~/.manifest-cli/ide/CLAUDE.md
+```
+
+These files document the first-class commands and the safe-by-default contract:
+mutating commands preview by default, `--dry-run` is explicit preview, and
+`-y`/`--yes` applies the plan.
+
+### Installing Docker
+
+On macOS, the install script uses one clean path:
+
+```bash
+brew install --cask docker
+open -a Docker
+docker info
+```
+
+On Linux, install Docker Engine for your distribution, start the service, then verify:
+
+```bash
+docker info
+```
 
 ### Installing yq Manually
 
