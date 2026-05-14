@@ -1,5 +1,15 @@
 # Changelog
 
+## [47.9.2] - 2026-05-14
+
+**Release Type:** Patch
+
+### Changes
+
+- Clarify repo and fleet command scope
+- Align built-in recipes with current workflows
+
+
 ## [47.9.1] - 2026-05-14
 
 **Release Type:** Patch — no user-facing changes.
@@ -86,8 +96,3 @@
 - Wire first-class CLI commands to inspectable built-in recipe definitions
 - Update shell completions for new command options
 - Add regression coverage for the changed CLI workflow
-
-
-## [47.8.1] - 2026-05-13
-
-**Release Type:** Patch — no user-facing changes.
