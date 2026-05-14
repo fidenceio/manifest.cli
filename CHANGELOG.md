@@ -1,5 +1,18 @@
 # Changelog
 
+## [47.8.5] - 2026-05-14
+
+**Release Type:** Patch
+
+### Changes
+
+- Add GitHub Release publishing support
+- Add smart ship preview summaries
+- Update release copy and configuration examples
+- Wire first-class CLI commands to inspectable built-in recipe definitions
+- Add regression coverage for the changed CLI workflow
+
+
 ## [47.8.4] - 2026-05-13
 
 **Release Type:** Patch
@@ -66,10 +79,5 @@
 
 
 ## [47.6.2] - 2026-05-08
-
-**Release Type:** Patch — no user-facing changes.
-
-
-## [47.6.1] - 2026-05-08
 
 **Release Type:** Patch — no user-facing changes.
