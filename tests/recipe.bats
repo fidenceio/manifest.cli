@@ -41,6 +41,8 @@ run_manifest_from_plain_dir() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"Ship Repo Patch"* ]]
     [[ "$output" == *"Command:    manifest ship repo patch"* ]]
+    [[ "$output" == *"confirm-repo-target -> manifest.repo.confirm_target {effect: read} [apply]"* ]]
+    [[ "$output" == *"archive-docs -> manifest.docs.archive_sweep {effect: local-write}"* ]]
     [[ "$output" == *"bump-version -> manifest.version.bump"* ]]
     [[ "$output" == *"create-github-release -> github.release.create {effect: remote-write} [publish_release && github.release.enabled]"* ]]
 }
@@ -84,6 +86,61 @@ run_manifest_from_plain_dir() {
             offenders="$offenders $file"
         fi
     done < <(find "$TEST_REPO_ROOT/recipes/builtin" -type f -name 'manifest.builtin.ship.*.yaml' | sort)
+
+    [ -z "$offenders" ]
+}
+
+@test "built-in repo recipes describe repo target confirmation before writes" {
+    local file offenders
+    offenders=""
+
+    for file in \
+        "$TEST_REPO_ROOT/recipes/builtin/manifest.builtin.prep.repo.yaml" \
+        "$TEST_REPO_ROOT/recipes/builtin/manifest.builtin.refresh.repo.yaml" \
+        "$TEST_REPO_ROOT"/recipes/builtin/manifest.builtin.ship.repo.*.yaml; do
+        if [ "$(yq e '[.steps[] | select(.id == "confirm-repo-target" and .uses == "manifest.repo.confirm_target" and .effect == "read" and .when == "apply")] | length' "$file")" != "1" ]; then
+            offenders="$offenders $file"
+        fi
+    done
+
+    [ -z "$offenders" ]
+}
+
+@test "built-in fleet ship recipes describe scope and releaseable-service plan" {
+    local file offenders
+    offenders=""
+
+    while IFS= read -r file; do
+        if [ "$(yq e '[.steps[] | select(.id == "render-fleet-scope" and .uses == "manifest.fleet.scope_block" and .effect == "read")] | length' "$file")" != "1" ]; then
+            offenders="$offenders $file:scope"
+        fi
+        if [ "$(yq e '[.steps[] | select(.id == "build-release-plan" and .uses == "manifest.fleet.release_plan" and .effect == "read")] | length' "$file")" != "1" ]; then
+            offenders="$offenders $file:plan"
+        fi
+        if grep -q 'prep-fleet\|manifest.fleet.ship_services' "$file"; then
+            offenders="$offenders $file:stale"
+        fi
+    done < <(find "$TEST_REPO_ROOT/recipes/builtin" -type f -name 'manifest.builtin.ship.fleet.*.yaml' | sort)
+
+    [ -z "$offenders" ]
+}
+
+@test "non-patch repo ship recipes include guarded follow-up patch" {
+    local file offenders
+    offenders=""
+
+    for file in \
+        "$TEST_REPO_ROOT/recipes/builtin/manifest.builtin.ship.repo.minor.yaml" \
+        "$TEST_REPO_ROOT/recipes/builtin/manifest.builtin.ship.repo.major.yaml" \
+        "$TEST_REPO_ROOT/recipes/builtin/manifest.builtin.ship.repo.revision.yaml"; do
+        if [ "$(yq e '[.steps[] | select(.id == "follow-up-patch" and .uses == "manifest.ship.followup_patch" and .effect == "remote-write" and .when == "publish_release && canonical_cli")] | length' "$file")" != "1" ]; then
+            offenders="$offenders $file"
+        fi
+    done
+
+    if grep -q 'follow-up-patch' "$TEST_REPO_ROOT/recipes/builtin/manifest.builtin.ship.repo.patch.yaml"; then
+        offenders="$offenders patch-should-not-follow-up"
+    fi
 
     [ -z "$offenders" ]
 }

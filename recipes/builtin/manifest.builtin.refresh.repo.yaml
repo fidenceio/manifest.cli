@@ -3,16 +3,30 @@ title: Refresh Repo
 kind: builtin
 command: manifest refresh repo
 scope: repo
-summary: Regenerate repository documentation and metadata without publishing a release.
+summary: Preview or apply documentation and metadata refresh for the current Git repository, including repo-scope validation and target confirmation before writes.
 entrypoint: manifest_refresh_repo
 execution:
   default_mode: preview
   requires_yes_for: [local-write]
 inputs: {}
 steps:
+  - id: identify-repo
+    uses: manifest.repo.identity
+    effect: read
+  - id: confirm-repo-target
+    uses: manifest.repo.confirm_target
+    effect: read
+    when: apply
   - id: generate-docs
     uses: manifest.docs.generate
+    effect: local-write
+  - id: validate-markdown
+    uses: manifest.docs.validate_markdown
     effect: local-write
   - id: refresh-metadata
     uses: manifest.repo.metadata
     effect: local-write
+  - id: commit-metadata
+    uses: manifest.git.commit_metadata
+    effect: local-write
+    when: apply && commit

@@ -3,7 +3,7 @@ title: Ship Fleet Revision
 kind: builtin
 command: manifest ship fleet revision
 scope: fleet
-summary: Publish a coordinated revision release across a fleet.
+summary: Preview or publish a coordinated revision release across release-enabled fleet members, showing fleet scope, selected repositories, release decisions, and skip reasons before apply.
 entrypoint: manifest_ship_fleet
 execution:
   default_mode: preview
@@ -21,16 +21,22 @@ steps:
   - id: load-fleet
     uses: manifest.fleet.load
     effect: read
-  - id: prep-fleet
+  - id: resolve-service-filter
+    uses: manifest.fleet.filter_services
+    effect: read
+  - id: render-fleet-scope
+    uses: manifest.fleet.scope_block
+    effect: read
+  - id: build-release-plan
     uses: manifest.fleet.release_plan
     effect: read
     with:
       release_type: revision
   - id: prep-releaseable-services-local
-    uses: manifest.fleet.ship_services
+    uses: manifest.fleet.ship_releaseable_services
     effect: local-write
     when: apply && local
   - id: publish-releaseable-services
-    uses: manifest.fleet.ship_services
+    uses: manifest.fleet.ship_releaseable_services
     effect: remote-write
     when: apply && publish_release
