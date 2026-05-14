@@ -33,6 +33,13 @@ load 'helpers/setup'
     grep -F 'Install coreutils for the supported macOS timeout command' "$TEST_REPO_ROOT/modules/system/manifest-os.sh" >/dev/null
 }
 
+@test "CI and git retry use the supported coreutils timeout command" {
+    grep -F 'brew install bats-core yq bash coreutils' "$TEST_REPO_ROOT/.github/workflows/test.yml" >/dev/null
+    grep -F 'manifest_git_timeout_command' "$TEST_REPO_ROOT/modules/git/manifest-git.sh" >/dev/null
+    grep -F 'gtimeout' "$TEST_REPO_ROOT/modules/git/manifest-git.sh" >/dev/null
+    ! grep -F 'if timeout "$timeout"' "$TEST_REPO_ROOT/modules/git/manifest-git.sh" >/dev/null
+}
+
 @test "installer handles Homebrew before Docker before final validation" {
     local homebrew_line docker_line validate_line
 

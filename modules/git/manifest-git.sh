@@ -38,6 +38,29 @@ validate_increment_type() {
     esac
 }
 
+manifest_git_timeout_command() {
+    if [[ "$(uname -s 2>/dev/null || echo "")" == "Darwin" ]]; then
+        if command -v gtimeout >/dev/null 2>&1; then
+            echo "gtimeout"
+            return 0
+        fi
+    elif command -v timeout >/dev/null 2>&1; then
+        echo "timeout"
+        return 0
+    fi
+
+    if command -v timeout >/dev/null 2>&1; then
+        echo "timeout"
+        return 0
+    fi
+    if command -v gtimeout >/dev/null 2>&1; then
+        echo "gtimeout"
+        return 0
+    fi
+
+    return 1
+}
+
 # Shared retry function for git operations
 git_retry() {
     local description="$1"
@@ -45,6 +68,7 @@ git_retry() {
     local timeout="${MANIFEST_CLI_GIT_TIMEOUT:-300}"  # 5 minutes default timeout
     local max_retries="${MANIFEST_CLI_GIT_RETRIES:-3}"  # 3 retries default
     local success=false
+    local timeout_cmd=""
     
     # Validate command input to prevent injection
     if [[ -z "$command" ]]; then
@@ -64,12 +88,17 @@ git_retry() {
     
     # Configure git to use SSH connection multiplexing to reduce connection overhead
     local git_ssh_command="ssh -o ControlMaster=auto -o ControlPersist=60s -o ControlPath=~/.ssh/control-%r@%h:%p"
+
+    if ! timeout_cmd="$(manifest_git_timeout_command)"; then
+        echo "   ❌ Missing timeout command. Install coreutils (gtimeout on macOS, timeout elsewhere)."
+        return 1
+    fi
     
     for attempt in $(seq 1 $max_retries); do
         echo "   $description (attempt $attempt/$max_retries)..."
         
         # Use GIT_SSH_COMMAND to enable connection multiplexing with safe array execution
-        if timeout "$timeout" env GIT_SSH_COMMAND="$git_ssh_command" "${cmd_array[@]}" 2>/dev/null; then
+        if "$timeout_cmd" "$timeout" env GIT_SSH_COMMAND="$git_ssh_command" "${cmd_array[@]}" 2>/dev/null; then
             echo "   ✅ $description successful"
             success=true
             break
