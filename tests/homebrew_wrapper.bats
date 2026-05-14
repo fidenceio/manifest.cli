@@ -39,3 +39,9 @@ load 'helpers/setup'
     grep -F 'bash_completion.install libexec/"completions/manifest.bash" => "manifest"' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
     grep -F 'zsh_completion.install libexec/"completions/_manifest"' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
 }
+
+@test "Homebrew formula caveats describe uninstall preview and apply commands" {
+    grep -F 'To preview a clean uninstall:' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
+    grep -F 'To uninstall cleanly (removes config and env vars too):' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
+    grep -F 'manifest uninstall -y' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
+}

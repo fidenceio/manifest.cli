@@ -327,7 +327,8 @@ enabled.
 | Command | Purpose |
 | ------- | ------- |
 | `manifest upgrade` | Check for and install CLI updates \[Cloud\] |
-| `manifest uninstall` | Remove Manifest CLI (preserves global config — double-confirm to delete) |
+| `manifest uninstall` | Preview Manifest CLI removal |
+| `manifest uninstall -y` | Remove Manifest CLI (preserves global config unless extra confirmation is granted) |
 | `manifest reinstall` | Full uninstall + reinstall |
 | `manifest security` | Run security audit and write reports |
 | `manifest security --check` | Run read-only security checks |
