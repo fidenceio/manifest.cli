@@ -1,5 +1,17 @@
 # Changelog
 
+## [47.11.2] - 2026-05-14
+
+**Release Type:** Patch
+
+### Changes
+
+- Add GitHub Release publishing support
+- Update release copy and configuration examples
+- Add regression coverage for the changed CLI workflow
+- Backfill and clarify release history in the root changelog
+
+
 ## [47.11.1] - 2026-05-14
 
 **Release Type:** Patch — no user-facing changes.
@@ -71,12 +83,3 @@
 ### Changes
 
 - Require repo target confirmation
-
-
-## [47.8.8] - 2026-05-14
-
-**Release Type:** Patch
-
-### Changes
-
-- Add regression coverage for the changed CLI workflow
