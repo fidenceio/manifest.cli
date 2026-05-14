@@ -1,5 +1,10 @@
 # Changelog
 
+## [47.12.1] - 2026-05-14
+
+**Release Type:** Patch — no user-facing changes.
+
+
 ## [47.12.0] - 2026-05-14
 
 **Release Type:** Minor
@@ -80,8 +85,3 @@
 
 - Clarify repo and fleet command scope
 - Align built-in recipes with current workflows
-
-
-## [47.9.1] - 2026-05-14
-
-**Release Type:** Patch — no user-facing changes.
