@@ -24,7 +24,8 @@ teardown() {
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Dry run"
     echo "$output" | grep -q "would create:.*VERSION"
-    echo "$output" | grep -q "No changes written"
+    echo "$output" | grep -q "No changes written. Re-run with -y to apply this plan:"
+    echo "$output" | grep -q "manifest init repo -y"
 
     # Hard guarantee: nothing should have been written.
     [ ! -f "$SCRATCH/VERSION" ]
@@ -40,7 +41,8 @@ teardown() {
     PROJECT_ROOT="$SCRATCH" run manifest_init_repo
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Dry run"
-    echo "$output" | grep -q "No changes written"
+    echo "$output" | grep -q "No changes written. Re-run with -y to apply this plan:"
+    echo "$output" | grep -q "manifest init repo -y"
     [ ! -f "$SCRATCH/VERSION" ]
     [ ! -d "$SCRATCH/.git" ]
 }
@@ -97,7 +99,8 @@ teardown() {
     echo "$output" | grep -q "Remotes that would be pulled"
     echo "$output" | grep -q "origin"
     echo "$output" | grep -q "https://example.invalid/example.git"
-    echo "$output" | grep -q "No changes written"
+    echo "$output" | grep -q "No changes written. Re-run with -y to apply this plan:"
+    echo "$output" | grep -q "manifest prep repo -y"
 }
 
 @test "prep repo defaults to preview and makes no remote calls" {
@@ -161,7 +164,8 @@ teardown() {
     echo "$output" | grep -q "Origin:.*example/project"
     echo "$output" | grep -q "Target:.*this Git repository only"
     ! echo "$output" | grep -q "Git and publish plan"
-    echo "$output" | grep -q "No changes written"
+    echo "$output" | grep -q "No changes written. Re-run with -y to apply this plan:"
+    echo "$output" | grep -q "manifest ship repo minor -y"
 }
 
 # -----------------------------------------------------------------------------
@@ -180,7 +184,8 @@ teardown() {
     echo "$output" | grep -q "Version: 2.5.4 (unchanged)"
     echo "$output" | grep -q "Would perform"
     echo "$output" | grep -q "Regenerate documentation"
-    echo "$output" | grep -q "No changes written"
+    echo "$output" | grep -q "No changes written. Re-run with -y to apply this plan:"
+    echo "$output" | grep -q "manifest refresh repo -y"
 }
 
 @test "refresh repo defaults to preview" {
@@ -192,7 +197,8 @@ teardown() {
     PROJECT_ROOT="$SCRATCH" run manifest_refresh_repo
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Dry run"
-    echo "$output" | grep -q "No changes written"
+    echo "$output" | grep -q "No changes written. Re-run with -y to apply this plan:"
+    echo "$output" | grep -q "manifest refresh repo -y"
 }
 
 @test "refresh repo --dry-run --commit: surfaces the commit step in the plan" {

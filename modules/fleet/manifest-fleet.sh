@@ -1239,7 +1239,7 @@ _fleet_sync() {
     echo ""
 
     if [[ "$dry_run" == "true" ]]; then
-        _fleet_sync_dry_run "$clone_only" "$pull_only"
+        _fleet_sync_dry_run "$clone_only" "$pull_only" "$parallel"
         return 0
     fi
 
@@ -1260,6 +1260,7 @@ _fleet_sync() {
 _fleet_sync_dry_run() {
     local clone_only="$1"
     local pull_only="$2"
+    local parallel="${3:-false}"
 
     local total=0 would_clone=0 would_pull=0 would_skip=0 would_fail=0
     local service path url is_submodule
@@ -1305,7 +1306,11 @@ _fleet_sync_dry_run() {
     echo "────────────────────────────────────────────────────────────────────────"
     echo "Plan: $would_clone clone, $would_pull pull, $would_skip skip, $would_fail fail (of $total total)"
     echo ""
-    echo "No changes written. Re-run without --dry-run to apply."
+    local replay_command="manifest prep fleet"
+    [[ "$parallel" == "true" ]] && replay_command="$replay_command --parallel"
+    [[ "$clone_only" == "true" ]] && replay_command="$replay_command --clone-only"
+    [[ "$pull_only" == "true" ]] && replay_command="$replay_command --pull-only"
+    manifest_execution_footer "$replay_command -y"
     echo ""
 }
 
@@ -1685,7 +1690,7 @@ EOF
 
         if [[ "$dry_run" == "true" ]]; then
             echo "To add these services, run:"
-            echo "  manifest update fleet"
+            echo "  manifest update fleet --depth $depth -y"
         else
             local new_repos
             new_repos=$(get_new_repos "$diff_output")

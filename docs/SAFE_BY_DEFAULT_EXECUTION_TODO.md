@@ -316,13 +316,13 @@ No layer silently escalates preview into apply.
 - [ ] Add a short "Safe by default" section to README, User Guide, Command Reference, and Examples.
 - [ ] Update shell completions for `-y`, `--yes`, and `--dry-run` on every mutating command.
 - [ ] Update help examples so bare mutating commands show previews and applied examples include `-y`.
-- [ ] Update error messages that currently say "Re-run without --dry-run" to "Re-run with -y to apply".
+- [x] Update error messages that currently say "Re-run without --dry-run" to "Re-run with -y to apply".
 - [ ] Add a migration note for users upgrading from pre-change behavior.
 - [x] Add one consistent contradictory-flags error:
   - `Cannot combine --dry-run with -y/--yes. Preview is already the default; remove --dry-run to apply.`
-- [ ] Add one consistent apply banner:
+- [x] Add one consistent apply banner:
   - `Applying because -y/--yes was provided.`
-- [ ] Add one consistent preview footer:
+- [x] Add one consistent preview footer:
   - `No changes written. Re-run with -y to apply this plan.`
 - [ ] Make tables include `Effect`, `Scope`, and `Apply command` where useful.
 

@@ -466,6 +466,7 @@ fleet_docs_generate() {
     local services_only=false
     local release_type="patch"
     local dry_run=false
+    local replay_command="manifest docs fleet"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -580,7 +581,17 @@ fleet_docs_generate() {
             echo "Would skip:    per-service docs"
         fi
         echo ""
-        echo "No changes written. Re-run without --dry-run to apply."
+        if [[ "$release_type" != "patch" ]]; then
+            replay_command="$replay_command $release_type"
+        fi
+        if [[ "$fleet_only" == "true" ]]; then
+            replay_command="$replay_command --fleet-only"
+        elif [[ "$services_only" == "true" ]]; then
+            replay_command="$replay_command --services-only"
+        elif [[ -n "$strategy_override" ]]; then
+            replay_command="$replay_command --strategy $strategy_override"
+        fi
+        manifest_execution_footer "$replay_command -y"
         return 0
     fi
 
