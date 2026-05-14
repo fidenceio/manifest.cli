@@ -5,10 +5,10 @@
 # External MCP/API-backed engines can be wired through the provider command
 # without changing the commit path.
 
-if [[ -n "${_MANIFEST_DOC_REVIEW_LOADED:-}" ]]; then
+if [[ -n "${_MANIFEST_CLI_DOC_REVIEW_LOADED:-}" ]]; then
     return 0
 fi
-_MANIFEST_DOC_REVIEW_LOADED=1
+_MANIFEST_CLI_DOC_REVIEW_LOADED=1
 
 _manifest_doc_review_is_disabled() {
     case "$(printf '%s' "${MANIFEST_CLI_DOC_REVIEW:-true}" | tr '[:upper:]' '[:lower:]' | xargs 2>/dev/null || printf '%s' "${MANIFEST_CLI_DOC_REVIEW:-true}")" in
@@ -99,11 +99,11 @@ _manifest_doc_review_run_provider() {
     local state_dir
     state_dir="$(_manifest_doc_review_state_dir "$project_root")" || return 1
 
-    export MANIFEST_DOC_REVIEW_REPORT_FILE="$report_file"
-    export MANIFEST_DOC_REVIEW_COMMIT_SUBJECT_FILE="$state_dir/provider-commit-subject"
-    export MANIFEST_DOC_REVIEW_COMMIT_BODY_FILE="$state_dir/provider-commit-body"
-    export MANIFEST_DOC_REVIEW_RELEASE_NOTE_FILE="$state_dir/provider-release-note"
-    rm -f "$MANIFEST_DOC_REVIEW_COMMIT_SUBJECT_FILE" "$MANIFEST_DOC_REVIEW_COMMIT_BODY_FILE" "$MANIFEST_DOC_REVIEW_RELEASE_NOTE_FILE"
+    export MANIFEST_CLI_DOC_REVIEW_REPORT_FILE="$report_file"
+    export MANIFEST_CLI_DOC_REVIEW_COMMIT_SUBJECT_FILE="$state_dir/provider-commit-subject"
+    export MANIFEST_CLI_DOC_REVIEW_COMMIT_BODY_FILE="$state_dir/provider-commit-body"
+    export MANIFEST_CLI_DOC_REVIEW_RELEASE_NOTE_FILE="$state_dir/provider-release-note"
+    rm -f "$MANIFEST_CLI_DOC_REVIEW_COMMIT_SUBJECT_FILE" "$MANIFEST_CLI_DOC_REVIEW_COMMIT_BODY_FILE" "$MANIFEST_CLI_DOC_REVIEW_RELEASE_NOTE_FILE"
 
     case "$provider" in
         ""|local)
@@ -125,10 +125,10 @@ manifest_smart_documentation_review() {
     local commit_message="${1:-}"
     local project_root="${PROJECT_ROOT:-$(pwd)}"
 
-    MANIFEST_DOC_REVIEW_REPORT_FILE=""
-    MANIFEST_DOC_REVIEW_COMMIT_BODY=""
-    MANIFEST_DOC_REVIEW_COMMIT_SUBJECT=""
-    MANIFEST_DOC_REVIEW_RELEASE_NOTE=""
+    MANIFEST_CLI_DOC_REVIEW_REPORT_FILE=""
+    MANIFEST_CLI_DOC_REVIEW_COMMIT_BODY=""
+    MANIFEST_CLI_DOC_REVIEW_COMMIT_SUBJECT=""
+    MANIFEST_CLI_DOC_REVIEW_RELEASE_NOTE=""
 
     _manifest_doc_review_is_disabled && return 0
     git -C "$project_root" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
@@ -246,30 +246,30 @@ manifest_smart_documentation_review() {
         echo "   ⚠️  Documentation review provider failed; continuing"
     fi
 
-    if [[ -s "${MANIFEST_DOC_REVIEW_COMMIT_SUBJECT_FILE:-}" ]]; then
-        MANIFEST_DOC_REVIEW_COMMIT_SUBJECT="$(head -1 "$MANIFEST_DOC_REVIEW_COMMIT_SUBJECT_FILE")"
-        echo "   Provider subject: $MANIFEST_DOC_REVIEW_COMMIT_SUBJECT"
+    if [[ -s "${MANIFEST_CLI_DOC_REVIEW_COMMIT_SUBJECT_FILE:-}" ]]; then
+        MANIFEST_CLI_DOC_REVIEW_COMMIT_SUBJECT="$(head -1 "$MANIFEST_CLI_DOC_REVIEW_COMMIT_SUBJECT_FILE")"
+        echo "   Provider subject: $MANIFEST_CLI_DOC_REVIEW_COMMIT_SUBJECT"
     fi
-    if [[ -s "${MANIFEST_DOC_REVIEW_COMMIT_BODY_FILE:-}" ]]; then
-        commit_body="$(cat "$MANIFEST_DOC_REVIEW_COMMIT_BODY_FILE")"
+    if [[ -s "${MANIFEST_CLI_DOC_REVIEW_COMMIT_BODY_FILE:-}" ]]; then
+        commit_body="$(cat "$MANIFEST_CLI_DOC_REVIEW_COMMIT_BODY_FILE")"
         echo "" >> "$report_file"
         echo "## External Provider Commit Body" >> "$report_file"
         echo "" >> "$report_file"
-        cat "$MANIFEST_DOC_REVIEW_COMMIT_BODY_FILE" >> "$report_file"
+        cat "$MANIFEST_CLI_DOC_REVIEW_COMMIT_BODY_FILE" >> "$report_file"
     fi
-    if [[ -s "${MANIFEST_DOC_REVIEW_RELEASE_NOTE_FILE:-}" ]]; then
-        release_note="$(cat "$MANIFEST_DOC_REVIEW_RELEASE_NOTE_FILE")"
+    if [[ -s "${MANIFEST_CLI_DOC_REVIEW_RELEASE_NOTE_FILE:-}" ]]; then
+        release_note="$(cat "$MANIFEST_CLI_DOC_REVIEW_RELEASE_NOTE_FILE")"
         echo "" >> "$report_file"
         echo "## External Provider Release Note" >> "$report_file"
         echo "" >> "$report_file"
-        cat "$MANIFEST_DOC_REVIEW_RELEASE_NOTE_FILE" >> "$report_file"
+        cat "$MANIFEST_CLI_DOC_REVIEW_RELEASE_NOTE_FILE" >> "$report_file"
     fi
 
-    MANIFEST_DOC_REVIEW_REPORT_FILE="$report_file"
+    MANIFEST_CLI_DOC_REVIEW_REPORT_FILE="$report_file"
     if [[ "$commit_body_enabled" == "true" ]]; then
-        MANIFEST_DOC_REVIEW_COMMIT_BODY="$commit_body"
+        MANIFEST_CLI_DOC_REVIEW_COMMIT_BODY="$commit_body"
     fi
-    MANIFEST_DOC_REVIEW_RELEASE_NOTE="$release_note"
+    MANIFEST_CLI_DOC_REVIEW_RELEASE_NOTE="$release_note"
     [[ "$report_file" != "$latest_file" ]] && cp "$report_file" "$latest_file" 2>/dev/null || true
 
     return 0

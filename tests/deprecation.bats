@@ -4,7 +4,7 @@ load 'helpers/setup'
 
 setup() {
     load_modules
-    unset _MANIFEST_DEPRECATIONS_WARNED MANIFEST_CLI_QUIET_DEPRECATIONS
+    unset MANIFEST_CLI_DEPRECATIONS_WARNED MANIFEST_CLI_QUIET_DEPRECATIONS
 }
 
 @test "log_deprecated emits a warning containing both old and new names" {
@@ -40,7 +40,7 @@ setup() {
     # string "1" suppressed deprecations; "true", "yes", or " 1 " would all
     # silently leak warnings even though the user clearly meant "yes, quiet".
     for v in "true" "yes" "on" "TRUE" "YES" "  1  " "	true	"; do
-        unset _MANIFEST_DEPRECATIONS_WARNED
+        unset MANIFEST_CLI_DEPRECATIONS_WARNED
         export MANIFEST_CLI_QUIET_DEPRECATIONS="$v"
         run log_deprecated "old.$v" "new.$v"
         [ "$status" -eq 0 ]
@@ -52,7 +52,7 @@ setup() {
     # Falsy (0/false/no/empty) and unknown values both fall through to
     # "warn normally" — only explicit truthy suppresses.
     for v in "0" "false" "no" "" "garbage"; do
-        unset _MANIFEST_DEPRECATIONS_WARNED
+        unset MANIFEST_CLI_DEPRECATIONS_WARNED
         export MANIFEST_CLI_QUIET_DEPRECATIONS="$v"
         run log_deprecated "old.$v" "new.$v"
         [ "$status" -eq 0 ]

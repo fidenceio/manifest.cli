@@ -77,11 +77,11 @@ get_next_version() {
 
 # Get latest version from GitHub API with OS-dependent timeout
 get_latest_version() {
-    local repo_url="${MANIFEST_REPO_URL:-https://api.github.com/repos/fidenceio/fidenceio.manifest.cli/releases/latest}"
+    local repo_url="${MANIFEST_CLI_REPO_URL:-https://api.github.com/repos/fidenceio/fidenceio.manifest.cli/releases/latest}"
     
     # Use OS-dependent timeout strategy
     local timeout_cmd=""
-    case "${MANIFEST_OS:-Unknown}" in
+    case "${MANIFEST_CLI_OS:-Unknown}" in
         "macOS")
             if command -v gtimeout >/dev/null 2>&1; then
                 timeout_cmd="gtimeout"
@@ -97,7 +97,7 @@ get_latest_version() {
     # Try to get latest version from GitHub API with timeout
     if command -v curl >/dev/null 2>&1; then
         local latest_version=""
-        local timeout_seconds="${MANIFEST_UPDATE_TIMEOUT:-10}"
+        local timeout_seconds="${MANIFEST_CLI_UPDATE_TIMEOUT:-10}"
         
         # Use secure curl request
         latest_version=$(secure_curl_request "$repo_url" "$timeout_seconds" 2>/dev/null | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
@@ -136,15 +136,9 @@ manifest_is_canonical_repo() {
     local origin_slug=""
     origin_slug="$(manifest_origin_repo_slug "$project_root" || echo "")"
 
-    # MANIFEST_CLI_CANONICAL_REPO_SLUGS is the current name.
-    # MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS is the deprecated alias kept
-    # for back-compat — emit a one-time warning if the user is still on it.
     local allowed_slugs=""
     if [[ -n "${MANIFEST_CLI_CANONICAL_REPO_SLUGS:-}" ]]; then
         allowed_slugs="$MANIFEST_CLI_CANONICAL_REPO_SLUGS"
-    elif [[ -n "${MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS:-}" ]]; then
-        allowed_slugs="$MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS"
-        log_deprecated "MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS" "MANIFEST_CLI_CANONICAL_REPO_SLUGS"
     else
         allowed_slugs="fidenceio/manifest.cli,fidenceio/fidenceio.manifest.cli"
     fi
@@ -265,13 +259,13 @@ manifest_git_safe_fast_forward_checkout() {
 # Verify the GitHub CLI is installed and authenticated. Used by any command
 # that talks to GitHub via `gh` (init/prep --create-repo-*, manifest pr ...).
 #
-# Memoizes the success result for MANIFEST_GH_VALIDATION_TTL seconds (default
+# Memoizes the success result for MANIFEST_CLI_GH_VALIDATION_TTL seconds (default
 # 300) so a fleet loop calling this N times pays the `gh auth status` cost
 # once. The TTL bounds staleness if `gh` is uninstalled or auth changes
 # mid-session; failures are never cached.
 # -----------------------------------------------------------------------------
 _manifest_require_gh() {
-    local ttl="${MANIFEST_GH_VALIDATION_TTL:-300}"
+    local ttl="${MANIFEST_CLI_GH_VALIDATION_TTL:-300}"
     local now
     now=$(date +%s)
     if [[ -n "${_MANIFEST_GH_VALIDATED_AT:-}" ]] \
@@ -398,7 +392,7 @@ secure_curl_request() {
 check_network_connectivity() {
     # Use OS-dependent timeout strategy
     local timeout_cmd=""
-    case "${MANIFEST_OS:-Unknown}" in
+    case "${MANIFEST_CLI_OS:-Unknown}" in
         "macOS")
             if command -v gtimeout >/dev/null 2>&1; then
                 timeout_cmd="gtimeout"

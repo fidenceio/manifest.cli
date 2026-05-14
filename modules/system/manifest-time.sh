@@ -19,7 +19,7 @@ MANIFEST_CLI_TIME_SERVER_IP=""
 MANIFEST_CLI_TIME_METHOD=""
 
 _manifest_time_debug() {
-    [ "${MANIFEST_DEBUG:-0}" = "1" ] && echo "   🔍 Debug: $*" >&2
+    [ "${MANIFEST_CLI_DEBUG:-0}" = "1" ] && echo "   🔍 Debug: $*" >&2
     return 0
 }
 

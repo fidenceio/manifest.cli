@@ -27,14 +27,14 @@
 # =============================================================================
 
 # Prevent multiple sourcing
-if [[ -n "${_MANIFEST_FLEET_DOCS_LOADED:-}" ]]; then
+if [[ -n "${_MANIFEST_CLI_FLEET_DOCS_LOADED:-}" ]]; then
     return 0
 fi
-_MANIFEST_FLEET_DOCS_LOADED=1
+_MANIFEST_CLI_FLEET_DOCS_LOADED=1
 
 # Module metadata
-readonly MANIFEST_FLEET_DOCS_MODULE_VERSION="1.0.0"
-readonly MANIFEST_FLEET_DOCS_MODULE_NAME="manifest-fleet-docs"
+readonly MANIFEST_CLI_FLEET_DOCS_MODULE_VERSION="1.0.0"
+readonly MANIFEST_CLI_FLEET_DOCS_MODULE_NAME="manifest-fleet-docs"
 
 # =============================================================================
 # UTILITY FUNCTIONS
@@ -102,7 +102,7 @@ _compute_relpath() {
 # -----------------------------------------------------------------------------
 get_fleet_docs_strategy() {
     local strategy
-    strategy=$(get_fleet_config_value "docs_strategy" "$MANIFEST_FLEET_DEFAULT_DOCS_STRATEGY")
+    strategy=$(get_fleet_config_value "docs_strategy" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_STRATEGY")
     echo "$strategy"
 }
 
@@ -154,20 +154,20 @@ generate_fleet_root_docs() {
     local release_type="${3:-patch}"
 
     local docs_folder
-    docs_folder=$(get_fleet_config_value "docs_fleet_root_folder" "$MANIFEST_FLEET_DEFAULT_DOCS_FLEET_ROOT_FOLDER")
+    docs_folder=$(get_fleet_config_value "docs_fleet_root_folder" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_FLEET_ROOT_FOLDER")
 
     local detail_level
-    detail_level=$(get_fleet_config_value "docs_fleet_root_detail_level" "$MANIFEST_FLEET_DEFAULT_DOCS_FLEET_ROOT_DETAIL_LEVEL")
+    detail_level=$(get_fleet_config_value "docs_fleet_root_detail_level" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_FLEET_ROOT_DETAIL_LEVEL")
 
-    local fleet_docs_dir="$MANIFEST_FLEET_ROOT/$docs_folder"
+    local fleet_docs_dir="$MANIFEST_CLI_FLEET_ROOT/$docs_folder"
     mkdir -p "$fleet_docs_dir"
 
     log_info "Generating fleet-root docs in $fleet_docs_dir (detail_level: $detail_level)..."
 
     # Check which document types to generate
     local gen_index gen_readme_version
-    gen_index=$(get_fleet_config_value "docs_gen_index" "$MANIFEST_FLEET_DEFAULT_DOCS_GEN_INDEX")
-    gen_readme_version=$(get_fleet_config_value "docs_gen_readme_version" "$MANIFEST_FLEET_DEFAULT_DOCS_GEN_README_VERSION")
+    gen_index=$(get_fleet_config_value "docs_gen_index" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_GEN_INDEX")
+    gen_readme_version=$(get_fleet_config_value "docs_gen_readme_version" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_GEN_README_VERSION")
 
     if [[ "$detail_level" == "summary" ]]; then
         _generate_fleet_root_summary "$fleet_version" "$timestamp" "$release_type" \
@@ -201,7 +201,7 @@ _generate_fleet_root_summary() {
     local service_summary=""
     local service_changes=""
 
-    for service in $MANIFEST_FLEET_SERVICES; do
+    for service in $MANIFEST_CLI_FLEET_SERVICES; do
         local path
         path=$(get_fleet_service_property "$service" "path")
         local excluded
@@ -254,7 +254,7 @@ ${changes}
     # are no longer generated — the fleet root CHANGELOG.md is the
     # single archival surface.
     if declare -F prepend_root_changelog_entry >/dev/null 2>&1; then
-        prepend_root_changelog_entry "$MANIFEST_FLEET_ROOT" "$fleet_version" \
+        prepend_root_changelog_entry "$MANIFEST_CLI_FLEET_ROOT" "$fleet_version" \
             "$timestamp" "$release_type" "$changes_file" || \
             log_warning "Fleet root CHANGELOG.md update failed"
     else
@@ -268,9 +268,9 @@ ${changes}
     fi
 
     # Update fleet-root README if present
-    if [[ "$gen_readme_version" == "true" ]] && [[ -f "$MANIFEST_FLEET_ROOT/README.md" ]]; then
+    if [[ "$gen_readme_version" == "true" ]] && [[ -f "$MANIFEST_CLI_FLEET_ROOT/README.md" ]]; then
         (
-            PROJECT_ROOT="$MANIFEST_FLEET_ROOT"
+            PROJECT_ROOT="$MANIFEST_CLI_FLEET_ROOT"
             update_readme_version "$fleet_version" "$timestamp" 2>/dev/null || true
         )
     fi
@@ -306,13 +306,13 @@ _generate_fleet_docs_index() {
     local fleet_docs_dir="$3"
 
     local per_service_folder
-    per_service_folder=$(get_fleet_config_value "docs_per_service_folder" "$MANIFEST_FLEET_DEFAULT_DOCS_PER_SERVICE_FOLDER")
+    per_service_folder=$(get_fleet_config_value "docs_per_service_folder" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_PER_SERVICE_FOLDER")
 
     local index_file="$fleet_docs_dir/INDEX.md"
     cat > "$index_file" << EOF
 # Fleet Documentation Index
 
-**Fleet:** ${MANIFEST_FLEET_NAME}
+**Fleet:** ${MANIFEST_CLI_FLEET_NAME}
 **Version:** ${fleet_version}
 **Last Updated:** ${timestamp}
 
@@ -322,7 +322,7 @@ _generate_fleet_docs_index() {
 |---------|---------|------|------|
 EOF
 
-    for service in $MANIFEST_FLEET_SERVICES; do
+    for service in $MANIFEST_CLI_FLEET_SERVICES; do
         local path
         path=$(get_fleet_service_property "$service" "path")
         local type
@@ -374,13 +374,13 @@ generate_fleet_per_service_docs() {
     local release_type="${1:-patch}"
 
     local per_service_folder
-    per_service_folder=$(get_fleet_config_value "docs_per_service_folder" "$MANIFEST_FLEET_DEFAULT_DOCS_PER_SERVICE_FOLDER")
+    per_service_folder=$(get_fleet_config_value "docs_per_service_folder" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_PER_SERVICE_FOLDER")
 
     log_info "Generating per-service docs (folder: $per_service_folder)..."
 
     local any_failures=0
 
-    for service in $MANIFEST_FLEET_SERVICES; do
+    for service in $MANIFEST_CLI_FLEET_SERVICES; do
         local path
         path=$(get_fleet_service_property "$service" "path")
         local excluded
@@ -549,19 +549,19 @@ fleet_docs_generate() {
         echo "Release type: $release_type"
         if [[ "$do_fleet_root" == "true" ]]; then
             local fleet_root_folder
-            fleet_root_folder=$(get_fleet_config_value "docs_fleet_root_folder" "$MANIFEST_FLEET_DEFAULT_DOCS_FLEET_ROOT_FOLDER")
-            echo "Would write:   fleet-root docs in $MANIFEST_FLEET_ROOT/$fleet_root_folder/"
+            fleet_root_folder=$(get_fleet_config_value "docs_fleet_root_folder" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_FLEET_ROOT_FOLDER")
+            echo "Would write:   fleet-root docs in $MANIFEST_CLI_FLEET_ROOT/$fleet_root_folder/"
         else
             echo "Would skip:    fleet-root docs"
         fi
         if [[ "$do_per_service" == "true" ]]; then
             local per_service_folder
-            per_service_folder=$(get_fleet_config_value "docs_per_service_folder" "$MANIFEST_FLEET_DEFAULT_DOCS_PER_SERVICE_FOLDER")
+            per_service_folder=$(get_fleet_config_value "docs_per_service_folder" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_PER_SERVICE_FOLDER")
             local service_count=0
             local missing_count=0
             local excluded_count=0
             local service path excluded
-            for service in $MANIFEST_FLEET_SERVICES; do
+            for service in $MANIFEST_CLI_FLEET_SERVICES; do
                 excluded=$(get_fleet_service_property "$service" "excluded" "false")
                 if [[ "$excluded" == "true" ]]; then
                     ((excluded_count += 1))
@@ -596,7 +596,7 @@ fleet_docs_generate() {
     fi
 
     # Get fleet version and timestamp
-    local fleet_version="${MANIFEST_FLEET_VERSION:-unknown}"
+    local fleet_version="${MANIFEST_CLI_FLEET_VERSION:-unknown}"
     local timestamp
     if declare -F get_time_timestamp >/dev/null 2>&1; then
         get_time_timestamp >/dev/null 2>&1
@@ -642,13 +642,13 @@ fleet_docs_status() {
     strategy=$(get_fleet_docs_strategy)
 
     local fleet_root_folder
-    fleet_root_folder=$(get_fleet_config_value "docs_fleet_root_folder" "$MANIFEST_FLEET_DEFAULT_DOCS_FLEET_ROOT_FOLDER")
+    fleet_root_folder=$(get_fleet_config_value "docs_fleet_root_folder" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_FLEET_ROOT_FOLDER")
 
     local fleet_root_detail
-    fleet_root_detail=$(get_fleet_config_value "docs_fleet_root_detail_level" "$MANIFEST_FLEET_DEFAULT_DOCS_FLEET_ROOT_DETAIL_LEVEL")
+    fleet_root_detail=$(get_fleet_config_value "docs_fleet_root_detail_level" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_FLEET_ROOT_DETAIL_LEVEL")
 
     local per_service_folder
-    per_service_folder=$(get_fleet_config_value "docs_per_service_folder" "$MANIFEST_FLEET_DEFAULT_DOCS_PER_SERVICE_FOLDER")
+    per_service_folder=$(get_fleet_config_value "docs_per_service_folder" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_PER_SERVICE_FOLDER")
 
     echo ""
     echo "Fleet Docs Configuration"
@@ -659,7 +659,7 @@ fleet_docs_status() {
 
     if should_generate_fleet_root_docs; then
         echo "Fleet-Root Docs:  ENABLED"
-        echo "  Folder:         $MANIFEST_FLEET_ROOT/$fleet_root_folder/"
+        echo "  Folder:         $MANIFEST_CLI_FLEET_ROOT/$fleet_root_folder/"
         echo "  Detail Level:   $fleet_root_detail"
     else
         echo "Fleet-Root Docs:  disabled"
@@ -672,7 +672,7 @@ fleet_docs_status() {
         echo "  Folder Name:    $per_service_folder/"
         echo ""
         echo "  Services:"
-        for service in $MANIFEST_FLEET_SERVICES; do
+        for service in $MANIFEST_CLI_FLEET_SERVICES; do
             local path
             path=$(get_fleet_service_property "$service" "path")
             local excluded
@@ -697,8 +697,8 @@ fleet_docs_status() {
     # Show generation settings
     echo ""
     echo "Document Types:"
-    echo "  Index:          $(get_fleet_config_value "docs_gen_index" "$MANIFEST_FLEET_DEFAULT_DOCS_GEN_INDEX")"
-    echo "  README Version: $(get_fleet_config_value "docs_gen_readme_version" "$MANIFEST_FLEET_DEFAULT_DOCS_GEN_README_VERSION")"
+    echo "  Index:          $(get_fleet_config_value "docs_gen_index" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_GEN_INDEX")"
+    echo "  README Version: $(get_fleet_config_value "docs_gen_readme_version" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_GEN_README_VERSION")"
     echo ""
 }
 

@@ -64,27 +64,27 @@
 # =============================================================================
 
 # Get the directory where this script is located
-MANIFEST_FLEET_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MANIFEST_CLI_FLEET_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Prevent multiple sourcing
-if [[ -n "${_MANIFEST_FLEET_LOADED:-}" ]]; then
+if [[ -n "${_MANIFEST_CLI_FLEET_LOADED:-}" ]]; then
     return 0
 fi
-_MANIFEST_FLEET_LOADED=1
+_MANIFEST_CLI_FLEET_LOADED=1
 
 # Module metadata
-readonly MANIFEST_FLEET_MODULE_VERSION="1.0.0"
-readonly MANIFEST_FLEET_MODULE_NAME="manifest-fleet"
+readonly MANIFEST_CLI_FLEET_MODULE_VERSION="1.0.0"
+readonly MANIFEST_CLI_FLEET_MODULE_NAME="manifest-fleet"
 
 # -----------------------------------------------------------------------------
 # Source Dependencies
 # -----------------------------------------------------------------------------
 # Source fleet sub-modules
-source "$MANIFEST_FLEET_SCRIPT_DIR/manifest-fleet-config.sh"
-source "$MANIFEST_FLEET_SCRIPT_DIR/manifest-fleet-detect.sh"
-source "$MANIFEST_FLEET_SCRIPT_DIR/manifest-fleet-docs.sh"
-source "$MANIFEST_FLEET_SCRIPT_DIR/manifest-fleet-plan.sh"
-source "$MANIFEST_FLEET_SCRIPT_DIR/manifest-fleet-apply.sh"
+source "$MANIFEST_CLI_FLEET_SCRIPT_DIR/manifest-fleet-config.sh"
+source "$MANIFEST_CLI_FLEET_SCRIPT_DIR/manifest-fleet-detect.sh"
+source "$MANIFEST_CLI_FLEET_SCRIPT_DIR/manifest-fleet-docs.sh"
+source "$MANIFEST_CLI_FLEET_SCRIPT_DIR/manifest-fleet-plan.sh"
+source "$MANIFEST_CLI_FLEET_SCRIPT_DIR/manifest-fleet-apply.sh"
 
 # =============================================================================
 # UTILITY FUNCTIONS
@@ -171,16 +171,16 @@ _fleet_ensure_gitignores() {
 # otherwise looks for the config file in the given root directory.
 #
 # ARGUMENTS:
-#   $1 - Root directory to search (defaults to MANIFEST_FLEET_ROOT or pwd)
+#   $1 - Root directory to search (defaults to MANIFEST_CLI_FLEET_ROOT or pwd)
 #
 # OUTPUT:
 #   Echoes the resolved config file path
 # -----------------------------------------------------------------------------
 _fleet_resolve_config() {
-    local root_dir="${1:-${MANIFEST_FLEET_ROOT:-.}}"
-    local config_file="${MANIFEST_FLEET_CONFIG_FILE:-}"
+    local root_dir="${1:-${MANIFEST_CLI_FLEET_ROOT:-.}}"
+    local config_file="${MANIFEST_CLI_FLEET_CONFIG_FILE:-}"
     if [[ -z "$config_file" ]] || [[ ! -f "$config_file" ]]; then
-        local config_filename="${MANIFEST_CLI_FLEET_CONFIG_FILENAME:-$MANIFEST_FLEET_DEFAULT_CONFIG_FILENAME}"
+        local config_filename="${MANIFEST_CLI_FLEET_CONFIG_FILENAME:-$MANIFEST_CLI_FLEET_DEFAULT_CONFIG_FILENAME}"
         config_file="$root_dir/$config_filename"
     fi
     echo "$config_file"
@@ -196,7 +196,7 @@ _fleet_resolve_config() {
 #   1 if not in fleet mode or configuration failed to load
 # -----------------------------------------------------------------------------
 _fleet_ensure_initialized() {
-    if [[ "$MANIFEST_FLEET_ACTIVE" != "true" ]]; then
+    if [[ "$MANIFEST_CLI_FLEET_ACTIVE" != "true" ]]; then
         if ! load_fleet_config; then
             return 1
         fi
@@ -287,21 +287,21 @@ fleet_status() {
     echo ""
 
     # Fleet metadata
-    echo "Fleet: $MANIFEST_FLEET_NAME"
-    [[ -n "$MANIFEST_FLEET_DESCRIPTION" ]] && echo "       $MANIFEST_FLEET_DESCRIPTION"
-    echo "Root:  $MANIFEST_FLEET_ROOT"
+    echo "Fleet: $MANIFEST_CLI_FLEET_NAME"
+    [[ -n "$MANIFEST_CLI_FLEET_DESCRIPTION" ]] && echo "       $MANIFEST_CLI_FLEET_DESCRIPTION"
+    echo "Root:  $MANIFEST_CLI_FLEET_ROOT"
     echo ""
 
     # Fleet version (if enabled)
-    if [[ "$MANIFEST_FLEET_VERSIONING" != "none" ]] && [[ -n "$MANIFEST_FLEET_VERSION" ]]; then
-        echo "Fleet Version: $MANIFEST_FLEET_VERSION ($MANIFEST_FLEET_VERSIONING)"
+    if [[ "$MANIFEST_CLI_FLEET_VERSIONING" != "none" ]] && [[ -n "$MANIFEST_CLI_FLEET_VERSION" ]]; then
+        echo "Fleet Version: $MANIFEST_CLI_FLEET_VERSION ($MANIFEST_CLI_FLEET_VERSIONING)"
         echo ""
     fi
 
     # Service count
     local service_count
     # shellcheck disable=SC2086
-    service_count=$(set -- $MANIFEST_FLEET_SERVICES; echo $#)
+    service_count=$(set -- $MANIFEST_CLI_FLEET_SERVICES; echo $#)
     echo "Services: $service_count"
     echo ""
 
@@ -311,7 +311,7 @@ fleet_status() {
     printf "├─────────────────────────┼──────────┼──────────┼──────────────┼─────────┤\n"
 
     # Service details
-    for service in $MANIFEST_FLEET_SERVICES; do
+    for service in $MANIFEST_CLI_FLEET_SERVICES; do
         local path=$(get_fleet_service_property "$service" "path")
         local type=$(get_fleet_service_property "$service" "type" "service")
         local expected_branch=$(get_fleet_service_property "$service" "branch" "main")
@@ -401,19 +401,19 @@ _fleet_status_json() {
 
     echo "{"
     echo "  \"fleet\": {"
-    echo "    \"name\": \"$(_json_escape "$MANIFEST_FLEET_NAME")\","
-    echo "    \"root\": \"$(_json_escape "$MANIFEST_FLEET_ROOT")\","
-    if [[ -n "${MANIFEST_FLEET_VERSION:-}" ]]; then
-        echo "    \"version\": \"$(_json_escape "$MANIFEST_FLEET_VERSION")\","
+    echo "    \"name\": \"$(_json_escape "$MANIFEST_CLI_FLEET_NAME")\","
+    echo "    \"root\": \"$(_json_escape "$MANIFEST_CLI_FLEET_ROOT")\","
+    if [[ -n "${MANIFEST_CLI_FLEET_VERSION:-}" ]]; then
+        echo "    \"version\": \"$(_json_escape "$MANIFEST_CLI_FLEET_VERSION")\","
     else
         echo "    \"version\": null,"
     fi
-    echo "    \"versioning\": \"$MANIFEST_FLEET_VERSIONING\""
+    echo "    \"versioning\": \"$MANIFEST_CLI_FLEET_VERSIONING\""
     echo "  },"
     echo "  \"services\": ["
 
     local first=true
-    for service in $MANIFEST_FLEET_SERVICES; do
+    for service in $MANIFEST_CLI_FLEET_SERVICES; do
         [[ "$first" == "true" ]] || echo ","
         first=false
 
@@ -1177,7 +1177,7 @@ fleet_discover() {
 # -----------------------------------------------------------------------------
 # Function: _fleet_validate_clone_path (internal)
 # -----------------------------------------------------------------------------
-# Validates that a fleet service path is safely under MANIFEST_FLEET_ROOT.
+# Validates that a fleet service path is safely under MANIFEST_CLI_FLEET_ROOT.
 # Pure string check — no filesystem writes, so a malformed config can't
 # create stray directories outside the fleet root before being rejected.
 #
@@ -1212,7 +1212,7 @@ _fleet_sync() {
         return 1
     fi
 
-    local parallel=$(get_fleet_config_value "parallel" "$MANIFEST_FLEET_DEFAULT_PARALLEL")
+    local parallel=$(get_fleet_config_value "parallel" "$MANIFEST_CLI_FLEET_DEFAULT_PARALLEL")
     local clone_only=false
     local pull_only=false
     local dry_run=false
@@ -1265,7 +1265,7 @@ _fleet_sync_dry_run() {
     local total=0 would_clone=0 would_pull=0 would_skip=0 would_fail=0
     local service path url is_submodule
 
-    for service in $MANIFEST_FLEET_SERVICES; do
+    for service in $MANIFEST_CLI_FLEET_SERVICES; do
         ((total += 1))
         path=$(get_fleet_service_property "$service" "path")
         url=$(get_fleet_service_property "$service" "url")
@@ -1367,7 +1367,7 @@ _fleet_sync_service() {
         fi
 
         # Safe to create parent directory now that path is validated.
-        mkdir -p "$MANIFEST_FLEET_ROOT/$(dirname "$path")"
+        mkdir -p "$MANIFEST_CLI_FLEET_ROOT/$(dirname "$path")"
 
         echo "  $service: → Cloning from $url..."
         # Clone without --branch and checkout afterward — tolerates remotes
@@ -1433,7 +1433,7 @@ _fleet_sync_print_summary() {
     local total="$2"
 
     local cloned=0 pulled=0 failed=0
-    for service in $MANIFEST_FLEET_SERVICES; do
+    for service in $MANIFEST_CLI_FLEET_SERVICES; do
         local result_file="$result_dir/$service"
         [[ -f "$result_file" ]] || continue
         local result
@@ -1462,7 +1462,7 @@ _fleet_sync_sequential() {
     result_dir=$(mktemp -d)
 
     local total=0
-    for service in $MANIFEST_FLEET_SERVICES; do
+    for service in $MANIFEST_CLI_FLEET_SERVICES; do
         ((total++))
         echo "[$total] $service"
         _fleet_sync_service "$service" "$clone_only" "$pull_only" "$result_dir" || true
@@ -1486,7 +1486,7 @@ _fleet_sync_parallel() {
     result_dir=$(mktemp -d)
 
     local pids=()
-    for service in $MANIFEST_FLEET_SERVICES; do
+    for service in $MANIFEST_CLI_FLEET_SERVICES; do
         _fleet_sync_service "$service" "$clone_only" "$pull_only" "$result_dir" &
         pids+=($!)
     done
@@ -1497,7 +1497,7 @@ _fleet_sync_parallel() {
     done
 
     local total=0
-    for service in $MANIFEST_FLEET_SERVICES; do
+    for service in $MANIFEST_CLI_FLEET_SERVICES; do
         ((total++))
     done
 
@@ -1576,7 +1576,7 @@ fleet_update() {
         return 1
     fi
 
-    local root_dir="${MANIFEST_FLEET_ROOT:-$(pwd)}"
+    local root_dir="${MANIFEST_CLI_FLEET_ROOT:-$(pwd)}"
 
     # --- JSON summary mode (fast, limited depth) ---
     if [[ "$json_output" == "true" ]]; then
@@ -1779,7 +1779,7 @@ _fleet_prep_run() {
     local increment_type="${1:-patch}"
 
     local any_failures=0
-    for service in $MANIFEST_FLEET_SERVICES; do
+    for service in $MANIFEST_CLI_FLEET_SERVICES; do
         local path
         path=$(get_fleet_service_property "$service" "path")
         if [ ! -d "$path/.git" ]; then
@@ -1836,7 +1836,7 @@ fleet_prep() {
 # -----------------------------------------------------------------------------
 # Function: _fleet_filter_services
 # -----------------------------------------------------------------------------
-# Computes a filtered subset of $MANIFEST_FLEET_SERVICES based on --only and
+# Computes a filtered subset of $MANIFEST_CLI_FLEET_SERVICES based on --only and
 # --except selectors. Selectors are comma- or space-separated service names.
 # Exactly one of $1 / $2 may be set (validation is the caller's job).
 #
@@ -1854,7 +1854,7 @@ _fleet_filter_services() {
             if [ -z "$name" ]; then
                 continue
             fi
-            if [[ " $MANIFEST_FLEET_SERVICES " != *" $name "* ]]; then
+            if [[ " $MANIFEST_CLI_FLEET_SERVICES " != *" $name "* ]]; then
                 log_error "Service '$name' is not in the fleet."
                 return 1
             fi
@@ -1866,20 +1866,20 @@ _fleet_filter_services() {
             if [ -z "$name" ]; then
                 continue
             fi
-            if [[ " $MANIFEST_FLEET_SERVICES " != *" $name "* ]]; then
+            if [[ " $MANIFEST_CLI_FLEET_SERVICES " != *" $name "* ]]; then
                 log_error "Service '$name' is not in the fleet."
                 return 1
             fi
             exclude="$exclude$name "
         done
         local svc
-        for svc in $MANIFEST_FLEET_SERVICES; do
+        for svc in $MANIFEST_CLI_FLEET_SERVICES; do
             if [[ "$exclude" != *" $svc "* ]]; then
                 result="${result:+$result }$svc"
             fi
         done
     else
-        result="$MANIFEST_FLEET_SERVICES"
+        result="$MANIFEST_CLI_FLEET_SERVICES"
     fi
 
     echo "$result"
@@ -1895,8 +1895,8 @@ _fleet_service_count() {
 }
 
 _fleet_scope_block() {
-    local selected_services="${1:-$MANIFEST_FLEET_SERVICES}"
-    local original_services="${2:-$MANIFEST_FLEET_SERVICES}"
+    local selected_services="${1:-$MANIFEST_CLI_FLEET_SERVICES}"
+    local original_services="${2:-$MANIFEST_CLI_FLEET_SERVICES}"
     local filter_label="${3:-none}"
     local selected_count original_count
 
@@ -1906,9 +1906,9 @@ _fleet_scope_block() {
     echo ""
     echo "Fleet scope"
     echo "-----------"
-    printf "  %-10s %s\n" "Fleet:" "${MANIFEST_FLEET_NAME:-unnamed-fleet}"
-    printf "  %-10s %s\n" "Root:" "${MANIFEST_FLEET_ROOT:-$(pwd)}"
-    printf "  %-10s %s\n" "Config:" "${MANIFEST_FLEET_CONFIG_FILE:-manifest.fleet.config.yaml}"
+    printf "  %-10s %s\n" "Fleet:" "${MANIFEST_CLI_FLEET_NAME:-unnamed-fleet}"
+    printf "  %-10s %s\n" "Root:" "${MANIFEST_CLI_FLEET_ROOT:-$(pwd)}"
+    printf "  %-10s %s\n" "Config:" "${MANIFEST_CLI_FLEET_CONFIG_FILE:-manifest.fleet.config.yaml}"
     printf "  %-10s %s\n" "Scope:" "fleet"
     printf "  %-10s %s\n" "Mutation:" "selected fleet repositories listed below"
     if [[ "$selected_count" == "$original_count" ]]; then
@@ -1975,7 +1975,7 @@ _fleet_service_release_reason() {
             ;;
     esac
 
-    local root_dir="${MANIFEST_FLEET_ROOT:-$(pwd)}"
+    local root_dir="${MANIFEST_CLI_FLEET_ROOT:-$(pwd)}"
     if [[ "$path" == "." || "$path" == "$root_dir" || "$(cd "$path" 2>/dev/null && pwd)" == "$root_dir" ]]; then
         echo "fleet root infrastructure"
         return 1
@@ -2004,7 +2004,7 @@ _fleet_ship_plan() {
     printf '%-36s %-14s %-12s %-10s %-16s %s\n' "-------" "----" "------" "------" "--------" "-------------"
 
     local service path reason effect decision type branch
-    for service in $MANIFEST_FLEET_SERVICES; do
+    for service in $MANIFEST_CLI_FLEET_SERVICES; do
         path=$(get_fleet_service_property "$service" "path")
         type=$(get_fleet_service_property "$service" "type" "service")
         branch=$(get_fleet_service_property "$service" "branch" "${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}")
@@ -2121,7 +2121,7 @@ EOF
         return 1
     fi
 
-    local _saved_services="$MANIFEST_FLEET_SERVICES"
+    local _saved_services="$MANIFEST_CLI_FLEET_SERVICES"
     local _filter_label="none"
     if [ -n "$only_filter" ] || [ -n "$except_filter" ]; then
         local filtered
@@ -2132,7 +2132,7 @@ EOF
             log_error "Filter selected zero services."
             return 1
         fi
-        MANIFEST_FLEET_SERVICES="$filtered"
+        MANIFEST_CLI_FLEET_SERVICES="$filtered"
         if [ -n "$only_filter" ]; then
             _filter_label="--only $only_filter"
         else
@@ -2142,28 +2142,28 @@ EOF
     fi
 
     if [[ "$execution_mode" == "preview" ]]; then
-        _fleet_scope_block "$MANIFEST_FLEET_SERVICES" "$_saved_services" "$_filter_label"
+        _fleet_scope_block "$MANIFEST_CLI_FLEET_SERVICES" "$_saved_services" "$_filter_label"
         _fleet_ship_plan "$increment_type" "$local_only"
         local replay_command="manifest ship fleet $increment_type"
         [[ "$local_only" == "true" ]] && replay_command="$replay_command --local"
         [[ -n "$only_filter" ]] && replay_command="$replay_command --only $only_filter"
         [[ -n "$except_filter" ]] && replay_command="$replay_command --except $except_filter"
         manifest_execution_footer "$replay_command -y"
-        MANIFEST_FLEET_SERVICES="$_saved_services"
+        MANIFEST_CLI_FLEET_SERVICES="$_saved_services"
         return 0
     fi
 
     echo "Starting fleet ship workflow ($increment_type)"
-    _fleet_scope_block "$MANIFEST_FLEET_SERVICES" "$_saved_services" "$_filter_label"
+    _fleet_scope_block "$MANIFEST_CLI_FLEET_SERVICES" "$_saved_services" "$_filter_label"
     _fleet_ship_plan "$increment_type" "$local_only"
     echo ""
 
-    # One-shot block so we always restore $MANIFEST_FLEET_SERVICES on exit.
+    # One-shot block so we always restore $MANIFEST_CLI_FLEET_SERVICES on exit.
     local _rc=0
     while :; do
         if [ "$run_prep" != "true" ]; then
             echo "⏭️  Skipping fleet prep (--noprep)."
-            for service in $MANIFEST_FLEET_SERVICES; do
+            for service in $MANIFEST_CLI_FLEET_SERVICES; do
                 local path
                 path=$(get_fleet_service_property "$service" "path")
                 if [ ! -d "$path/.git" ]; then
@@ -2182,7 +2182,7 @@ EOF
 
         echo "Step 1/1: Shipping releaseable services directly..."
         local service path reason ship_args
-        for service in $MANIFEST_FLEET_SERVICES; do
+        for service in $MANIFEST_CLI_FLEET_SERVICES; do
             path=$(get_fleet_service_property "$service" "path")
             if ! reason=$(_fleet_service_release_reason "$service" "$path"); then
                 echo "  - $service: skipped ($reason)"
@@ -2215,7 +2215,7 @@ EOF
         break
     done
 
-    MANIFEST_FLEET_SERVICES="$_saved_services"
+    MANIFEST_CLI_FLEET_SERVICES="$_saved_services"
     return $_rc
 }
 
@@ -2244,7 +2244,7 @@ fleet_validate() {
     fi
 
     echo ""
-    echo "Validating fleet: $MANIFEST_FLEET_NAME"
+    echo "Validating fleet: $MANIFEST_CLI_FLEET_NAME"
     echo ""
 
     validate_fleet_config
@@ -2320,11 +2320,11 @@ fleet_add() {
 
     local existing_config
     existing_config=$(_fleet_resolve_config "$(pwd)")
-    if [[ "$MANIFEST_FLEET_ACTIVE" != "true" && -f "$existing_config" ]]; then
+    if [[ "$MANIFEST_CLI_FLEET_ACTIVE" != "true" && -f "$existing_config" ]]; then
         load_fleet_config "$(pwd)" || return 1
     fi
-    MANIFEST_FLEET_ROOT="${MANIFEST_FLEET_ROOT:-$(pwd)}"
-    MANIFEST_FLEET_NAME="${MANIFEST_FLEET_NAME:-$(basename "$MANIFEST_FLEET_ROOT")}"
+    MANIFEST_CLI_FLEET_ROOT="${MANIFEST_CLI_FLEET_ROOT:-$(pwd)}"
+    MANIFEST_CLI_FLEET_NAME="${MANIFEST_CLI_FLEET_NAME:-$(basename "$MANIFEST_CLI_FLEET_ROOT")}"
 
     # Determine if it's a path or URL
     local is_url=false
@@ -2333,7 +2333,7 @@ fleet_add() {
     fi
 
     echo ""
-    echo "Adding service to fleet: $MANIFEST_FLEET_NAME"
+    echo "Adding service to fleet: $MANIFEST_CLI_FLEET_NAME"
     echo ""
 
     if [[ "$is_url" == "true" ]]; then
@@ -2350,7 +2350,7 @@ fleet_add() {
 
         # Auto-detect name and type
         if [[ -z "$service_name" ]]; then
-            service_name=$(_extract_service_name "$path_or_url" "$MANIFEST_FLEET_ROOT")
+            service_name=$(_extract_service_name "$path_or_url" "$MANIFEST_CLI_FLEET_ROOT")
         fi
 
         if [[ -z "$service_type" ]] && [[ -d "$path_or_url" ]]; then
@@ -2381,7 +2381,7 @@ fleet_add() {
         yaml_content+="    url: \"${path_or_url//\"/\\\"}\""$'\n'
         yaml_content+="    path: \"./$safe_name\""$'\n'
     else
-        local rel_path="${path_or_url#"$MANIFEST_FLEET_ROOT"/}"
+        local rel_path="${path_or_url#"$MANIFEST_CLI_FLEET_ROOT"/}"
         rel_path="${rel_path#./}"
         yaml_content+="    path: \"./${rel_path//\"/\\\"}\""$'\n'
     fi
@@ -2662,7 +2662,7 @@ EOF
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     # Source dependencies if running standalone
-    MODULES_DIR="$(dirname "$MANIFEST_FLEET_SCRIPT_DIR")"
+    MODULES_DIR="$(dirname "$MANIFEST_CLI_FLEET_SCRIPT_DIR")"
 
     if [[ -f "$MODULES_DIR/core/manifest-shared-utils.sh" ]]; then
         source "$MODULES_DIR/core/manifest-shared-utils.sh"

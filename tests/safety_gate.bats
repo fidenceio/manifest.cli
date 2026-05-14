@@ -13,7 +13,7 @@ setup() {
     SCRATCH="$(mk_scratch)"
     TARGET="$SCRATCH/global.yaml"
     : > "$TARGET"
-    unset _MANIFEST_GLOBAL_CONFIG_AUTHORIZED MANIFEST_CLI_AUTO_CONFIRM
+    unset MANIFEST_CLI_GLOBAL_CONFIG_AUTHORIZED MANIFEST_CLI_AUTO_CONFIRM
 }
 
 teardown() {
@@ -36,18 +36,18 @@ teardown() {
 @test "safety gate: AUTO_CONFIRM sets the session-authorized flag" {
     export MANIFEST_CLI_AUTO_CONFIRM=1
     _confirm_global_config_write "modify" "$TARGET" "test reason"
-    [ "$_MANIFEST_GLOBAL_CONFIG_AUTHORIZED" = "1" ]
+    [ "$MANIFEST_CLI_GLOBAL_CONFIG_AUTHORIZED" = "1" ]
 }
 
 @test "safety gate: session cache short-circuits subsequent modify ops" {
-    export _MANIFEST_GLOBAL_CONFIG_AUTHORIZED=1
+    export MANIFEST_CLI_GLOBAL_CONFIG_AUTHORIZED=1
     # No AUTO_CONFIRM, no TTY — would normally fail. Cache should let it through.
     run _confirm_global_config_write "modify" "$TARGET" "subsequent modify"
     [ "$status" -eq 0 ]
 }
 
 @test "safety gate: cached approval does NOT short-circuit destructive delete" {
-    export _MANIFEST_GLOBAL_CONFIG_AUTHORIZED=1
+    export MANIFEST_CLI_GLOBAL_CONFIG_AUTHORIZED=1
     # Non-TTY + no AUTO_CONFIRM => should be denied even with prior approval.
     run _confirm_global_config_write "delete" "$TARGET" "destructive op"
     [ "$status" -ne 0 ]

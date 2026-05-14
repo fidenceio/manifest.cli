@@ -4,8 +4,8 @@
 # Handles Git operations, versioning, and workflow automation
 
 # Git module - uses PROJECT_ROOT from core module
-MANIFEST_GIT_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$MANIFEST_GIT_SCRIPT_DIR/manifest-doc-review.sh"
+MANIFEST_CLI_GIT_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$MANIFEST_CLI_GIT_SCRIPT_DIR/manifest-doc-review.sh"
 
 # Git Configuration
 
@@ -249,16 +249,16 @@ commit_changes() {
         return 1
     fi
 
-    if [[ -n "${MANIFEST_DOC_REVIEW_COMMIT_SUBJECT:-}" ]]; then
-        message="$MANIFEST_DOC_REVIEW_COMMIT_SUBJECT"
+    if [[ -n "${MANIFEST_CLI_DOC_REVIEW_COMMIT_SUBJECT:-}" ]]; then
+        message="$MANIFEST_CLI_DOC_REVIEW_COMMIT_SUBJECT"
     fi
 
     echo "   Message: $message"
     
     git add .
     local commit_ok=false
-    if [[ -n "${MANIFEST_DOC_REVIEW_COMMIT_BODY:-}" ]]; then
-        git commit -m "$message" -m "$MANIFEST_DOC_REVIEW_COMMIT_BODY" && commit_ok=true
+    if [[ -n "${MANIFEST_CLI_DOC_REVIEW_COMMIT_BODY:-}" ]]; then
+        git commit -m "$message" -m "$MANIFEST_CLI_DOC_REVIEW_COMMIT_BODY" && commit_ok=true
     else
         git commit -m "$message" && commit_ok=true
     fi

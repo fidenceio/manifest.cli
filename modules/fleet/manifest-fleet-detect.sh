@@ -41,14 +41,14 @@
 # =============================================================================
 
 # Prevent multiple sourcing
-if [[ -n "${_MANIFEST_FLEET_DETECT_LOADED:-}" ]]; then
+if [[ -n "${_MANIFEST_CLI_FLEET_DETECT_LOADED:-}" ]]; then
     return 0
 fi
-_MANIFEST_FLEET_DETECT_LOADED=1
+_MANIFEST_CLI_FLEET_DETECT_LOADED=1
 
 # Module metadata
-readonly MANIFEST_FLEET_DETECT_MODULE_VERSION="1.0.0"
-readonly MANIFEST_FLEET_DETECT_MODULE_NAME="manifest-fleet-detect"
+readonly MANIFEST_CLI_FLEET_DETECT_MODULE_VERSION="1.0.0"
+readonly MANIFEST_CLI_FLEET_DETECT_MODULE_NAME="manifest-fleet-detect"
 
 _manifest_fleet_tsv_read_line() {
     local line="$1"
@@ -71,7 +71,7 @@ _manifest_fleet_tsv_read_line() {
 # These are common directories that should never be treated as services.
 
 # Dependency directories (package managers)
-readonly MANIFEST_FLEET_IGNORE_DEPS=(
+readonly MANIFEST_CLI_FLEET_IGNORE_DEPS=(
     "node_modules"
     "vendor"
     "bower_components"
@@ -83,7 +83,7 @@ readonly MANIFEST_FLEET_IGNORE_DEPS=(
 )
 
 # Build and output directories
-readonly MANIFEST_FLEET_IGNORE_BUILD=(
+readonly MANIFEST_CLI_FLEET_IGNORE_BUILD=(
     "dist"
     "build"
     "out"
@@ -96,7 +96,7 @@ readonly MANIFEST_FLEET_IGNORE_BUILD=(
 )
 
 # IDE and tool directories
-readonly MANIFEST_FLEET_IGNORE_IDE=(
+readonly MANIFEST_CLI_FLEET_IGNORE_IDE=(
     ".idea"
     ".vscode"
     ".vs"
@@ -104,14 +104,14 @@ readonly MANIFEST_FLEET_IGNORE_IDE=(
 )
 
 # VCS directories (we look FOR .git, but ignore these)
-readonly MANIFEST_FLEET_IGNORE_VCS=(
+readonly MANIFEST_CLI_FLEET_IGNORE_VCS=(
     ".git"
     ".svn"
     ".hg"
 )
 
 # Archive and backup directories
-readonly MANIFEST_FLEET_IGNORE_ARCHIVE=(
+readonly MANIFEST_CLI_FLEET_IGNORE_ARCHIVE=(
     "zArchive"
     "archive"
     ".archive"
@@ -123,7 +123,7 @@ readonly MANIFEST_FLEET_IGNORE_ARCHIVE=(
 )
 
 # Test fixtures and mocks
-readonly MANIFEST_FLEET_IGNORE_FIXTURES=(
+readonly MANIFEST_CLI_FLEET_IGNORE_FIXTURES=(
     "__fixtures__"
     "__mocks__"
     "fixtures"
@@ -132,14 +132,14 @@ readonly MANIFEST_FLEET_IGNORE_FIXTURES=(
 )
 
 # Documentation and examples
-readonly MANIFEST_FLEET_IGNORE_DOCS=(
+readonly MANIFEST_CLI_FLEET_IGNORE_DOCS=(
     "examples"
     "docs"
     "documentation"
 )
 
 # Temporary directories
-readonly MANIFEST_FLEET_IGNORE_TEMP=(
+readonly MANIFEST_CLI_FLEET_IGNORE_TEMP=(
     "tmp"
     "temp"
     ".tmp"
@@ -152,16 +152,16 @@ readonly MANIFEST_FLEET_IGNORE_TEMP=(
 # -----------------------------------------------------------------------------
 
 # Maximum depth to search for repositories
-readonly MANIFEST_FLEET_DEFAULT_DISCOVERY_DEPTH=5
+readonly MANIFEST_CLI_FLEET_DEFAULT_DISCOVERY_DEPTH=5
 
 # Minimum depth (don't treat fleet root as a service)
-readonly MANIFEST_FLEET_MIN_DISCOVERY_DEPTH=1
+readonly MANIFEST_CLI_FLEET_MIN_DISCOVERY_DEPTH=1
 
 # Whether to include submodules in discovery
-readonly MANIFEST_FLEET_DEFAULT_INCLUDE_SUBMODULES="true"
+readonly MANIFEST_CLI_FLEET_DEFAULT_INCLUDE_SUBMODULES="true"
 
 # Whether to include nested git repos (repos inside repos)
-readonly MANIFEST_FLEET_DEFAULT_INCLUDE_NESTED="false"
+readonly MANIFEST_CLI_FLEET_DEFAULT_INCLUDE_NESTED="false"
 
 # =============================================================================
 # HELPER FUNCTIONS
@@ -189,14 +189,14 @@ _should_ignore_directory() {
 
     # Check against all ignore lists
     local all_ignore=(
-        "${MANIFEST_FLEET_IGNORE_DEPS[@]}"
-        "${MANIFEST_FLEET_IGNORE_BUILD[@]}"
-        "${MANIFEST_FLEET_IGNORE_IDE[@]}"
-        "${MANIFEST_FLEET_IGNORE_VCS[@]}"
-        "${MANIFEST_FLEET_IGNORE_ARCHIVE[@]}"
-        "${MANIFEST_FLEET_IGNORE_FIXTURES[@]}"
-        "${MANIFEST_FLEET_IGNORE_DOCS[@]}"
-        "${MANIFEST_FLEET_IGNORE_TEMP[@]}"
+        "${MANIFEST_CLI_FLEET_IGNORE_DEPS[@]}"
+        "${MANIFEST_CLI_FLEET_IGNORE_BUILD[@]}"
+        "${MANIFEST_CLI_FLEET_IGNORE_IDE[@]}"
+        "${MANIFEST_CLI_FLEET_IGNORE_VCS[@]}"
+        "${MANIFEST_CLI_FLEET_IGNORE_ARCHIVE[@]}"
+        "${MANIFEST_CLI_FLEET_IGNORE_FIXTURES[@]}"
+        "${MANIFEST_CLI_FLEET_IGNORE_DOCS[@]}"
+        "${MANIFEST_CLI_FLEET_IGNORE_TEMP[@]}"
     )
 
     for pattern in "${all_ignore[@]}"; do
@@ -549,8 +549,8 @@ _extract_service_name() {
 #
 # ARGUMENTS:
 #   $1 - Root directory to search (defaults to current directory)
-#   $2 - Maximum depth to search (defaults to MANIFEST_FLEET_DEFAULT_DISCOVERY_DEPTH)
-#   $3 - Include submodules (defaults to MANIFEST_FLEET_DEFAULT_INCLUDE_SUBMODULES)
+#   $2 - Maximum depth to search (defaults to MANIFEST_CLI_FLEET_DEFAULT_DISCOVERY_DEPTH)
+#   $3 - Include submodules (defaults to MANIFEST_CLI_FLEET_DEFAULT_INCLUDE_SUBMODULES)
 #
 # OUTPUT FORMAT:
 #   Outputs one line per discovered repository with tab-separated fields:
@@ -568,8 +568,8 @@ _extract_service_name() {
 # -----------------------------------------------------------------------------
 discover_fleet_repos() {
     local root_dir="${1:-$(pwd)}"
-    local max_depth="${2:-$MANIFEST_FLEET_DEFAULT_DISCOVERY_DEPTH}"
-    local include_submodules="${3:-$MANIFEST_FLEET_DEFAULT_INCLUDE_SUBMODULES}"
+    local max_depth="${2:-$MANIFEST_CLI_FLEET_DEFAULT_DISCOVERY_DEPTH}"
+    local include_submodules="${3:-$MANIFEST_CLI_FLEET_DEFAULT_INCLUDE_SUBMODULES}"
 
     # Validate root directory
     if [[ ! -d "$root_dir" ]]; then
@@ -643,7 +643,7 @@ _discover_repos_recursive() {
     fi
 
     # Output repository info if found (and not at root level)
-    if [[ "$is_repo" == "true" ]] && [[ $current_depth -ge $MANIFEST_FLEET_MIN_DISCOVERY_DEPTH ]]; then
+    if [[ "$is_repo" == "true" ]] && [[ $current_depth -ge $MANIFEST_CLI_FLEET_MIN_DISCOVERY_DEPTH ]]; then
         # Skip if we've already discovered this path
         local rel_path="${current_dir#"$root_dir"/}"
         local already_found=false
@@ -711,14 +711,14 @@ _discover_repos_recursive() {
 #
 # ARGUMENTS:
 #   $1 - Root directory to scan (default: pwd)
-#   $2 - Maximum depth (default: MANIFEST_FLEET_DEFAULT_DISCOVERY_DEPTH)
+#   $2 - Maximum depth (default: MANIFEST_CLI_FLEET_DEFAULT_DISCOVERY_DEPTH)
 #
 # OUTPUT FORMAT (per line, tab-separated):
 #   NAME  PATH  TYPE  BRANCH  VERSION  URL  IS_SUBMODULE  HAS_GIT  HAS_REMOTE
 # -----------------------------------------------------------------------------
 discover_all_directories() {
     local root_dir="${1:-$(pwd)}"
-    local max_depth="${2:-$MANIFEST_FLEET_DEFAULT_DISCOVERY_DEPTH}"
+    local max_depth="${2:-$MANIFEST_CLI_FLEET_DEFAULT_DISCOVERY_DEPTH}"
 
     if [[ ! -d "$root_dir" ]]; then
         log_error "Discovery root directory does not exist: $root_dir"
@@ -760,7 +760,7 @@ _discover_dirs_recursive() {
     fi
 
     # Emit directory info at valid depth (skip the root itself)
-    if [[ $current_depth -ge $MANIFEST_FLEET_MIN_DISCOVERY_DEPTH ]]; then
+    if [[ $current_depth -ge $MANIFEST_CLI_FLEET_MIN_DISCOVERY_DEPTH ]]; then
         local rel_path="${current_dir#"$root_dir"/}"
 
         # Dedup check
@@ -1252,7 +1252,7 @@ merge_start_tsv() {
 # -----------------------------------------------------------------------------
 diff_discovered_repos() {
     local discovered="$1"
-    local manifest_file="${2:-$MANIFEST_FLEET_CONFIG_FILE}"
+    local manifest_file="${2:-$MANIFEST_CLI_FLEET_CONFIG_FILE}"
 
     # Get services from manifest
     local manifest_services=""
@@ -1272,7 +1272,7 @@ diff_discovered_repos() {
         path=$(get_yaml_value "$manifest_file" ".services.$service.path" "")
         if [[ -n "$path" ]]; then
             # Make relative if absolute
-            path="${path#"$MANIFEST_FLEET_ROOT"/}"
+            path="${path#"$MANIFEST_CLI_FLEET_ROOT"/}"
             # Strip leading ./ so paths match discovery output format
             path="${path#./}"
             manifest_paths["$path"]="$service"
@@ -1282,7 +1282,7 @@ diff_discovered_repos() {
 
     # Process discovered repos
     local discovered_paths=()
-    local root_dir="${MANIFEST_FLEET_ROOT:-$(dirname "$manifest_file")}"
+    local root_dir="${MANIFEST_CLI_FLEET_ROOT:-$(dirname "$manifest_file")}"
     if [[ -n "${manifest_paths[.]:-}" ]] && _is_git_repository "$root_dir"; then
         local root_service="${manifest_paths[.]}"
         local root_type="${manifest_types[$root_service]:-service}"

@@ -168,9 +168,9 @@ teardown() {
     provider="$SCRATCH/provider"
     {
         echo '#!/usr/bin/env bash'
-        echo 'printf "%s\n" "Provider subject" > "$MANIFEST_DOC_REVIEW_COMMIT_SUBJECT_FILE"'
-        echo 'printf "%s\n" "Provider commit body" > "$MANIFEST_DOC_REVIEW_COMMIT_BODY_FILE"'
-        echo 'printf "%s\n" "- Provider release note" > "$MANIFEST_DOC_REVIEW_RELEASE_NOTE_FILE"'
+        echo 'printf "%s\n" "Provider subject" > "$MANIFEST_CLI_DOC_REVIEW_COMMIT_SUBJECT_FILE"'
+        echo 'printf "%s\n" "Provider commit body" > "$MANIFEST_CLI_DOC_REVIEW_COMMIT_BODY_FILE"'
+        echo 'printf "%s\n" "- Provider release note" > "$MANIFEST_CLI_DOC_REVIEW_RELEASE_NOTE_FILE"'
     } > "$provider"
     chmod +x "$provider"
 

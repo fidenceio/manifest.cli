@@ -126,8 +126,7 @@ archive_old_docs() {
 # Back-compat shim. The canonical implementations live in
 # manifest-shared-functions.sh:
 #   - manifest_origin_repo_slug (takes optional project_root)
-#   - manifest_is_canonical_repo (uses MANIFEST_CLI_CANONICAL_REPO_SLUGS,
-#     accepts MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS as a deprecated alias)
+#   - manifest_is_canonical_repo (uses MANIFEST_CLI_CANONICAL_REPO_SLUGS)
 # Old call sites continue to work via this shim.
 should_update_homebrew_for_repo() {
     manifest_is_canonical_repo "$@"
@@ -216,7 +215,7 @@ update_homebrew_formula() {
         local origin_slug=""
         origin_slug="$(manifest_origin_repo_slug || echo "unknown")"
         echo "🍺 Skipping Homebrew formula update for repository: ${origin_slug}"
-        echo "   Homebrew updates run only for: ${MANIFEST_CLI_CANONICAL_REPO_SLUGS:-${MANIFEST_CLI_HOMEBREW_ALLOWED_REPO_SLUGS:-fidenceio/manifest.cli,fidenceio/fidenceio.manifest.cli}}"
+        echo "   Homebrew updates run only for: ${MANIFEST_CLI_CANONICAL_REPO_SLUGS:-fidenceio/manifest.cli,fidenceio/fidenceio.manifest.cli}"
         return 0
     fi
 
