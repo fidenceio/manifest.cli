@@ -1,5 +1,14 @@
 # Changelog
 
+## [47.12.5] - 2026-05-14
+
+**Release Type:** Patch
+
+### Changes
+
+- Normalize Manifest environment namespace
+
+
 ## [47.12.4] - 2026-05-14
 
 **Release Type:** Patch
@@ -78,8 +87,3 @@
 ### Changes
 
 - Add regression coverage for the changed CLI workflow
-
-
-## [47.10.1] - 2026-05-14
-
-**Release Type:** Patch — no user-facing changes.
