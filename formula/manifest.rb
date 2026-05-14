@@ -9,7 +9,7 @@ class Manifest < Formula
   depends_on "bash"
   depends_on "git" => :recommended
   depends_on "yq"
-  depends_on "coreutils" => :optional
+  depends_on "coreutils"
 
   def install
     # Copy all project files to libexec

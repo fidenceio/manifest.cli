@@ -15,6 +15,8 @@ MANIFEST_CLI_REQUIRED_YQ_LABEL="${MANIFEST_CLI_REQUIRED_YQ_LABEL:-Mike Farah yq 
 MANIFEST_CLI_REQUIRED_DOCKER_COMMAND="${MANIFEST_CLI_REQUIRED_DOCKER_COMMAND:-docker}"
 MANIFEST_CLI_REQUIRED_DOCKER_LABEL="${MANIFEST_CLI_REQUIRED_DOCKER_LABEL:-Docker CLI with a running Docker engine}"
 
+MANIFEST_CLI_REQUIRED_COREUTILS_LABEL="${MANIFEST_CLI_REQUIRED_COREUTILS_LABEL:-coreutils timeout command}"
+
 manifest_requirement_semver_major() {
     printf '%s\n' "${1:-}" | sed -nE 's/[^0-9]*([0-9]+)(\.[0-9]+){0,2}.*/\1/p' | head -n1
 }
@@ -62,4 +64,18 @@ manifest_requirement_docker_engine_is_running() {
     local docker_cmd="${1:-$MANIFEST_CLI_REQUIRED_DOCKER_COMMAND}"
     manifest_requirement_docker_command_exists "$docker_cmd" || return 1
     "$docker_cmd" info >/dev/null 2>&1
+}
+
+manifest_requirement_coreutils_timeout_command() {
+    local os_name
+    os_name="$(uname -s 2>/dev/null || echo "")"
+
+    case "$os_name" in
+        Darwin)
+            command -v gtimeout >/dev/null 2>&1
+            ;;
+        *)
+            command -v timeout >/dev/null 2>&1
+            ;;
+    esac
 }

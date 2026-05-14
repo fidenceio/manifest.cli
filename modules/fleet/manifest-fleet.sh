@@ -1910,6 +1910,7 @@ _fleet_scope_block() {
     printf "  %-10s %s\n" "Root:" "${MANIFEST_FLEET_ROOT:-$(pwd)}"
     printf "  %-10s %s\n" "Config:" "${MANIFEST_FLEET_CONFIG_FILE:-manifest.fleet.config.yaml}"
     printf "  %-10s %s\n" "Scope:" "fleet"
+    printf "  %-10s %s\n" "Mutation:" "selected fleet repositories listed below"
     if [[ "$selected_count" == "$original_count" ]]; then
         printf "  %-10s %s services\n" "Selected:" "$selected_count"
     else

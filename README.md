@@ -5,7 +5,7 @@
 When you can spin up four features in parallel, you also need to ship four features without dropping any. Manifest handles versions, tags, changelogs, docs, and the multi-repo coordination so the human stays in flow.
 
 [![tests](https://github.com/fidenceio/manifest.cli/actions/workflows/test.yml/badge.svg)](https://github.com/fidenceio/manifest.cli/actions/workflows/test.yml)
-**Version** `47.9.3` · **Platform** macOS · Linux · FreeBSD · **Requires** Bash, Git, yq, and Docker requirements from `modules/core/manifest-requirements.sh`
+**Version** `47.9.3` · **Platform** macOS · Linux · FreeBSD · **Requires** Bash, Git, yq, coreutils, and Docker requirements from `modules/core/manifest-requirements.sh`
 
 ---
 
@@ -36,7 +36,7 @@ The bottleneck of modern dev work has shifted. Writing the code is no longer the
 ### Install
 
 ```bash
-# Homebrew (recommended — installs Bash 5 and yq automatically)
+# Homebrew (recommended — installs Bash 5, yq, and coreutils automatically)
 brew tap fidenceio/tap
 brew install manifest
 
@@ -93,10 +93,12 @@ Manifest status
 
 Repo identity
 -------------
+  You are in: fidenceio/manifest.cli
   Git root:    /Users/you/coderepos/manifest/fidenceio.manifest.cli
   Origin:      fidenceio/manifest.cli
   Branch:      main → origin/main
   Fleet:       not detected
+  Scope:       repo
   Target:      this Git repository only
   Working:     clean
   Version:     47.6.2
@@ -235,12 +237,12 @@ manifest <verb> <scope> [options]
 `manifest ship repo` prints the resolved repo identity before the preview/apply
 plan so a fleet workspace cannot hide which nested Git checkout will be
 released. The identity block includes `Scope: repo`, the Git root, origin,
-branch/upstream, detected fleet root, and fleet member. Apply mode also prints
-an explicit target summary and asks
+branch/upstream, detected fleet root, fleet member, and a `You are in:` line
+that names the current checkout. Apply mode also prints an explicit target summary and asks
 `Apply to this repository? [y/N]` before mutation.
 
 `manifest status fleet` and `manifest ship fleet ...` make fleet scope explicit:
-they print the fleet root/config and list the included repositories by service,
+they print the fleet root/config, `Scope: fleet`, and list the included repositories by service,
 branch, release decision, and path before any apply work can start.
 
 Today `repo` is selected by the enclosing `.git` repository from the shell
@@ -659,7 +661,7 @@ _MANIFEST_YAML_TO_ENV[] bidirectional map      ← In manifest-yaml.sh
 | yq | 4.0+ (Mike Farah's Go version) | YAML configuration parsing | `brew install yq` |
 | Docker | Running engine | Containerized execution and tests | `brew install --cask docker` |
 | curl | Any | HTTPS timestamps, API calls | Usually pre-installed |
-| coreutils | Any (optional) | Cross-platform date/stat | `brew install coreutils` |
+| coreutils | Any | Cross-platform timeout/date/stat behavior | `brew install coreutils` |
 
 The install script checks Homebrew first, then Docker, then final system validation. Runtime checks read requirements from `modules/core/manifest-requirements.sh`.
 

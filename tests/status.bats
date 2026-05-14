@@ -115,10 +115,10 @@ YAML
     run manifest_status repo
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Repo identity"
-    echo "$output" | grep -q "Fleet:.*test-fleet"
+    echo "$output" | grep -q "Current repo:.*svc-a"
+    echo "$output" | grep -q "Fleet context:.*test-fleet"
     echo "$output" | grep -q "Fleet member:.*svc-a"
-    echo "$output" | grep -q "Scope:.*repo"
-    echo "$output" | grep -q "Target:.*this Git repository only"
+    echo "$output" | grep -q "Mutation scope:.*this Git repository only"
 }
 
 @test "status: fleet root prints repo table with version, timestamp, and latest commit" {
@@ -164,6 +164,10 @@ YAML
     run manifest_status
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Fleet:.*test-fleet"
+    echo "$output" | grep -q "Config:.*manifest.fleet.yaml"
+    echo "$output" | grep -q "Scope:.*fleet"
+    echo "$output" | grep -q "Repos:.*2 total"
+    echo "$output" | grep -q "Included repositories"
     echo "$output" | grep -q "Repo.*Branch.*State.*Version.*Timestamp.*Path.*Latest commit"
     echo "$output" | grep -q "svc-a.*${branch_a}.*clean.*1.2.3.*2026-05-01.*$SCRATCH/svc-a.*Initial A"
     echo "$output" | grep -q "svc-b.*${branch_b}.*dirty.*2.0.0.*2026-05-02.*$SCRATCH/svc-b.*Initial B"

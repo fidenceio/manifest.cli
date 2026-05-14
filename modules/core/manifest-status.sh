@@ -146,9 +146,14 @@ _manifest_repo_identity_collect() {
 manifest_repo_identity_block() {
     local proj="${1:-$PROJECT_ROOT}"
     _manifest_repo_identity_collect "$proj"
+    local current_repo="$_MANIFEST_REPO_ID_ORIGIN"
+    if [[ "$current_repo" == "(no origin remote)" ]]; then
+        current_repo="$(basename "$_MANIFEST_REPO_ID_GIT_ROOT")"
+    fi
 
     echo "Repo identity"
     echo "-------------"
+    _status_line "Current repo:" "$current_repo"
     _status_line "Git root:" "$_MANIFEST_REPO_ID_GIT_ROOT"
     _status_line "Origin:" "$_MANIFEST_REPO_ID_ORIGIN"
     if [[ -n "$_MANIFEST_REPO_ID_UPSTREAM" ]]; then
@@ -157,16 +162,15 @@ manifest_repo_identity_block() {
         _status_line "Branch:" "$_MANIFEST_REPO_ID_BRANCH  (no upstream)"
     fi
     if [[ -n "$_MANIFEST_REPO_ID_FLEET_ROOT" ]]; then
-        _status_line "Fleet:" "${_MANIFEST_REPO_ID_FLEET_NAME}  (${_MANIFEST_REPO_ID_FLEET_ROOT})"
+        _status_line "Fleet context:" "${_MANIFEST_REPO_ID_FLEET_NAME}  (${_MANIFEST_REPO_ID_FLEET_ROOT})"
         _status_line "Fleet member:" "${_MANIFEST_REPO_ID_FLEET_MEMBER:-not configured}"
     elif [[ -n "$_MANIFEST_REPO_ID_FLEET_NAME" || -n "$_MANIFEST_REPO_ID_FLEET_MEMBER" ]]; then
-        _status_line "Fleet:" "${_MANIFEST_REPO_ID_FLEET_NAME:-hint only}"
+        _status_line "Fleet context:" "${_MANIFEST_REPO_ID_FLEET_NAME:-hint only}"
         _status_line "Fleet member:" "${_MANIFEST_REPO_ID_FLEET_MEMBER:-not configured}"
     else
-        _status_line "Fleet:" "not detected"
+        _status_line "Fleet context:" "not detected"
     fi
-    _status_line "Scope:" "repo"
-    _status_line "Target:" "this Git repository only"
+    _status_line "Mutation scope:" "this Git repository only"
     if [[ -n "$_MANIFEST_REPO_ID_WARNING" ]]; then
         _status_line "Warning:" "$_MANIFEST_REPO_ID_WARNING"
     fi
@@ -366,8 +370,11 @@ _manifest_status_fleet() {
     echo ""
     _status_line "Fleet:" "$fleet_name"
     _status_line "Root:" "$proj"
+    _status_line "Config:" "$config_file"
+    _status_line "Scope:" "fleet"
     _status_line "Repos:" "$total total, $clean clean, $dirty dirty, $other other"
     echo ""
+    echo "Included repositories"
     printf "%-36s  %-12s  %-8s  %-9s  %-25s  %-40s  %s\n" "Repo" "Branch" "State" "Version" "Timestamp" "Path" "Latest commit"
     printf "%-36s  %-12s  %-8s  %-9s  %-25s  %-40s  %s\n" "------------------------------------" "------------" "--------" "---------" "-------------------------" "----------------------------------------" "----------------------------------------"
     local row

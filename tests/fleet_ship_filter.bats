@@ -189,6 +189,7 @@ YAML
     [ "$status" -eq 0 ]
     [[ "$output" == *"Starting fleet ship workflow (patch)"* ]]
     [[ "$output" == *"Fleet scope"* ]]
+    [[ "$output" == *"Mutation:"*"selected fleet repositories listed below"* ]]
     [[ "$output" == *"Selected:"*"3 services"* ]]
     [[ "$output" == *"Included repositories"* ]]
     [[ "$output" == *"alpha"*"release"*"would ship"*"$SCRATCH/alpha"* ]]

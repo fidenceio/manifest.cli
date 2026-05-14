@@ -62,6 +62,12 @@ manifest_doctor() {
         _doctor_fail "git" "missing"
     fi
 
+    if manifest_requirement_coreutils_timeout_command; then
+        _doctor_ok "coreutils" "${MANIFEST_CLI_REQUIRED_COREUTILS_LABEL}"
+    else
+        _doctor_fail "coreutils" "missing ${MANIFEST_CLI_REQUIRED_COREUTILS_LABEL}"
+    fi
+
     if manifest_requirement_current_bash_is_supported; then
         _doctor_ok "Bash" "${BASH_VERSION}"
     else
