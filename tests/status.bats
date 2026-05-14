@@ -117,6 +117,7 @@ YAML
     echo "$output" | grep -q "Repo identity"
     echo "$output" | grep -q "Fleet:.*test-fleet"
     echo "$output" | grep -q "Fleet member:.*svc-a"
+    echo "$output" | grep -q "Scope:.*repo"
     echo "$output" | grep -q "Target:.*this Git repository only"
 }
 
@@ -163,9 +164,9 @@ YAML
     run manifest_status
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Fleet:.*test-fleet"
-    echo "$output" | grep -q "Repo.*Branch.*State.*Version.*Timestamp.*Latest commit"
-    echo "$output" | grep -q "svc-a.*${branch_a}.*clean.*1.2.3.*2026-05-01.*Initial A"
-    echo "$output" | grep -q "svc-b.*${branch_b}.*dirty.*2.0.0.*2026-05-02.*Initial B"
+    echo "$output" | grep -q "Repo.*Branch.*State.*Version.*Timestamp.*Path.*Latest commit"
+    echo "$output" | grep -q "svc-a.*${branch_a}.*clean.*1.2.3.*2026-05-01.*$SCRATCH/svc-a.*Initial A"
+    echo "$output" | grep -q "svc-b.*${branch_b}.*dirty.*2.0.0.*2026-05-02.*$SCRATCH/svc-b.*Initial B"
 }
 
 @test "runtime bash detection reports current interpreter, not PATH bash" {

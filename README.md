@@ -234,8 +234,14 @@ manifest <verb> <scope> [options]
 
 `manifest ship repo` prints the resolved repo identity before the preview/apply
 plan so a fleet workspace cannot hide which nested Git checkout will be
-released. Apply mode also prints an explicit target summary and asks
+released. The identity block includes `Scope: repo`, the Git root, origin,
+branch/upstream, detected fleet root, and fleet member. Apply mode also prints
+an explicit target summary and asks
 `Apply to this repository? [y/N]` before mutation.
+
+`manifest status fleet` and `manifest ship fleet ...` make fleet scope explicit:
+they print the fleet root/config and list the included repositories by service,
+branch, release decision, and path before any apply work can start.
 
 Today `repo` is selected by the enclosing `.git` repository from the shell
 working directory, not by an argument. Repo-scoped commands fail outside a Git

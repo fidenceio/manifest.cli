@@ -1885,6 +1885,39 @@ _fleet_filter_services() {
     echo "$result"
 }
 
+_fleet_service_count() {
+    local count=0
+    local service
+    for service in $1; do
+        count=$((count + 1))
+    done
+    echo "$count"
+}
+
+_fleet_scope_block() {
+    local selected_services="${1:-$MANIFEST_FLEET_SERVICES}"
+    local original_services="${2:-$MANIFEST_FLEET_SERVICES}"
+    local filter_label="${3:-none}"
+    local selected_count original_count
+
+    selected_count="$(_fleet_service_count "$selected_services")"
+    original_count="$(_fleet_service_count "$original_services")"
+
+    echo ""
+    echo "Fleet scope"
+    echo "-----------"
+    printf "  %-10s %s\n" "Fleet:" "${MANIFEST_FLEET_NAME:-unnamed-fleet}"
+    printf "  %-10s %s\n" "Root:" "${MANIFEST_FLEET_ROOT:-$(pwd)}"
+    printf "  %-10s %s\n" "Config:" "${MANIFEST_FLEET_CONFIG_FILE:-manifest.fleet.config.yaml}"
+    printf "  %-10s %s\n" "Scope:" "fleet"
+    if [[ "$selected_count" == "$original_count" ]]; then
+        printf "  %-10s %s services\n" "Selected:" "$selected_count"
+    else
+        printf "  %-10s %s of %s services\n" "Selected:" "$selected_count" "$original_count"
+    fi
+    printf "  %-10s %s\n" "Filter:" "$filter_label"
+}
+
 _fleet_service_release_reason() {
     local service="$1"
     local path="$2"
@@ -1965,12 +1998,15 @@ _fleet_ship_plan() {
     echo ""
     echo "Fleet ship plan ($increment_type)"
     echo ""
-    printf '%-36s %-10s %-16s %s\n' "Service" "Effect" "Decision" "Path / reason"
-    printf '%-36s %-10s %-16s %s\n' "-------" "------" "--------" "-------------"
+    echo "Included repositories"
+    printf '%-36s %-14s %-12s %-10s %-16s %s\n' "Service" "Type" "Branch" "Effect" "Decision" "Path / reason"
+    printf '%-36s %-14s %-12s %-10s %-16s %s\n' "-------" "----" "------" "------" "--------" "-------------"
 
-    local service path reason effect decision
+    local service path reason effect decision type branch
     for service in $MANIFEST_FLEET_SERVICES; do
         path=$(get_fleet_service_property "$service" "path")
+        type=$(get_fleet_service_property "$service" "type" "service")
+        branch=$(get_fleet_service_property "$service" "branch" "${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}")
         if reason=$(_fleet_service_release_reason "$service" "$path"); then
             releaseable_count=$((releaseable_count + 1))
             effect="release"
@@ -1979,10 +2015,10 @@ _fleet_ship_plan() {
             else
                 decision="would ship"
             fi
-            printf '%-36s %-10s %-16s %s\n' "$service" "$effect" "$decision" "$path"
+            printf '%-36s %-14s %-12s %-10s %-16s %s\n' "$service" "$type" "$branch" "$effect" "$decision" "$path"
         else
             skipped_count=$((skipped_count + 1))
-            printf '%-36s %-10s %-16s %s\n' "$service" "read" "skip" "$path ($reason)"
+            printf '%-36s %-14s %-12s %-10s %-16s %s\n' "$service" "$type" "$branch" "read" "skip" "$path ($reason)"
         fi
     done
 
@@ -2085,6 +2121,7 @@ EOF
     fi
 
     local _saved_services="$MANIFEST_FLEET_SERVICES"
+    local _filter_label="none"
     if [ -n "$only_filter" ] || [ -n "$except_filter" ]; then
         local filtered
         if ! filtered=$(_fleet_filter_services "$only_filter" "$except_filter"); then
@@ -2095,10 +2132,16 @@ EOF
             return 1
         fi
         MANIFEST_FLEET_SERVICES="$filtered"
+        if [ -n "$only_filter" ]; then
+            _filter_label="--only $only_filter"
+        else
+            _filter_label="--except $except_filter"
+        fi
         echo "🎯 Filter applied: $filtered"
     fi
 
     if [[ "$execution_mode" == "preview" ]]; then
+        _fleet_scope_block "$MANIFEST_FLEET_SERVICES" "$_saved_services" "$_filter_label"
         _fleet_ship_plan "$increment_type" "$local_only"
         local replay_command="manifest ship fleet $increment_type"
         [[ "$local_only" == "true" ]] && replay_command="$replay_command --local"
@@ -2110,6 +2153,7 @@ EOF
     fi
 
     echo "Starting fleet ship workflow ($increment_type)"
+    _fleet_scope_block "$MANIFEST_FLEET_SERVICES" "$_saved_services" "$_filter_label"
     _fleet_ship_plan "$increment_type" "$local_only"
     echo ""
 

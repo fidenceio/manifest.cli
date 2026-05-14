@@ -188,6 +188,11 @@ YAML
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"Starting fleet ship workflow (patch)"* ]]
+    [[ "$output" == *"Fleet scope"* ]]
+    [[ "$output" == *"Selected:"*"3 services"* ]]
+    [[ "$output" == *"Included repositories"* ]]
+    [[ "$output" == *"alpha"*"release"*"would ship"*"$SCRATCH/alpha"* ]]
+    [[ "$output" == *"tap"*"read"*"skip"*"$SCRATCH/tap (release disabled)"* ]]
     [[ "$output" == *"alpha: shipping patch"* ]]
     [[ "$output" == *"bravo: shipping patch"* ]]
     [[ "$output" == *"tap: skipped (release disabled)"* ]]

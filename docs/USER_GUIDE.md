@@ -342,6 +342,11 @@ manifest ship fleet patch --except docs         # Ship every service except 'doc
 Fleet PR work is explicit: use `manifest pr fleet ... -y` when you want PR creation,
 queueing, or readiness operations.
 
+Fleet release previews always show the fleet name, root, config file, selected
+service count, active filter, and the included repository table before any apply
+step. Use `manifest status fleet` for the same member list plus branch, state,
+version, path, and latest commit.
+
 ### Direct Fleet Commands
 
 Fleet commands use action-first syntax:

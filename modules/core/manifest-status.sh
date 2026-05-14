@@ -165,6 +165,7 @@ manifest_repo_identity_block() {
     else
         _status_line "Fleet:" "not detected"
     fi
+    _status_line "Scope:" "repo"
     _status_line "Target:" "this Git repository only"
     if [[ -n "$_MANIFEST_REPO_ID_WARNING" ]]; then
         _status_line "Warning:" "$_MANIFEST_REPO_ID_WARNING"
@@ -350,7 +351,7 @@ _manifest_status_fleet() {
         version="$(_status_repo_version "$path")"
         commit="$(_status_repo_latest_commit "$path")"
         commit_timestamp="$(_status_repo_latest_commit_timestamp "$path")"
-        rows+=("$(printf "%-36s  %-12s  %-8s  %-9s  %-25s  %s" "$service" "$branch" "$state" "$version" "$commit_timestamp" "$commit")")
+        rows+=("$(printf "%-36s  %-12s  %-8s  %-9s  %-25s  %-40s  %s" "$service" "$branch" "$state" "$version" "$commit_timestamp" "$path" "$commit")")
         total=$((total + 1))
         case "$state" in
             clean) clean=$((clean + 1)) ;;
@@ -367,8 +368,8 @@ _manifest_status_fleet() {
     _status_line "Root:" "$proj"
     _status_line "Repos:" "$total total, $clean clean, $dirty dirty, $other other"
     echo ""
-    printf "%-36s  %-12s  %-8s  %-9s  %-25s  %s\n" "Repo" "Branch" "State" "Version" "Timestamp" "Latest commit"
-    printf "%-36s  %-12s  %-8s  %-9s  %-25s  %s\n" "------------------------------------" "------------" "--------" "---------" "-------------------------" "----------------------------------------"
+    printf "%-36s  %-12s  %-8s  %-9s  %-25s  %-40s  %s\n" "Repo" "Branch" "State" "Version" "Timestamp" "Path" "Latest commit"
+    printf "%-36s  %-12s  %-8s  %-9s  %-25s  %-40s  %s\n" "------------------------------------" "------------" "--------" "---------" "-------------------------" "----------------------------------------" "----------------------------------------"
     local row
     for row in "${rows[@]}"; do
         printf "%s\n" "$row"
