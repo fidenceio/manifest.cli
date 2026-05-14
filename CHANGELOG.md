@@ -1,5 +1,14 @@
 # Changelog
 
+## [47.12.3] - 2026-05-14
+
+**Release Type:** Patch
+
+### Changes
+
+- Clarify Homebrew uninstall caveats
+
+
 ## [47.12.2] - 2026-05-14
 
 **Release Type:** Patch
@@ -75,12 +84,3 @@
 
 - Update release copy and configuration examples
 - Add regression coverage for the changed CLI workflow
-
-
-## [47.9.3] - 2026-05-14
-
-**Release Type:** Patch
-
-### Changes
-
-- Make repo confirmation tests portable
