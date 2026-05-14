@@ -1,5 +1,16 @@
 # Changelog
 
+## [47.12.0] - 2026-05-14
+
+**Release Type:** Minor
+
+### Changes
+
+- Update release copy and configuration examples
+- Update shell completions for new command options
+- Add regression coverage for the changed CLI workflow
+
+
 ## [47.11.2] - 2026-05-14
 
 **Release Type:** Patch
@@ -74,12 +85,3 @@
 ## [47.9.1] - 2026-05-14
 
 **Release Type:** Patch — no user-facing changes.
-
-
-## [47.9.0] - 2026-05-14
-
-**Release Type:** Minor
-
-### Changes
-
-- Require repo target confirmation
