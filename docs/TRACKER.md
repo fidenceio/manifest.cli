@@ -129,6 +129,11 @@ Currently preview output is bespoke per command. The shared renderer (item 1.3) 
   - **Deliverable:** `services.<name>.release.{enabled,strategy}` in fleet config (already partially live for top-level); per-service test in `tests/fleet_release_config.bats`.
   - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
 
+- **3.7 `manifest select repo` for fleet-service config edits.**
+  - **Why:** today, toggling `services.<name>.release.{enabled,strategy}` (or any other per-service setting in `manifest.fleet.config.yaml`) requires hand-editing the YAML. `manifest config set` only reaches `manifest.config.yaml` keys; `manifest init fleet` is a regenerate-from-TSV flow. Surfaced 2026-05-15 when enabling release on the marketing-site service required an editor.
+  - **Deliverable:** `manifest select repo [<service>] [--enable-release|--disable-release] [--strategy <s>] [-y|--dry-run]` (or equivalent flag set); interactive TTY picker when service omitted; safe-by-default preview; writes scoped to `manifest.fleet.config.yaml`. Final command name TBD — `select repo` is the user-proposed shape; alternatives are `fleet set <service>.<key> <value>` or `fleet edit <service>`.
+  - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
+
 ---
 
 ## 4. Tests
