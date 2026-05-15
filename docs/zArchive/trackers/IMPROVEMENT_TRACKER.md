@@ -1,5 +1,7 @@
 # Manifest CLI — Improvement Tracker
 
+> **Archived 2026-05-14** — superseded by [docs/TRACKER.md](../../TRACKER.md). Open follow-ups merged forward; closed items and historical findings preserved here for provenance.
+
 **Started:** 2026-04-24 (against v44.1.1, ~15K LOC)
 **Status legend:** `[ ]` open · `[~]` in progress · `[x]` done · `[-]` declined/won't-fix
 
