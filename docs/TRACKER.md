@@ -2,7 +2,7 @@
 
 Open work for the Manifest CLI repo. Closed items and historical findings live in [`zArchive/trackers/`](zArchive/trackers/).
 
-**Conventions**
+## Conventions
 
 - Items are grouped by area, not by tier or session.
 - Every item names a concrete deliverable (file, test, module) and an anchor.
@@ -174,7 +174,7 @@ Currently preview output is bespoke per command. The shared renderer (item 1.3) 
 
 - **5.1 "Safe by default" section in user-facing docs.**
   - **Why:** L316 — the contract is invisible until users hit it.
-  - **Deliverable:** new short section in [`docs/README.md`](README.md) (if applicable), [`docs/USER_GUIDE.md`](USER_GUIDE.md), [`docs/COMMAND_REFERENCE.md`](COMMAND_REFERENCE.md), [`docs/EXAMPLES.md`](EXAMPLES.md) — same wording everywhere.
+  - **Deliverable:** new short section in [`README.md`](../README.md), [`docs/USER_GUIDE.md`](USER_GUIDE.md), [`docs/COMMAND_REFERENCE.md`](COMMAND_REFERENCE.md), [`docs/EXAMPLES.md`](EXAMPLES.md) — same wording everywhere.
   - **Anchor:** [`docs/USER_GUIDE.md`](USER_GUIDE.md).
 
 - **5.2 Help-example updates.**
