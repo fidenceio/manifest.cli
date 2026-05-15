@@ -1,5 +1,7 @@
 # Safe-by-Default Execution Notes
 
+> **Archived 2026-05-14** — superseded by [docs/TRACKER.md](../../TRACKER.md). Items already implemented in code (preview default, `--dry-run` parsing, `-y`/`--yes` apply, ship→PR decoupling, contradictory-flags detection) were verified against `manifest-execution-policy.sh` and 25+ call sites and dropped from the live tracker. Genuinely open items (helpers, plan renderer, edge-command conversions, cross-cut Cloud requirements, tests, docs) are carried forward.
+
 **Status:** Implemented for the core journey and ship paths; remaining work tracks edge commands and Cloud integrations.
 **Created:** 2026-05-06
 **Goal:** Keep every mutating Manifest workflow preview-first, require `-y` or `--yes` to apply, and keep PR operations out of release shipping.

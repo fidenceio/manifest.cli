@@ -1,5 +1,7 @@
 # Bash 5 Runtime Fix
 
+> **Archived 2026-05-14** — superseded by [docs/TRACKER.md](../../TRACKER.md). The 16 implementation items shipped in v47.6.3 (2026-05-09); the single conditional hardening follow-up ("extract duplicated wrapper guard if drift recurs") is carried forward as a low-priority item.
+
 **Status:** Shipped in the v47.6.3 patch release
 **Created:** 2026-05-06
 **Goal:** Manifest CLI must run under Bash 5+ everywhere. Bash 3.2 may start a wrapper on macOS, but it must never reach CLI modules or nested Manifest execution.
