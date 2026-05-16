@@ -134,6 +134,11 @@ Currently preview output is bespoke per command. The shared renderer (item 1.3) 
   - **Deliverable:** `manifest select repo [<service>] [--enable-release|--disable-release] [--strategy <s>] [-y|--dry-run]` (or equivalent flag set); interactive TTY picker when service omitted; safe-by-default preview; writes scoped to `manifest.fleet.config.yaml`. Final command name TBD — `select repo` is the user-proposed shape; alternatives are `fleet set <service>.<key> <value>` or `fleet edit <service>`.
   - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
 
+- **3.8 Replace per-repo TTY-only confirmation with fleet-context implicit confirm.**
+  - **Why:** `manifest_repo_scope_confirm_apply` hard-checks `[[ -t 0 ]]` then `read`s, blocking any non-interactive shell even when fleet config already disambiguates the target repo. Workaround landed 2026-05-16: the function now honors `MANIFEST_CLI_AUTO_CONFIRM=1` and skips the prompt (apply is still gated by `-y` upstream). The long-term fix is a fleet-context bypass that doesn't require a blanket env var — same shape as §3.5 (path/member selectors).
+  - **Deliverable:** add an internal flag to `manifest_repo_scope_confirm_apply` ("called from fleet dispatch") that the fleet ship pipeline sets; tests prove the flag is only honored when fleet context is present.
+  - **Anchor:** [`modules/core/manifest-shared-utils.sh:453-506`](../modules/core/manifest-shared-utils.sh#L453-L506), [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
+
 ---
 
 ## 4. Tests
