@@ -1,6 +1,6 @@
 # Manifest CLI Documentation
 
-**Version:** 47.13.1 | **Updated:** 2026-05-16
+**Version:** 47.14.0 | **Updated:** 2026-05-16
 
 ---
 

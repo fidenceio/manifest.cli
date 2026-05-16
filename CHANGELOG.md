@@ -1,5 +1,14 @@
 # Changelog
 
+## [47.14.0] - 2026-05-16
+
+**Release Type:** Minor
+
+### Changes
+
+- Docs(tracker): add §5.5 archive sweep flattening
+
+
 ## [47.13.1] - 2026-05-16
 
 **Release Type:** Patch — no user-facing changes.
@@ -80,8 +89,3 @@
 - Update release copy and configuration examples
 - Add regression coverage for the changed CLI workflow
 - Backfill and clarify release history in the root changelog
-
-
-## [47.11.1] - 2026-05-14
-
-**Release Type:** Patch — no user-facing changes.
