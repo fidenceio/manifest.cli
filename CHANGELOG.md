@@ -1,5 +1,14 @@
 # Changelog
 
+## [47.14.2] - 2026-05-16
+
+**Release Type:** Patch
+
+### Changes
+
+- Update release copy and configuration examples
+
+
 ## [47.14.1] - 2026-05-16
 
 **Release Type:** Patch — no user-facing changes.
@@ -71,14 +80,3 @@
 ## [47.12.1] - 2026-05-14
 
 **Release Type:** Patch — no user-facing changes.
-
-
-## [47.12.0] - 2026-05-14
-
-**Release Type:** Minor
-
-### Changes
-
-- Update release copy and configuration examples
-- Update shell completions for new command options
-- Add regression coverage for the changed CLI workflow
