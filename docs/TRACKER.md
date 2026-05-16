@@ -202,6 +202,11 @@ Currently preview output is bespoke per command. The shared renderer (item 1.3) 
   - **Deliverable:** one short paragraph in the next major release notes plus a `docs/MIGRATION.md` (if patterns repeat).
   - **Anchor:** [`docs/USER_GUIDE.md`](USER_GUIDE.md).
 
+- **5.5 Archive sweep: flatten layout, remove INDEX regeneration.**
+  - **Why:** user clarified 2026-05-16 that `docs/zArchive/` is read-only "memory" — moved files only, nothing created or modified inside. Current sweep `mkdir -p`s `v<major>/` subfolders and (re)writes per-major + top-level `INDEX.md` files on every cleanup, both of which violate the new rule. Existing legacy `v<major>/` folders stay where they are (immutability applies retroactively); only new behavior changes.
+  - **Deliverable:** in [`modules/docs/manifest-cleanup-docs.sh`](../modules/docs/manifest-cleanup-docs.sh): (a) replace `v<major>/` routing with a flat move into `docs/zArchive/`; (b) delete `_manifest_archive_generate_per_major_index`; (c) delete `_manifest_archive_generate_top_level_index` and `_manifest_archive_regenerate_indexes` and their call sites. Preserve `_MANIFEST_ARCHIVABLE_REGEX` (anchored regex still catches the right files). Add test asserting no files are created inside `docs/zArchive/` during a sweep — only moves.
+  - **Anchor:** [`modules/docs/manifest-cleanup-docs.sh`](../modules/docs/manifest-cleanup-docs.sh).
+
 ---
 
 ## 6. Cross-cut to Cloud (CLI side)
