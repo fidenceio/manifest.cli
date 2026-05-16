@@ -1,5 +1,10 @@
 # Changelog
 
+## [47.13.1] - 2026-05-16
+
+**Release Type:** Patch — no user-facing changes.
+
+
 ## [47.13.0] - 2026-05-16
 
 **Release Type:** Minor
@@ -80,14 +85,3 @@
 ## [47.11.1] - 2026-05-14
 
 **Release Type:** Patch — no user-facing changes.
-
-
-## [47.11.0] - 2026-05-14
-
-**Release Type:** Minor
-
-### Changes
-
-- Promote remaining user-facing `MANIFEST_CLI_*` settings to first-class YAML keys
-- Preserve process environment overrides above YAML layers for CI and backward compatibility
-- Add Cloud secret-reference hydration and security private-file YAML coverage
