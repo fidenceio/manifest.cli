@@ -1,5 +1,18 @@
 # Changelog
 
+## [47.13.0] - 2026-05-16
+
+**Release Type:** Minor
+
+### Changes
+
+- Archive legacy trackers ahead of consolidation
+- Add consolidated CLI tracker
+- Fix CLI tracker README anchor and heading level
+- Docs(tracker): add §3.7 manifest select repo
+- Honor MANIFEST_CLI_AUTO_CONFIRM in repo-scope confirmation
+
+
 ## [47.12.5] - 2026-05-14
 
 **Release Type:** Patch
@@ -78,12 +91,3 @@
 - Promote remaining user-facing `MANIFEST_CLI_*` settings to first-class YAML keys
 - Preserve process environment overrides above YAML layers for CI and backward compatibility
 - Add Cloud secret-reference hydration and security private-file YAML coverage
-
-
-## [47.10.2] - 2026-05-14
-
-**Release Type:** Patch
-
-### Changes
-
-- Add regression coverage for the changed CLI workflow
