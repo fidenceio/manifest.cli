@@ -477,12 +477,18 @@ manifest_repo_scope_confirm_apply() {
     echo "  Command:  $replay_command"
     echo ""
 
+    if [[ "${MANIFEST_CLI_AUTO_CONFIRM:-0}" == "1" ]]; then
+        echo "Auto-confirmed repository target (MANIFEST_CLI_AUTO_CONFIRM=1): $git_root"
+        return 0
+    fi
+
     if [[ ! -t 0 ]]; then
         log_error "Repo confirmation requires an interactive terminal."
         log_error "Run this from the intended repository folder, preview with:"
         log_error "  ${replay_command% -y}"
         log_error "Then apply interactively with:"
         log_error "  $replay_command"
+        log_error "Or in scripted contexts set MANIFEST_CLI_AUTO_CONFIRM=1 (apply must still be authorized via -y)."
         return 1
     fi
 
