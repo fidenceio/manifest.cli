@@ -1,276 +1,177 @@
-# Manifest CLI — Tracker
+# Manifest CLI - Tracker
 
-Open work for the Manifest CLI repo. Closed items and historical findings live in [`zArchive/trackers/`](zArchive/trackers/).
+Open work for the Manifest CLI repo.
 
 ## Conventions
 
 - Items are grouped by area, not by tier or session.
-- Every item names a concrete deliverable (file, test, module) and an anchor.
-- Drift policy: when an item ships, delete it from this file. Provenance lives in the merge commit.
+- Every item names a concrete deliverable and an anchor.
+- Drift policy: when an item ships, delete it from this file. Provenance lives in the merge commit and release history.
 
 ---
 
-## 1. Execution policy — helpers and adoption gaps
+## 1. Release Correctness
 
-The shared contract (`preview` default, `--dry-run` explicit, `-y`/`--yes` to apply, contradictory-flags detection) is already enforced in [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh) and adopted at 25+ call sites across `init`, `prep`, `refresh`, `ship`, `fleet`, `pr`, `config`, and `core`. What remains is the helper surface and the last edge commands.
+- **1.1 Eliminate the ship workflow's version double-cycle.**
+  - **Why:** every canonical CLI `manifest ship repo minor|major|revision` currently runs the intended release, updates the in-repo Homebrew formula, then treats that formula commit as new work for a follow-up patch. Observed 2026-05-16: `47.13.0 -> 47.13.1` and `47.14.0 -> 47.14.1`.
+  - **Deliverable:** choose and implement one policy: fold the formula update into the same release commit, or classify formula-only changes as non-shippable for the follow-up patch. Add a regression proving one canonical ship produces one release tag.
+  - **Anchor:** [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh), [`formula/manifest.rb`](../formula/manifest.rb), [`tests/ship_resume.bats`](../tests/ship_resume.bats).
 
-- **1.1 `manifest_execution_require_apply` helper.**
-  - **Why:** every command currently re-implements the "preview-or-apply" branch inline. A single guard would let new commands opt in without re-introducing ad-hoc parsing.
-  - **Deliverable:** function in [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh) that returns non-zero in preview mode with the standard "Re-run with -y" footer; bats coverage in `tests/execution_policy.bats`.
-  - **Anchor:** [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh).
+- **1.2 Make archive cleanup obey the read-only archive rule.**
+  - **Why:** archive cleanup still creates `docs/zArchive/v<major>/` directories and regenerates archive `INDEX.md` files. The active rule is: moved files only; no new generated output inside the archive.
+  - **Deliverable:** flatten future archive moves into `docs/zArchive/`, remove archive index generation and its call sites, and add a regression proving cleanup moves files without creating archive-side generated files.
+  - **Anchor:** [`modules/docs/manifest-cleanup-docs.sh`](../modules/docs/manifest-cleanup-docs.sh), [`tests/archive_move_log.bats`](../tests/archive_move_log.bats), [`tests/archive_pre_move_safety.bats`](../tests/archive_pre_move_safety.bats).
 
-- **1.2 `manifest_execution_replay_hint` helper.**
-  - **Why:** `manifest_execution_footer` accepts a single apply-command string, but call sites assemble it inline. A helper that takes the original argv and emits the exact replay command — including `-y`, original subcommand path, and preserved flags — is the missing piece for L243 (preserve original user command) and L313 (end every preview with the exact replay command).
-  - **Deliverable:** helper that captures `$0 "$@"` at command-dispatch entry, strips flags via `manifest_execution_strip_apply_flags`, re-appends `-y`, returns the string.
+---
+
+## 2. Execution Policy Cleanup
+
+The base contract is already live: mutating commands preview by default, `--dry-run` is explicit preview, `-y`/`--yes` selects apply, and contradictory `--dry-run` plus `-y` is rejected. Remaining work is consolidation and edge-case coverage.
+
+- **2.1 Add shared apply guard and replay-command helpers.**
+  - **Why:** call sites still build "preview or apply" branches and replay commands by hand.
+  - **Deliverable:** add `manifest_execution_require_apply` and `manifest_execution_replay_hint` in [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh), migrate representative call sites, and cover them in tests.
   - **Anchor:** [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh), [`modules/core/manifest-core.sh`](../modules/core/manifest-core.sh).
 
-- **1.3 `manifest_execution_plan_table` renderer.**
-  - **Why:** preview output today is bespoke per command. A shared renderer is the foundation for the consistent `Effect | Scope | Apply command` columns called for in L305/L315/L327.
-  - **Deliverable:** function that takes step rows and emits a uniform Markdown table; consumers in `ship`, `fleet`, `pr`, and Cloud-backed previews.
-  - **Anchor:** [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh).
+- **2.2 Add shared plan rendering and plan fingerprints.**
+  - **Why:** preview output is still bespoke per command, and apply mode cannot warn when the plan changed since preview.
+  - **Deliverable:** add a shared plan-table renderer plus a stable plan fingerprint helper; use them in ship/fleet/PR previews and compare fingerprints where apply recomputes work.
+  - **Anchor:** [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh), [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh), [`modules/pr/manifest-pr-native.sh`](../modules/pr/manifest-pr-native.sh).
 
-- **1.4 Plan-fingerprint helper.**
-  - **Why:** L244 calls for a hash so apply-time recomputation can warn if the plan changed since preview.
-  - **Deliverable:** stable hash over the rendered plan (sha256 over canonicalized step rows); store alongside the preview, compare on apply.
-  - **Anchor:** new helper next to `manifest_execution_plan_table`.
+- **2.3 Finish the execution-policy edge audit.**
+  - **Why:** aliases, recursive Manifest calls, generated hooks, CI workflows, and unknown flag paths can still bypass the intended command surface if they are not checked together.
+  - **Deliverable:** audit deprecated aliases, `scripts/`, generated hook templates, and `.github/workflows/*.yml`; route mutating calls through explicit `-y`, explicit `--dry-run`, or a shared rejection path. Centralize unknown flag handling where practical.
+  - **Anchor:** [`modules/core/`](../modules/core/), [`scripts/`](../scripts/), [`.github/workflows/`](../.github/workflows/).
 
-- **1.5 Unknown / misplaced execution flags fail through the shared help template.**
-  - **Why:** L241 — today, an unknown flag may silently survive parsing.
-  - **Deliverable:** common error path in `manifest_execution_parse` for unknown tokens that look like flags (`^-`); test in `tests/execution_policy.bats`.
-  - **Anchor:** [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh).
-
-- **1.6 Legacy `--apply` / `--do` decision.**
-  - **Why:** L223 — accept as deprecated aliases or reject outright. Either is fine; what's not fine is leaving it undecided.
-  - **Deliverable:** decision recorded in this tracker as a one-line resolution, plus the chosen implementation (rejected-with-message vs alias-with-deprecation-warning).
-  - **Anchor:** [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh).
-
-- **1.7 `--force` stays separate from `-y`.**
-  - **Why:** L64 — `--force` may bypass a readiness gate only after `-y` has selected apply mode.
-  - **Deliverable:** in commands that accept `--force`, require apply mode before `--force` has effect; test that `--force` alone never mutates.
-  - **Anchor:** call sites of `--force` (grep `--force` under `modules/`).
-
-- **1.8 `MANIFEST_CLI_AUTO_CONFIRM=1` stays prompt-automation only.**
-  - **Why:** L65, L240 — must not convert preview mode into apply mode.
-  - **Deliverable:** explicit test in `tests/execution_policy.bats` proving preview + `AUTO_CONFIRM=1` does not write.
-  - **Anchor:** [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh).
-
-- **1.9 Audit legacy aliases and deprecation paths.**
-  - **Why:** L259 — aliases must inherit the same execution policy; otherwise they're a back door.
-  - **Deliverable:** find every deprecation alias (`grep -rn "deprecated alias" modules/`); confirm it routes through `manifest_execution_parse` or rejects explicitly.
-  - **Anchor:** [`modules/core/`](../modules/core/).
-
-- **1.10 Audit recursive Manifest calls and generated hooks.**
-  - **Why:** L260 — scripts that call Manifest must add explicit `-y` only where apply is intended; today some pre-existing hooks may not.
-  - **Deliverable:** grep `scripts/` and any generated hook templates for `manifest` invocations; annotate or fix each.
-  - **Anchor:** [`scripts/`](../scripts/).
-
-- **1.11 Audit CI workflows for unintended apply.**
-  - **Why:** L261 — release automation that currently calls mutating commands without `-y` will now no-op silently. Either add `-y` (apply intent) or switch to `--dry-run` (preview).
-  - **Deliverable:** review `.github/workflows/*.yml` for `manifest <verb>` calls; pick the right intent per call.
-  - **Anchor:** [`.github/workflows/`](../.github/workflows/).
-
----
-
-## 2. Plan-then-apply renderer
-
-Currently preview output is bespoke per command. The shared renderer (item 1.3) feeds this work.
-
-- **2.1 Standardize preview output heading.**
-  - **Why:** L305 — every mutating command should open with a recognizable banner so users can tell preview from apply at a glance.
-  - **Deliverable:** `manifest_execution_preview_header` is already wired; audit each command's first output line to use it.
-  - **Anchor:** [`modules/core/manifest-execution-policy.sh:75-78`](../modules/core/manifest-execution-policy.sh#L75-L78).
-
-- **2.2 Apply mode prints the same plan first, then the apply banner.**
-  - **Why:** L314 — apply runs should produce identical plan output to preview, so users can diff if needed.
-  - **Deliverable:** restructure ship/fleet/pr apply paths so plan rendering precedes mutation; reuse the renderer from 1.3.
-  - **Anchor:** [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh), [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh), [`modules/pr/manifest-pr-native.sh`](../modules/pr/manifest-pr-native.sh).
-
-- **2.3 Dense, scannable preview tables for fleet commands.**
-  - **Why:** L315 — current fleet previews dump one section per member; a table is faster to scan when ≥5 members.
-  - **Deliverable:** fleet preview output uses the shared `manifest_execution_plan_table`.
-  - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
-
-- **2.4 Effect / Scope / Apply-command columns in plan tables.**
-  - **Why:** L327 — these three columns turn "preview" into a contract the user can verify.
-  - **Deliverable:** renderer from 1.3 emits these columns where step rows carry effect metadata (already populated by recipe schema work).
-  - **Anchor:** [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh).
+- **2.4 Add the missing `MANIFEST_CLI_AUTO_CONFIRM` no-write regression.**
+  - **Why:** code documents `MANIFEST_CLI_AUTO_CONFIRM=1` as prompt automation only, but the exact preview no-write regression should be explicit.
+  - **Deliverable:** test that a preview command with `MANIFEST_CLI_AUTO_CONFIRM=1` still writes nothing and prints an apply replay command instead of mutating.
+  - **Anchor:** [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh), [`tests/dry_run.bats`](../tests/dry_run.bats).
 
 ---
 
 ## 3. Fleet UX
 
-- **3.1 Stop with a clear message when fleet requires PR review first.**
-  - **Why:** L279 — today `ship fleet` silently skips PR-gated members. The user should see "X members require PR review; run `manifest pr fleet ... -y` first."
-  - **Deliverable:** fleet ship preview lists PR-gated members; apply mode refuses with a structured error and replay command.
+- **3.1 Stop clearly when fleet release requires PR review first.**
+  - **Why:** fleet release should not silently skip PR-gated members.
+  - **Deliverable:** fleet ship preview lists PR-gated members; apply refuses with a structured error and a `manifest pr fleet ... -y` replay command.
   - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
 
-- **3.2 Fleet partial-failure recovery output.**
-  - **Why:** L280 — when a multi-member apply fails mid-fleet, the user has no way to resume from where it stopped.
-  - **Deliverable:** structured failure report listing which members completed, which failed, and a `--resume` flag or per-member replay command.
+- **3.2 Add fleet partial-failure recovery output.**
+  - **Why:** when a fleet apply fails mid-run, users need a precise resume or replay path.
+  - **Deliverable:** structured report listing completed members, failed members, skipped members, and per-member replay or resume commands.
   - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
 
-- **3.3 Recompute fleet plan at apply time and warn on diff.**
-  - **Why:** L281 — preview is point-in-time; if a member's state changes between preview and apply (e.g., new commits), the user should be warned.
-  - **Deliverable:** apply path recomputes the plan, compares fingerprint (item 1.4), prints diff or "plan unchanged".
-  - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
+- **3.3 Detect workspace/fleet membership drift.**
+  - **Why:** fleet config goes stale when repos are added outside Manifest.
+  - **Deliverable:** read-only workspace diff that compares discovered repos to fleet config, exposed from a low-friction command such as `manifest doctor`, `manifest update fleet --dry-run`, or a timestamped passive check.
+  - **Anchor:** [`modules/fleet/manifest-fleet-detect.sh`](../modules/fleet/manifest-fleet-detect.sh), [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
 
-- **3.4 Fleet background-scan: detect new repos in the workspace.**
-  - **Why:** fleet membership goes stale silently when new repos appear in the workspace. A passive scan that detects divergence between workspace state and fleet config (and prompts the user to refresh) would close the gap. Raised 2026-05-05; previously held as a feature-radar idea — now formalized.
-  - **Deliverable:** a reusable read-only `_fleet_diff_workspace` function in [`modules/fleet/manifest-fleet-detect.sh`](../modules/fleet/manifest-fleet-detect.sh) that prints a diff; a hook invocation point (one of: shell-entry hook, `manifest doctor` check, or periodic timestamp file in `~/.manifest/state/`). Surface a prompt; do not auto-modify config.
-  - **Anchor:** [`modules/fleet/manifest-fleet-detect.sh`](../modules/fleet/manifest-fleet-detect.sh).
+- **3.4 Add repo path/member selectors and fleet-context confirmation.**
+  - **Why:** repo-scoped apply commands still confirm against the cwd-resolved Git root. Fleet dispatch has enough context to avoid a blanket non-TTY prompt bypass.
+  - **Deliverable:** repo-scoped apply commands accept `--path <dir>` and/or `--member <name>`; fleet dispatch passes a scoped confirmation context that is honored only for that resolved member.
+  - **Anchor:** [`modules/core/manifest-shared-utils.sh`](../modules/core/manifest-shared-utils.sh), [`modules/core/manifest-init.sh`](../modules/core/manifest-init.sh), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh), [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
 
-- **3.5 Path and fleet-member selectors for repo-root confirmation.**
-  - **Why:** carried forward from the closed #44 — today repo-scoped apply commands confirm against the cwd-resolved Git root only; path-based and fleet-member selectors were deferred from that change.
-  - **Deliverable:** repo-scoped apply commands accept `--path <dir>` and `--member <name>` and confirm against the resolved target.
-  - **Anchor:** [`modules/core/manifest-init.sh`](../modules/core/manifest-init.sh), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh).
-
-- **3.6 Fleet service-releaseability model in fleet config.**
-  - **Why:** L67 — today releaseability is inferred from file presence (`VERSION` etc.) over time. Explicit per-service config is more honest.
-  - **Deliverable:** `services.<name>.release.{enabled,strategy}` in fleet config (already partially live for top-level); per-service test in `tests/fleet_release_config.bats`.
-  - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
-
-- **3.7 `manifest select repo` for fleet-service config edits.**
-  - **Why:** today, toggling `services.<name>.release.{enabled,strategy}` (or any other per-service setting in `manifest.fleet.config.yaml`) requires hand-editing the YAML. `manifest config set` only reaches `manifest.config.yaml` keys; `manifest init fleet` is a regenerate-from-TSV flow. Surfaced 2026-05-15 when enabling release on the marketing-site service required an editor.
-  - **Deliverable:** `manifest select repo [<service>] [--enable-release|--disable-release] [--strategy <s>] [-y|--dry-run]` (or equivalent flag set); interactive TTY picker when service omitted; safe-by-default preview; writes scoped to `manifest.fleet.config.yaml`. Final command name TBD — `select repo` is the user-proposed shape; alternatives are `fleet set <service>.<key> <value>` or `fleet edit <service>`.
-  - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
-
-- **3.8 Replace per-repo TTY-only confirmation with fleet-context implicit confirm.**
-  - **Why:** `manifest_repo_scope_confirm_apply` hard-checks `[[ -t 0 ]]` then `read`s, blocking any non-interactive shell even when fleet config already disambiguates the target repo. Workaround landed 2026-05-16: the function now honors `MANIFEST_CLI_AUTO_CONFIRM=1` and skips the prompt (apply is still gated by `-y` upstream). The long-term fix is a fleet-context bypass that doesn't require a blanket env var — same shape as §3.5 (path/member selectors).
-  - **Deliverable:** add an internal flag to `manifest_repo_scope_confirm_apply` ("called from fleet dispatch") that the fleet ship pipeline sets; tests prove the flag is only honored when fleet context is present.
-  - **Anchor:** [`modules/core/manifest-shared-utils.sh:453-506`](../modules/core/manifest-shared-utils.sh#L453-L506), [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
+- **3.5 Add a fleet-service config editor.**
+  - **Why:** toggling `services.<name>.release.enabled` or `services.<name>.release.strategy` still requires hand-editing `manifest.fleet.config.yaml`.
+  - **Deliverable:** add a safe-by-default command, final name TBD, for scoped fleet-service config edits such as enabling/disabling release and setting release strategy.
+  - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh), [`modules/fleet/manifest-fleet-config.sh`](../modules/fleet/manifest-fleet-config.sh), [`tests/fleet_ship_filter.bats`](../tests/fleet_ship_filter.bats).
 
 ---
 
-## 4. Tests
+## 4. Verification Gaps
 
-- **4.1 No-write tests per preview path.**
-  - **Why:** L333 — the safest proof of "preview by default" is a git porcelain + file snapshot before and after every preview run.
-  - **Deliverable:** parametrized bats helper that asserts no porcelain change for each mutating command in preview mode.
-  - **Anchor:** new `tests/preview_no_write.bats`.
+- **4.1 Add broad preview no-write coverage.**
+  - **Why:** focused dry-run tests exist, but there is no shared matrix proving every mutating preview leaves git porcelain and file snapshots unchanged.
+  - **Deliverable:** `tests/preview_no_write.bats` or equivalent helper-driven coverage across repo, fleet, PR, config, docs, install/uninstall, and refresh paths.
+  - **Anchor:** [`tests/dry_run.bats`](../tests/dry_run.bats), [`tests/fleet_dry_run.bats`](../tests/fleet_dry_run.bats), [`tests/pr_native_safe_by_default.bats`](../tests/pr_native_safe_by_default.bats).
 
-- **4.2 Apply tests for focused local-only commands.**
-  - **Why:** L334 — `--local -y` is its own contract and needs targeted coverage.
-  - **Deliverable:** bats cases asserting local writes happen and remote dispatch does not.
-  - **Anchor:** new `tests/local_only_apply.bats`.
+- **4.2 Add focused local-only apply tests.**
+  - **Why:** `--local -y` is its own contract and should prove local writes occur without remote dispatch.
+  - **Deliverable:** targeted tests for local-only ship/refresh/fleet paths, including assertions that no remote push/API command is called.
+  - **Anchor:** [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh), [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
 
-- **4.3 `MANIFEST_CLI_AUTO_CONFIRM=1` does-not-imply-apply tests.**
-  - **Why:** L336 — already implemented in code but untested.
-  - **Deliverable:** cases in `tests/execution_policy.bats`.
-  - **Anchor:** [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh).
+- **4.3 Add Cloud apply-intent contract stubs.**
+  - **Why:** Cloud-backed mutation must fail closed when `execution_mode=apply` is missing.
+  - **Deliverable:** local stub test that rejects a Cloud request missing apply intent before any provider or analyzer runs.
+  - **Anchor:** [`modules/stubs/manifest-cloud-stub.sh`](../modules/stubs/manifest-cloud-stub.sh), new `tests/cloud_contract.bats`.
 
-- **4.4 PR commands require `-y` to mutate.**
-  - **Why:** L338 — PR-side tests confirming preview-default holds end-to-end (parsing already enforces it; missing the integration test).
-  - **Deliverable:** `tests/pr_native_dry_run.bats` covering each PR verb.
-  - **Anchor:** [`modules/pr/manifest-pr-native.sh`](../modules/pr/manifest-pr-native.sh).
+- **4.4 Keep policy phases gated by the container suite.**
+  - **Why:** execution-policy work crosses many commands and must stay container-only.
+  - **Deliverable:** run `./scripts/run-tests-container.sh` after each execution-policy or fleet-policy phase, and record failures in the change that introduced them.
+  - **Anchor:** [`scripts/run-tests-container.sh`](../scripts/run-tests-container.sh).
 
-- **4.5 Docs / completion tests for `-y`, `--yes`, and `--dry-run`.**
-  - **Why:** L340 — drift between command surface and completions/help is a recurring user-confusion source.
-  - **Deliverable:** test that for every mutating command, completions list `-y`/`--yes`/`--dry-run` and help mentions them.
+---
+
+## 5. Docs And Completions
+
+- **5.1 Finish safe-by-default help/doc audit.**
+  - **Why:** user-facing docs and bash/zsh completions already describe most of the contract, but command help can still drift.
+  - **Deliverable:** audit mutating command help examples so preview examples are bare commands and apply examples include `-y`; add tests where practical.
+  - **Anchor:** [`modules/core/manifest-core.sh`](../modules/core/manifest-core.sh), [`docs/USER_GUIDE.md`](USER_GUIDE.md), [`docs/COMMAND_REFERENCE.md`](COMMAND_REFERENCE.md), [`docs/EXAMPLES.md`](EXAMPLES.md).
+
+- **5.2 Add fish-shell completions.**
+  - **Why:** bash and zsh completions ship; fish remains missing.
+  - **Deliverable:** `completions/manifest.fish` plus install instructions in `completions/README.md`.
   - **Anchor:** [`completions/`](../completions/), [`tests/completions.bats`](../tests/completions.bats).
 
-- **4.6 Cloud contract stubs prove missing apply intent is rejected.**
-  - **Why:** L343 — even before Cloud ships, the CLI should have a stub test proving that a contract-violating request fails fast.
-  - **Deliverable:** test that posts a request missing `execution_mode=apply` against a local stub and asserts rejection.
-  - **Anchor:** new `tests/cloud_contract.bats`.
-
-- **4.7 Run targeted + full container suite after each policy phase.**
-  - **Why:** L341–L342 — multi-phase rollout needs gates between phases.
-  - **Deliverable:** running `./scripts/run-tests-container.sh` after each item in §1–§3 lands.
-  - **Anchor:** [`scripts/run-tests-container.sh`](../scripts/run-tests-container.sh).
+- **5.3 Write the public-release migration note.**
+  - **Why:** users upgrading from pre-safe-by-default releases need a concise explanation of preview default, `-y` apply, and `MANIFEST_CLI_AUTO_CONFIRM` semantics.
+  - **Deliverable:** migration copy in release docs or `docs/MIGRATION.md`, with matching language in the user guide before the next major release.
+  - **Anchor:** [`docs/USER_GUIDE.md`](USER_GUIDE.md), [`docs/COMMAND_REFERENCE.md`](COMMAND_REFERENCE.md).
 
 ---
 
-## 5. Docs surface
+## 6. Cloud Handoff - CLI Side
 
-- **5.1 "Safe by default" section in user-facing docs.**
-  - **Why:** L316 — the contract is invisible until users hit it.
-  - **Deliverable:** new short section in [`README.md`](../README.md), [`docs/USER_GUIDE.md`](USER_GUIDE.md), [`docs/COMMAND_REFERENCE.md`](COMMAND_REFERENCE.md), [`docs/EXAMPLES.md`](EXAMPLES.md) — same wording everywhere.
-  - **Anchor:** [`docs/USER_GUIDE.md`](USER_GUIDE.md).
+The local release-notes provider hook and recipe inspection surfaces exist. Remaining work is the Cloud-specific contract, payload policy, and end-to-end verification.
 
-- **5.2 Help-example updates.**
-  - **Why:** L318 — bare-command examples in help text should preview, applied examples should include `-y`. Today some still flip this.
-  - **Deliverable:** audit `--help` output for every mutating command.
-  - **Anchor:** dispatcher in [`modules/core/manifest-core.sh`](../modules/core/manifest-core.sh).
+- **6.1 Decide and document the CLI/Cloud contract source.**
+  - **Deliverable:** decide whether CLI stores copied schemas under `docs/contracts/` or references Cloud as source of truth; document Standard and Verbose payload expectations.
+  - **Anchor:** [`docs/contracts/`](contracts/), [`docs/USER_GUIDE.md`](USER_GUIDE.md).
 
-- **5.3 Shell completions for `-y`, `--yes`, `--dry-run`.**
-  - **Why:** L317 — every mutating command needs these completions.
-  - **Deliverable:** updates to [`completions/manifest.bash`](../completions/manifest.bash) and [`completions/_manifest`](../completions/_manifest); fish-shell support also lands here (#20 follow-up).
-  - **Anchor:** [`completions/`](../completions/).
+- **6.2 Complete the `cloud.*` YAML/env config surface.**
+  - **Deliverable:** add the remaining `cloud.{enabled,endpoint,release_notes.*,security.*}` mappings; keep Cloud disabled by default and secrets referenced by env name, not committed values.
+  - **Anchor:** [`modules/core/manifest-yaml.sh`](../modules/core/manifest-yaml.sh), [`modules/core/manifest-config.sh`](../modules/core/manifest-config.sh), [`examples/manifest.config.yaml.example`](../examples/manifest.config.yaml.example), [`tests/yaml.bats`](../tests/yaml.bats).
 
-- **5.4 Migration note for pre-change users.**
-  - **Why:** L320 — users upgrading from a pre-`-y` build will be surprised by the new preview default.
-  - **Deliverable:** one short paragraph in the next major release notes plus a `docs/MIGRATION.md` (if patterns repeat).
-  - **Anchor:** [`docs/USER_GUIDE.md`](USER_GUIDE.md).
-
-- **5.5 Archive sweep: flatten layout, remove INDEX regeneration.**
-  - **Why:** user clarified 2026-05-16 that `docs/zArchive/` is read-only "memory" — moved files only, nothing created or modified inside. Current sweep `mkdir -p`s `v<major>/` subfolders and (re)writes per-major + top-level `INDEX.md` files on every cleanup, both of which violate the new rule. Existing legacy `v<major>/` folders stay where they are (immutability applies retroactively); only new behavior changes.
-  - **Deliverable:** in [`modules/docs/manifest-cleanup-docs.sh`](../modules/docs/manifest-cleanup-docs.sh): (a) replace `v<major>/` routing with a flat move into `docs/zArchive/`; (b) delete `_manifest_archive_generate_per_major_index`; (c) delete `_manifest_archive_generate_top_level_index` and `_manifest_archive_regenerate_indexes` and their call sites. Preserve `_MANIFEST_ARCHIVABLE_REGEX` (anchored regex still catches the right files). Add test asserting no files are created inside `docs/zArchive/` during a sweep — only moves.
-  - **Anchor:** [`modules/docs/manifest-cleanup-docs.sh`](../modules/docs/manifest-cleanup-docs.sh).
-
----
-
-## 6. Cross-cut to Cloud (CLI side)
-
-Lifted from the archived workspace cloud-implementation tracker (A-track). The Cloud side lives in [`../../fidenceio.manifest.cloud/docs/TRACKER.md`](../../fidenceio.manifest.cloud/docs/TRACKER.md); the workspace-level milestones gate both sides at [`../../TRACKER.md`](../../TRACKER.md).
-
-- **6.1 A0 — Contract awareness.**
-  - **Deliverable:** decide whether CLI stores copied release-notes schemas under `docs/contracts/` or references Cloud as the source of truth; document Standard and Verbose payload expectations; confirm the current release-notes provider request file contains enough metadata for Standard mode.
-  - **Anchor:** [`docs/contracts/`](contracts/) (if path taken).
-
-- **6.2 A1 — YAML and env config for `cloud.*`.**
-  - **Deliverable:** add `cloud.{enabled,endpoint,release_notes.*,security.*}` YAML keys with env mappings (`MANIFEST_CLI_CLOUD_*`); defaults keep Cloud disabled; secrets referenced via env, not committed.
-  - **Anchor:** [`modules/core/manifest-yaml.sh`](../modules/core/manifest-yaml.sh), [`modules/core/manifest-config.sh`](../modules/core/manifest-config.sh), [`examples/manifest.config.yaml.example`](../examples/manifest.config.yaml.example).
-
-- **6.3 A2 — Provider hook integration with Cloud.**
-  - **Deliverable:** Cloud provider command selectable via config; local fallback preserved when provider absent/unavailable/invalid; abort doc generation when `fallback: fail`; Cloud returns candidates only, CLI owns changelog writes.
+- **6.3 Wire Cloud as a release-notes provider option.**
+  - **Deliverable:** Cloud provider command selectable by config; local fallback preserved when optional; required mode aborts doc generation on failure; CLI remains owner of changelog writes.
   - **Anchor:** [`modules/docs/manifest-documentation.sh`](../modules/docs/manifest-documentation.sh), [`tests/release_notes_provider.bats`](../tests/release_notes_provider.bats).
 
-- **6.4 A3 — Payload preview and privacy policy.**
-  - **Deliverable:** preview output for Cloud payload mode, identity, fallback, endpoint, and upload decision; reject `http://` endpoints unless local override is enabled; assert Standard mode excludes source bodies, raw diffs, raw commit bodies, author emails, full remotes, local absolute paths, and secret-looking values.
-  - **Anchor:** new `tests/cloud_payload.bats`; [`docs/USER_GUIDE.md`](USER_GUIDE.md).
+- **6.4 Add payload preview and privacy assertions.**
+  - **Deliverable:** preview output shows Cloud mode, endpoint, fallback, identity, and upload decision; tests assert Standard mode excludes source bodies, raw diffs, raw commit bodies, author emails, full remotes, absolute paths, and secret-looking values.
+  - **Anchor:** new `tests/cloud_payload.bats`, [`docs/USER_GUIDE.md`](USER_GUIDE.md).
 
-- **6.5 A4 — Recipe integration.**
-  - **Deliverable:** recipe schema accepts step `policy`/`privacy`/`fallback` metadata; Cloud handoff step added to ship recipes; `manifest ship repo patch --explain` shows Cloud handoff mode without uploading.
-  - **Anchor:** [`docs/contracts/recipe.schema.json`](contracts/recipe.schema.json), [`recipes/builtin/manifest.builtin.ship.repo.*.yaml`](../recipes/builtin/).
+- **6.5 Add Cloud handoff metadata to recipes.**
+  - **Deliverable:** recipe schema accepts step `policy`/`privacy`/`fallback` metadata; ship recipes include a Cloud handoff step; `manifest ship repo patch --explain` shows Cloud status without uploading.
+  - **Anchor:** [`docs/contracts/recipe.schema.json`](contracts/recipe.schema.json), [`recipes/builtin/manifest.builtin.ship.repo.*.yaml`](../recipes/builtin/), [`tests/recipe.bats`](../tests/recipe.bats).
 
-- **6.6 A5 — CLI documentation for Cloud handoff.**
-  - **Deliverable:** Standard mode, Verbose mode, no-code default, fallback behavior, provider-hook integration, recipe-backed first-class commands, and the Fidence platform assumption for production Cloud documented in `README`, `USER_GUIDE`, `COMMAND_REFERENCE`, `EXAMPLES`, `INDEX`.
-  - **Anchor:** [`docs/USER_GUIDE.md`](USER_GUIDE.md).
+- **6.6 Finish CLI docs for Cloud handoff.**
+  - **Deliverable:** document Standard mode, Verbose mode, no-code default, fallback behavior, provider-hook integration, recipe-backed commands, and the Fidence platform assumption for production Cloud.
+  - **Anchor:** [`README.md`](../README.md), [`docs/USER_GUIDE.md`](USER_GUIDE.md), [`docs/COMMAND_REFERENCE.md`](COMMAND_REFERENCE.md), [`docs/EXAMPLES.md`](EXAMPLES.md), [`docs/INDEX.md`](INDEX.md).
 
-- **6.7 A6 — CLI verification.**
-  - **Deliverable:** `./scripts/run-tests-container.sh tests/yaml.bats tests/release_notes_provider.bats tests/docs_generation.bats tests/recipe.bats tests/cloud_payload.bats` passes; `manifest ship repo patch --explain` works without GitHub or Cloud; full container suite green.
+- **6.7 Verify the Cloud handoff path in containers.**
+  - **Deliverable:** `./scripts/run-tests-container.sh tests/yaml.bats tests/release_notes_provider.bats tests/docs_generation.bats tests/recipe.bats tests/cloud_payload.bats` passes; `manifest ship repo patch --explain` works without GitHub or Cloud; full container suite is green.
   - **Anchor:** [`scripts/run-tests-container.sh`](../scripts/run-tests-container.sh).
 
 ---
 
-## 7. Follow-ups from closed work
+## 7. Structural Follow-ups
 
-Carried forward from individual closed items in the archived [`IMPROVEMENT_TRACKER.md`](zArchive/trackers/IMPROVEMENT_TRACKER.md). Each is genuinely open.
-
-- **7.1 Extract `migrate_user_global_configuration` from [`install-cli.sh`](../install-cli.sh).**
-  - **Why:** #11 hit 919 lines vs. an aspirational 500; extracting this single function is the next structural step. Current size: 1209 lines.
+- **7.1 Extract user global-config migration from `install-cli.sh`.**
+  - **Why:** `install-cli.sh` remains large, and the global-config migration is a clean extraction boundary.
   - **Deliverable:** new `scripts/migrate-user-config.sh`; `install-cli.sh` delegates.
   - **Anchor:** [`install-cli.sh`](../install-cli.sh).
 
-- **7.2 `--json` on `refresh` and `ship` summaries.**
-  - **Why:** #19 follow-up — `status` and `config list` ship `--json`; streaming side-effect operations need orchestrator step-result plumbing.
-  - **Deliverable:** orchestrator emits a structured per-step result object; `--json` flag on `refresh` and `ship` serializes the summary at the end.
-  - **Anchor:** [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh).
+- **7.2 Add `--json` summaries to `refresh` and `ship`.**
+  - **Why:** `status` and `config list` have JSON, but streaming side-effect commands need structured step-result plumbing first.
+  - **Deliverable:** orchestrator emits a structured per-step result object; `--json` on `refresh` and `ship` serializes the final summary.
+  - **Anchor:** [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh), [`modules/core/manifest-refresh.sh`](../modules/core/manifest-refresh.sh), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh).
 
-- **7.3 Relocate `manifest_ship_workflow` into [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh).**
-  - **Why:** #2 follow-up — the rename landed in place with a back-compat shim at [`modules/workflow/manifest-orchestrator.sh:906-907`](../modules/workflow/manifest-orchestrator.sh#L906-L907); relocation was deferred because the orchestrator file holds more than just the entry point.
-  - **Deliverable:** move the function body to `manifest-ship.sh`; keep the shim or remove it after grepping for external callers.
-  - **Anchor:** [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh).
-
-- **7.4 Fish-shell completions.**
-  - **Why:** #20 — `bash` and `zsh` ship; fish is the remaining gap.
-  - **Deliverable:** `completions/manifest.fish`; install instructions in [`completions/README.md`](../completions/README.md).
-  - **Anchor:** [`completions/`](../completions/).
-
-- **7.5 Conditional: extract duplicated wrapper guard.**
-  - **Why:** the only open item from the archived [`BASH_5_RUNTIME_TODO.md`](zArchive/trackers/BASH_5_RUNTIME_TODO.md). The current fix keeps the small wrapper snippets aligned and tested without a new bootstrap dependency; only worth doing if drift recurs.
-  - **Deliverable:** generate or share the guard from one source. **Trigger:** wrapper drift detected in a future ship.
-  - **Anchor:** [`scripts/manifest-cli.sh`](../scripts/manifest-cli.sh), [`scripts/manifest-cli-wrapper.sh`](../scripts/manifest-cli-wrapper.sh), [`formula/manifest.rb`](../formula/manifest.rb).
+- **7.3 Relocate `manifest_ship_workflow` into `modules/core/manifest-ship.sh`.**
+  - **Why:** the public ship entry point lives in `manifest-ship.sh`, but the workflow body still lives in the orchestrator module.
+  - **Deliverable:** move the function body to `manifest-ship.sh`; keep or remove the compatibility shim after checking callers.
+  - **Anchor:** [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh).
 
 ---
 
@@ -278,4 +179,3 @@ Carried forward from individual closed items in the archived [`IMPROVEMENT_TRACK
 
 - Workspace milestones: [`../../TRACKER.md`](../../TRACKER.md)
 - Cloud side: [`../../fidenceio.manifest.cloud/docs/TRACKER.md`](../../fidenceio.manifest.cloud/docs/TRACKER.md)
-- Archived legacy trackers: [`zArchive/trackers/`](zArchive/trackers/)
