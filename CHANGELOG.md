@@ -1,5 +1,10 @@
 # Changelog
 
+## [47.14.1] - 2026-05-16
+
+**Release Type:** Patch — no user-facing changes.
+
+
 ## [47.14.0] - 2026-05-16
 
 **Release Type:** Minor
@@ -77,15 +82,3 @@
 - Update release copy and configuration examples
 - Update shell completions for new command options
 - Add regression coverage for the changed CLI workflow
-
-
-## [47.11.2] - 2026-05-14
-
-**Release Type:** Patch
-
-### Changes
-
-- Add GitHub Release publishing support
-- Update release copy and configuration examples
-- Add regression coverage for the changed CLI workflow
-- Backfill and clarify release history in the root changelog
