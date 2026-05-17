@@ -343,16 +343,18 @@ manifest refresh fleet --dry-run   # Preview changes without applying
 manifest ship fleet minor                       # Preview coordinated minor release
 manifest ship fleet minor -y                    # Apply coordinated minor release
 manifest ship fleet minor --local -y            # Apply local-only across fleet
-manifest ship fleet patch --only api,worker     # Ship only the named services
-manifest ship fleet patch --except docs         # Ship every service except 'docs'
 ```
+
+Fleet membership and per-service release eligibility are read from
+`manifest.fleet.config.yaml` — toggle `services.<name>.release.enabled` to
+include or exclude a service from coordinated releases.
 
 Fleet PR work is explicit: bare `manifest pr fleet ...` previews, and
 `manifest pr fleet ... -y` applies PR creation, queueing, or readiness
 operations.
 
-Fleet release previews always show the fleet name, root, config file, `Scope: fleet`, selected
-service count, active filter, and the included repository table before any apply
+Fleet release previews always show the fleet name, root, config file, `Scope: fleet`,
+selected service count, and the included repository table before any apply
 step. Use `manifest status fleet` for the same member list plus branch, state,
 version, path, and latest commit.
 
