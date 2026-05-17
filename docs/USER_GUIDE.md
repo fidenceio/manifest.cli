@@ -354,8 +354,8 @@ Fleet PR work is explicit: bare `manifest pr fleet ...` previews, and
 operations.
 
 Fleet release previews always show the fleet name, root, config file, `Scope: fleet`,
-selected service count, and the included repository table before any apply
-step. Use `manifest status fleet` for the same member list plus branch, state,
+service count, and the included repository table before any apply step.
+Use `manifest status fleet` for the same member list plus branch, state,
 version, path, and latest commit.
 
 ### Direct Fleet Commands

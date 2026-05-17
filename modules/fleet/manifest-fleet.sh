@@ -1853,8 +1853,8 @@ _fleet_scope_block() {
     printf "  %-10s %s\n" "Root:" "${MANIFEST_CLI_FLEET_ROOT:-$(pwd)}"
     printf "  %-10s %s\n" "Config:" "${MANIFEST_CLI_FLEET_CONFIG_FILE:-manifest.fleet.config.yaml}"
     printf "  %-10s %s\n" "Scope:" "fleet"
-    printf "  %-10s %s\n" "Mutation:" "selected fleet repositories listed below"
-    printf "  %-10s %s services\n" "Selected:" "$count"
+    printf "  %-10s %s\n" "Mutation:" "fleet repositories listed below"
+    printf "  %-10s %s\n" "Services:" "$count"
 }
 
 _fleet_service_release_reason() {
