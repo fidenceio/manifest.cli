@@ -559,7 +559,7 @@ manifest ship fleet patch --noprep              # Skip per-service prep step
 Use `manifest pr fleet ...` explicitly for PR workflows.
 
 Preview and apply both start with a fleet scope block showing the fleet name,
-root path, config file, command scope, and selected service count.
+root path, config file, command scope, and service count.
 The status and ship plan then list `Included repositories` with service name, type, branch,
 release/read effect, decision, and path or skip reason where relevant. This is the authoritative
 answer to "which repos will this fleet command touch?"
