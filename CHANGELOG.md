@@ -1,5 +1,15 @@
 # Changelog
 
+## [47.14.3] - 2026-05-17
+
+**Release Type:** Patch
+
+### Changes
+
+- Drop ship fleet --only/--except; let fleet -y short-circuit per-member confirms
+- Drop "selected" wording from fleet scope block
+
+
 ## [47.14.2] - 2026-05-16
 
 **Release Type:** Patch
@@ -75,8 +85,3 @@
 ### Changes
 
 - Harden uninstall and reinstall execution policy
-
-
-## [47.12.1] - 2026-05-14
-
-**Release Type:** Patch — no user-facing changes.
