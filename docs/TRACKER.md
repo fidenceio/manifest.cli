@@ -67,15 +67,10 @@ The base contract is already live: mutating commands preview by default, `--dry-
   - **Deliverable:** read-only workspace diff that compares discovered repos to fleet config, exposed from a low-friction command such as `manifest doctor`, `manifest update fleet --dry-run`, or a timestamped passive check.
   - **Anchor:** [`modules/fleet/manifest-fleet-detect.sh`](../modules/fleet/manifest-fleet-detect.sh), [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
 
-- **3.4 Add repo path/member selectors and fleet-context confirmation.**
-  - **Why:** repo-scoped apply commands still confirm against the cwd-resolved Git root. Fleet dispatch has enough context to avoid a blanket non-TTY prompt bypass.
-  - **Deliverable:** repo-scoped apply commands accept `--path <dir>` and/or `--member <name>`; fleet dispatch passes a scoped confirmation context that is honored only for that resolved member.
-  - **Anchor:** [`modules/core/manifest-shared-utils.sh`](../modules/core/manifest-shared-utils.sh), [`modules/core/manifest-init.sh`](../modules/core/manifest-init.sh), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh), [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
-
-- **3.5 Add a fleet-service config editor.**
+- **3.4 Add a fleet-service config editor.**
   - **Why:** toggling `services.<name>.release.enabled` or `services.<name>.release.strategy` still requires hand-editing `manifest.fleet.config.yaml`.
   - **Deliverable:** add a safe-by-default command, final name TBD, for scoped fleet-service config edits such as enabling/disabling release and setting release strategy.
-  - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh), [`modules/fleet/manifest-fleet-config.sh`](../modules/fleet/manifest-fleet-config.sh), [`tests/fleet_ship_filter.bats`](../tests/fleet_ship_filter.bats).
+  - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh), [`modules/fleet/manifest-fleet-config.sh`](../modules/fleet/manifest-fleet-config.sh).
 
 ---
 

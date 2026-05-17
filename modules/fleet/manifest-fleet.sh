@@ -1833,58 +1833,6 @@ fleet_prep() {
 # COMMAND: fleet ship
 # =============================================================================
 
-# -----------------------------------------------------------------------------
-# Function: _fleet_filter_services
-# -----------------------------------------------------------------------------
-# Computes a filtered subset of $MANIFEST_CLI_FLEET_SERVICES based on --only and
-# --except selectors. Selectors are comma- or space-separated service names.
-# Exactly one of $1 / $2 may be set (validation is the caller's job).
-#
-# Echoes the filtered service list (newline-free, space-separated).
-# Returns 1 if any named service is not present in the fleet.
-# -----------------------------------------------------------------------------
-_fleet_filter_services() {
-    local only_csv="$1"
-    local except_csv="$2"
-    local result=""
-    local name
-
-    if [ -n "$only_csv" ]; then
-        for name in $(echo "$only_csv" | tr ',' ' '); do
-            if [ -z "$name" ]; then
-                continue
-            fi
-            if [[ " $MANIFEST_CLI_FLEET_SERVICES " != *" $name "* ]]; then
-                log_error "Service '$name' is not in the fleet."
-                return 1
-            fi
-            result="${result:+$result }$name"
-        done
-    elif [ -n "$except_csv" ]; then
-        local exclude=" "
-        for name in $(echo "$except_csv" | tr ',' ' '); do
-            if [ -z "$name" ]; then
-                continue
-            fi
-            if [[ " $MANIFEST_CLI_FLEET_SERVICES " != *" $name "* ]]; then
-                log_error "Service '$name' is not in the fleet."
-                return 1
-            fi
-            exclude="$exclude$name "
-        done
-        local svc
-        for svc in $MANIFEST_CLI_FLEET_SERVICES; do
-            if [[ "$exclude" != *" $svc "* ]]; then
-                result="${result:+$result }$svc"
-            fi
-        done
-    else
-        result="$MANIFEST_CLI_FLEET_SERVICES"
-    fi
-
-    echo "$result"
-}
-
 _fleet_service_count() {
     local count=0
     local service
@@ -1895,13 +1843,8 @@ _fleet_service_count() {
 }
 
 _fleet_scope_block() {
-    local selected_services="${1:-$MANIFEST_CLI_FLEET_SERVICES}"
-    local original_services="${2:-$MANIFEST_CLI_FLEET_SERVICES}"
-    local filter_label="${3:-none}"
-    local selected_count original_count
-
-    selected_count="$(_fleet_service_count "$selected_services")"
-    original_count="$(_fleet_service_count "$original_services")"
+    local count
+    count="$(_fleet_service_count "$MANIFEST_CLI_FLEET_SERVICES")"
 
     echo ""
     echo "Fleet scope"
@@ -1911,12 +1854,7 @@ _fleet_scope_block() {
     printf "  %-10s %s\n" "Config:" "${MANIFEST_CLI_FLEET_CONFIG_FILE:-manifest.fleet.config.yaml}"
     printf "  %-10s %s\n" "Scope:" "fleet"
     printf "  %-10s %s\n" "Mutation:" "selected fleet repositories listed below"
-    if [[ "$selected_count" == "$original_count" ]]; then
-        printf "  %-10s %s services\n" "Selected:" "$selected_count"
-    else
-        printf "  %-10s %s of %s services\n" "Selected:" "$selected_count" "$original_count"
-    fi
-    printf "  %-10s %s\n" "Filter:" "$filter_label"
+    printf "  %-10s %s services\n" "Selected:" "$count"
 }
 
 _fleet_service_release_reason() {
@@ -2047,8 +1985,6 @@ fleet_ship() {
     local increment_type="patch"
     local run_prep=true
     local any_failures=0
-    local only_filter=""
-    local except_filter=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -2068,22 +2004,6 @@ fleet_ship() {
                 log_error "--method belongs under 'manifest pr fleet queue', not 'manifest ship fleet'."
                 return 1
                 ;;
-            --only)
-                if [ -z "${2:-}" ] || [[ "${2:-}" == --* ]]; then
-                    log_error "--only requires a service name (or comma-separated list)"
-                    return 1
-                fi
-                only_filter="${only_filter:+$only_filter,}$2"
-                shift 2
-                ;;
-            --except)
-                if [ -z "${2:-}" ] || [[ "${2:-}" == --* ]]; then
-                    log_error "--except requires a service name (or comma-separated list)"
-                    return 1
-                fi
-                except_filter="${except_filter:+$except_filter,}$2"
-                shift 2
-                ;;
             -h|--help)
                 cat << 'EOF'
 Usage: manifest ship fleet [patch|minor|major|revision] [-y|--yes] [--dry-run] [--local] [options]
@@ -2093,15 +2013,13 @@ Options:
   -y, --yes                 Apply the fleet release plan
   --local                   With -y, apply local release prep only
   --noprep                  Skip per-service prep step during apply
-  --only <name[,name...]>   Ship only the named service(s) (repeatable)
-  --except <name[,name...]> Ship all services except the named one(s) (repeatable)
 
 Flow:
   default: preview release plan
   -y:      direct ship of releaseable services
   PR work: manifest pr fleet ...
 
---only and --except are mutually exclusive.
+Fleet membership and release-eligibility are determined by manifest.fleet.config.yaml.
 EOF
                 return 0
                 ;;
@@ -2112,111 +2030,73 @@ EOF
         esac
     done
 
-    if [ -n "$only_filter" ] && [ -n "$except_filter" ]; then
-        log_error "--only and --except are mutually exclusive."
-        return 1
-    fi
-
     if ! _fleet_require_initialized "ship"; then
         return 1
     fi
 
-    local _saved_services="$MANIFEST_CLI_FLEET_SERVICES"
-    local _filter_label="none"
-    if [ -n "$only_filter" ] || [ -n "$except_filter" ]; then
-        local filtered
-        if ! filtered=$(_fleet_filter_services "$only_filter" "$except_filter"); then
-            return 1
-        fi
-        if [ -z "$filtered" ]; then
-            log_error "Filter selected zero services."
-            return 1
-        fi
-        MANIFEST_CLI_FLEET_SERVICES="$filtered"
-        if [ -n "$only_filter" ]; then
-            _filter_label="--only $only_filter"
-        else
-            _filter_label="--except $except_filter"
-        fi
-        echo "🎯 Filter applied: $filtered"
-    fi
-
     if [[ "$execution_mode" == "preview" ]]; then
-        _fleet_scope_block "$MANIFEST_CLI_FLEET_SERVICES" "$_saved_services" "$_filter_label"
+        _fleet_scope_block
         _fleet_ship_plan "$increment_type" "$local_only"
         local replay_command="manifest ship fleet $increment_type"
         [[ "$local_only" == "true" ]] && replay_command="$replay_command --local"
-        [[ -n "$only_filter" ]] && replay_command="$replay_command --only $only_filter"
-        [[ -n "$except_filter" ]] && replay_command="$replay_command --except $except_filter"
         manifest_execution_footer "$replay_command -y"
-        MANIFEST_CLI_FLEET_SERVICES="$_saved_services"
         return 0
     fi
 
     echo "Starting fleet ship workflow ($increment_type)"
-    _fleet_scope_block "$MANIFEST_CLI_FLEET_SERVICES" "$_saved_services" "$_filter_label"
+    _fleet_scope_block
     _fleet_ship_plan "$increment_type" "$local_only"
     echo ""
 
-    # One-shot block so we always restore $MANIFEST_CLI_FLEET_SERVICES on exit.
-    local _rc=0
-    while :; do
-        if [ "$run_prep" != "true" ]; then
-            echo "⏭️  Skipping fleet prep (--noprep)."
-            for service in $MANIFEST_CLI_FLEET_SERVICES; do
-                local path
-                path=$(get_fleet_service_property "$service" "path")
-                if [ ! -d "$path/.git" ]; then
-                    continue
-                fi
-                if [ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]; then
-                    echo "  - $service: ❌ has uncommitted changes; cannot use --noprep"
-                    any_failures=1
-                fi
-            done
-            if [ "$any_failures" -eq 1 ]; then
-                log_error "Cannot continue fleet ship --noprep with dirty repositories."
-                _rc=1; break
-            fi
-        fi
-
-        echo "Step 1/1: Shipping releaseable services directly..."
-        local service path reason ship_args
+    if [ "$run_prep" != "true" ]; then
+        echo "⏭️  Skipping fleet prep (--noprep)."
         for service in $MANIFEST_CLI_FLEET_SERVICES; do
+            local path
             path=$(get_fleet_service_property "$service" "path")
-            if ! reason=$(_fleet_service_release_reason "$service" "$path"); then
-                echo "  - $service: skipped ($reason)"
+            if [ ! -d "$path/.git" ]; then
                 continue
             fi
-            echo "  - $service: shipping $increment_type"
-            (
-                cd "$path" || exit 1
-                PROJECT_ROOT="$PWD"
-                export PROJECT_ROOT
-                if [[ "$local_only" == "true" ]]; then
-                    manifest_ship_repo "$increment_type" "--local" "-y"
-                else
-                    manifest_ship_repo "$increment_type" "-y"
-                fi
-            ) || {
-                echo "  - $service: ship failed"
+            if [ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]; then
+                echo "  - $service: ❌ has uncommitted changes; cannot use --noprep"
                 any_failures=1
-                _rc=1
-                break
-            }
+            fi
         done
-
-        if [[ "$any_failures" -eq 1 ]]; then
-            log_error "Fleet ship failed. Review completed service commits/tags before retrying."
-            break
+        if [ "$any_failures" -eq 1 ]; then
+            log_error "Cannot continue fleet ship --noprep with dirty repositories."
+            return 1
         fi
+    fi
 
-        echo "✅ Fleet ship workflow complete."
-        break
+    echo "Step 1/1: Shipping releaseable services directly..."
+    local service path reason
+    for service in $MANIFEST_CLI_FLEET_SERVICES; do
+        path=$(get_fleet_service_property "$service" "path")
+        if ! reason=$(_fleet_service_release_reason "$service" "$path"); then
+            echo "  - $service: skipped ($reason)"
+            continue
+        fi
+        echo "  - $service: shipping $increment_type"
+        # Fleet's -y is the apply consent; suppress the per-member confirmation
+        # prompt that manifest_ship_repo would otherwise trigger.
+        (
+            cd "$path" || exit 1
+            PROJECT_ROOT="$PWD"
+            export PROJECT_ROOT
+            MANIFEST_CLI_AUTO_CONFIRM=1
+            export MANIFEST_CLI_AUTO_CONFIRM
+            if [[ "$local_only" == "true" ]]; then
+                manifest_ship_repo "$increment_type" "--local" "-y"
+            else
+                manifest_ship_repo "$increment_type" "-y"
+            fi
+        ) || {
+            echo "  - $service: ship failed"
+            log_error "Fleet ship failed. Review completed service commits/tags before retrying."
+            return 1
+        }
     done
 
-    MANIFEST_CLI_FLEET_SERVICES="$_saved_services"
-    return $_rc
+    echo "✅ Fleet ship workflow complete."
 }
 
 # =============================================================================

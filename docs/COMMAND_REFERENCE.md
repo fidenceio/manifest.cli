@@ -553,18 +553,20 @@ manifest ship fleet minor                       # Preview coordinated minor rele
 manifest ship fleet minor -y                    # Apply coordinated minor release
 manifest ship fleet minor --local -y            # Apply local-only across fleet
 manifest ship fleet patch --noprep              # Skip per-service prep step
-manifest ship fleet patch --only api,worker     # Ship only the named services
-manifest ship fleet patch --except docs         # Ship every service except 'docs'
 ```
 
 `ship fleet` is release-only. It does not create, ready, queue, or merge PRs.
 Use `manifest pr fleet ...` explicitly for PR workflows.
 
 Preview and apply both start with a fleet scope block showing the fleet name,
-root path, config file, command scope, selected service count, and active filter.
+root path, config file, command scope, and selected service count.
 The status and ship plan then list `Included repositories` with service name, type, branch,
 release/read effect, decision, and path or skip reason where relevant. This is the authoritative
 answer to "which repos will this fleet command touch?"
+
+Fleet membership and per-service release eligibility are read from
+`manifest.fleet.config.yaml`. Toggle `services.<name>.release.enabled` to
+include or exclude a service from coordinated releases.
 
 **Flags:**
 
@@ -572,10 +574,6 @@ answer to "which repos will this fleet command touch?"
 | ---- | ----------- |
 | `--local` | Local-only mode across fleet |
 | `--noprep` | Skip per-service prep step |
-| `--only <name[,name...]>` | Ship only the named service(s); repeatable |
-| `--except <name[,name...]>` | Ship every service except those named; repeatable |
-
-`--only` and `--except` are mutually exclusive. The filter applies to the release plan and apply path.
 
 Release eligibility is conservative: services with `VERSION` are releaseable by
 default, Homebrew tap/formula repositories and the fleet root are skipped, and

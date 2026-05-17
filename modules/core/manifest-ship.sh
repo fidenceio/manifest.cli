@@ -361,16 +361,13 @@ manifest_ship_fleet() {
   -y, --yes                Apply the fleet release plan
   --local                  With -y, local only — no push, no tags
   --explain                Show the built-in recipe definition without running it
-  --noprep                 Skip per-service prep step (requires clean trees)
-  --only <name[,name...]>  Ship only selected services
-  --except <name[,name...]> Ship all services except selected services" \
+  --noprep                 Skip per-service prep step (requires clean trees)" \
                     "Flow" "  preview:  load fleet -> render per-service release plan
   apply:    load fleet -> ship release-enabled services directly
   PR work:  use manifest pr fleet ... explicitly" \
                     "Examples" "  manifest ship fleet patch
   manifest ship fleet patch -y
-  manifest ship fleet minor --local -y
-  manifest ship fleet patch --only fidenceiomanifestcli"
+  manifest ship fleet minor --local -y"
                 return 0
                 ;;
             *)
