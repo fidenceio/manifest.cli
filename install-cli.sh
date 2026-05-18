@@ -24,29 +24,28 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
-# Installation paths
-MANIFEST_CLI_LOCAL_BIN="$HOME/.local/bin"
+# Version requirements + canonical install paths
+# shellcheck disable=SC1091
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/modules/core/manifest-requirements.sh"
+# shellcheck disable=SC1091
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/modules/system/manifest-install-paths.sh"
+
+# Installation paths (derived from manifest-install-paths.sh)
+MANIFEST_CLI_LOCAL_BIN="$(manifest_install_paths_user_bin_dir)"
 MANIFEST_CLI_NAME="manifest"
-MANIFEST_CLI_IDE_SUPPORT_DIR="$HOME/.manifest-cli/ide"
+MANIFEST_CLI_IDE_SUPPORT_DIR="$(manifest_install_paths_global_state_dir)/ide"
 
 # Function to determine the best installation directory
 get_install_location() {
-    # Check if user has a preference
     if [ -n "$MANIFEST_CLI_INSTALL_LOCATION" ]; then
         echo "$MANIFEST_CLI_INSTALL_LOCATION"
         return 0
     fi
-
-    # Default to ~/.manifest-cli (user's home directory, no sudo required)
-    echo "$HOME/.manifest-cli"
+    manifest_install_paths_global_state_dir
 }
 
 # Set the actual installation directory
 MANIFEST_CLI_INSTALL_LOCATION="$(get_install_location)"
-
-# Version requirements
-# shellcheck disable=SC1091
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/modules/core/manifest-requirements.sh"
 
 # =============================================================================
 # Utility Functions
@@ -189,7 +188,8 @@ sed_inplace() {
 }
 
 migrate_user_global_configuration() {
-    local config_file="$HOME/.manifest-cli/manifest.config.global.yaml"
+    local config_file
+    config_file="$(manifest_install_paths_user_global_config)"
     [ -f "$config_file" ] || return 0
 
     # Source the YAML module for get_yaml_value / set_yaml_value
@@ -400,18 +400,18 @@ source_manifest_uninstall() {
 cleanup_environment_variables() {
     print_subheader "🧹 Cleaning Up Manifest CLI Shell-Profile Entries"
 
-    local shell_files=(
-        "$HOME/.zshrc" "$HOME/.zprofile" "$HOME/.zsh_profile"
-        "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"
-    )
     local removed_count=0
+    local profile_regex
+    profile_regex="$(manifest_install_paths_profile_line_regex)"
+
     local profile temp backup
-    for profile in "${shell_files[@]}"; do
+    while IFS= read -r profile; do
+        [ -n "$profile" ] || continue
         [ -f "$profile" ] || continue
         backup="${profile}.manifest-backup-$(date +%Y%m%d-%H%M%S)"
         cp "$profile" "$backup"
         temp=$(mktemp)
-        if grep -v -E '^[[:space:]]*(export[[:space:]]+MANIFEST_[A-Z_]+=|export[[:space:]]+PATH=.*\.manifest-cli|export[[:space:]]+PATH=.*\.local/bin.*PATH|(\.|source)[[:space:]]+.*manifest)' "$profile" > "$temp"; then
+        if grep -v -E "$profile_regex" "$profile" > "$temp"; then
             if [ -s "$temp" ] && ! cmp -s "$profile" "$temp"; then
                 mv "$temp" "$profile"
                 print_success "✅ Cleaned: $profile (backup: $backup)"
@@ -422,7 +422,7 @@ cleanup_environment_variables() {
         else
             rm -f "$temp" "$backup"
         fi
-    done
+    done < <(manifest_install_paths_shell_profiles)
     if [ $removed_count -eq 0 ]; then
         print_status "  No prior Manifest entries found in shell profiles"
     fi
@@ -432,8 +432,8 @@ cleanup_environment_variables() {
 cleanup_legacy_locations() {
     print_subheader "🧹 Cleaning Up Legacy Installation Locations"
 
-    # Only check for the previous default location
-    local legacy_location="/usr/local/share/manifest-cli"
+    local legacy_location
+    legacy_location="$(manifest_install_paths_legacy_install_dir)"
 
     if [ -d "$legacy_location" ]; then
         print_status "Found legacy installation at: $legacy_location"
@@ -716,8 +716,9 @@ EOF
 create_configuration() {
     print_subheader "⚙️  Creating Configuration Files"
 
-    local config_dir="$HOME/.manifest-cli"
-    local config_file="$config_dir/manifest.config.global.yaml"
+    local config_dir config_file
+    config_dir="$(manifest_install_paths_global_state_dir)"
+    config_file="$(manifest_install_paths_user_global_config)"
 
     # Ensure the config directory exists
     mkdir -p "$config_dir"
@@ -784,7 +785,8 @@ EOF
 setup_environment_variables() {
     print_subheader "🌍 Setting Up Environment Variables"
 
-    local config_file="$HOME/.manifest-cli/manifest.config.global.yaml"
+    local config_file
+    config_file="$(manifest_install_paths_user_global_config)"
 
     # Source the YAML module for load_yaml_to_env
     local yaml_module="$MANIFEST_CLI_INSTALL_LOCATION/modules/core/manifest-yaml.sh"
@@ -1006,22 +1008,15 @@ install_git_hooks() {
 
 # Cleanup step used before Homebrew install
 cleanup_homebrew_install() {
+    local user_bin state_dir legacy_dir
+    user_bin="$(manifest_install_paths_user_binary)"
+    state_dir="$(manifest_install_paths_global_state_dir)"
+    legacy_dir="$(manifest_install_paths_legacy_install_dir)"
+
     local found_legacy=false
-
-    # Check for manual install binary
-    if [ -f "$HOME/.local/bin/manifest" ]; then
-        found_legacy=true
-    fi
-
-    # Check for manual install directory
-    if [ -d "$HOME/.manifest-cli" ]; then
-        found_legacy=true
-    fi
-
-    # Check for legacy system location
-    if [ -d "/usr/local/share/manifest-cli" ]; then
-        found_legacy=true
-    fi
+    [ -f "$user_bin" ] && found_legacy=true
+    [ -d "$state_dir" ] && found_legacy=true
+    [ -d "$legacy_dir" ] && found_legacy=true
 
     if [ "$found_legacy" = "false" ]; then
         return 0
@@ -1029,37 +1024,22 @@ cleanup_homebrew_install() {
 
     print_subheader "🧹 Cleaning up previous manual installation"
 
-    # Remove manual install binary
-    if [ -f "$HOME/.local/bin/manifest" ]; then
-        rm -f "$HOME/.local/bin/manifest"
-        print_success "✅ Removed $HOME/.local/bin/manifest"
+    if [ -f "$user_bin" ]; then
+        rm -f "$user_bin"
+        print_success "✅ Removed $user_bin"
+    fi
+    if [ -d "$state_dir" ]; then
+        rm -rf "$state_dir"
+        print_success "✅ Removed $state_dir"
+    fi
+    if [ -d "$legacy_dir" ]; then
+        sudo rm -rf "$legacy_dir" 2>/dev/null && \
+            print_success "✅ Removed $legacy_dir" || \
+            print_warning "⚠️  Could not remove $legacy_dir (may need manual cleanup)"
     fi
 
-    # Remove manual install directory
-    if [ -d "$HOME/.manifest-cli" ]; then
-        rm -rf "$HOME/.manifest-cli"
-        print_success "✅ Removed $HOME/.manifest-cli"
-    fi
-
-    # Remove legacy system location
-    if [ -d "/usr/local/share/manifest-cli" ]; then
-        sudo rm -rf "/usr/local/share/manifest-cli" 2>/dev/null && \
-            print_success "✅ Removed /usr/local/share/manifest-cli" || \
-            print_warning "⚠️  Could not remove /usr/local/share/manifest-cli (may need manual cleanup)"
-    fi
-
-    # Remove PATH entries for ~/.local/bin added by previous installer
-    local shell_profiles=("$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.bashrc")
-    for profile in "${shell_profiles[@]}"; do
-        if [ -f "$profile" ] && grep -q '\.local/bin' "$profile" 2>/dev/null; then
-            # Remove the manifest-specific PATH export line
-            sed_inplace '/export PATH=.*\.local\/bin.*PATH/d' "$profile" 2>/dev/null && \
-                print_success "✅ Cleaned PATH entry from $(basename "$profile")"
-        fi
-    done
-
-    # Strip residual MANIFEST_* exports from shell profiles (inline; the old
-    # env-management module has been removed).
+    # Strip any residual MANIFEST_* exports and installer-style PATH adds from
+    # shell profiles via the centralized profile-line regex.
     cleanup_environment_variables
 
     echo ""
@@ -1069,24 +1049,24 @@ cleanup_homebrew_install() {
 # Homebrew Installation
 # =============================================================================
 
-MANIFEST_CLI_TAP="fidenceio/tap"
-
 install_via_homebrew() {
     print_subheader "🍺 Installing via Homebrew"
 
-    # Tap the repository
-    if ! brew tap "$MANIFEST_CLI_TAP" 2>/dev/null; then
-        print_error "❌ Failed to tap $MANIFEST_CLI_TAP"
+    local brew_tap brew_formula
+    brew_tap="$(manifest_install_paths_homebrew_tap)"
+    brew_formula="$(manifest_install_paths_homebrew_formula)"
+
+    if ! brew tap "$brew_tap" 2>/dev/null; then
+        print_error "❌ Failed to tap $brew_tap"
         return 1
     fi
-    print_success "✅ Tapped $MANIFEST_CLI_TAP"
+    print_success "✅ Tapped $brew_tap"
 
-    # Install or upgrade
-    if brew list "$MANIFEST_CLI_TAP/manifest" &>/dev/null; then
+    if brew list "$brew_formula" &>/dev/null; then
         print_status "Manifest CLI already installed via Homebrew, upgrading..."
-        brew upgrade "$MANIFEST_CLI_TAP/manifest" 2>/dev/null || true
+        brew upgrade "$brew_formula" 2>/dev/null || true
     else
-        if ! brew install "$MANIFEST_CLI_TAP/manifest"; then
+        if ! brew install "$brew_formula"; then
             print_error "❌ brew install failed"
             return 1
         fi

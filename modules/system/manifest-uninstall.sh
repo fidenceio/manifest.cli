@@ -5,37 +5,27 @@
 
 # Uninstall module - uses PROJECT_ROOT from core module
 
+# Source the install-paths module so this module never hardcodes filesystem
+# locations. Required dependency — the module must be present alongside this
+# file in any complete checkout.
+# shellcheck source=manifest-install-paths.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/manifest-install-paths.sh"
+
 # Check if manifest was installed via Homebrew
 is_homebrew_installed() {
-    command -v brew &>/dev/null && (brew list fidenceio/tap/manifest &>/dev/null || brew list manifest &>/dev/null)
+    command -v brew &>/dev/null && \
+        (brew list "$(manifest_install_paths_homebrew_formula)" &>/dev/null || brew list manifest &>/dev/null)
 }
 
 # Function to find all possible installation locations
 find_installation_locations() {
-    local locations=()
-    
-    # Check installation locations (primary: ~/.manifest-cli, plus legacy for cleanup)
-    local common_locations=(
-        "$HOME/.manifest-cli"
-        "/usr/local/share/manifest-cli"
-    )
-    
-    # Add user-specified locations if set
-    if [ -n "$MANIFEST_CLI_INSTALL_LOCATION" ]; then
-        common_locations+=("$MANIFEST_CLI_INSTALL_LOCATION")
-    fi
-    if [ -n "$MANIFEST_CLI_INSTALL_DIR" ]; then
-        common_locations+=("$MANIFEST_CLI_INSTALL_DIR")
-    fi
-    
-    # Check which locations actually exist
-    for location in "${common_locations[@]}"; do
+    local locations=() location
+    while IFS= read -r location; do
+        [ -n "$location" ] || continue
         if [ -d "$location" ]; then
             locations+=("$location")
         fi
-    done
-    
-    # Return found locations
+    done < <(manifest_install_paths_install_dirs)
     printf '%s\n' "${locations[@]}"
 }
 
@@ -52,13 +42,19 @@ _manifest_uninstall_binary_is_owned() {
     local binary_path="$1"
     [ -f "$binary_path" ] || return 1
 
-    local user_bin="${HOME}/.local/bin/manifest"
-    local configured_bin="${MANIFEST_CLI_CORE_BINARY_LOCATION:-}/manifest"
-    case "$binary_path" in
-        "$user_bin"|"$configured_bin")
+    # Fast-path: if the candidate matches one of the canonical install paths
+    # (or the configured binary location), trust it without marker grep.
+    local candidate
+    while IFS= read -r candidate; do
+        [ -n "$candidate" ] || continue
+        if [ "$binary_path" = "$candidate" ]; then
             return 0
-            ;;
-    esac
+        fi
+    done < <(manifest_install_paths_binary_candidates)
+    local configured_bin="${MANIFEST_CLI_CORE_BINARY_LOCATION:-}/manifest"
+    if [ -n "${MANIFEST_CLI_CORE_BINARY_LOCATION:-}" ] && [ "$binary_path" = "$configured_bin" ]; then
+        return 0
+    fi
 
     local resolved_binary
     resolved_binary="$(_manifest_uninstall_resolve_path "$binary_path")"
@@ -80,21 +76,13 @@ _manifest_uninstall_binary_is_owned() {
 }
 
 find_cli_binaries() {
-    local binaries=()
-    
-    # Check common binary locations
-    local common_binaries=(
-        "$HOME/.local/bin/manifest"
-        "/usr/local/bin/manifest"
-        "/opt/manifest-cli/bin/manifest"
-    )
-    
-    # Check which binaries actually exist
-    for binary in "${common_binaries[@]}"; do
+    local binaries=() binary
+    while IFS= read -r binary; do
+        [ -n "$binary" ] || continue
         if _manifest_uninstall_binary_is_owned "$binary"; then
             binaries+=("$binary")
         fi
-    done
+    done < <(manifest_install_paths_binary_candidates)
 
     # Include resolved PATH binary when available (e.g., Homebrew /opt/homebrew/bin/manifest)
     local resolved_manifest=""
@@ -126,30 +114,13 @@ _manifest_uninstall_print_artifact_plan() {
         homebrew_installed=true
     fi
 
-    local global_yaml="$HOME/.manifest-cli/manifest.config.global.yaml"
-    local config_files=(
-        "$HOME/.manifestrc"
-        "$HOME/.manifest-cli.conf"
-        "$HOME/.config/manifest-cli"
-        "$global_yaml"
-    )
-    local data_dirs=(
-        "$HOME/.manifest-agent"
-        "${TMPDIR:-/tmp}/manifest-cli"
-    )
-    if [[ "/tmp/manifest-cli" != "${TMPDIR:-/tmp}/manifest-cli" ]]; then
-        data_dirs+=("/tmp/manifest-cli")
-    fi
-
-    local shell_files=(
-        "$HOME/.zshrc" "$HOME/.zprofile" "$HOME/.zsh_profile"
-        "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"
-    )
+    local profile_regex
+    profile_regex="$(manifest_install_paths_profile_line_regex)"
 
     local found=0
     if [ "$homebrew_installed" = "true" ]; then
-        echo "${indent}Would uninstall Homebrew package: fidenceio/tap/manifest"
-        echo "${indent}Would untap Homebrew tap: fidenceio/tap"
+        echo "${indent}Would uninstall Homebrew package: $(manifest_install_paths_homebrew_formula)"
+        echo "${indent}Would untap Homebrew tap: $(manifest_install_paths_homebrew_tap)"
         found=1
     fi
 
@@ -162,24 +133,27 @@ _manifest_uninstall_print_artifact_plan() {
         echo "${indent}Would remove CLI binary: $binary"
         found=1
     done
-    for config_file in "${config_files[@]}"; do
+    while IFS= read -r config_file; do
+        [ -n "$config_file" ] || continue
         if [ -f "$config_file" ] || [ -d "$config_file" ]; then
             echo "${indent}Would remove config artifact: $config_file"
             found=1
         fi
-    done
-    for data_dir in "${data_dirs[@]}"; do
+    done < <(manifest_install_paths_config_files)
+    while IFS= read -r data_dir; do
+        [ -n "$data_dir" ] || continue
         if [ -d "$data_dir" ]; then
             echo "${indent}Would remove data directory: $data_dir"
             found=1
         fi
-    done
-    for profile_file in "${shell_files[@]}"; do
-        if [ -f "$profile_file" ] && grep -q -E '^[[:space:]]*(export[[:space:]]+MANIFEST_[A-Z_]+=|export[[:space:]]+PATH=.*\.manifest-cli|export[[:space:]]+PATH=.*\.local/bin.*PATH|(\.|source)[[:space:]]+.*manifest)' "$profile_file"; then
+    done < <(manifest_install_paths_data_dirs)
+    while IFS= read -r profile_file; do
+        [ -n "$profile_file" ] || continue
+        if [ -f "$profile_file" ] && grep -q -E "$profile_regex" "$profile_file"; then
             echo "${indent}Would remove Manifest entries from shell profile: $profile_file"
             found=1
         fi
-    done
+    done < <(manifest_install_paths_shell_profiles)
 
     if [ "$found" -eq 0 ]; then
         echo "${indent}No Manifest CLI installation artifacts detected."
@@ -217,8 +191,8 @@ preview_reinstall_manifest() {
     echo ""
     if command -v brew >/dev/null 2>&1; then
         echo "Would reinstall through Homebrew:"
-        echo "  brew tap fidenceio/tap"
-        echo "  brew reinstall fidenceio/tap/manifest || brew reinstall manifest"
+        echo "  brew tap $(manifest_install_paths_homebrew_tap)"
+        echo "  brew reinstall $(manifest_install_paths_homebrew_formula) || brew reinstall manifest"
     else
         echo "Would reinstall through the manual installer if the Manifest Cloud installer module is available."
     fi
@@ -272,26 +246,8 @@ remove_cli_binary() {
 # Function to clean up configuration files and data directories
 cleanup_config_files() {
     local skip_confirmations="${1:-false}"
-    local global_yaml="$HOME/.manifest-cli/manifest.config.global.yaml"
-    local config_files=(
-        "$HOME/.manifestrc"
-        "$HOME/.manifest-cli.conf"
-        "$HOME/.config/manifest-cli"
-        "$global_yaml"
-    )
-
-    # Data directories created at runtime by cloud/agent and time modules
-    local data_dirs=(
-        "$HOME/.manifest-agent"
-    )
-
-    # Time cache lives under $TMPDIR (or /tmp) — clean both possible locations
-    local tmpdir_cache="${TMPDIR:-/tmp}/manifest-cli"
-    local fallback_cache="/tmp/manifest-cli"
-    data_dirs+=("$tmpdir_cache")
-    if [[ "$fallback_cache" != "$tmpdir_cache" ]]; then
-        data_dirs+=("$fallback_cache")
-    fi
+    local global_yaml
+    global_yaml="$(manifest_install_paths_user_global_config)"
 
     # Gate deletion of the global YAML behind explicit double-confirm so the
     # uninstall workflow can't silently destroy user-customized settings.
@@ -305,8 +261,9 @@ cleanup_config_files() {
         fi
     fi
 
-    local cleaned=0
-    for config_file in "${config_files[@]}"; do
+    local cleaned=0 config_file data_dir
+    while IFS= read -r config_file; do
+        [ -n "$config_file" ] || continue
         if [ "$config_file" = "$global_yaml" ] && [ "$skip_global_yaml" -eq 1 ]; then
             continue
         fi
@@ -319,9 +276,10 @@ cleanup_config_files() {
                 echo "❌ Failed to remove config file: $config_file"
             fi
         fi
-    done
+    done < <(manifest_install_paths_config_files)
 
-    for data_dir in "${data_dirs[@]}"; do
+    while IFS= read -r data_dir; do
+        [ -n "$data_dir" ] || continue
         if [ -d "$data_dir" ]; then
             echo "Removing data directory: $data_dir"
             if rm -rf "$data_dir"; then
@@ -331,7 +289,7 @@ cleanup_config_files() {
                 echo "❌ Failed to remove data directory: $data_dir"
             fi
         fi
-    done
+    done < <(manifest_install_paths_data_dirs)
 
     if [ $cleaned -eq 0 ]; then
         echo "No configuration files or data directories found to clean up"
@@ -345,23 +303,18 @@ cleanup_config_files() {
 cleanup_environment_variables() {
     echo "🧹 Cleaning up Manifest CLI shell-profile entries..."
 
-    local shell_files=(
-        "$HOME/.zshrc" "$HOME/.zprofile" "$HOME/.zsh_profile"
-        "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"
-    )
     local removed_count=0
+    local profile_regex
+    profile_regex="$(manifest_install_paths_profile_line_regex)"
 
     local profile_file backup_file temp_file
-    for profile_file in "${shell_files[@]}"; do
+    while IFS= read -r profile_file; do
+        [ -n "$profile_file" ] || continue
         [ -f "$profile_file" ] || continue
         backup_file="${profile_file}.manifest-backup-$(date +%Y%m%d-%H%M%S)"
         cp "$profile_file" "$backup_file"
         temp_file=$(mktemp)
-        # Remove any line that:
-        #  - exports a MANIFEST_* variable
-        #  - prepends .manifest-cli or .local/bin to PATH (installer-style)
-        #  - sources a manifest-related rc file
-        grep -v -E '^[[:space:]]*(export[[:space:]]+MANIFEST_[A-Z_]+=|export[[:space:]]+PATH=.*\.manifest-cli|export[[:space:]]+PATH=.*\.local/bin.*PATH|(\.|source)[[:space:]]+.*manifest)' "$profile_file" > "$temp_file" || true
+        grep -v -E "$profile_regex" "$profile_file" > "$temp_file" || true
         if ! cmp -s "$profile_file" "$temp_file"; then
             mv "$temp_file" "$profile_file"
             echo "  ✅ Cleaned: $profile_file (backup: $backup_file)"
@@ -369,7 +322,7 @@ cleanup_environment_variables() {
         else
             rm -f "$temp_file" "$backup_file"
         fi
-    done
+    done < <(manifest_install_paths_shell_profiles)
 
     if [ $removed_count -eq 0 ]; then
         echo "  No Manifest CLI entries found in shell profiles"
@@ -410,10 +363,12 @@ uninstall_manifest() {
     # Show what will be removed
     echo "Found the following Manifest CLI artifacts:"
     if [ "$homebrew_installed" = "true" ]; then
-        echo "  🍺 Homebrew package: fidenceio/tap/manifest"
+        echo "  🍺 Homebrew package: $(manifest_install_paths_homebrew_formula)"
     fi
+    local state_dir
+    state_dir="$(manifest_install_paths_global_state_dir)"
     for location in "${install_locations[@]}"; do
-        if [[ "$location" == "$HOME/.manifest-cli" ]]; then
+        if [[ "$location" == "$state_dir" ]]; then
             echo "  📁 $location (state/data directory: logs, config markers)"
         else
             echo "  📁 $location"
@@ -438,14 +393,17 @@ uninstall_manifest() {
 
     # Uninstall via Homebrew if that's how it was installed
     if [ "$homebrew_installed" = "true" ]; then
+        local brew_formula brew_tap
+        brew_formula="$(manifest_install_paths_homebrew_formula)"
+        brew_tap="$(manifest_install_paths_homebrew_tap)"
         echo "🍺 Homebrew installation detected — uninstalling via Homebrew..."
-        if brew uninstall fidenceio/tap/manifest 2>/dev/null || brew uninstall manifest 2>/dev/null; then
+        if brew uninstall "$brew_formula" 2>/dev/null || brew uninstall manifest 2>/dev/null; then
             echo "✅ Homebrew package removed"
         else
             echo "⚠️  brew uninstall failed"
             ((errors+=1))
         fi
-        if brew untap fidenceio/tap 2>/dev/null; then
+        if brew untap "$brew_tap" 2>/dev/null; then
             echo "✅ Homebrew tap removed"
         else
             echo "⚠️  brew untap failed (may already be untapped)"

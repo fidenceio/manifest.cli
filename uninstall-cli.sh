@@ -68,30 +68,65 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-INSTALL_DIRS=(
-    "$HOME/.manifest-cli"
-    "/usr/local/share/manifest-cli"
-)
-BINARY_CANDIDATES=(
-    "$HOME/.local/bin/manifest"
-    "/usr/local/bin/manifest"
-    "/opt/manifest-cli/bin/manifest"
-)
-CONFIG_PATHS=(
-    "$HOME/.manifestrc"
-    "$HOME/.manifest-cli.conf"
-    "$HOME/.config/manifest-cli"
-)
-DATA_DIRS=(
-    "$HOME/.manifest-agent"
-    "${TMPDIR:-/tmp}/manifest-cli"
-)
-[ "/tmp/manifest-cli" != "${TMPDIR:-/tmp}/manifest-cli" ] && DATA_DIRS+=("/tmp/manifest-cli")
-SHELL_PROFILES=(
-    "$HOME/.zshrc" "$HOME/.zprofile" "$HOME/.zsh_profile"
-    "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"
-)
-PROFILE_LINE_REGEX='^[[:space:]]*(export[[:space:]]+MANIFEST_[A-Z_]+=|export[[:space:]]+PATH=.*\.manifest-cli|export[[:space:]]+PATH=.*\.local/bin.*PATH|(\.|source)[[:space:]]+.*manifest)'
+# Source the canonical install-paths module. uninstall-cli.sh must stay usable
+# when the modules tree is missing (broken/partial checkout), so we fall back
+# to inline constants when the source fails. KEEP IN SYNC with
+# modules/system/manifest-install-paths.sh.
+_UNINSTALL_CLI_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+_UNINSTALL_CLI_PATHS_MOD="$_UNINSTALL_CLI_SCRIPT_DIR/modules/system/manifest-install-paths.sh"
+if [ -f "$_UNINSTALL_CLI_PATHS_MOD" ]; then
+    # shellcheck source=modules/system/manifest-install-paths.sh
+    source "$_UNINSTALL_CLI_PATHS_MOD"
+    INSTALL_DIRS=()
+    BINARY_CANDIDATES=()
+    CONFIG_PATHS=()
+    DATA_DIRS=()
+    SHELL_PROFILES=()
+    while IFS= read -r _p; do [ -n "$_p" ] && INSTALL_DIRS+=("$_p"); done < <(manifest_install_paths_install_dirs)
+    while IFS= read -r _p; do [ -n "$_p" ] && BINARY_CANDIDATES+=("$_p"); done < <(manifest_install_paths_binary_candidates)
+    while IFS= read -r _p; do
+        [ -n "$_p" ] || continue
+        # uninstall-cli.sh tracks the user global YAML separately under its
+        # config-file removal block; skip it from the generic CONFIG_PATHS list
+        # so the historical output ordering stays stable.
+        [ "$_p" = "$(manifest_install_paths_user_global_config)" ] && continue
+        CONFIG_PATHS+=("$_p")
+    done < <(manifest_install_paths_config_files)
+    while IFS= read -r _p; do [ -n "$_p" ] && DATA_DIRS+=("$_p"); done < <(manifest_install_paths_data_dirs)
+    while IFS= read -r _p; do [ -n "$_p" ] && SHELL_PROFILES+=("$_p"); done < <(manifest_install_paths_shell_profiles)
+    PROFILE_LINE_REGEX="$(manifest_install_paths_profile_line_regex)"
+    BREW_FORMULA="$(manifest_install_paths_homebrew_formula)"
+    BREW_TAP="$(manifest_install_paths_homebrew_tap)"
+    unset _p
+else
+    # Fallback for broken/partial checkout.
+    INSTALL_DIRS=(
+        "$HOME/.manifest-cli"
+        "/usr/local/share/manifest-cli"
+    )
+    BINARY_CANDIDATES=(
+        "$HOME/.local/bin/manifest"
+        "/usr/local/bin/manifest"
+        "/opt/manifest-cli/bin/manifest"
+    )
+    CONFIG_PATHS=(
+        "$HOME/.manifestrc"
+        "$HOME/.manifest-cli.conf"
+        "$HOME/.config/manifest-cli"
+    )
+    DATA_DIRS=(
+        "$HOME/.manifest-agent"
+        "${TMPDIR:-/tmp}/manifest-cli"
+    )
+    [ "/tmp/manifest-cli" != "${TMPDIR:-/tmp}/manifest-cli" ] && DATA_DIRS+=("/tmp/manifest-cli")
+    SHELL_PROFILES=(
+        "$HOME/.zshrc" "$HOME/.zprofile" "$HOME/.zsh_profile"
+        "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"
+    )
+    PROFILE_LINE_REGEX='^[[:space:]]*(export[[:space:]]+MANIFEST_[A-Z_]+=|export[[:space:]]+PATH=.*\.manifest-cli|export[[:space:]]+PATH=.*\.local/bin.*PATH|(\.|source)[[:space:]]+.*manifest)'
+    BREW_FORMULA="fidenceio/tap/manifest"
+    BREW_TAP="fidenceio/tap"
+fi
 
 # =============================================================================
 # Detection
@@ -101,11 +136,12 @@ PROFILE_LINE_REGEX='^[[:space:]]*(export[[:space:]]+MANIFEST_[A-Z_]+=|export[[:s
 # install dir, or matches the installer default path. Prevents nuking an
 # unrelated `manifest` binary that happens to share the name.
 is_owned_binary() {
-    local path="$1" resolved d
+    local path="$1" resolved d candidate
     [ -f "$path" ] || return 1
-    case "$path" in
-        "$HOME/.local/bin/manifest") return 0 ;;
-    esac
+    # Fast-path: known canonical binary locations are unambiguously ours.
+    for candidate in "${BINARY_CANDIDATES[@]}"; do
+        [ "$path" = "$candidate" ] && return 0
+    done
     grep -a -E 'Manifest CLI|manifest-cli|MANIFEST_CLI' "$path" >/dev/null 2>&1 && return 0
     resolved="$(readlink -f "$path" 2>/dev/null || echo "$path")"
     for d in "${INSTALL_DIRS[@]}"; do
@@ -170,13 +206,20 @@ brew_completion_targets() {
 
 brew_package_present() {
     command -v brew >/dev/null 2>&1 || return 1
-    brew list fidenceio/tap/manifest >/dev/null 2>&1 || brew list manifest >/dev/null 2>&1
+    brew list "$BREW_FORMULA" >/dev/null 2>&1 || brew list manifest >/dev/null 2>&1
 }
 
 brew_tap_present() {
     command -v brew >/dev/null 2>&1 || return 1
-    local p; p="$(brew --prefix 2>/dev/null || true)"
-    [ -n "$p" ] && [ -d "$p/Library/Taps/fidenceio/homebrew-tap" ]
+    local tap_dir
+    if type manifest_install_paths_homebrew_tap_dir >/dev/null 2>&1; then
+        tap_dir="$(manifest_install_paths_homebrew_tap_dir)"
+    else
+        local p; p="$(brew --prefix 2>/dev/null || true)"
+        [ -n "$p" ] || return 1
+        tap_dir="$p/Library/Taps/fidenceio/homebrew-tap"
+    fi
+    [ -n "$tap_dir" ] && [ -d "$tap_dir" ]
 }
 
 # =============================================================================
@@ -188,8 +231,8 @@ print_plan() {
     echo "----"
     local found=0 f
 
-    brew_package_present && { echo "  brew uninstall fidenceio/tap/manifest"; found=1; }
-    brew_tap_present     && { echo "  brew untap fidenceio/tap";              found=1; }
+    brew_package_present && { echo "  brew uninstall $BREW_FORMULA"; found=1; }
+    brew_tap_present     && { echo "  brew untap $BREW_TAP";          found=1; }
 
     while IFS= read -r f; do [ -n "$f" ] && { echo "  remove dir:        $f"; found=1; }; done < <(found_install_dirs)
     while IFS= read -r f; do [ -n "$f" ] && { echo "  remove binary:     $f"; found=1; }; done < <(found_binaries)
@@ -219,7 +262,7 @@ apply_plan() {
 
     if brew_package_present; then
         print_status "Uninstalling Homebrew package..."
-        if brew uninstall fidenceio/tap/manifest 2>/dev/null || brew uninstall manifest 2>/dev/null; then
+        if brew uninstall "$BREW_FORMULA" 2>/dev/null || brew uninstall manifest 2>/dev/null; then
             print_success "Removed Homebrew package"
         else
             print_warning "brew uninstall failed (continuing)"
@@ -228,9 +271,9 @@ apply_plan() {
     fi
 
     if brew_tap_present; then
-        print_status "Untapping fidenceio/tap..."
-        if brew untap fidenceio/tap 2>/dev/null; then
-            print_success "Untapped fidenceio/tap"
+        print_status "Untapping $BREW_TAP..."
+        if brew untap "$BREW_TAP" 2>/dev/null; then
+            print_success "Untapped $BREW_TAP"
         else
             print_warning "brew untap failed (continuing)"
         fi
@@ -307,11 +350,11 @@ verify_clean() {
     local remaining=0 f
 
     if brew_package_present; then
-        print_warning "Still present: Homebrew package fidenceio/tap/manifest"
+        print_warning "Still present: Homebrew package $BREW_FORMULA"
         remaining=$((remaining + 1))
     fi
     if brew_tap_present; then
-        print_warning "Still present: Homebrew tap fidenceio/tap"
+        print_warning "Still present: Homebrew tap $BREW_TAP"
         remaining=$((remaining + 1))
     fi
     while IFS= read -r f; do [ -n "$f" ] && { print_warning "Still present: $f"; remaining=$((remaining + 1)); }; done < <(found_install_dirs)
