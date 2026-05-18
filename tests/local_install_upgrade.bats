@@ -9,19 +9,23 @@ setup() {
         "workflow/manifest-orchestrator.sh"
     SCRATCH="$(mk_scratch)"
     export PROJECT_ROOT="$SCRATCH/repo"
-    mkdir -p "$PROJECT_ROOT"
+    mkdir -p "$PROJECT_ROOT/formula"
     cd "$PROJECT_ROOT"
     git init -q .
     git checkout -q -b main
     git config user.email "test@example.com"
     git config user.name "Test"
     echo "1.2.3" > VERSION
-    git add VERSION
+    echo "stub formula" > formula/manifest.rb
+    git add VERSION formula/manifest.rb
     git commit -qm "Bump version to 1.2.3"
     export MANIFEST_CLI_GIT_DEFAULT_BRANCH="main"
 
-    # No formula/manifest.rb in PROJECT_ROOT → first block self-skips.
-    # Stub the GitHub Release step so the middle block self-skips with rc=2.
+    # Drive the first block to "success" without touching the tap or network:
+    # treat fixture as the canonical CLI repo, and make the formula update
+    # return 0 without modifying formula/manifest.rb so the commit branch is skipped.
+    should_update_homebrew_for_repo() { return 0; }
+    update_homebrew_formula() { return 0; }
     manifest_create_github_release_for_tag() { return 2; }
 }
 
@@ -84,4 +88,23 @@ teardown() {
     echo "$output" | grep -q "brew update && brew upgrade manifest"
     ! echo "$output" | grep -q "Local manifest is not installed via Homebrew"
     ! echo "$output" | grep -q "Local installation upgraded"
+}
+
+@test "local upgrade is skipped entirely when tap push did not succeed" {
+    # Force the homebrew block to self-skip → workflow_homebrew_status stays "skipped".
+    # The local upgrade gate must then prevent any upgrade output, even with a
+    # fully functional brew on PATH.
+    rm -f "$PROJECT_ROOT/formula/manifest.rb"
+    git add -A
+    git commit -qm "drop formula"
+
+    brew() { return 0; }
+
+    run manifest_ship_post_push_steps "1.2.3" "$(git rev-parse HEAD)" "v1.2.3" "success"
+
+    [ "$status" -eq 0 ]
+    ! echo "$output" | grep -q "Upgrading local Manifest CLI installation"
+    ! echo "$output" | grep -q "Local installation upgraded"
+    ! echo "$output" | grep -q "Local manifest is not installed via Homebrew"
+    ! echo "$output" | grep -q "Homebrew upgrade did not complete"
 }
