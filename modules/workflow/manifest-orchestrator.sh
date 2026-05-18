@@ -282,25 +282,28 @@ manifest_ship_post_push_steps() {
     fi
     echo ""
 
-    # Upgrade local Manifest CLI installation to the just-published version.
-    echo "🔄 Upgrading local Manifest CLI installation..."
-    if command -v brew &>/dev/null; then
-        if ! brew list --formula manifest &>/dev/null; then
-            echo "⚠️  Local manifest is not installed via Homebrew — skipping upgrade"
-            echo "   Run: brew install fidenceio/tap/manifest"
-        elif brew update &>/dev/null && brew upgrade manifest 2>&1; then
-            echo "✅ Local installation upgraded to v$new_version via Homebrew"
+    # Only run when this ship actually pushed a new formula to the tap; otherwise
+    # brew upgrades against stale tap state and reports a misleading "upgraded to vN".
+    if [[ "$workflow_homebrew_status" == "success" ]]; then
+        echo "🔄 Upgrading local Manifest CLI installation..."
+        if command -v brew &>/dev/null; then
+            if ! brew list --formula manifest &>/dev/null; then
+                echo "⚠️  Local manifest is not installed via Homebrew — skipping upgrade"
+                echo "   Run: brew install fidenceio/tap/manifest"
+            elif brew update &>/dev/null && brew upgrade manifest 2>&1; then
+                echo "✅ Local installation upgraded to v$new_version via Homebrew"
+            else
+                echo "⚠️  Homebrew upgrade did not complete — try 'brew update && brew upgrade manifest' manually"
+            fi
         else
-            echo "⚠️  Homebrew upgrade did not complete — try 'brew update && brew upgrade manifest' manually"
+            if manifest upgrade --force 2>&1; then
+                echo "✅ Local installation upgraded to v$new_version"
+            else
+                echo "⚠️  Local upgrade did not complete — try 'manifest upgrade --force' manually"
+            fi
         fi
-    else
-        if manifest upgrade --force 2>&1; then
-            echo "✅ Local installation upgraded to v$new_version"
-        else
-            echo "⚠️  Local upgrade did not complete — try 'manifest upgrade --force' manually"
-        fi
+        echo ""
     fi
-    echo ""
 
     _MANIFEST_SHIP_LAST_HOMEBREW_STATUS="$workflow_homebrew_status"
     _MANIFEST_SHIP_LAST_GITHUB_RELEASE_STATUS="$workflow_github_release_status"
