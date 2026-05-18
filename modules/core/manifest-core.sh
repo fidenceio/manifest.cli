@@ -295,8 +295,9 @@ update_homebrew_formula() {
             return 1
         fi
     else
-        echo "   ⚠️  Homebrew tap not found locally — formula updated in this repo only"
-        echo "   Push formula/manifest.rb to the homebrew-tap repo manually"
+        log_error "Homebrew tap not found locally at ${tap_dir:-<unset>} — formula sync would silently skip and leave the tap stale."
+        log_error "Run: brew tap fidenceio/tap && brew install manifest, then re-ship."
+        return 1
     fi
 
     manifest_refresh_homebrew_tap_checkouts "$tap_dir"
