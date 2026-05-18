@@ -121,6 +121,13 @@ manifest ship repo major -i -y # Apply major release with interactive safety pro
 
 Ship preview starts by printing the resolved repo identity, including `You are in:`, Git root, origin, branch/upstream, fleet membership when detected, and the reminder that `ship repo` targets only that Git repository. Ship apply prints the same target context plus an explicit target summary, then asks `Apply to this repository? [y/N]` before mutation. After confirmation it runs: sync, version bump, documentation generation, markdown validation, commit, Git tag, push to all remotes, and Homebrew formula update (in the canonical repository). When the canonical CLI release updates the Homebrew tap, Manifest also refreshes any clean local tap checkout it can safely fast-forward, including sibling workspace checkouts such as `fidenceio.homebrew.tap`. Canonical CLI `minor`, `major`, and `revision` ships then run one guarded follow-up patch under the upgraded installed CLI so release-process changes take effect immediately. Set `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH=false` to skip it.
 
+Before any apply-mode repo mutation, Manifest verifies that Git metadata is
+writable and that it can create the Git index lock needed for commit/tag work.
+If that preflight fails, the command stops before bumping `VERSION`. In sandboxed
+automation, run release/apply commands outside the restrictive sandbox or grant
+the exact Manifest command Git write access; preview commands can still run
+inside restricted environments.
+
 Preview output includes a `What's new` section. That summary is derived from the
 same change-analysis path used for `CHANGELOG.md`, generated release docs, and
 GitHub Release notes, so release copy stays aligned across local preview and

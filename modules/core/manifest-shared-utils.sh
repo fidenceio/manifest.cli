@@ -450,6 +450,72 @@ manifest_repo_scope_require_git() {
     return 1
 }
 
+manifest_git_preflight_write_access() {
+    local project_root="${1:-${PROJECT_ROOT:-$(pwd)}}"
+    local operation="${2:-manifest apply}"
+    local index_lock probe_dir probe_file
+
+    if ! git -C "$project_root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        log_error "Cannot verify Git write access outside a Git work tree."
+        log_error "Operation: $operation"
+        return 1
+    fi
+
+    index_lock="$(git -C "$project_root" rev-parse --git-path index.lock 2>/dev/null || true)"
+    probe_dir="$(git -C "$project_root" rev-parse --git-path "manifest-preflight-write-$$-${RANDOM}" 2>/dev/null || true)"
+    if [[ -z "$index_lock" || -z "$probe_dir" ]]; then
+        log_error "Could not resolve Git metadata paths before apply."
+        log_error "Operation: $operation"
+        return 1
+    fi
+
+    case "$index_lock" in
+        /*) ;;
+        *) index_lock="$project_root/$index_lock" ;;
+    esac
+    case "$probe_dir" in
+        /*) ;;
+        *) probe_dir="$project_root/$probe_dir" ;;
+    esac
+    probe_file="$probe_dir/probe"
+
+    if [[ -e "$index_lock" ]]; then
+        log_error "Git index lock already exists; refusing to mutate files before Git can commit."
+        log_error "Lock path: $index_lock"
+        log_error "Operation: $operation"
+        return 1
+    fi
+
+    # Probe Git metadata writability by creating a uniquely-named subdir + file
+    # under .git/. Do NOT probe by writing to .git/index.lock — that's a real
+    # Git lock; clobbering it (or leaking it on cleanup failure) would block
+    # subsequent git operations. If .git/ is writable and index.lock does not
+    # exist (checked above), git will be able to claim the lock when it needs to.
+    if ! mkdir "$probe_dir" 2>/dev/null; then
+        log_error "Git metadata is not writable; refusing to mutate files before Git can commit."
+        log_error "Probe path: $probe_dir"
+        log_error "Operation: $operation"
+        log_error "Run release/apply commands outside restrictive execution sandboxes, or grant the command Git write access."
+        return 1
+    fi
+
+    if ! : > "$probe_file" 2>/dev/null; then
+        rm -rf "$probe_dir" 2>/dev/null || true
+        log_error "Git metadata probe file could not be written."
+        log_error "Probe path: $probe_file"
+        log_error "Operation: $operation"
+        return 1
+    fi
+
+    if ! rm -f "$probe_file" 2>/dev/null || ! rmdir "$probe_dir" 2>/dev/null; then
+        log_error "Git metadata preflight cleanup failed; refusing to continue before mutation."
+        log_error "Probe path: $probe_dir"
+        log_error "Operation: $operation"
+        return 1
+    fi
+    return 0
+}
+
 manifest_repo_scope_confirm_apply() {
     local project_root="${1:-${PROJECT_ROOT:-$(pwd)}}"
     local replay_command="${2:-manifest command -y}"
@@ -479,7 +545,8 @@ manifest_repo_scope_confirm_apply() {
 
     if [[ "${MANIFEST_CLI_AUTO_CONFIRM:-0}" == "1" ]]; then
         echo "Auto-confirmed repository target (MANIFEST_CLI_AUTO_CONFIRM=1): $git_root"
-        return 0
+        manifest_git_preflight_write_access "$git_root" "$replay_command"
+        return $?
     fi
 
     if [[ ! -t 0 ]]; then
@@ -497,7 +564,8 @@ manifest_repo_scope_confirm_apply() {
     case "$answer" in
         y|Y|yes|YES|Yes)
             echo "Confirmed repository target: $git_root"
-            return 0
+            manifest_git_preflight_write_access "$git_root" "$replay_command"
+            return $?
             ;;
         *)
             log_error "Repository target was not confirmed; no changes written."
@@ -693,7 +761,7 @@ export -f _render_help _render_help_error _manifest_hash_short
 export -f _json_escape _json_kv_str _json_kv_raw _json_value
 export -f get_script_dir get_script_parent_dir get_project_root get_modules_dir
 export -f is_installation_directory validate_repository_root ensure_repository_root
-export -f manifest_repo_scope_require_git manifest_repo_scope_confirm_apply
+export -f manifest_repo_scope_require_git manifest_git_preflight_write_access manifest_repo_scope_confirm_apply
 export -f show_network_error show_file_error show_git_error show_config_error
 export -f show_validation_error show_permission_error show_dependency_error
 export -f sanitize_filename sanitize_version sanitize_path validate_version_format

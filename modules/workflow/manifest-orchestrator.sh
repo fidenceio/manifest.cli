@@ -285,7 +285,10 @@ manifest_ship_post_push_steps() {
     # Upgrade local Manifest CLI installation to the just-published version.
     echo "🔄 Upgrading local Manifest CLI installation..."
     if command -v brew &>/dev/null; then
-        if brew update &>/dev/null && brew upgrade manifest 2>&1; then
+        if ! brew list --formula manifest &>/dev/null; then
+            echo "⚠️  Local manifest is not installed via Homebrew — skipping upgrade"
+            echo "   Run: brew install fidenceio/tap/manifest"
+        elif brew update &>/dev/null && brew upgrade manifest 2>&1; then
             echo "✅ Local installation upgraded to v$new_version via Homebrew"
         else
             echo "⚠️  Homebrew upgrade did not complete — try 'brew update && brew upgrade manifest' manually"
