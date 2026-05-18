@@ -1,5 +1,15 @@
 # Changelog
 
+## [48.0.0] - 2026-05-18
+
+**Release Type:** Major
+
+### Changes
+
+- Track Homebrew tap install gaps
+- Consolidate documentation generation
+
+
 ## [47.14.3] - 2026-05-17
 
 **Release Type:** Patch
@@ -76,12 +86,3 @@
 ### Changes
 
 - Clarify Homebrew uninstall caveats
-
-
-## [47.12.2] - 2026-05-14
-
-**Release Type:** Patch
-
-### Changes
-
-- Harden uninstall and reinstall execution policy
