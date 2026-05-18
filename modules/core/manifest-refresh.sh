@@ -15,7 +15,7 @@
 #   manifest refresh fleet    Re-scan fleet membership, regenerate docs across fleet
 #
 # DEPENDENCIES:
-#   - manifest-documentation.sh (generate_documents, update_repository_metadata)
+#   - manifest-documentation.sh (manifest_docs_generate, update_repository_metadata)
 #   - manifest-cleanup-docs.sh (main_cleanup)
 #   - manifest-markdown-validation.sh (validate_project)
 #   - manifest-fleet.sh (fleet_update, fleet_validate, fleet_docs_dispatch)
@@ -138,7 +138,7 @@ manifest_refresh_repo() {
 
     # Regenerate documentation
     echo "Regenerating documentation..."
-    if generate_documents "$current_version" "$timestamp" "patch"; then
+    if manifest_docs_generate "$current_version" "$timestamp" "patch"; then
         echo "  Documentation regenerated"
     else
         log_warning "Documentation generation had issues, continuing..."
@@ -267,7 +267,7 @@ manifest_refresh_fleet() {
 
     # Regenerate fleet documentation
     echo "Regenerating fleet documentation..."
-    fleet_docs_dispatch
+    fleet_docs_dispatch -y
     echo ""
 
     if [[ "$do_commit" == "true" ]]; then

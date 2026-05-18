@@ -1403,7 +1403,7 @@ EOF
                         return 0
                     fi
                     manifest_execution_apply_header
-                    generate_documents "$current_version" "$timestamp" "patch"
+                    manifest_docs_generate "$current_version" "$timestamp" "patch"
                     ;;
             esac
             ;;

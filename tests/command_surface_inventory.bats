@@ -61,3 +61,47 @@ EOF
         [[ "$output" == *"--yes"* ]]
     done < <(mutating_help_surfaces)
 }
+
+@test "documentation generation has no stale live symbol names" {
+    local old_repo_symbol old_fleet_symbol old_yaml old_env
+    old_repo_symbol="generate_""documents"
+    old_fleet_symbol="fleet_docs_""generate"
+    old_yaml="docs.auto_""generate"
+    old_env="MANIFEST_CLI_DOCS_AUTO_""GENERATE"
+
+    run bash -c '
+        set -euo pipefail
+        root="$1"
+        shift
+        find "$root" \
+            \( -path "*/zArchive/*" -o -path "*/.git/*" \) -prune -o \
+            -type f \
+            ! -path "*/tests/command_surface_inventory.bats" \
+            -print0 |
+        xargs -0 grep -nE "$*" || true
+    ' _ "$TEST_REPO_ROOT" "$old_repo_symbol|$old_fleet_symbol|$old_yaml|$old_env"
+
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+}
+
+@test "public command docs do not invert scope grammar" {
+    local bad_ship bad_refresh
+    bad_ship="manifest repo ship"
+    bad_refresh="manifest repo refresh"
+
+    run bash -c '
+        set -euo pipefail
+        root="$1"
+        shift
+        find "$root" \
+            \( -path "*/zArchive/*" -o -path "*/.git/*" \) -prune -o \
+            -type f \
+            ! -path "*/tests/command_surface_inventory.bats" \
+            -print0 |
+        xargs -0 grep -nE "$*" || true
+    ' _ "$TEST_REPO_ROOT" "$bad_ship|$bad_refresh"
+
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+}

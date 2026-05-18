@@ -609,7 +609,7 @@ manifest-core.sh :: main()
     │                           │
     │                           ├── sync_repository()          [git module]
     │                           ├── bump_version()             [git module]
-    │                           ├── generate_documents()       [docs module]
+    │                           ├── manifest_docs_generate()   [docs module]
     │                           ├── main_cleanup()             [docs module]
     │                           ├── validate_project()         [docs module]
     │                           ├── commit_changes()           [git module]

@@ -728,8 +728,29 @@ get_fleet_config_value() {
         "docs_fleet_root_detail_level") yaml_path=".docs.fleet_root.detail_level" ;;
         "docs_per_service_enabled")   yaml_path=".docs.per_service.enabled" ;;
         "docs_per_service_folder")    yaml_path=".docs.per_service.folder" ;;
+        "docs_gen_enabled")           yaml_path=".docs.generate.enabled" ;;
+        "docs_gen_changelog")         yaml_path=".docs.generate.changelog" ;;
         "docs_gen_index")             yaml_path=".docs.generate.index" ;;
         "docs_gen_readme_version")    yaml_path=".docs.generate.readme_version" ;;
+        "docs_gen_archive_cleanup")   yaml_path=".docs.generate.archive_cleanup" ;;
+        "docs_gen_site")              yaml_path=".docs.generate.site" ;;
+        "docs_gen_site_workflow")     yaml_path=".docs.generate.site_workflow" ;;
+        "docs_site_enabled")          yaml_path=".docs.site.enabled" ;;
+        "docs_site_enable_pages")     yaml_path=".docs.site.enable_pages" ;;
+        "docs_site_pages_required")   yaml_path=".docs.site.pages_required" ;;
+        "docs_site_source_dir")       yaml_path=".docs.site.source_dir" ;;
+        "docs_site_publish_mode")     yaml_path=".docs.site.publish_mode" ;;
+        "docs_site_branding")         yaml_path=".docs.site.branding" ;;
+        "docs_site_theme")            yaml_path=".docs.site.theme" ;;
+        "docs_site_title")            yaml_path=".docs.site.title" ;;
+        "docs_site_description")      yaml_path=".docs.site.description" ;;
+        "docs_site_custom_css")       yaml_path=".docs.site.custom_css" ;;
+        "docs_site_palette_primary")  yaml_path=".docs.site.palette.primary" ;;
+        "docs_site_palette_accent")   yaml_path=".docs.site.palette.accent" ;;
+        "docs_site_palette_background") yaml_path=".docs.site.palette.background" ;;
+        "docs_site_palette_surface")  yaml_path=".docs.site.palette.surface" ;;
+        "docs_site_palette_text")     yaml_path=".docs.site.palette.text" ;;
+        "docs_site_palette_muted")    yaml_path=".docs.site.palette.muted" ;;
     esac
 
     if [[ -n "$yaml_path" ]] && [[ -f "${MANIFEST_CLI_FLEET_CONFIG_FILE:-}" ]]; then

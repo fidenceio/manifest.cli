@@ -24,6 +24,7 @@ MANIFEST_CLI_INDEX_METADATA_START="<!-- manifest:index-metadata:start -->"
 MANIFEST_CLI_INDEX_METADATA_END="<!-- manifest:index-metadata:end -->"
 MANIFEST_CLI_INDEX_CURRENT_RELEASE_START="<!-- manifest:index-current-release:start -->"
 MANIFEST_CLI_INDEX_CURRENT_RELEASE_END="<!-- manifest:index-current-release:end -->"
+MANIFEST_CLI_DOCS_SITE_MANAGED_MARKER="Managed by Manifest CLI docs site generation"
 
 manifest_file_has_managed_block() {
     local file="$1"
@@ -161,6 +162,326 @@ ${MANIFEST_CLI_INDEX_CURRENT_RELEASE_END}
 EOF
 
     rm -f "$metadata_file" "$current_release_file"
+}
+
+_manifest_docs_config_bool() {
+    local value="$1"
+    local default="${2:-true}"
+    if [[ -z "$value" ]]; then
+        value="$default"
+    fi
+    is_truthy "$value"
+}
+
+_manifest_docs_site_enabled() {
+    _manifest_docs_config_bool "${MANIFEST_CLI_DOCS_GENERATE_SITE:-false}" "false" || \
+        _manifest_docs_config_bool "${MANIFEST_CLI_DOCS_SITE_ENABLED:-false}" "false"
+}
+
+_manifest_docs_site_workflow_enabled() {
+    _manifest_docs_config_bool "${MANIFEST_CLI_DOCS_GENERATE_SITE_WORKFLOW:-true}" "true"
+}
+
+_manifest_docs_write_managed_file() {
+    local file="$1"
+    local marker="$2"
+    local content_file="$3"
+
+    if [[ -f "$file" ]] && ! grep -Fq "$marker" "$file"; then
+        log_error "Refusing to overwrite unmanaged docs site file: $file"
+        return 1
+    fi
+
+    mkdir -p "$(dirname "$file")"
+    cp "$content_file" "$file"
+}
+
+_manifest_docs_repo_title() {
+    local project_root="${1:-$PROJECT_ROOT}"
+    local configured="${MANIFEST_CLI_DOCS_SITE_TITLE:-}"
+    if [[ -n "$configured" ]]; then
+        printf '%s\n' "$configured"
+        return 0
+    fi
+    manifest_repo_display_name "$project_root"
+}
+
+_manifest_docs_site_palette_css() {
+    cat << EOF
+:root {
+  --manifest-primary: ${MANIFEST_CLI_DOCS_SITE_PALETTE_PRIMARY:-#2563eb};
+  --manifest-accent: ${MANIFEST_CLI_DOCS_SITE_PALETTE_ACCENT:-#14b8a6};
+  --manifest-background: ${MANIFEST_CLI_DOCS_SITE_PALETTE_BACKGROUND:-#ffffff};
+  --manifest-surface: ${MANIFEST_CLI_DOCS_SITE_PALETTE_SURFACE:-#f8fafc};
+  --manifest-text: ${MANIFEST_CLI_DOCS_SITE_PALETTE_TEXT:-#111827};
+  --manifest-muted: ${MANIFEST_CLI_DOCS_SITE_PALETTE_MUTED:-#64748b};
+}
+
+body {
+  margin: 0;
+  color: var(--manifest-text);
+  background: var(--manifest-background);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.6;
+}
+
+.page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 48px 24px;
+}
+
+.masthead {
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+}
+
+.masthead h1 {
+  margin: 0 0 8px;
+  font-size: 2.25rem;
+  letter-spacing: 0;
+}
+
+.masthead p {
+  color: var(--manifest-muted);
+  margin: 0;
+}
+
+.doc-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.doc-link {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: var(--manifest-surface);
+  padding: 16px;
+}
+
+a {
+  color: var(--manifest-primary);
+}
+EOF
+}
+
+_manifest_docs_generate_site() {
+    local version="$1"
+    local timestamp="$2"
+    local scope="${3:-repo}"
+    local project_root="${4:-$PROJECT_ROOT}"
+    local docs_dir="${5:-$(get_docs_dir)}"
+    local source_dir="${MANIFEST_CLI_DOCS_SITE_SOURCE_DIR:-docs-site}"
+    local site_root="$project_root/$source_dir"
+    local title description
+    title="$(_manifest_docs_repo_title "$project_root")"
+    description="${MANIFEST_CLI_DOCS_SITE_DESCRIPTION:-Documentation for $title}"
+
+    local config_file index_file layout_file css_file gitignore_file content_file
+    config_file=$(mktemp)
+    index_file=$(mktemp)
+    layout_file=$(mktemp)
+    css_file=$(mktemp)
+    gitignore_file=$(mktemp)
+
+    cat > "$config_file" << EOF
+# $MANIFEST_CLI_DOCS_SITE_MANAGED_MARKER
+title: "$title"
+description: "$description"
+theme: minima
+markdown: kramdown
+exclude:
+  - .jekyll-cache
+  - .bundle
+  - vendor
+EOF
+
+    cat > "$index_file" << EOF
+---
+layout: default
+title: Home
+---
+<!-- $MANIFEST_CLI_DOCS_SITE_MANAGED_MARKER -->
+
+<main class="page">
+  <header class="masthead">
+    <h1>$title</h1>
+    <p>$description</p>
+  </header>
+
+  <section class="doc-grid">
+    <article class="doc-link">
+      <h2>README</h2>
+      <p><a href="README.md">Project overview</a></p>
+    </article>
+    <article class="doc-link">
+      <h2>Changelog</h2>
+      <p><a href="CHANGELOG.md">Release history for v$version</a></p>
+    </article>
+    <article class="doc-link">
+      <h2>Documentation Index</h2>
+      <p><a href="${docs_dir#"$project_root"/}/INDEX.md">Generated documentation index</a></p>
+    </article>
+  </section>
+</main>
+EOF
+
+    cat > "$layout_file" << EOF
+<!-- $MANIFEST_CLI_DOCS_SITE_MANAGED_MARKER -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page.title }} | {{ site.title }}</title>
+    <link rel="stylesheet" href="{{ '/assets/css/manifest.css' | relative_url }}">
+  </head>
+  <body>
+    {{ content }}
+  </body>
+</html>
+EOF
+
+    {
+        printf '/* %s */\n' "$MANIFEST_CLI_DOCS_SITE_MANAGED_MARKER"
+        _manifest_docs_site_palette_css
+        if [[ -n "${MANIFEST_CLI_DOCS_SITE_CUSTOM_CSS:-}" ]]; then
+            printf '\n@import url("%s");\n' "$MANIFEST_CLI_DOCS_SITE_CUSTOM_CSS"
+        fi
+    } > "$css_file"
+
+    cat > "$gitignore_file" << EOF
+# $MANIFEST_CLI_DOCS_SITE_MANAGED_MARKER
+_site/
+.jekyll-cache/
+.sass-cache/
+.bundle/
+vendor/
+.jekyll-metadata
+EOF
+
+    _manifest_docs_write_managed_file "$site_root/_config.yml" "$MANIFEST_CLI_DOCS_SITE_MANAGED_MARKER" "$config_file" || return 1
+    _manifest_docs_write_managed_file "$site_root/index.md" "$MANIFEST_CLI_DOCS_SITE_MANAGED_MARKER" "$index_file" || return 1
+    _manifest_docs_write_managed_file "$site_root/_layouts/default.html" "$MANIFEST_CLI_DOCS_SITE_MANAGED_MARKER" "$layout_file" || return 1
+    _manifest_docs_write_managed_file "$site_root/assets/css/manifest.css" "$MANIFEST_CLI_DOCS_SITE_MANAGED_MARKER" "$css_file" || return 1
+    _manifest_docs_write_managed_file "$site_root/.gitignore" "$MANIFEST_CLI_DOCS_SITE_MANAGED_MARKER" "$gitignore_file" || return 1
+
+    rm -f "$config_file" "$index_file" "$layout_file" "$css_file" "$gitignore_file"
+
+    if _manifest_docs_site_workflow_enabled; then
+        _manifest_docs_generate_pages_workflow "$project_root" "$source_dir" || return 1
+    fi
+
+    _manifest_docs_enable_pages_if_requested "$project_root"
+}
+
+_manifest_docs_generate_pages_workflow() {
+    local project_root="$1"
+    local source_dir="$2"
+    local workflow_file="$project_root/.github/workflows/manifest-docs-pages.yml"
+    local content_file
+    content_file=$(mktemp)
+
+    cat > "$content_file" << EOF
+# $MANIFEST_CLI_DOCS_SITE_MANAGED_MARKER
+name: Manifest Docs Pages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "$source_dir/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "docs/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - name: Prepare Manifest docs source
+        run: |
+          rm -rf .manifest-pages-src
+          mkdir -p .manifest-pages-src
+          cp -R "$source_dir"/. .manifest-pages-src/
+          [ -f README.md ] && cp README.md .manifest-pages-src/README.md
+          [ -f CHANGELOG.md ] && cp CHANGELOG.md .manifest-pages-src/CHANGELOG.md
+          if [ -d docs ]; then
+            mkdir -p .manifest-pages-src/docs
+            cp -R docs/. .manifest-pages-src/docs/
+          fi
+      - uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./.manifest-pages-src
+          destination: ./_site
+      - uses: actions/upload-pages-artifact@v3
+  deploy:
+    environment:
+      name: github-pages
+      url: \${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+EOF
+
+    _manifest_docs_write_managed_file "$workflow_file" "$MANIFEST_CLI_DOCS_SITE_MANAGED_MARKER" "$content_file"
+    local status=$?
+    rm -f "$content_file"
+    return "$status"
+}
+
+_manifest_docs_enable_pages_if_requested() {
+    local project_root="$1"
+    _manifest_docs_config_bool "${MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES:-false}" "false" || return 0
+
+    local slug=""
+    if declare -F manifest_origin_repo_slug >/dev/null 2>&1; then
+        slug="$(PROJECT_ROOT="$project_root" manifest_origin_repo_slug 2>/dev/null || true)"
+    fi
+
+    if [[ -z "$slug" ]] || ! command -v gh >/dev/null 2>&1; then
+        if _manifest_docs_config_bool "${MANIFEST_CLI_DOCS_SITE_PAGES_REQUIRED:-false}" "false"; then
+            log_error "GitHub Pages enablement requested but gh or repo slug is unavailable"
+            return 1
+        fi
+        log_warning "Skipping GitHub Pages enablement; gh or repo slug unavailable"
+        return 0
+    fi
+
+    if gh api --method POST "repos/$slug/pages" -f build_type=workflow >/dev/null 2>&1; then
+        log_success "GitHub Pages enabled for $slug"
+        return 0
+    fi
+
+    if gh api --method PATCH "repos/$slug/pages" -f build_type=workflow >/dev/null 2>&1; then
+        log_success "GitHub Pages workflow publishing configured for $slug"
+        return 0
+    fi
+
+    if _manifest_docs_config_bool "${MANIFEST_CLI_DOCS_SITE_PAGES_REQUIRED:-false}" "false"; then
+        log_error "GitHub Pages enablement failed for $slug"
+        return 1
+    fi
+
+    log_warning "GitHub Pages enablement failed for $slug; continuing because pages_required=false"
+    return 0
 }
 
 # Update README version information
@@ -800,12 +1121,181 @@ update_repository_metadata() {
     log_success "Repository metadata update completed"
 }
 
+_manifest_docs_fleet_root_summary() {
+    local fleet_version="$1"
+    local timestamp="$2"
+    local release_type="$3"
+    local fleet_docs_dir="$4"
+    local gen_index="$5"
+    local gen_readme_version="$6"
+
+    local service_summary=""
+    local service_changes=""
+
+    for service in $MANIFEST_CLI_FLEET_SERVICES; do
+        local path excluded version
+        path=$(get_fleet_service_property "$service" "path")
+        excluded=$(get_fleet_service_property "$service" "excluded" "false")
+
+        [[ "$excluded" == "true" ]] && continue
+
+        version="unknown"
+        if [[ -d "$path" ]] && declare -F _get_repo_version >/dev/null 2>&1; then
+            version=$(_get_repo_version "$path" 2>/dev/null || echo "unknown")
+        elif [[ -f "$path/VERSION" ]]; then
+            version=$(cat "$path/VERSION" 2>/dev/null || echo "unknown")
+        fi
+
+        service_summary="${service_summary}| ${service} | v${version} | ${release_type} |\n"
+
+        if [[ -d "$path/.git" ]]; then
+            local changes
+            changes=$(git -C "$path" log --oneline -10 --no-merges 2>/dev/null || echo "  No recent changes")
+            service_changes="${service_changes}
+### ${service} (v${version})
+
+\`\`\`
+${changes}
+\`\`\`
+"
+        fi
+    done
+
+    local changes_file
+    changes_file=$(mktemp)
+    {
+        printf '## Highlights for v%s\n\n' "$fleet_version"
+        printf '### Service Summary\n\n'
+        printf '| Service | Version | Bump Type |\n'
+        printf '|---------|---------|-----------|\n'
+        printf '%b' "$service_summary"
+        printf '\n### Detailed Changes\n%s\n' "$service_changes"
+    } > "$changes_file"
+
+    prepend_root_changelog_entry "$MANIFEST_CLI_FLEET_ROOT" "$fleet_version" \
+        "$timestamp" "$release_type" "$changes_file" || \
+        log_warning "Fleet root CHANGELOG.md update failed"
+    rm -f "$changes_file"
+
+    if [[ "$gen_index" == "true" ]]; then
+        _manifest_docs_fleet_index "$fleet_version" "$timestamp" "$fleet_docs_dir"
+    fi
+
+    if [[ "$gen_readme_version" == "true" ]] && [[ -f "$MANIFEST_CLI_FLEET_ROOT/README.md" ]]; then
+        (
+            PROJECT_ROOT="$MANIFEST_CLI_FLEET_ROOT"
+            update_readme_version "$fleet_version" "$timestamp" 2>/dev/null || true
+        )
+    fi
+}
+
+_manifest_docs_fleet_index() {
+    local fleet_version="$1"
+    local timestamp="$2"
+    local fleet_docs_dir="$3"
+
+    local per_service_folder
+    per_service_folder=$(get_fleet_config_value "docs_per_service_folder" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_PER_SERVICE_FOLDER")
+
+    local index_file="$fleet_docs_dir/INDEX.md"
+    cat > "$index_file" << EOF
+# Fleet Documentation Index
+
+**Fleet:** ${MANIFEST_CLI_FLEET_NAME}
+**Version:** ${fleet_version}
+**Last Updated:** ${timestamp}
+
+## Services
+
+| Service | Version | Type | Docs |
+|---------|---------|------|------|
+EOF
+
+    for service in $MANIFEST_CLI_FLEET_SERVICES; do
+        local path type excluded version rel_path
+        path=$(get_fleet_service_property "$service" "path")
+        type=$(get_fleet_service_property "$service" "type" "service")
+        excluded=$(get_fleet_service_property "$service" "excluded" "false")
+
+        [[ "$excluded" == "true" ]] && continue
+
+        version="unknown"
+        if [[ -d "$path" ]] && declare -F _get_repo_version >/dev/null 2>&1; then
+            version=$(_get_repo_version "$path" 2>/dev/null || echo "unknown")
+        elif [[ -f "$path/VERSION" ]]; then
+            version=$(cat "$path/VERSION" 2>/dev/null || echo "unknown")
+        fi
+
+        if declare -F _compute_relpath >/dev/null 2>&1; then
+            rel_path=$(_compute_relpath "$path/$per_service_folder" "$fleet_docs_dir")
+        else
+            rel_path="$path/$per_service_folder"
+        fi
+
+        echo "| ${service} | v${version} | ${type} | [docs](${rel_path}/) |" >> "$index_file"
+    done
+
+    cat >> "$index_file" << EOF
+
+---
+*Generated by Manifest CLI*
+EOF
+
+    log_success "Fleet docs index generated: $index_file"
+}
+
+_manifest_docs_generate_fleet_root() {
+    local fleet_version="$1"
+    local timestamp="$2"
+    local release_type="${3:-patch}"
+
+    local docs_folder detail_level fleet_docs_dir gen_index gen_readme_version
+    docs_folder=$(get_fleet_config_value "docs_fleet_root_folder" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_FLEET_ROOT_FOLDER")
+    detail_level=$(get_fleet_config_value "docs_fleet_root_detail_level" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_FLEET_ROOT_DETAIL_LEVEL")
+    fleet_docs_dir="$MANIFEST_CLI_FLEET_ROOT/$docs_folder"
+    mkdir -p "$fleet_docs_dir"
+
+    log_info "Generating fleet-root docs in $fleet_docs_dir (detail_level: $detail_level)..."
+
+    gen_index=$(get_fleet_config_value "docs_gen_index" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_GEN_INDEX")
+    gen_readme_version=$(get_fleet_config_value "docs_gen_readme_version" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_GEN_README_VERSION")
+
+    if [[ "$detail_level" == "summary" ]]; then
+        _manifest_docs_fleet_root_summary "$fleet_version" "$timestamp" "$release_type" \
+            "$fleet_docs_dir" "$gen_index" "$gen_readme_version"
+    elif [[ "$detail_level" == "index" ]]; then
+        [[ "$gen_index" == "true" ]] && _manifest_docs_fleet_index "$fleet_version" "$timestamp" "$fleet_docs_dir"
+    else
+        log_warning "Unknown fleet docs detail_level: $detail_level, falling back to summary"
+        _manifest_docs_fleet_root_summary "$fleet_version" "$timestamp" "$release_type" \
+            "$fleet_docs_dir" "$gen_index" "$gen_readme_version"
+    fi
+
+    if _manifest_docs_site_enabled; then
+        PROJECT_ROOT="$MANIFEST_CLI_FLEET_ROOT" _manifest_docs_generate_site \
+            "$fleet_version" "$timestamp" "fleet-root" "$MANIFEST_CLI_FLEET_ROOT" "$fleet_docs_dir"
+    fi
+
+    log_success "Fleet-root documentation generated in $fleet_docs_dir"
+}
+
 # Main document generation function
-generate_documents() {
+manifest_docs_generate() {
     local version="$1"
     local timestamp="$2"
     local release_type="${3:-patch}"
-    
+    local scope="${4:-repo}"
+
+    if ! _manifest_docs_config_bool "${MANIFEST_CLI_DOCS_GENERATE_ENABLED:-true}" "true"; then
+        log_info "Documentation generation disabled by docs.generate.enabled"
+        return 0
+    fi
+
+    if [[ "$scope" == "fleet-root" ]]; then
+        _manifest_docs_generate_fleet_root "$version" "$timestamp" "$release_type"
+        return $?
+    fi
+
     log_info "Starting document generation for version $version..."
     
     # Ensure docs directory exists
@@ -830,14 +1320,27 @@ generate_documents() {
     fi
 
     # Prepend a Keep-a-Changelog entry to root CHANGELOG.md for this version.
-    if ! prepend_root_changelog_entry "$PROJECT_ROOT" "$version" "$timestamp" "$release_type" "$changes_file"; then
-        log_warning "Root CHANGELOG.md update failed, but continuing..."
+    if _manifest_docs_config_bool "${MANIFEST_CLI_DOCS_GENERATE_CHANGELOG:-true}" "true"; then
+        if ! prepend_root_changelog_entry "$PROJECT_ROOT" "$version" "$timestamp" "$release_type" "$changes_file"; then
+            log_warning "Root CHANGELOG.md update failed, but continuing..."
+        fi
     fi
-    if ! update_readme_version "$version" "$timestamp"; then
-        log_warning "README version update failed, but continuing..."
+    if _manifest_docs_config_bool "${MANIFEST_CLI_DOCS_GENERATE_README_VERSION:-true}" "true"; then
+        if ! update_readme_version "$version" "$timestamp"; then
+            log_warning "README version update failed, but continuing..."
+        fi
     fi
-    if ! generate_docs_index "$version"; then
-        log_warning "Documentation index generation failed, but continuing..."
+    if _manifest_docs_config_bool "${MANIFEST_CLI_DOCS_GENERATE_INDEX:-true}" "true"; then
+        if ! generate_docs_index "$version"; then
+            log_warning "Documentation index generation failed, but continuing..."
+        fi
+    fi
+
+    if _manifest_docs_site_enabled; then
+        if ! _manifest_docs_generate_site "$version" "$timestamp" "$scope" "$PROJECT_ROOT" "$(get_docs_dir)"; then
+            rm -f "$changes_file"
+            return 1
+        fi
     fi
 
     # Clean up
@@ -864,7 +1367,7 @@ main() {
                 show_required_arg_error "Version" "generate <version> [timestamp] [release_type]"
             fi
             
-            generate_documents "$version" "$timestamp" "$release_type"
+            manifest_docs_generate "$version" "$timestamp" "$release_type"
             ;;
         "analyze")
             local version="${2:-}"

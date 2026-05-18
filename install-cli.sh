@@ -756,7 +756,14 @@ git:
 docs:
   folder: "docs"
   archive_folder: "docs/zArchive"
-  auto_generate: true
+  generate:
+    enabled: true
+    changelog: true
+    readme_version: true
+    index: true
+    archive_cleanup: true
+    site: false
+    site_workflow: true
 
 config:
   schema_version: 2

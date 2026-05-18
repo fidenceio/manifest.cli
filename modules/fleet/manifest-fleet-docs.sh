@@ -14,14 +14,13 @@
 #
 # KEY FUNCTIONS:
 #   - fleet_docs_dispatch()           : Route fleet docs subcommands
-#   - fleet_docs_generate()           : Main entry point for doc generation
-#   - generate_fleet_root_docs()      : Generate unified docs at fleet root
-#   - generate_fleet_per_service_docs() : Generate docs in each service
+#   - fleet_docs_run()                : Resolve docs targets and delegate
+#   - fleet_docs_run_per_service()    : Iterate services and delegate
 #   - fleet_docs_status()             : Show current docs config
 #
 # DEPENDENCIES:
 #   - manifest-fleet-config.sh (get_fleet_config_value, get_fleet_service_property)
-#   - manifest-documentation.sh (generate_documents, generate_release_notes, etc.)
+#   - manifest-documentation.sh (manifest_docs_generate, release notes, etc.)
 #   - manifest-shared-utils.sh (logging)
 #
 # =============================================================================
@@ -106,6 +105,55 @@ get_fleet_docs_strategy() {
     echo "$strategy"
 }
 
+fleet_docs_export_generation_config() {
+    export MANIFEST_CLI_DOCS_GENERATE_ENABLED
+    MANIFEST_CLI_DOCS_GENERATE_ENABLED=$(get_fleet_config_value "docs_gen_enabled" "${MANIFEST_CLI_DOCS_GENERATE_ENABLED:-true}")
+    export MANIFEST_CLI_DOCS_GENERATE_CHANGELOG
+    MANIFEST_CLI_DOCS_GENERATE_CHANGELOG=$(get_fleet_config_value "docs_gen_changelog" "${MANIFEST_CLI_DOCS_GENERATE_CHANGELOG:-true}")
+    export MANIFEST_CLI_DOCS_GENERATE_README_VERSION
+    MANIFEST_CLI_DOCS_GENERATE_README_VERSION=$(get_fleet_config_value "docs_gen_readme_version" "${MANIFEST_CLI_DOCS_GENERATE_README_VERSION:-true}")
+    export MANIFEST_CLI_DOCS_GENERATE_INDEX
+    MANIFEST_CLI_DOCS_GENERATE_INDEX=$(get_fleet_config_value "docs_gen_index" "${MANIFEST_CLI_DOCS_GENERATE_INDEX:-true}")
+    export MANIFEST_CLI_DOCS_GENERATE_ARCHIVE_CLEANUP
+    MANIFEST_CLI_DOCS_GENERATE_ARCHIVE_CLEANUP=$(get_fleet_config_value "docs_gen_archive_cleanup" "${MANIFEST_CLI_DOCS_GENERATE_ARCHIVE_CLEANUP:-true}")
+    export MANIFEST_CLI_DOCS_GENERATE_SITE
+    MANIFEST_CLI_DOCS_GENERATE_SITE=$(get_fleet_config_value "docs_gen_site" "${MANIFEST_CLI_DOCS_GENERATE_SITE:-false}")
+    export MANIFEST_CLI_DOCS_GENERATE_SITE_WORKFLOW
+    MANIFEST_CLI_DOCS_GENERATE_SITE_WORKFLOW=$(get_fleet_config_value "docs_gen_site_workflow" "${MANIFEST_CLI_DOCS_GENERATE_SITE_WORKFLOW:-true}")
+    export MANIFEST_CLI_DOCS_SITE_ENABLED
+    MANIFEST_CLI_DOCS_SITE_ENABLED=$(get_fleet_config_value "docs_site_enabled" "${MANIFEST_CLI_DOCS_SITE_ENABLED:-false}")
+    export MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES
+    MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES=$(get_fleet_config_value "docs_site_enable_pages" "${MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES:-false}")
+    export MANIFEST_CLI_DOCS_SITE_PAGES_REQUIRED
+    MANIFEST_CLI_DOCS_SITE_PAGES_REQUIRED=$(get_fleet_config_value "docs_site_pages_required" "${MANIFEST_CLI_DOCS_SITE_PAGES_REQUIRED:-false}")
+    export MANIFEST_CLI_DOCS_SITE_SOURCE_DIR
+    MANIFEST_CLI_DOCS_SITE_SOURCE_DIR=$(get_fleet_config_value "docs_site_source_dir" "${MANIFEST_CLI_DOCS_SITE_SOURCE_DIR:-docs-site}")
+    export MANIFEST_CLI_DOCS_SITE_PUBLISH_MODE
+    MANIFEST_CLI_DOCS_SITE_PUBLISH_MODE=$(get_fleet_config_value "docs_site_publish_mode" "${MANIFEST_CLI_DOCS_SITE_PUBLISH_MODE:-actions}")
+    export MANIFEST_CLI_DOCS_SITE_BRANDING
+    MANIFEST_CLI_DOCS_SITE_BRANDING=$(get_fleet_config_value "docs_site_branding" "${MANIFEST_CLI_DOCS_SITE_BRANDING:-auto}")
+    export MANIFEST_CLI_DOCS_SITE_THEME
+    MANIFEST_CLI_DOCS_SITE_THEME=$(get_fleet_config_value "docs_site_theme" "${MANIFEST_CLI_DOCS_SITE_THEME:-manifest}")
+    export MANIFEST_CLI_DOCS_SITE_TITLE
+    MANIFEST_CLI_DOCS_SITE_TITLE=$(get_fleet_config_value "docs_site_title" "${MANIFEST_CLI_DOCS_SITE_TITLE:-}")
+    export MANIFEST_CLI_DOCS_SITE_DESCRIPTION
+    MANIFEST_CLI_DOCS_SITE_DESCRIPTION=$(get_fleet_config_value "docs_site_description" "${MANIFEST_CLI_DOCS_SITE_DESCRIPTION:-}")
+    export MANIFEST_CLI_DOCS_SITE_CUSTOM_CSS
+    MANIFEST_CLI_DOCS_SITE_CUSTOM_CSS=$(get_fleet_config_value "docs_site_custom_css" "${MANIFEST_CLI_DOCS_SITE_CUSTOM_CSS:-}")
+    export MANIFEST_CLI_DOCS_SITE_PALETTE_PRIMARY
+    MANIFEST_CLI_DOCS_SITE_PALETTE_PRIMARY=$(get_fleet_config_value "docs_site_palette_primary" "${MANIFEST_CLI_DOCS_SITE_PALETTE_PRIMARY:-#2563eb}")
+    export MANIFEST_CLI_DOCS_SITE_PALETTE_ACCENT
+    MANIFEST_CLI_DOCS_SITE_PALETTE_ACCENT=$(get_fleet_config_value "docs_site_palette_accent" "${MANIFEST_CLI_DOCS_SITE_PALETTE_ACCENT:-#14b8a6}")
+    export MANIFEST_CLI_DOCS_SITE_PALETTE_BACKGROUND
+    MANIFEST_CLI_DOCS_SITE_PALETTE_BACKGROUND=$(get_fleet_config_value "docs_site_palette_background" "${MANIFEST_CLI_DOCS_SITE_PALETTE_BACKGROUND:-#ffffff}")
+    export MANIFEST_CLI_DOCS_SITE_PALETTE_SURFACE
+    MANIFEST_CLI_DOCS_SITE_PALETTE_SURFACE=$(get_fleet_config_value "docs_site_palette_surface" "${MANIFEST_CLI_DOCS_SITE_PALETTE_SURFACE:-#f8fafc}")
+    export MANIFEST_CLI_DOCS_SITE_PALETTE_TEXT
+    MANIFEST_CLI_DOCS_SITE_PALETTE_TEXT=$(get_fleet_config_value "docs_site_palette_text" "${MANIFEST_CLI_DOCS_SITE_PALETTE_TEXT:-#111827}")
+    export MANIFEST_CLI_DOCS_SITE_PALETTE_MUTED
+    MANIFEST_CLI_DOCS_SITE_PALETTE_MUTED=$(get_fleet_config_value "docs_site_palette_muted" "${MANIFEST_CLI_DOCS_SITE_PALETTE_MUTED:-#64748b}")
+}
+
 # -----------------------------------------------------------------------------
 # Function: should_generate_fleet_root_docs
 # -----------------------------------------------------------------------------
@@ -131,246 +179,18 @@ should_generate_per_service_docs() {
 }
 
 # =============================================================================
-# FLEET-ROOT DOCUMENTATION GENERATION
+# FLEET DOCUMENTATION ORCHESTRATION
 # =============================================================================
 
-# -----------------------------------------------------------------------------
-# Function: generate_fleet_root_docs
-# -----------------------------------------------------------------------------
-# Generates unified documentation at the fleet root level.
-#
-# Behavior depends on detail_level config:
-#   "summary" - Aggregated RELEASE/CHANGELOG with changes from all services
-#   "index"   - Lightweight index listing service versions with links
-#
-# ARGUMENTS:
-#   $1 - Fleet version (e.g., "2026.04.03" or "1.2.0")
-#   $2 - Timestamp
-#   $3 - Release type (patch|minor|major)
-# -----------------------------------------------------------------------------
-generate_fleet_root_docs() {
+fleet_docs_run_fleet_root() {
     local fleet_version="$1"
     local timestamp="$2"
     local release_type="${3:-patch}"
-
-    local docs_folder
-    docs_folder=$(get_fleet_config_value "docs_fleet_root_folder" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_FLEET_ROOT_FOLDER")
-
-    local detail_level
-    detail_level=$(get_fleet_config_value "docs_fleet_root_detail_level" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_FLEET_ROOT_DETAIL_LEVEL")
-
-    local fleet_docs_dir="$MANIFEST_CLI_FLEET_ROOT/$docs_folder"
-    mkdir -p "$fleet_docs_dir"
-
-    log_info "Generating fleet-root docs in $fleet_docs_dir (detail_level: $detail_level)..."
-
-    # Check which document types to generate
-    local gen_index gen_readme_version
-    gen_index=$(get_fleet_config_value "docs_gen_index" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_GEN_INDEX")
-    gen_readme_version=$(get_fleet_config_value "docs_gen_readme_version" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_GEN_README_VERSION")
-
-    if [[ "$detail_level" == "summary" ]]; then
-        _generate_fleet_root_summary "$fleet_version" "$timestamp" "$release_type" \
-            "$fleet_docs_dir" "$gen_index" "$gen_readme_version"
-    elif [[ "$detail_level" == "index" ]]; then
-        _generate_fleet_root_index "$fleet_version" "$timestamp" \
-            "$fleet_docs_dir" "$gen_index"
-    else
-        log_warning "Unknown fleet docs detail_level: $detail_level, falling back to summary"
-        _generate_fleet_root_summary "$fleet_version" "$timestamp" "$release_type" \
-            "$fleet_docs_dir" "$gen_index" "$gen_readme_version"
-    fi
-
-    log_success "Fleet-root documentation generated in $fleet_docs_dir"
+    fleet_docs_export_generation_config
+    manifest_docs_generate "$fleet_version" "$timestamp" "$release_type" "fleet-root"
 }
 
-# -----------------------------------------------------------------------------
-# Function: _generate_fleet_root_summary (internal)
-# -----------------------------------------------------------------------------
-# Generates aggregated fleet-root docs with changes from all services.
-# -----------------------------------------------------------------------------
-_generate_fleet_root_summary() {
-    local fleet_version="$1"
-    local timestamp="$2"
-    local release_type="$3"
-    local fleet_docs_dir="$4"
-    local gen_index="$5"
-    local gen_readme_version="$6"
-
-    # Collect service versions and changes
-    local service_summary=""
-    local service_changes=""
-
-    for service in $MANIFEST_CLI_FLEET_SERVICES; do
-        local path
-        path=$(get_fleet_service_property "$service" "path")
-        local excluded
-        excluded=$(get_fleet_service_property "$service" "excluded" "false")
-
-        if [[ "$excluded" == "true" ]]; then
-            continue
-        fi
-
-        local version="unknown"
-        if [[ -d "$path" ]] && declare -F _get_repo_version >/dev/null 2>&1; then
-            version=$(_get_repo_version "$path" 2>/dev/null || echo "unknown")
-        elif [[ -f "$path/VERSION" ]]; then
-            version=$(cat "$path/VERSION" 2>/dev/null || echo "unknown")
-        fi
-
-        service_summary="${service_summary}| ${service} | v${version} | ${release_type} |\n"
-
-        # Collect recent git changes for this service
-        if [[ -d "$path/.git" ]]; then
-            local changes
-            changes=$(git -C "$path" log --oneline -10 --no-merges 2>/dev/null || echo "  No recent changes")
-            service_changes="${service_changes}
-### ${service} (v${version})
-
-\`\`\`
-${changes}
-\`\`\`
-"
-        fi
-    done
-
-    # Build a changes_file shaped like analyze_changes output so the
-    # shared prepend_root_changelog_entry helper can consume it. The
-    # leading `## Highlights for vX` line is consumed and dropped by
-    # the body extractor.
-    local changes_file
-    changes_file=$(mktemp)
-    {
-        printf '## Highlights for v%s\n\n' "$fleet_version"
-        printf '### Service Summary\n\n'
-        printf '| Service | Version | Bump Type |\n'
-        printf '|---------|---------|-----------|\n'
-        printf '%b' "$service_summary"
-        printf '\n### Detailed Changes\n%s\n' "$service_changes"
-    } > "$changes_file"
-
-    # Prepend the entry to the fleet-root CHANGELOG.md (parallel to how
-    # the CLI repo handles its own root CHANGELOG.md). Per-version files
-    # are no longer generated — the fleet root CHANGELOG.md is the
-    # single archival surface.
-    if declare -F prepend_root_changelog_entry >/dev/null 2>&1; then
-        prepend_root_changelog_entry "$MANIFEST_CLI_FLEET_ROOT" "$fleet_version" \
-            "$timestamp" "$release_type" "$changes_file" || \
-            log_warning "Fleet root CHANGELOG.md update failed"
-    else
-        log_warning "prepend_root_changelog_entry not available; skipping fleet CHANGELOG.md update"
-    fi
-    rm -f "$changes_file"
-
-    # Generate fleet-level index
-    if [[ "$gen_index" == "true" ]]; then
-        _generate_fleet_docs_index "$fleet_version" "$timestamp" "$fleet_docs_dir"
-    fi
-
-    # Update fleet-root README if present
-    if [[ "$gen_readme_version" == "true" ]] && [[ -f "$MANIFEST_CLI_FLEET_ROOT/README.md" ]]; then
-        (
-            PROJECT_ROOT="$MANIFEST_CLI_FLEET_ROOT"
-            update_readme_version "$fleet_version" "$timestamp" 2>/dev/null || true
-        )
-    fi
-}
-
-# -----------------------------------------------------------------------------
-# Function: _generate_fleet_root_index (internal)
-# -----------------------------------------------------------------------------
-# Generates a lightweight index at fleet root with links to per-service docs.
-# -----------------------------------------------------------------------------
-_generate_fleet_root_index() {
-    local fleet_version="$1"
-    local timestamp="$2"
-    local fleet_docs_dir="$3"
-    local gen_index="$4"
-
-    if [[ "$gen_index" != "true" ]]; then
-        return 0
-    fi
-
-    _generate_fleet_docs_index "$fleet_version" "$timestamp" "$fleet_docs_dir"
-}
-
-# -----------------------------------------------------------------------------
-# Function: _generate_fleet_docs_index (internal)
-# -----------------------------------------------------------------------------
-# Generates INDEX.md for fleet-root docs.
-# Lists all services with versions and paths to their individual docs.
-# -----------------------------------------------------------------------------
-_generate_fleet_docs_index() {
-    local fleet_version="$1"
-    local timestamp="$2"
-    local fleet_docs_dir="$3"
-
-    local per_service_folder
-    per_service_folder=$(get_fleet_config_value "docs_per_service_folder" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_PER_SERVICE_FOLDER")
-
-    local index_file="$fleet_docs_dir/INDEX.md"
-    cat > "$index_file" << EOF
-# Fleet Documentation Index
-
-**Fleet:** ${MANIFEST_CLI_FLEET_NAME}
-**Version:** ${fleet_version}
-**Last Updated:** ${timestamp}
-
-## Services
-
-| Service | Version | Type | Docs |
-|---------|---------|------|------|
-EOF
-
-    for service in $MANIFEST_CLI_FLEET_SERVICES; do
-        local path
-        path=$(get_fleet_service_property "$service" "path")
-        local type
-        type=$(get_fleet_service_property "$service" "type" "service")
-        local excluded
-        excluded=$(get_fleet_service_property "$service" "excluded" "false")
-
-        if [[ "$excluded" == "true" ]]; then
-            continue
-        fi
-
-        local version="unknown"
-        if [[ -d "$path" ]] && declare -F _get_repo_version >/dev/null 2>&1; then
-            version=$(_get_repo_version "$path" 2>/dev/null || echo "unknown")
-        elif [[ -f "$path/VERSION" ]]; then
-            version=$(cat "$path/VERSION" 2>/dev/null || echo "unknown")
-        fi
-
-        # Compute relative path from fleet docs dir to service docs
-        local rel_path
-        rel_path=$(_compute_relpath "$path/$per_service_folder" "$fleet_docs_dir")
-
-        echo "| ${service} | v${version} | ${type} | [docs](${rel_path}/) |" >> "$index_file"
-    done
-
-    cat >> "$index_file" << EOF
-
----
-*Generated by Manifest CLI - Fleet Docs*
-EOF
-
-    log_success "Fleet docs index generated: $index_file"
-}
-
-# =============================================================================
-# PER-SERVICE DOCUMENTATION GENERATION
-# =============================================================================
-
-# -----------------------------------------------------------------------------
-# Function: generate_fleet_per_service_docs
-# -----------------------------------------------------------------------------
-# Iterates over fleet services and generates docs in each.
-# Respects exclude_from_fleet_bump and per-service folder config.
-#
-# ARGUMENTS:
-#   $1 - Release type (patch|minor|major)
-# -----------------------------------------------------------------------------
-generate_fleet_per_service_docs() {
+fleet_docs_run_per_service() {
     local release_type="${1:-patch}"
 
     local per_service_folder
@@ -414,6 +234,7 @@ generate_fleet_per_service_docs() {
             cd "$path" || exit 1
             export PROJECT_ROOT="$path"
             export MANIFEST_CLI_DOCS_FOLDER="$per_service_folder"
+            fleet_docs_export_generation_config
 
             # Get timestamp
             local timestamp
@@ -424,10 +245,10 @@ generate_fleet_per_service_docs() {
                 timestamp=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
             fi
 
-            if declare -F generate_documents >/dev/null 2>&1; then
-                generate_documents "$version" "$timestamp" "$release_type"
+            if declare -F manifest_docs_generate >/dev/null 2>&1; then
+                manifest_docs_generate "$version" "$timestamp" "$release_type" "repo"
             else
-                log_warning "$service: generate_documents() not available"
+                log_warning "$service: manifest_docs_generate() not available"
                 exit 1
             fi
         ) && {
@@ -447,20 +268,7 @@ generate_fleet_per_service_docs() {
     return 0
 }
 
-# =============================================================================
-# MAIN ENTRY POINTS
-# =============================================================================
-
-# -----------------------------------------------------------------------------
-# Function: fleet_docs_generate
-# -----------------------------------------------------------------------------
-# Main entry point for fleet docs generation.
-# Reads strategy config and dispatches to fleet-root and/or per-service.
-#
-# ARGUMENTS:
-#   $@ - Optional flags: --fleet-only, --services-only, --strategy <s>
-# -----------------------------------------------------------------------------
-fleet_docs_generate() {
+fleet_docs_run() {
     local strategy_override=""
     local fleet_only=false
     local services_only=false
@@ -495,7 +303,7 @@ fleet_docs_generate() {
                 shift
                 ;;
             *)
-                log_error "Unknown option for fleet docs generate: $1"
+                log_error "Unknown option for fleet docs: $1"
                 return 1
                 ;;
         esac
@@ -606,11 +414,12 @@ fleet_docs_generate() {
     fi
 
     local any_failures=0
+    fleet_docs_export_generation_config
 
     # Generate fleet-root docs
     if [[ "$do_fleet_root" == "true" ]]; then
         echo "📄 Generating fleet-root documentation..."
-        generate_fleet_root_docs "$fleet_version" "$timestamp" "$release_type" || {
+        fleet_docs_run_fleet_root "$fleet_version" "$timestamp" "$release_type" || {
             log_warning "Fleet-root docs generation had issues"
             any_failures=1
         }
@@ -619,7 +428,7 @@ fleet_docs_generate() {
     # Generate per-service docs
     if [[ "$do_per_service" == "true" ]]; then
         echo "📄 Generating per-service documentation..."
-        generate_fleet_per_service_docs "$release_type" || {
+        fleet_docs_run_per_service "$release_type" || {
             log_warning "Per-service docs generation had issues"
             any_failures=1
         }
@@ -697,8 +506,11 @@ fleet_docs_status() {
     # Show generation settings
     echo ""
     echo "Document Types:"
+    echo "  Enabled:        $(get_fleet_config_value "docs_gen_enabled" "${MANIFEST_CLI_DOCS_GENERATE_ENABLED:-true}")"
+    echo "  Changelog:      $(get_fleet_config_value "docs_gen_changelog" "${MANIFEST_CLI_DOCS_GENERATE_CHANGELOG:-true}")"
     echo "  Index:          $(get_fleet_config_value "docs_gen_index" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_GEN_INDEX")"
     echo "  README Version: $(get_fleet_config_value "docs_gen_readme_version" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_GEN_README_VERSION")"
+    echo "  Site:           $(get_fleet_config_value "docs_gen_site" "${MANIFEST_CLI_DOCS_GENERATE_SITE:-false}")"
     echo ""
 }
 
@@ -735,6 +547,18 @@ Configuration:
         detail_level: "summary"  # summary | index
       per_service:
         folder: "docs"
+      generate:
+        enabled: true
+        changelog: true
+        readme_version: true
+        index: true
+        archive_cleanup: true
+        site: false
+        site_workflow: true
+      site:
+        enabled: false
+        source_dir: "docs-site"
+        enable_pages: false
 
 Examples:
   manifest docs fleet                     # Generate per configured strategy
@@ -769,10 +593,10 @@ fleet_docs_dispatch() {
                 return 1
             fi
             if [[ "$execution_mode" == "preview" ]]; then
-                fleet_docs_generate --dry-run "${remaining_args[@]}"
+                fleet_docs_run --dry-run "${remaining_args[@]}"
             else
                 manifest_execution_apply_header
-                fleet_docs_generate "${remaining_args[@]}"
+                fleet_docs_run "${remaining_args[@]}"
             fi
             ;;
         status)
@@ -789,10 +613,10 @@ fleet_docs_dispatch() {
                 return 1
             fi
             if [[ "$execution_mode" == "preview" ]]; then
-                fleet_docs_generate --dry-run "${remaining_args[@]}"
+                fleet_docs_run --dry-run "${remaining_args[@]}"
             else
                 manifest_execution_apply_header
-                fleet_docs_generate "${remaining_args[@]}"
+                fleet_docs_run "${remaining_args[@]}"
             fi
             ;;
         patch|minor|major|revision)
@@ -801,10 +625,10 @@ fleet_docs_dispatch() {
                 return 1
             fi
             if [[ "$execution_mode" == "preview" ]]; then
-                fleet_docs_generate "$subcmd" --dry-run "${remaining_args[@]}"
+                fleet_docs_run "$subcmd" --dry-run "${remaining_args[@]}"
             else
                 manifest_execution_apply_header
-                fleet_docs_generate "$subcmd" "${remaining_args[@]}"
+                fleet_docs_run "$subcmd" "${remaining_args[@]}"
             fi
             ;;
         *)
