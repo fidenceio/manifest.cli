@@ -240,10 +240,34 @@ docs:
   # Control which document types are created during fleet docs generation.
   #
   generate:
-    index: true                       # INDEX.md (links to per-service docs)
+    enabled: true
+    changelog: true
     readme_version: true              # Update README.md version section
+    index: true                       # INDEX.md (links to per-service docs)
+    archive_cleanup: true
+    site: false                       # Generate Jekyll source files
+    site_workflow: true               # Generate GitHub Pages workflow when site is enabled
     # Note: per-version RELEASE/CHANGELOG files are no longer generated.
     # Fleet-root CHANGELOG.md gets a prepended entry on each fleet bump.
+
+  site:
+    enabled: false
+    enable_pages: false
+    pages_required: false
+    source_dir: "docs-site"
+    publish_mode: "actions"
+    branding: "auto"
+    theme: "manifest"
+    title: ""
+    description: ""
+    custom_css: ""
+    palette:
+      primary: "#2563eb"
+      accent: "#14b8a6"
+      background: "#ffffff"
+      surface: "#f8fafc"
+      text: "#111827"
+      muted: "#64748b"
 
 # =============================================================================
 # FLEET OPERATIONS

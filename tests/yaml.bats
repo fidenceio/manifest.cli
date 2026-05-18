@@ -83,6 +83,24 @@ EOF
     [ "$output" = "docs.review.outputs" ]
 }
 
+@test "yaml: maps documentation generation and site config" {
+    run yaml_path_to_env_var "docs.generate.enabled"
+    [ "$status" -eq 0 ]
+    [ "$output" = "MANIFEST_CLI_DOCS_GENERATE_ENABLED" ]
+
+    run yaml_path_to_env_var "docs.generate.site_workflow"
+    [ "$status" -eq 0 ]
+    [ "$output" = "MANIFEST_CLI_DOCS_GENERATE_SITE_WORKFLOW" ]
+
+    run yaml_path_to_env_var "docs.site.palette.primary"
+    [ "$status" -eq 0 ]
+    [ "$output" = "MANIFEST_CLI_DOCS_SITE_PALETTE_PRIMARY" ]
+
+    run env_var_to_yaml_path "MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES"
+    [ "$status" -eq 0 ]
+    [ "$output" = "docs.site.enable_pages" ]
+}
+
 @test "yaml: maps config-surface keys lifted from env-only settings" {
     run yaml_path_to_env_var "release.canonical_repo_slugs"
     [ "$status" -eq 0 ]
@@ -137,7 +155,11 @@ EOF
     set_yaml_value "$YAML" "github.release.enabled" "false"
     set_yaml_value "$YAML" "docs.review.outputs" "commit_body,report"
     set_yaml_value "$YAML" "docs.review.report_dir" "docs/reviews"
+    set_yaml_value "$YAML" "docs.generate.enabled" "false"
+    set_yaml_value "$YAML" "docs.site.source_dir" "site-docs"
+    set_yaml_value "$YAML" "docs.site.theme" "minimal"
     unset MANIFEST_CLI_GIT_TAG_PREFIX MANIFEST_CLI_GIT_DEFAULT_BRANCH MANIFEST_CLI_RELEASE_TAG_TARGET MANIFEST_CLI_GITHUB_RELEASE_ENABLED MANIFEST_CLI_DOC_REVIEW_OUTPUTS MANIFEST_CLI_DOC_REVIEW_REPORT_DIR
+    unset MANIFEST_CLI_DOCS_GENERATE_ENABLED MANIFEST_CLI_DOCS_SITE_SOURCE_DIR MANIFEST_CLI_DOCS_SITE_THEME
     load_yaml_to_env "$YAML"
     [ "$MANIFEST_CLI_GIT_TAG_PREFIX" = "release-" ]
     [ "$MANIFEST_CLI_GIT_DEFAULT_BRANCH" = "trunk" ]
@@ -145,6 +167,9 @@ EOF
     [ "$MANIFEST_CLI_GITHUB_RELEASE_ENABLED" = "false" ]
     [ "$MANIFEST_CLI_DOC_REVIEW_OUTPUTS" = "commit_body,report" ]
     [ "$MANIFEST_CLI_DOC_REVIEW_REPORT_DIR" = "docs/reviews" ]
+    [ "$MANIFEST_CLI_DOCS_GENERATE_ENABLED" = "false" ]
+    [ "$MANIFEST_CLI_DOCS_SITE_SOURCE_DIR" = "site-docs" ]
+    [ "$MANIFEST_CLI_DOCS_SITE_THEME" = "minimal" ]
 }
 
 @test "yaml: load_yaml_to_env exports lifted config-surface keys" {

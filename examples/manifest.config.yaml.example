@@ -120,8 +120,33 @@ docs:
                               #   "off"        - never delete; archive grows
                               # SECURITY_ANALYSIS_REPORT_v* files are point-in-time
                               # audits and are never auto-deleted.
-  auto_generate: true
   template_dir: ""
+  generate:
+    enabled: true
+    changelog: true
+    readme_version: true
+    index: true
+    archive_cleanup: true
+    site: false
+    site_workflow: true
+  site:
+    enabled: false
+    enable_pages: false
+    pages_required: false
+    source_dir: "docs-site"
+    publish_mode: "actions"
+    branding: "auto"
+    theme: "manifest"
+    title: ""
+    description: ""
+    custom_css: ""
+    palette:
+      primary: "#2563eb"
+      accent: "#14b8a6"
+      background: "#ffffff"
+      surface: "#f8fafc"
+      text: "#111827"
+      muted: "#64748b"
   review:
     enabled: true
     outputs: "commit_body,report,release_notes"

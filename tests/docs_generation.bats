@@ -3,7 +3,7 @@
 load 'helpers/setup'
 
 setup() {
-    load_modules "core/manifest-config.sh" "git/manifest-git-changes.sh"
+    load_modules "core/manifest-config.sh" "git/manifest-git-changes.sh" "docs/manifest-documentation.sh"
     set_default_configuration
     SCRATCH="$(mk_scratch)"
 }
@@ -78,4 +78,63 @@ EOF
     [ "$status" -eq 0 ]
     grep -qx '^- Real change$' "$changes"
     [ "$(grep -c '^- ' "$changes")" -eq 1 ]
+}
+
+prepare_docs_site_repo() {
+    mkdir -p "$SCRATCH/repo/docs"
+    printf '# Test Repo\n' > "$SCRATCH/repo/README.md"
+    printf '# Changelog\n' > "$SCRATCH/repo/CHANGELOG.md"
+    printf '# Index\n' > "$SCRATCH/repo/docs/INDEX.md"
+}
+
+@test "docs site generation writes managed Jekyll source without build artifacts" {
+    prepare_docs_site_repo
+
+    PROJECT_ROOT="$SCRATCH/repo" \
+    MANIFEST_CLI_DOCS_GENERATE_SITE=true \
+    MANIFEST_CLI_DOCS_GENERATE_SITE_WORKFLOW=true \
+    MANIFEST_CLI_DOCS_SITE_SOURCE_DIR="docs-site" \
+    run _manifest_docs_generate_site "99.4.0" "2026-05-18 12:00:00 UTC" "repo" "$SCRATCH/repo" "$SCRATCH/repo/docs"
+
+    [ "$status" -eq 0 ]
+    grep -q "Managed by Manifest CLI docs site generation" "$SCRATCH/repo/docs-site/_config.yml"
+    grep -q "Managed by Manifest CLI docs site generation" "$SCRATCH/repo/docs-site/index.md"
+    grep -q "Managed by Manifest CLI docs site generation" "$SCRATCH/repo/docs-site/_layouts/default.html"
+    grep -q "Managed by Manifest CLI docs site generation" "$SCRATCH/repo/docs-site/assets/css/manifest.css"
+    grep -q "_site/" "$SCRATCH/repo/docs-site/.gitignore"
+    [ -f "$SCRATCH/repo/.github/workflows/manifest-docs-pages.yml" ]
+    grep -q ".manifest-pages-src" "$SCRATCH/repo/.github/workflows/manifest-docs-pages.yml"
+    grep -q "cp README.md" "$SCRATCH/repo/.github/workflows/manifest-docs-pages.yml"
+    [ ! -d "$SCRATCH/repo/docs-site/_site" ]
+    [ ! -d "$SCRATCH/repo/docs-site/.jekyll-cache" ]
+    [ ! -d "$SCRATCH/repo/docs-site/.bundle" ]
+}
+
+@test "docs site generation refuses unmanaged collisions" {
+    prepare_docs_site_repo
+    mkdir -p "$SCRATCH/repo/docs-site"
+    printf 'user-owned\n' > "$SCRATCH/repo/docs-site/index.md"
+
+    PROJECT_ROOT="$SCRATCH/repo" \
+    MANIFEST_CLI_DOCS_GENERATE_SITE=true \
+    run _manifest_docs_generate_site "99.5.0" "2026-05-18 12:00:00 UTC" "repo" "$SCRATCH/repo" "$SCRATCH/repo/docs"
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Refusing to overwrite unmanaged docs site file"* ]]
+    [ "$(cat "$SCRATCH/repo/docs-site/index.md")" = "user-owned" ]
+}
+
+@test "docs site generation can request GitHub Pages workflow publishing through gh" {
+    prepare_docs_site_repo
+    git -C "$SCRATCH/repo" init -q
+    git -C "$SCRATCH/repo" remote add origin git@github.com:example/docs-site-test.git
+    gh_stub_install "$SCRATCH/gh"
+
+    PROJECT_ROOT="$SCRATCH/repo" \
+    MANIFEST_CLI_DOCS_GENERATE_SITE=true \
+    MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES=true \
+    run _manifest_docs_generate_site "99.6.0" "2026-05-18 12:00:00 UTC" "repo" "$SCRATCH/repo" "$SCRATCH/repo/docs"
+
+    [ "$status" -eq 0 ]
+    grep -q $'\tapi\t--method\tPOST\trepos/example/docs-site-test/pages\t-f\tbuild_type=workflow' "$GH_STUB_LOG"
 }

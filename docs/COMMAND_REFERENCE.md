@@ -349,7 +349,7 @@ manifest refresh repo --commit     # Also commit refreshed files
 | ---- | ----------- |
 | `--commit` | Commit refreshed files after regeneration |
 
-**Delegates to:** `generate_documents()`, `main_cleanup()`, `validate_project()`, `update_repository_metadata()`
+**Delegates to:** `manifest_docs_generate()`, `main_cleanup()`, `validate_project()`, `update_repository_metadata()`
 
 ### `manifest refresh fleet`
 
@@ -514,7 +514,7 @@ release-note/changelog attachment.
 4. Auto-commit uncommitted changes, after smart documentation review
 5. `sync_repository()` — pull from remotes
 6. `bump_version()` — increment VERSION file
-7. `generate_documents()` — release notes, changelog
+7. `manifest_docs_generate()` — release notes, changelog
 8. `main_cleanup()` — archive previous version docs
 9. `validate_project()` — markdown validation
 10. `commit_changes()` — commit version bump
