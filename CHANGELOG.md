@@ -1,5 +1,16 @@
 # Changelog
 
+## [48.0.1] - 2026-05-18
+
+**Release Type:** Patch
+
+### Changes
+
+- Add GitHub Release publishing support
+- Update release copy and configuration examples
+- Add regression coverage for the changed CLI workflow
+
+
 ## [48.0.0] - 2026-05-18
 
 **Release Type:** Major
@@ -77,12 +88,3 @@
 ### Changes
 
 - Ignore unrelated manifest executables on uninstall
-
-
-## [47.12.3] - 2026-05-14
-
-**Release Type:** Patch
-
-### Changes
-
-- Clarify Homebrew uninstall caveats
