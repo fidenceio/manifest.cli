@@ -1204,12 +1204,16 @@ EOF
                     brew install fidenceio/tap/manifest || brew install manifest
                 fi
             else
-                echo "Reinstalling via manual install..."
-                if manifest_load_plugin "workflow/manifest-auto-upgrade.sh"; then
-                    install_cli "true"
-                    migrate_user_global_config_internal
+                # Manual reinstall: delegate to the canonical install-cli.sh.
+                # Requires the user to be in the Manifest CLI source repo (or
+                # in a checkout that still has install-cli.sh + modules/).
+                if [ -f "$PROJECT_ROOT/install-cli.sh" ] && [ -d "$PROJECT_ROOT/modules" ]; then
+                    echo "Reinstalling via manual install (running install-cli.sh from $PROJECT_ROOT)..."
+                    bash "$PROJECT_ROOT/install-cli.sh"
                 else
-                    log_error "Manual reinstall requires Manifest Cloud. Use: brew reinstall manifest"
+                    log_error "Manual reinstall requires install-cli.sh from the Manifest CLI source repo."
+                    log_error "  cd /path/to/manifest.cli && ./install-cli.sh"
+                    log_error "  brew reinstall fidenceio/tap/manifest"
                     return 1
                 fi
             fi
