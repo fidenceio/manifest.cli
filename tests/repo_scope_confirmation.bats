@@ -79,6 +79,39 @@ init_repo_fixture() {
     [ "$(cat "$SCRATCH/VERSION")" = "1.2.3" ]
 }
 
+@test "ship repo apply fails before version bump when git index is locked" {
+    init_repo_fixture
+    touch "$SCRATCH/.git/index.lock"
+
+    MANIFEST_CLI_AUTO_CONFIRM=1 PROJECT_ROOT="$SCRATCH" run manifest_ship_repo patch -y
+
+    [ "$status" -ne 0 ]
+    echo "$output" | grep -q "Git index lock already exists"
+    echo "$output" | grep -q "refusing to mutate files before Git can commit"
+    [ "$(cat "$SCRATCH/VERSION")" = "1.2.3" ]
+}
+
+@test "ship repo apply fails before version bump when git metadata is unwritable" {
+    if [ "$(id -u)" -eq 0 ]; then
+        skip "running as root bypasses chmod-based write restriction"
+    fi
+    init_repo_fixture
+    chmod u-w "$SCRATCH/.git"
+
+    MANIFEST_CLI_AUTO_CONFIRM=1 PROJECT_ROOT="$SCRATCH" run manifest_ship_repo patch -y
+    rc="$status"
+    out="$output"
+
+    # Restore write permission immediately so teardown can clean up regardless
+    # of whether assertions below pass or terminate the test.
+    chmod u+w "$SCRATCH/.git"
+
+    [ "$rc" -ne 0 ]
+    echo "$out" | grep -q "Git metadata is not writable"
+    echo "$out" | grep -q "refusing to mutate files before Git can commit"
+    [ "$(cat "$SCRATCH/VERSION")" = "1.2.3" ]
+}
+
 @test "repo confirmation refuses a declined interactive prompt" {
     if [ "${MANIFEST_CLI_ENABLE_PTY_TESTS:-0}" != "1" ]; then
         skip "PTY prompt test is opt-in; script is not a Manifest runtime dependency"

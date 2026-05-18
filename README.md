@@ -239,7 +239,11 @@ plan so a fleet workspace cannot hide which nested Git checkout will be
 released. The identity block includes `Scope: repo`, the Git root, origin,
 branch/upstream, detected fleet root, fleet member, and a `You are in:` line
 that names the current checkout. Apply mode also prints an explicit target summary and asks
-`Apply to this repository? [y/N]` before mutation.
+`Apply to this repository? [y/N]` before mutation. After confirmation, Manifest
+checks that Git metadata is writable and that the Git index lock can be created;
+if not, it stops before bumping `VERSION`. In sandboxed automation, run
+release/apply commands outside the restrictive sandbox or grant the exact
+Manifest command Git write access.
 
 `manifest status fleet` and `manifest ship fleet ...` make fleet scope explicit:
 they print the fleet root/config, `Scope: fleet`, and list the included repositories by service,
