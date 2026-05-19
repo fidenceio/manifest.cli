@@ -1,5 +1,10 @@
 # Changelog
 
+## [48.2.2] - 2026-05-19
+
+**Release Type:** Patch — no user-facing changes.
+
+
 ## [48.2.1] - 2026-05-19
 
 **Release Type:** Patch
@@ -87,8 +92,3 @@
 ### Changes
 
 - Update release copy and configuration examples
-
-
-## [47.14.1] - 2026-05-16
-
-**Release Type:** Patch — no user-facing changes.
