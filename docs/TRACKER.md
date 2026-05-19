@@ -119,6 +119,11 @@ The base contract is already live: mutating commands preview by default, `--dry-
   - **Deliverable:** run `./scripts/run-tests-container.sh` after each execution-policy or fleet-policy phase, and record failures in the change that introduced them.
   - **Anchor:** [`scripts/run-tests-container.sh`](../scripts/run-tests-container.sh).
 
+- **4.5 Restore the two failing `homebrew_tap_refresh.bats` tests.**
+  - **Why:** on a clean `HEAD` (verified 2026-05-19 by stashing all working-tree changes and re-running), `bats tests/homebrew_tap_refresh.bats` reports `not ok 3 Homebrew tap refresher updates sibling workspace checkout` and `not ok 4 Homebrew tap refresher leaves dirty sibling checkout alone`. Both fail with `warning: You appear to have cloned an empty repository` and the `*"N current/updated, M skipped, K failed"*` summary assertion misses. Pre-existing — predates this session's §1.3 fix and is unrelated to it.
+  - **Deliverable:** root-cause whether the sibling-checkout fixture needs a seed commit on the remote, the refresher helper changed its summary line format, or the assertion regex drifted; restore both tests to green and add a brief regression note if the failure mode is recurrence-prone.
+  - **Anchor:** [`tests/homebrew_tap_refresh.bats`](../tests/homebrew_tap_refresh.bats), [`modules/core/manifest-core.sh`](../modules/core/manifest-core.sh) (`manifest_refresh_homebrew_tap_checkouts`).
+
 ---
 
 ## 5. Docs And Completions
