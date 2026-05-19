@@ -1,5 +1,16 @@
 # Changelog
 
+## [48.1.0] - 2026-05-19
+
+**Release Type:** Minor
+
+### Changes
+
+- Track findings from 2026-05-19 fleet-ship trial
+- Push Homebrew formula to tap remote directly (SSH by default)
+- Track pre-existing homebrew_tap_refresh.bats tests 3/4 failures
+
+
 ## [48.0.2] - 2026-05-19
 
 **Release Type:** Patch
@@ -82,12 +93,3 @@
 - Fix CLI tracker README anchor and heading level
 - Docs(tracker): add §3.7 manifest select repo
 - Honor MANIFEST_CLI_AUTO_CONFIRM in repo-scope confirmation
-
-
-## [47.12.5] - 2026-05-14
-
-**Release Type:** Patch
-
-### Changes
-
-- Normalize Manifest environment namespace
