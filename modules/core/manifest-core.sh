@@ -209,6 +209,62 @@ manifest_refresh_homebrew_tap_checkouts() {
     return 0
 }
 
+# Push an updated Formula/manifest.rb from a tap checkout to the canonical
+# Homebrew tap remote. Defaults to the SSH URL so push works regardless of how
+# the local checkout's `origin` was configured (modern `brew tap` defaults to
+# HTTPS, which fails the push with `could not read Username for 'https://github.com'`
+# on hosts without cached HTTPS credentials).
+#
+# Overrides:
+#   MANIFEST_CLI_HOMEBREW_TAP_REMOTE_URL — push target (default: SSH URL)
+#   MANIFEST_CLI_HOMEBREW_TAP_BRANCH     — target branch (default: main)
+manifest_homebrew_tap_push_formula() {
+    local tap_dir="$1"
+    local formula_file="$2"
+    local tag="$3"
+
+    local push_remote_url="${MANIFEST_CLI_HOMEBREW_TAP_REMOTE_URL:-git@github.com:fidenceio/homebrew-tap.git}"
+    local push_branch="${MANIFEST_CLI_HOMEBREW_TAP_BRANCH:-main}"
+
+    cp "$formula_file" "$tap_dir/Formula/manifest.rb"
+
+    local push_log
+    push_log="$(mktemp)"
+    (
+        set -e
+        cd "$tap_dir"
+        git add Formula/manifest.rb
+        if ! git diff --cached --quiet; then
+            git commit -m "Update formula to ${tag}"
+        fi
+        git push "$push_remote_url" "HEAD:${push_branch}"
+    ) >"$push_log" 2>&1
+    local push_status=$?
+
+    if [ "$push_status" -eq 0 ]; then
+        cat "$push_log"
+        echo "   ✅ Pushed to homebrew-tap repo (${push_remote_url})"
+        rm -f "$push_log"
+        return 0
+    fi
+
+    cat "$push_log" >&2
+    log_error "Failed to push formula to homebrew-tap repo (${push_remote_url})"
+    if grep -q "could not read Username for 'https://github.com" "$push_log"; then
+        cat >&2 <<'EOF'
+
+   The push target appears to be HTTPS with no cached credentials.
+   Fix once, workspace-wide (recommended):
+     git config --global url."git@github.com:fidenceio/".insteadOf "https://github.com/fidenceio/"
+
+   This rewrites any https://github.com/fidenceio/* URL to SSH at the git
+   transport layer — no per-repo remote edits needed, and survives re-taps.
+EOF
+    fi
+    rm -f "$push_log"
+    return "$push_status"
+}
+
 # Update Homebrew formula in both this repo and the tap repo
 update_homebrew_formula() {
     if ! should_update_homebrew_for_repo; then
@@ -279,19 +335,7 @@ update_homebrew_formula() {
         else
             echo "   ⚠️  Could not pull latest from homebrew-tap — continuing with local state"
         fi
-        cp "$formula_file" "$tap_dir/Formula/manifest.rb"
-        if (
-            set -e
-            cd "$tap_dir"
-            git add Formula/manifest.rb
-            if ! git diff --cached --quiet; then
-                git commit -m "Update formula to ${tag}"
-            fi
-            git push origin main
-        ); then
-            echo "   ✅ Pushed to homebrew-tap repo"
-        else
-            log_error "Failed to push formula to homebrew-tap repo"
+        if ! manifest_homebrew_tap_push_formula "$tap_dir" "$formula_file" "$tag"; then
             return 1
         fi
     else
