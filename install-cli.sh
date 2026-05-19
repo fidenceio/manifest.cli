@@ -209,50 +209,54 @@ migrate_user_global_configuration() {
 
     local migrated=0
 
+    # get_yaml_value with explicit "" default keeps the migration safe under
+    # `set -e`: a missing key returns "" rc=0 rather than rc=1, which would
+    # otherwise abort the installer on a fresh config file that doesn't yet
+    # carry the legacy keys this function is checking for.
     local time1 time2 time3 time4 tap_repo
-    time1=$(get_yaml_value "$config_file" "time.server1")
-    time2=$(get_yaml_value "$config_file" "time.server2")
-    time3=$(get_yaml_value "$config_file" "time.server3")
-    time4=$(get_yaml_value "$config_file" "time.server4")
-    tap_repo=$(get_yaml_value "$config_file" "brew.tap_repo")
+    time1=$(get_yaml_value "$config_file" ".time.server1" "")
+    time2=$(get_yaml_value "$config_file" ".time.server2" "")
+    time3=$(get_yaml_value "$config_file" ".time.server3" "")
+    time4=$(get_yaml_value "$config_file" ".time.server4" "")
+    tap_repo=$(get_yaml_value "$config_file" ".brew.tap_repo" "")
 
     # Migrate only known legacy defaults; preserve user custom values.
     if [ "$time1" = "time.apple.com" ] || [ "$time1" = "216.239.35.0" ]; then
-        set_yaml_value "$config_file" "time.server1" "https://www.cloudflare.com/cdn-cgi/trace"
+        set_yaml_value "$config_file" ".time.server1" "https://www.cloudflare.com/cdn-cgi/trace"
         migrated=$((migrated + 1))
     fi
     if [ "$time2" = "time.google.com" ] || [ "$time2" = "216.239.35.4" ]; then
-        set_yaml_value "$config_file" "time.server2" "https://www.google.com/generate_204"
+        set_yaml_value "$config_file" ".time.server2" "https://www.google.com/generate_204"
         migrated=$((migrated + 1))
     fi
     if [ "$time3" = "pool.ntp.org" ]; then
-        set_yaml_value "$config_file" "time.server3" "https://www.apple.com"
+        set_yaml_value "$config_file" ".time.server3" "https://www.apple.com"
         migrated=$((migrated + 1))
     fi
     if [ "$time4" = "time.nist.gov" ]; then
-        set_yaml_value "$config_file" "time.server4" ""
+        set_yaml_value "$config_file" ".time.server4" ""
         migrated=$((migrated + 1))
     fi
     if [ "$tap_repo" = "https://github.com/fidenceio/fidenceio-homebrew-tap.git" ]; then
-        set_yaml_value "$config_file" "brew.tap_repo" "https://github.com/fidenceio/homebrew-tap.git"
+        set_yaml_value "$config_file" ".brew.tap_repo" "https://github.com/fidenceio/homebrew-tap.git"
         migrated=$((migrated + 1))
     fi
 
     # Ensure new cache controls exist.
     local cache_ttl cache_cleanup cache_stale
-    cache_ttl=$(get_yaml_value "$config_file" "time.cache_ttl")
+    cache_ttl=$(get_yaml_value "$config_file" ".time.cache_ttl" "")
     if [ -z "$cache_ttl" ]; then
-        set_yaml_value "$config_file" "time.cache_ttl" "120"
+        set_yaml_value "$config_file" ".time.cache_ttl" "120"
         migrated=$((migrated + 1))
     fi
-    cache_cleanup=$(get_yaml_value "$config_file" "time.cache_cleanup_period")
+    cache_cleanup=$(get_yaml_value "$config_file" ".time.cache_cleanup_period" "")
     if [ -z "$cache_cleanup" ]; then
-        set_yaml_value "$config_file" "time.cache_cleanup_period" "3600"
+        set_yaml_value "$config_file" ".time.cache_cleanup_period" "3600"
         migrated=$((migrated + 1))
     fi
-    cache_stale=$(get_yaml_value "$config_file" "time.cache_stale_max_age")
+    cache_stale=$(get_yaml_value "$config_file" ".time.cache_stale_max_age" "")
     if [ -z "$cache_stale" ]; then
-        set_yaml_value "$config_file" "time.cache_stale_max_age" "21600"
+        set_yaml_value "$config_file" ".time.cache_stale_max_age" "21600"
         migrated=$((migrated + 1))
     fi
 
