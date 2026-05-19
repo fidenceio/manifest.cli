@@ -148,6 +148,13 @@ EOF
     [ "$output" = "fallback-val" ]
 }
 
+@test "yaml: get_yaml_value treats an explicit empty default as a default" {
+    : > "$YAML"
+    run get_yaml_value "$YAML" ".does.not.exist" ""
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+}
+
 @test "yaml: load_yaml_to_env exports mapped keys into MANIFEST_CLI_* envs" {
     set_yaml_value "$YAML" "git.tag_prefix" "release-"
     set_yaml_value "$YAML" "git.default_branch" "trunk"

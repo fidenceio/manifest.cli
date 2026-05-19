@@ -35,6 +35,16 @@ teardown() {
     [[ "$output" != *"--follow-tags"* ]]
 }
 
+@test "ship failure report avoids rollback advice after published Homebrew failure" {
+    run emit_ship_failure_report "homebrew_update" "$(git rev-parse HEAD)" "1.2.3" "v1.2.3" "success" "failed"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Release artifacts are already pushed"* ]]
+    [[ "$output" == *"Resume:      manifest ship repo resume"* ]]
+    [[ "$output" == *"Verify tag:  git ls-remote --tags origin v1.2.3"* ]]
+    [[ "$output" != *"Remove tag:"* ]]
+    [[ "$output" != *"Roll back:"* ]]
+}
+
 @test "ship repo resume pushes existing local release tag" {
     local remote="$SCRATCH/remote.git"
     git init --bare -q "$remote"
@@ -60,6 +70,38 @@ teardown() {
     unset MANIFEST_CLI_SHIP_FOLLOWUP_PATCH MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE
 
     run manifest_ship_should_run_followup_patch "minor" "true"
+
+    [ "$status" -eq 0 ]
+}
+
+@test "follow-up patch gate skips formula-only post-tag changes" {
+    should_update_homebrew_for_repo() { return 0; }
+    unset MANIFEST_CLI_SHIP_FOLLOWUP_PATCH MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE
+    mkdir -p formula
+    echo "old formula" > formula/manifest.rb
+    git add formula/manifest.rb
+    git commit -qm "Add formula"
+    run create_tag "1.2.3"
+    [ "$status" -eq 0 ]
+    echo "new formula" > formula/manifest.rb
+    git add formula/manifest.rb
+    git commit -qm "Update Homebrew formula to v1.2.3"
+
+    run manifest_ship_should_run_followup_patch "minor" "true" "v1.2.3"
+
+    [ "$status" -ne 0 ]
+}
+
+@test "follow-up patch gate allows non-formula post-tag changes" {
+    should_update_homebrew_for_repo() { return 0; }
+    unset MANIFEST_CLI_SHIP_FOLLOWUP_PATCH MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE
+    run create_tag "1.2.3"
+    [ "$status" -eq 0 ]
+    echo "runtime change" > runtime.txt
+    git add runtime.txt
+    git commit -qm "Runtime change"
+
+    run manifest_ship_should_run_followup_patch "minor" "true" "v1.2.3"
 
     [ "$status" -eq 0 ]
 }

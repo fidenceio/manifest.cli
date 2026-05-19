@@ -848,6 +848,11 @@ configure_path() {
         if [ -n "$shell_profile" ]; then
             print_warning "⚠️  To make this permanent, add this line to $shell_profile:"
             echo "   export PATH=\"$MANIFEST_CLI_LOCAL_BIN:\$PATH\""
+
+            if [ ! -t 0 ]; then
+                print_status "Non-interactive shell detected; skipping automatic profile edit"
+                return 0
+            fi
             
             # Offer to add it automatically
             read -p "   Would you like me to add this to $shell_profile? (y/N): " -n 1 -r
