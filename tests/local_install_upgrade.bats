@@ -71,6 +71,28 @@ teardown() {
     ! echo "$output" | grep -q "Homebrew upgrade did not complete"
 }
 
+@test "local upgrade skips brew replacement while running from Homebrew Cellar" {
+    export MANIFEST_CLI_CORE_MODULES_DIR="$SCRATCH/homebrew/Cellar/manifest/1.2.2/libexec/modules"
+    mkdir -p "$MANIFEST_CLI_CORE_MODULES_DIR"
+    brew() {
+        case "$1 ${2:-} ${3:-}" in
+            "list --formula manifest") return 0 ;;
+            "update "*|"update") echo "unexpected brew update"; return 1 ;;
+            "upgrade manifest"*) echo "unexpected brew upgrade"; return 1 ;;
+            *) return 0 ;;
+        esac
+    }
+
+    run manifest_ship_post_push_steps "1.2.3" "$(git rev-parse HEAD)" "v1.2.3" "success"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Skipping live Homebrew upgrade"
+    echo "$output" | grep -q "brew update && brew upgrade manifest"
+    ! echo "$output" | grep -q "unexpected brew update"
+    ! echo "$output" | grep -q "unexpected brew upgrade"
+    ! echo "$output" | grep -q "Local installation upgraded"
+}
+
 @test "local upgrade warns when brew has manifest installed but upgrade fails" {
     brew() {
         case "$1 ${2:-} ${3:-}" in

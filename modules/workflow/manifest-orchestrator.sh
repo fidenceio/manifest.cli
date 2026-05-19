@@ -52,18 +52,25 @@ emit_ship_failure_report() {
     git status --short --branch 2>/dev/null || echo "   (unavailable)"
     echo ""
     echo "🛠️  Recovery commands:"
-    if [ -n "$tag_name" ] && [ "$tag_name" != "none" ]; then
+    if [[ "$push_status" == "success" && "$failure_step" =~ ^(homebrew_|github_release) ]]; then
+        echo "   Release artifacts are already pushed. Do not delete the tag or hard-reset unless you are intentionally rolling back a public release."
+        echo "   Resume:      manifest ship repo resume"
+        echo "   Retry branch push if needed: git push origin ${branch}"
+        if [ -n "$tag_name" ] && [ "$tag_name" != "none" ]; then
+            echo "   Verify tag:  git ls-remote --tags origin ${tag_name}"
+        fi
+    elif [ -n "$tag_name" ] && [ "$tag_name" != "none" ]; then
         echo "   Retry push:  git push origin ${branch} ${tag_name}"
         echo "   Resume:      manifest ship repo resume"
         echo "   Remove tag:  git tag -d ${tag_name}"
     else
         echo "   Retry push:  git push origin ${branch}"
     fi
-    if [ -n "$start_sha" ]; then
+    if [ -n "$start_sha" ] && ! [[ "$push_status" == "success" && "$failure_step" =~ ^(homebrew_|github_release) ]]; then
         echo "   Roll back:   git reset --hard ${start_sha}"
     fi
     echo ""
-	}
+}
 
 manifest_should_wait_for_github_actions() {
     ! is_falsy "${MANIFEST_CLI_GITHUB_ACTIONS_WAIT:-false}"
@@ -229,6 +236,7 @@ manifest_ship_post_push_steps() {
     local workflow_push_status="${4:-success}"
     local workflow_homebrew_status="skipped"
     local workflow_github_release_status="skipped"
+    _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="not_attempted"
 
     # Update Homebrew formula only for the Manifest CLI canonical repository.
     if [ -f "$PROJECT_ROOT/formula/manifest.rb" ] && should_update_homebrew_for_repo; then
@@ -290,16 +298,25 @@ manifest_ship_post_push_steps() {
             if ! brew list --formula manifest &>/dev/null; then
                 echo "⚠️  Local manifest is not installed via Homebrew — skipping upgrade"
                 echo "   Run: brew install fidenceio/tap/manifest"
+                _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="skipped_not_homebrew"
+            elif manifest_ship_running_from_homebrew_install; then
+                echo "⚠️  Skipping live Homebrew upgrade because this release is running from the installed Manifest CLI tree."
+                echo "   Run after this command exits: brew update && brew upgrade manifest"
+                _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="skipped_live_process"
             elif brew update &>/dev/null && brew upgrade manifest 2>&1; then
                 echo "✅ Local installation upgraded to v$new_version via Homebrew"
+                _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="success"
             else
                 echo "⚠️  Homebrew upgrade did not complete — try 'brew update && brew upgrade manifest' manually"
+                _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="failed"
             fi
         else
             if manifest upgrade --force 2>&1; then
                 echo "✅ Local installation upgraded to v$new_version"
+                _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="success"
             else
                 echo "⚠️  Local upgrade did not complete — try 'manifest upgrade --force' manually"
+                _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="failed"
             fi
         fi
         echo ""
@@ -310,9 +327,42 @@ manifest_ship_post_push_steps() {
     return 0
 }
 
+manifest_ship_running_from_homebrew_install() {
+    if is_truthy "${MANIFEST_CLI_ALLOW_LIVE_HOMEBREW_UPGRADE:-false}"; then
+        return 1
+    fi
+
+    local modules_dir="${MANIFEST_CLI_CORE_MODULES_DIR:-}"
+    case "$modules_dir" in
+        */Cellar/manifest/*/libexec/modules|*/Cellar/manifest/*/modules)
+            return 0
+            ;;
+    esac
+
+    return 1
+}
+
+manifest_ship_followup_has_releasable_changes() {
+    local tag_name="${1:-}"
+    if [[ -z "$tag_name" || "$tag_name" == "none" ]]; then
+        return 0
+    fi
+
+    if ! git rev-parse "${tag_name}^{commit}" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    local changed_files dirty_files
+    changed_files="$(git diff --name-only "${tag_name}..HEAD" -- . ':(exclude)formula/manifest.rb' 2>/dev/null || true)"
+    dirty_files="$(git status --porcelain 2>/dev/null | awk '$2 != "formula/manifest.rb" && $0 != "" { print; found=1 } END { exit found ? 0 : 1 }' || true)"
+
+    [[ -n "$changed_files" || -n "$dirty_files" ]]
+}
+
 manifest_ship_should_run_followup_patch() {
     local increment_type="$1"
     local publish_release="${2:-false}"
+    local tag_name="${3:-}"
 
     [[ "$publish_release" == "true" ]] || return 1
     [[ "$increment_type" != "patch" ]] || return 1
@@ -323,6 +373,10 @@ manifest_ship_should_run_followup_patch() {
     fi
 
     if ! should_update_homebrew_for_repo; then
+        return 1
+    fi
+
+    if ! manifest_ship_followup_has_releasable_changes "$tag_name"; then
         return 1
     fi
 
@@ -579,6 +633,7 @@ manifest_ship_workflow() {
         elif [ "$_ac_count" -gt 1 ]; then
             _ac_hint=" ($_ac_count files: $_ac_first, ...)"
         fi
+        echo "⚠️  Auto-committing $_ac_count pending file(s) into this release from $PROJECT_ROOT."
         commit_changes "Auto-commit before Manifest process$_ac_hint" "$timestamp"
         echo ""
     fi
@@ -743,7 +798,7 @@ manifest_ship_workflow() {
     echo "   - Uncertainty: ±$MANIFEST_CLI_TIME_UNCERTAINTY seconds"
     echo "   - Method: $MANIFEST_CLI_TIME_METHOD"
 
-    if manifest_ship_should_run_followup_patch "$increment_type" "$publish_release"; then
+    if manifest_ship_should_run_followup_patch "$increment_type" "$publish_release" "$workflow_tag_name"; then
         manifest_ship_run_followup_patch
     fi
 }

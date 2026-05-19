@@ -412,13 +412,15 @@ parse_yaml_with_yq() {
 get_yaml_value() {
     local yaml_file="$1"
     local yaml_path="$2"
-    local default_value="${3:-}"
+    local default_value="${3-}"
+    local has_default=false
+    [[ $# -ge 3 ]] && has_default=true
 
     # Validate yq is available (cached after first call)
     if [[ -z "${_MANIFEST_YAML_PARSER:-}" ]]; then
         _MANIFEST_YAML_PARSER=$(detect_yaml_parser) || {
             # yq missing — return default if provided, else fail
-            if [[ -n "$default_value" ]]; then
+            if [[ "$has_default" == "true" ]]; then
                 echo "$default_value"
                 return 0
             fi
@@ -431,7 +433,7 @@ get_yaml_value() {
     if value=$(parse_yaml_with_yq "$yaml_file" "$yaml_path" 2>/dev/null); then
         echo "$value"
         return 0
-    elif [[ -n "$default_value" ]]; then
+    elif [[ "$has_default" == "true" ]]; then
         echo "$default_value"
         return 0
     else
