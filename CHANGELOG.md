@@ -1,5 +1,17 @@
 # Changelog
 
+## [48.0.2] - 2026-05-19
+
+**Release Type:** Patch
+
+### Changes
+
+- Gate local-upgrade step on successful tap push
+- Centralize install/uninstall path constants in one module
+- Delete plugin's install_cli; reinstall delegates to install-cli.sh
+- Add regression coverage for the changed CLI workflow
+
+
 ## [48.0.1] - 2026-05-18
 
 **Release Type:** Patch
@@ -79,12 +91,3 @@
 ### Changes
 
 - Normalize Manifest environment namespace
-
-
-## [47.12.4] - 2026-05-14
-
-**Release Type:** Patch
-
-### Changes
-
-- Ignore unrelated manifest executables on uninstall
