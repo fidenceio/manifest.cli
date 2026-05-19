@@ -25,6 +25,7 @@ Open work for the Manifest CLI repo.
 - **1.3 Stop the ship → tap-remote formula push from silently falling through.**
   - **Why:** `manifest ship repo` updates the in-repo [`formula/manifest.rb`](../formula/manifest.rb) and only pushes to the `fidenceio/homebrew-tap` remote when `$(brew --prefix)/Library/Taps/fidenceio/homebrew-tap` exists. When that dir is absent, the run prints `⚠️  Homebrew tap not found locally — formula updated in this repo only` and exits clean. Observed 2026-05-17: canonical CLI shipped v47.14.3 (commit `45aad1f`, tag `v47.14.3`), but the tap remote still serves v47.14.2, so `brew tap fidenceio/tap && brew install manifest` resolves to a stale version. **Previously solved as an install-side workaround** — see [`memory/reference_brew_tap_install_required.md`](../../../.claude/projects/-Users-william-coderepos-manifest/memory/reference_brew_tap_install_required.md). That memory's claim "the loop is fully wired in code" assumed the brew-managed tap dir would be present at ship time; this session proves the push side is not robust when it isn't.
   - **Update (2026-05-18, v48.0.1 ship):** a second brew-managed-dir failure mode hit during today's fleet ship. The dir was present (brew tap had run cleanly), but its `origin` was the default HTTPS URL (`https://github.com/fidenceio/homebrew-tap`). Push from that dir failed with `fatal: could not read Username for 'https://github.com': Device not configured`, `update_homebrew_formula` returned 1, and the orchestrator exited mid-flight before the local-upgrade step ran. Per-host workaround applied: `git remote set-url origin git@github.com:fidenceio/homebrew-tap.git` in `/opt/homebrew/Library/Taps/fidenceio/homebrew-tap`. Pushing directly to the SSH remote from any checkout (option a below) addresses both this and the original dir-absent case in one fix.
+  - **Update (2026-05-19, v48.0.1 → 48.0.2 fleet ship):** reproduced again on a fresh `brew tap fidenceio/tap && brew install manifest` host. The brew-managed tap dir's `origin` was the HTTPS URL by default — the 2026-05-18 per-host SSH workaround does not persist for new installs. Every fresh install reproduces this auth failure on the first fleet ship. Until option (a) lands, the install-side mitigation should be to set the SSH remote at install/tap time, not to rely on each user discovering the workaround after a failed release.
   - **Deliverable:** either (a) **preferred** — push the formula update directly to the `fidenceio/homebrew-tap` remote from any checkout (no dependency on the user's local brew state or its remote URL scheme), or (b) fail the ship with a non-zero exit and a structured error when the brew-managed tap dir is absent and the push would otherwise be a silent no-op. Add a regression proving (a) a ship without the brew-managed tap dir does not exit 0 with a stale tap remote, and (b) a ship with an HTTPS-only brew-managed tap dir still pushes the formula update.
   - **Anchor:** [`modules/core/manifest-core.sh`](../modules/core/manifest-core.sh) (`update_homebrew_formula`), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh).
 
@@ -32,6 +33,16 @@ Open work for the Manifest CLI repo.
   - **Why:** observed 2026-05-17 on a modern Homebrew install with JSON API enabled: `brew tap fidenceio/tap && brew install manifest` taps cleanly, then forces `==> Tapping homebrew/core` which fails to clone (permissions on `/opt/homebrew/Library/Taps/homebrew/homebrew-core`). Modern Homebrew should resolve our `depends_on "bash"`, `git`, `yq`, `coreutils` via the JSON API without ever cloning homebrew/core. Some property of our formula or install path forces the legacy core-tap clone path. Result: end-to-end canonical install is currently broken on this host even after the right `brew tap` + `brew install`.
   - **Deliverable:** identify the trigger (formula attribute, post-install command, dependency declaration, or something Manifest is setting in the brew environment) and either remove the trigger or document the required user env so the JSON API path is used. Add a container or CI check that `brew install fidenceio/tap/manifest` completes without `Tapping homebrew/core`.
   - **Anchor:** [`formula/manifest.rb`](../formula/manifest.rb), any post-install hook touched by the formula.
+
+- **1.5 Stop fleet ship from silently sweeping dirty trees into release commits.**
+  - **Why:** observed 2026-05-19 fleet ship at `v48.0.1 → 48.0.2`: the cli repo had 1 modified + 3 untracked files unrelated to the release. Preview did not flag them. Apply created an `Auto-commit before Manifest process (4 files: install-cli.sh, ...)` commit ahead of the release commit, wrapping unrelated changes into the release without prompting. Memory note: `feedback_fleet_consent_model` says "scope block = notice, `-y` = consent" — silently auto-committing unrelated dirt exceeds the scope of that consent.
+  - **Deliverable:** preview shows a `dirty: N modified, M untracked` column per member when dirty; apply either (a) refuses with a structured error and a `--include-dirty` opt-in flag, or (b) prints `Auto-committing N uncommitted/untracked files into release commit on <repo>` before the auto-commit fires. Add a regression where a fleet member with dirty state runs through `manifest ship fleet patch -y` and asserts the chosen behavior.
+  - **Anchor:** [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh), [`modules/git/manifest-git-changes.sh`](../modules/git/manifest-git-changes.sh), [`modules/fleet/manifest-fleet-plan.sh`](../modules/fleet/manifest-fleet-plan.sh), [`modules/fleet/manifest-fleet-apply.sh`](../modules/fleet/manifest-fleet-apply.sh).
+
+- **1.6 Harden cli self-modification during fleet ship.**
+  - **Why:** when `manifest ship fleet` includes the cli repo, the running `manifest` binary is shipping itself. If the formula push succeeds and brew is triggered (or a user runs `brew upgrade` mid-flight), `/opt/homebrew/bin/manifest` (a symlink into `Cellar/manifest/<old>/bin/manifest`) can be replaced or its Cellar dir removed while the orchestrator is still source'ing scripts. Today's run (2026-05-19) only avoided this because the tap push failed (§1.3) before brew could upgrade — the failure window is the only thing currently protecting against mid-script binary replacement.
+  - **Deliverable:** on ship entry, when the running process is itself the binary being shipped, snapshot the script tree to a tmpdir and `exec` into the snapshot so the live process is decoupled from the install location. Alternatively, defer any local-upgrade step to a post-orchestrator hook that fires after the orchestrator process has exited. Add a regression that simulates `brew upgrade manifest` mid-ship and asserts the orchestrator completes cleanly.
+  - **Anchor:** [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh), [`scripts/manifest-cli-wrapper.sh`](../scripts/manifest-cli-wrapper.sh), [`modules/system/manifest-install-paths.sh`](../modules/system/manifest-install-paths.sh).
 
 ---
 
@@ -46,8 +57,11 @@ The base contract is already live: mutating commands preview by default, `--dry-
 
 - **2.2 Add shared plan rendering and plan fingerprints.**
   - **Why:** preview output is still bespoke per command, and apply mode cannot warn when the plan changed since preview.
-  - **Deliverable:** add a shared plan-table renderer plus a stable plan fingerprint helper; use them in ship/fleet/PR previews and compare fingerprints where apply recomputes work.
-  - **Anchor:** [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh), [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh), [`modules/pr/manifest-pr-native.sh`](../modules/pr/manifest-pr-native.sh).
+  - **Deliverable:** add a shared plan-table renderer plus a stable plan fingerprint helper; use them in ship/fleet/PR previews and compare fingerprints where apply recomputes work. Concrete content additions, surfaced by the 2026-05-19 fleet-ship trial:
+    - a `Version` column showing `current → next` per member — required to disambiguate divergent SemVer trains (workspace `2.0.1 → 2.0.2` alongside cli `48.0.1 → 48.0.2`) before the user types `-y`;
+    - a dirty-tree disclosure (see §1.5) inline in the plan table, not as a separate scan;
+    - a clearer preview exit-code convention so CI wrappers can distinguish "preview happened, no consent" from "applied successfully" (current behavior: both return 0).
+  - **Anchor:** [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh), [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh), [`modules/fleet/manifest-fleet-plan.sh`](../modules/fleet/manifest-fleet-plan.sh), [`modules/pr/manifest-pr-native.sh`](../modules/pr/manifest-pr-native.sh).
 
 - **2.3 Finish the execution-policy edge audit.**
   - **Why:** aliases, recursive Manifest calls, generated hooks, CI workflows, and unknown flag paths can still bypass the intended command surface if they are not checked together.
@@ -70,8 +84,8 @@ The base contract is already live: mutating commands preview by default, `--dry-
 
 - **3.2 Add fleet partial-failure recovery output.**
   - **Why:** when a fleet apply fails mid-run, users need a precise resume or replay path.
-  - **Deliverable:** structured report listing completed members, failed members, skipped members, and per-member replay or resume commands.
-  - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
+  - **Deliverable:** structured report listing completed members, failed members, skipped members, and per-member replay or resume commands. Must specifically cover the **"release tagged + code pushed + formula push failed"** state observed 2026-05-19: the current recovery banner suggests tag-delete and hard-reset, but the tag and release commit are already on `origin/main` — the correct remediation is "release is live, formula stale; retry the tap push" (e.g., `manifest ship --resume-formula`), not a rollback that would orphan a published tag.
+  - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh), [`modules/fleet/manifest-fleet-apply.sh`](../modules/fleet/manifest-fleet-apply.sh), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh).
 
 - **3.3 Detect workspace/fleet membership drift.**
   - **Why:** fleet config goes stale when repos are added outside Manifest.
@@ -82,6 +96,11 @@ The base contract is already live: mutating commands preview by default, `--dry-
   - **Why:** toggling `services.<name>.release.enabled` or `services.<name>.release.strategy` still requires hand-editing `manifest.fleet.config.yaml`.
   - **Deliverable:** add a safe-by-default command, final name TBD, for scoped fleet-service config edits such as enabling/disabling release and setting release strategy.
   - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh), [`modules/fleet/manifest-fleet-config.sh`](../modules/fleet/manifest-fleet-config.sh).
+
+- **3.5 Preserve fleet service names in plan output.**
+  - **Why:** the fleet plan table renders the `Service` column as a de-dotted slug — e.g. `fidenceiomanifestcli` instead of `fidenceio.manifest.cli`, observed 2026-05-19. The `Path` column saves comprehension, but the Service column reads as noise.
+  - **Deliverable:** print the configured service name verbatim (or apply a documented slug transform that preserves dots). Add a regression that asserts the printed Service column matches the configured name for each fleet entry.
+  - **Anchor:** [`modules/fleet/manifest-fleet-plan.sh`](../modules/fleet/manifest-fleet-plan.sh), [`modules/fleet/manifest-fleet-config.sh`](../modules/fleet/manifest-fleet-config.sh).
 
 ---
 
@@ -125,6 +144,11 @@ The base contract is already live: mutating commands preview by default, `--dry-
   - **Why:** users upgrading from pre-safe-by-default releases need a concise explanation of preview default, `-y` apply, and `MANIFEST_CLI_AUTO_CONFIRM` semantics.
   - **Deliverable:** migration copy in release docs or `docs/MIGRATION.md`, with matching language in the user guide before the next major release.
   - **Anchor:** [`docs/USER_GUIDE.md`](USER_GUIDE.md), [`docs/COMMAND_REFERENCE.md`](COMMAND_REFERENCE.md).
+
+- **5.4 Surface the required `brew tap fidenceio/tap` step at point of install failure.**
+  - **Why:** `brew install manifest` against a Homebrew install without the tap fails with the generic "No available formula" message and no breadcrumb to `fidenceio/tap`. Confirmed 2026-05-19 on a fresh host. Memory `reference_brew_tap_install_required` captures the contract; users hitting the failure don't see it.
+  - **Deliverable:** README install section leads with `brew tap fidenceio/tap && brew install manifest` (or the qualified `brew install fidenceio/tap/manifest`) as the canonical command; `install-cli.sh` and any post-install caveats print the tap command on Homebrew-detected failures.
+  - **Anchor:** [`README.md`](../README.md), [`install-cli.sh`](../install-cli.sh), [`formula/manifest.rb`](../formula/manifest.rb) (caveats block).
 
 ---
 
@@ -178,6 +202,20 @@ The local release-notes provider hook and recipe inspection surfaces exist. Rema
   - **Why:** the public ship entry point lives in `manifest-ship.sh`, but the workflow body still lives in the orchestrator module.
   - **Deliverable:** move the function body to `manifest-ship.sh`; keep or remove the compatibility shim after checking callers.
   - **Anchor:** [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh).
+
+---
+
+## 8. Output Polish
+
+- **8.1 Quiet OS-detection preamble on every invocation.**
+  - **Why:** every `manifest <anything>` invocation — including `--version`, `version`, and pure-preview commands like `ship fleet patch` (no `-y`) — prints a 3-line `🔍 Detecting operating system… Bash 5.3.9 detected on Darwin…` block before the requested output. For `--version` it adds ~1s and pushes the version string off-screen in CI logs; for previews it pushes the scope notice down.
+  - **Deliverable:** detect OS once per process and cache; suppress the preamble unless `--verbose` or `MANIFEST_DEBUG=1` is set; treat `--version` / `version` as a fast-path that prints a single line and exits.
+  - **Anchor:** [`modules/system/manifest-os.sh`](../modules/system/manifest-os.sh), [`modules/core/manifest-requirements.sh`](../modules/core/manifest-requirements.sh), [`scripts/manifest-cli.sh`](../scripts/manifest-cli.sh).
+
+- **8.2 Stop reporting bogus precision on cached trusted timestamps.**
+  - **Why:** fleet ship output reads `Trusted timestamp ±0.000000` for cached values across all members within seconds of each other. The `±0.000000` is technically the cache's confidence-of-itself, but reads as "we measured to sub-microsecond precision" — confusing for anyone auditing release timing. Observed 2026-05-19 across 4 members.
+  - **Deliverable:** when emitting a cached timestamp, label it as `cached (from <source> at <time>)` and drop the precision figure, OR report the original measurement's confidence rather than zero. Add a regression covering the cached-emit path.
+  - **Anchor:** [`modules/system/manifest-time.sh`](../modules/system/manifest-time.sh).
 
 ---
 
