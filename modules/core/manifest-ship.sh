@@ -204,6 +204,14 @@ manifest_ship_repo_identity_notice() {
     echo ""
 }
 
+manifest_ship_repo_preview_preflight_notice() {
+    echo ""
+    echo "DRY RUN COMPLETE: APPLY PREFLIGHT WAS NOT RUN"
+    echo "  Preview mode did not touch .git or test Git metadata writes."
+    echo "  When you rerun with -y, Manifest checks Git metadata write access before changing files."
+    echo "  Depending upon your IDE or agent, you may see a brief failure before an elevated script completes the job."
+}
+
 # -----------------------------------------------------------------------------
 # Function: manifest_ship_repo
 # -----------------------------------------------------------------------------
@@ -295,6 +303,7 @@ manifest_ship_repo() {
         manifest_ship_repo_identity_notice "${PROJECT_ROOT:-$PWD}"
         manifest_ship_preview_plan "$increment_type" "$local_only"
         manifest_execution_footer "$replay_command -y"
+        manifest_ship_repo_preview_preflight_notice
         return 0
     fi
 
