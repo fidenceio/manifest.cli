@@ -167,6 +167,10 @@ teardown() {
     ! echo "$output" | grep -q "Git and publish plan"
     echo "$output" | grep -q "No changes written. Re-run with -y to apply this plan:"
     echo "$output" | grep -q "manifest ship repo minor -y"
+    echo "$output" | grep -q "DRY RUN COMPLETE: APPLY PREFLIGHT WAS NOT RUN"
+    echo "$output" | grep -q "Preview mode did not touch .git or test Git metadata writes."
+    echo "$output" | grep -q "When you rerun with -y, Manifest checks Git metadata write access before changing files."
+    echo "$output" | grep -q "Depending upon your IDE or agent, you may see a brief failure before an elevated script completes the job."
 }
 
 # -----------------------------------------------------------------------------
