@@ -1,5 +1,15 @@
 # Changelog
 
+## [48.2.1] - 2026-05-19
+
+**Release Type:** Patch
+
+### Changes
+
+- Add smart ship preview summaries
+- Add regression coverage for the changed CLI workflow
+
+
 ## [48.2.0] - 2026-05-19
 
 **Release Type:** Minor
@@ -82,12 +92,3 @@
 ## [47.14.1] - 2026-05-16
 
 **Release Type:** Patch — no user-facing changes.
-
-
-## [47.14.0] - 2026-05-16
-
-**Release Type:** Minor
-
-### Changes
-
-- Docs(tracker): add §5.5 archive sweep flattening
