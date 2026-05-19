@@ -1,5 +1,16 @@
 # Changelog
 
+## [48.2.0] - 2026-05-19
+
+**Release Type:** Minor
+
+### Changes
+
+- Add GitHub Release publishing support
+- Update release copy and configuration examples
+- Add regression coverage for the changed CLI workflow
+
+
 ## [48.1.1] - 2026-05-19
 
 **Release Type:** Patch — no user-facing changes.
@@ -80,8 +91,3 @@
 ### Changes
 
 - Docs(tracker): add §5.5 archive sweep flattening
-
-
-## [47.13.1] - 2026-05-16
-
-**Release Type:** Patch — no user-facing changes.
