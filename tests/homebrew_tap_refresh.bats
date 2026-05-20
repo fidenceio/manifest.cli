@@ -8,6 +8,11 @@ setup() {
     export PROJECT_ROOT="$SCRATCH/workspace/fidenceio.manifest.cli"
     mkdir -p "$PROJECT_ROOT"
     git config --global init.defaultBranch main >/dev/null 2>&1 || true
+
+    # Without this stub, manifest_homebrew_tap_checkout_candidates also walks
+    # into $(brew --prefix)/Library/Taps/fidenceio/homebrew-tap on any dev
+    # machine that has the real tap installed, polluting the refresh count.
+    brew() { return 1; }
 }
 
 teardown() {
