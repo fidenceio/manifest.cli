@@ -1,5 +1,15 @@
 # Changelog
 
+## [48.3.0] - 2026-05-20
+
+**Release Type:** Minor
+
+### Changes
+
+- Add GitHub Release publishing support
+- Add regression coverage for the changed CLI workflow
+
+
 ## [48.2.2] - 2026-05-19
 
 **Release Type:** Patch — no user-facing changes.
@@ -83,12 +93,3 @@
 
 - Drop ship fleet --only/--except; let fleet -y short-circuit per-member confirms
 - Drop "selected" wording from fleet scope block
-
-
-## [47.14.2] - 2026-05-16
-
-**Release Type:** Patch
-
-### Changes
-
-- Update release copy and configuration examples
