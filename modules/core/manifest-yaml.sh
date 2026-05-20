@@ -581,6 +581,34 @@ write_full_yaml() {
 # =============================================================================
 
 # -----------------------------------------------------------------------------
+# Function: _manifest_yaml_expand_home_prefix
+# -----------------------------------------------------------------------------
+# Internal helper. Expands a leading "~/" or leading "$HOME/" in a YAML-sourced
+# string to the actual expanded value of $HOME. Anything else passes through
+# unchanged — bare "~", "~user", embedded "~", absolute paths, relative paths,
+# and arbitrary non-path strings.
+#
+# We deliberately do NOT try to detect whether the field "looks like a path";
+# any value that starts with "~/" or "$HOME/" is unambiguously a path prefix
+# in YAML config context, and any non-path value happens to never start with
+# either of those two prefixes.
+#
+# ARGUMENTS:
+#   $1 - Raw value as read from YAML
+#
+# RETURNS:
+#   Echoes the (possibly expanded) value
+# -----------------------------------------------------------------------------
+_manifest_yaml_expand_home_prefix() {
+    local v="$1"
+    case "$v" in
+        '~/'*)     printf '%s' "$HOME/${v#'~/'}" ;;
+        '$HOME/'*) printf '%s' "$HOME/${v#'$HOME/'}" ;;
+        *)         printf '%s' "$v" ;;
+    esac
+}
+
+# -----------------------------------------------------------------------------
 # Function: load_yaml_to_env
 # -----------------------------------------------------------------------------
 # Reads a YAML config file and exports all mapped MANIFEST_CLI_* env vars.
@@ -632,6 +660,12 @@ load_yaml_to_env() {
             # space silently breaks every downstream string comparison.
             value="${value#"${value%%[![:space:]]*}"}"
             value="${value%"${value##*[![:space:]]}"}"
+            # Path-prefix expansion: bash does NOT tilde-expand values pulled
+            # from YAML, so a literal "~/.manifest-cli" would be exported as a
+            # literal "~/..." and downstream joins break. Only leading "~/" and
+            # leading "$HOME/" are expanded; non-path values starting with
+            # anything else (including bare "~") are left untouched.
+            value=$(_manifest_yaml_expand_home_prefix "$value")
             if [[ -n "$value" ]]; then
                 case "$(declare -p "$env_var" 2>/dev/null || true)" in
                     declare\ -a*|declare\ -A*)
