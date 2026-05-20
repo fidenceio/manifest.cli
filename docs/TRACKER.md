@@ -160,7 +160,7 @@ The local release-notes provider hook and recipe inspection surfaces exist. Rema
 
 - **5.3 Quiet OS-detection preamble on every invocation.**
   - **Why:** every `manifest <anything>` invocation — including `--version`, `version`, and pure-preview commands like `ship fleet patch` (no `-y`) — prints a 3-line `🔍 Detecting operating system… Bash 5.3.9 detected on Darwin…` block before the requested output. For `--version` it adds ~1s and pushes the version string off-screen in CI logs; for previews it pushes the scope notice down.
-  - **Deliverable:** detect OS once per process and cache; suppress the preamble unless `--verbose` or `MANIFEST_DEBUG=1` is set; treat `--version` / `version` as a fast-path that prints a single line and exits.
+  - **Deliverable:** detect OS once per process and cache; suppress the preamble unless `--verbose` or `MANIFEST_CLI_DEBUG=1` is set; treat `--version` / `version` as a fast-path that prints a single line and exits.
   - **Anchor:** [`modules/system/manifest-os.sh`](../modules/system/manifest-os.sh), [`modules/core/manifest-requirements.sh`](../modules/core/manifest-requirements.sh), [`scripts/manifest-cli.sh`](../scripts/manifest-cli.sh).
 
 - **5.4 Stop reporting bogus precision on cached trusted timestamps.**
