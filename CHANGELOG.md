@@ -1,5 +1,10 @@
 # Changelog
 
+## [48.4.0] - 2026-05-20
+
+**Release Type:** Minor — no user-facing changes.
+
+
 ## [48.3.2] - 2026-05-20
 
 **Release Type:** Patch
@@ -77,15 +82,4 @@
 - Gate local-upgrade step on successful tap push
 - Centralize install/uninstall path constants in one module
 - Delete plugin's install_cli; reinstall delegates to install-cli.sh
-- Add regression coverage for the changed CLI workflow
-
-
-## [48.0.1] - 2026-05-18
-
-**Release Type:** Patch
-
-### Changes
-
-- Add GitHub Release publishing support
-- Update release copy and configuration examples
 - Add regression coverage for the changed CLI workflow
