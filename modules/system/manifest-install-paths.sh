@@ -81,10 +81,33 @@ manifest_install_paths_config_files() {
 }
 
 manifest_install_paths_data_dirs() {
-    echo "$HOME/.manifest-agent"
     local tmpdir_cache="${TMPDIR:-/tmp}/manifest-cli"
     echo "$tmpdir_cache"
     [ "/tmp/manifest-cli" != "$tmpdir_cache" ] && echo "/tmp/manifest-cli"
+    manifest_install_paths_plugin_data_dirs
+}
+
+# Plugin-declared data dirs. Each cli-plugin under
+# ${MANIFEST_CLI_CLOUD_DIR:-$HOME/.manifest-cloud}/cli-plugins/ may ship a
+# sibling <name>.data-dirs file listing absolute paths it owns at runtime, so
+# uninstall sweeps plugin-owned state without hardcoding plugin internals.
+# Per-line format: absolute path; literal $HOME is the only allowed
+# substitution; '#' starts a comment; paths must resolve under $HOME/.
+manifest_install_paths_plugin_data_dirs() {
+    [ -n "$HOME" ] || return 0
+    local plugins_dir="${MANIFEST_CLI_CLOUD_DIR:-$HOME/.manifest-cloud}/cli-plugins"
+    [ -d "$plugins_dir" ] || return 0
+    local manifest line path
+    while IFS= read -r manifest; do
+        while IFS= read -r line || [ -n "$line" ]; do
+            line="${line%%#*}"
+            line="${line#"${line%%[![:space:]]*}"}"
+            line="${line%"${line##*[![:space:]]}"}"
+            [ -n "$line" ] || continue
+            path="${line//\$HOME/$HOME}"
+            case "$path" in "$HOME"/*) echo "$path" ;; esac
+        done < "$manifest"
+    done < <(find "$plugins_dir" -type f -name '*.data-dirs' 2>/dev/null | sort)
 }
 
 # --- Shell profile cleanup --------------------------------------------------
