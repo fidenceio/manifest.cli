@@ -1,5 +1,10 @@
 # Changelog
 
+## [48.3.1] - 2026-05-20
+
+**Release Type:** Patch — no user-facing changes.
+
+
 ## [48.3.0] - 2026-05-20
 
 **Release Type:** Minor
@@ -83,13 +88,3 @@
 
 - Track Homebrew tap install gaps
 - Consolidate documentation generation
-
-
-## [47.14.3] - 2026-05-17
-
-**Release Type:** Patch
-
-### Changes
-
-- Drop ship fleet --only/--except; let fleet -y short-circuit per-member confirms
-- Drop "selected" wording from fleet scope block
