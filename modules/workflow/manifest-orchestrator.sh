@@ -299,13 +299,10 @@ manifest_ship_post_push_steps() {
                 echo "⚠️  Local manifest is not installed via Homebrew — skipping upgrade"
                 echo "   Run: brew install fidenceio/tap/manifest"
                 _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="skipped_not_homebrew"
-            elif manifest_ship_running_from_homebrew_install; then
-                echo "⚠️  Skipping live Homebrew upgrade because this release is running from the installed Manifest CLI tree."
-                echo "   Run after this command exits: brew update && brew upgrade manifest"
-                _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="skipped_live_process"
             elif brew update &>/dev/null && brew upgrade manifest 2>&1; then
                 echo "✅ Local installation upgraded to v$new_version via Homebrew"
                 _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="success"
+                manifest_ship_restore_tap_ssh_origin
             else
                 echo "⚠️  Homebrew upgrade did not complete — try 'brew update && brew upgrade manifest' manually"
                 _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="failed"
@@ -327,19 +324,22 @@ manifest_ship_post_push_steps() {
     return 0
 }
 
-manifest_ship_running_from_homebrew_install() {
-    if is_truthy "${MANIFEST_CLI_ALLOW_LIVE_HOMEBREW_UPGRADE:-false}"; then
-        return 1
-    fi
-
-    local modules_dir="${MANIFEST_CLI_CORE_MODULES_DIR:-}"
-    case "$modules_dir" in
-        */Cellar/manifest/*/libexec/modules|*/Cellar/manifest/*/modules)
-            return 0
-            ;;
-    esac
-
-    return 1
+# `brew update` / `brew upgrade` resets the tap checkout's `origin` URL back to
+# the canonical HTTPS form. Future `manifest ship` runs from this canonical repo
+# push the formula via the explicit `MANIFEST_CLI_HOMEBREW_TAP_REMOTE_URL` (SSH
+# by default), so the push itself is unaffected — but other tooling that reads
+# the tap's origin (and the user's stated preference) expects SSH. Re-assert it.
+#
+# Path resolution goes through manifest_install_paths_homebrew_tap_dir so that
+# this code, the formula sync code, and the uninstall code all agree on where
+# the tap lives — no drift between call sites.
+manifest_ship_restore_tap_ssh_origin() {
+    local tap_dir
+    tap_dir="$(manifest_install_paths_homebrew_tap_dir)"
+    [ -n "$tap_dir" ] || return 0
+    [ -d "$tap_dir/.git" ] || return 0
+    local ssh_url="${MANIFEST_CLI_HOMEBREW_TAP_REMOTE_URL:-git@github.com:fidenceio/homebrew-tap.git}"
+    git -C "$tap_dir" remote set-url origin "$ssh_url" 2>/dev/null || true
 }
 
 manifest_ship_followup_has_releasable_changes() {

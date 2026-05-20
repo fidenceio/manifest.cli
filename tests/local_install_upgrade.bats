@@ -5,6 +5,7 @@ load 'helpers/setup'
 setup() {
     load_modules \
         "system/manifest-os.sh" \
+        "system/manifest-install-paths.sh" \
         "git/manifest-git.sh" \
         "workflow/manifest-orchestrator.sh"
     SCRATCH="$(mk_scratch)"
@@ -71,14 +72,20 @@ teardown() {
     ! echo "$output" | grep -q "Homebrew upgrade did not complete"
 }
 
-@test "local upgrade skips brew replacement while running from Homebrew Cellar" {
-    export MANIFEST_CLI_CORE_MODULES_DIR="$SCRATCH/homebrew/Cellar/manifest/1.2.2/libexec/modules"
-    mkdir -p "$MANIFEST_CLI_CORE_MODULES_DIR"
+@test "successful brew upgrade invokes the SSH-restore helper" {
+    # Integration check: confirm post-push wires the SSH-restore step in after
+    # a successful upgrade. The helper's own behavior is covered exhaustively
+    # in homebrew_tap_ssh_restore.bats — this test only proves the call site
+    # exists. No tap-dir paths or SSH URLs are hardcoded; we stub the helper
+    # to drop a sentinel and assert the sentinel appears.
+    local sentinel="$SCRATCH/ssh-restore-fired"
+    manifest_ship_restore_tap_ssh_origin() { touch "$sentinel"; }
+
     brew() {
         case "$1 ${2:-} ${3:-}" in
             "list --formula manifest") return 0 ;;
-            "update "*|"update") echo "unexpected brew update"; return 1 ;;
-            "upgrade manifest"*) echo "unexpected brew upgrade"; return 1 ;;
+            "update "*|"update") return 0 ;;
+            "upgrade manifest"*) return 0 ;;
             *) return 0 ;;
         esac
     }
@@ -86,11 +93,31 @@ teardown() {
     run manifest_ship_post_push_steps "1.2.3" "$(git rev-parse HEAD)" "v1.2.3" "success"
 
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Skipping live Homebrew upgrade"
-    echo "$output" | grep -q "brew update && brew upgrade manifest"
-    ! echo "$output" | grep -q "unexpected brew update"
-    ! echo "$output" | grep -q "unexpected brew upgrade"
-    ! echo "$output" | grep -q "Local installation upgraded"
+    echo "$output" | grep -q "Local installation upgraded to v1.2.3 via Homebrew"
+    [ -f "$sentinel" ]
+}
+
+@test "failed brew upgrade does NOT invoke the SSH-restore helper" {
+    # Drift guard: the restore helper must only fire after a successful
+    # upgrade, not unconditionally — otherwise we'd be writing origin URLs
+    # against a tap brew may not even have touched.
+    local sentinel="$SCRATCH/ssh-restore-fired"
+    manifest_ship_restore_tap_ssh_origin() { touch "$sentinel"; }
+
+    brew() {
+        case "$1 ${2:-} ${3:-}" in
+            "list --formula manifest") return 0 ;;
+            "update "*|"update") return 0 ;;
+            "upgrade manifest"*) return 1 ;;
+            *) return 0 ;;
+        esac
+    }
+
+    run manifest_ship_post_push_steps "1.2.3" "$(git rev-parse HEAD)" "v1.2.3" "success"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Homebrew upgrade did not complete"
+    [ ! -f "$sentinel" ]
 }
 
 @test "local upgrade warns when brew has manifest installed but upgrade fails" {
