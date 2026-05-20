@@ -102,6 +102,10 @@ manifest_install_paths_shell_profiles() {
 #   - exports a MANIFEST_* variable
 #   - prepends .manifest-cli or .local/bin to PATH (installer-style)
 #   - sources a manifest-related rc file
+#
+# Legacy-cleanup exception: the export pattern intentionally matches bare
+# MANIFEST_* (not just MANIFEST_CLI_*) so uninstall sweeps pre-namespace
+# profile entries. All non-uninstall code must scope to MANIFEST_CLI_*.
 manifest_install_paths_profile_line_regex() {
     echo '^[[:space:]]*(export[[:space:]]+MANIFEST_[A-Z_]+=|export[[:space:]]+PATH=.*\.manifest-cli|export[[:space:]]+PATH=.*\.local/bin.*PATH|(\.|source)[[:space:]]+.*manifest)'
 }
