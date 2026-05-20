@@ -331,9 +331,10 @@ cleanup_environment_variables() {
     fi
 
     # Best-effort in-process unset (not user-visible after process exits).
-    # Legacy-cleanup exception: matches both MANIFEST_CLI_* (current namespace)
-    # and bare MANIFEST_* (pre-namespace installs). All new code must scope to
-    # MANIFEST_CLI_*; only uninstall paths broaden the pattern.
+    # Legacy-cleanup exception: this loop matches the current MANIFEST_CLI
+    # namespace and the bare Manifest prefix used before namespacing, so
+    # uninstall sweeps stale exports from pre-namespace installs. New code
+    # must scope to MANIFEST_CLI; only uninstall paths broaden the pattern.
     local var
     for var in $(env | grep -E '^MANIFEST_(CLI_)?[A-Z_]+=' | cut -d'=' -f1); do
         unset "$var"

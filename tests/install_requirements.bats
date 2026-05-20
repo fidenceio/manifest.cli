@@ -43,6 +43,10 @@ load 'helpers/setup'
     local offenders="" file line text var
 
     while IFS=: read -r file line text; do
+        # Skip pure comment lines — documentation legitimately references the
+        # legacy unprefixed Manifest namespace (e.g. uninstall's sweep over
+        # pre-namespace exports) and shouldn't be flagged as a code offender.
+        [[ "$text" =~ ^[[:space:]]*# ]] && continue
         while [[ "$text" =~ (^|[^A-Za-z0-9_])(MANIFEST_[A-Z0-9_]*) ]]; do
             var="${BASH_REMATCH[2]}"
             case "$var" in
