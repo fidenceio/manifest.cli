@@ -51,7 +51,8 @@ Artifacts considered:
               /opt/manifest-cli/bin/manifest, and any \`manifest\` on PATH
               that carries Manifest CLI markers
   - Config: ~/.manifestrc, ~/.manifest-cli.conf, ~/.config/manifest-cli
-  - Data: ~/.manifest-agent, \$TMPDIR/manifest-cli, /tmp/manifest-cli
+  - Data: \$TMPDIR/manifest-cli, /tmp/manifest-cli, and any plugin-declared
+          dirs from <plugin>.data-dirs files under ~/.manifest-cloud/cli-plugins/
   - Shell completions: brew bash/zsh completion targets
   - Shell-profile entries: MANIFEST_* exports, manifest-cli PATH adds,
     source/. lines referencing manifest, in zsh/bash/profile rc files
@@ -115,10 +116,29 @@ else
         "$HOME/.config/manifest-cli"
     )
     DATA_DIRS=(
-        "$HOME/.manifest-agent"
         "${TMPDIR:-/tmp}/manifest-cli"
     )
     [ "/tmp/manifest-cli" != "${TMPDIR:-/tmp}/manifest-cli" ] && DATA_DIRS+=("/tmp/manifest-cli")
+    # Inline copy of manifest_install_paths_plugin_data_dirs from
+    # modules/system/manifest-install-paths.sh — keep in sync.
+    manifest_install_paths_plugin_data_dirs() {
+        [ -n "$HOME" ] || return 0
+        local plugins_dir="${MANIFEST_CLI_CLOUD_DIR:-$HOME/.manifest-cloud}/cli-plugins"
+        [ -d "$plugins_dir" ] || return 0
+        local manifest line path
+        while IFS= read -r manifest; do
+            while IFS= read -r line || [ -n "$line" ]; do
+                line="${line%%#*}"
+                line="${line#"${line%%[![:space:]]*}"}"
+                line="${line%"${line##*[![:space:]]}"}"
+                [ -n "$line" ] || continue
+                path="${line//\$HOME/$HOME}"
+                case "$path" in "$HOME"/*) echo "$path" ;; esac
+            done < "$manifest"
+        done < <(find "$plugins_dir" -type f -name '*.data-dirs' 2>/dev/null | sort)
+    }
+    while IFS= read -r _p; do [ -n "$_p" ] && DATA_DIRS+=("$_p"); done < <(manifest_install_paths_plugin_data_dirs)
+    unset _p
     SHELL_PROFILES=(
         "$HOME/.zshrc" "$HOME/.zprofile" "$HOME/.zsh_profile"
         "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"
