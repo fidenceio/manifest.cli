@@ -12,34 +12,29 @@ Open work for the Manifest CLI repo.
 
 ## 1. Fleet operations
 
-- **1.1 Stop fleet ship from silently sweeping dirty trees into release commits.**
-  - **Why:** observed 2026-05-19 fleet ship at `v48.0.1 → 48.0.2`: the cli repo had 1 modified + 3 untracked files unrelated to the release. Preview did not flag them. Apply created an `Auto-commit before Manifest process (4 files: install-cli.sh, ...)` commit ahead of the release commit, wrapping unrelated changes into the release without prompting. Memory note: `feedback_fleet_consent_model` says "scope block = notice, `-y` = consent" — silently auto-committing unrelated dirt exceeds the scope of that consent. Still recurring as of v48.3.x (`3b99de1`, `fb498fa`, `5ffb5c2`, `3161ee4`).
-  - **Deliverable:** preview shows a `dirty: N modified, M untracked` column per member when dirty; apply either (a) refuses with a structured error and a `--include-dirty` opt-in flag, or (b) prints `Auto-committing N uncommitted/untracked files into release commit on <repo>` before the auto-commit fires. Add a regression where a fleet member with dirty state runs through `manifest ship fleet patch -y` and asserts the chosen behavior.
-  - **Anchor:** [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh), [`modules/git/manifest-git-changes.sh`](../modules/git/manifest-git-changes.sh), [`modules/fleet/manifest-fleet-plan.sh`](../modules/fleet/manifest-fleet-plan.sh), [`modules/fleet/manifest-fleet-apply.sh`](../modules/fleet/manifest-fleet-apply.sh).
-
-- **1.2 Halt clearly when fleet release requires PR review first.**
+- **1.1 Halt clearly when fleet release requires PR review first.**
   - **Why:** fleet release should not silently skip PR-gated members.
   - **Deliverable:** fleet ship preview lists PR-gated members; apply refuses with a structured error and a `manifest pr fleet ... -y` replay command.
   - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
 
-- **1.3 Add fleet partial-failure recovery output.**
+- **1.2 Add fleet partial-failure recovery output.**
   - **Why:** when a fleet apply fails mid-run, users need a precise resume or replay path.
   - **Deliverable:** structured report listing completed members, failed members, skipped members, and per-member replay or resume commands. Must specifically cover the **"release tagged + code pushed + formula push failed"** state observed 2026-05-19: the current recovery banner suggests tag-delete and hard-reset, but the tag and release commit are already on `origin/main` — the correct remediation is "release is live, formula stale; retry the tap push" (e.g., `manifest ship --resume-formula`), not a rollback that would orphan a published tag.
   - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh), [`modules/fleet/manifest-fleet-apply.sh`](../modules/fleet/manifest-fleet-apply.sh), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh).
 
-- **1.4 Detect workspace/fleet membership drift.**
+- **1.3 Detect workspace/fleet membership drift.**
   - **Why:** fleet config goes stale when repos are added outside Manifest.
   - **Deliverable:** read-only workspace diff that compares discovered repos to fleet config, exposed from a low-friction command such as `manifest doctor`, `manifest update fleet --dry-run`, or a timestamped passive check.
   - **Anchor:** [`modules/fleet/manifest-fleet-detect.sh`](../modules/fleet/manifest-fleet-detect.sh), [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
 
-- **1.5 Add a fleet-service config editor.**
+- **1.4 Add a fleet-service config editor.**
   - **Why:** toggling `services.<name>.release.enabled` or `services.<name>.release.strategy` still requires hand-editing `manifest.fleet.config.yaml`.
   - **Deliverable:** add a safe-by-default command, final name TBD, for scoped fleet-service config edits such as enabling/disabling release and setting release strategy.
   - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh), [`modules/fleet/manifest-fleet-config.sh`](../modules/fleet/manifest-fleet-config.sh).
 
-- **1.6 Fail fast on sandboxed `.git` write denial during fleet ship.**
+- **1.5 Fail fast on sandboxed `.git` write denial during fleet ship.**
   - **Why:** during the W0 Phase 6 run on 2026-05-18 (`manifest ship fleet major -y`), the sandbox denied `.git` writes for the workspace root and marketing repos, leaving both in a partial state that required manual commit/tag/release recovery; Cloud and CLI only completed because they ran under elevated permissions. Fleet ship currently has no pre-flight that detects this class of environment failure, so the user discovers it mid-run, per-member, after each repo has already done partial work.
-  - **Deliverable:** add a per-member pre-flight check that probes `.git` writability before any mutation; if any member fails, refuse fleet apply with a structured error naming the affected repos and a remediation hint (rerun outside sandbox / under elevated permissions). When a mid-run denial slips past pre-flight, the partial-failure recovery output (see §1.3) must distinguish "sandbox-denied, no state written" from "partially shipped, recovery needed." Add a regression that injects a read-only `.git` and asserts both the pre-flight refusal and the post-failure recovery output.
+  - **Deliverable:** add a per-member pre-flight check that probes `.git` writability before any mutation; if any member fails, refuse fleet apply with a structured error naming the affected repos and a remediation hint (rerun outside sandbox / under elevated permissions). When a mid-run denial slips past pre-flight, the partial-failure recovery output (see §1.2) must distinguish "sandbox-denied, no state written" from "partially shipped, recovery needed." Add a regression that injects a read-only `.git` and asserts both the pre-flight refusal and the post-failure recovery output.
   - **Anchor:** [`modules/fleet/manifest-fleet-apply.sh`](../modules/fleet/manifest-fleet-apply.sh), [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh).
 
 ---
@@ -57,7 +52,6 @@ The base contract is already live: mutating commands preview by default, `--dry-
   - **Why:** preview output is still bespoke per command, and apply mode cannot warn when the plan changed since preview.
   - **Deliverable:** add a shared plan-table renderer plus a stable plan fingerprint helper; use them in ship/fleet/PR previews and compare fingerprints where apply recomputes work. Concrete content additions, surfaced by the 2026-05-19 fleet-ship trial:
     - a `Version` column showing `current → next` per member — required to disambiguate divergent SemVer trains (workspace `2.0.1 → 2.0.2` alongside cli `48.0.1 → 48.0.2`) before the user types `-y`;
-    - a dirty-tree disclosure (see §1.1) inline in the plan table, not as a separate scan;
     - a clearer preview exit-code convention so CI wrappers can distinguish "preview happened, no consent" from "applied successfully" (current behavior: both return 0).
   - **Anchor:** [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh), [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh), [`modules/fleet/manifest-fleet-plan.sh`](../modules/fleet/manifest-fleet-plan.sh), [`modules/pr/manifest-pr-native.sh`](../modules/pr/manifest-pr-native.sh).
 
