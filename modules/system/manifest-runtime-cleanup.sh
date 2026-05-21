@@ -13,8 +13,8 @@
 # any delete: empty / "/" / "$HOME" / bare "/tmp" / "$TMPDIR" / anything
 # without "manifest-cli" in the resolved path is refused.
 
-[ -n "$_MANIFEST_RUNTIME_CLEANUP_LOADED" ] && return 0
-_MANIFEST_RUNTIME_CLEANUP_LOADED=1
+[ -n "$_MANIFEST_CLI_RUNTIME_CLEANUP_LOADED" ] && return 0
+_MANIFEST_CLI_RUNTIME_CLEANUP_LOADED=1
 
 # shellcheck source=manifest-install-paths.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/manifest-install-paths.sh"
