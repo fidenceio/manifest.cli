@@ -41,6 +41,30 @@ $bullet
     printf -v "$seen_var" '%s%s\n' "$seen" "$bullet"
 }
 
+# Compact dirty-tree summary for the fleet ship plan column. Echoes an
+# empty string when the work tree is clean (or only formula/manifest.rb is
+# dirty — that file is touched intentionally by ship and is filtered the
+# same way auto-commit detection does in manifest-orchestrator.sh). When
+# dirty, echoes "Nm+Nu" where N counts modified/staged vs untracked
+# entries. Always returns 0; missing or non-git paths produce empty output.
+manifest_git_changes_dirty_summary() {
+    local path="$1"
+    [ -n "$path" ] || return 0
+    [ -d "$path/.git" ] || [ -f "$path/.git" ] || return 0
+
+    local porcelain modified untracked
+    porcelain=$(git -C "$path" status --porcelain 2>/dev/null \
+        | awk '$2 != "formula/manifest.rb" && NF > 0 { print }')
+    [ -n "$porcelain" ] || return 0
+
+    # grep -c exits 1 on zero matches, which would propagate through $().
+    # Pipe through `|| true` so the substitution always gets a clean count.
+    modified=$({ printf '%s\n' "$porcelain" | grep -cv '^??'; } 2>/dev/null || true)
+    untracked=$({ printf '%s\n' "$porcelain" | grep -c '^??'; } 2>/dev/null || true)
+    : "${modified:=0}" "${untracked:=0}"
+    printf '%dm+%du' "$modified" "$untracked"
+}
+
 manifest_git_changes_bullets_for_files() {
     local files="$1"
     local emitted=""
