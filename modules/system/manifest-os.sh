@@ -44,14 +44,26 @@ detect_bash_version() {
     fi
 }
 
-# OS Detection function
+# OS Detection function. Idempotent: re-sourcing the module or calling
+# detect_os a second time is a no-op. Output is gated behind verbose
+# mode (`MANIFEST_CLI_VERBOSE=1` or `MANIFEST_CLI_DEBUG=1`); the
+# detection itself always runs, only the preamble is suppressed.
 detect_os() {
-    echo "🔍 Detecting operating system..."
-    
+    if [ -n "${MANIFEST_CLI_OS_DETECTED:-}" ]; then
+        return 0
+    fi
+
+    local verbose=0
+    if [ "${MANIFEST_CLI_VERBOSE:-0}" = "1" ] || [ "${MANIFEST_CLI_DEBUG:-0}" = "1" ]; then
+        verbose=1
+    fi
+
+    [ "$verbose" = "1" ] && echo "🔍 Detecting operating system..."
+
     # Get OS name
     local os_name=$(uname -s)
     local os_version=$(uname -r)
-    
+
     case "$os_name" in
         "Darwin")
             MANIFEST_CLI_OS_OS="macOS"
@@ -96,13 +108,17 @@ detect_os() {
             setup_fallback_commands
             ;;
     esac
-    
-    echo "   ✅ Detected: $MANIFEST_CLI_OS_OS ($MANIFEST_CLI_OS_VERSION)"
-    echo "   🔧 Platform: $MANIFEST_CLI_OS_FAMILY"
-    
+
+    if [ "$verbose" = "1" ]; then
+        echo "   ✅ Detected: $MANIFEST_CLI_OS_OS ($MANIFEST_CLI_OS_VERSION)"
+        echo "   🔧 Platform: $MANIFEST_CLI_OS_FAMILY"
+    fi
+
     # Detect bash version and capabilities
     detect_bash_version
-    echo "   🐍 Bash: $MANIFEST_CLI_OS_BASH_VERSION ([[ ]]: $MANIFEST_CLI_OS_BASH_SUPPORTS_DOUBLE_BRACKETS, Arrays: $MANIFEST_CLI_OS_BASH_SUPPORTS_ASSOCIATIVE_ARRAYS)"
+    [ "$verbose" = "1" ] && echo "   🐍 Bash: $MANIFEST_CLI_OS_BASH_VERSION ([[ ]]: $MANIFEST_CLI_OS_BASH_SUPPORTS_DOUBLE_BRACKETS, Arrays: $MANIFEST_CLI_OS_BASH_SUPPORTS_ASSOCIATIVE_ARRAYS)"
+
+    MANIFEST_CLI_OS_DETECTED=1
 }
 
 # macOS-specific command setup
