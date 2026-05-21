@@ -266,6 +266,52 @@ YAML
     ! grep -q $'\tsvc/src\t' "$SCRATCH/work/manifest.fleet.tsv"
 }
 
+@test "ship fleet preview Service column preserves dots via path basename" {
+    mkdir -p "$SCRATCH/work/fidenceio.manifest.cli" "$SCRATCH/work/fidenceio.homebrew.tap/Formula"
+    git -C "$SCRATCH/work" init -q
+    git -C "$SCRATCH/work/fidenceio.manifest.cli" init -q
+    git -C "$SCRATCH/work/fidenceio.homebrew.tap" init -q
+    echo "1.0.0" > "$SCRATCH/work/fidenceio.manifest.cli/VERSION"
+    cat > "$SCRATCH/work/manifest.fleet.config.yaml" <<'YAML'
+fleet:
+  name: "test-fleet"
+  versioning: "none"
+services:
+  rootworkspace:
+    path: "."
+    type: "infrastructure"
+    branch: "main"
+  fidenceiomanifestcli:
+    path: "./fidenceio.manifest.cli"
+    type: "tool"
+    branch: "main"
+  fidenceiohomebrewtap:
+    path: "./fidenceio.homebrew.tap"
+    type: "infrastructure"
+    branch: "main"
+YAML
+    cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
+true	rootworkspace	.	infrastructure	true
+true	fidenceiomanifestcli	./fidenceio.manifest.cli	tool	true
+true	fidenceiohomebrewtap	./fidenceio.homebrew.tap	infrastructure	true
+TSV
+
+    run_manifest ship fleet patch
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Fleet ship plan"* ]]
+    # Path-derived display name: dots preserved for non-root entries.
+    [[ "$output" == *"fidenceio.manifest.cli"* ]]
+    [[ "$output" == *"fidenceio.homebrew.tap"* ]]
+    # YAML key (dot-free slug) still shows for the workspace-root entry,
+    # where basename(".") would be uninformative.
+    [[ "$output" == *"rootworkspace"* ]]
+    # The de-dotted slugs must NOT appear as the Service column value;
+    # they are the YAML keys, not user-facing names.
+    [[ "$output" != *"fidenceiomanifestcli"* ]]
+    [[ "$output" != *"fidenceiohomebrewtap"* ]]
+}
+
 @test "refresh fleet --dry-run classifies dotted CLI and Homebrew tap repo names" {
     mkdir -p "$SCRATCH/work/fidenceio.manifest.cli" "$SCRATCH/work/fidenceio.homebrew.tap/Formula"
     git -C "$SCRATCH/work" init -q
