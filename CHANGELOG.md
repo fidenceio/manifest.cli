@@ -1,5 +1,18 @@
 # Changelog
 
+## [48.5.1] - 2026-05-21
+
+**Release Type:** Patch
+
+### Changes
+
+- Add opportunistic runtime cache cleanup (Step 7b substrate)
+- Close CLI tracker §5.4 (runtime cleanup); renumber §5.5 → §5.4
+- Rename runtime-cleanup load sentinel to MANIFEST_CLI_* namespace
+- Add Dirty column to fleet ship plan preview (tracker §1.1)
+- Close CLI tracker §1.1 (dirty trees in fleet ship); renumber §1.2–§1.6 → §1.1–§1.5
+
+
 ## [48.5.0] - 2026-05-21
 
 **Release Type:** Minor
@@ -80,14 +93,3 @@
 ## [48.1.1] - 2026-05-19
 
 **Release Type:** Patch — no user-facing changes.
-
-
-## [48.1.0] - 2026-05-19
-
-**Release Type:** Minor
-
-### Changes
-
-- Track findings from 2026-05-19 fleet-ship trial
-- Push Homebrew formula to tap remote directly (SSH by default)
-- Track pre-existing homebrew_tap_refresh.bats tests 3/4 failures
