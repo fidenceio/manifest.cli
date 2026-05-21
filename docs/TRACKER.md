@@ -42,6 +42,11 @@ Open work for the Manifest CLI repo.
   - **Deliverable:** print the configured service name verbatim (or apply a documented slug transform that preserves dots). Add a regression that asserts the printed Service column matches the configured name for each fleet entry.
   - **Anchor:** [`modules/fleet/manifest-fleet-plan.sh`](../modules/fleet/manifest-fleet-plan.sh), [`modules/fleet/manifest-fleet-config.sh`](../modules/fleet/manifest-fleet-config.sh).
 
+- **1.7 Fail fast on sandboxed `.git` write denial during fleet ship.**
+  - **Why:** during the W0 Phase 6 run on 2026-05-18 (`manifest ship fleet major -y`), the sandbox denied `.git` writes for the workspace root and marketing repos, leaving both in a partial state that required manual commit/tag/release recovery; Cloud and CLI only completed because they ran under elevated permissions. Fleet ship currently has no pre-flight that detects this class of environment failure, so the user discovers it mid-run, per-member, after each repo has already done partial work.
+  - **Deliverable:** add a per-member pre-flight check that probes `.git` writability before any mutation; if any member fails, refuse fleet apply with a structured error naming the affected repos and a remediation hint (rerun outside sandbox / under elevated permissions). When a mid-run denial slips past pre-flight, the partial-failure recovery output (see §1.3) must distinguish "sandbox-denied, no state written" from "partially shipped, recovery needed." Add a regression that injects a read-only `.git` and asserts both the pre-flight refusal and the post-failure recovery output.
+  - **Anchor:** [`modules/fleet/manifest-fleet-apply.sh`](../modules/fleet/manifest-fleet-apply.sh), [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh).
+
 ---
 
 ## 2. Execution policy & preview safety
