@@ -80,10 +80,18 @@ manifest_install_paths_config_files() {
     manifest_install_paths_user_global_config
 }
 
-manifest_install_paths_data_dirs() {
+# Cache-sweep-safe roots only. The runtime-cleanup module reads exclusively
+# from here; plugin data dirs are intentionally excluded so opportunistic
+# cleanup cannot touch user-owned plugin state.
+manifest_install_paths_cache_dirs() {
     local tmpdir_cache="${TMPDIR:-/tmp}/manifest-cli"
     echo "$tmpdir_cache"
     [ "/tmp/manifest-cli" != "$tmpdir_cache" ] && echo "/tmp/manifest-cli"
+    return 0
+}
+
+manifest_install_paths_data_dirs() {
+    manifest_install_paths_cache_dirs
     manifest_install_paths_plugin_data_dirs
 }
 
