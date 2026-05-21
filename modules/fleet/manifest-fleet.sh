@@ -1928,6 +1928,33 @@ _fleet_service_release_reason() {
     return 1
 }
 
+# Returns the user-facing service name for plan output. YAML keys are
+# intentionally dot-free for variable-name compatibility (see
+# manifest-fleet-config.sh `tr '[:lower:]-.' '[:upper:]__'`), so the
+# basename of `path` is the source of truth for the dotted display
+# form. Falls back to the slug for workspace-root entries where the
+# basename would be uninformative.
+_fleet_plan_service_display_name() {
+    local service="$1"
+    local path="$2"
+    local root_dir="${MANIFEST_CLI_FLEET_ROOT:-$(pwd)}"
+    local resolved="${path%/}"
+    resolved="${resolved%/.}"
+
+    if [[ -z "$resolved" || "$resolved" == "." || "$resolved" == "$root_dir" ]]; then
+        echo "$service"
+        return
+    fi
+
+    local candidate
+    candidate=$(basename "$resolved")
+    if [[ -z "$candidate" || "$candidate" == "." ]]; then
+        echo "$service"
+        return
+    fi
+    echo "$candidate"
+}
+
 _fleet_ship_plan() {
     local increment_type="$1"
     local local_only="$2"
@@ -1941,11 +1968,12 @@ _fleet_ship_plan() {
     printf '%-36s %-14s %-12s %-10s %-16s %s\n' "Service" "Type" "Branch" "Effect" "Decision" "Path / reason"
     printf '%-36s %-14s %-12s %-10s %-16s %s\n' "-------" "----" "------" "------" "--------" "-------------"
 
-    local service path reason effect decision type branch
+    local service path reason effect decision type branch display_name
     for service in $MANIFEST_CLI_FLEET_SERVICES; do
         path=$(get_fleet_service_property "$service" "path")
         type=$(get_fleet_service_property "$service" "type" "service")
         branch=$(get_fleet_service_property "$service" "branch" "${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}")
+        display_name=$(_fleet_plan_service_display_name "$service" "$path")
         if reason=$(_fleet_service_release_reason "$service" "$path"); then
             releaseable_count=$((releaseable_count + 1))
             effect="release"
@@ -1954,10 +1982,10 @@ _fleet_ship_plan() {
             else
                 decision="would ship"
             fi
-            printf '%-36s %-14s %-12s %-10s %-16s %s\n' "$service" "$type" "$branch" "$effect" "$decision" "$path"
+            printf '%-36s %-14s %-12s %-10s %-16s %s\n' "$display_name" "$type" "$branch" "$effect" "$decision" "$path"
         else
             skipped_count=$((skipped_count + 1))
-            printf '%-36s %-14s %-12s %-10s %-16s %s\n' "$service" "$type" "$branch" "read" "skip" "$path ($reason)"
+            printf '%-36s %-14s %-12s %-10s %-16s %s\n' "$display_name" "$type" "$branch" "read" "skip" "$path ($reason)"
         fi
     done
 
