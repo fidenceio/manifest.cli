@@ -1965,15 +1965,16 @@ _fleet_ship_plan() {
     echo "Fleet ship plan ($increment_type)"
     echo ""
     echo "Included repositories"
-    printf '%-36s %-14s %-12s %-10s %-16s %s\n' "Service" "Type" "Branch" "Effect" "Decision" "Path / reason"
-    printf '%-36s %-14s %-12s %-10s %-16s %s\n' "-------" "----" "------" "------" "--------" "-------------"
+    printf '%-36s %-14s %-12s %-7s %-10s %-16s %s\n' "Service" "Type" "Branch" "Dirty" "Effect" "Decision" "Path / reason"
+    printf '%-36s %-14s %-12s %-7s %-10s %-16s %s\n' "-------" "----" "------" "-----" "------" "--------" "-------------"
 
-    local service path reason effect decision type branch display_name
+    local service path reason effect decision type branch display_name dirty
     for service in $MANIFEST_CLI_FLEET_SERVICES; do
         path=$(get_fleet_service_property "$service" "path")
         type=$(get_fleet_service_property "$service" "type" "service")
         branch=$(get_fleet_service_property "$service" "branch" "${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}")
         display_name=$(_fleet_plan_service_display_name "$service" "$path")
+        dirty=$(manifest_git_changes_dirty_summary "$path")
         if reason=$(_fleet_service_release_reason "$service" "$path"); then
             releaseable_count=$((releaseable_count + 1))
             effect="release"
@@ -1982,10 +1983,10 @@ _fleet_ship_plan() {
             else
                 decision="would ship"
             fi
-            printf '%-36s %-14s %-12s %-10s %-16s %s\n' "$display_name" "$type" "$branch" "$effect" "$decision" "$path"
+            printf '%-36s %-14s %-12s %-7s %-10s %-16s %s\n' "$display_name" "$type" "$branch" "$dirty" "$effect" "$decision" "$path"
         else
             skipped_count=$((skipped_count + 1))
-            printf '%-36s %-14s %-12s %-10s %-16s %s\n' "$display_name" "$type" "$branch" "read" "skip" "$path ($reason)"
+            printf '%-36s %-14s %-12s %-7s %-10s %-16s %s\n' "$display_name" "$type" "$branch" "$dirty" "read" "skip" "$path ($reason)"
         fi
     done
 
