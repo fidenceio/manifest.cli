@@ -224,6 +224,8 @@ _manifest_time_print_result() {
 get_time_timestamp() {
     echo "🕐 Getting trusted timestamp..."
     _manifest_time_maybe_cleanup_cache
+    command -v _manifest_runtime_maybe_cleanup_cache >/dev/null 2>&1 \
+        && _manifest_runtime_maybe_cleanup_cache
 
     local cached
     if cached=$(_manifest_time_read_cache_data "fresh"); then

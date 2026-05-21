@@ -106,6 +106,7 @@ _files_with() {
     declare -F manifest_install_paths_config_files >/dev/null
     declare -F manifest_install_paths_data_dirs >/dev/null
     declare -F manifest_install_paths_plugin_data_dirs >/dev/null
+    declare -F manifest_install_paths_cache_dirs >/dev/null
     declare -F manifest_install_paths_shell_profiles >/dev/null
     declare -F manifest_install_paths_profile_line_regex >/dev/null
     declare -F manifest_install_paths_homebrew_formula >/dev/null
