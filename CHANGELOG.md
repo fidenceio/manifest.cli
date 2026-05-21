@@ -1,5 +1,25 @@
 # Changelog
 
+## [48.5.0] - 2026-05-21
+
+**Release Type:** Minor
+
+### Changes
+
+- Fix MANIFEST_DEBUG → MANIFEST_CLI_DEBUG in tracker §5.3
+- Label broad MANIFEST_* regexes as legacy-cleanup exceptions
+- Discover plugin-owned data dirs via sibling .data-dirs manifests
+- Skip comment lines in namespace audit; reword legacy-cleanup notes
+- Fix path-join doubling $HOME/~/.manifest-cli in temp-list
+- Drop install: block from example config — defaults are correct
+- Expand leading ~/ and $HOME/ in YAML values on load
+- Extend namespace audit with four gap-coverage tests
+- Add §1.7 fleet-ship sandbox .git write denial pre-flight
+- Add §5.5 runtime cleanup subcommand; renumber tap test to §5.6
+- Fleet plan Service column shows path basename, not YAML key
+- Quiet OS-detection preamble by default; gate behind verbose/debug
+
+
 ## [48.4.0] - 2026-05-20
 
 **Release Type:** Minor — no user-facing changes.
@@ -71,15 +91,3 @@
 - Track findings from 2026-05-19 fleet-ship trial
 - Push Homebrew formula to tap remote directly (SSH by default)
 - Track pre-existing homebrew_tap_refresh.bats tests 3/4 failures
-
-
-## [48.0.2] - 2026-05-19
-
-**Release Type:** Patch
-
-### Changes
-
-- Gate local-upgrade step on successful tap push
-- Centralize install/uninstall path constants in one module
-- Delete plugin's install_cli; reinstall delegates to install-cli.sh
-- Add regression coverage for the changed CLI workflow
