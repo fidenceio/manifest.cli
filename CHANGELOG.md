@@ -1,5 +1,14 @@
 # Changelog
 
+## [48.5.2] - 2026-05-22
+
+**Release Type:** Patch
+
+### Changes
+
+- Route raw mktemp through scratch helper; drop inert managed-temp API (Step 7c)
+
+
 ## [48.5.1] - 2026-05-21
 
 **Release Type:** Patch
@@ -88,8 +97,3 @@
 - Add GitHub Release publishing support
 - Update release copy and configuration examples
 - Add regression coverage for the changed CLI workflow
-
-
-## [48.1.1] - 2026-05-19
-
-**Release Type:** Patch — no user-facing changes.
