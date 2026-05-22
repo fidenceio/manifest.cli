@@ -596,16 +596,6 @@ ensure_directory() {
     fi
 }
 
-# Common temporary file handling
-create_temp_file() {
-    mktemp 2>/dev/null || {
-        log_error "Failed to create temporary file"
-        return 1
-    }
-}
-
-# cleanup_temp_file() - Use cleanup_temp_files() from manifest-cleanup-docs.sh for comprehensive cleanup
-
 # Common help function pattern
 show_help() {
     local module_name="$1"
@@ -754,7 +744,7 @@ validate_directory_exists() {
 
 # Export functions for use in other modules
 export -f log_debug log_info log_success log_warning log_error log_trace
-export -f validate_required_args ensure_directory create_temp_file
+export -f validate_required_args ensure_directory
 export -f show_help show_usage_error show_required_arg_error
 export -f _trim_ws normalize_enum_value is_truthy is_falsy
 export -f _render_help _render_help_error _manifest_hash_short

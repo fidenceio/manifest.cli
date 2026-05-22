@@ -15,6 +15,9 @@ MANIFEST_CLI_SCRIPT_DIR="$(get_script_dir)"
 source "$(dirname "$MANIFEST_CLI_SCRIPT_DIR")/git/manifest-git-changes.sh"
 source "$(dirname "$MANIFEST_CLI_SCRIPT_DIR")/docs/manifest-markdown-templates.sh"
 source "$(dirname "$MANIFEST_CLI_SCRIPT_DIR")/docs/manifest-markdown-validation.sh"
+# manifest_make_scratch_path lives here — every temp-file site below depends
+# on it. Idempotent thanks to the module's load guard.
+source "$(dirname "$MANIFEST_CLI_SCRIPT_DIR")/system/manifest-install-paths.sh"
 
 MANIFEST_CLI_README_VERSION_START="<!-- manifest:readme-version:start -->"
 MANIFEST_CLI_README_VERSION_END="<!-- manifest:readme-version:end -->"
@@ -49,7 +52,7 @@ manifest_replace_managed_block() {
         return 1
     fi
 
-    temp_file=$(mktemp)
+    temp_file=$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")
     if (( start_line > 1 )); then
         head -n $((start_line - 1)) "$file" > "$temp_file"
     else
@@ -79,7 +82,7 @@ manifest_replace_markdown_section() {
         end_line=$(wc -l < "$file")
     fi
 
-    temp_file=$(mktemp)
+    temp_file=$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")
     if (( start_line > 1 )); then
         head -n $((start_line - 1)) "$file" > "$temp_file"
     else
@@ -142,8 +145,8 @@ write_external_docs_index() {
     local repo_name
     repo_name="$(manifest_repo_display_name "$PROJECT_ROOT")"
     local metadata_file current_release_file
-    metadata_file=$(mktemp)
-    current_release_file=$(mktemp)
+    metadata_file=$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")
+    current_release_file=$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")
 
     generate_external_index_metadata_block "$version" > "$metadata_file"
     generate_external_index_current_release_block "$version" > "$current_release_file"
@@ -280,11 +283,11 @@ _manifest_docs_generate_site() {
     description="${MANIFEST_CLI_DOCS_SITE_DESCRIPTION:-Documentation for $title}"
 
     local config_file index_file layout_file css_file gitignore_file content_file
-    config_file=$(mktemp)
-    index_file=$(mktemp)
-    layout_file=$(mktemp)
-    css_file=$(mktemp)
-    gitignore_file=$(mktemp)
+    config_file=$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")
+    index_file=$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")
+    layout_file=$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")
+    css_file=$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")
+    gitignore_file=$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")
 
     cat > "$config_file" << EOF
 # $MANIFEST_CLI_DOCS_SITE_MANAGED_MARKER
@@ -382,7 +385,7 @@ _manifest_docs_generate_pages_workflow() {
     local source_dir="$2"
     local workflow_file="$project_root/.github/workflows/manifest-docs-pages.yml"
     local content_file
-    content_file=$(mktemp)
+    content_file=$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")
 
     cat > "$content_file" << EOF
 # $MANIFEST_CLI_DOCS_SITE_MANAGED_MARKER
@@ -503,14 +506,14 @@ update_readme_version() {
 
     if manifest_is_canonical_repo "$PROJECT_ROOT"; then
         local temp_file
-        temp_file=$(mktemp)
+        temp_file=$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")
 
         if grep -q "## 📋 Version Information" "$readme_file"; then
             # README has a version metadata section — replace it in place
             local version_section
             version_section=$(generate_readme_version_section "$version" "$timestamp")
             local version_section_file
-            version_section_file=$(mktemp)
+            version_section_file=$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")
             echo "$version_section" > "$version_section_file"
 
             local start_line end_line
@@ -551,7 +554,7 @@ update_readme_version() {
     fi
 
     local version_section_file
-    version_section_file=$(mktemp)
+    version_section_file=$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")
     generate_readme_version_section "$version" "$timestamp" > "$version_section_file"
 
     if manifest_is_legacy_generated_readme "$readme_file"; then
@@ -658,8 +661,8 @@ EOF
             write_external_docs_index "$index_file" "$version"
         elif manifest_file_has_managed_block "$index_file" "$MANIFEST_CLI_INDEX_METADATA_START" "$MANIFEST_CLI_INDEX_METADATA_END" && manifest_file_has_managed_block "$index_file" "$MANIFEST_CLI_INDEX_CURRENT_RELEASE_START" "$MANIFEST_CLI_INDEX_CURRENT_RELEASE_END"; then
             local metadata_file current_release_file
-            metadata_file=$(mktemp)
-            current_release_file=$(mktemp)
+            metadata_file=$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")
+            current_release_file=$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")
             generate_external_index_metadata_block "$version" > "$metadata_file"
             generate_external_index_current_release_block "$version" > "$current_release_file"
             manifest_replace_managed_block "$index_file" "$MANIFEST_CLI_INDEX_METADATA_START" "$MANIFEST_CLI_INDEX_METADATA_END" "$metadata_file"
@@ -794,12 +797,12 @@ prepend_root_changelog_entry() {
 
     local root_changelog="${project_root}/CHANGELOG.md"
     local entry_file
-    entry_file="$(mktemp)"
+    entry_file="$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")"
     _manifest_build_changelog_entry "$version" "$timestamp" "$release_type" "$changes_file" \
         > "$entry_file"
 
     local existing_body_file
-    existing_body_file="$(mktemp)"
+    existing_body_file="$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")"
     if [[ -f "$root_changelog" ]] && ! manifest_is_legacy_generated_root_changelog "$root_changelog"; then
         # Strip the leading `# Changelog\n\n` header (if present); keep the rest.
         # Also drop any existing `## [X.Y.Z]` section matching the current
@@ -866,7 +869,7 @@ _manifest_prune_root_changelog() {
     fi
 
     local tmp
-    tmp="$(mktemp)"
+    tmp="$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")"
     awk -v kind="$kind" -v value="$value" -v cutoff="$cutoff_date" '
         function flush_section(    keep) {
             if (section_index == 0) return
@@ -1074,8 +1077,8 @@ _manifest_release_notes_run_provider() {
     fi
 
     local request_file output_file
-    request_file="$(mktemp)"
-    output_file="$(mktemp)"
+    request_file="$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")"
+    output_file="$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")"
     : > "$output_file"
 
     _manifest_release_notes_build_request \
@@ -1099,7 +1102,7 @@ _manifest_release_notes_run_provider() {
     fi
 
     local new_changes
-    new_changes="$(mktemp)"
+    new_changes="$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")"
     {
         printf '## Highlights for v%s\n\n### Changes\n\n' "$version"
         printf '%s\n' "$validated"
@@ -1162,7 +1165,7 @@ ${changes}
     done
 
     local changes_file
-    changes_file=$(mktemp)
+    changes_file=$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")
     {
         printf '## Highlights for v%s\n\n' "$fleet_version"
         printf '### Service Summary\n\n'
@@ -1302,7 +1305,7 @@ manifest_docs_generate() {
     mkdir -p "$(get_docs_dir)"
     
     # Create temporary changes file
-    local changes_file=$(mktemp)
+    local changes_file=$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")
     
     # Get and analyze changes
     get_git_changes "$version" > "$changes_file"
@@ -1375,7 +1378,7 @@ main() {
                 show_required_arg_error "Version" "analyze <version>"
             fi
             
-            local changes_file=$(mktemp)
+            local changes_file=$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")
             get_git_changes "$version" > "$changes_file"
             analyze_changes "$version" "$changes_file"
             cat "$changes_file"

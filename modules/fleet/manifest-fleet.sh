@@ -1459,7 +1459,7 @@ _fleet_sync_sequential() {
     local pull_only="$2"
 
     local result_dir
-    result_dir=$(mktemp -d)
+    result_dir=$(mktemp -d "$(manifest_make_scratch_path fleet)/sync.XXXXXXXX")
 
     local total=0
     for service in $MANIFEST_CLI_FLEET_SERVICES; do
@@ -1483,7 +1483,7 @@ _fleet_sync_parallel() {
     echo ""
 
     local result_dir
-    result_dir=$(mktemp -d)
+    result_dir=$(mktemp -d "$(manifest_make_scratch_path fleet)/sync.XXXXXXXX")
 
     local pids=()
     for service in $MANIFEST_CLI_FLEET_SERVICES; do

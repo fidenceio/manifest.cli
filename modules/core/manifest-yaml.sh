@@ -163,8 +163,6 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     # -------------------------------------------------------------------------
     ["install.dir"]="MANIFEST_CLI_INSTALL_DIR"
     ["install.bin_dir"]="MANIFEST_CLI_BIN_DIR"
-    ["install.temp_dir"]="MANIFEST_CLI_TEMP_DIR"
-    ["install.temp_list"]="MANIFEST_CLI_TEMP_LIST"
 
     # -------------------------------------------------------------------------
     # brew — Homebrew integration

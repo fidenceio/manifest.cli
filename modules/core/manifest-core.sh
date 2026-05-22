@@ -230,7 +230,7 @@ manifest_homebrew_tap_push_formula() {
     cp "$formula_file" "$tap_dir/Formula/manifest.rb"
 
     local push_log
-    push_log="$(mktemp)"
+    push_log="$(mktemp "$(manifest_make_scratch_path core)/tmp.XXXXXXXX")"
     (
         set -e
         cd "$tap_dir"
@@ -1285,7 +1285,7 @@ EOF
                         echo "Usage: manifest cloud generate <version> [timestamp] [release_type]"
                         return 1
                     fi
-                    local changes_file=$(mktemp)
+                    local changes_file=$(mktemp "$(manifest_make_scratch_path core)/tmp.XXXXXXXX")
                     get_git_changes "$version" > "$changes_file"
                     send_to_manifest_cloud "$version" "$changes_file" "$release_type"
                     local result=$?
