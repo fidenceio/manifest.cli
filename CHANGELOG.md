@@ -1,5 +1,14 @@
 # Changelog
 
+## [48.5.3] - 2026-05-22
+
+**Release Type:** Patch
+
+### Changes
+
+- Add CLI tracker §1.6 fleet resume + §5.5–§5.7 ship reliability
+
+
 ## [48.5.2] - 2026-05-22
 
 **Release Type:** Patch
@@ -85,15 +94,4 @@
 ### Changes
 
 - Add smart ship preview summaries
-- Add regression coverage for the changed CLI workflow
-
-
-## [48.2.0] - 2026-05-19
-
-**Release Type:** Minor
-
-### Changes
-
-- Add GitHub Release publishing support
-- Update release copy and configuration examples
 - Add regression coverage for the changed CLI workflow
