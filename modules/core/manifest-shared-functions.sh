@@ -603,41 +603,6 @@ safe_write_file() {
 }
 
 # =============================================================================
-# TEMPORARY FILE MANAGEMENT
-# =============================================================================
-
-# Create temporary file with cleanup tracking
-create_managed_temp_file() {
-    local prefix="${1:-manifest-}"
-    local temp_file=$(mktemp -t "$prefix.XXXXXXXXXX" 2>/dev/null)
-    
-    if [ -z "$temp_file" ]; then
-        show_file_error "Failed to create temporary file"
-        return 1
-    fi
-    
-    # Track for cleanup
-    echo "$temp_file" >> "$MANIFEST_CLI_TEMP_DIR/$MANIFEST_CLI_TEMP_LIST" 2>/dev/null || true
-    
-    echo "$temp_file"
-}
-
-# Clean up tracked temporary files
-cleanup_managed_temp_files() {
-    local temp_list="$MANIFEST_CLI_TEMP_DIR/$MANIFEST_CLI_TEMP_LIST"
-    
-    if [ -f "$temp_list" ]; then
-        while IFS= read -r temp_file; do
-            if [ -f "$temp_file" ]; then
-                rm -f "$temp_file" 2>/dev/null
-                log_debug "Cleaned up temp file: $temp_file"
-            fi
-        done < "$temp_list"
-        rm -f "$temp_list"
-    fi
-}
-
-# =============================================================================
 # CONFIGURATION MANAGEMENT FUNCTIONS
 # =============================================================================
 
@@ -786,6 +751,5 @@ export -f secure_curl_request check_network_connectivity check_required_tools
 export -f generate_agent_id generate_session_id log_operation
 export -f get_git_info is_git_repository
 export -f safe_read_file safe_write_file
-export -f create_managed_temp_file cleanup_managed_temp_files
 export -f get_config_value set_config_value
 export -f safe_json_read safe_json_write

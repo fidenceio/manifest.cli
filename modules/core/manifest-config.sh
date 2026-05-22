@@ -707,10 +707,6 @@ set_default_configuration() {
     export MANIFEST_CLI_INSTALL_DIR="${MANIFEST_CLI_INSTALL_DIR:-$HOME/.manifest-cli}"
     export MANIFEST_CLI_BIN_DIR="${MANIFEST_CLI_BIN_DIR:-$HOME/.local/bin}"
 
-    # Temporary file paths
-    export MANIFEST_CLI_TEMP_DIR="${MANIFEST_CLI_TEMP_DIR:-$HOME/.manifest-cli}"
-    export MANIFEST_CLI_TEMP_LIST="${MANIFEST_CLI_TEMP_LIST:-temp-files.list}"
-    
     # Configuration file names
     export MANIFEST_CLI_CONFIG_GLOBAL="${MANIFEST_CLI_CONFIG_GLOBAL:-manifest.config.global.yaml}"
     export MANIFEST_CLI_CONFIG_LOCAL="${MANIFEST_CLI_CONFIG_LOCAL:-manifest.config.local.yaml}"

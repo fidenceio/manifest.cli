@@ -21,7 +21,7 @@ setup() {
     export HOME="$SCRATCH/home"
     mkdir -p "$HOME"
     # Wipe inherited values so we exercise the loader, not the host env.
-    unset MANIFEST_CLI_TEMP_DIR MANIFEST_CLI_INSTALL_DIR MANIFEST_CLI_BIN_DIR
+    unset MANIFEST_CLI_INSTALL_DIR MANIFEST_CLI_BIN_DIR
     load_modules
 }
 
@@ -61,19 +61,19 @@ setup() {
     [ "$output" = "~" ]
 }
 
-@test "load_yaml_to_env expands ~/.manifest-cli on install.temp_dir" {
+@test "load_yaml_to_env expands ~/.manifest-cli on install.dir" {
     # Skip if yq is unavailable — the loader's parser requirement is hard.
     command -v yq >/dev/null 2>&1 || skip "yq not installed"
 
     local cfg="$SCRATCH/manifest.yaml"
     cat > "$cfg" <<'YAML'
 install:
-  temp_dir: "~/.manifest-cli"
+  dir: "~/.manifest-cli"
 YAML
 
     # NOTE: `run` executes in a subshell, so any env vars exported by
     # load_yaml_to_env would die with that subshell. Call directly.
     load_yaml_to_env "$cfg"
-    [ "$MANIFEST_CLI_TEMP_DIR" = "$HOME/.manifest-cli" ]
-    case "$MANIFEST_CLI_TEMP_DIR" in *'~'*) return 1 ;; esac
+    [ "$MANIFEST_CLI_INSTALL_DIR" = "$HOME/.manifest-cli" ]
+    case "$MANIFEST_CLI_INSTALL_DIR" in *'~'*) return 1 ;; esac
 }

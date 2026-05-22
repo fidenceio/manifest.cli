@@ -90,6 +90,23 @@ manifest_install_paths_cache_dirs() {
     return 0
 }
 
+# Scratch directory for short-lived temp files. Every site that previously
+# called raw `mktemp` should funnel through here so the TTL-gated cache
+# sweep ([[runtime-cleanup]]) eventually collects leaked files instead of
+# stranding them in the system $TMPDIR where the sweep cannot reach.
+#
+# Sites that need a same-filesystem atomic-replace temp (write-then-mv) are
+# the exception: they must use `mktemp "${target}.XXXXXX"` next to the
+# target. See modules/fleet/manifest-fleet-detect.sh:1501 for the canonical
+# example.
+manifest_make_scratch_path() {
+    local purpose="${1:-misc}"
+    local root="${TMPDIR:-/tmp}/manifest-cli"
+    local dir="${root}/scratch/${purpose}"
+    mkdir -p "$dir" 2>/dev/null || return 1
+    echo "$dir"
+}
+
 manifest_install_paths_data_dirs() {
     manifest_install_paths_cache_dirs
     manifest_install_paths_plugin_data_dirs

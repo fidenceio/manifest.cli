@@ -132,6 +132,28 @@ teardown() {
     [ -f "$plugin_data/stale-but-protected.file" ]
 }
 
+@test "scratch path falls under a swept cache dir (sweep can reach leaks)" {
+    # Structural invariant: any path returned by manifest_make_scratch_path
+    # must start with one of the cache_dirs roots, so the TTL-gated sweep
+    # eventually collects raw-mktemp leaks. Regressing this silently strands
+    # temp files in the system $TMPDIR where the sweep cannot reach.
+    export TMPDIR="$SCRATCH"
+    source "$TEST_REPO_ROOT/modules/system/manifest-install-paths.sh"
+
+    local scratch_path
+    scratch_path="$(manifest_make_scratch_path docs)"
+    [ -n "$scratch_path" ]
+    [ -d "$scratch_path" ]
+
+    local found=0 root
+    while IFS= read -r root; do
+        case "$scratch_path" in
+            "$root"/*) found=1; break ;;
+        esac
+    done < <(manifest_install_paths_cache_dirs)
+    [ "$found" = "1" ]
+}
+
 @test "runtime cleanup: refuses paths failing safety guard" {
     # Inject a hostile cache_dirs override that returns /, $HOME, /tmp,
     # and a sibling path missing 'manifest-cli'. None should be swept.

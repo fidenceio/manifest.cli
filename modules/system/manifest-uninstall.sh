@@ -313,7 +313,7 @@ cleanup_environment_variables() {
         [ -f "$profile_file" ] || continue
         backup_file="${profile_file}.manifest-backup-$(date +%Y%m%d-%H%M%S)"
         cp "$profile_file" "$backup_file"
-        temp_file=$(mktemp)
+        temp_file=$(mktemp "$(manifest_make_scratch_path system)/tmp.XXXXXXXX")
         grep -v -E "$profile_regex" "$profile_file" > "$temp_file" || true
         if ! cmp -s "$profile_file" "$temp_file"; then
             mv "$temp_file" "$profile_file"
