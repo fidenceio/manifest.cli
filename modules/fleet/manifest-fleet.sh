@@ -1928,6 +1928,55 @@ _fleet_service_release_reason() {
     return 1
 }
 
+# Probes whether the caller can write under <path>/.git. Sandboxed
+# environments (Claude Code, restricted CI runners) frequently allow reads
+# but deny mutations under .git/, which surfaces as a partial-ship failure
+# mid-iteration. Pre-flighting the probe per member lets fleet apply refuse
+# before any state is written.
+_fleet_preflight_git_writable() {
+    local path="$1"
+    [[ -d "$path/.git" ]] || return 1
+    local probe="$path/.git/.manifest-preflight-$$"
+    if : > "$probe" 2>/dev/null; then
+        rm -f "$probe" 2>/dev/null
+        return 0
+    fi
+    return 1
+}
+
+# Iterates fleet members and refuses fleet apply if any releaseable member's
+# .git is not writable. Skipped members (excluded, missing path, not a git
+# repo, release disabled, etc.) are not probed — fleet apply never writes
+# into them.
+_fleet_preflight_git_writability() {
+    local failed=()
+    local service path reason
+    for service in $MANIFEST_CLI_FLEET_SERVICES; do
+        path=$(get_fleet_service_property "$service" "path")
+        if ! reason=$(_fleet_service_release_reason "$service" "$path"); then
+            continue
+        fi
+        if ! _fleet_preflight_git_writable "$path"; then
+            failed+=("$service ($path)")
+        fi
+    done
+
+    if [[ ${#failed[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    log_error "Pre-flight: .git write denied for ${#failed[@]} fleet member(s):"
+    local entry
+    for entry in "${failed[@]}"; do
+        echo "  - $entry"
+    done
+    echo ""
+    echo "Likely cause: sandboxed environment denying writes under .git/."
+    echo "Remediation:  rerun outside the sandbox or under elevated permissions."
+    echo "Pre-flight refused before any mutation; no fleet member was modified."
+    return 1
+}
+
 # Returns the user-facing service name for plan output. YAML keys are
 # intentionally dot-free for variable-name compatibility (see
 # manifest-fleet-config.sh `tr '[:lower:]-.' '[:upper:]__'`), so the
@@ -2076,6 +2125,10 @@ EOF
     _fleet_scope_block
     _fleet_ship_plan "$increment_type" "$local_only"
     echo ""
+
+    if ! _fleet_preflight_git_writability; then
+        return 1
+    fi
 
     if [ "$run_prep" != "true" ]; then
         echo "⏭️  Skipping fleet prep (--noprep)."
