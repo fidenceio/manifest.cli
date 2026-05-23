@@ -17,10 +17,9 @@ Open work for the Manifest CLI repo.
 
 The hardening-pass triage organized open work around *"does absence of this item allow harm at fleet-of-dozens scale?"*
 
-### T1 — release-blocking (5)
+### T1 — release-blocking (4)
 
 - §1.2 Fleet partial-failure recovery output
-- §1.5 Fail fast on sandboxed `.git` write denial
 - §1.6 Fleet-level resume entrypoint
 - §2.5 Broad preview no-write coverage matrix
 - §5.7 Atomic `install-cli.sh` upgrades
@@ -72,7 +71,7 @@ The hardening-pass triage organized open work around *"does absence of this item
   - **Status:** T1.
   - **Why:** when a fleet apply fails mid-run, users need a precise resume or replay path. The current recovery banner can be actively dangerous — see the 2026-05-19 incident below — recommending rollback for state that's already public.
   - **Deliverable:** structured report listing completed members, failed members, skipped members, and per-member replay or resume commands. Must specifically cover the **"release tagged + code pushed + formula push failed"** state observed 2026-05-19: the current recovery banner suggests tag-delete and hard-reset, but the tag and release commit are already on `origin/main` — the correct remediation is "release is live, formula stale; retry the tap push" (e.g., `manifest ship --resume-formula`), not a rollback that would orphan a published tag. Recovery output must distinguish:
-    - environment failure (no state written; see §1.5)
+    - environment failure (no state written; e.g. sandboxed `.git` writes the pre-flight refused, or a mid-run denial after the pre-flight passed)
     - auth/permission failure mid-run (no rollback needed; retry after fixing creds)
     - network failure mid-push (resume-from-step semantics)
     - tagged-and-pushed but formula-stranded (resume formula only; no rollback)
@@ -83,12 +82,6 @@ The hardening-pass triage organized open work around *"does absence of this item
   - **Why:** fleet config goes stale when repos are added outside Manifest.
   - **Deliverable:** read-only workspace diff that compares discovered repos to fleet config, exposed from a low-friction command such as `manifest doctor`, `manifest update fleet --dry-run`, or a timestamped passive check.
   - **Anchor:** [`modules/fleet/manifest-fleet-detect.sh`](../modules/fleet/manifest-fleet-detect.sh), [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
-
-- **1.5 Fail fast on sandboxed `.git` write denial during fleet ship.**
-  - **Status:** T1.
-  - **Why:** during the W0 Phase 6 run on 2026-05-18 (`manifest ship fleet major -y`), the sandbox denied `.git` writes for the workspace root and marketing repos, leaving both in a partial state that required manual commit/tag/release recovery; Cloud and CLI only completed because they ran under elevated permissions. Fleet ship currently has no pre-flight that detects this class of environment failure, so the user discovers it mid-run, per-member, after each repo has already done partial work. Sandboxed execution (Claude Code, CI runners, restricted hosts) is the common case at enterprise scale.
-  - **Deliverable:** add a per-member pre-flight check that probes `.git` writability before any mutation; if any member fails, refuse fleet apply with a structured error naming the affected repos and a remediation hint (rerun outside sandbox / under elevated permissions). When a mid-run denial slips past pre-flight, the partial-failure recovery output (see §1.2) must distinguish "sandbox-denied, no state written" from "partially shipped, recovery needed." Add a regression that injects a read-only `.git` and asserts both the pre-flight refusal and the post-failure recovery output.
-  - **Anchor:** [`modules/fleet/manifest-fleet-apply.sh`](../modules/fleet/manifest-fleet-apply.sh), [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh).
 
 - **1.6 Add fleet-level resume entrypoint.**
   - **Status:** T1.
