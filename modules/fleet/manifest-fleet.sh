@@ -2044,6 +2044,122 @@ _fleet_ship_plan() {
     return 0
 }
 
+# Reads a key=value status file written by the orchestrator and prints a
+# structured fleet-level recovery report. Classifies the failed member into
+# one of:
+#   pushed-then-stranded - release is on origin; formula/release-notes stranded; DO NOT rollback
+#   local-only           - failure before push; no public state on origin
+#   unknown              - status file missing or unparsable (rare; child crashed before emit)
+# Reads `completed`, `not_started`, `skipped` arrays from caller scope.
+_fleet_emit_recovery_report() {
+    local failed_service="$1"
+    local failed_path="$2"
+    local status_file="$3"
+    local increment_type="$4"
+    local local_only="$5"
+
+    local result="unknown" failure_step="unknown" push_status="unknown"
+    local homebrew_status="unknown" version="" tag=""
+    if [[ -f "$status_file" ]]; then
+        local k v
+        while IFS='=' read -r k v; do
+            case "$k" in
+                result)          result="$v" ;;
+                failure_step)    failure_step="$v" ;;
+                push_status)     push_status="$v" ;;
+                homebrew_status) homebrew_status="$v" ;;
+                version)         version="$v" ;;
+                tag)             tag="$v" ;;
+            esac
+        done < "$status_file"
+    fi
+
+    local category recovery_line resume_cmd retry_cmd
+    if [[ "$push_status" == "success" && "$failure_step" =~ ^(homebrew_|github_release) ]]; then
+        category="pushed-then-stranded"
+        recovery_line="Release v${version:-?} is live (tag ${tag:-?} on origin). Formula/release stranded. DO NOT rollback."
+        resume_cmd="cd $failed_path && manifest ship repo resume"
+        retry_cmd=""
+    elif [[ "$push_status" == "failed" || "$result" == "failed" ]]; then
+        category="local-only"
+        recovery_line="Failure before public push; no remote state for this member. Safe to retry or rollback locally."
+        resume_cmd="cd $failed_path && manifest ship repo resume"
+        retry_cmd="cd $failed_path && manifest ship repo $increment_type -y"
+    else
+        category="unknown"
+        recovery_line="Per-member status file missing; see the failure report above for recovery commands."
+        resume_cmd=""
+        retry_cmd=""
+    fi
+
+    echo ""
+    echo "Fleet ship: partial completion"
+    echo "==============================="
+    echo "  Fleet:     ${MANIFEST_CLI_FLEET_NAME:-unknown}"
+    echo "  Increment: $increment_type"
+    [[ "$local_only" == "true" ]] && echo "  Mode:      --local"
+    echo ""
+
+    echo "  Completed (${#completed[@]}):"
+    if [[ ${#completed[@]} -eq 0 ]]; then
+        echo "    (none)"
+    else
+        local entry svc sfile sver rest
+        for entry in "${completed[@]}"; do
+            svc="${entry%%|*}"
+            rest="${entry#*|}"
+            sfile="${rest#*|}"
+            sver=""
+            if [[ -f "$sfile" ]]; then
+                sver=$(grep '^version=' "$sfile" 2>/dev/null | cut -d= -f2-)
+            fi
+            echo "    ✅ $svc → v${sver:-?}"
+        done
+    fi
+    echo ""
+
+    echo "  Failed (1):"
+    echo "    ❌ $failed_service ($failed_path)"
+    echo "       step:     $failure_step"
+    echo "       category: $category"
+    echo "       $recovery_line"
+    if [[ -n "$resume_cmd" ]]; then
+        echo "       Resume:   $resume_cmd"
+    fi
+    if [[ -n "$retry_cmd" ]]; then
+        echo "       Or retry: $retry_cmd"
+    fi
+    echo ""
+
+    echo "  Not started (${#not_started[@]}):"
+    if [[ ${#not_started[@]} -eq 0 ]]; then
+        echo "    (none)"
+    else
+        local entry ns_svc ns_path
+        for entry in "${not_started[@]}"; do
+            ns_svc="${entry%%|*}"
+            ns_path="${entry#*|}"
+            echo "    ⏸  $ns_svc ($ns_path)"
+        done
+    fi
+    echo ""
+
+    echo "  Skipped (${#skipped[@]}):"
+    if [[ ${#skipped[@]} -eq 0 ]]; then
+        echo "    (none)"
+    else
+        local entry sk_svc sk_path sk_reason rest
+        for entry in "${skipped[@]}"; do
+            sk_svc="${entry%%|*}"
+            rest="${entry#*|}"
+            sk_path="${rest%%|*}"
+            sk_reason="${rest#*|}"
+            echo "    ⏭  $sk_svc ($sk_reason)"
+        done
+    fi
+    echo ""
+}
+
 # -----------------------------------------------------------------------------
 # Function: fleet_ship
 # -----------------------------------------------------------------------------
@@ -2150,34 +2266,79 @@ EOF
     fi
 
     echo "Step 1/1: Shipping releaseable services directly..."
-    local service path reason
-    for service in $MANIFEST_CLI_FLEET_SERVICES; do
+
+    local -a member_list=()
+    # shellcheck disable=SC2206
+    member_list=( $MANIFEST_CLI_FLEET_SERVICES )
+
+    local status_dir
+    status_dir=$(mktemp -d "${TMPDIR:-/tmp}/manifest-fleet-status.XXXXXX") || {
+        log_error "Could not create fleet status scratch directory."
+        return 1
+    }
+
+    local -a completed=() not_started=() skipped=()
+    local failed_service="" failed_path="" failed_status_file=""
+    local service path reason status_file idx=0 rc rem rem_path rem_reason rem_idx
+
+    for service in "${member_list[@]}"; do
+        idx=$((idx + 1))
         path=$(get_fleet_service_property "$service" "path")
         if ! reason=$(_fleet_service_release_reason "$service" "$path"); then
             echo "  - $service: skipped ($reason)"
+            skipped+=("$service|$path|$reason")
             continue
         fi
         echo "  - $service: shipping $increment_type"
+        status_file="$status_dir/${service}.status"
+
         # Fleet's -y is the apply consent; suppress the per-member confirmation
-        # prompt that manifest_ship_repo would otherwise trigger.
+        # prompt that manifest_ship_repo would otherwise trigger. The status
+        # file lets the fleet aggregator classify per-member outcomes without
+        # parsing the child's stdout.
         (
             cd "$path" || exit 1
             PROJECT_ROOT="$PWD"
             export PROJECT_ROOT
             MANIFEST_CLI_AUTO_CONFIRM=1
             export MANIFEST_CLI_AUTO_CONFIRM
+            MANIFEST_CLI_SHIP_STATUS_FILE="$status_file"
+            export MANIFEST_CLI_SHIP_STATUS_FILE
             if [[ "$local_only" == "true" ]]; then
                 manifest_ship_repo "$increment_type" "--local" "-y"
             else
                 manifest_ship_repo "$increment_type" "-y"
             fi
-        ) || {
-            echo "  - $service: ship failed"
-            log_error "Fleet ship failed. Review completed service commits/tags before retrying."
-            return 1
-        }
+        )
+        rc=$?
+        if [[ $rc -ne 0 ]]; then
+            failed_service="$service"
+            failed_path="$path"
+            failed_status_file="$status_file"
+            for ((rem_idx=idx; rem_idx<${#member_list[@]}; rem_idx++)); do
+                rem="${member_list[$rem_idx]}"
+                rem_path=$(get_fleet_service_property "$rem" "path")
+                if rem_reason=$(_fleet_service_release_reason "$rem" "$rem_path"); then
+                    not_started+=("$rem|$rem_path")
+                else
+                    skipped+=("$rem|$rem_path|$rem_reason")
+                fi
+            done
+            break
+        fi
+        completed+=("$service|$path|$status_file")
     done
 
+    if [[ -n "$failed_service" ]]; then
+        _fleet_emit_recovery_report \
+            "$failed_service" "$failed_path" "$failed_status_file" \
+            "$increment_type" "$local_only"
+        rm -rf "$status_dir" 2>/dev/null
+        log_error "Fleet ship aborted at $failed_service. See classification above before retrying."
+        return 1
+    fi
+
+    rm -rf "$status_dir" 2>/dev/null
     echo "✅ Fleet ship workflow complete."
 }
 

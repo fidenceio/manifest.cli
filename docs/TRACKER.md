@@ -17,9 +17,8 @@ Open work for the Manifest CLI repo.
 
 The hardening-pass triage organized open work around *"does absence of this item allow harm at fleet-of-dozens scale?"*
 
-### T1 — release-blocking (4)
+### T1 — release-blocking (3)
 
-- §1.2 Fleet partial-failure recovery output
 - §1.6 Fleet-level resume entrypoint
 - §2.5 Broad preview no-write coverage matrix
 - §5.7 Atomic `install-cli.sh` upgrades
@@ -66,16 +65,6 @@ The hardening-pass triage organized open work around *"does absence of this item
   - **Why:** fleet release should not silently skip PR-gated members. Silent skip leaves the fleet in an inconsistent state where some members shipped and others didn't.
   - **Deliverable:** fleet ship preview lists PR-gated members; apply refuses with a structured error and a `manifest pr fleet ... -y` replay command.
   - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
-
-- **1.2 Add fleet partial-failure recovery output.**
-  - **Status:** T1.
-  - **Why:** when a fleet apply fails mid-run, users need a precise resume or replay path. The current recovery banner can be actively dangerous — see the 2026-05-19 incident below — recommending rollback for state that's already public.
-  - **Deliverable:** structured report listing completed members, failed members, skipped members, and per-member replay or resume commands. Must specifically cover the **"release tagged + code pushed + formula push failed"** state observed 2026-05-19: the current recovery banner suggests tag-delete and hard-reset, but the tag and release commit are already on `origin/main` — the correct remediation is "release is live, formula stale; retry the tap push" (e.g., `manifest ship --resume-formula`), not a rollback that would orphan a published tag. Recovery output must distinguish:
-    - environment failure (no state written; e.g. sandboxed `.git` writes the pre-flight refused, or a mid-run denial after the pre-flight passed)
-    - auth/permission failure mid-run (no rollback needed; retry after fixing creds)
-    - network failure mid-push (resume-from-step semantics)
-    - tagged-and-pushed but formula-stranded (resume formula only; no rollback)
-  - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh), [`modules/fleet/manifest-fleet-apply.sh`](../modules/fleet/manifest-fleet-apply.sh), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh).
 
 - **1.3 Detect workspace/fleet membership drift.**
   - **Status:** DEFER (post-enterprise; read-only convenience).
