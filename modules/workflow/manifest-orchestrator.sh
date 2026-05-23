@@ -7,6 +7,17 @@
 
 # Orchestrator module - modules are already sourced by manifest-core.sh
 
+_emit_ship_status_file() {
+    # Writes key=value lines to $MANIFEST_CLI_SHIP_STATUS_FILE when set.
+    # Used by fleet ship to classify per-member outcomes without parsing stdout.
+    [[ -n "${MANIFEST_CLI_SHIP_STATUS_FILE:-}" ]] || return 0
+    : > "$MANIFEST_CLI_SHIP_STATUS_FILE" 2>/dev/null || return 0
+    while [[ $# -ge 2 ]]; do
+        printf '%s=%s\n' "$1" "$2" >> "$MANIFEST_CLI_SHIP_STATUS_FILE"
+        shift 2
+    done
+}
+
 emit_ship_failure_report() {
     local failure_step="$1"
     local start_sha="$2"
@@ -70,6 +81,14 @@ emit_ship_failure_report() {
         echo "   Roll back:   git reset --hard ${start_sha}"
     fi
     echo ""
+
+    _emit_ship_status_file \
+        result failed \
+        failure_step "$failure_step" \
+        version "${version:-}" \
+        tag "${tag_name:-}" \
+        push_status "$push_status" \
+        homebrew_status "$homebrew_status"
 }
 
 manifest_should_wait_for_github_actions() {
@@ -797,6 +816,13 @@ manifest_ship_workflow() {
     echo "   - Offset: $MANIFEST_CLI_TIME_OFFSET seconds"
     echo "   - Uncertainty: ±$MANIFEST_CLI_TIME_UNCERTAINTY seconds"
     echo "   - Method: $MANIFEST_CLI_TIME_METHOD"
+
+    _emit_ship_status_file \
+        result success \
+        version "$new_version" \
+        tag "${workflow_tag_name:-}" \
+        push_status "${workflow_push_status:-skipped}" \
+        homebrew_status "${workflow_homebrew_status:-skipped}"
 
     if manifest_ship_should_run_followup_patch "$increment_type" "$publish_release" "$workflow_tag_name"; then
         manifest_ship_run_followup_patch
