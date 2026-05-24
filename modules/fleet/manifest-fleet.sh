@@ -2343,6 +2343,220 @@ EOF
 }
 
 # =============================================================================
+# COMMAND: ship fleet resume
+# =============================================================================
+
+# Probes each releaseable fleet member, classifies it as eligible / nothing /
+# release-disabled, and (when applied) delegates to per-repo resume for each
+# eligible member. Pure read in preview mode; sequential fail-fast on apply.
+#
+# Fills caller-scope arrays `eligible`, `nothing`, `disabled` via dynamic
+# scope. Each entry is pipe-delimited:
+#   eligible: svc|path|version|tag
+#   nothing:  svc|path|code|detail
+#   disabled: svc|path|reason
+_fleet_resume_classify() {
+    eligible=()
+    nothing=()
+    disabled=()
+
+    local service path reason probe code version tag_name detail
+    for service in $MANIFEST_CLI_FLEET_SERVICES; do
+        path=$(get_fleet_service_property "$service" "path")
+        if ! reason=$(_fleet_service_release_reason "$service" "$path"); then
+            # Includes "not a git repo", "missing path", "release disabled",
+            # "excluded", etc. — anything fleet ship would also skip.
+            disabled+=("$service|$path|$reason")
+            continue
+        fi
+        # `|| true` neutralizes set -eo pipefail propagation from the subshell
+        # when the probe returns 1 (non-eligible); the probe's stdout is the
+        # source of truth — rc just mirrors eligible-vs-not.
+        probe=$(
+            cd "$path" 2>/dev/null || exit 1
+            PROJECT_ROOT="$PWD"
+            export PROJECT_ROOT
+            manifest_ship_repo_resume_eligible
+        ) || true
+        IFS='|' read -r code version tag_name detail <<<"$probe"
+        case "$code" in
+            eligible)
+                eligible+=("$service|$path|$version|$tag_name")
+                ;;
+            *)
+                nothing+=("$service|$path|${code:-unknown}|${detail:-no detail}")
+                ;;
+        esac
+    done
+}
+
+# Prints the per-category recap used by both preview and apply summary.
+# Reads caller-scope arrays `eligible`, `nothing`, `disabled`.
+_fleet_resume_print_classification() {
+    local header_label="${1:-Fleet resume preview}"
+    echo ""
+    echo "$header_label"
+    echo "  Fleet:     ${MANIFEST_CLI_FLEET_NAME:-unknown}"
+    echo ""
+
+    echo "  Eligible (${#eligible[@]}):"
+    if [[ ${#eligible[@]} -eq 0 ]]; then
+        echo "    (none)"
+    else
+        local entry svc spath sver stag
+        for entry in "${eligible[@]}"; do
+            IFS='|' read -r svc spath sver stag <<<"$entry"
+            echo "    🔧 $svc → resume v${sver} (tag ${stag})"
+        done
+    fi
+    echo ""
+
+    echo "  Nothing to resume (${#nothing[@]}):"
+    if [[ ${#nothing[@]} -eq 0 ]]; then
+        echo "    (none)"
+    else
+        local entry nsvc npath ncode ndetail
+        for entry in "${nothing[@]}"; do
+            IFS='|' read -r nsvc npath ncode ndetail <<<"$entry"
+            echo "    ✓  $nsvc ($ncode)"
+        done
+    fi
+    echo ""
+
+    echo "  Release disabled (${#disabled[@]}):"
+    if [[ ${#disabled[@]} -eq 0 ]]; then
+        echo "    (none)"
+    else
+        local entry dsvc dpath dreason
+        for entry in "${disabled[@]}"; do
+            IFS='|' read -r dsvc dpath dreason <<<"$entry"
+            echo "    ⏭  $dsvc ($dreason)"
+        done
+    fi
+    echo ""
+}
+
+# -----------------------------------------------------------------------------
+# Function: fleet_resume
+# -----------------------------------------------------------------------------
+# Fleet-level counterpart to `manifest ship repo resume`. Walks each
+# releaseable member, applies the per-repo resume eligibility probe, and
+# delegates to per-repo resume for any member found in the stranded state.
+# Preview by default; -y to apply. Refuses --local (resume's job is to push
+# stranded artifacts).
+# -----------------------------------------------------------------------------
+fleet_resume() {
+    local execution_mode="preview"
+    local local_only=false
+    local remaining_args=()
+    if ! manifest_execution_parse execution_mode local_only remaining_args "$@"; then
+        return 1
+    fi
+    set -- "${remaining_args[@]}"
+
+    if [[ "$local_only" == "true" ]]; then
+        log_error "fleet resume does not support --local."
+        return 1
+    fi
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help)
+                cat << 'EOF'
+Usage: manifest ship fleet resume [-y|--yes] [--dry-run]
+
+Walks each releaseable fleet member, probes per-repo resume eligibility
+(VERSION present, local tag matches, ancestor of HEAD, clean tree modulo
+formula/manifest.rb), and (with -y) delegates to `manifest ship repo resume`
+for each eligible member.
+
+Options:
+  --dry-run    Explicit preview; classify members but do not resume
+  -y, --yes    Apply: resume each eligible member in sequence
+
+Resume is sequential and fail-fast. A failure aborts remaining members so
+the user can inspect state before re-running.
+EOF
+                return 0
+                ;;
+            *)
+                log_error "Unknown option for 'manifest ship fleet resume': $1"
+                return 1
+                ;;
+        esac
+    done
+
+    if ! _fleet_require_initialized "ship resume"; then
+        return 1
+    fi
+
+    local -a eligible=() nothing=() disabled=()
+    _fleet_resume_classify
+
+    _fleet_scope_block
+    _fleet_resume_print_classification "Fleet resume plan"
+
+    if [[ "$execution_mode" == "preview" ]]; then
+        manifest_execution_footer "manifest ship fleet resume -y"
+        return 0
+    fi
+
+    if [[ ${#eligible[@]} -eq 0 ]]; then
+        echo "Nothing to resume across fleet."
+        return 0
+    fi
+
+    if ! _fleet_preflight_git_writability; then
+        return 1
+    fi
+
+    echo "Resuming ${#eligible[@]} member(s)..."
+    local entry svc spath sver stag rc
+    local -a resumed=() failed=()
+    for entry in "${eligible[@]}"; do
+        IFS='|' read -r svc spath sver stag <<<"$entry"
+        echo "  - $svc: resuming v${sver}"
+        (
+            cd "$spath" || exit 1
+            PROJECT_ROOT="$PWD"
+            export PROJECT_ROOT
+            MANIFEST_CLI_AUTO_CONFIRM=1
+            export MANIFEST_CLI_AUTO_CONFIRM
+            manifest_ship_repo_resume
+        )
+        rc=$?
+        if [[ $rc -ne 0 ]]; then
+            failed+=("$svc|$spath|$sver")
+            break
+        fi
+        resumed+=("$svc|$spath|$sver")
+    done
+
+    echo ""
+    echo "Fleet resume summary"
+    echo "  Resumed (${#resumed[@]}):"
+    if [[ ${#resumed[@]} -eq 0 ]]; then
+        echo "    (none)"
+    else
+        for entry in "${resumed[@]}"; do
+            IFS='|' read -r svc spath sver <<<"$entry"
+            echo "    ✅ $svc → v${sver}"
+        done
+    fi
+    if [[ ${#failed[@]} -gt 0 ]]; then
+        echo "  Failed (${#failed[@]}):"
+        for entry in "${failed[@]}"; do
+            IFS='|' read -r svc spath sver <<<"$entry"
+            echo "    ❌ $svc → v${sver}"
+        done
+        log_error "Fleet resume aborted at ${failed[0]%%|*}. See per-member output above."
+        return 1
+    fi
+    echo "✅ Fleet resume complete."
+    return 0
+}
+
+# =============================================================================
 # COMMAND: validate fleet
 # =============================================================================
 

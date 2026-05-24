@@ -350,6 +350,7 @@ manifest_ship_fleet() {
     local fleet_args=()
     local execution_mode="preview"
     local remaining_args=()
+    local subcommand="ship"
 
     if ! manifest_execution_parse execution_mode local_only remaining_args "$@"; then
         return 1
@@ -360,23 +361,33 @@ manifest_ship_fleet() {
         case "$1" in
             patch|minor|major|revision)
                 increment_type="$1"; shift ;;
+            resume)
+                subcommand="resume"; shift ;;
             --explain) explain=true; shift ;;
             -h|--help)
+                if [[ "$subcommand" == "resume" ]]; then
+                    fleet_resume "--help"
+                    return $?
+                fi
                 _render_help \
-                    "manifest ship fleet <patch|minor|major|revision> [-y|--yes] [--dry-run] [--local] [fleet options]" \
+                    "manifest ship fleet <patch|minor|major|revision>|resume [-y|--yes] [--dry-run] [--local] [fleet options]" \
                     "Preview or publish a coordinated fleet release across eligible services." \
                     "Options" "  patch | minor | major | revision   Release type
+  resume                   Resume stranded fleet members (push tag + formula for each eligible repo)
   --dry-run                Explicit preview; no writes, commits, tags, pushes, or PRs
   -y, --yes                Apply the fleet release plan
-  --local                  With -y, local only — no push, no tags
+  --local                  With -y, local only — no push, no tags (ship only; not valid for resume)
   --explain                Show the built-in recipe definition without running it
   --noprep                 Skip per-service prep step (requires clean trees)" \
                     "Flow" "  preview:  load fleet -> render per-service release plan
   apply:    load fleet -> ship release-enabled services directly
+  resume:   load fleet -> per-member eligibility probe -> delegate to repo resume
   PR work:  use manifest pr fleet ... explicitly" \
                     "Examples" "  manifest ship fleet patch
   manifest ship fleet patch -y
-  manifest ship fleet minor --local -y"
+  manifest ship fleet minor --local -y
+  manifest ship fleet resume
+  manifest ship fleet resume -y"
                 return 0
                 ;;
             *)
@@ -384,10 +395,32 @@ manifest_ship_fleet() {
         esac
     done
 
+    if [[ "$subcommand" == "resume" ]]; then
+        if [[ "$local_only" == "true" ]]; then
+            _render_help_error \
+                "manifest ship fleet resume does not support --local" \
+                "manifest ship fleet resume [-y|--yes] [--dry-run]"
+            return 1
+        fi
+        if [[ "$explain" == "true" ]]; then
+            log_error "manifest ship fleet resume has no recipe to explain."
+            return 1
+        fi
+        if [[ "$execution_mode" == "preview" ]]; then
+            echo "Ship fleet resume preview — no changes written"
+            fleet_resume "--dry-run" "${fleet_args[@]}"
+        else
+            manifest_execution_apply_header
+            echo "Ship fleet resume"
+            fleet_resume "-y" "${fleet_args[@]}"
+        fi
+        return $?
+    fi
+
     if [[ -z "$increment_type" ]]; then
         _render_help_error \
             "ship fleet requires a release type" \
-            "manifest ship fleet <patch|minor|major|revision> [--local]"
+            "manifest ship fleet <patch|minor|major|revision>|resume [--local]"
         return 1
     fi
 

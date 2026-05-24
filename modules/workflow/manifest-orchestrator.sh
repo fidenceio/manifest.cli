@@ -409,6 +409,62 @@ manifest_ship_run_followup_patch() {
     MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE=1 manifest_exec_manifest ship repo patch -y
 }
 
+# Probes whether the current repo is in a resume-eligible state. Pure function:
+# no log_error, no side effects, no PROJECT_ROOT mutation. Caller is responsible
+# for cd'ing into the repo first; uses PROJECT_ROOT if set, else pwd.
+#
+# Echoes a single pipe-separated line: <code>|<version>|<tag>|<detail>
+# Codes:
+#   eligible          - VERSION present + local tag matches + ancestor of HEAD + clean modulo formula
+#   no-version        - VERSION file missing or empty
+#   no-branch         - detached HEAD
+#   no-local-tag      - VERSION present, but expected local tag does not exist
+#   tag-not-ancestor  - tag exists but does not point at an ancestor of HEAD
+#   dirty-tree        - working tree has changes outside formula/manifest.rb
+#
+# Returns 0 for "eligible", 1 for any non-eligible code.
+manifest_ship_repo_resume_eligible() {
+    local project_root="${PROJECT_ROOT:-$(pwd)}"
+    local version="" tag_name tag_commit branch dirty_files non_formula_count
+
+    if [[ -r "$project_root/VERSION" ]]; then
+        version="$(tr -d '[:space:]' < "$project_root/VERSION" 2>/dev/null || echo "")"
+    fi
+    if [[ -z "$version" ]]; then
+        echo "no-version|||VERSION file missing or empty"
+        return 1
+    fi
+    tag_name="$(manifest_release_tag_name "$version")"
+
+    branch="$(git -C "$project_root" branch --show-current 2>/dev/null || echo "")"
+    if [[ -z "$branch" ]]; then
+        echo "no-branch|$version|$tag_name|detached HEAD"
+        return 1
+    fi
+
+    if ! tag_commit="$(git -C "$project_root" rev-parse "${tag_name}^{commit}" 2>/dev/null)"; then
+        echo "no-local-tag|$version|$tag_name|local tag missing"
+        return 1
+    fi
+    if ! git -C "$project_root" merge-base --is-ancestor "$tag_commit" HEAD 2>/dev/null; then
+        echo "tag-not-ancestor|$version|$tag_name|tag is not an ancestor of HEAD"
+        return 1
+    fi
+
+    dirty_files="$(git -C "$project_root" status --porcelain 2>/dev/null || true)"
+    non_formula_count=$(printf '%s\n' "$dirty_files" \
+        | awk '$2 != "formula/manifest.rb" && $0 != ""' \
+        | grep -c . 2>/dev/null || true)
+    non_formula_count="${non_formula_count:-0}"
+    if (( non_formula_count > 0 )); then
+        echo "dirty-tree|$version|$tag_name|${non_formula_count} unrelated dirty path(s)"
+        return 1
+    fi
+
+    echo "eligible|$version|$tag_name|"
+    return 0
+}
+
 manifest_ship_repo_resume() {
     if ! ensure_repository_root; then
         log_error "Repository root validation failed"
@@ -417,36 +473,43 @@ manifest_ship_repo_resume() {
     PROJECT_ROOT="$(pwd)"
     export PROJECT_ROOT
 
-    local version tag_name tag_commit branch remote_branch_status remote_tag_status dirty_files non_formula_dirty
-    version="$(tr -d '[:space:]' < "$PROJECT_ROOT/VERSION" 2>/dev/null || echo "")"
-    if [[ -z "$version" ]]; then
-        log_error "Cannot resume ship: VERSION file is missing or empty."
-        return 1
-    fi
-    tag_name="$(manifest_release_tag_name "$version")"
+    local probe code version tag_name detail
+    probe="$(manifest_ship_repo_resume_eligible)"
+    IFS='|' read -r code version tag_name detail <<<"$probe"
+    case "$code" in
+        no-version)
+            log_error "Cannot resume ship: VERSION file is missing or empty."
+            return 1
+            ;;
+        no-branch)
+            log_error "Cannot resume ship: detached HEAD is not supported."
+            return 1
+            ;;
+        no-local-tag)
+            log_error "Cannot resume ship: local tag ${tag_name} does not exist."
+            log_error "Run a normal ship workflow or create the release tag first."
+            return 1
+            ;;
+        tag-not-ancestor)
+            log_error "Cannot resume ship: ${tag_name} does not point at an ancestor of HEAD."
+            return 1
+            ;;
+        dirty-tree)
+            log_error "Cannot resume ship with unrelated working-tree changes:"
+            git status --porcelain | awk '$2 != "formula/manifest.rb" && $0 != ""'
+            return 1
+            ;;
+        eligible) ;;
+        *)
+            log_error "Cannot resume ship: unknown probe state ($code)."
+            return 1
+            ;;
+    esac
+
+    local tag_commit branch dirty_files remote_branch_status remote_tag_status
+    tag_commit="$(git rev-parse "${tag_name}^{commit}" 2>/dev/null)"
     branch="$(git branch --show-current 2>/dev/null || echo "")"
-    if [[ -z "$branch" ]]; then
-        log_error "Cannot resume ship: detached HEAD is not supported."
-        return 1
-    fi
-
-    if ! tag_commit="$(git rev-parse "${tag_name}^{commit}" 2>/dev/null)"; then
-        log_error "Cannot resume ship: local tag ${tag_name} does not exist."
-        log_error "Run a normal ship workflow or create the release tag first."
-        return 1
-    fi
-    if ! git merge-base --is-ancestor "$tag_commit" HEAD 2>/dev/null; then
-        log_error "Cannot resume ship: ${tag_name} does not point at an ancestor of HEAD."
-        return 1
-    fi
-
     dirty_files="$(git status --porcelain 2>/dev/null || true)"
-    non_formula_dirty="$(printf '%s\n' "$dirty_files" | awk '$2 != "formula/manifest.rb" && $0 != "" { print; found=1 } END { exit found ? 0 : 1 }' || true)"
-    if [[ -n "$non_formula_dirty" ]]; then
-        log_error "Cannot resume ship with unrelated working-tree changes:"
-        printf '%s\n' "$non_formula_dirty"
-        return 1
-    fi
 
     remote_branch_status="unknown"
     remote_tag_status="unknown"
