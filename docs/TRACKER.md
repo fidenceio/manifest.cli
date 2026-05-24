@@ -17,9 +17,8 @@ Open work for the Manifest CLI repo.
 
 The hardening-pass triage organized open work around *"does absence of this item allow harm at fleet-of-dozens scale?"*
 
-### T1 — release-blocking (3)
+### T1 — release-blocking (2)
 
-- §1.6 Fleet-level resume entrypoint
 - §2.5 Broad preview no-write coverage matrix
 - §5.7 Atomic `install-cli.sh` upgrades
 
@@ -71,12 +70,6 @@ The hardening-pass triage organized open work around *"does absence of this item
   - **Why:** fleet config goes stale when repos are added outside Manifest.
   - **Deliverable:** read-only workspace diff that compares discovered repos to fleet config, exposed from a low-friction command such as `manifest doctor`, `manifest update fleet --dry-run`, or a timestamped passive check.
   - **Anchor:** [`modules/fleet/manifest-fleet-detect.sh`](../modules/fleet/manifest-fleet-detect.sh), [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
-
-- **1.6 Add fleet-level resume entrypoint.**
-  - **Status:** T1.
-  - **Why:** `manifest ship repo resume` ([`manifest-orchestrator.sh:393`](../modules/workflow/manifest-orchestrator.sh)) handles the per-repo "tag pushed, formula stranded" state, but a fleet ship that dies mid-iteration has no `manifest ship fleet resume` — the user must identify which members already shipped and manually invoke per-repo resume from each one. Observed 2026-05-21: an interrupted `ship fleet patch` left the CLI repo with `v48.5.1` tag pushed but formula uncommitted; recovery required manually `cd`-ing into the repo and running `ship repo resume`, with no help from the fleet layer. Manual per-member recovery doesn't scale to dozens of repos.
-  - **Deliverable:** add `manifest ship fleet resume` that walks each releaseable member, infers per-member state with the same checks as repo resume (VERSION present, tag exists locally + remotely, only `formula/manifest.rb` dirty), and delegates to per-repo resume for any member found in the stranded state. Skip cleanly when nothing to resume. The fleet-state probe must be shared between `--dry-run` (preview which members would resume) and apply.
-  - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh), [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh).
 
 - **1.7 Single-flight lock for fleet apply.**
   - **Status:** T2.
