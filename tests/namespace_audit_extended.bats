@@ -80,9 +80,9 @@ _namespace_scan_offenders() {
         # install-cli.sh:400 — comment describing the cleanup_environment_variables
         #   helper that strips legacy MANIFEST_* exports from shell profiles.
         "install-cli.sh:400"
-        # install-cli.sh:1050 — comment in the post-uninstall residue sweep
+        # install-cli.sh:1061 — comment in the post-uninstall residue sweep
         #   that calls cleanup_environment_variables for stale MANIFEST_* exports.
-        "install-cli.sh:1050"
+        "install-cli.sh:1061"
         # uninstall-cli.sh:57 — usage-help text listing what the uninstaller
         #   removes from shell profiles, including legacy MANIFEST_* exports.
         "uninstall-cli.sh:57"

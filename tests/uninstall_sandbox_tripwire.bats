@@ -116,3 +116,268 @@ teardown() {
     [ "$status" -eq 0 ]
     [ ! -d "$sandboxed" ]
 }
+
+# ============================================================================
+# End-to-end coverage: remaining destructive sites in manifest-uninstall.sh
+#
+# Each test plants a decoy file/dir at a real-home-shaped path OUTSIDE
+# $BATS_TEST_TMPDIR, overrides path-yielding helpers so the destructive
+# function targets the decoy, then asserts the decoy survives. Filesystem
+# state is the decisive check — return codes alone aren't reliable because
+# some functions `continue` past refusals without bubbling an error.
+# ============================================================================
+
+@test "remove_cli_binary refuses real-home-shaped target end-to-end" {
+    # shellcheck disable=SC1090
+    source "$TEST_REPO_ROOT/modules/system/manifest-uninstall.sh"
+    local decoy_dir="/tmp/manifest-tripwire-bin.$$"
+    rm -rf "$decoy_dir" 2>/dev/null || true
+    mkdir -p "$decoy_dir"
+    local decoy="$decoy_dir/fake-manifest"
+    : > "$decoy"
+    run remove_cli_binary "$decoy"
+    [ "$status" -ne 0 ]
+    [ -f "$decoy" ]
+    rm -rf "$decoy_dir"
+}
+
+@test "cleanup_config_files refuses config-file rm against real-home-shaped target" {
+    # shellcheck disable=SC1090
+    source "$TEST_REPO_ROOT/modules/system/manifest-uninstall.sh"
+    local decoy_dir="/tmp/manifest-tripwire-config.$$"
+    rm -rf "$decoy_dir" 2>/dev/null || true
+    mkdir -p "$decoy_dir"
+    local decoy="$decoy_dir/fake-config.yaml"
+    echo "user_settings: keep-me" > "$decoy"
+    manifest_install_paths_config_files() { printf '%s\n' "$decoy"; }
+    manifest_install_paths_data_dirs() { :; }
+    manifest_install_paths_user_global_config() { echo "$decoy_dir/__nonexistent__"; }
+    export -f manifest_install_paths_config_files
+    export -f manifest_install_paths_data_dirs
+    export -f manifest_install_paths_user_global_config
+    run cleanup_config_files true
+    [ -f "$decoy" ]
+    [ "$(cat "$decoy")" = "user_settings: keep-me" ]
+    rm -rf "$decoy_dir"
+}
+
+@test "cleanup_config_files refuses data-dir rm against real-home-shaped target" {
+    # shellcheck disable=SC1090
+    source "$TEST_REPO_ROOT/modules/system/manifest-uninstall.sh"
+    local decoy_dir="/tmp/manifest-tripwire-data.$$"
+    rm -rf "$decoy_dir" 2>/dev/null || true
+    mkdir -p "$decoy_dir/fake-data-dir"
+    echo "important data" > "$decoy_dir/fake-data-dir/keep.txt"
+    manifest_install_paths_config_files() { :; }
+    manifest_install_paths_data_dirs() { printf '%s\n' "$decoy_dir/fake-data-dir"; }
+    manifest_install_paths_user_global_config() { echo "$decoy_dir/__nonexistent__"; }
+    export -f manifest_install_paths_config_files
+    export -f manifest_install_paths_data_dirs
+    export -f manifest_install_paths_user_global_config
+    run cleanup_config_files true
+    [ -d "$decoy_dir/fake-data-dir" ]
+    [ "$(cat "$decoy_dir/fake-data-dir/keep.txt")" = "important data" ]
+    rm -rf "$decoy_dir"
+}
+
+@test "cleanup_environment_variables refuses profile rewrite against real-home-shaped target" {
+    # shellcheck disable=SC1090
+    source "$TEST_REPO_ROOT/modules/system/manifest-uninstall.sh"
+    local decoy_dir="/tmp/manifest-tripwire-profile.$$"
+    rm -rf "$decoy_dir" 2>/dev/null || true
+    mkdir -p "$decoy_dir"
+    local decoy="$decoy_dir/fake-zshrc"
+    cat > "$decoy" <<'EOF'
+# User's real config — must not be touched
+export PATH="$HOME/bin:$PATH"
+export MANIFEST_CLI_FAKE=oops
+alias ll='ls -la'
+EOF
+    local original_sum
+    original_sum="$(shasum "$decoy" | awk '{print $1}')"
+    manifest_install_paths_shell_profiles() { printf '%s\n' "$decoy"; }
+    export -f manifest_install_paths_shell_profiles
+    manifest_make_scratch_path() { echo "$BATS_TEST_TMPDIR"; }
+    export -f manifest_make_scratch_path
+    run cleanup_environment_variables
+    [ -f "$decoy" ]
+    local current_sum
+    current_sum="$(shasum "$decoy" | awk '{print $1}')"
+    [ "$current_sum" = "$original_sum" ]
+    ! ls "$decoy".manifest-backup-* >/dev/null 2>&1
+    rm -rf "$decoy_dir"
+}
+
+# ============================================================================
+# End-to-end coverage: every destructive site in install-cli.sh
+# ============================================================================
+
+@test "install-cli cleanup_homebrew_install refuses user_bin rm against real-home-shaped target" {
+    set --
+    # shellcheck disable=SC1090
+    source "$TEST_REPO_ROOT/install-cli.sh"
+    local decoy_dir="/tmp/manifest-tripwire-installcli-bin.$$"
+    rm -rf "$decoy_dir" 2>/dev/null || true
+    mkdir -p "$decoy_dir"
+    local decoy_bin="$decoy_dir/fake-manifest"
+    : > "$decoy_bin"
+    manifest_install_paths_user_binary() { echo "$decoy_bin"; }
+    manifest_install_paths_global_state_dir() { echo "$decoy_dir/__no_state__"; }
+    manifest_install_paths_legacy_install_dir() { echo "$decoy_dir/__no_legacy__"; }
+    export -f manifest_install_paths_user_binary
+    export -f manifest_install_paths_global_state_dir
+    export -f manifest_install_paths_legacy_install_dir
+    cleanup_environment_variables() { :; }
+    export -f cleanup_environment_variables
+    run cleanup_homebrew_install
+    [ -f "$decoy_bin" ]
+    rm -rf "$decoy_dir"
+}
+
+@test "install-cli cleanup_homebrew_install refuses state_dir rm against real-home-shaped target" {
+    set --
+    # shellcheck disable=SC1090
+    source "$TEST_REPO_ROOT/install-cli.sh"
+    local decoy_dir="/tmp/manifest-tripwire-installcli-state.$$"
+    rm -rf "$decoy_dir" 2>/dev/null || true
+    mkdir -p "$decoy_dir/fake-state"
+    echo "important" > "$decoy_dir/fake-state/keep.txt"
+    manifest_install_paths_user_binary() { echo "$decoy_dir/__no_bin__"; }
+    manifest_install_paths_global_state_dir() { echo "$decoy_dir/fake-state"; }
+    manifest_install_paths_legacy_install_dir() { echo "$decoy_dir/__no_legacy__"; }
+    export -f manifest_install_paths_user_binary
+    export -f manifest_install_paths_global_state_dir
+    export -f manifest_install_paths_legacy_install_dir
+    cleanup_environment_variables() { :; }
+    export -f cleanup_environment_variables
+    run cleanup_homebrew_install
+    [ -d "$decoy_dir/fake-state" ]
+    [ "$(cat "$decoy_dir/fake-state/keep.txt")" = "important" ]
+    rm -rf "$decoy_dir"
+}
+
+@test "install-cli cleanup_legacy_locations refuses rm against real-home-shaped target" {
+    set --
+    # shellcheck disable=SC1090
+    source "$TEST_REPO_ROOT/install-cli.sh"
+    local decoy_dir="/tmp/manifest-tripwire-installcli-legacy.$$"
+    rm -rf "$decoy_dir" 2>/dev/null || true
+    mkdir -p "$decoy_dir/fake-legacy"
+    echo "important" > "$decoy_dir/fake-legacy/keep.txt"
+    manifest_install_paths_legacy_install_dir() { echo "$decoy_dir/fake-legacy"; }
+    export -f manifest_install_paths_legacy_install_dir
+    run cleanup_legacy_locations
+    [ -d "$decoy_dir/fake-legacy" ]
+    [ "$(cat "$decoy_dir/fake-legacy/keep.txt")" = "important" ]
+    rm -rf "$decoy_dir"
+}
+
+@test "install-cli cleanup_environment_variables refuses profile rewrite against real-home-shaped target" {
+    set --
+    # shellcheck disable=SC1090
+    source "$TEST_REPO_ROOT/install-cli.sh"
+    local decoy_dir="/tmp/manifest-tripwire-installcli-profile.$$"
+    rm -rf "$decoy_dir" 2>/dev/null || true
+    mkdir -p "$decoy_dir"
+    local decoy="$decoy_dir/fake-bashrc"
+    cat > "$decoy" <<'EOF'
+# User's real bashrc
+export MANIFEST_CLI_GHOST=oops
+alias gs='git status'
+EOF
+    local original_sum
+    original_sum="$(shasum "$decoy" | awk '{print $1}')"
+    manifest_install_paths_shell_profiles() { printf '%s\n' "$decoy"; }
+    export -f manifest_install_paths_shell_profiles
+    run cleanup_environment_variables
+    [ -f "$decoy" ]
+    local current_sum
+    current_sum="$(shasum "$decoy" | awk '{print $1}')"
+    [ "$current_sum" = "$original_sum" ]
+    ! ls "$decoy".manifest-backup-* >/dev/null 2>&1
+    rm -rf "$decoy_dir"
+}
+
+# ============================================================================
+# End-to-end coverage: every destructive site in uninstall-cli.sh
+#
+# remove_path is the chokepoint for install_dirs/binaries/configs/data_dirs
+# blocks in apply_plan — one direct test covers all four. Completion rm and
+# profile rewrite have their own predicate sites and need their own tests.
+# ============================================================================
+
+@test "uninstall-cli remove_path refuses real-home-shaped target" {
+    set --
+    # shellcheck disable=SC1090
+    source "$TEST_REPO_ROOT/uninstall-cli.sh"
+    local decoy_dir="/tmp/manifest-tripwire-uninstallcli-path.$$"
+    rm -rf "$decoy_dir" 2>/dev/null || true
+    mkdir -p "$decoy_dir/fake-target"
+    echo "important" > "$decoy_dir/fake-target/keep.txt"
+    run remove_path "$decoy_dir/fake-target" "no"
+    [ "$status" -ne 0 ]
+    [ -d "$decoy_dir/fake-target" ]
+    [ "$(cat "$decoy_dir/fake-target/keep.txt")" = "important" ]
+    rm -rf "$decoy_dir"
+}
+
+@test "uninstall-cli completion rm in apply_plan refuses real-home-shaped target" {
+    set --
+    # shellcheck disable=SC1090
+    source "$TEST_REPO_ROOT/uninstall-cli.sh"
+    local decoy_dir="/tmp/manifest-tripwire-uninstallcli-completion.$$"
+    rm -rf "$decoy_dir" 2>/dev/null || true
+    mkdir -p "$decoy_dir"
+    local decoy="$decoy_dir/fake-completion"
+    : > "$decoy"
+    found_install_dirs()      { :; }
+    found_binaries()          { :; }
+    found_configs()           { :; }
+    found_data_dirs()         { :; }
+    found_profile_files()     { :; }
+    brew_package_present()    { return 1; }
+    brew_tap_present()        { return 1; }
+    brew_completion_targets() { printf '%s\n' "$decoy"; }
+    export -f found_install_dirs found_binaries found_configs found_data_dirs
+    export -f found_profile_files brew_package_present brew_tap_present
+    export -f brew_completion_targets
+    run apply_plan
+    [ -f "$decoy" ]
+    rm -rf "$decoy_dir"
+}
+
+@test "uninstall-cli profile rewrite in apply_plan refuses real-home-shaped target" {
+    set --
+    # shellcheck disable=SC1090
+    source "$TEST_REPO_ROOT/uninstall-cli.sh"
+    local decoy_dir="/tmp/manifest-tripwire-uninstallcli-profile.$$"
+    rm -rf "$decoy_dir" 2>/dev/null || true
+    mkdir -p "$decoy_dir"
+    local decoy="$decoy_dir/fake-zshrc"
+    cat > "$decoy" <<'EOF'
+# User's real zshrc
+export MANIFEST_CLI_OOPS=1
+export PATH="$HOME/.manifest-cli/bin:$PATH"
+alias x='echo y'
+EOF
+    local original_sum
+    original_sum="$(shasum "$decoy" | awk '{print $1}')"
+    found_install_dirs()      { :; }
+    found_binaries()          { :; }
+    found_configs()           { :; }
+    found_data_dirs()         { :; }
+    brew_completion_targets() { :; }
+    brew_package_present()    { return 1; }
+    brew_tap_present()        { return 1; }
+    found_profile_files()     { printf '%s\n' "$decoy"; }
+    export -f found_install_dirs found_binaries found_configs found_data_dirs
+    export -f brew_completion_targets brew_package_present brew_tap_present
+    export -f found_profile_files
+    run apply_plan
+    [ -f "$decoy" ]
+    local current_sum
+    current_sum="$(shasum "$decoy" | awk '{print $1}')"
+    [ "$current_sum" = "$original_sum" ]
+    ! ls "$decoy".manifest-backup-* >/dev/null 2>&1
+    rm -rf "$decoy_dir"
+}
