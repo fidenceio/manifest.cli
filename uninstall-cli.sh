@@ -270,6 +270,7 @@ print_plan() {
 
 remove_path() {
     local path="$1" privileged="${2:-no}"
+    manifest_install_paths_assert_destructive_target_safe "$path" "rm" || return 1
     if [ "$privileged" = "yes" ]; then
         sudo rm -rf "$path" 2>/dev/null || rm -rf "$path" 2>/dev/null
     else
@@ -281,21 +282,30 @@ apply_plan() {
     local errors=0 f privileged backup tmp
 
     if brew_package_present; then
-        print_status "Uninstalling Homebrew package..."
-        if brew uninstall "$BREW_FORMULA" 2>/dev/null || brew uninstall manifest 2>/dev/null; then
-            print_success "Removed Homebrew package"
-        else
-            print_warning "brew uninstall failed (continuing)"
+        if ! manifest_install_paths_assert_destructive_brew_safe "brew uninstall manifest"; then
+            print_warning "brew uninstall skipped by sandbox tripwire"
             errors=$((errors + 1))
+        else
+            print_status "Uninstalling Homebrew package..."
+            if brew uninstall "$BREW_FORMULA" 2>/dev/null || brew uninstall manifest 2>/dev/null; then
+                print_success "Removed Homebrew package"
+            else
+                print_warning "brew uninstall failed (continuing)"
+                errors=$((errors + 1))
+            fi
         fi
     fi
 
     if brew_tap_present; then
-        print_status "Untapping $BREW_TAP..."
-        if brew untap "$BREW_TAP" 2>/dev/null; then
-            print_success "Untapped $BREW_TAP"
+        if ! manifest_install_paths_assert_destructive_brew_safe "brew untap $BREW_TAP"; then
+            print_warning "brew untap skipped by sandbox tripwire"
         else
-            print_warning "brew untap failed (continuing)"
+            print_status "Untapping $BREW_TAP..."
+            if brew untap "$BREW_TAP" 2>/dev/null; then
+                print_success "Untapped $BREW_TAP"
+            else
+                print_warning "brew untap failed (continuing)"
+            fi
         fi
     fi
 
@@ -339,6 +349,10 @@ apply_plan() {
 
     while IFS= read -r f; do
         [ -n "$f" ] || continue
+        if ! manifest_install_paths_assert_destructive_target_safe "$f" "rm completion"; then
+            errors=$((errors + 1))
+            continue
+        fi
         if rm -f "$f" 2>/dev/null; then
             print_success "Removed $f"
         else
@@ -348,6 +362,9 @@ apply_plan() {
 
     while IFS= read -r f; do
         [ -n "$f" ] || continue
+        if ! manifest_install_paths_assert_destructive_target_safe "$f" "profile-rewrite"; then
+            continue
+        fi
         backup="${f}.manifest-backup-$(date +%Y%m%d-%H%M%S)"
         tmp="$(mktemp)"
         cp "$f" "$backup"
