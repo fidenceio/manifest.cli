@@ -144,24 +144,48 @@ _confirm_global_config_write() {
     return 0
 }
 
+_manifest_config_state_dir() {
+    echo "$HOME/.manifest-cli"
+}
+
 _manifest_config_warning_state_file() {
-    local state_dir="$HOME/.manifest-cli"
-    if ! mkdir -p "$state_dir" 2>/dev/null; then
-        echo ""
-        return 0
-    fi
-    echo "$state_dir/config-warning.last"
+    echo "$(_manifest_config_state_dir)/config-warning.last"
 }
 
 _manifest_config_migration_state_file() {
-    local state_dir="$HOME/.manifest-cli"
-    if ! mkdir -p "$state_dir" 2>/dev/null; then
-        echo ""
-        return 0
-    fi
-    echo "$state_dir/config-migration.last"
+    echo "$(_manifest_config_state_dir)/config-migration.last"
 }
 
+# Ensure the state directory exists. Callers that intend to write must invoke
+# this; pure-read paths must not, so preview-mode commands never mutate disk.
+_manifest_config_state_dir_ensure() {
+    mkdir -p "$(_manifest_config_state_dir)" 2>/dev/null
+}
+
+# Atomically record a timestamp into STATE_FILE.
+#
+# Race-safety: the temp file is PID-suffixed (private to this writer), and the
+# rename(2) syscall is atomic on POSIX filesystems — concurrent readers never
+# observe a partial file, and concurrent writers' last-write-wins is the
+# correct semantic for a monotonic "epoch of last emission" marker.
+_manifest_config_atomic_write_timestamp() {
+    local state_file="$1"
+    local now="$2"
+    [ -n "$state_file" ] && [ -n "$now" ] || return 1
+    _manifest_config_state_dir_ensure || return 1
+    local tmp="${state_file}.tmp.$$"
+    if printf '%s\n' "$now" > "$tmp" 2>/dev/null; then
+        mv -f "$tmp" "$state_file" 2>/dev/null || { rm -f "$tmp" 2>/dev/null; return 1; }
+    else
+        rm -f "$tmp" 2>/dev/null
+        return 1
+    fi
+    return 0
+}
+
+# Pure read: returns 0 if the cooldown has elapsed and the next warning is
+# permitted to emit, 1 otherwise. Never writes — the cooldown is advanced
+# separately at apply-time via _manifest_execution_apply_hook.
 _manifest_config_should_emit_warnings() {
     local cooldown_minutes="${MANIFEST_CLI_CONFIG_WARNING_COOLDOWN_MINUTES:-1440}"
     if ! [[ "$cooldown_minutes" =~ ^[0-9]+$ ]] || [ "$cooldown_minutes" -lt 0 ]; then
@@ -184,14 +208,12 @@ _manifest_config_should_emit_warnings() {
         fi
     fi
 
-    if [ $((now - last)) -lt $((cooldown_minutes * 60)) ]; then
-        return 1
-    fi
-
-    ( printf '%s\n' "$now" > "$state_file" ) 2>/dev/null || true
-    return 0
+    [ $((now - last)) -ge $((cooldown_minutes * 60)) ]
 }
 
+# Pure read: returns 0 if the migration cooldown has elapsed, 1 otherwise.
+# Never writes — the cooldown is advanced separately when migration actually
+# runs (apply path) or is announced (warn-only path advances at apply-time).
 _manifest_config_should_run_auto_migration() {
     local cooldown_minutes="${MANIFEST_CLI_CONFIG_MIGRATION_COOLDOWN_MINUTES:-1440}"
     if ! [[ "$cooldown_minutes" =~ ^[0-9]+$ ]] || [ "$cooldown_minutes" -lt 0 ]; then
@@ -214,12 +236,25 @@ _manifest_config_should_run_auto_migration() {
         fi
     fi
 
-    if [ $((now - last)) -lt $((cooldown_minutes * 60)) ]; then
-        return 1
-    fi
+    [ $((now - last)) -ge $((cooldown_minutes * 60)) ]
+}
 
-    ( printf '%s\n' "$now" > "$state_file" ) 2>/dev/null || true
-    return 0
+# Invoked from manifest_execution_apply_header at the apply boundary. Atomically
+# advances any cooldowns whose notices fired during this CLI invocation. Lives
+# in config.sh so execution-policy.sh stays free of config-state coupling.
+_manifest_execution_apply_hook() {
+    local now
+    now=$(date +%s)
+    if [ "${_MANIFEST_CLI_DEPRECATION_WARNED:-0}" = "1" ]; then
+        _manifest_config_atomic_write_timestamp \
+            "$(_manifest_config_warning_state_file)" "$now" 2>/dev/null || true
+        unset _MANIFEST_CLI_DEPRECATION_WARNED
+    fi
+    if [ "${_MANIFEST_CLI_MIGRATION_NOTIFIED:-0}" = "1" ]; then
+        _manifest_config_atomic_write_timestamp \
+            "$(_manifest_config_migration_state_file)" "$now" 2>/dev/null || true
+        unset _MANIFEST_CLI_MIGRATION_NOTIFIED
+    fi
 }
 
 warn_deprecated_configuration() {
@@ -246,6 +281,10 @@ warn_deprecated_configuration() {
 
     if [ "$warned" -eq 1 ]; then
         _manifest_config_warn "Run 'manifest upgrade --force' (or reinstall) to apply safe config migrations automatically."
+        # Marker: the apply hook will atomically advance config-warning.last
+        # if this invocation reaches apply mode. Preview invocations never
+        # write the throttle, satisfying the no-side-effects contract.
+        export _MANIFEST_CLI_DEPRECATION_WARNED=1
     fi
 }
 
@@ -383,6 +422,10 @@ auto_migrate_user_global_configuration() {
     if ! is_truthy "${MANIFEST_CLI_AUTO_CONFIRM:-0}"; then
         _manifest_config_warn "Configuration drift detected in $config_file."
         _manifest_config_warn "Run 'manifest config doctor --dry-run' to review, then '--fix' to apply."
+        # Marker: the apply hook advances config-migration.last only if this
+        # invocation reaches apply mode; preview-only runs leave the throttle
+        # untouched so the notice continues to nudge the user.
+        export _MANIFEST_CLI_MIGRATION_NOTIFIED=1
         return 0
     fi
 
@@ -399,6 +442,11 @@ auto_migrate_user_global_configuration() {
     if [ -n "$migration_output" ]; then
         _manifest_config_warn "Applied safe configuration migrations to $config_file."
         _manifest_config_warn "Run 'manifest config doctor --dry-run' to review current drift status."
+        # Migration actually applied: advance the throttle inline (this path
+        # only runs under AUTO_CONFIRM, an explicit user authorization to
+        # write the global config, so an inline atomic write is in scope).
+        _manifest_config_atomic_write_timestamp \
+            "$(_manifest_config_migration_state_file)" "$(date +%s)" 2>/dev/null || true
     fi
 }
 
