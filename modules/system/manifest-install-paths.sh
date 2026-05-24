@@ -146,6 +146,69 @@ manifest_install_paths_shell_profiles() {
     echo "$HOME/.profile"
 }
 
+# --- Destructive-target sandbox tripwire -----------------------------------
+#
+# Every code path that destroys install footprint (rm -rf, rm -f, sudo rm,
+# brew uninstall, profile rewrite) must call this predicate before acting.
+# It refuses to proceed if the target looks like a real-system path while
+# the process is running inside bats (BATS_TEST_TMPDIR is set), so a test
+# that forgets to redirect HOME cannot wipe the real install footprint.
+#
+# To override (exceedingly rare — only when a legitimately-needed bats test
+# operates outside its sandbox), export MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1.
+# A loud stderr warning is emitted in that case so it cannot be enabled silently.
+manifest_install_paths_assert_destructive_target_safe() {
+    local path="$1"
+    local kind="${2:-rm}"
+
+    if [ -z "$path" ]; then
+        echo "manifest: refusing destructive ${kind}: empty target path" >&2
+        return 1
+    fi
+    case "$path" in
+        /|/Users|/Users/|/home|/home/|/usr|/usr/|/var|/var/|/etc|/etc/|/opt|/opt/|/private|/private/)
+            echo "manifest: refusing destructive ${kind}: system path '$path'" >&2
+            return 1
+            ;;
+    esac
+    if [ -n "${HOME:-}" ] && { [ "$path" = "$HOME" ] || [ "$path" = "$HOME/" ]; }; then
+        echo "manifest: refusing destructive ${kind}: target is \$HOME ('$HOME') itself" >&2
+        return 1
+    fi
+
+    if [ -n "${BATS_TEST_TMPDIR:-}" ]; then
+        if [ "${MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE:-}" = "1" ]; then
+            echo "manifest: warning: destructive ${kind} on '$path' permitted by MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1" >&2
+            return 0
+        fi
+        case "$path" in
+            "$BATS_TEST_TMPDIR"/*) ;;
+            *)
+                echo "manifest: refusing destructive ${kind} on '$path': running under bats (BATS_TEST_TMPDIR=$BATS_TEST_TMPDIR) but target is not inside it." >&2
+                echo "manifest: this is the test sandbox tripwire. Sandbox your test by setting HOME under \$BATS_TEST_TMPDIR (see tests/helpers/setup.bash), or set MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1 to explicitly override." >&2
+                return 1
+                ;;
+        esac
+    fi
+
+    return 0
+}
+
+# Same tripwire for brew (where there is no path argument — refuse all
+# brew-uninstall/untap calls under bats unless the escape hatch is set).
+manifest_install_paths_assert_destructive_brew_safe() {
+    local op="${1:-brew}"
+    if [ -n "${BATS_TEST_TMPDIR:-}" ]; then
+        if [ "${MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE:-}" = "1" ]; then
+            echo "manifest: warning: ${op} permitted by MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1 under bats" >&2
+            return 0
+        fi
+        echo "manifest: refusing ${op}: running under bats (BATS_TEST_TMPDIR=$BATS_TEST_TMPDIR). Set MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1 to explicitly override." >&2
+        return 1
+    fi
+    return 0
+}
+
 # Matches any shell-profile line that:
 #   - exports a Manifest-owned variable (current or legacy namespace)
 #   - prepends .manifest-cli or .local/bin to PATH (installer-style)

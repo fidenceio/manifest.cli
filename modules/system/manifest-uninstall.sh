@@ -208,8 +208,9 @@ preview_reinstall_manifest() {
 # Function to remove installation directory
 remove_installation_directory() {
     local install_dir="$1"
-    
+
     if [ -d "$install_dir" ]; then
+        manifest_install_paths_assert_destructive_target_safe "$install_dir" "rm install-dir" || return 1
         echo "Removing installation directory: $install_dir"
         if rm -rf "$install_dir"; then
             echo "✅ Installation directory removed: $install_dir"
@@ -227,8 +228,9 @@ remove_installation_directory() {
 # Function to remove CLI binary
 remove_cli_binary() {
     local binary_path="$1"
-    
+
     if [ -f "$binary_path" ]; then
+        manifest_install_paths_assert_destructive_target_safe "$binary_path" "rm cli-binary" || return 1
         echo "Removing CLI binary: $binary_path"
         if rm -f "$binary_path"; then
             echo "✅ CLI binary removed: $binary_path"
@@ -268,6 +270,9 @@ cleanup_config_files() {
             continue
         fi
         if [ -f "$config_file" ] || [ -d "$config_file" ]; then
+            if ! manifest_install_paths_assert_destructive_target_safe "$config_file" "rm config"; then
+                continue
+            fi
             echo "Removing config file: $config_file"
             if rm -rf "$config_file"; then
                 echo "✅ Config file removed: $config_file"
@@ -281,6 +286,9 @@ cleanup_config_files() {
     while IFS= read -r data_dir; do
         [ -n "$data_dir" ] || continue
         if [ -d "$data_dir" ]; then
+            if ! manifest_install_paths_assert_destructive_target_safe "$data_dir" "rm data-dir"; then
+                continue
+            fi
             echo "Removing data directory: $data_dir"
             if rm -rf "$data_dir"; then
                 echo "✅ Data directory removed: $data_dir"
@@ -311,6 +319,9 @@ cleanup_environment_variables() {
     while IFS= read -r profile_file; do
         [ -n "$profile_file" ] || continue
         [ -f "$profile_file" ] || continue
+        if ! manifest_install_paths_assert_destructive_target_safe "$profile_file" "profile-rewrite"; then
+            continue
+        fi
         backup_file="${profile_file}.manifest-backup-$(date +%Y%m%d-%H%M%S)"
         cp "$profile_file" "$backup_file"
         temp_file=$(mktemp "$(manifest_make_scratch_path system)/tmp.XXXXXXXX")
@@ -397,20 +408,25 @@ uninstall_manifest() {
 
     # Uninstall via Homebrew if that's how it was installed
     if [ "$homebrew_installed" = "true" ]; then
-        local brew_formula brew_tap
-        brew_formula="$(manifest_install_paths_homebrew_formula)"
-        brew_tap="$(manifest_install_paths_homebrew_tap)"
-        echo "🍺 Homebrew installation detected — uninstalling via Homebrew..."
-        if brew uninstall "$brew_formula" 2>/dev/null || brew uninstall manifest 2>/dev/null; then
-            echo "✅ Homebrew package removed"
-        else
-            echo "⚠️  brew uninstall failed"
+        if ! manifest_install_paths_assert_destructive_brew_safe "brew uninstall manifest"; then
+            echo "⚠️  brew uninstall skipped by sandbox tripwire"
             ((errors+=1))
-        fi
-        if brew untap "$brew_tap" 2>/dev/null; then
-            echo "✅ Homebrew tap removed"
         else
-            echo "⚠️  brew untap failed (may already be untapped)"
+            local brew_formula brew_tap
+            brew_formula="$(manifest_install_paths_homebrew_formula)"
+            brew_tap="$(manifest_install_paths_homebrew_tap)"
+            echo "🍺 Homebrew installation detected — uninstalling via Homebrew..."
+            if brew uninstall "$brew_formula" 2>/dev/null || brew uninstall manifest 2>/dev/null; then
+                echo "✅ Homebrew package removed"
+            else
+                echo "⚠️  brew uninstall failed"
+                ((errors+=1))
+            fi
+            if brew untap "$brew_tap" 2>/dev/null; then
+                echo "✅ Homebrew tap removed"
+            else
+                echo "⚠️  brew untap failed (may already be untapped)"
+            fi
         fi
     fi
 

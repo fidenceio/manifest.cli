@@ -412,6 +412,9 @@ cleanup_environment_variables() {
     while IFS= read -r profile; do
         [ -n "$profile" ] || continue
         [ -f "$profile" ] || continue
+        if ! manifest_install_paths_assert_destructive_target_safe "$profile" "profile-rewrite"; then
+            continue
+        fi
         backup="${profile}.manifest-backup-$(date +%Y%m%d-%H%M%S)"
         cp "$profile" "$backup"
         temp=$(mktemp)
@@ -441,8 +444,10 @@ cleanup_legacy_locations() {
 
     if [ -d "$legacy_location" ]; then
         print_status "Found legacy installation at: $legacy_location"
+        if ! manifest_install_paths_assert_destructive_target_safe "$legacy_location" "rm legacy-location"; then
+            print_warning "⚠️  Skipped removal of $legacy_location (sandbox tripwire)"
         # Try with sudo since it's a system location
-        if sudo rm -rf "$legacy_location" 2>/dev/null; then
+        elif sudo rm -rf "$legacy_location" 2>/dev/null; then
             print_success "✅ Removed legacy installation: $legacy_location"
         else
             print_warning "⚠️  Could not remove $legacy_location (may need manual cleanup)"
@@ -1034,17 +1039,23 @@ cleanup_homebrew_install() {
     print_subheader "🧹 Cleaning up previous manual installation"
 
     if [ -f "$user_bin" ]; then
-        rm -f "$user_bin"
-        print_success "✅ Removed $user_bin"
+        if manifest_install_paths_assert_destructive_target_safe "$user_bin" "rm user-bin"; then
+            rm -f "$user_bin"
+            print_success "✅ Removed $user_bin"
+        fi
     fi
     if [ -d "$state_dir" ]; then
-        rm -rf "$state_dir"
-        print_success "✅ Removed $state_dir"
+        if manifest_install_paths_assert_destructive_target_safe "$state_dir" "rm state-dir"; then
+            rm -rf "$state_dir"
+            print_success "✅ Removed $state_dir"
+        fi
     fi
     if [ -d "$legacy_dir" ]; then
-        sudo rm -rf "$legacy_dir" 2>/dev/null && \
-            print_success "✅ Removed $legacy_dir" || \
-            print_warning "⚠️  Could not remove $legacy_dir (may need manual cleanup)"
+        if manifest_install_paths_assert_destructive_target_safe "$legacy_dir" "rm legacy-dir"; then
+            sudo rm -rf "$legacy_dir" 2>/dev/null && \
+                print_success "✅ Removed $legacy_dir" || \
+                print_warning "⚠️  Could not remove $legacy_dir (may need manual cleanup)"
+        fi
     fi
 
     # Strip any residual MANIFEST_* exports and installer-style PATH adds from
