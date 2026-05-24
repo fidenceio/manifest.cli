@@ -17,9 +17,8 @@ Open work for the Manifest CLI repo.
 
 The hardening-pass triage organized open work around *"does absence of this item allow harm at fleet-of-dozens scale?"*
 
-### T1 — release-blocking (2)
+### T1 — release-blocking (1)
 
-- §2.5 Broad preview no-write coverage matrix
 - §5.7 Atomic `install-cli.sh` upgrades
 
 ### T2 — contract integrity (7)
@@ -108,12 +107,6 @@ The base contract is already live: mutating commands preview by default, `--dry-
   - **Why:** code documents `MANIFEST_CLI_AUTO_CONFIRM=1` as prompt automation only, but the exact preview no-write regression should be explicit. Pins workspace cross-cut [§1.3](../../TRACKER.md#1-cross-cut-requirements) with a direct test.
   - **Deliverable:** test that a preview command with `MANIFEST_CLI_AUTO_CONFIRM=1` still writes nothing and prints an apply replay command instead of mutating.
   - **Anchor:** [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh), [`tests/dry_run.bats`](../tests/dry_run.bats).
-
-- **2.5 Add broad preview no-write coverage.**
-  - **Status:** T1.
-  - **Why:** focused dry-run tests exist, but there is no shared matrix proving every mutating preview leaves git porcelain and file snapshots unchanged. Without the matrix, ONE command silently regressing to mutate-on-preview escapes detection — the smoke alarm for the safe-by-default contract.
-  - **Deliverable:** `tests/preview_no_write.bats` or equivalent helper-driven coverage across repo, fleet, PR, config, docs, install/uninstall, and refresh paths.
-  - **Anchor:** [`tests/dry_run.bats`](../tests/dry_run.bats), [`tests/fleet_dry_run.bats`](../tests/fleet_dry_run.bats), [`tests/pr_native_safe_by_default.bats`](../tests/pr_native_safe_by_default.bats).
 
 - **2.6 Add focused local-only apply tests.**
   - **Status:** T3.

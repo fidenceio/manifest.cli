@@ -79,6 +79,13 @@ manifest_execution_preview_header() {
 
 manifest_execution_apply_header() {
     echo "Applying because -y/--yes was provided."
+    # Lazy hook: modules loaded after execution-policy (e.g. manifest-config.sh)
+    # can register _manifest_execution_apply_hook to perform apply-only writes
+    # at the apply boundary — keeping preview commands side-effect-free without
+    # coupling execution-policy.sh to those modules' internals.
+    if declare -F _manifest_execution_apply_hook >/dev/null 2>&1; then
+        _manifest_execution_apply_hook
+    fi
 }
 
 manifest_execution_footer() {
