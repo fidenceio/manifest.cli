@@ -51,10 +51,22 @@ manifest_install_paths_legacy_install_dir() {
 }
 
 manifest_install_paths_install_dirs() {
-    echo "$HOME/.manifest-cli"
-    echo "/usr/local/share/manifest-cli"
-    [ -n "${MANIFEST_CLI_INSTALL_LOCATION:-}" ] && echo "$MANIFEST_CLI_INSTALL_LOCATION"
-    [ -n "${MANIFEST_CLI_INSTALL_DIR:-}" ] && echo "$MANIFEST_CLI_INSTALL_DIR"
+    # Dedupe so the artifact list shown by uninstall/preview never repeats a
+    # path (e.g. when MANIFEST_CLI_INSTALL_LOCATION points at $HOME/.manifest-cli,
+    # the canonical install location).
+    local seen="" path
+    for path in \
+        "$HOME/.manifest-cli" \
+        "/usr/local/share/manifest-cli" \
+        "${MANIFEST_CLI_INSTALL_LOCATION:-}" \
+        "${MANIFEST_CLI_INSTALL_DIR:-}"; do
+        [ -n "$path" ] || continue
+        case ":${seen}:" in
+            *":${path}:"*) continue ;;
+        esac
+        seen="${seen:+${seen}:}${path}"
+        echo "$path"
+    done
 }
 
 manifest_install_paths_user_bin_dir() {
