@@ -442,7 +442,7 @@ cleanup_environment_variables() {
             if [ -s "$temp" ] && ! cmp -s "$profile" "$temp"; then
                 mv "$temp" "$profile"
                 print_success "✅ Cleaned: $profile (backup: $backup)"
-                ((removed_count++))
+                removed_count=$((removed_count + 1))
             else
                 rm -f "$temp" "$backup"
             fi
