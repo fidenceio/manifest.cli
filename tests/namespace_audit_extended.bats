@@ -77,12 +77,12 @@ _namespace_scan_offenders() {
     # MANIFEST_CLI namespace instead — only true legacy-cleanup paths
     # (uninstall / pre-install scrub) belong here.
     local -a allowlist=(
-        # install-cli.sh:401 — comment describing the cleanup_environment_variables
+        # install-cli.sh:420 — comment describing the cleanup_environment_variables
         #   helper that strips legacy MANIFEST_* exports from shell profiles.
-        "install-cli.sh:401"
-        # install-cli.sh:1062 — comment in the post-uninstall residue sweep
+        "install-cli.sh:420"
+        # install-cli.sh:1081 — comment in the post-uninstall residue sweep
         #   that calls cleanup_environment_variables for stale MANIFEST_* exports.
-        "install-cli.sh:1062"
+        "install-cli.sh:1081"
         # uninstall-cli.sh:57 — usage-help text listing what the uninstaller
         #   removes from shell profiles, including legacy MANIFEST_* exports.
         "uninstall-cli.sh:57"
