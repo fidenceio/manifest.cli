@@ -7,6 +7,7 @@
 #
 # Run from the repo root:  ./install-cli.sh
 # Or via Homebrew:          brew install fidenceio/tap/manifest
+# To install from THIS source tree (skip Homebrew routing): ./install-cli.sh --manual
 
 set -e
 
@@ -1101,12 +1102,50 @@ install_via_homebrew() {
 # =============================================================================
 
 main() {
+    local install_mode="auto"
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --manual|--no-brew)
+                install_mode="manual"
+                shift
+                ;;
+            -h|--help)
+                cat <<'EOF'
+Usage: ./install-cli.sh [--manual]
+
+Installs the Manifest CLI from the current source tree.
+
+Options:
+  --manual, --no-brew   Skip Homebrew routing and install directly
+                        from this source tree. Use this to test
+                        local changes that have not been shipped to
+                        the Homebrew tap yet.
+  -h, --help            Show this help.
+
+Default behavior: on macOS with Homebrew installed, the script
+installs via 'brew install fidenceio/tap/manifest' (which uses the
+SHIPPED formula, not local code). Use --manual to bypass.
+EOF
+                exit 0
+                ;;
+            *)
+                print_error "Unknown option: $1"
+                print_error "Run './install-cli.sh --help' for usage."
+                exit 2
+                ;;
+        esac
+    done
+
     # Display banner
     echo
     print_header "============================================================================="
     print_header "🚀 Manifest CLI Installation Script"
     print_header "============================================================================="
     echo
+    if [ "$install_mode" = "manual" ]; then
+        print_status "📦 --manual specified — installing directly from this source tree (Homebrew routing skipped)"
+        echo
+    fi
 
     print_status "Welcome to the Manifest CLI installation!"
     print_status "This script will install a powerful CLI tool for versioning,"
@@ -1116,8 +1155,8 @@ main() {
     # System validation
     get_system_info
 
-    # On macOS, offer to install Homebrew if not present
-    if [[ "$OSTYPE" == "darwin"* ]] && ! command_exists brew; then
+    # On macOS, offer to install Homebrew if not present (skipped under --manual)
+    if [ "$install_mode" != "manual" ] && [[ "$OSTYPE" == "darwin"* ]] && ! command_exists brew; then
         print_status "🍺 macOS detected but Homebrew is not installed"
         print_status "Homebrew is the recommended way to install, upgrade, manage, and cleanly remove Manifest CLI on macOS. Plus, it offers thousands of other packages."
         echo ""
@@ -1149,8 +1188,8 @@ main() {
     ensure_docker_installed
     validate_system
 
-    # Route through Homebrew when available
-    if command_exists brew; then
+    # Route through Homebrew when available, unless --manual forces source-tree install
+    if [ "$install_mode" != "manual" ] && command_exists brew; then
         print_status "🍺 Homebrew detected — installing via Homebrew"
         echo ""
 
