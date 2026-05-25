@@ -1235,8 +1235,12 @@ EOF
             exit 1
         fi
     else
-        # Fallback: manual installation (Linux, CI, no Homebrew)
-        print_status "Homebrew not found — using manual installation"
+        # Manual installation: either --manual was requested, or Homebrew isn't available.
+        if [ "$install_mode" = "manual" ]; then
+            print_status "📦 Installing from this source tree (--manual specified — Homebrew routing skipped)"
+        else
+            print_status "Homebrew not found — using manual installation"
+        fi
         echo ""
 
         cleanup_environment_variables
