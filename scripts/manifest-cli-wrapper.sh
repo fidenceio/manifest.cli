@@ -6,8 +6,41 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Locate the installed CLI tree. The wrapper lives in a bin directory
+# (typically $HOME/.local/bin) while modules live elsewhere (typically
+# $HOME/.manifest-cli/modules/), so we cannot assume modules sit at
+# $SCRIPT_DIR/../modules/. Must run before any module source.
+find_cli_dir() {
+    local possible_dirs=(
+        "${MANIFEST_CLI_INSTALL_DIR:-$HOME/.manifest-cli}"
+        "$HOME/.manifest-cli"
+    )
+
+    # Dev mode: wrapper lives at <repo>/scripts/manifest-cli-wrapper.sh with
+    # modules at <repo>/modules/. realpath resolves symlinks so a symlinked
+    # wrapper still finds the real source tree.
+    if command -v realpath >/dev/null 2>&1; then
+        possible_dirs+=("$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")")
+    else
+        possible_dirs+=("$(dirname "$SCRIPT_DIR")")
+    fi
+
+    for dir in "${possible_dirs[@]}"; do
+        if [ -f "$dir/modules/core/manifest-core.sh" ]; then
+            echo "$dir"
+            return 0
+        fi
+    done
+
+    echo "ERROR: Could not find Manifest CLI installation directory" >&2
+    exit 1
+}
+
+CLI_DIR="$(find_cli_dir)"
+
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/../modules/core/manifest-requirements.sh"
+source "$CLI_DIR/modules/core/manifest-requirements.sh"
 
 # Require the centralized Bash runtime version. If possible, re-exec into it.
 ensure_bash5_or_reexec() {
@@ -48,38 +81,7 @@ ensure_bash5_or_reexec() {
 
 ensure_bash5_or_reexec "$@"
 
-# Function to find the CLI installation directory
-find_cli_dir() {
-    # Try installation locations (primary: ~/.manifest-cli)
-    local possible_dirs=(
-        "${MANIFEST_CLI_INSTALL_DIR:-$HOME/.manifest-cli}"
-        "$HOME/.manifest-cli"
-        # Check if we're running from a development directory (scripts/ subdir)
-        "$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")"
-    )
-    
-    for dir in "${possible_dirs[@]}"; do
-        if [ -f "$dir/modules/core/manifest-core.sh" ]; then
-            echo "$dir"
-            return 0
-        fi
-    done
-    
-    # If not found, try to find it relative to this script
-    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local project_root="$(dirname "$script_dir")"
-    
-    if [ -f "$project_root/modules/core/manifest-core.sh" ]; then
-        echo "$project_root"
-        return 0
-    fi
-    
-    echo "ERROR: Could not find Manifest CLI installation directory" >&2
-    exit 1
-}
-
-# Find and source the core module
-CLI_DIR="$(find_cli_dir)"
+# shellcheck disable=SC1091
 source "$CLI_DIR/modules/core/manifest-core.sh"
 
 # Call the main function

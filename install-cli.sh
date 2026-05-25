@@ -545,6 +545,12 @@ copy_cli_files() {
         print_success "✅ Copied source modules"
     fi
 
+    # Copy VERSION — display_version reads it from <install>/VERSION.
+    if [ -f "VERSION" ]; then
+        cp "VERSION" "$MANIFEST_CLI_INSTALL_LOCATION/"
+        print_success "✅ Copied VERSION"
+    fi
+
     # Copy documentation
     if [ -d "docs" ]; then
         cp -r "docs" "$MANIFEST_CLI_INSTALL_LOCATION/"
