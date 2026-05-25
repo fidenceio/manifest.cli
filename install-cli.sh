@@ -11,6 +11,24 @@
 
 set -e
 
+# Re-exec under Bash 5+ if the running interpreter is older.
+# macOS ships /bin/bash 3.2, which lacks associative arrays (declare -gA) used
+# by the YAML module. Honor PATH so Homebrew's bash 5+ is picked up automatically;
+# otherwise fail with the same "need Bash 5+" message the validator uses.
+if [ -z "${MANIFEST_CLI_INSTALL_REEXEC:-}" ] && [ "${BASH_VERSINFO[0]:-0}" -lt 5 ]; then
+    _better_bash="$(command -v bash 2>/dev/null || true)"
+    if [ -n "$_better_bash" ] && [ "$_better_bash" != "${BASH:-/bin/bash}" ]; then
+        _better_major="$("$_better_bash" -c 'echo "${BASH_VERSINFO[0]}"' 2>/dev/null || echo 0)"
+        if [ "$_better_major" -ge 5 ]; then
+            export MANIFEST_CLI_INSTALL_REEXEC=1
+            exec "$_better_bash" "$0" "$@"
+        fi
+    fi
+    echo "❌ Bash ${BASH_VERSION:-unknown} detected. Manifest CLI requires Bash 5.0+." >&2
+    echo "   Install:  brew install bash   (then re-run: ./install-cli.sh)" >&2
+    exit 1
+fi
+
 # =============================================================================
 # Configuration & Constants
 # =============================================================================
@@ -281,7 +299,8 @@ get_system_info() {
         os="$OSTYPE"
     fi
     shell_name="$(basename "$SHELL")"
-    bash_ver="$(bash --version 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+    # Report the running interpreter, not whatever `bash` happens to resolve to on PATH.
+    bash_ver="${BASH_VERSION%%[!0-9.]*}"
     echo "   🖥️  OS: $os"
     echo "   🐚 Shell: $shell_name"
     echo "   🐍 Bash: ${bash_ver:-not installed}"
