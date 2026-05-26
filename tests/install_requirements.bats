@@ -107,8 +107,21 @@ load 'helpers/setup'
     # post-rename equivalent of the old "Copy shell completions" comment.
     grep -F 'Staged completions' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
     grep -F 'install_shell_completions' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
-    grep -F 'etc/bash_completion.d/manifest' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
-    grep -F 'share/zsh/site-functions/_manifest' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
+    # Manual installs write to user-owned completion dirs, never brew's.
+    grep -F 'bash-completion/completions/manifest' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
+    grep -F '.zsh/completions' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
+}
+
+@test "installer never writes shell completions into Homebrew-managed dirs" {
+    # Regression: install-cli.sh used to symlink into $(brew --prefix)/etc and
+    # /share, clobbering the formula's own completions and breaking the next
+    # `brew upgrade`. The installer must only ever touch user-owned paths.
+    ! grep -F 'etc/bash_completion.d/manifest' "$TEST_REPO_ROOT/install-cli.sh"
+    ! grep -F 'share/zsh/site-functions/_manifest' "$TEST_REPO_ROOT/install-cli.sh"
+    # The Homebrew install path must not call install_shell_completions at all;
+    # the formula owns completions there. Exactly the two manual-path callers remain.
+    run grep -c 'install_shell_completions$' "$TEST_REPO_ROOT/install-cli.sh"
+    [ "$output" -eq 2 ]
 }
 
 @test "installer writes IDE and AI assistant command catalogs" {

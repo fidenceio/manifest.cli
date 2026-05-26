@@ -27,15 +27,6 @@ manifest_install_paths_homebrew_tap_dir() {
     echo "$prefix/Library/Taps/fidenceio/homebrew-tap"
 }
 
-manifest_install_paths_brew_completion_targets() {
-    command -v brew >/dev/null 2>&1 || return 0
-    local prefix
-    prefix="$(brew --prefix 2>/dev/null || true)"
-    [ -z "$prefix" ] && return 0
-    echo "$prefix/etc/bash_completion.d/manifest"
-    echo "$prefix/share/zsh/site-functions/_manifest"
-}
-
 # --- Install layout ---------------------------------------------------------
 
 manifest_install_paths_global_state_dir() {
