@@ -102,7 +102,10 @@ load 'helpers/setup'
 }
 
 @test "installer sets up shell completions for IDE integrated terminals" {
-    grep -F 'Copy shell completions' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
+    # §5.7: copy_cli_files stages completions/ into runtime/v<X>/ rather
+    # than the live install dir; the "Staged completions" print is the
+    # post-rename equivalent of the old "Copy shell completions" comment.
+    grep -F 'Staged completions' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
     grep -F 'install_shell_completions' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
     grep -F 'etc/bash_completion.d/manifest' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
     grep -F 'share/zsh/site-functions/_manifest' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
