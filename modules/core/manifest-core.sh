@@ -115,13 +115,6 @@ get_cli_dir() {
 MANIFEST_CLI_CORE_DIR="$(get_cli_dir)"
 
 # Archive old documentation files (delegated to manifest-cleanup-docs.sh)
-archive_old_docs() {
-    echo "📁 Archiving old documentation files..."
-    main_cleanup
-    echo "   ✅ Documentation archiving completed"
-    echo ""
-}
-
 # Main workflow function is now handled by manifest-orchestrator.sh
 
 # Back-compat shim. The canonical implementations live in
@@ -351,84 +344,7 @@ update_homebrew_formula() {
 }
 
 # Upgrade CLI function
-upgrade_cli() {
-    # Source the auto-upgrade module
-    source "$MANIFEST_CLI_CORE_MODULES_DIR/workflow/manifest-auto-upgrade.sh"
-    
-    # Call the upgrade function from the auto-upgrade module
-    local args=("$@")
-    upgrade_cli_internal "${args[@]}"
-}
-
 # Test mode function
-manifest_test() {
-    local test_type="$1"
-    
-    echo "🧪 Starting Manifest test mode..."
-    echo ""
-    
-    # Get trusted timestamp
-    get_time_timestamp
-
-    case "$test_type" in
-        "versions")
-            echo "🔄 Testing version increments..."
-            echo ""
-            
-            local versions=("patch" "minor" "major" "revision")
-            for version in "${versions[@]}"; do
-                echo "📋 Testing $version increment..."
-                echo "   Would increment version to: $(get_next_version "$version")"
-                echo ""
-            done
-            
-            echo "✅ Version increment tests completed"
-            ;;
-        "all")
-            echo "🔄 Running comprehensive tests..."
-            echo ""
-            
-            # Test timestamp
-            echo "🕐 Testing timestamp functionality..."
-            get_time_timestamp
-            echo ""
-            
-            # Test Git operations
-            echo "📦 Testing Git operations..."
-            echo "   Would sync repository"
-            echo "   Would check version files"
-            echo "   Would validate Git status"
-            echo ""
-            
-            # Test documentation
-            echo "📚 Testing documentation generation..."
-            echo "   Would create docs directory"
-            echo "   Would generate sample files"
-            echo ""
-            
-            echo "✅ Comprehensive tests completed"
-            ;;
-        *)
-            echo "🔄 Running basic test mode..."
-            echo "   No changes will be made"
-            echo "   All operations are simulated"
-            echo ""
-            
-            # Get trusted timestamp
-            get_time_timestamp
-
-            # Check repository status
-            echo "📋 Repository status:"
-            echo "   - Branch: $(git branch --show-current)"
-            echo "   - Status: $(git status --porcelain | wc -l) uncommitted changes"
-            echo "   - Remotes: $(git remote | wc -l) configured"
-            echo ""
-            
-            echo "✅ Basic test completed"
-            ;;
-    esac
-}
-
 # get_next_version() - Now available from manifest-shared-functions.sh
 
 # Auto-upgrade check with cooldown
