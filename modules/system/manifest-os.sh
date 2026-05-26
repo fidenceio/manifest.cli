@@ -282,17 +282,6 @@ get_timezone_display() {
 }
 
 # Cross-platform timeout function
-run_with_timeout() {
-    local timeout_seconds="$1"
-    shift
-    
-    if [[ "$TIMEOUT_CMD" == "timeout_fallback" ]]; then
-        timeout_fallback "$timeout_seconds" "$@"
-    else
-        $TIMEOUT_CMD "$timeout_seconds" "$@"
-    fi
-}
-
 # Bash-compatible comparison functions
 # These functions use the appropriate syntax based on bash version
 compare_strings() {
@@ -322,26 +311,6 @@ check_string_empty() {
     fi
 }
 
-check_string_not_empty() {
-    local str="$1"
-    
-    if [ "$MANIFEST_CLI_OS_BASH_SUPPORTS_DOUBLE_BRACKETS" = "true" ]; then
-        [[ -n "$str" ]]
-    else
-        [ -n "$str" ]
-    fi
-}
-
-check_file_exists() {
-    local file="$1"
-    
-    if [ "$MANIFEST_CLI_OS_BASH_SUPPORTS_DOUBLE_BRACKETS" = "true" ]; then
-        [[ -f "$file" ]]
-    else
-        [ -f "$file" ]
-    fi
-}
-
 check_directory_exists() {
     local dir="$1"
     
@@ -353,26 +322,5 @@ check_directory_exists() {
 }
 
 # Display OS information
-display_os_info() {
-    echo "🖥️  Manifest OS Detection Service"
-    echo "=================================="
-    echo "   🎯 **Operating System**: $MANIFEST_CLI_OS_OS"
-    echo "   🔧 **Platform Family**: $MANIFEST_CLI_OS_FAMILY"
-    echo "   📋 **Version**: $MANIFEST_CLI_OS_VERSION"
-    echo ""
-    echo "   🐍 **Bash Compatibility**:"
-    echo "      • Version: $MANIFEST_CLI_OS_BASH_VERSION"
-    echo "      • Double Brackets ([[ ]]): $MANIFEST_CLI_OS_BASH_SUPPORTS_DOUBLE_BRACKETS"
-    echo "      • Associative Arrays: $MANIFEST_CLI_OS_BASH_SUPPORTS_ASSOCIATIVE_ARRAYS"
-    echo ""
-    echo "   🛠️  **Platform Commands**:"
-    echo "      • Date: $MANIFEST_CLI_OS_DATE_CMD"
-    echo "      • Timeout: $MANIFEST_CLI_OS_TIMEOUT_CMD"
-    echo "      • Grep: $MANIFEST_CLI_OS_GREP_CMD"
-    echo "      • Sed: $MANIFEST_CLI_OS_SED_CMD"
-    echo ""
-    echo "   ✅ OS detection complete"
-}
-
 # Initialize OS detection when module is sourced
 detect_os

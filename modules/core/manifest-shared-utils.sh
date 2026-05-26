@@ -267,23 +267,6 @@ _json_value() {
 }
 
 # Common validation functions
-validate_required_args() {
-    local args=("$@")
-    local missing_args=()
-    
-    for arg in "${args[@]}"; do
-        if [[ -z "${!arg}" ]]; then
-            missing_args+=("$arg")
-        fi
-    done
-    
-    if [[ ${#missing_args[@]} -gt 0 ]]; then
-        log_error "Missing required arguments: ${missing_args[*]}"
-        return 1
-    fi
-    return 0
-}
-
 # Common path resolution utilities
 get_script_dir() {
     echo "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -597,33 +580,7 @@ ensure_directory() {
 }
 
 # Common help function pattern
-show_help() {
-    local module_name="$1"
-    local usage="$2"
-    local commands="$3"
-    local examples="$4"
-    
-    echo "$module_name"
-    echo "$(printf '=%.0s' {1..${#module_name}})"
-    echo ""
-    echo "Usage: $0 $usage"
-    echo ""
-    echo "Commands:"
-    echo "$commands"
-    echo ""
-    if [[ -n "$examples" ]]; then
-        echo "Examples:"
-        echo "$examples"
-        echo ""
-    fi
-}
-
 # Standardized error message functions
-show_network_error() {
-    log_error "Network operation failed: $1"
-    return 1
-}
-
 show_file_error() {
     log_error "File operation failed: $1"
     return 1
@@ -712,16 +669,6 @@ validate_version_format() {
     return 0
 }
 
-validate_git_repo() {
-    local path="${1:-.}"
-    
-    if ! git -C "$path" rev-parse --git-dir >/dev/null 2>&1; then
-        show_validation_error "Not a valid Git repository: $path"
-        return 1
-    fi
-    return 0
-}
-
 validate_file_exists() {
     local file="$1"
     
@@ -744,15 +691,15 @@ validate_directory_exists() {
 
 # Export functions for use in other modules
 export -f log_debug log_info log_success log_warning log_error log_trace
-export -f validate_required_args ensure_directory
-export -f show_help show_usage_error show_required_arg_error
+export -f ensure_directory
+export -f show_usage_error show_required_arg_error
 export -f _trim_ws normalize_enum_value is_truthy is_falsy
 export -f _render_help _render_help_error _manifest_hash_short
 export -f _json_escape _json_kv_str _json_kv_raw _json_value
 export -f get_script_dir get_script_parent_dir get_project_root get_modules_dir
 export -f is_installation_directory validate_repository_root ensure_repository_root
 export -f manifest_repo_scope_require_git manifest_git_preflight_write_access manifest_repo_scope_confirm_apply
-export -f show_network_error show_file_error show_git_error show_config_error
+export -f show_file_error show_git_error show_config_error
 export -f show_validation_error show_permission_error show_dependency_error
 export -f sanitize_filename sanitize_version sanitize_path validate_version_format
-export -f validate_git_repo validate_file_exists validate_directory_exists
+export -f validate_file_exists validate_directory_exists

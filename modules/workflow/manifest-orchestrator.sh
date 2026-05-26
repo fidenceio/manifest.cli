@@ -1053,10 +1053,6 @@ main() {
 
 # Back-compat: old name forwards to the renamed function. Remove once external
 # callers (if any) have migrated.
-manifest_prep_workflow() {
-    manifest_ship_workflow "$@"
-}
-
 # If script is being executed directly
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     main "$@"

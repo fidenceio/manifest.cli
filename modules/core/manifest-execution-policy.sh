@@ -64,14 +64,6 @@ manifest_execution_parse() {
     remaining_ref=("${remaining[@]}")
 }
 
-manifest_execution_is_preview() {
-    [[ "${1:-${MANIFEST_CLI_EXECUTION_MODE:-preview}}" == "preview" ]]
-}
-
-manifest_execution_is_apply() {
-    [[ "${1:-${MANIFEST_CLI_EXECUTION_MODE:-preview}}" == "apply" ]]
-}
-
 manifest_execution_preview_header() {
     local label="$1"
     echo "Preview - no changes written: $label"
@@ -99,20 +91,7 @@ manifest_execution_footer() {
     fi
 }
 
-manifest_execution_strip_apply_flags() {
-    local arg
-    for arg in "$@"; do
-        case "$arg" in
-            --dry-run|-y|--yes) ;;
-            *) printf '%s\n' "$arg" ;;
-        esac
-    done
-}
-
 export -f manifest_execution_parse
-export -f manifest_execution_is_preview
-export -f manifest_execution_is_apply
 export -f manifest_execution_preview_header
 export -f manifest_execution_apply_header
 export -f manifest_execution_footer
-export -f manifest_execution_strip_apply_flags

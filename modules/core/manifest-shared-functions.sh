@@ -459,14 +459,6 @@ check_required_tools() {
 # =============================================================================
 
 # Generate unique agent ID
-generate_agent_id() {
-    local hostname=$(hostname)
-    local user=$(whoami)
-    local timestamp=$(date +%s)
-    local random=$(openssl rand -hex 4 2>/dev/null || echo "$RANDOM")
-    echo "${hostname}-${user}-${timestamp}-${random}" | tr '[:upper:]' '[:lower:]'
-}
-
 # Generate unique session ID
 generate_session_id() {
     local timestamp=$(date +%s)
@@ -494,37 +486,6 @@ log_operation() {
 # =============================================================================
 
 # Get Git repository information
-get_git_info() {
-    local info_type="$1"
-    
-    case "$info_type" in
-        "url")
-            git remote get-url origin 2>/dev/null || echo ""
-            ;;
-        "name")
-            local repo_url=$(git remote get-url origin 2>/dev/null || echo "")
-            basename "$repo_url" .git 2>/dev/null || echo ""
-            ;;
-        "owner")
-            local repo_url=$(git remote get-url origin 2>/dev/null || echo "")
-            echo "$repo_url" | sed -n 's/.*[:/]\([^/]*\)\/\([^/]*\)\.git.*/\1/p'
-            ;;
-        "branch")
-            git branch --show-current 2>/dev/null || echo ""
-            ;;
-        "commit")
-            git rev-parse HEAD 2>/dev/null || echo ""
-            ;;
-        "status")
-            git status --porcelain 2>/dev/null || echo ""
-            ;;
-        *)
-            show_validation_error "Unknown Git info type: $info_type"
-            return 1
-            ;;
-    esac
-}
-
 # Check if in Git repository
 is_git_repository() {
     git rev-parse --git-dir >/dev/null 2>&1
@@ -607,50 +568,6 @@ safe_write_file() {
 # =============================================================================
 
 # Get configuration value with fallback
-get_config_value() {
-    local key="$1"
-    local default="${2:-}"
-    local config_file="${3:-$PROJECT_ROOT/.env}"
-
-    # Try environment variable first
-    if [ -n "${!key:-}" ]; then
-        echo "${!key}"
-        return 0
-    fi
-
-    # Try config file
-    if [ -f "$config_file" ]; then
-        case "$config_file" in
-            *.yaml|*.yml)
-                # YAML config: convert env var name to YAML dot-path
-                local yaml_path=""
-                if declare -F env_var_to_yaml_path >/dev/null 2>&1; then
-                    yaml_path=$(env_var_to_yaml_path "$key")
-                fi
-                if [ -n "$yaml_path" ]; then
-                    local value
-                    value=$(get_yaml_value "$config_file" "$yaml_path" "")
-                    if [ -n "$value" ]; then
-                        echo "$value"
-                        return 0
-                    fi
-                fi
-                ;;
-            *)
-                # Legacy .env config: grep KEY=VALUE
-                local value=$(grep "^${key}=" "$config_file" 2>/dev/null | cut -d'=' -f2- | sed 's/^["'\'']\|["'\'']$//g')
-                if [ -n "$value" ]; then
-                    echo "$value"
-                    return 0
-                fi
-                ;;
-        esac
-    fi
-
-    # Return default
-    echo "$default"
-}
-
 # Set configuration value
 set_config_value() {
     local key="$1"
@@ -697,24 +614,6 @@ set_config_value() {
 # =============================================================================
 
 # Safe JSON read with error handling
-safe_json_read() {
-    local json_file="$1"
-    local key="$2"
-    local default="${3:-}"
-    
-    if [ ! -f "$json_file" ]; then
-        echo "$default"
-        return 0
-    fi
-    
-    if command -v jq >/dev/null 2>&1; then
-        jq -r ".${key} // empty" "$json_file" 2>/dev/null || echo "$default"
-    else
-        # Fallback to grep/sed
-        grep -o "\"${key}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "$json_file" 2>/dev/null | sed 's/.*"\([^"]*\)".*/\1/' || echo "$default"
-    fi
-}
-
 # Safe JSON write with validation
 safe_json_write() {
     local json_file="$1"
@@ -748,8 +647,8 @@ export -f get_current_version get_next_version get_latest_version
 export -f manifest_origin_repo_slug manifest_is_canonical_repo manifest_repo_display_name
 export -f _manifest_require_gh _manifest_parse_create_repo_flag _manifest_gh_repo_create
 export -f secure_curl_request check_network_connectivity check_required_tools
-export -f generate_agent_id generate_session_id log_operation
-export -f get_git_info is_git_repository
+export -f generate_session_id log_operation
+export -f is_git_repository
 export -f safe_read_file safe_write_file
-export -f get_config_value set_config_value
-export -f safe_json_read safe_json_write
+export -f set_config_value
+export -f safe_json_write

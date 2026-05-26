@@ -17,13 +17,6 @@ _manifest_doc_review_is_disabled() {
     esac
 }
 
-_manifest_doc_review_value_is_false() {
-    case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]' | xargs 2>/dev/null || printf '%s' "${1:-}")" in
-        0|false|no|off|disabled) return 0 ;;
-        *) return 1 ;;
-    esac
-}
-
 _manifest_doc_review_output_enabled() {
     local wanted="$1"
     local outputs="${MANIFEST_CLI_DOC_REVIEW_OUTPUTS:-commit_body,report,release_notes}"

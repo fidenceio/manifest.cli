@@ -66,33 +66,6 @@ manifest_replace_managed_block() {
     mv "$temp_file" "$file"
 }
 
-manifest_replace_markdown_section() {
-    local file="$1"
-    local heading="$2"
-    local content_file="$3"
-    local start_line end_line temp_file
-
-    start_line=$(grep -nF "$heading" "$file" | head -1 | cut -d: -f1)
-    [[ -n "$start_line" ]] || return 1
-
-    end_line=$(tail -n +$((start_line + 1)) "$file" | grep -n "^## " | head -1 | cut -d: -f1)
-    if [[ -n "$end_line" ]]; then
-        end_line=$((start_line + end_line - 1))
-    else
-        end_line=$(wc -l < "$file")
-    fi
-
-    temp_file=$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")
-    if (( start_line > 1 )); then
-        head -n $((start_line - 1)) "$file" > "$temp_file"
-    else
-        : > "$temp_file"
-    fi
-    cat "$content_file" >> "$temp_file"
-    tail -n +$((end_line + 1)) "$file" >> "$temp_file"
-    mv "$temp_file" "$file"
-}
-
 manifest_is_legacy_generated_readme() {
     local readme_file="$1"
     [[ -f "$readme_file" ]] || return 1
