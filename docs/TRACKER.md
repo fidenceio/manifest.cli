@@ -180,7 +180,7 @@ The local release-notes provider hook and recipe inspection surfaces exist. Rema
   - **Anchor:** [`completions/`](../completions/), [`tests/completions.bats`](../tests/completions.bats).
 
 - **4.3 Write the public-release migration note.**
-  - **Status:** T3.
+  - **Status:** T3 — user-guide half landed (`docs/USER_GUIDE.md` "Migrating to safe-by-default"); release-docs/`MIGRATION.md` copy still pending.
   - **Why:** users upgrading from pre-safe-by-default releases need a concise explanation of preview default, `-y` apply, and `MANIFEST_CLI_AUTO_CONFIRM` semantics. Mirrors workspace [§2.1](../../TRACKER.md#2-workspace-level-open-items).
   - **Deliverable:** migration copy in release docs or `docs/MIGRATION.md`, with matching language in the user guide before the next major release.
   - **Anchor:** [`docs/USER_GUIDE.md`](USER_GUIDE.md), [`docs/COMMAND_REFERENCE.md`](COMMAND_REFERENCE.md).

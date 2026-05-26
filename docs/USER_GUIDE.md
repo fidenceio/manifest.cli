@@ -37,6 +37,25 @@ Fleet adoption has two extra commands before the normal fleet journey:
 `manifest plan fleet` generates an editable plan, and `manifest reconcile fleet`
 validates or applies it. Both are dry-run by default.
 
+### Migrating to safe-by-default
+
+If you used Manifest before the safe-by-default contract, three things changed.
+Update any scripts or CI that assumed the old behavior:
+
+- **Preview is the default.** `manifest ship repo patch` — and every mutating
+  command — previews and exits without touching your repository. The contract
+  change flipped a bare command from "apply" to "preview." Add `-y` to apply.
+- **`-y` is the only apply consent.** A command mutates only when you pass `-y`
+  (or `--yes`). No config field or environment variable turns a preview into an
+  apply.
+- **`MANIFEST_CLI_AUTO_CONFIRM` no longer authorizes apply.** It only answers
+  interactive prompts *after* apply mode is selected with `-y`.
+  `MANIFEST_CLI_AUTO_CONFIRM=1` on a bare command still previews. Scripts that
+  relied on it to ship unattended must add `-y`.
+
+The migration is mechanical: anywhere a script ran a mutating `manifest` command
+and expected it to apply, append `-y`.
+
 ### First-Class Commands And Recipes
 
 First-class commands are the stable interface for humans, scripts, and CI:
