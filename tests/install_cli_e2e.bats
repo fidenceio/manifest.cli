@@ -71,15 +71,18 @@ teardown() {
     grep -q -E 'Manifest CLI|manifest-cli|MANIFEST_CLI' "$HOME/.local/bin/manifest"
 
     [ -d "$HOME/.manifest-cli" ]
-    [ -d "$HOME/.manifest-cli/modules" ]
-    [ -d "$HOME/.manifest-cli/modules/core" ]
-    [ -d "$HOME/.manifest-cli/modules/system" ]
+    # §5.7 layout: shipped artifacts live under current/ (a symlink into
+    # runtime/v<X>/), not at the top level of $HOME/.manifest-cli/.
+    [ -L "$HOME/.manifest-cli/current" ]
+    [ -d "$HOME/.manifest-cli/current/modules" ]
+    [ -d "$HOME/.manifest-cli/current/modules/core" ]
+    [ -d "$HOME/.manifest-cli/current/modules/system" ]
     [ -f "$HOME/.manifest-cli/manifest.config.global.yaml" ]
 
     # The plugin's old install_cli used to skip these; the canonical pipeline
     # produces them. Their presence is the regression-prevention check.
-    [ -d "$HOME/.manifest-cli/docs" ]
-    [ -d "$HOME/.manifest-cli/examples" ]
+    [ -d "$HOME/.manifest-cli/current/docs" ]
+    [ -d "$HOME/.manifest-cli/current/examples" ]
 }
 
 @test "installed bin script preserves install-paths module" {
@@ -94,7 +97,7 @@ teardown() {
 
     # Manifest-install-paths.sh must end up under the installed modules tree
     # — otherwise reinstall/uninstall flows running from $HOME/.manifest-cli
-    # break.
-    [ -f "$HOME/.manifest-cli/modules/system/manifest-install-paths.sh" ]
-    [ -f "$HOME/.manifest-cli/modules/system/manifest-uninstall.sh" ]
+    # break. §5.7: modules live under current/ now.
+    [ -f "$HOME/.manifest-cli/current/modules/system/manifest-install-paths.sh" ]
+    [ -f "$HOME/.manifest-cli/current/modules/system/manifest-uninstall.sh" ]
 }

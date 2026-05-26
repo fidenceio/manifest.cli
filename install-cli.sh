@@ -450,103 +450,420 @@ cleanup_legacy_locations() {
     print_success "✅ Legacy location cleanup completed"
 }
 
-# Clean up old installation using the uninstall module
-cleanup_old_installation() {
-    print_subheader "🧹 Cleaning Up Old Installation"
+# Clean up stray legacy installation artifacts at the install root.
+#
+# This runs ONLY on a fresh install (mode=fresh) when stray shipped
+# artifacts are detected at the top level of $HOME/.manifest-cli/ from
+# a pre-§5.7 flat install. It must NEVER invoke uninstall_manifest —
+# that helper's blast radius (shell profiles, env vars, user state) is
+# the root cause of the partial-state-on-interrupt defect §5.7 fixes.
+#
+# Scope (explicit allowlist of shipped artifacts):
+#   - modules/, docs/, examples/, completions/, VERSION
+#
+# Untouched (USER STATE — preserved across installs/upgrades):
+#   - logs/, audit/, ide/, manifest.config.global.yaml, current,
+#     runtime/, .install.lock, anything else
+cleanup_legacy_installation() {
+    print_subheader "🧹 Cleaning Up Stray Legacy Artifacts"
 
-    # First, clean up any legacy installation locations
+    # First, clean up any legacy /usr/local install location.
     cleanup_legacy_locations
 
-    # Source the uninstall module
-    if ! source_manifest_uninstall; then
-        print_error "❌ Failed to load uninstall module"
-        print_error "❌ Cannot proceed with installation without cleanup capability"
-        return 1
-    fi
+    local state_dir
+    state_dir="$(manifest_install_paths_global_state_dir)"
+    [ -d "$state_dir" ] || { print_status "No stray artifacts found"; return 0; }
 
-    # Use the uninstall module for comprehensive cleanup
-    # Parameters: skip_confirmations=true, non_interactive=true
-    uninstall_manifest "true" "true"
+    local artifact name path
+    local artifacts=(modules docs examples completions VERSION)
+    local removed=0
+    for name in "${artifacts[@]}"; do
+        path="$state_dir/$name"
+        if [ -e "$path" ]; then
+            if manifest_install_paths_assert_destructive_target_safe "$path" "rm legacy-artifact"; then
+                rm -rf "$path"
+                print_success "✅ Removed stray $path"
+                removed=$((removed + 1))
+            else
+                print_warning "⚠️  Skipped removal of $path (sandbox tripwire)"
+            fi
+        fi
+    done
+    if [ "$removed" -eq 0 ]; then
+        print_status "No stray shipped artifacts at $state_dir"
+    fi
+    echo ""
 }
 
-# Create directory structure
-create_directories() {
-    print_subheader "📁 Creating Directory Structure"
-    
-    # Create local bin directory
+# Create the stable state-root tree under $HOME/.manifest-cli/.
+#
+# This dir hierarchy is user-visible and never renamed — only the
+# `current` symlink and `runtime/v<X>/` subdirs are swapped on upgrade.
+# User-state subdirs (logs/, audit/, ide/) and $HOME/.local/bin/ live
+# here permanently. Idempotent; safe to invoke on every run.
+create_state_root() {
+    print_subheader "📁 Creating State Root"
+
     if [ ! -d "$MANIFEST_CLI_LOCAL_BIN" ]; then
         mkdir -p "$MANIFEST_CLI_LOCAL_BIN"
         print_success "✅ Created $MANIFEST_CLI_LOCAL_BIN"
-    else
-        print_success "✅ $MANIFEST_CLI_LOCAL_BIN already exists"
     fi
-    
-    # Create project directory
-    if [ ! -d "$MANIFEST_CLI_INSTALL_LOCATION" ]; then
-        mkdir -p "$MANIFEST_CLI_INSTALL_LOCATION"
-        print_success "✅ Created $MANIFEST_CLI_INSTALL_LOCATION"
-    else
-        print_success "✅ $MANIFEST_CLI_INSTALL_LOCATION already exists"
-    fi
-    
-    # Create subdirectories
-    mkdir -p "$MANIFEST_CLI_INSTALL_LOCATION/docs"
-    
-    print_success "✅ Directory structure created"
+
+    local state_dir preserved
+    state_dir="$(manifest_install_paths_global_state_dir)"
+    mkdir -p "$state_dir"
+    while IFS= read -r preserved; do
+        [ -n "$preserved" ] || continue
+        mkdir -p "$state_dir/$preserved"
+    done < <(manifest_install_paths_preserved_subdirs)
+
+    print_success "✅ State root ready at $state_dir"
     echo ""
 }
 
-# Copy CLI files
+# Copy shipped artifacts from the install-cli.sh source tree into a
+# target staging directory. The wrapper binary (~/.local/bin/manifest)
+# is written separately in main() because it lives outside the swap
+# target and is version-agnostic.
+#
+# Arguments:
+#   $1  target staging dir for shipped artifacts (modules/, docs/, …)
 copy_cli_files() {
-    print_subheader "📦 Copying CLI Files"
-    
-    # Copy main CLI script
-    if [ -f "scripts/manifest-cli-wrapper.sh" ]; then
-        cp "scripts/manifest-cli-wrapper.sh" "$MANIFEST_CLI_LOCAL_BIN/$MANIFEST_CLI_NAME"
-        chmod +x "$MANIFEST_CLI_LOCAL_BIN/$MANIFEST_CLI_NAME"
-        print_success "✅ Copied CLI script to $MANIFEST_CLI_LOCAL_BIN/$MANIFEST_CLI_NAME"
-    else
-        print_error "❌ CLI wrapper script not found"
+    local target="$1"
+
+    if [ -z "$target" ]; then
+        print_error "❌ copy_cli_files: target staging dir required"
         exit 1
     fi
-    
-    # Copy source modules
-    if [ -d "modules" ]; then
-        cp -r "modules" "$MANIFEST_CLI_INSTALL_LOCATION/"
-        print_success "✅ Copied source modules"
+
+    print_subheader "📦 Staging CLI Files → $target"
+
+    local source_dir
+    source_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+    mkdir -p "$target"
+
+    if [ -d "$source_dir/modules" ]; then
+        cp -r "$source_dir/modules" "$target/"
+        print_success "✅ Staged modules"
     fi
 
-    # Copy VERSION — display_version reads it from <install>/VERSION.
-    if [ -f "VERSION" ]; then
-        cp "VERSION" "$MANIFEST_CLI_INSTALL_LOCATION/"
-        print_success "✅ Copied VERSION"
+    if [ -f "$source_dir/VERSION" ]; then
+        cp "$source_dir/VERSION" "$target/"
+        print_success "✅ Staged VERSION"
     fi
 
-    # Copy documentation
-    if [ -d "docs" ]; then
-        cp -r "docs" "$MANIFEST_CLI_INSTALL_LOCATION/"
-        print_success "✅ Copied documentation"
+    if [ -d "$source_dir/docs" ]; then
+        cp -r "$source_dir/docs" "$target/"
+        print_success "✅ Staged docs"
     fi
 
-    # Copy example configuration files
-    if [ -d "examples" ]; then
-        cp -r "examples" "$MANIFEST_CLI_INSTALL_LOCATION/"
-        print_success "✅ Copied example configuration files"
+    if [ -d "$source_dir/examples" ]; then
+        cp -r "$source_dir/examples" "$target/"
+        print_success "✅ Staged examples"
     fi
 
-    # Copy shell completions for IDE-integrated terminals and regular shells.
-    if [ -d "completions" ]; then
-        cp -r "completions" "$MANIFEST_CLI_INSTALL_LOCATION/"
-        print_success "✅ Copied shell completions"
+    if [ -d "$source_dir/completions" ]; then
+        cp -r "$source_dir/completions" "$target/"
+        print_success "✅ Staged completions"
     fi
 
-    print_success "✅ All CLI files copied successfully"
+    print_success "✅ Staging complete"
     echo ""
+}
+
+# True if the source wrapper script and the installed binary have the
+# same sha256 content. Used by upgrade flow to skip rewriting the
+# wrapper binary when nothing changed.
+_wrapper_binaries_match() {
+    local src="$1"
+    local dst="$2"
+    [ -f "$src" ] && [ -f "$dst" ] || return 1
+
+    local hasher
+    if command -v shasum >/dev/null 2>&1; then
+        hasher="shasum -a 256"
+    elif command -v sha256sum >/dev/null 2>&1; then
+        hasher="sha256sum"
+    else
+        return 1
+    fi
+
+    local h_src h_dst
+    h_src="$($hasher "$src" 2>/dev/null | awk '{print $1}')"
+    h_dst="$($hasher "$dst" 2>/dev/null | awk '{print $1}')"
+    [ -n "$h_src" ] && [ "$h_src" = "$h_dst" ]
+}
+
+# =============================================================================
+# §5.7 Atomic Upgrade Mechanism
+# =============================================================================
+
+# Hook used exclusively by Phase 3 tests to simulate failure at a specific
+# phase. Returns 1 with a stderr marker if the env var matches the named
+# phase. No-op in production runs.
+_manifest_install_fail_at() {
+    local phase="$1"
+    if [ "${MANIFEST_CLI_INSTALL_FAIL_AT:-}" = "$phase" ]; then
+        echo "manifest: simulated failure at $phase" >&2
+        return 1
+    fi
+    return 0
+}
+
+# Classify the current install state. Echo one of:
+#   legacy-migration  — pre-§5.7 flat layout present, `current` absent
+#   upgrade           — `current` symlink OR runtime/ tree present
+#   fresh             — neither
+detect_install_mode() {
+    local state_dir current runtime
+    state_dir="$(manifest_install_paths_global_state_dir)"
+    current="$(manifest_install_paths_current_symlink)"
+    runtime="$(manifest_install_paths_runtime_root)"
+
+    if [ -d "$state_dir/modules" ] && [ ! -L "$current" ] && [ ! -e "$current" ]; then
+        echo "legacy-migration"
+        return 0
+    fi
+    if [ -L "$current" ] || [ -d "$runtime" ]; then
+        echo "upgrade"
+        return 0
+    fi
+    echo "fresh"
+}
+
+# Path of the install-time lock file. Co-located with the install root so a
+# stale lock from a crashed installer is visible alongside the partial
+# install state it may have left behind.
+_manifest_install_lock_path() {
+    echo "$(manifest_install_paths_global_state_dir)/.install.lock"
+}
+
+# Race-free pid-file lock using set -C (noclobber). If a lock already
+# exists, the holder pid is examined via kill -0; a stale lock is
+# overwritten with a stderr warning. Lock content: "<pid>\n<iso-ts>\n".
+acquire_install_lock() {
+    local lock pid stale
+    lock="$(_manifest_install_lock_path)"
+    mkdir -p "$(dirname "$lock")"
+
+    if [ -e "$lock" ]; then
+        pid="$(head -n1 "$lock" 2>/dev/null || true)"
+        stale=1
+        if [ -n "$pid" ] && [ "$pid" -eq "$pid" ] 2>/dev/null; then
+            if kill -0 "$pid" 2>/dev/null; then
+                stale=0
+            fi
+        fi
+        if [ "$stale" -eq 0 ]; then
+            print_error "❌ Another manifest install is already in progress (pid $pid, lock $lock)."
+            print_error "   If you're sure no other installer is running, remove $lock and retry."
+            return 1
+        fi
+        echo "manifest: warning: stale install lock from pid ${pid:-?} found at $lock — overwriting" >&2
+        rm -f "$lock"
+    fi
+
+    # set -C makes the redirect fail if the file appears between our check
+    # and the write — closing the TOCTOU window for two concurrent installs.
+    (
+        set -C
+        : > "$lock"
+    ) || {
+        print_error "❌ Failed to create install lock at $lock (race or permission)"
+        return 1
+    }
+    {
+        echo "$$"
+        date -u +"%Y-%m-%dT%H:%M:%SZ"
+    } > "$lock"
+    _MANIFEST_CLI_INSTALL_LOCK_HELD="$lock"
+    return 0
+}
+
+# Release the lock only if it still names our pid. Defensive against a
+# trap firing after a swap left the lock in a half-known state.
+release_install_lock() {
+    local lock pid
+    lock="${_MANIFEST_CLI_INSTALL_LOCK_HELD:-$(_manifest_install_lock_path)}"
+    [ -f "$lock" ] || return 0
+    pid="$(head -n1 "$lock" 2>/dev/null || true)"
+    if [ "$pid" = "$$" ]; then
+        rm -f "$lock"
+    fi
+}
+
+# Stage all shipped artifacts into runtime/v<version>.tmp/ then atomically
+# rename to runtime/v<version>/. A pre-existing .tmp is a leftover from a
+# prior interrupted run — remove it and retry.
+stage_version_dir() {
+    local version="$1"
+    [ -n "$version" ] || { print_error "❌ stage_version_dir: version required"; return 1; }
+
+    _manifest_install_fail_at "stage_version_dir" || return 1
+
+    local final_dir staging_dir
+    final_dir="$(manifest_install_paths_versioned_dir "$version")"
+    staging_dir="${final_dir}.tmp"
+
+    mkdir -p "$(dirname "$final_dir")"
+
+    # Idempotent re-run: a leftover staging dir from a prior interrupted
+    # install must be removed before we restart. Gated by the tripwire.
+    if [ -d "$staging_dir" ]; then
+        if manifest_install_paths_assert_destructive_target_safe "$staging_dir" "rm staging"; then
+            rm -rf "$staging_dir"
+        else
+            return 1
+        fi
+    fi
+
+    # If the final dir already exists for this version, treat as no-op.
+    # (Re-running the installer for the already-installed version should
+    # not blow away a live install we're presumably symlinked to.)
+    if [ -d "$final_dir" ]; then
+        print_status "ℹ️  Version dir already present at $final_dir — skipping stage"
+        return 0
+    fi
+
+    copy_cli_files "$staging_dir"
+
+    # Atomic same-fs rename — the single point where the new dir becomes
+    # visible under its final name. After this returns, swap_current_symlink
+    # is the only remaining step in the upgrade window.
+    mv "$staging_dir" "$final_dir"
+    print_success "✅ Staged $final_dir"
+    echo ""
+}
+
+# Atomically point ~/.manifest-cli/current at runtime/v<version>/. Uses a
+# write-to-sibling + rename-over-target pattern so a SIGTERM mid-call
+# leaves the prior symlink intact (it's either the old target or the
+# new target, never broken).
+#
+# The symlink target is RELATIVE so the install dir stays relocatable.
+swap_current_symlink() {
+    local version="$1"
+    [ -n "$version" ] || { print_error "❌ swap_current_symlink: version required"; return 1; }
+
+    _manifest_install_fail_at "swap_current_symlink" || return 1
+
+    local state_dir vdirname new_link current_link
+    state_dir="$(manifest_install_paths_global_state_dir)"
+    case "$version" in
+        v*) vdirname="$version" ;;
+        *)  vdirname="v$version" ;;
+    esac
+    new_link="$state_dir/current.new"
+    current_link="$state_dir/current"
+
+    # Drop a stale .new from a prior interrupted swap.
+    [ -L "$new_link" ] && rm -f "$new_link"
+
+    # Atomic swap pattern:
+    #   1. Create a fresh symlink at current.new (pointing at the new target)
+    #   2. rename(2) it over current
+    #
+    # rename(2) of one symlink-to-X over another symlink is atomic and does
+    # NOT follow either link. We invoke it via `mv -fh` on BSD (Darwin) so
+    # mv treats the destination as a file even when it's a symlink-to-dir;
+    # GNU mv has no -h flag but defaults to the file-replace semantics we
+    # want, so we feature-detect.
+    #
+    # NB: BSD `mv` without -h, when the dst is a symlink-to-dir, will move
+    # INTO that directory (the very bug §5.7 is supposed to avoid). The -h
+    # detection guards against that.
+    ln -sfn "runtime/$vdirname" "$new_link"
+    if mv -h "$new_link" "$current_link" 2>/dev/null; then
+        :
+    else
+        # GNU mv: no -h, but its default rename semantics do not follow a
+        # symlink at the destination, so a plain `mv -f` is the right
+        # primitive on Linux.
+        mv -f "$new_link" "$current_link"
+    fi
+    print_success "✅ Pointed $current_link → runtime/$vdirname"
+    echo ""
+}
+
+# Keep `keep_n` versions under runtime/: the one currently pointed to by
+# `current`, plus (keep_n - 1) most recently modified other version dirs.
+# Anything else is removed. Default keep_n=2.
+prune_old_versions() {
+    local keep_n="${1:-2}"
+
+    _manifest_install_fail_at "prune_old_versions" || return 1
+
+    local runtime current_target state_dir
+    state_dir="$(manifest_install_paths_global_state_dir)"
+    runtime="$(manifest_install_paths_runtime_root)"
+    [ -d "$runtime" ] || return 0
+
+    # Resolve the currently-active version directory NAME (basename, since
+    # `current` stores a relative target like runtime/v<X>).
+    current_target=""
+    if [ -L "$state_dir/current" ]; then
+        current_target="$(basename "$(readlink "$state_dir/current")")"
+    fi
+
+    # Collect candidate version dir basenames sorted by mtime, newest first.
+    local -a all_versions=()
+    local entry name
+    while IFS= read -r entry; do
+        [ -n "$entry" ] || continue
+        name="$(basename "$entry")"
+        case "$name" in v*) all_versions+=("$name") ;; esac
+    done < <(
+        # `ls -td` orders by mtime (newest first); fall back to a stat sort
+        # if -t is unavailable (extremely rare on POSIX hosts).
+        ls -dt "$runtime"/v* 2>/dev/null || true
+    )
+
+    # Build the keep-set: always include current_target; then take from the
+    # mtime-sorted list until we hit keep_n total.
+    local -a keep=()
+    [ -n "$current_target" ] && keep+=("$current_target")
+    local v
+    for v in "${all_versions[@]}"; do
+        if [ "${#keep[@]}" -ge "$keep_n" ]; then break; fi
+        local already=0
+        local k
+        for k in "${keep[@]}"; do
+            [ "$k" = "$v" ] && { already=1; break; }
+        done
+        [ "$already" -eq 0 ] && keep+=("$v")
+    done
+
+    # rm anything not in keep[].
+    for v in "${all_versions[@]}"; do
+        local in_keep=0
+        local k
+        for k in "${keep[@]}"; do
+            [ "$k" = "$v" ] && { in_keep=1; break; }
+        done
+        if [ "$in_keep" -eq 0 ]; then
+            local victim="$runtime/$v"
+            if manifest_install_paths_assert_destructive_target_safe "$victim" "rm old-version"; then
+                rm -rf "$victim"
+                print_success "✅ Pruned $victim"
+            fi
+        fi
+    done
+}
+
+# Migrate a pre-§5.7 flat layout into the runtime/v<X>/ scheme. The full
+# implementation lands in Phase 2 Commit 4; the stub here lets Commit 3
+# wire the mode-dispatch in main() without functional risk.
+migrate_legacy_layout() {
+    _manifest_install_fail_at "migrate_legacy_layout" || return 1
+    print_warning "⚠️  Legacy flat layout detected; migration helper not yet wired (Commit 4)"
+    return 0
 }
 
 manifest_completion_source_dir() {
     local source_dir
     local candidates=(
+        "$MANIFEST_CLI_INSTALL_LOCATION/current/completions"
         "$MANIFEST_CLI_INSTALL_LOCATION/completions"
         "$(pwd)/completions"
     )
@@ -875,10 +1192,34 @@ configure_path() {
 # Verify installation
 verify_installation() {
     print_subheader "🔍 Verifying Installation"
-    
+
+    # §5.7 layout assertions: current must be a symlink resolving to a real
+    # versioned dir under runtime/, and the canonical core module must be
+    # readable through the symlink. Skipped on Homebrew installs (where
+    # MANIFEST_CLI_INSTALL_LOCATION points at the brew prefix and the
+    # symlink scheme is not used).
+    local state_dir current_link
+    state_dir="$(manifest_install_paths_global_state_dir)"
+    current_link="$state_dir/current"
+    if [ -e "$current_link" ] || [ -L "$current_link" ]; then
+        if [ ! -L "$current_link" ]; then
+            print_error "❌ $current_link exists but is not a symlink"
+            return 1
+        fi
+        if [ ! -d "$current_link" ]; then
+            print_error "❌ $current_link does not resolve to a directory"
+            return 1
+        fi
+        if [ ! -r "$current_link/modules/core/manifest-core.sh" ]; then
+            print_error "❌ $current_link/modules/core/manifest-core.sh is not readable"
+            return 1
+        fi
+        print_success "✅ current symlink resolves and core module is readable"
+    fi
+
     if command_exists "$MANIFEST_CLI_NAME"; then
         print_success "✅ Manifest CLI installed successfully!"
-        
+
         # Get version information
         local version_info
         if version_info=$("$MANIFEST_CLI_NAME" --version 2>/dev/null); then
@@ -886,13 +1227,13 @@ verify_installation() {
         else
             print_status "📋 CLI Version: Version info not available"
         fi
-        
+
         # Determine project root (always use current working directory)
         PROJECT_ROOT="$PWD"
-        
+
         print_status "📍 Location: $(which "$MANIFEST_CLI_NAME")"
         print_status "🏠 Project directory: $PROJECT_ROOT"
-        
+
         # Test basic functionality
         print_status "🧪 Testing basic functionality..."
         if "$MANIFEST_CLI_NAME" --help >/dev/null 2>&1; then
@@ -900,7 +1241,7 @@ verify_installation() {
         else
             print_warning "⚠️  Help command failed"
         fi
-        
+
         return 0
     else
         print_error "❌ Installation failed - $MANIFEST_CLI_NAME command not found"
@@ -1220,18 +1561,92 @@ EOF
         fi
         echo ""
 
-        cleanup_environment_variables
-        cleanup_old_installation
-        create_directories
-        copy_cli_files
-        create_configuration
-        setup_environment_variables
-        configure_path
-        install_shell_completions
+        # §5.7 atomic-upgrade flow: stage to runtime/v<X>.tmp/, atomic
+        # rename to runtime/v<X>/, swap `current` symlink. User-state
+        # subdirs and shell profiles are NOT touched on upgrade.
+        create_state_root
+        acquire_install_lock || exit 1
+        # shellcheck disable=SC2064
+        trap "release_install_lock" EXIT
+
+        local install_state
+        install_state="$(detect_install_mode)"
+        print_status "🧭 Install mode: $install_state"
+
+        if [ "$install_state" = "legacy-migration" ]; then
+            migrate_legacy_layout || {
+                print_error "❌ Legacy layout migration failed"
+                exit 1
+            }
+            install_state="upgrade"
+        fi
+
+        # Resolve the source-tree VERSION (the one we're installing).
+        local install_source_dir version_value
+        install_source_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        if [ -f "$install_source_dir/VERSION" ]; then
+            version_value="$(tr -d '[:space:]' < "$install_source_dir/VERSION")"
+        fi
+        if [ -z "$version_value" ]; then
+            print_error "❌ Cannot determine version (missing VERSION file at $install_source_dir)"
+            exit 1
+        fi
+
+        # Shell-profile rewriting is the duplicate-write defect's blast
+        # radius. Run ONLY on a fresh install — upgrades must leave the
+        # user's shell profiles untouched.
+        if [ "$install_state" = "fresh" ]; then
+            cleanup_environment_variables
+            cleanup_legacy_installation
+        fi
+
+        stage_version_dir "$version_value"
+
+        # The wrapper binary lives at the user-bin location (see
+        # manifest_install_paths_user_binary) and is version-agnostic.
+        # On a fresh install we write it; on upgrade we
+        # only refresh it if its sha256 differs from the source tree's
+        # copy (cheap content-hash compare avoids spurious mv on no-op).
+        local wrapper_src wrapper_dst
+        wrapper_src="$install_source_dir/scripts/manifest-cli-wrapper.sh"
+        wrapper_dst="$MANIFEST_CLI_LOCAL_BIN/$MANIFEST_CLI_NAME"
+        if [ "$install_state" = "fresh" ] || ! _wrapper_binaries_match "$wrapper_src" "$wrapper_dst"; then
+            if [ -f "$wrapper_src" ]; then
+                local wrapper_tmp
+                wrapper_tmp="$(mktemp "${wrapper_dst}.XXXXXX")"
+                cp "$wrapper_src" "$wrapper_tmp"
+                chmod +x "$wrapper_tmp"
+                mv -f "$wrapper_tmp" "$wrapper_dst"
+                print_success "✅ Installed wrapper $wrapper_dst"
+            else
+                print_error "❌ CLI wrapper script not found at $wrapper_src"
+                exit 1
+            fi
+        else
+            print_status "ℹ️  Wrapper binary already up to date"
+        fi
+
+        swap_current_symlink "$version_value"
+
+        if [ "$install_state" = "fresh" ]; then
+            create_configuration
+            setup_environment_variables
+            configure_path
+            install_shell_completions
+        else
+            # Upgrade mode: refresh only version-dependent content;
+            # leave shell profiles alone.
+            create_configuration
+            install_shell_completions
+        fi
+
         install_ide_command_catalog
+        prune_old_versions 2
 
         if verify_installation; then
-            install_git_hooks
+            if [ "$install_state" = "fresh" ]; then
+                install_git_hooks
+            fi
             display_post_install_info
         else
             print_error "❌ Installation verification failed"

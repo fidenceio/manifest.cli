@@ -8,11 +8,13 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Locate the installed CLI tree. The wrapper lives in a bin directory
-# (typically $HOME/.local/bin) while modules live elsewhere (typically
-# $HOME/.manifest-cli/modules/), so we cannot assume modules sit at
-# $SCRIPT_DIR/../modules/. Must run before any module source.
+# (typically $HOME/.local/bin) while modules live elsewhere. After §5.7
+# atomic-upgrade landed, modules live under $HOME/.manifest-cli/current/
+# (a symlink to runtime/v<X>/), and the wrapper transparently follows
+# the symlink. For pre-§5.7 flat installs the modules still sit at
+# $HOME/.manifest-cli/modules/.
 find_cli_dir() {
-    local possible_dirs=(
+    local roots=(
         "${MANIFEST_CLI_INSTALL_DIR:-$HOME/.manifest-cli}"
         "$HOME/.manifest-cli"
     )
@@ -21,12 +23,18 @@ find_cli_dir() {
     # modules at <repo>/modules/. realpath resolves symlinks so a symlinked
     # wrapper still finds the real source tree.
     if command -v realpath >/dev/null 2>&1; then
-        possible_dirs+=("$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")")
+        roots+=("$(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")")
     else
-        possible_dirs+=("$(dirname "$SCRIPT_DIR")")
+        roots+=("$(dirname "$SCRIPT_DIR")")
     fi
 
-    for dir in "${possible_dirs[@]}"; do
+    for dir in "${roots[@]}"; do
+        # §5.7 layout: <root>/current/modules/... (symlink-transparent)
+        if [ -f "$dir/current/modules/core/manifest-core.sh" ]; then
+            echo "$dir/current"
+            return 0
+        fi
+        # Legacy flat layout: <root>/modules/...
         if [ -f "$dir/modules/core/manifest-core.sh" ]; then
             echo "$dir"
             return 0
