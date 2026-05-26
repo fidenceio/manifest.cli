@@ -1,5 +1,14 @@
 # Changelog
 
+## [48.6.1] - 2026-05-26
+
+**Release Type:** Patch
+
+### Changes
+
+- Fix(install-cli): keep shell completions out of Homebrew-managed dirs
+
+
 ## [48.6.0] - 2026-05-26
 
 **Release Type:** Minor
@@ -107,8 +116,3 @@
 
 - Add GitHub Release publishing support
 - Add regression coverage for the changed CLI workflow
-
-
-## [48.2.2] - 2026-05-19
-
-**Release Type:** Patch — no user-facing changes.
