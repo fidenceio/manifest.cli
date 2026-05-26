@@ -851,13 +851,57 @@ prune_old_versions() {
     done
 }
 
-# Migrate a pre-§5.7 flat layout into the runtime/v<X>/ scheme. The full
-# implementation lands in Phase 2 Commit 4; the stub here lets Commit 3
-# wire the mode-dispatch in main() without functional risk.
+# Migrate a pre-§5.7 flat layout into the runtime/v<X>/ scheme.
+#
+# Detection (caller's responsibility — detect_install_mode returns
+# "legacy-migration" when this is needed): $HOME/.manifest-cli/modules/
+# exists AND $HOME/.manifest-cli/current does NOT exist.
+#
+# Strategy: relocate only the allowlisted shipped subdirs (modules,
+# docs, examples, completions, VERSION) into runtime/v<OLD_VER>/, then
+# create the `current` symlink pointing at that dir. User-state subdirs
+# (logs/, audit/, ide/, manifest.config.global.yaml, anything else) are
+# left untouched at the top level.
+#
+# Version sourced from $HOME/.manifest-cli/VERSION if present; falls
+# back to "0.0.0-legacy" so the dir name is deterministic and obviously
+# identifies a pre-§5.7 install.
 migrate_legacy_layout() {
     _manifest_install_fail_at "migrate_legacy_layout" || return 1
-    print_warning "⚠️  Legacy flat layout detected; migration helper not yet wired (Commit 4)"
-    return 0
+
+    print_subheader "🧭 Migrating Legacy Flat Layout"
+
+    local state_dir old_version target
+    state_dir="$(manifest_install_paths_global_state_dir)"
+
+    if [ -f "$state_dir/VERSION" ]; then
+        old_version="$(tr -d '[:space:]' < "$state_dir/VERSION")"
+    fi
+    [ -n "$old_version" ] || old_version="0.0.0-legacy"
+
+    target="$(manifest_install_paths_versioned_dir "$old_version")"
+    mkdir -p "$target"
+
+    local moved=0 artifact src
+    local artifacts=(modules docs examples completions VERSION)
+    for artifact in "${artifacts[@]}"; do
+        src="$state_dir/$artifact"
+        if [ -e "$src" ]; then
+            if manifest_install_paths_assert_destructive_target_safe "$src" "mv legacy-artifact"; then
+                mv "$src" "$target/"
+                moved=$((moved + 1))
+            else
+                print_warning "⚠️  Skipped move of $src (sandbox tripwire)"
+            fi
+        fi
+    done
+
+    # Create the relative `current` symlink. Use the same swap helper so
+    # the path goes through one canonical impl.
+    swap_current_symlink "$old_version"
+
+    echo "manifest: migrated legacy flat layout → $target (moved $moved shipped subdir(s))" >&2
+    echo ""
 }
 
 manifest_completion_source_dir() {

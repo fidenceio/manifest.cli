@@ -214,6 +214,78 @@ EOF
     [ ! -d "$HOME/.manifest-cli/runtime/v0.0.1" ]
 }
 
+@test "atomic-upgrade: legacy flat layout migrates only shipped subdirs" {
+    # Pre-create a pre-§5.7 flat install with one shipped artifact in
+    # each allowlist slot plus user-state files at the top level.
+    mkdir -p "$HOME/.manifest-cli/modules/core" "$HOME/.manifest-cli/docs" \
+             "$HOME/.manifest-cli/logs"
+    : > "$HOME/.manifest-cli/modules/core/marker"
+    echo "legacy-docs" > "$HOME/.manifest-cli/docs/index.md"
+    echo "0.1.0" > "$HOME/.manifest-cli/VERSION"
+    echo "preserved-log-sentinel" > "$HOME/.manifest-cli/logs/op.log"
+    # Use the shipped example config so the safe-key migration in
+    # create_configuration doesn't error.
+    cp "$TEST_REPO_ROOT/examples/manifest.config.yaml.example" \
+        "$HOME/.manifest-cli/manifest.config.global.yaml"
+    printf '# preserved-config-sentinel\n' >> "$HOME/.manifest-cli/manifest.config.global.yaml"
+
+    _run_installer
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+
+    # The legacy version dir is created and now holds the relocated
+    # shipped artifacts.
+    [ -d "$HOME/.manifest-cli/runtime/v0.1.0" ]
+    [ -f "$HOME/.manifest-cli/runtime/v0.1.0/modules/core/marker" ]
+    [ -f "$HOME/.manifest-cli/runtime/v0.1.0/docs/index.md" ]
+    [ -f "$HOME/.manifest-cli/runtime/v0.1.0/VERSION" ]
+
+    # User-state files are NOT moved.
+    [ -f "$HOME/.manifest-cli/logs/op.log" ]
+    grep -q 'preserved-log-sentinel' "$HOME/.manifest-cli/logs/op.log"
+    [ -f "$HOME/.manifest-cli/manifest.config.global.yaml" ]
+    grep -q 'preserved-config-sentinel' "$HOME/.manifest-cli/manifest.config.global.yaml"
+
+    # The current symlink exists. After the migration the installer falls
+    # through to upgrade flow, so current now points at the NEWLY-staged
+    # version dir (the installer's own VERSION); the legacy dir lives
+    # alongside it under runtime/.
+    [ -L "$HOME/.manifest-cli/current" ]
+    [ -d "$HOME/.manifest-cli/runtime/v${INSTALLER_VERSION}" ]
+}
+
+@test "atomic-upgrade: legacy migration is idempotent on a second run" {
+    mkdir -p "$HOME/.manifest-cli/modules/core" "$HOME/.manifest-cli/docs"
+    : > "$HOME/.manifest-cli/modules/core/marker"
+    echo "0.1.0" > "$HOME/.manifest-cli/VERSION"
+
+    _run_installer
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+
+    # Run the installer a SECOND time — it should see mode=upgrade now
+    # (the legacy modules dir is gone, current is a real symlink) and
+    # not re-attempt the migration.
+    _run_installer
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+
+    [ -L "$HOME/.manifest-cli/current" ]
+    [ -d "$HOME/.manifest-cli/runtime/v${INSTALLER_VERSION}" ]
+    # The legacy version dir is still present (prune_old_versions keeps
+    # current + 1 most recent other).
+    [ -d "$HOME/.manifest-cli/runtime/v0.1.0" ]
+}
+
+@test "atomic-upgrade: legacy migration falls back to 0.0.0-legacy when VERSION absent" {
+    mkdir -p "$HOME/.manifest-cli/modules/core"
+    : > "$HOME/.manifest-cli/modules/core/marker"
+    # NO VERSION file.
+
+    _run_installer
+    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
+
+    [ -d "$HOME/.manifest-cli/runtime/v0.0.0-legacy" ]
+    [ -f "$HOME/.manifest-cli/runtime/v0.0.0-legacy/modules/core/marker" ]
+}
+
 @test "atomic-upgrade: install lock prevents concurrent runs" {
     mkdir -p "$HOME/.manifest-cli"
     # Plant a lock owned by our own pid so kill -0 succeeds.
