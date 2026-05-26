@@ -310,48 +310,7 @@ cleanup_config_files() {
 # shell profiles is real cleanup the user benefits from.
 cleanup_environment_variables() {
     echo "🧹 Cleaning up Manifest CLI shell-profile entries..."
-
-    local removed_count=0
-    local profile_regex
-    profile_regex="$(manifest_install_paths_profile_line_regex)"
-
-    local profile_file backup_file temp_file
-    while IFS= read -r profile_file; do
-        [ -n "$profile_file" ] || continue
-        [ -f "$profile_file" ] || continue
-        if ! manifest_install_paths_assert_destructive_target_safe "$profile_file" "profile-rewrite"; then
-            continue
-        fi
-        backup_file="${profile_file}.manifest-backup-$(date +%Y%m%d-%H%M%S)"
-        cp "$profile_file" "$backup_file"
-        temp_file=$(mktemp "$(manifest_make_scratch_path system)/tmp.XXXXXXXX")
-        grep -v -E "$profile_regex" "$profile_file" > "$temp_file" || true
-        if ! cmp -s "$profile_file" "$temp_file"; then
-            mv "$temp_file" "$profile_file"
-            echo "  ✅ Cleaned: $profile_file (backup: $backup_file)"
-            ((removed_count+=1))
-        else
-            rm -f "$temp_file" "$backup_file"
-        fi
-    done < <(manifest_install_paths_shell_profiles)
-
-    if [ $removed_count -eq 0 ]; then
-        echo "  No Manifest CLI entries found in shell profiles"
-    else
-        echo "  ✅ Cleaned $removed_count shell profile(s) — restart your terminal to apply"
-    fi
-
-    # Best-effort in-process unset (not user-visible after process exits).
-    # Legacy-cleanup exception: this loop matches the current MANIFEST_CLI
-    # namespace and the bare Manifest prefix used before namespacing, so
-    # uninstall sweeps stale exports from pre-namespace installs. New code
-    # must scope to MANIFEST_CLI; only uninstall paths broaden the pattern.
-    local var
-    for var in $(env | grep -E '^MANIFEST_(CLI_)?[A-Z_]+=' | cut -d'=' -f1); do
-        unset "$var"
-    done
-
-    return 0
+    manifest_install_paths_cleanup_profile_entries 1 1
 }
 
 # Main uninstall function

@@ -418,41 +418,12 @@ source_manifest_uninstall() {
 }
 
 # Strip MANIFEST_* exports and manifest-related source/PATH lines from shell
-# profiles. Inlined here so install-cli.sh has no dependency on the (deleted)
-# env-management module. Called once before installing to remove residue from
-# previous installs.
+# profiles. Delegates to the canonical impl in manifest-install-paths.sh so
+# the regex, tripwire, and backup pattern live in one place. Called once
+# before installing to remove residue from previous installs.
 cleanup_environment_variables() {
     print_subheader "🧹 Cleaning Up Manifest CLI Shell-Profile Entries"
-
-    local removed_count=0
-    local profile_regex
-    profile_regex="$(manifest_install_paths_profile_line_regex)"
-
-    local profile temp backup
-    while IFS= read -r profile; do
-        [ -n "$profile" ] || continue
-        [ -f "$profile" ] || continue
-        if ! manifest_install_paths_assert_destructive_target_safe "$profile" "profile-rewrite"; then
-            continue
-        fi
-        backup="${profile}.manifest-backup-$(date +%Y%m%d-%H%M%S)"
-        cp "$profile" "$backup"
-        temp=$(mktemp)
-        if grep -v -E "$profile_regex" "$profile" > "$temp"; then
-            if [ -s "$temp" ] && ! cmp -s "$profile" "$temp"; then
-                mv "$temp" "$profile"
-                print_success "✅ Cleaned: $profile (backup: $backup)"
-                removed_count=$((removed_count + 1))
-            else
-                rm -f "$temp" "$backup"
-            fi
-        else
-            rm -f "$temp" "$backup"
-        fi
-    done < <(manifest_install_paths_shell_profiles)
-    if [ $removed_count -eq 0 ]; then
-        print_status "  No prior Manifest entries found in shell profiles"
-    fi
+    manifest_install_paths_cleanup_profile_entries 0 0
 }
 
 # Clean up legacy installation locations

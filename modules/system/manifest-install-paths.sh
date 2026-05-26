@@ -299,7 +299,7 @@ manifest_install_paths_cleanup_profile_entries() {
         cp "$profile_file" "$backup_file"
         temp_file=$(mktemp "$(manifest_make_scratch_path system)/tmp.XXXXXXXX")
         grep -v -E "$profile_regex" "$profile_file" > "$temp_file" || true
-        if [ -s "$temp_file" ] && ! cmp -s "$profile_file" "$temp_file"; then
+        if ! cmp -s "$profile_file" "$temp_file"; then
             mv "$temp_file" "$profile_file"
             if [ "$quiet" != "1" ]; then
                 echo "  ✅ Cleaned: $profile_file (backup: $backup_file)"
