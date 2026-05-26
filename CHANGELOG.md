@@ -1,5 +1,10 @@
 # Changelog
 
+## [48.6.2] - 2026-05-26
+
+**Release Type:** Patch — no user-facing changes.
+
+
 ## [48.6.1] - 2026-05-26
 
 **Release Type:** Patch
@@ -106,13 +111,3 @@
 ## [48.3.1] - 2026-05-20
 
 **Release Type:** Patch — no user-facing changes.
-
-
-## [48.3.0] - 2026-05-20
-
-**Release Type:** Minor
-
-### Changes
-
-- Add GitHub Release publishing support
-- Add regression coverage for the changed CLI workflow
