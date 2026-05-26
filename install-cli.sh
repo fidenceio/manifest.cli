@@ -932,41 +932,27 @@ install_shell_completions() {
         return 0
     fi
 
-    local installed=0
-    local bash_target=""
-    local zsh_target=""
+    # install-cli.sh owns user-writable locations only. Homebrew-managed
+    # directories (e.g. $(brew --prefix)/etc/bash_completion.d) belong to the
+    # formula; writing there from here clobbers brew's own symlinks and breaks
+    # the next `brew upgrade`. The Homebrew install path therefore skips this
+    # function entirely — see formula/manifest.rb for the brew-side install.
+    local bash_target="${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion/completions/manifest"
+    local zsh_dir="$HOME/.zsh/completions"
+    local zsh_target="$zsh_dir/_manifest"
 
-    if command_exists brew; then
-        local brew_prefix
-        brew_prefix="$(brew --prefix 2>/dev/null || true)"
-        if [ -n "$brew_prefix" ]; then
-            bash_target="$brew_prefix/etc/bash_completion.d/manifest"
-            zsh_target="$brew_prefix/share/zsh/site-functions/_manifest"
-        fi
-    fi
+    mkdir -p "$(dirname "$bash_target")"
+    ln -sf "$source_dir/manifest.bash" "$bash_target"
+    print_success "✅ Bash completion installed: $bash_target"
 
-    if [ -n "$bash_target" ]; then
-        mkdir -p "$(dirname "$bash_target")"
-        ln -sf "$source_dir/manifest.bash" "$bash_target"
-        print_success "✅ Bash completion installed: $bash_target"
-        installed=$((installed + 1))
-    fi
+    mkdir -p "$zsh_dir"
+    ln -sf "$source_dir/_manifest" "$zsh_target"
+    print_success "✅ Zsh completion installed: $zsh_target"
 
-    if [ -n "$zsh_target" ]; then
-        mkdir -p "$(dirname "$zsh_target")"
-        ln -sf "$source_dir/_manifest" "$zsh_target"
-        print_success "✅ Zsh completion installed: $zsh_target"
-        installed=$((installed + 1))
-    fi
-
-    if [ "$installed" -eq 0 ]; then
-        print_warning "⚠️  No standard completion directory detected"
-        print_warning "   Bash: source $source_dir/manifest.bash"
-        print_warning "   Zsh:  add $source_dir to fpath and run compinit"
-    else
-        print_status "IDE integrated terminals pick these up through their login shell."
-    fi
-
+    print_status "Bash picks this up automatically when bash-completion is enabled."
+    print_status "For Zsh, ensure your ~/.zshrc loads the directory:"
+    print_status "  fpath+=$zsh_dir"
+    print_status "  autoload -Uz compinit && compinit"
     echo ""
 }
 
@@ -1579,7 +1565,10 @@ EOF
 
         if install_via_homebrew; then
             create_configuration
-            install_shell_completions
+            # Shell completions are owned by the Homebrew formula
+            # (bash_completion.install / zsh_completion.install). Installing
+            # them again here would clobber brew's symlinks and break the next
+            # `brew upgrade`. Only the manual path calls install_shell_completions.
             install_ide_command_catalog
             install_git_hooks
             local brew_manifest="$(brew --prefix)/bin/manifest"
