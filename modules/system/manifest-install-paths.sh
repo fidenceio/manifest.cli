@@ -50,6 +50,36 @@ manifest_install_paths_legacy_install_dir() {
     echo "/usr/local/share/manifest-cli"
 }
 
+manifest_install_paths_runtime_root() {
+    echo "${MANIFEST_CLI_INSTALL_LOCATION:-$HOME/.manifest-cli}/runtime"
+}
+
+manifest_install_paths_current_symlink() {
+    echo "${MANIFEST_CLI_INSTALL_LOCATION:-$HOME/.manifest-cli}/current"
+}
+
+# Echo the versioned install directory for a given version. The caller may
+# pass either "1.2.3" or "v1.2.3"; the helper normalizes to ensure the
+# returned path always has a single leading 'v'. Never trust the caller.
+manifest_install_paths_versioned_dir() {
+    local version="$1"
+    [ -n "$version" ] || return 1
+    case "$version" in
+        v*) ;;
+        *) version="v$version" ;;
+    esac
+    echo "$(manifest_install_paths_runtime_root)/${version}"
+}
+
+# Subdirectories under the install root that hold user state and must never
+# be touched by an upgrade swap. Returned one-per-line so callers can iterate
+# without depending on bash arrays.
+manifest_install_paths_preserved_subdirs() {
+    echo "logs"
+    echo "audit"
+    echo "ide"
+}
+
 manifest_install_paths_install_dirs() {
     # Dedupe so the artifact list shown by uninstall/preview never repeats a
     # path (e.g. when MANIFEST_CLI_INSTALL_LOCATION points at $HOME/.manifest-cli,
@@ -232,4 +262,73 @@ manifest_install_paths_assert_destructive_brew_safe() {
 # MANIFEST_CLI namespace.
 manifest_install_paths_profile_line_regex() {
     echo '^[[:space:]]*(export[[:space:]]+MANIFEST_[A-Z_]+=|export[[:space:]]+PATH=.*\.manifest-cli|export[[:space:]]+PATH=.*\.local/bin.*PATH|(\.|source)[[:space:]]+.*manifest)'
+}
+
+# Canonical implementation of the shell-profile sweep. Both install-cli.sh
+# and modules/system/manifest-uninstall.sh delegate here so the regex,
+# tripwire, backup-naming, and cmp-then-mv pattern have a single home.
+#
+# Arguments:
+#   quiet=0|1     when 1, suppress the per-profile "Cleaned" line and the
+#                 "No entries found" summary (uninstall caller wants the
+#                 echoes; install caller prints its own banner)
+#   unset_env=0|1 when 1, additionally unset MANIFEST_-prefixed env vars in this
+#                 process (uninstall semantics; legacy-prefix sweep). When
+#                 0, leave the process env alone (install semantics — the
+#                 installer relies on these vars during its own run).
+#
+# Callers should print their own banner (this function does not). Emits
+# plain `echo` output for the per-profile lines so it has zero dependency
+# on the print_* helpers defined in install-cli.sh.
+manifest_install_paths_cleanup_profile_entries() {
+    local quiet="${1:-0}"
+    local unset_env="${2:-0}"
+
+    local removed_count=0
+    local profile_regex
+    profile_regex="$(manifest_install_paths_profile_line_regex)"
+
+    local profile_file backup_file temp_file
+    while IFS= read -r profile_file; do
+        [ -n "$profile_file" ] || continue
+        [ -f "$profile_file" ] || continue
+        if ! manifest_install_paths_assert_destructive_target_safe "$profile_file" "profile-rewrite"; then
+            continue
+        fi
+        backup_file="${profile_file}.manifest-backup-$(date +%Y%m%d-%H%M%S)"
+        cp "$profile_file" "$backup_file"
+        temp_file=$(mktemp "$(manifest_make_scratch_path system)/tmp.XXXXXXXX")
+        grep -v -E "$profile_regex" "$profile_file" > "$temp_file" || true
+        if [ -s "$temp_file" ] && ! cmp -s "$profile_file" "$temp_file"; then
+            mv "$temp_file" "$profile_file"
+            if [ "$quiet" != "1" ]; then
+                echo "  ✅ Cleaned: $profile_file (backup: $backup_file)"
+            fi
+            removed_count=$((removed_count + 1))
+        else
+            rm -f "$temp_file" "$backup_file"
+        fi
+    done < <(manifest_install_paths_shell_profiles)
+
+    if [ "$quiet" != "1" ]; then
+        if [ $removed_count -eq 0 ]; then
+            echo "  No Manifest CLI entries found in shell profiles"
+        else
+            echo "  ✅ Cleaned $removed_count shell profile(s) — restart your terminal to apply"
+        fi
+    fi
+
+    # Best-effort in-process unset (uninstall semantics; legacy-prefix sweep).
+    # Legacy-cleanup exception: matches both the current MANIFEST_CLI
+    # namespace and the bare Manifest prefix used before namespacing. New
+    # code must scope to MANIFEST_CLI; only uninstall paths broaden the
+    # pattern.
+    if [ "$unset_env" = "1" ]; then
+        local var
+        for var in $(env | grep -E '^MANIFEST_(CLI_)?[A-Z_]+=' | cut -d'=' -f1); do
+            unset "$var"
+        done
+    fi
+
+    return 0
 }

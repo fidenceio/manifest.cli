@@ -132,3 +132,131 @@ _files_with() {
     [ "$before" = "$after" ]
     [ "$before" = "1" ]
 }
+
+# ----- New runtime path helpers (Phase 1 of §5.7) -------------------------
+
+@test "runtime_root resolves under HOME by default" {
+    source "$TEST_REPO_ROOT/modules/system/manifest-install-paths.sh"
+    unset MANIFEST_CLI_INSTALL_LOCATION
+    [ "$(manifest_install_paths_runtime_root)" = "$HOME/.manifest-cli/runtime" ]
+}
+
+@test "runtime_root honours MANIFEST_CLI_INSTALL_LOCATION override" {
+    source "$TEST_REPO_ROOT/modules/system/manifest-install-paths.sh"
+    MANIFEST_CLI_INSTALL_LOCATION="/opt/manifest-cli-alt" \
+        run -0 manifest_install_paths_runtime_root
+    [ "$output" = "/opt/manifest-cli-alt/runtime" ]
+}
+
+@test "current_symlink resolves under HOME by default" {
+    source "$TEST_REPO_ROOT/modules/system/manifest-install-paths.sh"
+    unset MANIFEST_CLI_INSTALL_LOCATION
+    [ "$(manifest_install_paths_current_symlink)" = "$HOME/.manifest-cli/current" ]
+}
+
+@test "current_symlink honours MANIFEST_CLI_INSTALL_LOCATION override" {
+    source "$TEST_REPO_ROOT/modules/system/manifest-install-paths.sh"
+    MANIFEST_CLI_INSTALL_LOCATION="/opt/manifest-cli-alt" \
+        run -0 manifest_install_paths_current_symlink
+    [ "$output" = "/opt/manifest-cli-alt/current" ]
+}
+
+@test "versioned_dir prefixes 'v' when caller omits it" {
+    source "$TEST_REPO_ROOT/modules/system/manifest-install-paths.sh"
+    unset MANIFEST_CLI_INSTALL_LOCATION
+    [ "$(manifest_install_paths_versioned_dir 2.5.0)" = "$HOME/.manifest-cli/runtime/v2.5.0" ]
+}
+
+@test "versioned_dir does not double-prefix when caller passes leading v" {
+    source "$TEST_REPO_ROOT/modules/system/manifest-install-paths.sh"
+    unset MANIFEST_CLI_INSTALL_LOCATION
+    [ "$(manifest_install_paths_versioned_dir v2.5.0)" = "$HOME/.manifest-cli/runtime/v2.5.0" ]
+}
+
+@test "versioned_dir fails when version is empty" {
+    source "$TEST_REPO_ROOT/modules/system/manifest-install-paths.sh"
+    run manifest_install_paths_versioned_dir ""
+    [ "$status" -ne 0 ]
+}
+
+@test "preserved_subdirs lists logs, audit, ide one-per-line" {
+    source "$TEST_REPO_ROOT/modules/system/manifest-install-paths.sh"
+    local out
+    out="$(manifest_install_paths_preserved_subdirs)"
+    [ "$(echo "$out" | wc -l | tr -d ' ')" = "3" ]
+    echo "$out" | grep -qx 'logs'
+    echo "$out" | grep -qx 'audit'
+    echo "$out" | grep -qx 'ide'
+}
+
+# ----- Canonical cleanup_profile_entries (Phase 1 of §5.7) ----------------
+
+# Sandbox HOME under BATS_TEST_TMPDIR so the destructive tripwire allows the
+# profile rewrite and the test never reaches into the developer's real home.
+_setup_seeded_profile_home() {
+    SANDBOX_HOME="$BATS_TEST_TMPDIR/sandbox-home"
+    mkdir -p "$SANDBOX_HOME"
+    HOME="$SANDBOX_HOME"
+    cat > "$SANDBOX_HOME/.zshrc" <<'EOF'
+# user content above
+alias ll='ls -la'
+export MANIFEST_CLI_FAKE=oops
+export PATH="$HOME/.manifest-cli/bin:$PATH"
+# user content below
+EOF
+}
+
+@test "cleanup_profile_entries removes seeded MANIFEST entry and writes exactly one backup" {
+    source "$TEST_REPO_ROOT/modules/system/manifest-install-paths.sh"
+    _setup_seeded_profile_home
+    # Restrict scan to the seeded profile only.
+    manifest_install_paths_shell_profiles() { echo "$SANDBOX_HOME/.zshrc"; }
+    run -0 manifest_install_paths_cleanup_profile_entries 0 0
+    # Seeded MANIFEST line must be gone, unrelated content preserved.
+    ! grep -q 'MANIFEST_CLI_FAKE' "$SANDBOX_HOME/.zshrc"
+    grep -q "alias ll='ls -la'" "$SANDBOX_HOME/.zshrc"
+    # Exactly one backup written for this profile.
+    local backups
+    backups=$(ls "$SANDBOX_HOME"/.zshrc.manifest-backup-* 2>/dev/null | wc -l | tr -d ' ')
+    [ "$backups" = "1" ]
+}
+
+@test "cleanup_profile_entries refuses to operate outside BATS_TEST_TMPDIR (tripwire armed)" {
+    source "$TEST_REPO_ROOT/modules/system/manifest-install-paths.sh"
+    # Seed a profile-shaped file OUTSIDE BATS_TEST_TMPDIR.
+    local decoy_dir="/tmp/manifest-pathmod-tripwire.$$"
+    rm -rf "$decoy_dir" 2>/dev/null || true
+    mkdir -p "$decoy_dir"
+    local decoy="$decoy_dir/fake-zshrc"
+    cat > "$decoy" <<'EOF'
+export MANIFEST_CLI_FAKE=oops
+alias gs='git status'
+EOF
+    local original_sum
+    original_sum="$(shasum "$decoy" | awk '{print $1}')"
+    manifest_install_paths_shell_profiles() { echo "$decoy"; }
+    run manifest_install_paths_cleanup_profile_entries 0 0
+    # Tripwire must skip the rewrite; file untouched, no backup written.
+    [ -f "$decoy" ]
+    [ "$(shasum "$decoy" | awk '{print $1}')" = "$original_sum" ]
+    ! ls "$decoy".manifest-backup-* >/dev/null 2>&1
+    rm -rf "$decoy_dir"
+}
+
+@test "cleanup_profile_entries with unset_env=1 unsets MANIFEST-prefixed vars in-process" {
+    source "$TEST_REPO_ROOT/modules/system/manifest-install-paths.sh"
+    _setup_seeded_profile_home
+    manifest_install_paths_shell_profiles() { echo "$SANDBOX_HOME/.zshrc"; }
+    export MANIFEST_CLI_TEST_SENTINEL=1
+    manifest_install_paths_cleanup_profile_entries 1 1
+    [ -z "${MANIFEST_CLI_TEST_SENTINEL:-}" ]
+}
+
+@test "cleanup_profile_entries with unset_env=0 leaves MANIFEST-prefixed vars in-process" {
+    source "$TEST_REPO_ROOT/modules/system/manifest-install-paths.sh"
+    _setup_seeded_profile_home
+    manifest_install_paths_shell_profiles() { echo "$SANDBOX_HOME/.zshrc"; }
+    export MANIFEST_CLI_TEST_SENTINEL=1
+    manifest_install_paths_cleanup_profile_entries 0 0
+    [ "${MANIFEST_CLI_TEST_SENTINEL:-}" = "1" ]
+}
