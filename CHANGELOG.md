@@ -1,5 +1,10 @@
 # Changelog
 
+## [49.0.1] - 2026-05-26
+
+**Release Type:** Patch — no user-facing changes.
+
+
 ## [49.0.0] - 2026-05-26
 
 **Release Type:** Major
@@ -105,14 +110,3 @@
 ## [48.4.0] - 2026-05-20
 
 **Release Type:** Minor — no user-facing changes.
-
-
-## [48.3.2] - 2026-05-20
-
-**Release Type:** Patch
-
-### Changes
-
-- Stub brew in homebrew_tap_refresh.bats setup
-- Recreate CLI tracker — drop closed/stale items, renumber sections
-- Add §5.5 — e2e coverage for brew-managed tap dir
