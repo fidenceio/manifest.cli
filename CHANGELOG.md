@@ -1,5 +1,15 @@
 # Changelog
 
+## [49.0.0] - 2026-05-26
+
+**Release Type:** Major
+
+### Changes
+
+- Remove 45 dead functions across 11 modules
+- Draft safe-by-default migration note in user guide (§4.3)
+
+
 ## [48.6.2] - 2026-05-26
 
 **Release Type:** Patch — no user-facing changes.
@@ -106,8 +116,3 @@
 - Stub brew in homebrew_tap_refresh.bats setup
 - Recreate CLI tracker — drop closed/stale items, renumber sections
 - Add §5.5 — e2e coverage for brew-managed tap dir
-
-
-## [48.3.1] - 2026-05-20
-
-**Release Type:** Patch — no user-facing changes.
