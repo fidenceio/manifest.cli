@@ -17,10 +17,6 @@ Open work for the Manifest CLI repo.
 
 The hardening-pass triage organized open work around *"does absence of this item allow harm at fleet-of-dozens scale?"*
 
-### T1 — release-blocking (1)
-
-- §5.7 Atomic `install-cli.sh` upgrades
-
 ### T2 — contract integrity (7)
 
 - §1.1 Halt clearly when fleet release requires PR review first
@@ -234,12 +230,6 @@ The local release-notes provider hook and recipe inspection surfaces exist. Rema
   - **Why:** when a ship leaves the install or repo in an unexpected state (observed 2026-05-21: `$HOME/.manifest-cli/` payload empty after an interrupted run, with no record of which step ran or where the failure occurred), diagnosis falls back to guesswork from `git log` + `brew Cellar` timestamps. A timestamped per-run log would convert these incidents from "best-guess narrative" to "read the file." Note: §5.6 is *diagnostic* logging (what happened, for debug); structured audit events (who-authorized-what-when, for compliance) are §5.8.
   - **Deliverable:** ship writes a per-run log to `$HOME/.manifest-cli/logs/ship-<ts>.log` capturing each step boundary, exit status, and any captured stderr; resume reads the prior log when reporting "picking up from step X." Add log rotation (keep last N runs) tied to a TTL marker. The log path must NOT fall under [`manifest_install_paths_cache_dirs`](../modules/system/manifest-install-paths.sh) — diagnostic logs are not transient and must not be swept.
   - **Anchor:** [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh), [`modules/system/manifest-install-paths.sh`](../modules/system/manifest-install-paths.sh), [`modules/system/manifest-runtime-cleanup.sh`](../modules/system/manifest-runtime-cleanup.sh).
-
-- **5.7 Make `install-cli.sh` upgrades atomic.**
-  - **Status:** T1.
-  - **Why:** the current upgrade flow runs `cleanup_old_installation` (rm -rf the install dir at [`install-cli.sh:458`](../install-cli.sh)) *before* `copy_cli_files` ([`install-cli.sh:504`](../install-cli.sh)). An interruption between the two leaves `$HOME/.manifest-cli/` wiped — every CLI artifact gone, no rollback. Brew avoids this by writing the new version to a versioned Cellar dir and only swapping symlinks on success; `install-cli.sh` has no equivalent. Headless/CI/Docker hosts that depend on `install-cli.sh` (rather than brew) are exactly the environments where SIGTERM/OOM/CI-timeout mid-upgrade is most likely.
-  - **Deliverable:** rewrite the install/upgrade flow to (a) populate a sibling staging dir alongside the install dir, (b) verify the staged tree (presence of entry points + module manifests), (c) swap dirs by `mv` rename (the wrapper at `$MANIFEST_CLI_BIN_DIR/manifest` is one file and can be swapped last for a brief atomic switch), (d) remove the prior install only on success. Add a fault-injection regression that kills the install partway through copy and asserts the prior install remains intact and the wrapper still runs.
-  - **Anchor:** [`install-cli.sh`](../install-cli.sh) (`cleanup_old_installation`, `copy_cli_files`), [`modules/system/manifest-uninstall.sh`](../modules/system/manifest-uninstall.sh) (`uninstall_manifest`).
 
 - **5.8 CLI apply-event audit log.**
   - **Status:** T3.
