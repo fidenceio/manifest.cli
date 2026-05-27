@@ -17,13 +17,14 @@ Open work for the Manifest CLI repo.
 
 The hardening-pass triage organized open work around *"does absence of this item allow harm at fleet-of-dozens scale?"*
 
-### T2 — contract integrity (7)
+### T2 — contract integrity (8)
 
 - §1.1 Halt clearly when fleet release requires PR review first
 - §1.7 Single-flight lock for fleet apply
 - §2.1 Shared apply-guard and replay-command helpers
 - §2.2 Shared plan rendering and plan fingerprints
 - §2.3 Execution-policy edge audit
+- §2.8 Reconcile remaining `validation:` knobs with their gates
 - §5.5 Pre-tag ship steps re-entrancy audit
 - §5.6 Per-run ship logs for forensic replay
 
@@ -115,6 +116,12 @@ The base contract is already live: mutating commands preview by default, `--dry-
   - **Why:** the Cloud side has [§3.5 no-plaintext logging](../../fidenceio.manifest.cloud/docs/TRACKER.md#3-security--platform-m3-gate); the CLI has no parallel audit. Enterprise customers will assume any `GITHUB_TOKEN`, `HOMEBREW_GITHUB_API_TOKEN`, bearer token, or other env-var-supplied secret cannot appear in stdout, stderr, `--verbose` output, `manifest doctor` output, or any captured log. Today this is asserted by convention, not by test — any single `printf "$value"` in an error path could leak.
   - **Deliverable:** sweep every output call site (printf/echo/error helpers/log helpers) for direct interpolation of env-sourced or config-sourced values that could be tokens or secrets; route through a shared redaction helper that recognizes token-shaped values, bearer-prefix tokens, secret-key patterns, and known env-var names. Add a regression that seeds fake-token-shaped values into the relevant env vars (`GITHUB_TOKEN`, `HOMEBREW_GITHUB_API_TOKEN`, etc.), exercises representative happy and error paths across ship/fleet/refresh/doctor, and asserts the fake tokens appear nowhere in captured stdout/stderr or per-run ship logs (see §5.6) or audit log (§5.8).
   - **Anchor:** [`modules/core/`](../modules/core/), [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh), [`modules/system/`](../modules/system/).
+
+- **2.8 Reconcile the remaining `validation:` knobs with their (missing) gates.**
+  - **Status:** T2.
+  - **Why:** the 2026-05-26 audit found the `validation:` block was mostly decorative. `require_expected_branch` and `allow_branch_operations` were fully inert and have been **removed** (no branch-workflow enforcement — that is left to the user). The other three knobs are still suspect: `require_clean_status`'s behavior is hardcoded-on in the apply path ([`modules/fleet/manifest-fleet-apply.sh`](../modules/fleet/manifest-fleet-apply.sh) ~197) and flipping the flag changes nothing; `enforce_dependencies` and `strict` are reachable via `get_fleet_setting` short keys but no apply/preflight gate consumer was found. Config that advertises a guarantee the tool doesn't keep is a contract hole.
+  - **Deliverable:** for each of `require_clean_status`, `enforce_dependencies`, `strict`, either wire it to a real gate (flag actually changes apply/preflight behavior, covered by a bats test) or remove it from the config + default heredoc — following the `require_expected_branch` removal precedent. Document the resulting honest contract.
+  - **Anchor:** [`modules/fleet/manifest-fleet-apply.sh`](../modules/fleet/manifest-fleet-apply.sh), [`modules/fleet/manifest-fleet-config.sh`](../modules/fleet/manifest-fleet-config.sh), [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
 
 ---
 
