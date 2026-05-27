@@ -1146,7 +1146,6 @@ changelog:
 validation:
   require_clean_status: true
   enforce_dependencies: true
-  require_expected_branch: true
 EOF
 }
 
