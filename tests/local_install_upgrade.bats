@@ -36,11 +36,11 @@ teardown() {
 }
 
 @test "local upgrade surfaces install command when brew has no manifest installed" {
-    # brew is on PATH (as a function), but `brew list --formula manifest` fails.
+    # brew is on PATH (as a function), but no manifest formula is installed:
+    # every `brew list` form fails, matching manifest_install_paths_is_brew_managed's
+    # probe (the canonical provenance predicate the orchestrator now calls).
     brew() {
-        if [[ "$1" == "list" && "$2" == "--formula" && "$3" == "manifest" ]]; then
-            return 1
-        fi
+        [[ "$1" == "list" ]] && return 1
         return 0
     }
 
@@ -57,7 +57,7 @@ teardown() {
 @test "local upgrade reports success when brew upgrade manifest succeeds" {
     brew() {
         case "$1 ${2:-} ${3:-}" in
-            "list --formula manifest") return 0 ;;
+            "list "*) return 0 ;;  # any `brew list <formula>` → manifest is brew-managed
             "update "*|"update") return 0 ;;
             "upgrade manifest"*) return 0 ;;
             *) return 0 ;;
@@ -83,7 +83,7 @@ teardown() {
 
     brew() {
         case "$1 ${2:-} ${3:-}" in
-            "list --formula manifest") return 0 ;;
+            "list "*) return 0 ;;  # any `brew list <formula>` → manifest is brew-managed
             "update "*|"update") return 0 ;;
             "upgrade manifest"*) return 0 ;;
             *) return 0 ;;
@@ -106,7 +106,7 @@ teardown() {
 
     brew() {
         case "$1 ${2:-} ${3:-}" in
-            "list --formula manifest") return 0 ;;
+            "list "*) return 0 ;;  # any `brew list <formula>` → manifest is brew-managed
             "update "*|"update") return 0 ;;
             "upgrade manifest"*) return 1 ;;
             *) return 0 ;;
@@ -123,7 +123,7 @@ teardown() {
 @test "local upgrade warns when brew has manifest installed but upgrade fails" {
     brew() {
         case "$1 ${2:-} ${3:-}" in
-            "list --formula manifest") return 0 ;;
+            "list "*) return 0 ;;  # any `brew list <formula>` → manifest is brew-managed
             "update "*|"update") return 0 ;;
             "upgrade manifest"*) return 1 ;;
             *) return 0 ;;

@@ -1388,6 +1388,32 @@ install_git_hooks() {
 # Legacy Manual Install Cleanup
 # =============================================================================
 
+# Remove a Homebrew-managed Manifest so a source-tree install becomes the single
+# channel. The mirror image of cleanup_homebrew_install (which removes the manual
+# footprint before a brew install): a channel switch must clean up the channel it
+# leaves, in BOTH directions, so we never strand two installs fighting over PATH.
+# Only invoked on an explicit --manual switch when a brew-managed copy is present.
+# Honors the destructive-brew sandbox tripwire; best-effort (warns, never aborts
+# the install) — same contract as the uninstall module's brew removal.
+remove_brew_managed_install() {
+    manifest_install_paths_is_brew_managed || return 0
+
+    print_subheader "🧹 Removing Homebrew-managed Manifest (switching to the source channel)"
+
+    if ! manifest_install_paths_assert_destructive_brew_safe "brew uninstall manifest"; then
+        print_warning "   brew uninstall skipped by sandbox tripwire"
+        return 0
+    fi
+
+    local brew_formula
+    brew_formula="$(manifest_install_paths_homebrew_formula)"
+    if brew uninstall "$brew_formula" 2>/dev/null || brew uninstall manifest 2>/dev/null; then
+        print_success "✅ Removed Homebrew-managed Manifest"
+    else
+        print_warning "   Could not remove the Homebrew copy automatically — run: brew uninstall manifest"
+    fi
+}
+
 # Cleanup step used before Homebrew install
 cleanup_homebrew_install() {
     local user_bin state_dir legacy_dir
@@ -1450,7 +1476,7 @@ install_via_homebrew() {
     fi
     print_success "✅ Tapped $brew_tap"
 
-    if brew list "$brew_formula" &>/dev/null; then
+    if manifest_install_paths_is_brew_managed; then
         print_status "Manifest CLI already installed via Homebrew, upgrading..."
         brew upgrade "$brew_formula" 2>/dev/null || true
     else
@@ -1476,22 +1502,32 @@ main() {
                 install_mode="manual"
                 shift
                 ;;
+            --brew|--homebrew)
+                install_mode="brew"
+                shift
+                ;;
             -h|--help)
                 cat <<'EOF'
-Usage: ./install-cli.sh [--manual]
+Usage: ./install-cli.sh [--manual | --brew]
 
-Installs the Manifest CLI from the current source tree.
+Installs the Manifest CLI.
 
 Options:
-  --manual, --no-brew   Skip Homebrew routing and install directly
-                        from this source tree. Use this to test
-                        local changes that have not been shipped to
-                        the Homebrew tap yet.
+  --manual, --no-brew   Force a source-tree install from this checkout
+                        (Homebrew routing skipped); removes an existing
+                        Homebrew-managed copy so source is the only channel.
+                        Use this to test changes not yet shipped to the tap.
+  --brew, --homebrew    Force a Homebrew install of the SHIPPED formula
+                        ('brew install fidenceio/tap/manifest'), removing an
+                        existing manual install so brew is the only channel.
   -h, --help            Show this help.
 
-Default behavior: on macOS with Homebrew installed, the script
-installs via 'brew install fidenceio/tap/manifest' (which uses the
-SHIPPED formula, not local code). Use --manual to bypass.
+Default behavior (no flag): Manifest stays on the channel it is already
+installed through — a Homebrew install upgrades via Homebrew, a manual
+install re-installs from source. Only a machine with no existing install
+prefers Homebrew (when available). This is why a bare re-run never
+silently switches your install channel; pass --manual or --brew to switch
+deliberately.
 EOF
                 exit 0
                 ;;
@@ -1512,6 +1548,9 @@ EOF
     if [ "$install_mode" = "manual" ]; then
         print_status "📦 --manual specified — installing directly from this source tree (Homebrew routing skipped)"
         echo
+    elif [ "$install_mode" = "brew" ]; then
+        print_status "🍺 --brew specified — installing the shipped Homebrew formula"
+        echo
     fi
 
     print_status "Welcome to the Manifest CLI installation!"
@@ -1522,8 +1561,44 @@ EOF
     # System validation
     get_system_info
 
-    # On macOS, offer to install Homebrew if not present (skipped under --manual)
-    if [ "$install_mode" != "manual" ] && [[ "$OSTYPE" == "darwin"* ]] && ! command_exists brew; then
+    # --- Resolve install channel (provenance-aware) --------------------------
+    # The channel is decided by how Manifest is *currently* installed, not by
+    # whether brew merely exists on this machine. Conflating those is what let a
+    # bare re-run silently convert a --manual source install onto the shipped
+    # formula. manifest_install_paths_is_brew_managed is the single source of
+    # truth, shared with uninstall, the doctor reinstall, and the post-ship
+    # self-upgrade — so none of them can disagree about "are we on brew".
+    #   --manual : force a source-tree install
+    #   --brew   : force a Homebrew install
+    #   (auto)   : stay on the channel already in use; only a machine with no
+    #              existing install prefers Homebrew (when it is available).
+    local already_brew=false already_manual=false
+    manifest_install_paths_is_brew_managed   && already_brew=true
+    manifest_install_paths_is_manual_install && already_manual=true
+
+    local want_brew=false
+    case "$install_mode" in
+        manual) want_brew=false ;;
+        brew)   want_brew=true  ;;
+        auto)
+            if [ "$already_brew" = true ]; then
+                want_brew=true        # already brew-managed → upgrade via brew
+            elif [ "$already_manual" = true ]; then
+                want_brew=false       # already a source install → stay on source
+            else
+                want_brew=true        # fresh machine → prefer brew (offered below)
+            fi
+            ;;
+    esac
+
+    if [ "$already_brew" = true ] && [ "$already_manual" = true ]; then
+        print_status "ℹ️  Found BOTH a Homebrew-managed and a manual install of Manifest; converging to a single channel."
+    fi
+
+    # On macOS, offer to install Homebrew when we intend to use it but it is
+    # missing. Gated on the resolved channel (not bare brew-presence), so a user
+    # already on the source channel is never nagged to adopt Homebrew.
+    if [ "$want_brew" = true ] && [[ "$OSTYPE" == "darwin"* ]] && ! command_exists brew; then
         print_status "🍺 macOS detected but Homebrew is not installed"
         print_status "Homebrew is the recommended way to install, upgrade, manage, and cleanly remove Manifest CLI on macOS. Plus, it offers thousands of other packages."
         echo ""
@@ -1550,17 +1625,33 @@ EOF
         echo ""
     fi
 
+    # If we intended to use brew but it is still unavailable (offer declined, or
+    # a non-macOS box), reconcile rather than fall through inconsistently: an
+    # explicit --brew is a hard error (never a silent downgrade to source); a
+    # bare/auto run quietly uses the source channel instead.
+    if [ "$want_brew" = true ] && ! command_exists brew; then
+        if [ "$install_mode" = "brew" ]; then
+            print_error "❌ --brew requested but Homebrew is not available."
+            print_error "   Install Homebrew first, or re-run without --brew for a source install."
+            exit 2
+        fi
+        want_brew=false
+    fi
+
     # Docker install check comes after Homebrew so macOS has one clean path:
     # Homebrew first, Docker Desktop second, validation third.
     ensure_docker_installed
     validate_system
 
-    # Route through Homebrew when available, unless --manual forces source-tree install
-    if [ "$install_mode" != "manual" ] && command_exists brew; then
-        print_status "🍺 Homebrew detected — installing via Homebrew"
+    # Route to the resolved channel (see the provenance resolution above).
+    if [ "$want_brew" = true ]; then
+        print_status "🍺 Installing via Homebrew"
         echo ""
 
-        # Remove any previous manual installation before Homebrew install
+        # Converge on a single channel: remove any prior manual footprint before
+        # Homebrew takes over. Only reached when already brew-managed (no-op), a
+        # fresh machine (nothing to remove), or an explicit --brew switch (the
+        # cleanup is the intended effect).
         cleanup_homebrew_install
 
         if install_via_homebrew; then
@@ -1586,11 +1677,22 @@ EOF
             exit 1
         fi
     else
-        # Manual installation: either --manual was requested, or Homebrew isn't available.
+        # Source-tree install: --manual, an existing source install on a bare
+        # run, or no Homebrew available.
         if [ "$install_mode" = "manual" ]; then
             print_status "📦 Installing from this source tree (--manual specified — Homebrew routing skipped)"
+        elif [ "$already_manual" = true ]; then
+            print_status "📦 Existing source install detected — re-installing from this source tree (use --brew to switch to Homebrew)"
         else
-            print_status "Homebrew not found — using manual installation"
+            print_status "📦 Homebrew not available — installing from this source tree"
+        fi
+        # Converge on a single channel: a Homebrew-managed copy would otherwise
+        # shadow (or be shadowed by) this source build depending on PATH order.
+        # Remove it now so the switch to source is clean — the mirror of the brew
+        # branch's cleanup_homebrew_install. Reached only on an explicit --manual
+        # (a bare auto run with a brew copy present routes to the brew branch).
+        if [ "$already_brew" = true ]; then
+            remove_brew_managed_install
         fi
         echo ""
 
