@@ -937,9 +937,12 @@ install_shell_completions() {
     # formula; writing there from here clobbers brew's own symlinks and breaks
     # the next `brew upgrade`. The Homebrew install path therefore skips this
     # function entirely — see formula/manifest.rb for the brew-side install.
-    local bash_target="${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion/completions/manifest"
-    local zsh_dir="$HOME/.zsh/completions"
-    local zsh_target="$zsh_dir/_manifest"
+    # Targets come from the canonical getter so the uninstaller sweeps exactly
+    # what we write here (bash first, zsh second — see install-paths).
+    local bash_target zsh_target
+    { IFS= read -r bash_target; IFS= read -r zsh_target; } < <(manifest_install_paths_user_completion_targets)
+    local zsh_dir
+    zsh_dir="$(dirname "$zsh_target")"
 
     mkdir -p "$(dirname "$bash_target")"
     ln -sf "$source_dir/manifest.bash" "$bash_target"

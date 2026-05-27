@@ -84,6 +84,24 @@ create_fake_install_artifacts() {
     ! grep -q "MANIFEST_CLI_TEST" "$HOME/.zshrc"
 }
 
+@test "uninstall removes manual shell-completion files (both channels swept)" {
+    create_fake_install_artifacts
+    # Manual-install completion files the installer writes — historically left
+    # behind on uninstall. They live under the sandbox HOME so removal is in-scope.
+    local bash_comp="$HOME/.local/share/bash-completion/completions/manifest"
+    local zsh_comp="$HOME/.zsh/completions/_manifest"
+    mkdir -p "$(dirname "$bash_comp")" "$(dirname "$zsh_comp")"
+    : > "$bash_comp"
+    : > "$zsh_comp"
+
+    run_manifest_from_plain_dir uninstall --force -y
+
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Manifest CLI uninstalled successfully"
+    [ ! -e "$bash_comp" ]
+    [ ! -e "$zsh_comp" ]
+}
+
 @test "uninstall ignores unrelated manifest executable on PATH" {
     create_fake_install_artifacts
     mkdir -p "$SCRATCH/other-bin"

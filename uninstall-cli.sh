@@ -53,7 +53,7 @@ Artifacts considered:
   - Config: ~/.manifestrc, ~/.manifest-cli.conf, ~/.config/manifest-cli
   - Data: \$TMPDIR/manifest-cli, /tmp/manifest-cli, and any plugin-declared
           dirs from <plugin>.data-dirs files under ~/.manifest-cloud/cli-plugins/
-  - Shell completions: brew bash/zsh completion targets
+  - Shell completions: manual (~/.local/share, ~/.zsh) and Homebrew bash/zsh targets
   - Shell-profile entries: MANIFEST_* exports, manifest-cli PATH adds,
     source/. lines referencing manifest, in zsh/bash/profile rc files
 EOF
@@ -213,7 +213,20 @@ found_profile_files() {
     done
 }
 
+# Completion files to remove. Delegates to the canonical getter (manual + brew +
+# legacy locations) when the install-paths module loaded, so the standalone
+# uninstaller removes manual completions too — not just brew's. Falls back to
+# brew-only for a partial checkout where the module is absent. Emits only files
+# that currently exist (regular file or symlink, incl. broken symlinks).
 brew_completion_targets() {
+    local t
+    if type manifest_install_paths_completion_targets >/dev/null 2>&1; then
+        while IFS= read -r t; do
+            [ -n "$t" ] || continue
+            if [ -e "$t" ] || [ -L "$t" ]; then echo "$t"; fi
+        done < <(manifest_install_paths_completion_targets)
+        return 0
+    fi
     command -v brew >/dev/null 2>&1 || return 0
     local p b z
     p="$(brew --prefix 2>/dev/null || true)"

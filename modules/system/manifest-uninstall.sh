@@ -106,6 +106,19 @@ find_cli_binaries() {
     printf '%s\n' "${binaries[@]}"
 }
 
+# Shell-completion files (manual + brew + legacy) that currently exist on disk.
+# Sweeping these is what makes uninstall remove "everything, brew or manual" —
+# the manual completion symlinks in particular were previously left behind.
+find_completion_files() {
+    local target
+    while IFS= read -r target; do
+        [ -n "$target" ] || continue
+        # -L catches a broken symlink too (manual completions are symlinks whose
+        # source tree may already be gone); -e catches regular files / live links.
+        if [ -e "$target" ] || [ -L "$target" ]; then echo "$target"; fi
+    done < <(manifest_install_paths_completion_targets)
+}
+
 _manifest_uninstall_print_artifact_plan() {
     local indent="${1:-  }"
     local install_locations=($(find_installation_locations))
@@ -256,6 +269,25 @@ remove_cli_binary() {
     fi
 }
 
+# Remove one shell-completion file/symlink. Same sandbox-guard contract as the
+# binary/dir removers: rc 3 (guard skip) is propagated, not treated as failure.
+remove_completion_file() {
+    local target="$1"
+    [ -e "$target" ] || [ -L "$target" ] || { echo "No completion file at: $target"; return 0; }
+    manifest_install_paths_assert_destructive_target_safe "$target" "rm completion"
+    case $? in
+        0) ;;
+        3) echo "⚠️  Skipping completion $target — sandbox guard; left untouched."; return 3 ;;
+        *) return 1 ;;
+    esac
+    if rm -f "$target"; then
+        echo "✅ Completion removed: $target"
+        return 0
+    fi
+    echo "❌ Failed to remove completion: $target"
+    return 1
+}
+
 # Function to clean up configuration files and data directories
 cleanup_config_files() {
     local skip_confirmations="${1:-false}"
@@ -334,13 +366,14 @@ uninstall_manifest() {
     # Find all installation locations
     local install_locations=($(find_installation_locations))
     local cli_binaries=($(find_cli_binaries))
+    local completion_files=($(find_completion_files))
     local homebrew_installed=false
     if is_homebrew_installed; then
         homebrew_installed=true
     fi
-    
+
     # Check if anything is installed
-    if [ ${#install_locations[@]} -eq 0 ] && [ ${#cli_binaries[@]} -eq 0 ] && [ "$homebrew_installed" = "false" ]; then
+    if [ ${#install_locations[@]} -eq 0 ] && [ ${#cli_binaries[@]} -eq 0 ] && [ ${#completion_files[@]} -eq 0 ] && [ "$homebrew_installed" = "false" ]; then
         echo "No Manifest CLI installation found"
         return 0
     fi
@@ -362,7 +395,10 @@ uninstall_manifest() {
     for binary in "${cli_binaries[@]}"; do
         echo "  🔧 $binary"
     done
-    
+    for completion in "${completion_files[@]}"; do
+        echo "  🧩 $completion (shell completion)"
+    done
+
     # Interactive confirmation unless forced
     if [ "$non_interactive" != "true" ] && [ "$skip_confirmations" != "true" ]; then
         echo ""
@@ -414,6 +450,13 @@ uninstall_manifest() {
     # Remove CLI binaries (same sandbox-skip handling).
     for binary in "${cli_binaries[@]}"; do
         _rc=0; remove_cli_binary "$binary" || _rc=$?
+        if [ "$_rc" -ne 0 ] && [ "$_rc" -ne 3 ]; then ((errors+=1)); fi
+    done
+
+    # Remove shell-completion files (manual + brew + legacy), same handling — so
+    # an uninstall leaves no completion symlinks behind on either channel.
+    for completion in "${completion_files[@]}"; do
+        _rc=0; remove_completion_file "$completion" || _rc=$?
         if [ "$_rc" -ne 0 ] && [ "$_rc" -ne 3 ]; then ((errors+=1)); fi
     done
     
