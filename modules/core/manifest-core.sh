@@ -1159,7 +1159,7 @@ EOF
             if command -v brew &>/dev/null; then
                 echo "Reinstalling via Homebrew..."
                 brew tap fidenceio/tap 2>/dev/null
-                if brew list fidenceio/tap/manifest &>/dev/null || brew list manifest &>/dev/null; then
+                if manifest_install_paths_is_brew_managed; then
                     brew reinstall fidenceio/tap/manifest || brew reinstall manifest
                 else
                     brew install fidenceio/tap/manifest || brew install manifest

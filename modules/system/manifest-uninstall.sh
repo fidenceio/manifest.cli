@@ -11,10 +11,11 @@
 # shellcheck source=manifest-install-paths.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/manifest-install-paths.sh"
 
-# Check if manifest was installed via Homebrew
+# Check if manifest was installed via Homebrew. Thin alias over the canonical
+# provenance predicate (install-paths is sourced above) so this module shares
+# the one definition with the installer, doctor reinstall, and self-upgrade.
 is_homebrew_installed() {
-    command -v brew &>/dev/null && \
-        (brew list "$(manifest_install_paths_homebrew_formula)" &>/dev/null || brew list manifest &>/dev/null)
+    manifest_install_paths_is_brew_managed
 }
 
 # Function to find all possible installation locations

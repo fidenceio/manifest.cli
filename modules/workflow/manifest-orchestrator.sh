@@ -314,7 +314,7 @@ manifest_ship_post_push_steps() {
     if [[ "$workflow_homebrew_status" == "success" ]]; then
         echo "🔄 Upgrading local Manifest CLI installation..."
         if command -v brew &>/dev/null; then
-            if ! brew list --formula manifest &>/dev/null; then
+            if ! manifest_install_paths_is_brew_managed; then
                 echo "⚠️  Local manifest is not installed via Homebrew — skipping upgrade"
                 echo "   Run: brew install fidenceio/tap/manifest"
                 _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="skipped_not_homebrew"

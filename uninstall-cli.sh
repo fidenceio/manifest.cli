@@ -225,6 +225,13 @@ brew_completion_targets() {
 }
 
 brew_package_present() {
+    # Delegate to the canonical provenance predicate when the install-paths
+    # module loaded; fall back to the inline check for a partial checkout where
+    # the module is absent (see the conditional source above).
+    if type manifest_install_paths_is_brew_managed >/dev/null 2>&1; then
+        manifest_install_paths_is_brew_managed
+        return $?
+    fi
     command -v brew >/dev/null 2>&1 || return 1
     brew list "$BREW_FORMULA" >/dev/null 2>&1 || brew list manifest >/dev/null 2>&1
 }
