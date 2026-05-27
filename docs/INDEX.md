@@ -24,9 +24,6 @@
 | Document | Description |
 | -------- | ----------- |
 | [Fleet Design Spec](FLEET_DESIGN_SPEC.md) | Polyrepo orchestration architecture |
-| [Bash 5 Runtime TODO](BASH_5_RUNTIME_TODO.md) | Active plan to enforce Bash 5+ across wrappers, subprocesses, and nested Manifest calls |
-| [Safe-by-Default Execution Notes](SAFE_BY_DEFAULT_EXECUTION_TODO.md) | Execution policy, recipe effects, and remaining hardening work |
-| [Improvement Tracker](IMPROVEMENT_TRACKER.md) | Active and completed engineering work queue |
 | [North Star](NORTH_STAR.md) | Strategic direction and 12-month priorities |
 | [Security Notes](SECURITY_ANALYSIS_REPORT.md) | Current security posture and historical audit pointer |
 
