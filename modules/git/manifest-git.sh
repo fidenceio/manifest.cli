@@ -224,6 +224,34 @@ bump_version() {
     return 0
 }
 
+# Notice (not a prompt): list brand-new untracked files that a following
+# `git add .` is about to sweep into the commit. Modifications to tracked
+# files are the expected payload and stay silent; a never-committed file
+# showing up in a release/refresh commit is the anomaly worth surfacing (see
+# the v3.0.2 audit-doc leak). Notice only, never blocks — consistent with the
+# notice-not-prompt consent model. A blanket "you have unstaged changes" prompt
+# would defeat the point of auto-commit, so we only call out the new files.
+#
+# ARGUMENTS:
+#   $1 - repo path (default ".") so callers using `git -C <path>` match.
+#   $2 - line prefix (default "   ") for alignment / per-repo labeling.
+manifest_notice_new_untracked_files() {
+    local repo="${1:-.}"
+    local prefix="${2:-   }"
+    local _new_files=() _nf
+    while IFS= read -r _nf; do
+        [[ -n "$_nf" ]] && _new_files+=("$_nf")
+    done < <(git -C "$repo" status --porcelain 2>/dev/null | sed -n 's/^?? //p')
+    [[ ${#_new_files[@]} -gt 0 ]] || return 0
+    local _nf_noun="files"
+    [[ ${#_new_files[@]} -eq 1 ]] && _nf_noun="file"
+    local _nf_joined
+    printf -v _nf_joined '%s, ' "${_new_files[@]}"
+    _nf_joined="${_nf_joined%, }"
+    echo "${prefix}Also committing ${#_new_files[@]} new $_nf_noun: $_nf_joined"
+}
+export -f manifest_notice_new_untracked_files
+
 commit_changes() {
     local message="$1"
     local timestamp="$2"
@@ -254,7 +282,10 @@ commit_changes() {
     fi
 
     echo "   Message: $message"
-    
+
+    # Surface any brand-new untracked files this commit is about to sweep in.
+    manifest_notice_new_untracked_files
+
     git add .
     local commit_ok=false
     if [[ -n "${MANIFEST_CLI_DOC_REVIEW_COMMIT_BODY:-}" ]]; then
