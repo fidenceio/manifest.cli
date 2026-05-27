@@ -209,12 +209,18 @@ manifest_install_paths_shell_profiles() {
 #
 # Every code path that destroys install footprint (rm -rf, rm -f, sudo rm,
 # brew uninstall, profile rewrite) must call this predicate before acting.
-# It refuses to proceed if the target looks like a real-system path while
-# the process is running inside bats (BATS_TEST_TMPDIR is set), so a test
-# that forgets to redirect HOME cannot wipe the real install footprint.
 #
-# To override (exceedingly rare — only when a legitimately-needed bats test
-# operates outside its sandbox), export MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1.
+# Always refuses obviously-catastrophic targets (empty, system roots, $HOME
+# itself). Beyond that it enforces SANDBOX CONFINEMENT: when running in a test
+# or sandbox context — under bats (BATS_TEST_TMPDIR set) OR a plain run whose
+# HOME is a temp dir (manifest_install_paths_home_looks_sandboxed) — destructive
+# ops must stay inside the sandbox tree. A target outside it is refused, so a
+# test (or a careless manual repro) cannot delete real-system files such as
+# /opt/homebrew/bin/manifest. That confinement refusal returns 3 ("sandbox
+# skip") — a distinct non-zero code callers may treat as a protective skip
+# rather than a hard failure; the catastrophic-target refusals above return 1.
+#
+# To override (exceedingly rare), export MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1.
 # A loud stderr warning is emitted in that case so it cannot be enabled silently.
 manifest_install_paths_assert_destructive_target_safe() {
     local path="$1"
@@ -235,34 +241,66 @@ manifest_install_paths_assert_destructive_target_safe() {
         return 1
     fi
 
+    local sandbox_root=""
     if [ -n "${BATS_TEST_TMPDIR:-}" ]; then
+        sandbox_root="$BATS_TEST_TMPDIR"
+    elif manifest_install_paths_home_looks_sandboxed; then
+        sandbox_root="$HOME"
+    fi
+    if [ -n "$sandbox_root" ]; then
         if [ "${MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE:-}" = "1" ]; then
             echo "manifest: warning: destructive ${kind} on '$path' permitted by MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1" >&2
             return 0
         fi
         case "$path" in
-            "$BATS_TEST_TMPDIR"/*) ;;
-            *)
-                echo "manifest: refusing destructive ${kind} on '$path': running under bats (BATS_TEST_TMPDIR=$BATS_TEST_TMPDIR) but target is not inside it." >&2
-                echo "manifest: this is the test sandbox tripwire. Sandbox your test by setting HOME under \$BATS_TEST_TMPDIR (see tests/helpers/setup.bash), or set MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1 to explicitly override." >&2
-                return 1
-                ;;
+            "$sandbox_root"/*) return 0 ;;
         esac
+        if [ -n "${BATS_TEST_TMPDIR:-}" ]; then
+            echo "manifest: refusing destructive ${kind} on '$path': running under bats (BATS_TEST_TMPDIR=$BATS_TEST_TMPDIR) but target is not inside it." >&2
+            echo "manifest: this is the test sandbox tripwire. Sandbox your test by setting HOME under \$BATS_TEST_TMPDIR (see tests/helpers/setup.bash), or set MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1 to explicitly override." >&2
+        else
+            echo "manifest: refusing destructive ${kind} on '$path': HOME ('$HOME') looks like a temp/sandbox dir but target is outside it — real-system files left untouched." >&2
+            echo "manifest: sandbox tripwire — set MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1 to explicitly override." >&2
+        fi
+        return 3
     fi
 
     return 0
 }
 
-# Same tripwire for brew (where there is no path argument — refuse all
-# brew-uninstall/untap calls under bats unless the escape hatch is set).
+# Heuristic: is $HOME a throwaway sandbox (a temp dir) rather than a real user
+# home? A genuine uninstall runs against the user's actual home; only tests and
+# ad-hoc sandboxes redirect HOME into a temp tree. This matters specifically for
+# brew: brew operations are GLOBAL (HOME-independent), so a redirected HOME gives
+# a false sense of isolation — `brew uninstall` from a fake HOME still hits the
+# host's real install (this is exactly how a manual repro once removed the real
+# Homebrew manifest). A sandboxed HOME is therefore a strong signal that a brew
+# mutation is unintended, so the brew tripwire refuses it regardless of bats.
+manifest_install_paths_home_looks_sandboxed() {
+    [ -n "${BATS_TEST_TMPDIR:-}" ] && return 0
+    local home="${HOME:-}"
+    [ -n "$home" ] || return 1
+    local tmp="${TMPDIR:-/tmp}"; tmp="${tmp%/}"
+    case "$home" in
+        "$tmp"/*|/tmp/*|/private/tmp/*|/var/folders/*|/private/var/folders/*) return 0 ;;
+    esac
+    return 1
+}
+
+# Tripwire for brew (no path argument — brew mutations are global). Refuse all
+# brew-uninstall/untap calls when running under bats OR against a sandboxed HOME
+# (see manifest_install_paths_home_looks_sandboxed), unless the escape hatch is
+# set. The HOME check is what makes this hold for any invocation — a plain
+# `bash` run against a temp HOME, not just bats — so a real Homebrew install can
+# never be removed from a fake home.
 manifest_install_paths_assert_destructive_brew_safe() {
     local op="${1:-brew}"
-    if [ -n "${BATS_TEST_TMPDIR:-}" ]; then
+    if [ -n "${BATS_TEST_TMPDIR:-}" ] || manifest_install_paths_home_looks_sandboxed; then
         if [ "${MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE:-}" = "1" ]; then
-            echo "manifest: warning: ${op} permitted by MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1 under bats" >&2
+            echo "manifest: warning: ${op} permitted by MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1 (sandboxed HOME / bats)" >&2
             return 0
         fi
-        echo "manifest: refusing ${op}: running under bats (BATS_TEST_TMPDIR=$BATS_TEST_TMPDIR). Set MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1 to explicitly override." >&2
+        echo "manifest: refusing ${op}: HOME ('${HOME:-}') looks like a temp/sandbox dir or running under bats — global brew left untouched. Set MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1 to explicitly override." >&2
         return 1
     fi
     return 0

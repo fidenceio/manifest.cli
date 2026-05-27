@@ -71,41 +71,42 @@ _namespace_scan_offenders() {
         "$TEST_REPO_ROOT/.github"
     )
 
-    # Per-file allowlist of `MANIFEST_*` (literal asterisk) occurrences.
-    # Each "path:line" entry below is justified. If you find yourself
-    # adding a new entry, you almost certainly want to use the
-    # MANIFEST_CLI namespace instead — only true legacy-cleanup paths
-    # (uninstall / pre-install scrub) belong here.
+    # Allowlist of `MANIFEST_*` (literal asterisk) occurrences, keyed by
+    # "<relpath>\t<stable line substring>" rather than a line number — line
+    # numbers drift on every edit above the site and silently break this guard.
+    # Each entry is a true legacy-cleanup path (uninstall / pre-install scrub);
+    # if you find yourself adding one, you almost certainly want the MANIFEST_CLI
+    # namespace instead.
     local -a allowlist=(
-        # install-cli.sh:420 — comment describing the cleanup_environment_variables
-        #   helper that strips legacy MANIFEST_* exports from shell profiles.
-        "install-cli.sh:420"
-        # install-cli.sh:1443 — comment in the post-uninstall residue sweep
-        #   that calls cleanup_environment_variables for stale MANIFEST_* exports.
-        "install-cli.sh:1443"
-        # uninstall-cli.sh:57 — usage-help text listing what the uninstaller
-        #   removes from shell profiles, including legacy MANIFEST_* exports.
-        "uninstall-cli.sh:57"
+        # install-cli.sh — comment on the cleanup_environment_variables helper
+        #   that strips legacy MANIFEST_* exports from shell profiles.
+        $'install-cli.sh\tStrip MANIFEST_* exports and manifest-related'
+        # install-cli.sh — comment in the post-uninstall residue sweep that
+        #   strips stale MANIFEST_* exports.
+        $'install-cli.sh\tStrip any residual MANIFEST_* exports'
+        # uninstall-cli.sh — usage-help text listing what the uninstaller removes
+        #   from shell profiles, including legacy MANIFEST_* exports.
+        $'uninstall-cli.sh\tShell-profile entries: MANIFEST_* exports'
     )
 
-    local offenders="" file line rel key allowed
-    while IFS=: read -r file line _rest; do
+    local offenders="" file line content rel allowed entry entry_path entry_needle
+    while IFS=: read -r file line content; do
         [ -n "$file" ] || continue
         rel="${file#"$TEST_REPO_ROOT/"}"
         # This audit file itself documents the literal pattern in prose;
-        # excluding it keeps the test self-hosting without polluting the
-        # allowlist with dozens of incidental line numbers.
+        # excluding it keeps the test self-hosting.
         [ "$rel" = "tests/namespace_audit_extended.bats" ] && continue
-        key="${rel}:${line}"
         allowed=0
         for entry in "${allowlist[@]}"; do
-            if [ "$entry" = "$key" ]; then
+            entry_path="${entry%%$'\t'*}"
+            entry_needle="${entry#*$'\t'}"
+            if [ "$entry_path" = "$rel" ] && [[ "$content" == *"$entry_needle"* ]]; then
                 allowed=1
                 break
             fi
         done
         if [ "$allowed" -eq 0 ]; then
-            offenders+="${rel}:${line}"$'\n'
+            offenders+="${rel}:${line}:${content}"$'\n'
         fi
     done < <(grep -R -n -F 'MANIFEST_*' "${search_paths[@]}" 2>/dev/null || true)
 
