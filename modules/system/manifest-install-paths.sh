@@ -19,6 +19,32 @@ _MANIFEST_INSTALL_PATHS_LOADED=1
 manifest_install_paths_homebrew_formula() { echo "fidenceio/tap/manifest"; }
 manifest_install_paths_homebrew_tap()     { echo "fidenceio/tap"; }
 
+# Provenance predicate — the SINGLE source of truth for "is the Manifest CLI
+# currently installed *and managed by Homebrew*". This is deliberately distinct
+# from "is brew available on this machine" (`command -v brew`): conflating the
+# two is what let a bare `install-cli.sh` re-run silently convert a --manual
+# source install onto the shipped formula. Every site that must decide
+# brew-vs-source provenance (installer routing, uninstall, doctor reinstall,
+# post-ship self-upgrade) routes here so the answer can never drift.
+#
+# Checks the tap-qualified formula first, then the bare leaf name, matching how
+# a tap install registers. Silent; returns 0 (brew-managed) / 1 (not).
+manifest_install_paths_is_brew_managed() {
+    command -v brew >/dev/null 2>&1 || return 1
+    brew list "$(manifest_install_paths_homebrew_formula)" >/dev/null 2>&1 && return 0
+    brew list manifest >/dev/null 2>&1 && return 0
+    return 1
+}
+
+# Companion predicate — is there a --manual (source-tree) install? The manual
+# install writes the version-agnostic wrapper to the user-bin location; a
+# Homebrew install never does (it symlinks into $(brew --prefix)/bin instead),
+# so the presence of this binary unambiguously marks the source channel.
+# Silent; returns 0 (manual install present) / 1 (not).
+manifest_install_paths_is_manual_install() {
+    [ -f "$(manifest_install_paths_user_binary)" ]
+}
+
 manifest_install_paths_homebrew_tap_dir() {
     command -v brew >/dev/null 2>&1 || return 0
     local prefix
