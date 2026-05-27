@@ -1388,6 +1388,32 @@ install_git_hooks() {
 # Legacy Manual Install Cleanup
 # =============================================================================
 
+# Remove a Homebrew-managed Manifest so a source-tree install becomes the single
+# channel. The mirror image of cleanup_homebrew_install (which removes the manual
+# footprint before a brew install): a channel switch must clean up the channel it
+# leaves, in BOTH directions, so we never strand two installs fighting over PATH.
+# Only invoked on an explicit --manual switch when a brew-managed copy is present.
+# Honors the destructive-brew sandbox tripwire; best-effort (warns, never aborts
+# the install) — same contract as the uninstall module's brew removal.
+remove_brew_managed_install() {
+    manifest_install_paths_is_brew_managed || return 0
+
+    print_subheader "🧹 Removing Homebrew-managed Manifest (switching to the source channel)"
+
+    if ! manifest_install_paths_assert_destructive_brew_safe "brew uninstall manifest"; then
+        print_warning "   brew uninstall skipped by sandbox tripwire"
+        return 0
+    fi
+
+    local brew_formula
+    brew_formula="$(manifest_install_paths_homebrew_formula)"
+    if brew uninstall "$brew_formula" 2>/dev/null || brew uninstall manifest 2>/dev/null; then
+        print_success "✅ Removed Homebrew-managed Manifest"
+    else
+        print_warning "   Could not remove the Homebrew copy automatically — run: brew uninstall manifest"
+    fi
+}
+
 # Cleanup step used before Homebrew install
 cleanup_homebrew_install() {
     local user_bin state_dir legacy_dir
@@ -1488,11 +1514,12 @@ Installs the Manifest CLI.
 
 Options:
   --manual, --no-brew   Force a source-tree install from this checkout
-                        (Homebrew routing skipped). Use this to test
-                        local changes not yet shipped to the tap.
+                        (Homebrew routing skipped); removes an existing
+                        Homebrew-managed copy so source is the only channel.
+                        Use this to test changes not yet shipped to the tap.
   --brew, --homebrew    Force a Homebrew install of the SHIPPED formula
-                        ('brew install fidenceio/tap/manifest'), even if
-                        a manual install is currently present.
+                        ('brew install fidenceio/tap/manifest'), removing an
+                        existing manual install so brew is the only channel.
   -h, --help            Show this help.
 
 Default behavior (no flag): Manifest stays on the channel it is already
@@ -1659,13 +1686,13 @@ EOF
         else
             print_status "📦 Homebrew not available — installing from this source tree"
         fi
-        # Cross-channel notice: a Homebrew-managed copy will shadow (or be
-        # shadowed by) this source build depending on PATH order. Surface it so
-        # the divergence can't be silent — the user removes it deliberately.
-        # (`--brew` does the reverse switch and cleans up the source copy for you.)
+        # Converge on a single channel: a Homebrew-managed copy would otherwise
+        # shadow (or be shadowed by) this source build depending on PATH order.
+        # Remove it now so the switch to source is clean — the mirror of the brew
+        # branch's cleanup_homebrew_install. Reached only on an explicit --manual
+        # (a bare auto run with a brew copy present routes to the brew branch).
         if [ "$already_brew" = true ]; then
-            print_status "⚠️  A Homebrew-managed Manifest is still installed and may shadow this source build on PATH."
-            print_status "    To fully switch to the source channel, remove it:  brew uninstall manifest"
+            remove_brew_managed_install
         fi
         echo ""
 
