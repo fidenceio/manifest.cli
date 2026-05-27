@@ -1,5 +1,15 @@
 # Changelog
 
+## [49.0.2] - 2026-05-27
+
+**Release Type:** Patch
+
+### Changes
+
+- Drop 3 dead links from docs INDEX.md Architecture table
+- Remove inert branch-enforcement knobs from fleet config (B)
+
+
 ## [49.0.1] - 2026-05-26
 
 **Release Type:** Patch — no user-facing changes.
@@ -105,8 +115,3 @@
 - Add §5.5 runtime cleanup subcommand; renumber tap test to §5.6
 - Fleet plan Service column shows path basename, not YAML key
 - Quiet OS-detection preamble by default; gate behind verbose/debug
-
-
-## [48.4.0] - 2026-05-20
-
-**Release Type:** Minor — no user-facing changes.
