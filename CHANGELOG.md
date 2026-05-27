@@ -1,5 +1,20 @@
 # Changelog
 
+## [50.0.0] - 2026-05-27
+
+**Release Type:** Major
+
+### Changes
+
+- Notice brand-new untracked files before auto-commit sweeps them in
+- Fix install/upgrade channel divergence with one provenance predicate
+- Make --manual remove an existing Homebrew install (symmetric channel switch)
+- Merge branch 'fix-install-channel-provenance'
+- Harden destructive-op guards so a sandbox can never touch real installs
+- Merge branch 'notice-new-untracked-on-autocommit'
+- Uninstall: sweep shell completions across versions and both channels
+
+
 ## [49.0.2] - 2026-05-27
 
 **Release Type:** Patch
@@ -95,23 +110,3 @@
 - Rename runtime-cleanup load sentinel to MANIFEST_CLI_* namespace
 - Add Dirty column to fleet ship plan preview (tracker §1.1)
 - Close CLI tracker §1.1 (dirty trees in fleet ship); renumber §1.2–§1.6 → §1.1–§1.5
-
-
-## [48.5.0] - 2026-05-21
-
-**Release Type:** Minor
-
-### Changes
-
-- Fix MANIFEST_DEBUG → MANIFEST_CLI_DEBUG in tracker §5.3
-- Label broad MANIFEST_* regexes as legacy-cleanup exceptions
-- Discover plugin-owned data dirs via sibling .data-dirs manifests
-- Skip comment lines in namespace audit; reword legacy-cleanup notes
-- Fix path-join doubling $HOME/~/.manifest-cli in temp-list
-- Drop install: block from example config — defaults are correct
-- Expand leading ~/ and $HOME/ in YAML values on load
-- Extend namespace audit with four gap-coverage tests
-- Add §1.7 fleet-ship sandbox .git write denial pre-flight
-- Add §5.5 runtime cleanup subcommand; renumber tap test to §5.6
-- Fleet plan Service column shows path basename, not YAML key
-- Quiet OS-detection preamble by default; gate behind verbose/debug
