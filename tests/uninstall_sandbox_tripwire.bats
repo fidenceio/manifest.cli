@@ -81,6 +81,24 @@ teardown() {
     echo "$output" | grep -q "permitted by MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1"
 }
 
+# Durable control: the brew guard must also fire for a plain (non-bats)
+# invocation whose HOME points into a temp/sandbox tree. Without this, a script
+# (or a careless manual repro) that redirects HOME but not brew would remove the
+# host's real Homebrew install. Drop the bats marker so only the HOME heuristic
+# is exercised.
+@test "brew predicate refuses a sandboxed HOME even outside bats" {
+    run env -u BATS_TEST_TMPDIR "HOME=${TMPDIR:-/tmp}/manifest-sandbox-home" \
+        bash -c 'source "'"$TEST_REPO_ROOT"'/modules/system/manifest-install-paths.sh"; manifest_install_paths_assert_destructive_brew_safe "brew uninstall manifest"'
+    [ "$status" -ne 0 ]
+    echo "$output" | grep -q "refusing brew uninstall manifest"
+}
+
+@test "brew predicate allows a real (non-temp) HOME outside bats" {
+    run env -u BATS_TEST_TMPDIR "HOME=/Users/realuser" \
+        bash -c 'source "'"$TEST_REPO_ROOT"'/modules/system/manifest-install-paths.sh"; manifest_install_paths_assert_destructive_brew_safe "brew uninstall manifest"'
+    [ "$status" -eq 0 ]
+}
+
 @test "remove_installation_directory refuses real-home target under bats" {
     # End-to-end: drive the actual destructive function (not the predicate
     # directly) against a real-shaped path. The function MUST refuse and

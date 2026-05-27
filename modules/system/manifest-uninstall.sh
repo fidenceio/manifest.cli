@@ -211,7 +211,12 @@ remove_installation_directory() {
     local install_dir="$1"
 
     if [ -d "$install_dir" ]; then
-        manifest_install_paths_assert_destructive_target_safe "$install_dir" "rm install-dir" || return 1
+        manifest_install_paths_assert_destructive_target_safe "$install_dir" "rm install-dir"
+        case $? in
+            0) ;;
+            3) echo "⚠️  Skipping installation directory $install_dir — sandbox guard; left untouched."; return 3 ;;
+            *) return 1 ;;
+        esac
         echo "Removing installation directory: $install_dir"
         if rm -rf "$install_dir"; then
             echo "✅ Installation directory removed: $install_dir"
@@ -231,7 +236,12 @@ remove_cli_binary() {
     local binary_path="$1"
 
     if [ -f "$binary_path" ]; then
-        manifest_install_paths_assert_destructive_target_safe "$binary_path" "rm cli-binary" || return 1
+        manifest_install_paths_assert_destructive_target_safe "$binary_path" "rm cli-binary"
+        case $? in
+            0) ;;
+            3) echo "⚠️  Skipping CLI binary $binary_path — sandbox guard; left untouched."; return 3 ;;
+            *) return 1 ;;
+        esac
         echo "Removing CLI binary: $binary_path"
         if rm -f "$binary_path"; then
             echo "✅ CLI binary removed: $binary_path"
@@ -369,8 +379,10 @@ uninstall_manifest() {
     # Uninstall via Homebrew if that's how it was installed
     if [ "$homebrew_installed" = "true" ]; then
         if ! manifest_install_paths_assert_destructive_brew_safe "brew uninstall manifest"; then
-            echo "⚠️  brew uninstall skipped by sandbox tripwire"
-            ((errors+=1))
+            # Protective skip, not a failure: the guard refused because HOME looks
+            # sandboxed / we're under bats, so the global Homebrew install was left
+            # untouched on purpose. Do NOT count this as an uninstall error.
+            echo "⚠️  Skipping Homebrew uninstall — sandbox guard refused it; system Homebrew install left untouched."
         else
             local brew_formula brew_tap
             brew_formula="$(manifest_install_paths_homebrew_formula)"
@@ -390,18 +402,19 @@ uninstall_manifest() {
         fi
     fi
 
-    # Remove installation directories
+    # Remove installation directories. A sandbox-skip (rc 3) is the guard
+    # deliberately leaving a real-system path alone — not an uninstall failure.
+    # `|| _rc=$?` keeps this set -e-safe while still capturing the code.
+    local _rc
     for location in "${install_locations[@]}"; do
-        if ! remove_installation_directory "$location"; then
-            ((errors+=1))
-        fi
+        _rc=0; remove_installation_directory "$location" || _rc=$?
+        if [ "$_rc" -ne 0 ] && [ "$_rc" -ne 3 ]; then ((errors+=1)); fi
     done
-    
-    # Remove CLI binaries
+
+    # Remove CLI binaries (same sandbox-skip handling).
     for binary in "${cli_binaries[@]}"; do
-        if ! remove_cli_binary "$binary"; then
-            ((errors+=1))
-        fi
+        _rc=0; remove_cli_binary "$binary" || _rc=$?
+        if [ "$_rc" -ne 0 ] && [ "$_rc" -ne 3 ]; then ((errors+=1)); fi
     done
     
     # Clean up configuration files
