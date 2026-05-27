@@ -168,6 +168,7 @@ manifest_refresh_repo() {
     if [[ "$do_commit" == "true" ]]; then
         if [[ -n "$(git status --porcelain)" ]]; then
             echo "Committing refreshed files..."
+            manifest_notice_new_untracked_files
             git add .
             git commit -m "Refresh docs and metadata for v$current_version"
             echo "  Committed"
@@ -298,6 +299,7 @@ _refresh_fleet_commit_changes() {
     local root_dir="${MANIFEST_CLI_FLEET_ROOT:-$(pwd)}"
     if [[ -d "$root_dir/.git" ]]; then
         if [[ -n "$(git -C "$root_dir" status --porcelain 2>/dev/null)" ]]; then
+            manifest_notice_new_untracked_files "$root_dir" "  fleet root: "
             if git -C "$root_dir" add . && git -C "$root_dir" commit -m "$commit_msg" >/dev/null; then
                 echo "  ✓ fleet root: committed"
                 committed=$((committed + 1))
@@ -323,6 +325,7 @@ _refresh_fleet_commit_changes() {
         [[ "$path" == "$root_dir" ]] && continue
 
         if [[ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]]; then
+            manifest_notice_new_untracked_files "$path" "  $service: "
             if git -C "$path" add . && git -C "$path" commit -m "$commit_msg" >/dev/null; then
                 echo "  ✓ $service: committed"
                 committed=$((committed + 1))
