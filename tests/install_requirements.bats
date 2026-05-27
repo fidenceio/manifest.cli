@@ -107,9 +107,12 @@ load 'helpers/setup'
     # post-rename equivalent of the old "Copy shell completions" comment.
     grep -F 'Staged completions' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
     grep -F 'install_shell_completions' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
-    # Manual installs write to user-owned completion dirs, never brew's.
-    grep -F 'bash-completion/completions/manifest' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
-    grep -F '.zsh/completions' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
+    # Manual installs write to user-owned completion dirs, never brew's. The
+    # paths are centralized in the install-paths module (single source of truth,
+    # shared with the uninstaller's completion sweep) and read back by the
+    # installer, so assert them there.
+    grep -F 'bash-completion/completions/manifest' "$TEST_REPO_ROOT/modules/system/manifest-install-paths.sh" >/dev/null
+    grep -F '.zsh/completions' "$TEST_REPO_ROOT/modules/system/manifest-install-paths.sh" >/dev/null
 }
 
 @test "installer never writes shell completions into Homebrew-managed dirs" {

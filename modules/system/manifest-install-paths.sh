@@ -130,6 +130,34 @@ manifest_install_paths_binary_candidates() {
     echo "/opt/manifest-cli/bin/manifest"
 }
 
+# --- Shell completions ------------------------------------------------------
+#
+# Manual-install completion files (the user-writable locations install-cli.sh
+# owns). Emitted one per line, bash target first then zsh, so install can read
+# them positionally and uninstall can sweep them. Single source of truth — the
+# installer writes exactly these and the uninstaller removes exactly these, so
+# the set can never drift.
+manifest_install_paths_user_completion_targets() {
+    echo "${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion/completions/manifest"
+    echo "$HOME/.zsh/completions/_manifest"
+}
+
+# Every shell-completion file ANY Manifest version may have installed, across
+# channels — for uninstall to remove "everything, brew or manual". Adds the
+# Homebrew-prefix completion paths to the manual set; those same brew-prefix
+# paths are also where pre-2026 manual installs wrote completions (before they
+# moved to the user-writable locations above — see install-cli.sh history), so
+# sweeping them covers that legacy manual layout too.
+manifest_install_paths_completion_targets() {
+    manifest_install_paths_user_completion_targets
+    command -v brew >/dev/null 2>&1 || return 0
+    local prefix
+    prefix="$(brew --prefix 2>/dev/null || true)"
+    [ -n "$prefix" ] || return 0
+    echo "$prefix/etc/bash_completion.d/manifest"
+    echo "$prefix/share/zsh/site-functions/_manifest"
+}
+
 # --- Config and runtime data ------------------------------------------------
 
 manifest_install_paths_config_files() {
