@@ -1,209 +1,109 @@
-# Manifest CLI Installation Guide
+# Manifest CLI Installation
 
----
+This document separates product installation from repository development.
 
-## Requirements
+- Product users install the CLI on their machine.
+- Contributors working in this repo validate through containers and do not install repo dependencies on the host.
 
-| Dependency | Version | Required | Notes |
-| ---------- | ------- | -------- | ----- |
-| **Bash** | 5.0+ | Yes | macOS ships Bash 3.2; Homebrew installs Bash 5 automatically |
-| **Git** | Any recent | Yes | Version control operations |
-| **yq** | 4.0+ (Mike Farah's Go version) | Yes | YAML configuration parsing |
-| **Docker** | Running engine | Yes | Required for the containerized execution model |
-| **curl** | Any | Recommended | HTTPS timestamps, API calls, install script |
-| **coreutils** | Any | Yes | Cross-platform timeout, `date`, and `stat` behavior |
+## Product Installation
 
-**Important:** The supported dependency versions are defined in `modules/core/manifest-requirements.sh`. The CLI, installer, doctor, and Homebrew wrapper use that same contract.
+### Homebrew
 
----
-
-## Install via Homebrew (Recommended)
+Recommended for macOS and Linux users with Homebrew:
 
 ```bash
 brew tap fidenceio/tap
 brew install manifest
 ```
 
-This installs the CLI, sets up the `manifest` command, and pulls in Bash 5, Git, yq, and coreutils as dependencies automatically. Docker must also be installed and running.
+Homebrew installs the formula dependencies declared in the tap: Bash 5, yq, Git, and coreutils. It also installs shell completions.
 
-### Upgrade
-
-```bash
-brew update && brew upgrade manifest
-```
-
-Or use the built-in upgrade command:
+Upgrade:
 
 ```bash
-manifest upgrade
-manifest upgrade --check   # Check only, don't install
-manifest upgrade --force   # Force regardless of version
+brew update
+brew upgrade manifest
 ```
 
----
+### Install Script
 
-## Install via Script
+Use the install script when Homebrew is not the desired distribution path:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/fidenceio/manifest.cli/main/install-cli.sh | bash
 ```
 
-The install script:
+The script validates runtime requirements before installing and writes Manifest runtime state under `~/.manifest-cli/`.
 
-1. Validates the required Bash version (with per-platform install instructions if missing)
-2. Validates the required yq version and vendor (detects wrong version, provides install commands)
-3. Validates coreutils timeout support (`gtimeout` on macOS, `timeout` elsewhere)
-4. Ensures Homebrew first on macOS, then offers to install Docker Desktop with `brew install --cask docker`
-5. Validates Docker is installed and the engine is reachable
-6. Uses Homebrew when available (preferred path)
-7. Falls back to manual installation at `~/.manifest-cli` with a launcher in `~/.local/bin`
-8. Installs bash/zsh completions for normal terminals and IDE integrated terminals
-9. Writes IDE and AI assistant command catalogs under `~/.manifest-cli/ide/`
-10. Migrates configuration from legacy locations automatically
-
-### IDE and AI Assistant Support
-
-The installer sets up shell completions in standard bash/zsh locations when
-those locations are available. VS Code, Cursor, Windsurf, Antigravity, and other
-editors that use your normal login shell can then complete `manifest` commands
-inside their integrated terminals.
-
-The installer also writes a concise command catalog for AI/editor assistants:
-
-```text
-~/.manifest-cli/ide/manifest-cli-commands.md
-~/.manifest-cli/ide/manifest-cli-commands.json
-~/.manifest-cli/ide/AGENTS.md
-~/.manifest-cli/ide/CLAUDE.md
-```
-
-These files document the first-class commands and the safe-by-default contract:
-mutating commands preview by default, `--dry-run` is explicit preview, and
-`-y`/`--yes` applies the plan.
-
-### Installing Docker
-
-On macOS, the install script uses one clean path:
+## Verify Product Install
 
 ```bash
-brew install --cask docker
-open -a Docker
-docker info
-```
-
-On Linux, install Docker Engine for your distribution, start the service, then verify:
-
-```bash
-docker info
-```
-
-### Installing yq Manually
-
-If the install script reports yq is missing, install it for your platform:
-
-```bash
-# macOS
-brew install yq
-
-# Ubuntu/Debian (via snap)
-sudo snap install yq
-
-# Fedora/RHEL
-sudo dnf install yq
-
-# Alpine
-sudo apk add yq
-
-# Arch Linux
-sudo pacman -S go-yq
-
-# Any platform (binary download)
-# See https://github.com/mikefarah/yq#install
-```
-
-**Verify you have the correct version:**
-
-```bash
-yq --version
-# Should show: yq (https://github.com/mikefarah/yq/) version v4.x.x
-```
-
-If `manifest doctor` reports the wrong `yq`, install the package listed above for your platform. Manifest rejects incompatible `yq` binaries at startup.
-
----
-
-## Verify Installation
-
-```bash
-# Check the CLI is accessible
-which manifest
-
-# View help
 manifest --help
-
-# Review configuration
-manifest config show
-
-# Validate dependencies
 manifest doctor
+manifest status
+manifest config show
 ```
 
----
+`manifest doctor` checks dependencies, config layers, and repository state. `manifest status` is read-only and reports what Manifest would target from the current directory.
 
-## Post-Install: Initialize Your Project
+## Contributor Validation
+
+Do not install repo dependencies on the host to work on this codebase. Run tests through the containerized harness:
 
 ```bash
-cd your-project
-
-# Scaffold required files (VERSION, CHANGELOG.md, docs/, .gitignore)
-manifest init repo
-manifest init repo -y
-
-# Connect remotes and pull latest
-manifest prep repo
-manifest prep repo -y
-
-# Review your configuration
-manifest config show
+./scripts/run-tests-container.sh
 ```
 
----
+Focused suite example:
+
+```bash
+./scripts/run-tests-container.sh tests/command_surface_inventory.bats
+```
+
+The container runner provides the toolchain needed for bats and shell integration tests. See [tests/README.md](../tests/README.md).
+
+## Runtime Requirements
+
+Manifest requires:
+
+| Dependency | Purpose |
+| ---------- | ------- |
+| Bash 5+ | Shell runtime |
+| Git | Repository operations |
+| yq v4+ | YAML config parsing |
+| coreutils | Portable date/stat/timeout behavior |
+| curl | API and timestamp calls |
+| Docker | Containerized validation and some workflows |
+| gh | Optional GitHub PR and release operations |
+
+The source of truth for runtime checks is `modules/core/manifest-requirements.sh`.
+
+## Shell Completions
+
+Homebrew installs completions automatically. Manual setup instructions live in [completions/README.md](../completions/README.md).
 
 ## Uninstall
 
-```bash
-manifest uninstall          # Preview uninstall changes
-manifest uninstall -y       # Apply uninstall interactively
-manifest uninstall --force -y  # Apply and skip extra confirmations
-```
-
----
-
-## Reinstall
-
-Full uninstall and clean reinstall:
+Preview first:
 
 ```bash
-manifest reinstall          # Preview reinstall steps
-manifest reinstall -y       # Apply full uninstall + reinstall
+manifest uninstall
 ```
 
-On macOS, this offers the Homebrew installation path. Configuration is preserved during migration.
+Apply removal:
 
----
+```bash
+manifest uninstall -y
+```
+
+Global config removal requires additional confirmation. This prevents accidental deletion of `~/.manifest-cli/manifest.config.global.yaml`.
 
 ## Troubleshooting
 
-| Symptom | Fix |
-| ------- | --- |
-| `manifest: command not found` | Ensure `~/.local/bin` is on your `PATH` |
-| Wrong version running | Check with `which manifest` and `manifest --help` |
-| Tests failing | Run `manifest doctor` and use the repo's containerized test runner when developing Manifest CLI |
-| Bash version issues | Install Bash 5+ via Homebrew: `brew install bash` |
-| `yq is not installed` | Install yq: `brew install yq` (see Installing yq Manually above) |
-| `yq does not satisfy the Manifest requirement` | Install the supported yq package for your platform |
-| YAML config not loading | Run `manifest config doctor` to diagnose config issues |
-| Network errors | Check connectivity; use `MANIFEST_CLI_OFFLINE_MODE=true` for offline work |
-
-For persistent issues in the Manifest CLI repo, run `./scripts/run-tests-container.sh`
-and review the emitted test log paths.
+| Symptom | Check |
+| ------- | ----- |
+| `manifest` not found | Confirm `brew --prefix` or `~/.local/bin` is on `PATH` |
+| Bash version error | Run `manifest doctor`; Homebrew installs Bash 5 for the formula |
+| YAML config error | Confirm `yq --version` reports Mike Farah yq v4+ |
+| GitHub release or PR commands fail | Run `gh auth status` |
+| Repo command targets the wrong path | Run `manifest status` from the intended Git checkout |

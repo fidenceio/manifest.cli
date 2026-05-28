@@ -1,46 +1,38 @@
-# Shell completions
+# Shell Completions
 
-Tab-completion for `manifest` covering top-level commands, scopes (`repo|fleet`), bump types (`patch|minor|major|revision`), config subcommands, PR subcommands, layer flags, and config keys (queried dynamically from `manifest config list`).
+Manifest ships Bash and zsh completions.
 
-## Bash
+## Installed By Homebrew
 
-```sh
-# One-off (current shell):
-source /path/to/manifest-cli/completions/manifest.bash
+The Homebrew formula installs:
 
-# Persistent (~/.bashrc):
-echo 'source /path/to/manifest-cli/completions/manifest.bash' >> ~/.bashrc
+- `completions/manifest.bash` as Bash completion
+- `completions/_manifest` as zsh completion
+
+## Manual Bash Setup
+
+```bash
+source completions/manifest.bash
 ```
 
-If you have [bash-completion](https://github.com/scop/bash-completion) installed, you can drop the file into its completion dir instead:
+Persistent setup depends on your shell profile and completion directory. Prefer the Homebrew formula when possible.
 
-```sh
-ln -s /path/to/manifest-cli/completions/manifest.bash \
-      $(brew --prefix)/etc/bash_completion.d/manifest
+## Manual Zsh Setup
+
+```bash
+fpath=("$PWD/completions" $fpath)
+autoload -Uz compinit
+compinit
 ```
 
-## Zsh
+## Coverage
 
-```sh
-# Add the completions dir to fpath, then run compinit:
-fpath=(/path/to/manifest-cli/completions $fpath)
-autoload -U compinit && compinit
-```
+Completions cover:
 
-Or symlink directly into the standard site-functions directory:
+- Top-level commands
+- Repo and fleet scopes
+- Release types
+- Config keys
+- Common flags
 
-```sh
-ln -s /path/to/manifest-cli/completions/_manifest \
-      $(brew --prefix)/share/zsh/site-functions/_manifest
-```
-
-After installing, restart your shell or run `compinit` again.
-
-## What you get
-
-- `manifest <TAB>` → all top-level commands
-- `manifest init <TAB>` → `repo  fleet`
-- `manifest ship repo <TAB>` → `patch minor major revision -y --yes --local --dry-run`
-- `manifest config <TAB>` → `show list get set unset describe doctor setup time`
-- `manifest config get <TAB>` → all 83 config keys (cached after first lookup)
-- `manifest config set --layer <TAB>` → `global  project  local`
+When adding or removing public commands, update completions with help text and command-reference docs in the same change.

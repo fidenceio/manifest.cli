@@ -1,47 +1,39 @@
-# Manifest CLI tests
+# Manifest CLI Tests
 
-Bash unit tests using [bats-core](https://github.com/bats-core/bats-core).
+Run tests in containers. Do not install test dependencies on the host.
 
-## Run The Suite
+## Full Suite
 
-The default path is containerized. Do not install bats, yq, or other test
-dependencies on the host.
-
-```sh
-./scripts/run-tests-container.sh                  # everything
-./scripts/run-tests-container.sh tests/yaml.bats  # one file
+```bash
+./scripts/run-tests-container.sh
 ```
 
-The container runner uses Alpine with Bash, Git, bats-core, Mike Farah yq, and
-coreutils installed inside the disposable container.
+## Focused Suite
 
-## Host Runner
-
-```sh
-./scripts/run-tests.sh                  # everything
-./scripts/run-tests.sh tests/yaml.bats  # one file
+```bash
+./scripts/run-tests-container.sh tests/docs_generation.bats
+./scripts/run-tests-container.sh tests/command_surface_inventory.bats
 ```
 
-This runner is intended for CI images or development containers that already
-provide dependencies. It exits 2 if `bats` is missing.
+## What Is Covered
 
-## What's covered
-
-| File | Targets |
-|---|---|
-| `tests/yaml.bats` | YAML parser detection, `set_yaml_value` / `get_yaml_value` round-trip, `load_yaml_to_env` precedence, YAML↔ENV mapping |
-| `tests/version.bats` | `bump_version` for patch / minor / major / revision; rejection of bad input |
-| `tests/canonical_repo.bats` | `manifest_origin_repo_slug` URL parsing, `should_update_homebrew_for_repo` allowlist gate |
-| `tests/recipe.bats` | Built-in recipe introspection and `ship --explain` routing |
-| `tests/safety_gate.bats` | `_confirm_global_config_write` bypass / session cache / destructive-op behavior |
-| `tests/security_check.bats` | `manifest security --check` read-only behavior and pre-commit hook integration |
+- Command dispatch and help behavior
+- Preview/apply safety gates
+- YAML config layering and env mapping
+- Version math and changelog updates
+- Repo and fleet release paths
+- Homebrew tap update behavior
+- GitHub Actions and GitHub Release integration
+- Docs generation and managed Pages workflow generation
+- Uninstall and destructive-path guards
 
 ## Conventions
 
-- Each test file `load 'helpers/setup'` for shared helpers.
-- `mk_scratch` returns a scratch dir under `$BATS_TEST_TMPDIR`; tests `rm -rf` it in teardown.
-- Tests must not touch the developer's real `$HOME`, real config, or real git remotes. Use scratch dirs.
+- Tests use scratch directories and must not mutate the developer's real home directory.
+- Tests that need destructive behavior must keep it inside the test sandbox.
+- New command behavior needs help/docs coverage when user-visible.
+- New mutating routes must advertise `--dry-run`, `-y`, and `--yes`.
 
-## Adding tests
+## Host Runner
 
-Pick a target with clear inputs and outputs (pure or near-pure). Avoid testing functions that shell out to network / git push — keep those for end-to-end smoke tests.
+`scripts/run-tests.sh` exists for controlled environments that already provide the right tools. It is not the default workflow for this workspace.
