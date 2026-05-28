@@ -53,6 +53,16 @@ For repository development and validation, do not install dependencies on the ho
 
 More detail: [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
+## Runtime Requirements
+
+| Requirement | Version | Notes |
+| ----------- | ------- | ----- |
+| Bash | 5.0+ | Required for associative arrays and modern shell behavior |
+| yq | 4.0+ (Mike Farah) | Required for YAML configuration parsing |
+| Git | Any supported release | Required for repository status, tags, commits, and pushes |
+| coreutils | Any | Required on macOS for the supported timeout command |
+| Docker | Running engine | Required by the containerized development and test workflow |
+
 ## First Release
 
 ```bash
