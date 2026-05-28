@@ -1,0 +1,7 @@
+# Managed by Manifest CLI docs site generation
+_site/
+.jekyll-cache/
+.sass-cache/
+.bundle/
+vendor/
+.jekyll-metadata
