@@ -1,5 +1,14 @@
 # Changelog
 
+## [50.1.3] - 2026-05-28
+
+**Release Type:** Patch
+
+### Changes
+
+- Add Manifest-generated Jekyll docs site and Pages workflow
+
+
 ## [50.1.2] - 2026-05-28
 
 **Release Type:** Patch — no user-facing changes.
@@ -82,12 +91,3 @@ distribution history lives in `fidenceio.homebrew.tap/CHANGELOG.md`.
 ## [48.6.2] - 2026-05-26
 
 **Release Type:** Patch — no user-facing changes.
-
-
-## [48.6.1] - 2026-05-26
-
-**Release Type:** Patch
-
-### Changes
-
-- Fix(install-cli): keep shell completions out of Homebrew-managed dirs
