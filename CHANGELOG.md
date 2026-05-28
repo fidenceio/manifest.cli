@@ -1,5 +1,14 @@
 # Changelog
 
+## [50.1.1] - 2026-05-28
+
+**Release Type:** Patch
+
+### Changes
+
+- Triage CLI tracker after the 2026-05-28 ship cycle
+
+
 ## [50.1.0] - 2026-05-28
 
 **Release Type:** Minor
@@ -104,12 +113,3 @@ distribution history lives in `fidenceio.homebrew.tap/CHANGELOG.md`.
 - Feat(install-cli): migrate legacy flat layout on first upgrade
 - Test(install-cli): fault-injection regression suite for atomic upgrade
 - Drop §5.7 from CLI tracker (atomic install-cli.sh upgrades shipped)
-
-
-## [48.5.3] - 2026-05-22
-
-**Release Type:** Patch
-
-### Changes
-
-- Add CLI tracker §1.6 fleet resume + §5.5–§5.7 ship reliability
