@@ -765,22 +765,22 @@ swap_current_symlink() {
     #   2. rename(2) it over current
     #
     # rename(2) of one symlink-to-X over another symlink is atomic and does
-    # NOT follow either link. We invoke it via `mv -fh` on BSD (Darwin) so
-    # mv treats the destination as a file even when it's a symlink-to-dir;
-    # GNU mv has no -h flag but defaults to the file-replace semantics we
-    # want, so we feature-detect.
-    #
-    # NB: BSD `mv` without -h, when the dst is a symlink-to-dir, will move
-    # INTO that directory (the very bug §5.7 is supposed to avoid). The -h
-    # detection guards against that.
+    # NOT follow either link — but `mv` only invokes it that way when told
+    # to treat the destination as a file. Without that hint, both BSD and
+    # GNU mv follow a symlink-to-dir at the destination and move source
+    # INTO it (the very bug §5.7 is supposed to avoid). We feature-detect:
+    #   - BSD/Darwin: `mv -h` (do not follow a symlink target)
+    #   - GNU/Linux:  `mv -fT` (`--no-target-directory`)
+    # Each flag is unknown on the other platform, so the cascade picks the
+    # first that succeeds.
     ln -sfn "runtime/$vdirname" "$new_link"
     if mv -h "$new_link" "$current_link" 2>/dev/null; then
         :
+    elif mv -fT "$new_link" "$current_link" 2>/dev/null; then
+        :
     else
-        # GNU mv: no -h, but its default rename semantics do not follow a
-        # symlink at the destination, so a plain `mv -f` is the right
-        # primitive on Linux.
-        mv -f "$new_link" "$current_link"
+        print_error "❌ swap_current_symlink: neither 'mv -h' nor 'mv -fT' supported"
+        return 1
     fi
     print_success "✅ Pointed $current_link → runtime/$vdirname"
     echo ""
