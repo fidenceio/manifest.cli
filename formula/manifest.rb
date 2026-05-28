@@ -1,8 +1,8 @@
 class Manifest < Formula
   desc "A powerful CLI tool for managing manifest files, versioning, and repository operations with trusted timestamp verification"
   homepage "https://github.com/fidenceio/manifest.cli"
-  url "https://github.com/fidenceio/manifest.cli/archive/refs/tags/v50.0.1.tar.gz"
-  sha256 "a9f4f1adeeaf203b81dfd669da95d469ee0a260d527bca70eda52f364c5e460b"
+  url "https://github.com/fidenceio/manifest.cli/archive/refs/tags/v50.1.0.tar.gz"
+  sha256 "ac74ce127241e7fe8f167436a9963c096915becf726562b1ca68b1ab19df9252"
   license "MIT"
   head "https://github.com/fidenceio/manifest.cli.git", branch: "main"
 
