@@ -1,5 +1,15 @@
 # Changelog
 
+## [50.0.1] - 2026-05-28
+
+**Release Type:** Patch
+
+### Changes
+
+- Stop a ship that would land on the wrong branch
+- Stop prescribing a branching workflow to users
+
+
 ## [50.0.0] - 2026-05-27
 
 **Release Type:** Major
@@ -97,16 +107,3 @@
 ### Changes
 
 - Route raw mktemp through scratch helper; drop inert managed-temp API (Step 7c)
-
-
-## [48.5.1] - 2026-05-21
-
-**Release Type:** Patch
-
-### Changes
-
-- Add opportunistic runtime cache cleanup (Step 7b substrate)
-- Close CLI tracker §5.4 (runtime cleanup); renumber §5.5 → §5.4
-- Rename runtime-cleanup load sentinel to MANIFEST_CLI_* namespace
-- Add Dirty column to fleet ship plan preview (tracker §1.1)
-- Close CLI tracker §1.1 (dirty trees in fleet ship); renumber §1.2–§1.6 → §1.1–§1.5
