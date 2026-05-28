@@ -1,0 +1,9 @@
+# Managed by Manifest CLI docs site generation
+title: "Manifest CLI"
+description: "Documentation for Manifest CLI"
+theme: minima
+markdown: kramdown
+exclude:
+  - .jekyll-cache
+  - .bundle
+  - vendor
