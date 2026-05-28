@@ -28,26 +28,21 @@ The hardening-pass triage organized open work around *"does absence of this item
 - §5.5 Pre-tag ship steps re-entrancy audit
 - §5.6 Per-run ship logs for forensic replay
 
-### T3 — coverage, audit, docs (9)
+### T3 — coverage, audit, docs (7)
 
-- §2.4 `MANIFEST_CLI_AUTO_CONFIRM` no-write regression
 - §2.6 Local-only apply tests
 - §2.7 Sensitive-value redaction audit across output surfaces
 - §3.8 Cloud apply-intent contract stubs
-- §4.1 Safe-by-default help/doc audit
 - §4.3 Public-release migration note
 - §4.4 Archive cleanup obeys the read-only archive rule
 - §5.4 e2e coverage for brew-managed tap dir scenario
 - §5.8 CLI apply-event audit log
 
-### DEFER — post-enterprise (12)
+### DEFER — post-enterprise (3)
 
-- §1.3 Detect workspace/fleet membership drift
-- §3.1–§3.7 Cloud handoff CLI side (gated by Cloud milestones)
+- §3.1 Cloud handoff CLI side (collapsed pointer; gated by Cloud milestones M0–M3)
 - §4.2 Fish completions
 - §5.1 Extract user global-config migration from `install-cli.sh`
-- §5.2 `--json` for `refresh`/`ship`
-- §5.3 Cached-timestamp precision label
 
 §6 lists items explicitly cut (command-creep candidates) so they don't reappear by accident.
 
@@ -60,12 +55,6 @@ The hardening-pass triage organized open work around *"does absence of this item
   - **Why:** fleet release should not silently skip PR-gated members. Silent skip leaves the fleet in an inconsistent state where some members shipped and others didn't.
   - **Deliverable:** fleet ship preview lists PR-gated members; apply refuses with a structured error and a `manifest pr fleet ... -y` replay command.
   - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
-
-- **1.3 Detect workspace/fleet membership drift.**
-  - **Status:** DEFER (post-enterprise; read-only convenience).
-  - **Why:** fleet config goes stale when repos are added outside Manifest.
-  - **Deliverable:** read-only workspace diff that compares discovered repos to fleet config, exposed from a low-friction command such as `manifest doctor`, `manifest update fleet --dry-run`, or a timestamped passive check.
-  - **Anchor:** [`modules/fleet/manifest-fleet-detect.sh`](../modules/fleet/manifest-fleet-detect.sh), [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
 
 - **1.7 Single-flight lock for fleet apply.**
   - **Status:** T2.
@@ -99,12 +88,6 @@ The base contract is already live: mutating commands preview by default, `--dry-
   - **Deliverable:** audit deprecated aliases, `scripts/`, generated hook templates, and `.github/workflows/*.yml`; route mutating calls through explicit `-y`, explicit `--dry-run`, or a shared rejection path. Centralize unknown flag handling where practical.
   - **Anchor:** [`modules/core/`](../modules/core/), [`scripts/`](../scripts/), [`.github/workflows/`](../.github/workflows/).
 
-- **2.4 Add the missing `MANIFEST_CLI_AUTO_CONFIRM` no-write regression.**
-  - **Status:** T3.
-  - **Why:** code documents `MANIFEST_CLI_AUTO_CONFIRM=1` as prompt automation only, but the exact preview no-write regression should be explicit. Pins workspace cross-cut [§1.3](../../TRACKER.md#1-cross-cut-requirements) with a direct test.
-  - **Deliverable:** test that a preview command with `MANIFEST_CLI_AUTO_CONFIRM=1` still writes nothing and prints an apply replay command instead of mutating.
-  - **Anchor:** [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh), [`tests/dry_run.bats`](../tests/dry_run.bats).
-
 - **2.6 Add focused local-only apply tests.**
   - **Status:** T3.
   - **Why:** `--local -y` is its own contract and should prove local writes occur without remote dispatch. Enterprise wants offline-safe boundaries that are tested, not asserted.
@@ -129,40 +112,10 @@ The base contract is already live: mutating commands preview by default, `--dry-
 
 The local release-notes provider hook and recipe inspection surfaces exist. Remaining work is the Cloud-specific contract, payload policy, and end-to-end verification. **All §3 items except §3.8 are DEFER (post-enterprise)** — they activate as the Cloud-side milestones (M0–M3) land. Cloud is disabled by default per workspace cross-cut [§1.4](../../TRACKER.md#1-cross-cut-requirements), so the v1 enterprise CLI release can ship with these items pending.
 
-- **3.1 Decide and document the CLI/Cloud contract source.**
-  - **Status:** DEFER (post-enterprise; gated by Cloud M0).
-  - **Deliverable:** decide whether CLI stores copied schemas under `docs/contracts/` or references Cloud as source of truth; document Standard and Verbose payload expectations.
-  - **Anchor:** [`docs/contracts/`](contracts/), [`docs/USER_GUIDE.md`](USER_GUIDE.md).
-
-- **3.2 Complete the `cloud.*` YAML/env config surface.**
-  - **Status:** DEFER (post-enterprise; gated by Cloud M0).
-  - **Deliverable:** add the remaining `cloud.{enabled,endpoint,release_notes.*,security.*}` mappings; keep Cloud disabled by default and secrets referenced by env name, not committed values.
-  - **Anchor:** [`modules/core/manifest-yaml.sh`](../modules/core/manifest-yaml.sh), [`modules/core/manifest-config.sh`](../modules/core/manifest-config.sh), [`examples/manifest.config.yaml.example`](../examples/manifest.config.yaml.example), [`tests/yaml.bats`](../tests/yaml.bats).
-
-- **3.3 Wire Cloud as a release-notes provider option.**
-  - **Status:** DEFER (post-enterprise; gated by Cloud M1/M3).
-  - **Deliverable:** Cloud provider command selectable by config; local fallback preserved when optional; required mode aborts doc generation on failure; CLI remains owner of changelog writes.
-  - **Anchor:** [`modules/docs/manifest-documentation.sh`](../modules/docs/manifest-documentation.sh), [`tests/release_notes_provider.bats`](../tests/release_notes_provider.bats).
-
-- **3.4 Add payload preview and privacy assertions.**
-  - **Status:** DEFER (post-enterprise; gated by Cloud M0/M3).
-  - **Deliverable:** preview output shows Cloud mode, endpoint, fallback, identity, and upload decision; tests assert Standard mode excludes source bodies, raw diffs, raw commit bodies, author emails, full remotes, absolute paths, and secret-looking values.
-  - **Anchor:** new `tests/cloud_payload.bats`, [`docs/USER_GUIDE.md`](USER_GUIDE.md).
-
-- **3.5 Add Cloud handoff metadata to recipes.**
-  - **Status:** DEFER (post-enterprise; gated by Cloud M0/M2).
-  - **Deliverable:** recipe schema accepts step `policy`/`privacy`/`fallback` metadata; ship recipes include a Cloud handoff step; `manifest ship repo patch --explain` shows Cloud status without uploading.
-  - **Anchor:** [`docs/contracts/recipe.schema.json`](contracts/recipe.schema.json), [`recipes/builtin/manifest.builtin.ship.repo.*.yaml`](../recipes/builtin/), [`tests/recipe.bats`](../tests/recipe.bats).
-
-- **3.6 Finish CLI docs for Cloud handoff.**
-  - **Status:** DEFER (post-enterprise; gated by Cloud M0–M4 landing).
-  - **Deliverable:** document Standard mode, Verbose mode, no-code default, fallback behavior, provider-hook integration, recipe-backed commands, and the Fidence platform assumption for production Cloud.
-  - **Anchor:** [`README.md`](../README.md), [`docs/USER_GUIDE.md`](USER_GUIDE.md), [`docs/COMMAND_REFERENCE.md`](COMMAND_REFERENCE.md), [`docs/EXAMPLES.md`](EXAMPLES.md), [`docs/INDEX.md`](INDEX.md).
-
-- **3.7 Verify the Cloud handoff path in containers.**
-  - **Status:** DEFER (post-enterprise; gated by Cloud M3).
-  - **Deliverable:** `./scripts/run-tests-container.sh tests/yaml.bats tests/release_notes_provider.bats tests/docs_generation.bats tests/recipe.bats tests/cloud_payload.bats` passes; `manifest ship repo patch --explain` works without GitHub or Cloud; full container suite is green.
-  - **Anchor:** [`scripts/run-tests-container.sh`](../scripts/run-tests-container.sh).
+- **3.1 Cloud handoff CLI work — gated by Cloud-side milestones M0–M3.**
+  - **Status:** DEFER (post-enterprise).
+  - **Why:** every CLI-side Cloud item activates 1:1 with a Cloud-tracker milestone — contract sources, `cloud.*` config surface, provider wiring, payload privacy assertions, recipe metadata, user-facing docs, and container verification. Tracking them as separate CLI items duplicates the Cloud tracker and creates drift sites for two-step changes. Source of truth: [Cloud TRACKER §1 (Contracts/M0)](../../fidenceio.manifest.cloud/docs/TRACKER.md#1-contracts-m0-gate), [§2 (Service implementation/M1/M3)](../../fidenceio.manifest.cloud/docs/TRACKER.md#2-service-implementation-m1--m3-gates), [§3 (Security & platform/M3)](../../fidenceio.manifest.cloud/docs/TRACKER.md#3-security--platform-m3-gate). When a Cloud milestone lands, re-file specific CLI deliverables as new items here against the freshly-stable Cloud contract — do not pre-fork them.
+  - **Anchor:** [`modules/core/manifest-yaml.sh`](../modules/core/manifest-yaml.sh), [`modules/core/manifest-config.sh`](../modules/core/manifest-config.sh), [`modules/docs/manifest-documentation.sh`](../modules/docs/manifest-documentation.sh), [`docs/contracts/recipe.schema.json`](contracts/recipe.schema.json), [`docs/USER_GUIDE.md`](USER_GUIDE.md), [`scripts/run-tests-container.sh`](../scripts/run-tests-container.sh).
 
 - **3.8 Add Cloud apply-intent contract stubs.**
   - **Status:** T3.
@@ -174,12 +127,6 @@ The local release-notes provider hook and recipe inspection surfaces exist. Rema
 
 ## 4. Docs & completions
 
-- **4.1 Finish safe-by-default help/doc audit.**
-  - **Status:** T3.
-  - **Why:** user-facing docs and bash/zsh completions already describe most of the contract, but command help can still drift. Help text and examples are part of the contract surface — wrong examples teach the wrong reflex.
-  - **Deliverable:** audit mutating command help examples so preview examples are bare commands and apply examples include `-y`; add tests where practical.
-  - **Anchor:** [`modules/core/manifest-core.sh`](../modules/core/manifest-core.sh), [`docs/USER_GUIDE.md`](USER_GUIDE.md), [`docs/COMMAND_REFERENCE.md`](COMMAND_REFERENCE.md), [`docs/EXAMPLES.md`](EXAMPLES.md).
-
 - **4.2 Add fish-shell completions.**
   - **Status:** DEFER (post-enterprise).
   - **Why:** bash and zsh completions ship; fish remains missing. Fish users can use the CLI fine without; no contract surface.
@@ -187,9 +134,9 @@ The local release-notes provider hook and recipe inspection surfaces exist. Rema
   - **Anchor:** [`completions/`](../completions/), [`tests/completions.bats`](../tests/completions.bats).
 
 - **4.3 Write the public-release migration note.**
-  - **Status:** T3 — user-guide half landed (`docs/USER_GUIDE.md` "Migrating to safe-by-default"); release-docs/`MIGRATION.md` copy still pending.
+  - **Status:** T3.
   - **Why:** users upgrading from pre-safe-by-default releases need a concise explanation of preview default, `-y` apply, and `MANIFEST_CLI_AUTO_CONFIRM` semantics. Mirrors workspace [§2.1](../../TRACKER.md#2-workspace-level-open-items).
-  - **Deliverable:** migration copy in release docs or `docs/MIGRATION.md`, with matching language in the user guide before the next major release.
+  - **Deliverable:** a migration note covering preview default / `-y` apply / `MANIFEST_CLI_AUTO_CONFIRM` semantics, landed either in `docs/USER_GUIDE.md` or a dedicated `docs/MIGRATION.md`, before the next major release. (Prior copy that lived in `USER_GUIDE.md` was removed during the 2026-05-28 docs rewrite; both halves are currently absent.)
   - **Anchor:** [`docs/USER_GUIDE.md`](USER_GUIDE.md), [`docs/COMMAND_REFERENCE.md`](COMMAND_REFERENCE.md).
 
 - **4.4 Make archive cleanup obey the read-only archive rule.**
@@ -207,18 +154,6 @@ The local release-notes provider hook and recipe inspection surfaces exist. Rema
   - **Why:** `install-cli.sh` remains large, and the global-config migration is a clean extraction boundary.
   - **Deliverable:** new `scripts/migrate-user-config.sh`; `install-cli.sh` delegates.
   - **Anchor:** [`install-cli.sh`](../install-cli.sh).
-
-- **5.2 Add `--json` summaries to `refresh` and `ship`.**
-  - **Status:** DEFER (post-enterprise; revisit when CI/automation integration becomes a tier-1 customer ask).
-  - **Why:** `status` and `config list` have JSON, but streaming side-effect commands need structured step-result plumbing first.
-  - **Deliverable:** orchestrator emits a structured per-step result object; `--json` on `refresh` and `ship` serializes the final summary.
-  - **Anchor:** [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh), [`modules/core/manifest-refresh.sh`](../modules/core/manifest-refresh.sh), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh).
-
-- **5.3 Stop reporting bogus precision on cached trusted timestamps.**
-  - **Status:** DEFER (post-enterprise; cosmetic).
-  - **Why:** fleet ship output reads `Trusted timestamp ±0.000000` for cached values across all members within seconds of each other. The `±0.000000` is technically the cache's confidence-of-itself, but reads as "we measured to sub-microsecond precision" — confusing for anyone auditing release timing. Observed 2026-05-19 across 4 members.
-  - **Deliverable:** when emitting a cached timestamp, label it as `cached (from <source> at <time>)` and drop the precision figure, OR report the original measurement's confidence rather than zero. Add a regression covering the cached-emit path.
-  - **Anchor:** [`modules/system/manifest-time.sh`](../modules/system/manifest-time.sh).
 
 - **5.4 Add e2e coverage for the brew-managed tap dir scenario.**
   - **Status:** T3.
@@ -254,6 +189,18 @@ Items considered during the 2026-05-22 enterprise-readiness triage and cut. List
 - **6.1 Fleet-service config editor (formerly §1.4).**
   - **Cut reason:** command creep. `manifest.fleet.config.yaml` is the source of truth for `services.<name>.release.enabled` and `services.<name>.release.strategy`; the file is human-editable and schema-validated on load. Adding a CLI subcommand that wraps `vim` of a transparent YAML file introduces a new validation surface, a new bug surface, and a new test surface in exchange for keystrokes that don't reduce risk.
   - **Original deliverable (kept for provenance):** add a safe-by-default command, final name TBD, for scoped fleet-service config edits such as enabling/disabling release and setting release strategy.
+
+- **6.2 Workspace/fleet membership drift detection (formerly §1.3).**
+  - **Cut reason:** command creep / doctor-style sprawl. Users discover drift naturally on the next `ship fleet` preview, which already enumerates members from fleet config against the working tree. A dedicated read-only diff command would add a CLI surface, a validation surface, and a test surface for information the next fleet preview already surfaces.
+  - **Original deliverable (kept for provenance):** read-only workspace diff that compares discovered repos to fleet config, exposed from a low-friction command such as `manifest doctor`, `manifest update fleet --dry-run`, or a timestamped passive check.
+
+- **6.3 `--json` summaries for `refresh` and `ship` (formerly §5.2).**
+  - **Cut reason:** no current customer ask. `status` and `config list` already emit JSON; streaming side-effect commands would need a structured per-step result object plumbed through the orchestrator. Meaningful surface area for zero current demand. Re-file as a fresh item if CI/automation integration becomes a tier-1 customer request.
+  - **Original deliverable (kept for provenance):** orchestrator emits a structured per-step result object; `--json` on `refresh` and `ship` serializes the final summary.
+
+- **6.4 Cached-timestamp precision label (formerly §5.3).**
+  - **Cut reason:** cosmetic. Fleet ship output reads `Trusted timestamp ±0.000000` for cached values across members. The `±0.000000` reads as bogus precision, but values themselves are correct and the label causes no compliance, safety, or workflow harm. Carry this only if a user surfaces confusion in an auditing context.
+  - **Original deliverable (kept for provenance):** when emitting a cached timestamp, label it as `cached (from <source> at <time>)` and drop the precision figure, OR report the original measurement's confidence rather than zero. Add a regression covering the cached-emit path.
 
 ---
 
