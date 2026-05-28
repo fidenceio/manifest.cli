@@ -1976,6 +1976,32 @@ _fleet_preflight_git_writability() {
     return 1
 }
 
+# Refuses fleet apply if any releaseable member has HEAD on a branch other than
+# the one its release would push. Same correctness guard as the single-repo
+# path (manifest_assert_release_branch) — releasing off the default branch tags
+# the wrong commit and pushes a stale default branch. Reports every offender at
+# once so the user can fix the whole fleet before retrying. Skipped members are
+# not checked — fleet apply never ships them.
+_fleet_preflight_on_default_branch() {
+    local failed=0
+    local service path reason
+    for service in $MANIFEST_CLI_FLEET_SERVICES; do
+        path=$(get_fleet_service_property "$service" "path")
+        if ! reason=$(_fleet_service_release_reason "$service" "$path"); then
+            continue
+        fi
+        if ! manifest_assert_release_branch "$path" "  "; then
+            failed=1
+        fi
+    done
+
+    [[ $failed -eq 0 ]] && return 0
+
+    echo ""
+    echo "Pre-flight refused before any mutation; no fleet member was shipped."
+    return 1
+}
+
 # Returns the user-facing service name for plan output. YAML keys are
 # intentionally dot-free for variable-name compatibility (see
 # manifest-fleet-config.sh `tr '[:lower:]-.' '[:upper:]__'`), so the
@@ -2245,6 +2271,10 @@ EOF
         return 1
     fi
 
+    if ! _fleet_preflight_on_default_branch; then
+        return 1
+    fi
+
     if [ "$run_prep" != "true" ]; then
         echo "⏭️  Skipping fleet prep (--noprep)."
         for service in $MANIFEST_CLI_FLEET_SERVICES; do
@@ -2506,6 +2536,10 @@ EOF
     fi
 
     if ! _fleet_preflight_git_writability; then
+        return 1
+    fi
+
+    if ! _fleet_preflight_on_default_branch; then
         return 1
     fi
 
