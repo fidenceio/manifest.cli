@@ -372,6 +372,46 @@ create_tag() {
     fi
 }
 
+# Refuse to start a publish if HEAD isn't on the branch the release will push.
+#
+# push_changes() below pushes the *literal* default-branch ref
+# (${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}), but the version commit and tag are
+# created on whatever HEAD is checked out. When HEAD differs, the commit+tag land
+# on the wrong branch and `git push origin <default>` pushes a stale default
+# branch — the v4.0.0 mishap (tag public, main never advanced). The workflow
+# cannot run correctly off the default branch, so we stop and hand the user the
+# git steps to fix it rather than wrapping/auto-fixing git. The comparison uses
+# the same env var push_changes uses, so a configured non-main default (e.g.
+# master) is honored without an override knob.
+#
+# ARGUMENTS:
+#   $1 - repo path (default ".") so callers using `git -C <path>` match.
+#   $2 - line prefix (default "   ") for alignment / per-repo labeling.
+# RETURNS: 0 if on the default branch; 1 (with remediation output) otherwise.
+manifest_assert_release_branch() {
+    local repo="${1:-.}"
+    local prefix="${2:-   }"
+    local default_branch="${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}"
+    local current
+    current="$(git -C "$repo" branch --show-current 2>/dev/null)"
+
+    [[ "$current" == "$default_branch" ]] && return 0
+
+    local where="branch '$current'"
+    [[ -z "$current" ]] && where="a detached HEAD"
+    echo "${prefix}❌ Cannot release: HEAD is on $where, not '$default_branch'."
+    echo "${prefix}   Ship pushes the '$default_branch' branch and the new tag, but the"
+    echo "${prefix}   version commit and tag would land on $where — so '$default_branch'"
+    echo "${prefix}   would be pushed unchanged and the tag would point off '$default_branch'."
+    echo "${prefix}   Resolve with git, then re-run ship:"
+    if [[ -n "$current" ]]; then
+        echo "${prefix}     git checkout $default_branch && git merge $current   # bring the work onto '$default_branch'"
+    fi
+    echo "${prefix}     git checkout $default_branch                          # if the work is already on '$default_branch'"
+    return 1
+}
+export -f manifest_assert_release_branch
+
 push_changes() {
     local version="$1"
     local tag_name

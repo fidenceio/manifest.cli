@@ -583,7 +583,17 @@ manifest_ship_workflow() {
     PROJECT_ROOT="$(pwd)"
     export PROJECT_ROOT
     workflow_start_sha="$(git rev-parse HEAD 2>/dev/null || echo "")"
-    
+
+    # Earliest clean halt point: a publish pushes the default-branch ref, so
+    # refuse before any mutation if HEAD is on a different branch (see
+    # manifest_assert_release_branch). Local/prep mode never pushes, so it's exempt.
+    if [ "$publish_release" = "true" ]; then
+        if ! manifest_assert_release_branch "$PROJECT_ROOT"; then
+            log_error "Aborting ship: HEAD is not on the release branch."
+            return 1
+        fi
+    fi
+
     # Determine version increment type
     if [ -z "$increment_type" ]; then
         increment_type="patch"
