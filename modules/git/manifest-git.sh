@@ -514,7 +514,6 @@ revert_version() {
     if git checkout "$selected_version"; then
         echo "✅ Successfully reverted to $selected_version"
         echo "💡 Note: You are now in 'detached HEAD' state"
-        echo "   To continue development, create a new branch: git checkout -b new-branch"
     else
         echo "❌ Failed to revert to $selected_version"
         return 1

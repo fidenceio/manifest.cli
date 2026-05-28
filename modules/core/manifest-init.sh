@@ -163,14 +163,6 @@ cat CHANGELOG.md
 - **Changelog**: [CHANGELOG.md](CHANGELOG.md)
 - **Project Docs**: [$(basename "$(get_docs_folder)")/]($(basename "$(get_docs_folder)")/) (if available)
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test your changes
-5. Submit a pull request
-
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
