@@ -1,65 +1,52 @@
 # Manifest CLI Documentation
 
+Use this index by task. The README is the entry point; this directory carries the detailed operating model and references.
+
 **Version:** 50.0.1 | **Updated:** 2026-05-28
 
----
+## Start
 
-## Getting Started
+| Task | Document |
+| ---- | -------- |
+| Understand the product | [README](../README.md) |
+| Install Manifest for product use | [Installation](INSTALLATION.md) |
+| Run repo validation as a contributor | [tests/README.md](../tests/README.md) |
+| Learn the daily workflow | [User Guide](USER_GUIDE.md) |
 
-| Document | Description |
-| -------- | ----------- |
-| [Installation Guide](INSTALLATION.md) | Setup, upgrade, uninstall, and troubleshooting |
-| [User Guide](USER_GUIDE.md) | Workflows, daily commands, and configuration |
-| [Examples](EXAMPLES.md) | Real-world command examples |
+## Operate
+
+| Task | Document |
+| ---- | -------- |
+| Ship one repo | [User Guide: Repository release workflow](USER_GUIDE.md#repository-release-workflow) |
+| Ship a fleet | [User Guide: Fleet workflow](USER_GUIDE.md#fleet-workflow) |
+| Use PR commands | [User Guide: Pull request workflow](USER_GUIDE.md#pull-request-workflow) |
+| Configure Manifest | [User Guide: Configuration](USER_GUIDE.md#configuration) |
+| Publish generated docs | [Docs site generation](DOCS_SITE.md) |
+| Copy command recipes | [Examples](EXAMPLES.md) |
 
 ## Reference
 
-| Document | Description |
-| -------- | ----------- |
-| [Command Reference](COMMAND_REFERENCE.md) | Every command, flag, and option |
-| [YAML config example](../examples/manifest.config.yaml.example) | Full schema with all keys + comments |
+| Reference | Contents |
+| --------- | -------- |
+| [Command Reference](COMMAND_REFERENCE.md) | Command grammar, flags, effects, and environment behavior |
+| [Fleet Design Spec](FLEET_DESIGN_SPEC.md) | Fleet config, detection, adoption, reconciliation, and release behavior |
+| [CLI Transaction Map](CLI_TRANSACTION_MAP.md) | Release and tap transaction boundaries |
+| [YAML config example](../examples/manifest.config.yaml.example) | Full config shape with comments |
+| [Recipe schema](contracts/recipe.schema.json) | Built-in and project recipe contract |
 
-## Architecture
+## Project Direction
 
-| Document | Description |
-| -------- | ----------- |
-| [Fleet Design Spec](FLEET_DESIGN_SPEC.md) | Polyrepo orchestration architecture |
-| [North Star](NORTH_STAR.md) | Strategic direction and 12-month priorities |
-| [Security Notes](SECURITY_ANALYSIS_REPORT.md) | Current security posture and historical audit pointer |
+| Document | Contents |
+| -------- | -------- |
+| [North Star](NORTH_STAR.md) | Product direction and cross-repo contract |
+| [Tracker](TRACKER.md) | Live implementation work |
+| [Changelog](../CHANGELOG.md) | Release history |
 
-## Release History
+## Supporting Docs
 
-| Document | Description |
-| -------- | ----------- |
-| [Root Changelog](../CHANGELOG.md) | Current release history |
-| [Archived Releases](zArchive/INDEX.md) | Versioned release documentation, grouped by major |
-
----
-
-## Quick Start
-
-```bash
-# Install
-brew tap fidenceio/tap && brew install manifest
-
-# Preview and apply project scaffold
-manifest init repo
-manifest init repo -y
-
-# Preview and apply remote prep
-manifest prep repo
-manifest prep repo -y
-
-# Preview and apply a patch release
-manifest ship repo patch
-manifest ship repo patch -y
-
-# Preview a release locally first
-manifest ship repo minor --local
-
-# Initialize a fleet
-manifest init fleet
-
-# Get help
-manifest --help
-```
+| Document | Contents |
+| -------- | -------- |
+| [Shell completions](../completions/README.md) | Bash and zsh completion installation |
+| [Git hooks](../.git-hooks/README.md) | Versioned pre-commit hook |
+| [Security analysis](SECURITY_ANALYSIS_REPORT.md) | Current security audit report |
+| [Archive](zArchive/INDEX.md) | Historical release docs, reports, and trackers |

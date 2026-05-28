@@ -1,22 +1,38 @@
-# Git Hooks Directory
+# Git Hooks
 
-This directory stores version-controlled git hooks that can be installed into `.git/hooks/`.
+This directory contains versioned hooks for Manifest CLI contributors.
 
 ## Included Hook
 
-- `pre-commit`: blocks likely secrets/private config from being committed.
+| Hook | Purpose |
+| ---- | ------- |
+| `pre-commit` | Scans staged content for secrets, private env files, large binaries, and unsafe release artifacts |
 
 ## Install
 
 ```bash
-cp .git-hooks/pre-commit .git/hooks/pre-commit
+ln -sf ../../.git-hooks/pre-commit .git/hooks/pre-commit
 chmod +x .git/hooks/pre-commit
 ```
 
-## Why This Exists
+## Recovery
 
-Git does not version files under `.git/hooks/`. Keeping canonical hook scripts in `.git-hooks/` lets the team review and evolve hook logic in normal pull requests.
+If the hook blocks a commit:
+
+```bash
+git status --short
+git restore --staged <file>
+# remove the secret or move private data into an ignored local file
+git add <safe-files>
+```
+
+Bypass only for emergencies and only after understanding the finding:
+
+```bash
+git commit --no-verify
+```
 
 ## Related Docs
 
-- `docs/USER_GUIDE.md` — Git Hooks section
+- [User Guide: Security and maintenance](../docs/USER_GUIDE.md#security-and-maintenance)
+- [Tests](../tests/README.md)

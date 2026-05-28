@@ -1,5 +1,9 @@
 # Changelog
 
+This changelog is the product release history for Manifest CLI. Workspace
+coordination changes live in the parent workspace changelog; Homebrew formula
+distribution history lives in `fidenceio.homebrew.tap/CHANGELOG.md`.
+
 ## [50.0.1] - 2026-05-28
 
 **Release Type:** Patch

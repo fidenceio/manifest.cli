@@ -1,547 +1,218 @@
 # Manifest CLI User Guide
 
-This guide covers the current Manifest CLI workflow: first-class commands,
-inspectable recipes, safe preview/apply behavior, release docs, and fleet
-orchestration.
-
----
-
-## The Five-Stage Journey
-
-Manifest organizes commands around a five-stage workflow that mirrors how developers actually work with a repository:
+Manifest organizes release work into explicit stages:
 
 ```text
-config  -->  init  -->  prep  -->  refresh  -->  ship
+config -> init -> prep -> refresh -> ship
 ```
 
-1. **`manifest config`** — set up your environment (interactive wizard, show settings, diagnose issues).
-2. **`manifest init repo|fleet`** — scaffold required files (VERSION, CHANGELOG, docs, .gitignore).
-3. **`manifest prep repo|fleet`** — connect remotes and pull latest code.
-4. **`manifest refresh repo|fleet`** — regenerate docs, metadata, fleet membership without a version change.
-5. **`manifest ship repo|fleet <type>`** — publish a release (bump, docs, commit, tag, push, Homebrew).
+Each mutating stage previews by default. Add `-y` or `--yes` to apply.
 
-Every journey command takes a **scope**: `repo` (single repository) or `fleet` (coordinated multi-repo).
+## Core Concepts
 
-Supported release types: `patch`, `minor`, `major`, `revision`.
+### Repo Scope
 
-Manifest is safe by default:
-
-```text
-command          preview only
-command --dry-run explicit preview
-command -y       apply the plan
-command --local -y apply local-only changes
-```
-
-Fleet adoption has two extra commands before the normal fleet journey:
-`manifest plan fleet` generates an editable plan, and `manifest reconcile fleet`
-validates or applies it. Both are dry-run by default.
-
-### Migrating to safe-by-default
-
-If you used Manifest before the safe-by-default contract, three things changed.
-Update any scripts or CI that assumed the old behavior:
-
-- **Preview is the default.** `manifest ship repo patch` — and every mutating
-  command — previews and exits without touching your repository. The contract
-  change flipped a bare command from "apply" to "preview." Add `-y` to apply.
-- **`-y` is the only apply consent.** A command mutates only when you pass `-y`
-  (or `--yes`). No config field or environment variable turns a preview into an
-  apply.
-- **`MANIFEST_CLI_AUTO_CONFIRM` no longer authorizes apply.** It only answers
-  interactive prompts *after* apply mode is selected with `-y`.
-  `MANIFEST_CLI_AUTO_CONFIRM=1` on a bare command still previews. Scripts that
-  relied on it to ship unattended must add `-y`.
-
-The migration is mechanical: anywhere a script ran a mutating `manifest` command
-and expected it to apply, append `-y`.
-
-### First-Class Commands And Recipes
-
-First-class commands are the stable interface for humans, scripts, and CI:
-`manifest ship repo patch`, `manifest ship fleet minor`, `manifest status repo`,
-`manifest pr checks`, and the rest of the documented command surface. These
-commands own parsing, help text, safety policy, and user-facing output.
-
-Recipes are YAML definitions that make those workflows inspectable. Built-in
-recipes live in `recipes/builtin`, project recipes may live in
-`.manifest/recipes`, and each recipe declares ordered steps plus effect metadata:
-`read`, `local-write`, `remote-write`, or `pr`.
-Recipes are not the commands to run. They are contracts behind first-class
-commands, so execution stays attached to a clear public command, help text, and
-safe-by-default policy.
+Repo scope targets the enclosing Git repository.
 
 ```bash
-manifest recipe list
-manifest recipe explain manifest.builtin.ship.repo.patch
-manifest recipe show manifest.builtin.ship.repo.patch
-manifest ship repo patch --explain
+manifest status repo
+manifest ship repo patch
+manifest ship repo patch -y
 ```
 
-Use first-class commands to do the work; use recipes to inspect what those
-commands are going to do.
+Manifest chooses the repo from the current directory's `.git` root. It does not accept a path selector for repo-scoped release commands.
 
-Local apply is guarded by those recipe effects. `manifest ship repo patch
---local -y` can prepare the release locally, but mapped commands reject any
-active `remote-write` step before the workflow starts.
+### Fleet Scope
 
----
+Fleet scope targets repositories selected by `manifest.fleet.config.yaml` and `manifest.fleet.tsv`.
+
+```bash
+manifest status fleet
+manifest ship fleet patch
+manifest ship fleet patch -y
+```
+
+Fleet commands print the fleet root, config path, selected services, release decisions, and branch state before apply.
+
+### Preview And Apply
+
+| Form | Meaning |
+| ---- | ------- |
+| No `-y` | Preview |
+| `--dry-run` | Explicit preview |
+| `-y` / `--yes` | Apply |
+| `--local -y` | Apply local writes only; skip remote side effects |
+
+`MANIFEST_CLI_AUTO_CONFIRM=1` may answer prompts after apply mode is selected. It is not an apply selector.
 
 ## First-Time Setup
 
 ```bash
-# View all available commands
-manifest --help
-
-# Preview project scaffold, then apply it
+manifest doctor
+manifest config show
 manifest init repo
 manifest init repo -y
+```
 
-# Review your current configuration
-manifest config show
+`manifest init repo` scaffolds required project files such as `VERSION`, `CHANGELOG.md`, docs, and ignore rules.
 
-# Validate dependencies, config, and repository state
+## Repository Release Workflow
+
+Inspect:
+
+```bash
+manifest status
 manifest doctor
-
-# Launch the interactive configuration wizard
-manifest config setup
 ```
 
----
-
-## Daily Commands
-
-### Prepare Your Workspace
+Prepare:
 
 ```bash
-manifest prep repo             # Preview remote prep
-manifest prep repo -y          # Connect remotes if missing, pull latest
+manifest prep repo
+manifest prep repo -y
 ```
 
-If no remote is configured and you are in a terminal, Manifest prompts for a remote URL.
-
-### Preview a Release Locally
+Preview release:
 
 ```bash
-manifest ship repo patch --local    # Preview local-only patch release
-manifest ship repo patch --local -y # Apply local-only patch release
-manifest ship repo -M --local -y    # Apply local-only major release
+manifest ship repo patch
+manifest ship repo minor
+manifest ship repo major
 ```
 
-The `--local` flag limits the apply scope. It still previews unless you add `-y`.
-
-### Publish a Release
+Apply:
 
 ```bash
-manifest ship repo patch       # Preview full patch release
-manifest ship repo patch -y    # Apply full patch release
-manifest ship repo major -i -y # Apply major release with interactive safety prompts
+manifest ship repo patch -y
 ```
 
-Ship preview starts by printing the resolved repo identity, including `You are in:`, Git root, origin, branch/upstream, fleet membership when detected, and the reminder that `ship repo` targets only that Git repository. Ship apply prints the same target context plus an explicit target summary, then asks `Apply to this repository? [y/N]` before mutation. After confirmation it runs: sync, version bump, documentation generation, markdown validation, commit, Git tag, push to all remotes, and Homebrew formula update (in the canonical repository). When the canonical CLI release updates the Homebrew tap, Manifest also refreshes any clean local tap checkout it can safely fast-forward, including sibling workspace checkouts such as `fidenceio.homebrew.tap`. Canonical CLI `minor`, `major`, and `revision` ships then run one guarded follow-up patch under the upgraded installed CLI so release-process changes take effect immediately. Set `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH=false` to skip it.
-
-Before any apply-mode repo mutation, Manifest verifies that Git metadata is
-writable and that it can create the Git index lock needed for commit/tag work.
-If that preflight fails, the command stops before bumping `VERSION`. In sandboxed
-automation, run release/apply commands outside the restrictive sandbox or grant
-the exact Manifest command Git write access; preview commands can still run
-inside restricted environments.
-
-Preview output includes a `What's new` section. That summary is derived from the
-same change-analysis path used for `CHANGELOG.md`, generated release docs, and
-GitHub Release notes, so release copy stays aligned across local preview and
-published artifacts.
-
-When `github.release.enabled` is true, repo ship creates or reuses the matching
-GitHub Release after the tag is pushed. Missing `gh`, missing authentication, or
-a non-GitHub origin skips the step unless `github.release.required` is true.
-
-```yaml
-github:
-  release:
-    enabled: true
-    required: false
-    draft: false
-    prerelease: false
-```
-
-#### Tag Placement (`release.tag_target`)
-
-The release tag can point at either of two commits:
-
-| Value | Tag points at | When to use |
-| ----- | ------------- | ----------- |
-| `version_commit` (default) | The "Bump version to X" commit | Most projects — keeps the tag anchored to the canonical release artifact even when a CHANGELOG commit lands after the bump |
-| `release_head` | Whatever HEAD is when the tag is created (post-bump, post-CHANGELOG, pre-Homebrew) | Projects that want the CHANGELOG entry inside the tag |
-
-The Homebrew formula commit is intentionally outside the tag in both cases:
-`update_homebrew_formula` curls the GitHub tarball at the tag URL to compute
-SHA256, which would require the formula to contain its own SHA256
-(chicken-and-egg). So `release_head` means "last commit *before* Homebrew",
-not literally the final commit of the release.
-
-Configure in `manifest.config.yaml`:
-
-```yaml
-release:
-  tag_target: "version_commit"   # or "release_head"
-```
-
-The value is whitespace- and case-tolerant (`Version_Commit`, `" release_head "` all work).
-
-### Regenerate Documentation
+Local-only apply:
 
 ```bash
-manifest refresh repo              # Regenerate docs and metadata
-manifest refresh repo --commit     # Also commit the refreshed files
+manifest ship repo minor --local -y
 ```
 
-Use `refresh` between releases to keep docs current without bumping the version.
+Repo ship can bump `VERSION`, update `CHANGELOG.md`, refresh docs, commit, tag, push, create a GitHub Release, and update the Homebrew formula when the repo is the canonical CLI repo.
 
-### Release-Notes Provider Hook
+## Fleet Workflow
 
-By default, every `manifest ship` produces a release-notes bullet list from
-the cleaned commit subjects since the last tag. The local generator is
-boilerplate-free: a single `### Changes` section, narrative bullets, no
-counts table. Empty ranges produce a one-liner `**Release Type:** Patch — no
-user-facing changes.` and no body.
-
-If you want richer prose, you can plug in any LLM:
-
-```yaml
-# manifest.config.yaml
-docs:
-  release_notes:
-    provider: command
-    command: /absolute/path/to/your-provider.sh
-    required: false   # true → ship aborts on provider failure
-```
-
-The provider is called as `your-provider.sh REQUEST_FILE OUTPUT_FILE`:
-
-- `REQUEST_FILE` is markdown Manifest writes for you. It contains the prompt,
-  the version metadata, the cleaned commit subjects, and the changed-file
-  list. **Manifest owns the prompt and the output schema** — your provider
-  is a thin transport that hands the request to an LLM and writes the
-  response back.
-- `OUTPUT_FILE` is where you write the LLM's response. Manifest validates
-  the response before splicing it into `CHANGELOG.md`:
-  - Bullets only (lines starting with a `-` followed by a space); preamble
-    before the first bullet and prose after the last bullet are stripped.
-  - Banned LLM-preamble phrases ("As an AI…", "Sure, here…", etc.) cause
-    the output to be rejected.
-  - Hard cap at 15 bullets; excess is truncated.
-- Any LLM works (Claude, GPT, a local model). See
-  [examples/release-notes-providers/example-provider.sh](../examples/release-notes-providers/example-provider.sh)
-  for the contract and a stub you can copy.
-
-If the provider exits non-zero or its output fails validation, Manifest logs
-a warning and falls back to the local generator. Set `required: true` to
-abort the ship instead.
-
-### Other Common Operations
+### Initialize A Fleet
 
 ```bash
-manifest revert               # Revert to previous version
-manifest security --check     # Run read-only security checks
-manifest upgrade              # Check for and install CLI updates
-```
-
----
-
-## Pull Request Workflows
-
-```bash
-manifest pr                   # Interactive PR wizard (TTY mode)
-manifest pr create            # Preview PR creation
-manifest pr create -y         # Create a new pull request
-manifest pr create --draft --labels "feature,v2" -y
-manifest pr update            # Preview branch update
-manifest pr update -y         # Update PR branch
-manifest pr status            # Show PR status
-manifest pr checks            # Show CI check results
-manifest pr checks --watch    # Watch checks in real-time
-manifest pr ready             # Preview marking draft PR ready
-manifest pr ready -y          # Mark draft PR ready
-manifest pr queue             # Preview auto-merge queueing
-manifest pr queue --method squash -y
-manifest pr policy show       # Display PR policy profile
-manifest pr policy validate   # Validate against policy
-```
-
-Mutating PR commands follow the same safe-by-default policy as journey
-commands. Bare `create`, `ready`, `merge`, `update`, `queue`, and fleet PR
-commands preview the GitHub action; add `-y` or `--yes` to apply. Read-only
-commands such as `status`, `checks`, and `policy show` run without apply mode.
-
----
-
-## Fleet Workflows
-
-Fleet manages versioning and releases across multiple repositories.
-
-### Adopt an Existing Fleet
-
-Use `plan` and `reconcile` when a workspace already contains multiple repos,
-plain directories, or submodules and you want an explicit adoption file before
-anything changes.
-
-```bash
-manifest plan fleet                    # Preview plan generation, writes nothing
-manifest plan fleet --apply            # Write manifest.fleet.plan.yaml
-manifest plan fleet --name "my-platform" --apply
-
-# Review and edit manifest.fleet.plan.yaml.
-
-manifest reconcile fleet               # Validate and explain, writes nothing
-manifest reconcile fleet --do          # Apply local filesystem/config changes
-manifest reconcile fleet --apply --commit
-```
-
-`--apply` and `--do` are aliases. `--commit` requires `--apply`/`--do`, and
-`--push` requires `--commit`. `--force` does not bypass target path collisions.
-
-The plan file supports these actions:
-
-| Action | Behavior |
-| ------ | -------- |
-| `track` | Add an existing git repo to fleet config |
-| `init` | Initialize a plain directory as a git repo and track it |
-| `move` | Move a directory/repo to `target_path`, then track it |
-| `adopt_submodule` | Convert a submodule into a standalone tracked repo |
-| `skip` | Leave the entry untouched |
-
-Submodule adoption is intentionally gated:
-
-```bash
-manifest reconcile fleet --apply --adopt-submodules
-```
-
-Only use it after reviewing the generated `parent_path`, `submodule_name`,
-`remote_url`, and `pinned_commit` fields.
-
-### Initialize a New Fleet
-
-```bash
-# Phase 1: Scan directories, choose repo depth per folder, create manifest.fleet.tsv
 manifest init fleet
-manifest init fleet --dry-run
+```
 
-# Phase 2: Re-run after reviewing TSV — scaffolds repos, creates fleet config
-manifest init fleet
-manifest init fleet --dry-run
+The first run scans and writes `manifest.fleet.tsv` for review. After editing the TSV, run the command again to create fleet config and repo scaffolding.
 
-# Custom scan depth (default: 2 levels)
+Useful variants:
+
+```bash
 manifest init fleet --depth 3
-
-# Exhaustive review mode: list every scanned folder in the TSV
 manifest init fleet --all-folders
-
-# Named fleet
-manifest init fleet --name "my-platform"
+manifest init fleet --name platform-services
 ```
 
-The two-phase approach lets you choose repo granularity before committing to a fleet configuration. In an interactive shell, Phase 1 asks how deep repos should be under each top-level folder: `0` means the folder itself, `1` means direct children such as `apps/*`, and `2` means grandchildren such as `apps/*/*`. During initialization, Manifest ensures every selected repo has a `.gitignore`. Existing `.gitignore` files with entries are preserved; a `.gitignore.manifest` reference file is created instead.
-
-For messy existing workspaces, prefer `manifest plan fleet` and
-`manifest reconcile fleet`; they keep the adoption decisions in an editable
-YAML plan with a dry-run default.
-
-### Prepare Fleet Workspace
+### Adopt An Existing Workspace
 
 ```bash
-manifest prep fleet                # Clone missing, pull existing
-manifest prep fleet --parallel     # Run operations in parallel
-manifest prep fleet --clone-only   # Clone only (skip pull)
-manifest prep fleet --pull-only    # Pull only (skip clone)
+manifest plan fleet
+manifest plan fleet --apply
+manifest reconcile fleet
+manifest reconcile fleet --do
 ```
 
-### Refresh Fleet
+`--commit` requires `--apply` / `--do`. `--push` requires `--commit`.
+
+### Operate A Fleet
 
 ```bash
-manifest refresh fleet             # Re-scan membership, validate, regenerate docs
-manifest refresh fleet --dry-run   # Preview changes without applying
+manifest status fleet
+manifest prep fleet
+manifest refresh fleet
+manifest ship fleet patch
+manifest ship fleet patch -y
+manifest ship fleet patch --local -y
 ```
 
-### Ship Fleet Release
+Release-disabled services are listed and skipped by ship.
+
+## Pull Request Workflow
+
+Native PR commands wrap `gh` and do not require Manifest Cloud:
 
 ```bash
-manifest ship fleet minor                       # Preview coordinated minor release
-manifest ship fleet minor -y                    # Apply coordinated minor release
-manifest ship fleet minor --local -y            # Apply local-only across fleet
+manifest pr
+manifest pr create --draft
+manifest pr checks --watch
+manifest pr ready
+manifest pr update
+manifest pr merge --squash
 ```
 
-Fleet membership and per-service release eligibility are read from
-`manifest.fleet.config.yaml` — toggle `services.<name>.release.enabled` to
-include or exclude a service from coordinated releases.
-
-Fleet PR work is explicit: bare `manifest pr fleet ...` previews, and
-`manifest pr fleet ... -y` applies PR creation, queueing, or readiness
-operations.
-
-Fleet release previews always show the fleet name, root, config file, `Scope: fleet`,
-service count, and the included repository table before any apply step.
-Use `manifest status fleet` for the same member list plus branch, state,
-version, path, and latest commit.
-
-### Direct Fleet Commands
-
-Fleet commands use action-first syntax:
+Cloud-only extensions:
 
 ```bash
-manifest status fleet              # Fleet repository status table
-manifest discover fleet --depth 3  # Find new repos
-manifest add fleet ./new-service --dry-run   # Preview service YAML
-manifest validate fleet            # Check configuration
-manifest pr fleet queue            # Auto-merge PRs across fleet
-manifest docs fleet --dry-run      # Preview docs generation
+manifest pr queue
+manifest pr policy show
+manifest pr policy validate
 ```
 
----
-
-## Testing Manifest CLI
-
-The Manifest CLI repo uses a containerized bats-core test runner. Use it when
-developing the CLI so dependencies and generated output stay inside the project
-test container:
-
-```bash
-./scripts/run-tests-container.sh
-./scripts/run-tests-container.sh tests/recipe.bats
-./scripts/run-tests-container.sh tests/github_actions_status.bats
-```
-
-The suite covers release flow, YAML layering, recipe introspection, version
-bump logic, canonical-repo detection, config safety gates, fleet workflows,
-JSON output, Homebrew packaging, local tap refresh, and recovery paths. CI runs
-the same test surface on Ubuntu and macOS.
-
----
+If Cloud plugins are missing, Cloud-only routes print install guidance. Native PR routes continue to work.
 
 ## Configuration
 
-### Interactive Setup
+Configuration loads in this order:
+
+1. Built-in defaults
+2. `~/.manifest-cli/manifest.config.global.yaml`
+3. `manifest.config.yaml`
+4. `manifest.config.local.yaml`
+
+Commands:
 
 ```bash
-manifest config             # Interactive wizard (TTY) or show config (pipe)
-manifest config setup       # Force interactive wizard
-manifest config show        # Display current configuration
-manifest config time        # Show time server settings
-manifest config doctor      # Detect deprecated settings
-manifest config doctor --fix      # Auto-fix deprecated settings
-manifest config doctor --dry-run  # Preview fixes without applying
+manifest config show
+manifest config list
+manifest config get git.tag_prefix
+manifest config describe git.tag_prefix
+manifest config set git.tag_prefix release-
+manifest config unset git.tag_prefix
+manifest config doctor
+manifest config doctor --fix
 ```
 
-### Configuration Loading Order
+`config set` writes local config by default. Global writes go through an additional safety gate.
 
-Configuration uses YAML files loaded in priority order (later overrides earlier):
-
-| Priority | File | Scope |
-| -------- | ---- | ----- |
-| 1 (lowest) | Code defaults | Built-in |
-| 2 | `~/.manifest-cli/manifest.config.global.yaml` | User-wide |
-| 3 | `manifest.config.yaml` | Project |
-| 4 (highest) | `manifest.config.local.yaml` (git-ignored) | Local overrides |
-
-All settings map to `MANIFEST_CLI_*` environment variables via a bidirectional YAML-to-env mapping in `manifest-yaml.sh`. The YAML parser is the yq version and vendor defined in `modules/core/manifest-requirements.sh`.
-
-For the full configuration schema with comments on every key, see
-[examples/manifest.config.yaml.example](../examples/manifest.config.yaml.example).
-
----
-
-## Security and Maintenance
+## Documentation Generation
 
 ```bash
-manifest security --check   # Run read-only security checks
-manifest upgrade --check    # Check for updates (no install)
-manifest upgrade            # Install latest version
-manifest upgrade --force    # Force upgrade regardless of version
-manifest uninstall          # Preview Manifest CLI removal
-manifest uninstall -y       # Remove Manifest CLI
-manifest uninstall --force -y  # Remove without extra confirmations
-manifest reinstall          # Preview full uninstall + reinstall cycle
-manifest reinstall -y       # Apply full uninstall + reinstall cycle
+manifest docs
+manifest docs metadata
+manifest docs cleanup
+manifest docs fleet --dry-run
 ```
 
-### Git Hooks
+Docs-site generation for Jekyll/GitHub Pages is optional and disabled by default. See [DOCS_SITE.md](DOCS_SITE.md).
 
-Manifest CLI ships a `pre-commit` hook in `.git-hooks/pre-commit` that blocks common secret-leak paths before they reach your Git history.
+## Testing Manifest
 
-#### What the Hook Checks
-
-| Check | Description |
-| ----- | ----------- |
-| Private env/config files | Blocks `.env*` and similar files from being committed |
-| Secret patterns | Scans staged content for tokens, API keys, and credentials |
-| `.gitignore` safety | Verifies `.gitignore` is properly configured |
-| Large files | Warns before accidentally committing binaries or archives |
-| Manifest security | Integrates with `manifest security --check` when available |
-
-#### Install
+Contributor validation is containerized:
 
 ```bash
-cp .git-hooks/pre-commit .git/hooks/pre-commit
-chmod +x .git/hooks/pre-commit
+./scripts/run-tests-container.sh
+./scripts/run-tests-container.sh tests/docs_generation.bats
 ```
 
-#### Blocked Commit Recovery
+Do not install test dependencies on the host.
 
-If the hook blocks your commit:
+## Security And Maintenance
 
 ```bash
-# Unstage the problematic file
-git reset HEAD <file>
-
-# Remove secrets or move to an ignored local config file
-# Then re-stage safe files only
-git add <safe-files>
-git commit -m "safe commit"
+manifest security --check
+manifest security
+manifest upgrade
+manifest uninstall
+manifest uninstall -y
 ```
 
-#### Bypass (Emergency Only)
-
-```bash
-git commit --no-verify -m "emergency change"
-```
-
-Use bypass sparingly. Always follow up with a manual `manifest security --check` run to verify no secrets were committed.
-
-#### Team Workflow
-
-- Keep `.git-hooks/pre-commit` version-controlled in your repository.
-- Reinstall the hook after pulling changes to the hook file.
-- Pair local hooks with CI security checks for defense in depth.
-- Use `manifest security --check` as a periodic read-only audit on top of the pre-commit hook.
-
----
-
-## Cloud and Agent
-
-```bash
-# Cloud (Manifest Cloud MCP connector)
-manifest cloud config       # Configure API key and endpoint
-manifest cloud status       # Show connection status
-manifest cloud generate 1.0.0  # Generate docs via cloud
-
-# Agent (containerized secure integration)
-manifest agent init docker  # Initialize Docker-based agent
-manifest agent auth github  # Set up GitHub OAuth
-manifest agent auth manifest  # Set up Manifest Cloud subscription
-manifest agent status       # Show agent status
-manifest agent logs         # View agent logs
-manifest agent uninstall    # Remove agent
-```
-
-Cloud features require `MANIFEST_CLI_CLOUD_API_KEY`. The cloud connector enriches
-decisions but is never a hard runtime requirement.
-
----
-
-## Internal Plumbing
-
-Use the first-class commands for normal work. The CLI also keeps a small set of
-plumbing commands for generated docs, archive cleanup, trusted timestamp display,
-timestamped commits, and isolated version bumps. They are available for
-automation and internal workflows, but the supported user workflow is the
-journey command set plus `status`, `doctor`, `config`, `recipe`, and `pr`.
+The versioned pre-commit hook is documented in [../.git-hooks/README.md](../.git-hooks/README.md).
