@@ -1,5 +1,16 @@
 # Changelog
 
+## [50.1.0] - 2026-05-28
+
+**Release Type:** Minor
+
+### Changes
+
+- Rewrite CLI documentation
+- Restore README runtime contract
+- Fix atomic-upgrade symlink swap on Linux
+
+
 This changelog is the product release history for Manifest CLI. Workspace
 coordination changes live in the parent workspace changelog; Homebrew formula
 distribution history lives in `fidenceio.homebrew.tap/CHANGELOG.md`.
@@ -102,12 +113,3 @@ distribution history lives in `fidenceio.homebrew.tap/CHANGELOG.md`.
 ### Changes
 
 - Add CLI tracker §1.6 fleet resume + §5.5–§5.7 ship reliability
-
-
-## [48.5.2] - 2026-05-22
-
-**Release Type:** Patch
-
-### Changes
-
-- Route raw mktemp through scratch helper; drop inert managed-temp API (Step 7c)
