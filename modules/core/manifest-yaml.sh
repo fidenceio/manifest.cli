@@ -64,6 +64,8 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     # -------------------------------------------------------------------------
     ["release.canonical_repo_slugs"]="MANIFEST_CLI_CANONICAL_REPO_SLUGS"
     ["release.tag_target"]="MANIFEST_CLI_RELEASE_TAG_TARGET"
+    ["release.gate"]="MANIFEST_CLI_RELEASE_GATE"
+    ["release.gate_command"]="MANIFEST_CLI_RELEASE_GATE_COMMAND"
     ["github.release.enabled"]="MANIFEST_CLI_GITHUB_RELEASE_ENABLED"
     ["github.release.required"]="MANIFEST_CLI_GITHUB_RELEASE_REQUIRED"
     ["github.release.draft"]="MANIFEST_CLI_GITHUB_RELEASE_DRAFT"

@@ -68,6 +68,21 @@ release:
   canonical_repo_slugs: "fidenceio/manifest.cli,fidenceio/fidenceio.manifest.cli"
   tag_target: "version_commit"
 
+  # gate — what must be green before a release is published.
+  #   none         No verification. Loud warning + audited bypass.
+  #   local-tests  (default) Run the test command before any version mutation;
+  #                a failure aborts with the repo untouched.
+  #   remote-ci    Require the pushed commit's GitHub checks to be green before
+  #                the GitHub Release / Homebrew publish (tag is already pushed).
+  #   all          local-tests AND remote-ci.
+  # Tolerant of surrounding whitespace and case.
+  gate: "local-tests"
+
+  # gate_command — command run for the local-tests phase. Empty auto-detects
+  # ./scripts/run-tests.sh. Set this to your project's test entrypoint, e.g.
+  # "pytest -q", "go test ./...", "npm test", "make test".
+  gate_command: ""
+
 # -----------------------------------------------------------------------------
 # Ship
 # -----------------------------------------------------------------------------

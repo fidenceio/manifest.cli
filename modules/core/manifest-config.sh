@@ -658,6 +658,14 @@ set_default_configuration() {
 
     # Release Policy
     export MANIFEST_CLI_RELEASE_TAG_TARGET="${MANIFEST_CLI_RELEASE_TAG_TARGET:-version_commit}"
+    # Release gate — what must be green before a release is published.
+    #   none        no verification (loud, audited bypass)
+    #   local-tests run the project's test command before any mutation (default)
+    #   remote-ci   require the pushed commit's GitHub checks to be green before publish
+    #   all         local-tests AND remote-ci
+    export MANIFEST_CLI_RELEASE_GATE="${MANIFEST_CLI_RELEASE_GATE:-local-tests}"
+    # Command run for the local-tests phase. Empty = auto-detect ./scripts/run-tests.sh.
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND="${MANIFEST_CLI_RELEASE_GATE_COMMAND:-}"
     export MANIFEST_CLI_GITHUB_RELEASE_ENABLED="${MANIFEST_CLI_GITHUB_RELEASE_ENABLED:-true}"
     export MANIFEST_CLI_GITHUB_RELEASE_REQUIRED="${MANIFEST_CLI_GITHUB_RELEASE_REQUIRED:-false}"
     export MANIFEST_CLI_GITHUB_RELEASE_DRAFT="${MANIFEST_CLI_GITHUB_RELEASE_DRAFT:-false}"
