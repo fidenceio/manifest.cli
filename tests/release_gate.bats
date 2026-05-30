@@ -1,0 +1,219 @@
+#!/usr/bin/env bats
+
+# Coverage for the release gate (MANIFEST_CLI_RELEASE_GATE / release.gate):
+# the single self-describing policy that blocks a release until verification
+# passes. Exercises policy normalization, the pre-bump local-tests phase, the
+# post-push remote-ci phase, the loud+audited `none` bypass, and that an
+# injection-shaped value is rejected rather than executed.
+
+load 'helpers/setup'
+
+setup() {
+    SCRATCH="$(mk_scratch)"
+    export SCRATCH
+    HOME="$SCRATCH/home"
+    mkdir -p "$HOME" "$SCRATCH/proj"
+    export HOME
+    export PROJECT_ROOT="$SCRATCH/proj"
+
+    # Minimal module stack for the gate functions.
+    export MANIFEST_CLI_CORE_MODULES_DIR="$TEST_REPO_ROOT/modules"
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/core/manifest-requirements.sh"
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/core/manifest-shared-utils.sh"
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/workflow/manifest-orchestrator.sh"
+
+    # Keep the actions waiter fast and offline by default; individual remote-ci
+    # tests install the gh stub and set their own contract.
+    export MANIFEST_CLI_GITHUB_ACTIONS_TIMEOUT_SECONDS=1
+    export MANIFEST_CLI_GITHUB_ACTIONS_POLL_SECONDS=1
+    unset MANIFEST_CLI_RELEASE_GATE MANIFEST_CLI_RELEASE_GATE_COMMAND
+    unset MANIFEST_CLI_SHIP_STATUS_FILE
+}
+
+teardown() {
+    cd /tmp || true
+    [ -n "$SCRATCH" ] && [ -d "$SCRATCH" ] && rm -rf "$SCRATCH"
+}
+
+# --- policy normalization ---------------------------------------------------
+
+@test "release_gate: default policy is local-tests" {
+    run manifest_release_gate_policy
+    [ "$status" -eq 0 ]
+    [ "$output" = "local-tests" ]
+}
+
+@test "release_gate: policy tolerates whitespace and case" {
+    MANIFEST_CLI_RELEASE_GATE=" Remote-CI " run manifest_release_gate_policy
+    [ "$status" -eq 0 ]
+    [ "$output" = "remote-ci" ]
+}
+
+@test "release_gate: unknown policy is rejected, never silently disabled" {
+    MANIFEST_CLI_RELEASE_GATE="garbage" run manifest_release_gate_policy
+    [ "$status" -eq 2 ]
+    echo "$output" | grep -q "Invalid release_gate"
+}
+
+@test "release_gate: injection-shaped value is rejected and not executed" {
+    MANIFEST_CLI_RELEASE_GATE='none; touch pwned' run manifest_release_gate_run "pre-bump"
+    [ "$status" -ne 0 ]
+    [ ! -e "$PROJECT_ROOT/pwned" ]
+    [ ! -e "pwned" ]
+}
+
+# --- pre-bump: local-tests --------------------------------------------------
+
+@test "release_gate: local-tests passes when the test command succeeds" {
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND="exit 0"
+    run manifest_release_gate_run "pre-bump"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "tests passed"
+}
+
+@test "release_gate: local-tests fails fast when the test command fails" {
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND="exit 1"
+    run manifest_release_gate_run "pre-bump"
+    [ "$status" -eq 1 ]
+    echo "$output" | grep -q "Release gate failed"
+    echo "$output" | grep -q "No version changes were made"
+}
+
+@test "release_gate: local-tests runs the command in PROJECT_ROOT" {
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND="touch ran.marker"
+    run manifest_release_gate_run "pre-bump"
+    [ "$status" -eq 0 ]
+    [ -e "$PROJECT_ROOT/ran.marker" ]
+}
+
+@test "release_gate: local-tests auto-detects ./scripts/run-tests.sh" {
+    mkdir -p "$PROJECT_ROOT/scripts"
+    cat > "$PROJECT_ROOT/scripts/run-tests.sh" <<'EOF'
+#!/usr/bin/env bash
+touch "$PWD/autodetect.marker"
+exit 0
+EOF
+    chmod +x "$PROJECT_ROOT/scripts/run-tests.sh"
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"
+    run manifest_release_gate_run "pre-bump"
+    [ "$status" -eq 0 ]
+    [ -e "$PROJECT_ROOT/autodetect.marker" ]
+}
+
+@test "release_gate: local-tests with no resolvable command warns and proceeds" {
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"
+    # No gate_command, no scripts/run-tests.sh in PROJECT_ROOT.
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
+    [ "$?" -eq 0 ]
+    grep -q "no test command found" "$SCRATCH/out"
+    [ "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS" = "unverified" ]
+}
+
+# --- pre-bump: none (loud + audited) ----------------------------------------
+
+@test "release_gate: none warns loudly and records an audited bypass" {
+    export MANIFEST_CLI_RELEASE_GATE="none"
+    # Call directly (not via `run`) so the disposition var is observable; the
+    # final ship emit threads this into the status file on success.
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
+    [ "$?" -eq 0 ]
+    grep -q "Release gate disabled" "$SCRATCH/out"
+    [ "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS" = "bypassed" ]
+    [ "$_MANIFEST_CLI_SHIP_LAST_GATE_POLICY" = "none" ]
+}
+
+@test "release_gate: a passing local-tests run records verified-local" {
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND="exit 0"
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
+    [ "$?" -eq 0 ]
+    [ "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS" = "verified-local" ]
+    [ "$_MANIFEST_CLI_SHIP_LAST_GATE_POLICY" = "local-tests" ]
+}
+
+@test "release_gate: none does not run any test command" {
+    export MANIFEST_CLI_RELEASE_GATE="none"
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND="touch should-not-run.marker"
+    run manifest_release_gate_run "pre-bump"
+    [ "$status" -eq 0 ]
+    [ ! -e "$PROJECT_ROOT/should-not-run.marker" ]
+}
+
+# --- remote-ci phase boundaries ---------------------------------------------
+
+@test "release_gate: remote-ci is a no-op in the pre-bump phase" {
+    export MANIFEST_CLI_RELEASE_GATE="remote-ci"
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND="exit 1"  # must NOT run pre-bump
+    run manifest_release_gate_run "pre-bump"
+    [ "$status" -eq 0 ]
+}
+
+@test "release_gate: local-tests is a no-op in the post-push phase" {
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"
+    run manifest_release_gate_run "post-push"
+    [ "$status" -eq 0 ]
+}
+
+@test "release_gate: post-push remote-ci passes when CI run is green" {
+    gh_stub_install
+    git -C "$PROJECT_ROOT" init -q
+    git -C "$PROJECT_ROOT" config user.email t@e.co
+    git -C "$PROJECT_ROOT" config user.name t
+    ( cd "$PROJECT_ROOT" && echo x > f && git add f && git commit -q -m c )
+    export GH_STUB_STDOUT="99999"   # gh run list returns a run id
+    export GH_STUB_EXIT=0           # gh run watch exits green
+    export MANIFEST_CLI_RELEASE_GATE="remote-ci"
+    run manifest_release_gate_run "post-push"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "remote CI is green"
+}
+
+@test "release_gate: post-push remote-ci fails when CI run is red" {
+    gh_stub_install
+    git -C "$PROJECT_ROOT" init -q
+    git -C "$PROJECT_ROOT" config user.email t@e.co
+    git -C "$PROJECT_ROOT" config user.name t
+    ( cd "$PROJECT_ROOT" && echo x > f && git add f && git commit -q -m c )
+    export GH_STUB_STDOUT="99999"   # run id present
+    export GH_STUB_EXIT=1           # gh run watch exits non-zero (red)
+    export GH_STUB_AUTH_EXIT=0      # but auth is fine
+    export MANIFEST_CLI_RELEASE_GATE="remote-ci"
+    run manifest_release_gate_run "post-push"
+    [ "$status" -eq 1 ]
+    echo "$output" | grep -q "remote CI did not pass"
+}
+
+@test "release_gate: post-push remote-ci hard-stops when CI cannot be confirmed" {
+    gh_stub_install
+    git -C "$PROJECT_ROOT" init -q
+    git -C "$PROJECT_ROOT" config user.email t@e.co
+    git -C "$PROJECT_ROOT" config user.name t
+    ( cd "$PROJECT_ROOT" && echo x > f && git add f && git commit -q -m c )
+    export GH_STUB_AUTH_EXIT=1      # gh installed but not authenticated -> rc2 path
+    export MANIFEST_CLI_RELEASE_GATE="remote-ci"
+    run manifest_release_gate_run "post-push"
+    [ "$status" -eq 1 ]
+    echo "$output" | grep -q "could not confirm a green CI run"
+}
+
+# --- per-repo independence (fleet version independence) ---------------------
+
+@test "release_gate: policy is read per call so each repo gates independently" {
+    # The gate is a pure function of the current env, so a fleet ship that
+    # invokes it per member (each with its own config) gates members
+    # independently. Prove the same function yields different verdicts when
+    # the policy differs between calls.
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND="exit 1"
+
+    MANIFEST_CLI_RELEASE_GATE="none" run manifest_release_gate_run "pre-bump"
+    [ "$status" -eq 0 ]   # member A: bypassed
+
+    MANIFEST_CLI_RELEASE_GATE="local-tests" run manifest_release_gate_run "pre-bump"
+    [ "$status" -eq 1 ]   # member B: gated, fails on its own failing tests
+}

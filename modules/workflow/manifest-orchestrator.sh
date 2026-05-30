@@ -145,6 +145,136 @@ manifest_check_github_actions_for_head() {
     return 1
 }
 
+# -----------------------------------------------------------------------------
+# Release gate — block a release until verification passes.
+# -----------------------------------------------------------------------------
+# One self-describing policy, MANIFEST_CLI_RELEASE_GATE (YAML: release.gate):
+#   none        no verification (loud + audited bypass)
+#   local-tests run the project's test command before any mutation (default)
+#   remote-ci   require the pushed commit's GitHub checks to be green before
+#               the GitHub Release / Homebrew publish
+#   all         local-tests AND remote-ci
+#
+# The gate runs per repository, so a fleet ship verifies each member against its
+# own config and its own commit — preserving fleet version independence.
+#
+# Phases:
+#   pre-bump   local-tests (fail-fast, before any version mutation); also emits
+#              the bypass notice for `none`.
+#   post-push  remote-ci (after the commit+tag are pushed, before publishing).
+
+# Echo the normalized policy. Defaults to local-tests; rejects unknown values
+# (return 2) so a typo can never silently disable the gate.
+manifest_release_gate_policy() {
+    local norm
+    norm="$(normalize_enum_value "${MANIFEST_CLI_RELEASE_GATE:-local-tests}")"
+    case "$norm" in
+        none|local-tests|remote-ci|all) printf '%s' "$norm" ;;
+        *)
+            log_error "Invalid release_gate '${MANIFEST_CLI_RELEASE_GATE}'. Expected: none, local-tests, remote-ci, all."
+            return 2
+            ;;
+    esac
+}
+
+# Resolve the command run for the local-tests phase. Configured command wins;
+# otherwise auto-detect ./scripts/run-tests.sh. Returns 1 if none resolvable.
+# The command is executed directly as the gate action — never interpolated into
+# another command (no eval). It carries the same trust as the repo's own test
+# tooling, which a release already runs.
+_manifest_release_gate_test_command() {
+    local configured="${MANIFEST_CLI_RELEASE_GATE_COMMAND:-}"
+    if [[ -n "${configured//[[:space:]]/}" ]]; then
+        printf '%s' "$configured"
+        return 0
+    fi
+    if [[ -x "${PROJECT_ROOT:-$PWD}/scripts/run-tests.sh" ]]; then
+        printf '%s' "./scripts/run-tests.sh"
+        return 0
+    fi
+    return 1
+}
+
+# Durable gate disposition, mirroring _MANIFEST_SHIP_LAST_HOMEBREW_STATUS. The
+# final ship status-file emit (which truncates and rewrites) reads these so the
+# audit record — including a `none` bypass or an `unverified` skip — survives a
+# successful run, not just a failure.
+_MANIFEST_CLI_SHIP_LAST_GATE_STATUS="not-run"
+_MANIFEST_CLI_SHIP_LAST_GATE_POLICY=""
+
+manifest_release_gate_run() {
+    local phase="$1"
+    local policy
+    policy="$(manifest_release_gate_policy)" || return 1
+    _MANIFEST_CLI_SHIP_LAST_GATE_POLICY="$policy"
+
+    case "$phase" in
+        pre-bump)
+            case "$policy" in
+                none)
+                    log_warning "Release gate disabled (release_gate=none) — publishing without test verification."
+                    _MANIFEST_CLI_SHIP_LAST_GATE_STATUS="bypassed"
+                    ;;
+                local-tests|all)
+                    local cmd
+                    if ! cmd="$(_manifest_release_gate_test_command)"; then
+                        # Nothing to run: a repo without a discoverable test
+                        # command can't be gated by local-tests. Warn and
+                        # proceed rather than block — teams that need hard
+                        # enforcement set release_gate_command or use remote-ci.
+                        log_warning "Release gate (local-tests): no test command found; proceeding without test verification."
+                        log_warning "Set release_gate_command (MANIFEST_CLI_RELEASE_GATE_COMMAND) or add ./scripts/run-tests.sh to enforce."
+                        _MANIFEST_CLI_SHIP_LAST_GATE_STATUS="unverified"
+                        return 0
+                    fi
+                    local gate_root="${PROJECT_ROOT:-$PWD}"
+                    if [[ ! -d "$gate_root" ]]; then
+                        log_error "Release gate: PROJECT_ROOT '$gate_root' is not a directory."
+                        return 1
+                    fi
+                    echo "🧪 Release gate: running tests before release (${cmd})..."
+                    if ( cd "$gate_root" && bash -c "$cmd" ); then
+                        echo "✅ Release gate: tests passed."
+                        _MANIFEST_CLI_SHIP_LAST_GATE_STATUS="verified-local"
+                    else
+                        log_error "Release gate failed: '${cmd}' returned non-zero. No version changes were made."
+                        return 1
+                    fi
+                    ;;
+                remote-ci) : ;;  # handled in post-push
+            esac
+            ;;
+        post-push)
+            case "$policy" in
+                remote-ci|all)
+                    local head_sha rc
+                    head_sha="$(git rev-parse HEAD 2>/dev/null || echo "")"
+                    # The gate's whole purpose is to wait for CI, so enable the
+                    # waiter for this call regardless of the global default.
+                    MANIFEST_CLI_GITHUB_ACTIONS_WAIT=true \
+                        manifest_check_github_actions_for_head "$head_sha"
+                    rc=$?
+                    if [[ "$rc" -eq 0 ]]; then
+                        echo "✅ Release gate: remote CI is green."
+                        _MANIFEST_CLI_SHIP_LAST_GATE_STATUS="verified-remote"
+                    elif [[ "$rc" -eq 1 ]]; then
+                        log_error "Release gate failed: remote CI did not pass for HEAD. Publish withheld."
+                        return 1
+                    else
+                        # rc=2: no run found / gh unavailable. Under a strict gate
+                        # this is a hard stop, not a silent pass.
+                        log_error "Release gate (remote-ci) could not confirm a green CI run for HEAD."
+                        log_error "Ensure CI is configured and gh is authenticated, or set release_gate=none to bypass."
+                        return 1
+                    fi
+                    ;;
+                none|local-tests) : ;;
+            esac
+            ;;
+    esac
+    return 0
+}
+
 manifest_should_create_github_release() {
     ! is_falsy "${MANIFEST_CLI_GITHUB_RELEASE_ENABLED:-true}"
 }
@@ -734,7 +864,15 @@ manifest_ship_workflow() {
     echo "🔄 Syncing with remote..."
     sync_repository
     echo ""
-    
+
+    # Release gate (pre-bump): run the project's tests before any mutation so a
+    # failure leaves a pristine repo. Also emits the bypass notice for `none`.
+    if ! manifest_release_gate_run "pre-bump"; then
+        emit_ship_failure_report "release_gate" "$workflow_start_sha" "$(cat "${PROJECT_ROOT:-$PWD}/VERSION" 2>/dev/null || echo unknown)" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+        return 1
+    fi
+    echo ""
+
     # Bump version
     echo "📦 Bumping version..."
     if ! bump_version "$increment_type"; then
@@ -838,6 +976,14 @@ manifest_ship_workflow() {
         workflow_push_status="success"
         echo ""
 
+        # Release gate (post-push): for remote-ci/all, require the pushed
+        # commit's CI to be green before publishing the GitHub Release and
+        # Homebrew formula. The tag is already pushed; only the publish is gated.
+        if ! manifest_release_gate_run "post-push"; then
+            emit_ship_failure_report "release_gate" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+            return 1
+        fi
+
         if ! manifest_ship_post_push_steps "$new_version" "$workflow_start_sha" "$workflow_tag_name" "$workflow_push_status"; then
             return 1
         fi
@@ -895,7 +1041,9 @@ manifest_ship_workflow() {
         version "$new_version" \
         tag "${workflow_tag_name:-}" \
         push_status "${workflow_push_status:-skipped}" \
-        homebrew_status "${workflow_homebrew_status:-skipped}"
+        homebrew_status "${workflow_homebrew_status:-skipped}" \
+        gate_status "${_MANIFEST_CLI_SHIP_LAST_GATE_STATUS:-not-run}" \
+        gate_policy "${_MANIFEST_CLI_SHIP_LAST_GATE_POLICY:-}"
 
     if manifest_ship_should_run_followup_patch "$increment_type" "$publish_release" "$workflow_tag_name"; then
         manifest_ship_run_followup_patch
