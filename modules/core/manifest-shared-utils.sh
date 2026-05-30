@@ -221,6 +221,20 @@ _manifest_hash_short() {
 }
 
 # -----------------------------------------------------------------------------
+# Plan fingerprint — a stable, short digest of a release plan's salient inputs.
+# Each argument is one plan field; order matters. The same fields produce the
+# same fingerprint, so a preview and its later apply can be compared, and the
+# future apply-event audit log can record exactly which plan was applied.
+# Truncated to 12 hex chars — identification, not cryptographic integrity.
+# Usage: manifest_plan_fingerprint "$increment_type" "$current" "$next" "$tag"
+# -----------------------------------------------------------------------------
+manifest_plan_fingerprint() {
+    local digest
+    digest="$(printf '%s\n' "$@" | _manifest_hash_short)"
+    printf '%s' "${digest:0:12}"
+}
+
+# -----------------------------------------------------------------------------
 # JSON helpers — minimal hand-rolled emitters so --json works without jq.
 # We only support the small subset of JSON the CLI actually emits: strings,
 # numbers/booleans/null (caller-classified), and flat arrays/objects.
@@ -694,7 +708,7 @@ export -f log_debug log_info log_success log_warning log_error log_trace
 export -f ensure_directory
 export -f show_usage_error show_required_arg_error
 export -f _trim_ws normalize_enum_value is_truthy is_falsy
-export -f _render_help _render_help_error _manifest_hash_short
+export -f _render_help _render_help_error _manifest_hash_short manifest_plan_fingerprint
 export -f _json_escape _json_kv_str _json_kv_raw _json_value
 export -f get_script_dir get_script_parent_dir get_project_root get_modules_dir
 export -f is_installation_directory validate_repository_root ensure_repository_root

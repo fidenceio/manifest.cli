@@ -87,10 +87,8 @@ manifest_refresh_repo() {
         return 1
     fi
 
-    if [[ "$execution_mode" == "apply" ]]; then
-        if ! manifest_repo_scope_confirm_apply "$project_root" "$replay_command -y"; then
-            return 1
-        fi
+    if ! manifest_execution_require_apply "$execution_mode" "$project_root" "$(manifest_execution_replay_hint "$replay_command")"; then
+        return 1
     fi
 
     echo ""

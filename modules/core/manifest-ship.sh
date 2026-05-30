@@ -148,6 +148,24 @@ manifest_ship_preview_summary_from_bullets() {
     fi
 }
 
+# Stable fingerprint of the single-repo ship plan. Computed identically in
+# preview and apply so the two can be compared (and so the future apply-event
+# audit log can record exactly which plan was applied).
+manifest_ship_repo_plan_fingerprint() {
+    local increment_type="$1"
+    local local_only="$2"
+    local repo_root="${PROJECT_ROOT:-$PWD}"
+    local current next tag
+    current="$(tr -d '[:space:]' < "$repo_root/VERSION" 2>/dev/null || echo "unknown")"
+    next="$(manifest_ship_preview_next_version "$increment_type")"
+    if [[ "$next" != "unknown" ]] && declare -F manifest_release_tag_name >/dev/null 2>&1; then
+        tag="$(manifest_release_tag_name "$next")"
+    else
+        tag="v${next}"
+    fi
+    manifest_plan_fingerprint "ship-repo" "$increment_type" "$local_only" "$current" "$next" "$tag"
+}
+
 manifest_ship_preview_plan() {
     local increment_type="$1"
     local local_only="$2"
@@ -174,6 +192,7 @@ manifest_ship_preview_plan() {
     echo "  Current version: $current_version"
     echo "  Next version:    $next_version"
     echo "  Release tag:     $tag_name"
+    echo "  Plan fingerprint: $(manifest_ship_repo_plan_fingerprint "$increment_type" "$local_only")"
     echo "  Writes:          none in preview mode"
     echo ""
 
@@ -302,7 +321,7 @@ manifest_ship_repo() {
     if [[ "$execution_mode" == "preview" ]]; then
         manifest_ship_repo_identity_notice "${PROJECT_ROOT:-$PWD}"
         manifest_ship_preview_plan "$increment_type" "$local_only"
-        manifest_execution_footer "$replay_command -y"
+        manifest_execution_footer "$(manifest_execution_replay_hint "$replay_command")"
         manifest_ship_repo_preview_preflight_notice
         return 0
     fi
@@ -317,12 +336,13 @@ manifest_ship_repo() {
         return 1
     fi
 
-    if ! manifest_repo_scope_confirm_apply "${PROJECT_ROOT:-$PWD}" "$replay_command -y"; then
+    if ! manifest_execution_require_apply "$execution_mode" "${PROJECT_ROOT:-$PWD}" "$(manifest_execution_replay_hint "$replay_command")"; then
         return 1
     fi
 
     manifest_execution_apply_header
 
+    echo "  Plan fingerprint: $(manifest_ship_repo_plan_fingerprint "$increment_type" "$local_only")"
     if [[ "$local_only" == "true" ]]; then
         echo "Ship (local): $increment_type — no remote operations"
     else
