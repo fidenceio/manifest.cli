@@ -288,17 +288,20 @@ compare_strings() {
     local str1="$1"
     local op="$2"
     local str2="$3"
-    
-    if [ "$MANIFEST_CLI_OS_BASH_SUPPORTS_DOUBLE_BRACKETS" = "true" ]; then
-        case "$op" in
-            "!=") [[ "$str1" != "$str2" ]] ;;
-            "==") [[ "$str1" == "$str2" ]] ;;
-            "=")  [[ "$str1" = "$str2" ]] ;;
-            *)    [ "$str1" $op "$str2" ] ;;
-        esac
-    else
-        [ "$str1" $op "$str2" ]
-    fi
+
+    # Operators are matched explicitly rather than expanded dynamically inside
+    # a test expression. A dynamic operator (`[ "$a" $op "$b" ]`) is fragile —
+    # it cannot be statically analyzed and breaks if the operand looks like a
+    # flag. `[ ... ]` with literal string operators works identically on Bash
+    # 3.2 and 5+, so no version branch is needed for string comparison.
+    case "$op" in
+        "!=")      [ "$str1" != "$str2" ] ;;
+        "=="|"=")  [ "$str1" = "$str2" ] ;;
+        *)
+            echo "compare_strings: unsupported operator '$op'" >&2
+            return 2
+            ;;
+    esac
 }
 
 check_string_empty() {

@@ -1,0 +1,6 @@
+# ShellCheck configuration for Manifest CLI.
+#
+# Modules are sourced Bash libraries loaded via dynamic paths at runtime, so
+# ShellCheck cannot follow `source`/`.` statically. SC1091 (not following a
+# sourced file) is therefore expected and disabled; it is noise, not a defect.
+disable=SC1091
