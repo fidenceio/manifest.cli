@@ -155,3 +155,13 @@ Schema example: [examples/manifest.config.yaml.example](examples/manifest.config
 Manifest CLI works without Manifest Cloud. Optional Cloud plugins can extend release-note generation, queue/policy behavior, MCP reports, and agent workflows. Missing Cloud plugins fall back to install guidance instead of blocking core repo and fleet releases.
 
 Cloud repo: [fidenceio.manifest.cloud](https://github.com/fidenceio/manifest.cloud)
+
+## Project
+
+| Document | Purpose |
+| -------- | ------- |
+| [LICENSE](LICENSE) | Apache License 2.0 |
+| [SECURITY.md](SECURITY.md) | Security policy and private vulnerability disclosure |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup, tests, and contribution flow |
+
+Licensed under the [Apache License 2.0](LICENSE).
