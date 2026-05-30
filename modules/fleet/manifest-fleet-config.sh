@@ -737,7 +737,6 @@ get_fleet_config_value() {
         "docs_gen_site_workflow")     yaml_path=".docs.generate.site_workflow" ;;
         "docs_site_enabled")          yaml_path=".docs.site.enabled" ;;
         "docs_site_enable_pages")     yaml_path=".docs.site.enable_pages" ;;
-        "docs_site_pages_required")   yaml_path=".docs.site.pages_required" ;;
         "docs_site_source_dir")       yaml_path=".docs.site.source_dir" ;;
         "docs_site_publish_mode")     yaml_path=".docs.site.publish_mode" ;;
         "docs_site_branding")         yaml_path=".docs.site.branding" ;;

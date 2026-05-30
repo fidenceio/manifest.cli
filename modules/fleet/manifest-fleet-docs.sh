@@ -117,15 +117,13 @@ fleet_docs_export_generation_config() {
     export MANIFEST_CLI_DOCS_GENERATE_ARCHIVE_CLEANUP
     MANIFEST_CLI_DOCS_GENERATE_ARCHIVE_CLEANUP=$(get_fleet_config_value "docs_gen_archive_cleanup" "${MANIFEST_CLI_DOCS_GENERATE_ARCHIVE_CLEANUP:-true}")
     export MANIFEST_CLI_DOCS_GENERATE_SITE
-    MANIFEST_CLI_DOCS_GENERATE_SITE=$(get_fleet_config_value "docs_gen_site" "${MANIFEST_CLI_DOCS_GENERATE_SITE:-false}")
+    MANIFEST_CLI_DOCS_GENERATE_SITE=$(get_fleet_config_value "docs_gen_site" "${MANIFEST_CLI_DOCS_GENERATE_SITE:-true}")
     export MANIFEST_CLI_DOCS_GENERATE_SITE_WORKFLOW
     MANIFEST_CLI_DOCS_GENERATE_SITE_WORKFLOW=$(get_fleet_config_value "docs_gen_site_workflow" "${MANIFEST_CLI_DOCS_GENERATE_SITE_WORKFLOW:-true}")
     export MANIFEST_CLI_DOCS_SITE_ENABLED
     MANIFEST_CLI_DOCS_SITE_ENABLED=$(get_fleet_config_value "docs_site_enabled" "${MANIFEST_CLI_DOCS_SITE_ENABLED:-false}")
     export MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES
-    MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES=$(get_fleet_config_value "docs_site_enable_pages" "${MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES:-false}")
-    export MANIFEST_CLI_DOCS_SITE_PAGES_REQUIRED
-    MANIFEST_CLI_DOCS_SITE_PAGES_REQUIRED=$(get_fleet_config_value "docs_site_pages_required" "${MANIFEST_CLI_DOCS_SITE_PAGES_REQUIRED:-false}")
+    MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES=$(get_fleet_config_value "docs_site_enable_pages" "${MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES:-true}")
     export MANIFEST_CLI_DOCS_SITE_SOURCE_DIR
     MANIFEST_CLI_DOCS_SITE_SOURCE_DIR=$(get_fleet_config_value "docs_site_source_dir" "${MANIFEST_CLI_DOCS_SITE_SOURCE_DIR:-docs-site}")
     export MANIFEST_CLI_DOCS_SITE_PUBLISH_MODE
@@ -510,7 +508,7 @@ fleet_docs_status() {
     echo "  Changelog:      $(get_fleet_config_value "docs_gen_changelog" "${MANIFEST_CLI_DOCS_GENERATE_CHANGELOG:-true}")"
     echo "  Index:          $(get_fleet_config_value "docs_gen_index" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_GEN_INDEX")"
     echo "  README Version: $(get_fleet_config_value "docs_gen_readme_version" "$MANIFEST_CLI_FLEET_DEFAULT_DOCS_GEN_README_VERSION")"
-    echo "  Site:           $(get_fleet_config_value "docs_gen_site" "${MANIFEST_CLI_DOCS_GENERATE_SITE:-false}")"
+    echo "  Site:           $(get_fleet_config_value "docs_gen_site" "${MANIFEST_CLI_DOCS_GENERATE_SITE:-true}")"
     echo ""
 }
 

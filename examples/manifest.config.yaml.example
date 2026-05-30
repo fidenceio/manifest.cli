@@ -127,12 +127,11 @@ docs:
     readme_version: true
     index: true
     archive_cleanup: true
-    site: false
+    site: true
     site_workflow: true
   site:
     enabled: false
-    enable_pages: false
-    pages_required: false
+    enable_pages: true                # Best-effort; a Pages failure never interrupts the run
     source_dir: "docs-site"
     publish_mode: "actions"
     branding: "auto"

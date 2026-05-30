@@ -18,9 +18,11 @@ If workflow generation is enabled, it also writes:
 
 The workflow builds the Jekyll source through GitHub Pages Actions and deploys the uploaded artifact.
 
-## What It Does Not Do By Default
+## Defaults and Behavior
 
-Docs-site generation is disabled by default. It does not create build artifacts in the repository and it does not enable GitHub Pages unless configured.
+Docs-site generation, the Pages workflow, and GitHub Pages enablement are all on by default — Manifest generates the full docs experience without extra configuration. It never commits build artifacts to the repository.
+
+Pages enablement is best-effort and never interrupts a run. If Pages cannot be enabled — most commonly a private repository on a GitHub plan that does not include Pages for private repos (HTTP 422) — Manifest emits a clear notice and continues. The managed site and the Pages workflow are still committed, so Pages publishes automatically the moment it becomes available (upgrade the plan or make the repo public).
 
 The generator refuses unmanaged collisions. If `docs-site/index.md` or another target exists without the Manifest managed marker, Manifest stops instead of overwriting user-owned site files.
 
@@ -35,9 +37,7 @@ docs:
     site: true
     site_workflow: true
   site:
-    enabled: true
-    enable_pages: false
-    pages_required: false
+    enable_pages: true
     source_dir: "docs-site"
     publish_mode: "actions"
     title: ""
@@ -51,8 +51,7 @@ Important keys:
 | `docs.generate.site` | Generate managed Jekyll source |
 | `docs.generate.site_workflow` | Generate the Pages workflow when site generation is enabled |
 | `docs.site.enabled` | Alternate switch for site generation |
-| `docs.site.enable_pages` | Ask `gh api` to enable workflow-based Pages publishing |
-| `docs.site.pages_required` | Fail if Pages enablement cannot be completed |
+| `docs.site.enable_pages` | Best-effort `gh api` enablement of workflow-based Pages publishing (never fatal) |
 | `docs.site.source_dir` | Source directory for managed site files |
 
 ## Verification

@@ -423,9 +423,14 @@ EOF
     return "$status"
 }
 
+# Best-effort GitHub Pages enablement. This NEVER interrupts a Manifest run:
+# the managed docs site and the Pages workflow are already committed, so if
+# enablement can't complete (commonly a private repo on a plan tier without
+# Pages, HTTP 422) we surface a clear notice and continue. Pages publishes
+# automatically the moment it becomes available for the repo.
 _manifest_docs_enable_pages_if_requested() {
     local project_root="$1"
-    _manifest_docs_config_bool "${MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES:-false}" "false" || return 0
+    _manifest_docs_config_bool "${MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES:-true}" "true" || return 0
 
     local slug=""
     if declare -F manifest_origin_repo_slug >/dev/null 2>&1; then
@@ -433,31 +438,41 @@ _manifest_docs_enable_pages_if_requested() {
     fi
 
     if [[ -z "$slug" ]] || ! command -v gh >/dev/null 2>&1; then
-        if _manifest_docs_config_bool "${MANIFEST_CLI_DOCS_SITE_PAGES_REQUIRED:-false}" "false"; then
-            log_error "GitHub Pages enablement requested but gh or repo slug is unavailable"
-            return 1
-        fi
-        log_warning "Skipping GitHub Pages enablement; gh or repo slug unavailable"
+        log_warning "Skipping GitHub Pages enablement; gh or repo slug unavailable."
+        log_info "The docs site and Pages workflow are committed and will publish once Pages is available for this repository."
         return 0
     fi
 
-    if gh api --method POST "repos/$slug/pages" -f build_type=workflow >/dev/null 2>&1; then
+    local gh_error
+    if gh_error="$(gh api --method POST "repos/$slug/pages" -f build_type=workflow 2>&1 >/dev/null)"; then
         log_success "GitHub Pages enabled for $slug"
         return 0
     fi
 
-    if gh api --method PATCH "repos/$slug/pages" -f build_type=workflow >/dev/null 2>&1; then
+    if gh_error="$(gh api --method PATCH "repos/$slug/pages" -f build_type=workflow 2>&1 >/dev/null)"; then
         log_success "GitHub Pages workflow publishing configured for $slug"
         return 0
     fi
 
-    if _manifest_docs_config_bool "${MANIFEST_CLI_DOCS_SITE_PAGES_REQUIRED:-false}" "false"; then
-        log_error "GitHub Pages enablement failed for $slug"
-        return 1
-    fi
-
-    log_warning "GitHub Pages enablement failed for $slug; continuing because pages_required=false"
+    _manifest_docs_notify_pages_unavailable "$slug" "$gh_error"
     return 0
+}
+
+# Emit a non-fatal notice when Pages could not be enabled, explaining the most
+# likely cause (private repo on a plan without Pages) without failing the run.
+_manifest_docs_notify_pages_unavailable() {
+    local slug="$1"
+    local gh_error="$2"
+
+    log_warning "GitHub Pages was not enabled for $slug; continuing without interruption."
+    if [[ "$gh_error" == *"does not support"* || "$gh_error" == *"422"* ]]; then
+        log_info "This typically means the repository is private on a GitHub plan that does not include Pages for private repositories. The docs site and Pages workflow are committed and will publish automatically once Pages becomes available (upgrade the plan or make the repository public)."
+    else
+        log_info "The docs site and Pages workflow are committed and will publish automatically once Pages becomes available for this repository."
+    fi
+    if [[ -n "$gh_error" ]]; then
+        log_info "gh reported: ${gh_error//$'\n'/ }"
+    fi
 }
 
 # Update README version information

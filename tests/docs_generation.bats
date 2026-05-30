@@ -138,3 +138,23 @@ prepare_docs_site_repo() {
     [ "$status" -eq 0 ]
     grep -q $'\tapi\t--method\tPOST\trepos/example/docs-site-test/pages\t-f\tbuild_type=workflow' "$GH_STUB_LOG"
 }
+
+@test "docs site generation never fails when GitHub Pages cannot be enabled" {
+    prepare_docs_site_repo
+    git -C "$SCRATCH/repo" init -q
+    git -C "$SCRATCH/repo" remote add origin git@github.com:example/private-docs-test.git
+    gh_stub_install "$SCRATCH/gh"
+
+    PROJECT_ROOT="$SCRATCH/repo" \
+    MANIFEST_CLI_DOCS_GENERATE_SITE=true \
+    MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES=true \
+    GH_STUB_EXIT=1 \
+    GH_STUB_STDERR="HTTP 422: Your current plan does not support GitHub Pages for this repository." \
+    run _manifest_docs_generate_site "99.7.0" "2026-05-18 12:00:00 UTC" "repo" "$SCRATCH/repo" "$SCRATCH/repo/docs"
+
+    # Pages enablement failed, but the run still succeeds and the site is committed.
+    [ "$status" -eq 0 ]
+    [ -f "$SCRATCH/repo/.github/workflows/manifest-docs-pages.yml" ]
+    [[ "$output" == *"GitHub Pages was not enabled"* ]]
+    [[ "$output" == *"does not include Pages for private repositories"* ]]
+}
