@@ -123,7 +123,6 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     ["docs.generate.site_workflow"]="MANIFEST_CLI_DOCS_GENERATE_SITE_WORKFLOW"
     ["docs.site.enabled"]="MANIFEST_CLI_DOCS_SITE_ENABLED"
     ["docs.site.enable_pages"]="MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES"
-    ["docs.site.pages_required"]="MANIFEST_CLI_DOCS_SITE_PAGES_REQUIRED"
     ["docs.site.source_dir"]="MANIFEST_CLI_DOCS_SITE_SOURCE_DIR"
     ["docs.site.publish_mode"]="MANIFEST_CLI_DOCS_SITE_PUBLISH_MODE"
     ["docs.site.branding"]="MANIFEST_CLI_DOCS_SITE_BRANDING"
