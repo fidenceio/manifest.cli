@@ -161,6 +161,24 @@ TSV
     ! echo "$output" | grep -E "clean-svc[[:space:]].*[0-9]+m\+[0-9]+u" >/dev/null
 }
 
+# --- Version column (current → next) ----------------------------------------
+
+@test "fleet ship preview: Version column header and per-member current version" {
+    write_fleet_with_two_members
+    # Seed VERSION files so the plan can render current → next.
+    echo "1.2.3" > "$SCRATCH/work/clean-svc/VERSION"
+    git -C "$SCRATCH/work/clean-svc" add VERSION
+    git -C "$SCRATCH/work/clean-svc" commit -q -m "version"
+    echo "4.5.6" > "$SCRATCH/work/dirty-svc/VERSION"
+    cd "$SCRATCH/work"
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
+    [ "$status" -eq 0 ]
+    # Header must list a Version column between Branch and Dirty.
+    echo "$output" | grep -E "Service.*Type.*Branch.*Version.*Dirty.*Effect" >/dev/null
+    # Releaseable member with a VERSION renders current→next (e.g. 1.2.3→1.2.4).
+    echo "$output" | grep -E "clean-svc[[:space:]].*1\.2\.3->" >/dev/null
+}
+
 # --- Apply-side regression guardrail ----------------------------------------
 
 @test "orchestrator preserves auto-commit notice (5ffb5c22 guardrail)" {

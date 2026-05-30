@@ -80,6 +80,26 @@ manifest_execution_apply_header() {
     fi
 }
 
+# Build the apply replay hint for a base command: "<base> -y". Single source
+# of truth so every preview footer and confirm prompt spells apply the same way.
+manifest_execution_replay_hint() {
+    local base="$1"
+    printf '%s -y' "$base"
+}
+
+# Apply guard: in apply mode, require confirmation before mutating; no-op in
+# preview mode. Centralizes the "if apply: confirm, abort on decline" block
+# that ship/prep/refresh each carried, so the apply boundary stays uniform
+# (and is the natural single place for the future apply-event audit log).
+# Returns non-zero if apply was declined or write access failed.
+manifest_execution_require_apply() {
+    local mode="$1"
+    local project_root="$2"
+    local replay_hint="$3"
+    [[ "$mode" == "apply" ]] || return 0
+    manifest_repo_scope_confirm_apply "$project_root" "$replay_hint"
+}
+
 manifest_execution_footer() {
     local apply_command="${1:-}"
     echo ""
@@ -95,3 +115,5 @@ export -f manifest_execution_parse
 export -f manifest_execution_preview_header
 export -f manifest_execution_apply_header
 export -f manifest_execution_footer
+export -f manifest_execution_replay_hint
+export -f manifest_execution_require_apply
