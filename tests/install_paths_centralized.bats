@@ -179,14 +179,15 @@ _files_with() {
     [ "$status" -ne 0 ]
 }
 
-@test "preserved_subdirs lists logs, audit, ide one-per-line" {
+@test "preserved_subdirs lists logs, audit, ide, locks one-per-line" {
     source "$TEST_REPO_ROOT/modules/system/manifest-install-paths.sh"
     local out
     out="$(manifest_install_paths_preserved_subdirs)"
-    [ "$(echo "$out" | wc -l | tr -d ' ')" = "3" ]
+    [ "$(echo "$out" | wc -l | tr -d ' ')" = "4" ]
     echo "$out" | grep -qx 'logs'
     echo "$out" | grep -qx 'audit'
     echo "$out" | grep -qx 'ide'
+    echo "$out" | grep -qx 'locks'
 }
 
 # ----- Canonical cleanup_profile_entries (Phase 1 of §5.7) ----------------
