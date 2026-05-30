@@ -1,5 +1,14 @@
 # Changelog
 
+## [50.2.0] - 2026-05-30
+
+**Release Type:** Minor
+
+### Changes
+
+- Always generate docs site; make GitHub Pages enablement best-effort
+
+
 ## [50.1.3] - 2026-05-28
 
 **Release Type:** Patch
@@ -86,8 +95,3 @@ distribution history lives in `fidenceio.homebrew.tap/CHANGELOG.md`.
 
 - Remove 45 dead functions across 11 modules
 - Draft safe-by-default migration note in user guide (§4.3)
-
-
-## [48.6.2] - 2026-05-26
-
-**Release Type:** Patch — no user-facing changes.
