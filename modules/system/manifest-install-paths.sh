@@ -95,6 +95,14 @@ manifest_install_paths_preserved_subdirs() {
     echo "logs"
     echo "audit"
     echo "ide"
+    echo "locks"
+}
+
+# Directory holding single-flight lock dirs (e.g. concurrent fleet ships).
+# Lives under the preserved global-state root so an upgrade swap can never
+# delete a lock that a running operation still holds.
+manifest_install_paths_locks_dir() {
+    echo "$(manifest_install_paths_global_state_dir)/locks"
 }
 
 manifest_install_paths_install_dirs() {

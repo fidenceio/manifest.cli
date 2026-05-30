@@ -2201,6 +2201,133 @@ _fleet_emit_recovery_report() {
 # -----------------------------------------------------------------------------
 # Highest-level coordinated fleet workflow:
 #   preview by default -> direct ship of releaseable services with -y.
+# -----------------------------------------------------------------------------
+# Single-flight fleet lock
+# -----------------------------------------------------------------------------
+# Serialize concurrent `manifest ship fleet ... -y` runs in the same workspace
+# so two invocations cannot race on shared per-member state (VERSION bumps, tag
+# creation, Homebrew formula updates). Portable mkdir-based mutex — `flock` is
+# absent on stock macOS. A lock left by a dead holder is reclaimed; a lock held
+# by a live process — including one on another host when $HOME is on shared
+# storage — is never broken.
+
+# Lock dir for the current workspace, keyed by the canonicalized fleet root so
+# that `.`, an absolute path, and a symlinked path all resolve to one lock.
+_fleet_lock_dir_path() {
+    local ws_root hash
+    ws_root="$(cd "${MANIFEST_CLI_FLEET_ROOT:-$PWD}" 2>/dev/null && pwd -P)" \
+        || ws_root="${MANIFEST_CLI_FLEET_ROOT:-$PWD}"
+    hash="$(printf '%s' "$ws_root" | _manifest_hash_short)"
+    printf '%s/fleet-%s.lock.d' "$(manifest_install_paths_locks_dir)" "${hash:0:16}"
+}
+
+# Process start-time token — distinguishes a live holder from a recycled PID.
+# Linux: starttime (field 22 of /proc/<pid>/stat). The comm field (2) can
+# contain spaces/parens, so parse the fields AFTER the final ')' — starttime is
+# then the 20th. macOS/BSD: ps lstart. Empty if unknown.
+_fleet_proc_start_token() {
+    local pid="$1"
+    if [ -r "/proc/$pid/stat" ]; then
+        sed 's/.*) //' "/proc/$pid/stat" 2>/dev/null | awk '{print $20}'
+    else
+        ps -o lstart= -p "$pid" 2>/dev/null | tr -s ' '
+    fi
+}
+
+# Modification time of a path in epoch seconds (portable across macOS/Linux).
+_fleet_dir_mtime_epoch() {
+    stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null
+}
+
+# 0 if the recorded holder is a live process on THIS host (do not break it).
+# 1 if reclaimable (abandoned). A holder on a different host is treated as alive
+# (returns 0) so shared-$HOME / NFS setups are never broken cross-host.
+_fleet_lock_holder_alive() {
+    local lock_dir="$1"
+    local holder="$lock_dir/holder"
+    if [ ! -r "$holder" ]; then
+        # No holder file. Either a winner that hasn't written its holder yet
+        # (the mkdir-then-write window) or a crash before the write. Treat a
+        # freshly-created lock dir as alive for a short grace period so a racer
+        # can never break a lock that was just legitimately acquired; only a
+        # holder-less dir older than the grace window is abandoned/reclaimable.
+        local grace="${MANIFEST_CLI_FLEET_LOCK_GRACE_SECONDS:-15}"
+        local mtime now
+        mtime="$(_fleet_dir_mtime_epoch "$lock_dir")"
+        now="$(date +%s 2>/dev/null)"
+        if [ -n "$mtime" ] && [ -n "$now" ] && [ "$((now - mtime))" -lt "$grace" ]; then
+            return 0   # fresh, holder write likely in flight -> treat as alive
+        fi
+        return 1       # old and holder-less -> abandoned, reclaimable
+    fi
+    local h_pid h_host h_token now_token
+    h_pid="$(sed -n 's/^pid=//p' "$holder" 2>/dev/null)"
+    h_host="$(sed -n 's/^host=//p' "$holder" 2>/dev/null)"
+    h_token="$(sed -n 's/^start=//p' "$holder" 2>/dev/null)"
+    [ "$h_host" = "$(hostname 2>/dev/null)" ] || return 0   # cross-host: never break
+    [ -n "$h_pid" ] || return 1
+    kill -0 "$h_pid" 2>/dev/null || return 1                # pid gone: dead
+    now_token="$(_fleet_proc_start_token "$h_pid")"
+    [ "$now_token" = "$h_token" ]                            # mismatch: pid reused
+}
+
+_fleet_lock_write_holder() {
+    local lock_dir="$1"
+    {
+        printf 'pid=%s\n' "$$"
+        printf 'host=%s\n' "$(hostname 2>/dev/null)"
+        printf 'start=%s\n' "$(_fleet_proc_start_token "$$")"
+        printf 'since=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)"
+    } > "$lock_dir/holder" 2>/dev/null || true
+}
+
+_fleet_lock_acquire() {
+    local lock_dir="$1"
+    local attempts=0
+    local max_attempts="${MANIFEST_CLI_FLEET_LOCK_ATTEMPTS:-50}"
+    mkdir -p "$(dirname "$lock_dir")" 2>/dev/null || true
+    while ! mkdir "$lock_dir" 2>/dev/null; do
+        if ! _fleet_lock_holder_alive "$lock_dir"; then
+            # Snapshot the holder we judged dead, then reclaim by renaming the
+            # dir aside (atomic; only one racer's mv can succeed — the source
+            # vanishes for the others). After the rename, re-verify: if the
+            # holder changed under us (someone acquired in the gap), we grabbed
+            # a LIVE lock — restore it and retry instead of deleting it.
+            local stale="${lock_dir}.stale.$$"
+            local before_holder after_holder
+            before_holder="$(cat "$lock_dir/holder" 2>/dev/null || echo "")"
+            if mv "$lock_dir" "$stale" 2>/dev/null; then
+                after_holder="$(cat "$stale/holder" 2>/dev/null || echo "")"
+                if [ "$after_holder" != "$before_holder" ] && _fleet_lock_holder_alive "$stale"; then
+                    mv "$stale" "$lock_dir" 2>/dev/null || rm -rf "$stale" 2>/dev/null
+                else
+                    rm -rf "$stale" 2>/dev/null
+                    log_warning "Reclaimed a stale fleet lock (previous holder is gone)."
+                    continue
+                fi
+            fi
+        fi
+        attempts=$((attempts + 1))
+        if [ "$attempts" -ge "$max_attempts" ]; then
+            log_error "Another fleet ship is already running for this workspace."
+            if [ -r "$lock_dir/holder" ]; then
+                log_error "  Lock holder: $(tr '\n' ' ' < "$lock_dir/holder" 2>/dev/null)"
+            fi
+            log_error "  Lock: $lock_dir"
+            log_error "  If no other run is active, remove that directory and retry."
+            return 1
+        fi
+        sleep 0.1
+    done
+    _fleet_lock_write_holder "$lock_dir"
+    return 0
+}
+
+_fleet_lock_release() {
+    local lock_dir="$1"
+    [ -n "$lock_dir" ] && [ -d "$lock_dir" ] && rm -rf "$lock_dir" 2>/dev/null || true
+}
+
 # PR orchestration belongs under `manifest pr fleet ...`, never here.
 # -----------------------------------------------------------------------------
 fleet_ship() {
@@ -2286,6 +2413,23 @@ EOF
         return 1
     fi
 
+    # Single-flight: only one fleet ship may apply in this workspace at a time.
+    # Acquired only on the apply path (preview returned above) and only after
+    # the read-only pre-flights pass.
+    local fleet_lock status_dir=""
+    fleet_lock="$(_fleet_lock_dir_path)"
+    if ! _fleet_lock_acquire "$fleet_lock"; then
+        return 1
+    fi
+    # Release the lock and clean scratch on ANY exit from this function. RETURN
+    # is function-scoped (functrace is off) so it never clobbers the CLI's
+    # top-level traps. INT/TERM additionally re-raise so Ctrl-C still terminates
+    # with the correct status. This also fixes a pre-existing status_dir leak on
+    # signal.
+    trap '_fleet_lock_release "${fleet_lock:-}"; [ -n "${status_dir:-}" ] && rm -rf "${status_dir}" 2>/dev/null' RETURN
+    trap '_fleet_lock_release "${fleet_lock:-}"; [ -n "${status_dir:-}" ] && rm -rf "${status_dir}" 2>/dev/null; trap - INT; kill -INT $$' INT
+    trap '_fleet_lock_release "${fleet_lock:-}"; [ -n "${status_dir:-}" ] && rm -rf "${status_dir}" 2>/dev/null; trap - TERM; kill -TERM $$' TERM
+
     if [ "$run_prep" != "true" ]; then
         echo "⏭️  Skipping fleet prep (--noprep)."
         for service in $MANIFEST_CLI_FLEET_SERVICES; do
@@ -2311,7 +2455,6 @@ EOF
     # shellcheck disable=SC2206
     member_list=( $MANIFEST_CLI_FLEET_SERVICES )
 
-    local status_dir
     status_dir=$(mktemp -d "${TMPDIR:-/tmp}/manifest-fleet-status.XXXXXX") || {
         log_error "Could not create fleet status scratch directory."
         return 1
