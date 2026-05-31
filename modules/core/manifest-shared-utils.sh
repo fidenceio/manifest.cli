@@ -34,39 +34,41 @@ get_log_level() {
 }
 
 # Enhanced logging functions with levels
+# Every log_* message is passed through manifest_redact so a token that slips
+# into a log/error/verbose line is never printed verbatim.
 log_debug() {
     if [[ $(get_log_level) -le $MANIFEST_CLI_SHARED_LOG_LEVEL_DEBUG ]]; then
-        echo -e "${PURPLE}🐛 DEBUG: $1${NC}" >&2
+        echo -e "${PURPLE}🐛 DEBUG: $(manifest_redact "$1")${NC}" >&2
     fi
 }
 
 log_info() {
     if [[ $(get_log_level) -le $MANIFEST_CLI_SHARED_LOG_LEVEL_INFO ]]; then
-        echo -e "${BLUE}ℹ️  INFO: $1${NC}" >&2
+        echo -e "${BLUE}ℹ️  INFO: $(manifest_redact "$1")${NC}" >&2
     fi
 }
 
 log_success() {
     if [[ $(get_log_level) -le $MANIFEST_CLI_SHARED_LOG_LEVEL_INFO ]]; then
-        echo -e "${GREEN}✅ SUCCESS: $1${NC}" >&2
+        echo -e "${GREEN}✅ SUCCESS: $(manifest_redact "$1")${NC}" >&2
     fi
 }
 
 log_warning() {
     if [[ $(get_log_level) -le $MANIFEST_CLI_SHARED_LOG_LEVEL_WARN ]]; then
-        echo -e "${YELLOW}⚠️  WARN: $1${NC}" >&2
+        echo -e "${YELLOW}⚠️  WARN: $(manifest_redact "$1")${NC}" >&2
     fi
 }
 
 log_error() {
     if [[ $(get_log_level) -le $MANIFEST_CLI_SHARED_LOG_LEVEL_ERROR ]]; then
-        echo -e "${RED}❌ ERROR: $1${NC}" >&2
+        echo -e "${RED}❌ ERROR: $(manifest_redact "$1")${NC}" >&2
     fi
 }
 
 log_trace() {
     if [[ $(get_log_level) -le $MANIFEST_CLI_SHARED_LOG_LEVEL_DEBUG ]]; then
-        echo -e "${CYAN}🔍 TRACE: $1${NC}" >&2
+        echo -e "${CYAN}🔍 TRACE: $(manifest_redact "$1")${NC}" >&2
     fi
 }
 
@@ -232,6 +234,54 @@ manifest_plan_fingerprint() {
     local digest
     digest="$(printf '%s\n' "$@" | _manifest_hash_short)"
     printf '%s' "${digest:0:12}"
+}
+
+# -----------------------------------------------------------------------------
+# Secret redaction — keep tokens out of stdout/stderr, logs, and status files.
+# -----------------------------------------------------------------------------
+# Two layers: the exact values of known credential env vars (so a token leaks
+# nothing even if its shape is unusual), plus token-shaped patterns (so a secret
+# from an unknown source is still caught). Not a security boundary — defense in
+# depth so an accidental echo/verbose-dump never prints a live credential.
+
+# Names of env vars whose VALUES must never appear in output. Includes the var
+# named by MANIFEST_CLI_CLOUD_API_KEY_ENV (the cloud key is indirected).
+_manifest_redaction_env_var_names() {
+    printf '%s\n' \
+        GITHUB_TOKEN GH_TOKEN HOMEBREW_GITHUB_API_TOKEN \
+        MANIFEST_CLI_CLOUD_API_KEY MANIFEST_CLI_CLOUD_API_TOKEN
+    [ -n "${MANIFEST_CLI_CLOUD_API_KEY_ENV:-}" ] && printf '%s\n' "$MANIFEST_CLI_CLOUD_API_KEY_ENV"
+    return 0
+}
+
+# Redact secrets from the single string argument; echoes the redacted text.
+manifest_redact() {
+    local text="${1-}"
+    [ -n "$text" ] || { printf '%s' "$text"; return 0; }
+
+    # Value-based: replace the exact value of each known credential env var.
+    # Pure bash substitution (no fork) keeps this cheap on the logging hot path.
+    local var val
+    while IFS= read -r var; do
+        [ -n "$var" ] || continue
+        val="${!var-}"
+        # Require a non-trivial length so a short/empty value can't over-redact.
+        [ -n "$val" ] && [ "${#val}" -ge 8 ] && text="${text//"$val"/[REDACTED]}"
+    done < <(_manifest_redaction_env_var_names)
+
+    # Pattern-based: only fork sed when a token sigil is actually present.
+    case "$text" in
+        *gh[pousr]_*|*github_pat_*|*AKIA*|*sk-*|*eyJ*|*[Bb]earer\ *)
+            text="$(printf '%s' "$text" | sed -E \
+                -e 's/github_pat_[A-Za-z0-9_]{20,}/[REDACTED]/g' \
+                -e 's/gh[pousr]_[A-Za-z0-9]{20,}/[REDACTED]/g' \
+                -e 's/AKIA[0-9A-Z]{16}/[REDACTED]/g' \
+                -e 's/sk-[A-Za-z0-9]{20,}/[REDACTED]/g' \
+                -e 's/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/[REDACTED]/g' \
+                -e 's/([Bb]earer )[A-Za-z0-9._-]{12,}/\1[REDACTED]/g')"
+            ;;
+    esac
+    printf '%s' "$text"
 }
 
 # -----------------------------------------------------------------------------
@@ -709,6 +759,7 @@ export -f ensure_directory
 export -f show_usage_error show_required_arg_error
 export -f _trim_ws normalize_enum_value is_truthy is_falsy
 export -f _render_help _render_help_error _manifest_hash_short manifest_plan_fingerprint
+export -f manifest_redact _manifest_redaction_env_var_names
 export -f _json_escape _json_kv_str _json_kv_raw _json_value
 export -f get_script_dir get_script_parent_dir get_project_root get_modules_dir
 export -f is_installation_directory validate_repository_root ensure_repository_root

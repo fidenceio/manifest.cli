@@ -13,7 +13,8 @@ _emit_ship_status_file() {
     [[ -n "${MANIFEST_CLI_SHIP_STATUS_FILE:-}" ]] || return 0
     : > "$MANIFEST_CLI_SHIP_STATUS_FILE" 2>/dev/null || return 0
     while [[ $# -ge 2 ]]; do
-        printf '%s=%s\n' "$1" "$2" >> "$MANIFEST_CLI_SHIP_STATUS_FILE"
+        # Defense in depth: redact in case a value ever carries a credential.
+        printf '%s=%s\n' "$1" "$(manifest_redact "$2")" >> "$MANIFEST_CLI_SHIP_STATUS_FILE"
         shift 2
     done
 }
