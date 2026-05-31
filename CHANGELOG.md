@@ -1,5 +1,23 @@
 # Changelog
 
+## [51.0.0] - 2026-05-31
+
+**Release Type:** Major
+
+### Changes
+
+- Add Apache-2.0 LICENSE, SECURITY.md, and CONTRIBUTING.md
+- Add shellcheck + gitleaks CI lint workflow
+- Add release gate: block publishing until verification passes
+- Add shared apply-guard helpers, plan fingerprints, fleet Version column
+- Add single-flight lock for fleet ship apply (tracker 1.7) [BLOCKER]
+- Add pre-tag re-entrancy: resume an interrupted ship in place (tracker 5.5)
+- Add token redaction across log output and the ship status file (tracker 2.7)
+- Refresh SECURITY_ANALYSIS_REPORT to v50.2.0
+- Add public-release migration note (tracker 4.3)
+- Reconcile tracker after enterprise-hardening pass
+
+
 ## [50.2.0] - 2026-05-30
 
 **Release Type:** Minor
@@ -85,13 +103,3 @@ distribution history lives in `fidenceio.homebrew.tap/CHANGELOG.md`.
 ## [49.0.1] - 2026-05-26
 
 **Release Type:** Patch — no user-facing changes.
-
-
-## [49.0.0] - 2026-05-26
-
-**Release Type:** Major
-
-### Changes
-
-- Remove 45 dead functions across 11 modules
-- Draft safe-by-default migration note in user guide (§4.3)
