@@ -17,23 +17,18 @@ Open work for the Manifest CLI repo.
 
 The hardening-pass triage organized open work around *"does absence of this item allow harm at fleet-of-dozens scale?"*
 
-### T2 — contract integrity (8)
+### T2 — contract integrity (5)
 
 - §1.1 Halt clearly when fleet release requires PR review first
-- §1.7 Single-flight lock for fleet apply
-- §2.1 Shared apply-guard and replay-command helpers
-- §2.2 Shared plan rendering and plan fingerprints
+- §2.2 Shared plan renderer, fingerprint comparison, preview exit code (residual; helper + Version column shipped)
 - §2.3 Execution-policy edge audit
 - §2.8 Reconcile remaining `validation:` knobs with their gates
-- §5.5 Pre-tag ship steps re-entrancy audit
 - §5.6 Per-run ship logs for forensic replay
 
-### T3 — coverage, audit, docs (7)
+### T3 — coverage, audit, docs (5)
 
 - §2.6 Local-only apply tests
-- §2.7 Sensitive-value redaction audit across output surfaces
 - §3.8 Cloud apply-intent contract stubs
-- §4.3 Public-release migration note
 - §4.4 Archive cleanup obeys the read-only archive rule
 - §5.4 e2e coverage for brew-managed tap dir scenario
 - §5.8 CLI apply-event audit log
@@ -56,30 +51,17 @@ The hardening-pass triage organized open work around *"does absence of this item
   - **Deliverable:** fleet ship preview lists PR-gated members; apply refuses with a structured error and a `manifest pr fleet ... -y` replay command.
   - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
 
-- **1.7 Single-flight lock for fleet apply.**
-  - **Status:** T2.
-  - **Why:** nothing currently prevents two concurrent `manifest ship fleet … -y` invocations on the same workspace. Two parallel runs would race on shared per-member state — VERSION bumps, tag creation, formula updates — and one run's writes would silently overwrite the other's, possibly creating divergent published artifacts. The risk is highest in CI/cron environments where re-trigger semantics aren't always idempotent, and grows linearly with fleet size.
-  - **Deliverable:** acquire a workspace-scoped file lock at the start of any `ship fleet … -y` apply (path under `$HOME/.manifest-cli/locks/fleet-<workspace-hash>.lock`, owner-PID + start timestamp + invoking command recorded inside). Refuse with a structured error naming the holding PID, command, and start time when held. Release on normal exit, signal, or trap. Stale-lock detection by PID liveness. Preview mode (no `-y`) does not acquire the lock. Add a regression that starts a sleeping ship under a stub orchestrator, asserts a second concurrent apply is refused with the structured error, and asserts the lock releases on SIGTERM.
-  - **Anchor:** [`modules/fleet/manifest-fleet-apply.sh`](../modules/fleet/manifest-fleet-apply.sh), [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh), [`modules/system/manifest-install-paths.sh`](../modules/system/manifest-install-paths.sh).
-
 ---
 
 ## 2. Execution policy & preview safety
 
 The base contract is already live: mutating commands preview by default, `--dry-run` is explicit preview, `-y`/`--yes` selects apply, and contradictory `--dry-run` plus `-y` is rejected. Remaining work is consolidation and edge-case coverage.
 
-- **2.1 Add shared apply-guard and replay-command helpers.**
-  - **Status:** T2.
-  - **Why:** call sites still build "preview or apply" branches and replay commands by hand. Every hand-built branch is a future drift site where the contract gets weakened silently. Also a hard dependency for §5.8 (audit emission lives in the apply-guard).
-  - **Deliverable:** add `manifest_execution_require_apply` and `manifest_execution_replay_hint` in [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh), migrate representative call sites, and cover them in tests.
-  - **Anchor:** [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh), [`modules/core/manifest-core.sh`](../modules/core/manifest-core.sh).
-
-- **2.2 Add shared plan rendering and plan fingerprints.**
-  - **Status:** T2.
-  - **Why:** preview output is still bespoke per command, and apply mode cannot warn when the plan changed since preview. Plan fingerprint is also the audit primitive shared with [Cloud §3.4](../../fidenceio.manifest.cloud/docs/TRACKER.md#3-security--platform-m3-gate) and the input to CLI §5.8.
-  - **Deliverable:** add a shared plan-table renderer plus a stable plan fingerprint helper; use them in ship/fleet/PR previews and compare fingerprints where apply recomputes work. Concrete content additions, surfaced by the 2026-05-19 fleet-ship trial:
-    - a `Version` column showing `current → next` per member — required to disambiguate divergent SemVer trains (workspace `2.0.1 → 2.0.2` alongside cli `48.0.1 → 48.0.2`) before the user types `-y`;
-    - a clearer preview exit-code convention so CI wrappers can distinguish "preview happened, no consent" from "applied successfully" (current behavior: both return 0).
+- **2.2 Finish shared plan rendering, fingerprint comparison, and the preview exit code.**
+  - **Status:** T2 (partially shipped 2026-05-30).
+  - **Shipped:** `manifest_plan_fingerprint` helper ([`manifest-shared-utils.sh`](../modules/core/manifest-shared-utils.sh)), displayed in the ship-repo preview and apply; the `Version` column (`current → next`, ASCII arrow) in the fleet ship plan; `_manifest_hash_short` exported.
+  - **Why (residual):** the fingerprint is shown but not yet (a) computed via a single shared plan-table renderer reused across ship/fleet/PR previews — each surface still renders bespoke output, and (b) persisted at preview time and re-compared on apply, so apply cannot warn when the plan changed since the preview the user read. (c) The preview exit-code convention is also unaddressed: preview-without-consent and applied-successfully both still return 0, so CI wrappers can't distinguish them.
+  - **Deliverable:** extract a shared plan-table renderer used by ship/fleet/PR previews; persist the preview fingerprint (e.g. under the run/status dir) and warn on apply if the recomputed fingerprint differs; introduce a distinct preview exit code (proposed: a dedicated non-zero "preview happened, no consent" code, documented in COMMAND_REFERENCE and covered by a bats test) without breaking the existing `--dry-run` contract.
   - **Anchor:** [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh), [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh), [`modules/fleet/manifest-fleet-plan.sh`](../modules/fleet/manifest-fleet-plan.sh), [`modules/pr/manifest-pr-native.sh`](../modules/pr/manifest-pr-native.sh).
 
 - **2.3 Finish the execution-policy edge audit.**
@@ -93,12 +75,6 @@ The base contract is already live: mutating commands preview by default, `--dry-
   - **Why:** `--local -y` is its own contract and should prove local writes occur without remote dispatch. Enterprise wants offline-safe boundaries that are tested, not asserted.
   - **Deliverable:** targeted tests for local-only ship/refresh/fleet paths, including assertions that no remote push/API command is called.
   - **Anchor:** [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh), [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
-
-- **2.7 Sensitive-value redaction audit across CLI output surfaces.**
-  - **Status:** T3.
-  - **Why:** the Cloud side has [§3.5 no-plaintext logging](../../fidenceio.manifest.cloud/docs/TRACKER.md#3-security--platform-m3-gate); the CLI has no parallel audit. Enterprise customers will assume any `GITHUB_TOKEN`, `HOMEBREW_GITHUB_API_TOKEN`, bearer token, or other env-var-supplied secret cannot appear in stdout, stderr, `--verbose` output, `manifest doctor` output, or any captured log. Today this is asserted by convention, not by test — any single `printf "$value"` in an error path could leak.
-  - **Deliverable:** sweep every output call site (printf/echo/error helpers/log helpers) for direct interpolation of env-sourced or config-sourced values that could be tokens or secrets; route through a shared redaction helper that recognizes token-shaped values, bearer-prefix tokens, secret-key patterns, and known env-var names. Add a regression that seeds fake-token-shaped values into the relevant env vars (`GITHUB_TOKEN`, `HOMEBREW_GITHUB_API_TOKEN`, etc.), exercises representative happy and error paths across ship/fleet/refresh/doctor, and asserts the fake tokens appear nowhere in captured stdout/stderr or per-run ship logs (see §5.6) or audit log (§5.8).
-  - **Anchor:** [`modules/core/`](../modules/core/), [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh), [`modules/system/`](../modules/system/).
 
 - **2.8 Reconcile the remaining `validation:` knobs with their (missing) gates.**
   - **Status:** T2.
@@ -133,12 +109,6 @@ The local release-notes provider hook and recipe inspection surfaces exist. Rema
   - **Deliverable:** `completions/manifest.fish` plus install instructions in `completions/README.md`.
   - **Anchor:** [`completions/`](../completions/), [`tests/completions.bats`](../tests/completions.bats).
 
-- **4.3 Write the public-release migration note.**
-  - **Status:** T3.
-  - **Why:** users upgrading from pre-safe-by-default releases need a concise explanation of preview default, `-y` apply, and `MANIFEST_CLI_AUTO_CONFIRM` semantics. Mirrors workspace [§2.1](../../TRACKER.md#2-workspace-level-open-items).
-  - **Deliverable:** a migration note covering preview default / `-y` apply / `MANIFEST_CLI_AUTO_CONFIRM` semantics, landed either in `docs/USER_GUIDE.md` or a dedicated `docs/MIGRATION.md`, before the next major release. (Prior copy that lived in `USER_GUIDE.md` was removed during the 2026-05-28 docs rewrite; both halves are currently absent.)
-  - **Anchor:** [`docs/USER_GUIDE.md`](USER_GUIDE.md), [`docs/COMMAND_REFERENCE.md`](COMMAND_REFERENCE.md).
-
 - **4.4 Make archive cleanup obey the read-only archive rule.**
   - **Status:** T3.
   - **Why:** archive cleanup still creates `docs/zArchive/v<major>/` directories and regenerates archive `INDEX.md` files. The active rule is: moved files only; no new generated output inside the archive.
@@ -161,23 +131,17 @@ The local release-notes provider hook and recipe inspection surfaces exist. Rema
   - **Deliverable:** a new test file (suggested: `tests/homebrew_tap_refresh_brew_dir.bats`) that isolates `$HOME`, stubs `brew --prefix` to a scratch dir containing a seeded `Library/Taps/fidenceio/homebrew-tap` checkout (matching the pattern in [`tests/homebrew_tap_ssh_restore.bats`](../tests/homebrew_tap_ssh_restore.bats)), and exercises the refresher with both candidates present. Assertions cover correct fast-forward of both, correct skip of dirty/divergent, and the strict count summary.
   - **Anchor:** [`tests/homebrew_tap_refresh.bats`](../tests/homebrew_tap_refresh.bats), [`tests/homebrew_tap_ssh_restore.bats`](../tests/homebrew_tap_ssh_restore.bats), [`modules/core/manifest-core.sh`](../modules/core/manifest-core.sh) (`manifest_homebrew_tap_checkout_candidates`, `manifest_refresh_homebrew_tap_checkouts`), [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh) (`manifest_ship_post_push_steps`, `manifest_ship_restore_tap_ssh_origin`).
 
-- **5.5 Audit pre-tag ship steps for re-entrancy.**
-  - **Status:** T2.
-  - **Why:** `manifest_ship_repo_resume` only re-enters at the push step ([`manifest-orchestrator.sh:460`](../modules/workflow/manifest-orchestrator.sh)). The pre-tag pipeline (version bump → docs/release notes → archive → commit) is non-resumable: an interruption between bump and commit leaves the repo with a half-applied state (VERSION bumped but uncommitted, generated docs on disk, no tag) and the user must manually undo before retrying. For 30+ repos shipping, the probability of mid-pre-tag interruption is meaningful; the cost is manual recovery per member.
-  - **Deliverable:** for each pre-tag step (version bump, docs generation, archive moves, commit), document the partial-state-detection rule and add a "re-running on already-applied state is a no-op" regression. Where idempotency requires a marker, prefer reading git state over writing a sidecar file.
-  - **Anchor:** [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh), [`modules/docs/manifest-cleanup-docs.sh`](../modules/docs/manifest-cleanup-docs.sh), [`modules/docs/manifest-documentation.sh`](../modules/docs/manifest-documentation.sh).
-
 - **5.6 Capture per-run ship logs for forensic replay.**
   - **Status:** T2.
   - **Why:** when a ship leaves the install or repo in an unexpected state (observed 2026-05-21: `$HOME/.manifest-cli/` payload empty after an interrupted run, with no record of which step ran or where the failure occurred), diagnosis falls back to guesswork from `git log` + `brew Cellar` timestamps. A timestamped per-run log would convert these incidents from "best-guess narrative" to "read the file." Note: §5.6 is *diagnostic* logging (what happened, for debug); structured audit events (who-authorized-what-when, for compliance) are §5.8.
-  - **Deliverable:** ship writes a per-run log to `$HOME/.manifest-cli/logs/ship-<ts>.log` capturing each step boundary, exit status, and any captured stderr; resume reads the prior log when reporting "picking up from step X." Add log rotation (keep last N runs) tied to a TTL marker. The log path must NOT fall under [`manifest_install_paths_cache_dirs`](../modules/system/manifest-install-paths.sh) — diagnostic logs are not transient and must not be swept.
+  - **Deliverable:** ship writes a per-run log to `$HOME/.manifest-cli/logs/ship-<ts>.log` capturing each step boundary, exit status, and any captured stderr (routed through `manifest_redact`, shipped 2026-05-30, so captured stderr cannot leak token-shaped values); resume reads the prior log when reporting "picking up from step X." Add log rotation (keep last N runs) tied to a TTL marker. The log path must NOT fall under [`manifest_install_paths_cache_dirs`](../modules/system/manifest-install-paths.sh) — diagnostic logs are not transient and must not be swept.
   - **Anchor:** [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh), [`modules/system/manifest-install-paths.sh`](../modules/system/manifest-install-paths.sh), [`modules/system/manifest-runtime-cleanup.sh`](../modules/system/manifest-runtime-cleanup.sh).
 
 - **5.8 CLI apply-event audit log.**
   - **Status:** T3.
   - **Why:** workspace cross-cut [§1.2](../../TRACKER.md#1-cross-cut-requirements) requires every apply request to emit an audit event with actor id, source, command, scope, and plan hash. The Cloud side owns this for Cloud-routed apply requests via [Cloud §3.4](../../fidenceio.manifest.cloud/docs/TRACKER.md#3-security--platform-m3-gate); CLI-local apply requests (the dominant case today: `manifest ship repo … -y`, `manifest ship fleet … -y`, `manifest pr … -y`) currently emit nothing structured. Per-run diagnostic logs (§5.6) are the *what-happened-for-debug* record; audit events are the *who-authorized-what-when* record. Enterprise compliance demands both, kept separate so retention/access policy can differ.
-  - **Deliverable:** add an append-only audit log at `$HOME/.manifest-cli/audit/apply-events.ndjson`, one NDJSON event per apply, recording: ISO-8601 timestamp, actor id (`$USER` plus optional `MANIFEST_CLI_ACTOR` override), source (`cli` / `cli-fleet` / `cli-pr` / future `mcp`), command, scope (repo path or fleet members), plan hash (from §2.2 fingerprint helper — hard dependency), and exit status. Emission lives in the apply-guard helper (§2.1) so every `-y`-gated path emits exactly once. Add a regression that runs a fleet apply, asserts one event per member with matching plan hashes and a coherent timestamp ordering. The audit log path, like §5.6 diagnostic logs, must NOT fall under [`manifest_install_paths_cache_dirs`](../modules/system/manifest-install-paths.sh).
-  - **Depends on:** §2.1 (apply-guard helper) and §2.2 (plan fingerprint). Land both before §5.8.
+  - **Deliverable:** add an append-only audit log at `$HOME/.manifest-cli/audit/apply-events.ndjson`, one NDJSON event per apply, recording: ISO-8601 timestamp, actor id (`$USER` plus optional `MANIFEST_CLI_ACTOR` override), source (`cli` / `cli-fleet` / `cli-pr` / future `mcp`), command, scope (repo path or fleet members), plan hash (from the `manifest_plan_fingerprint` helper, shipped 2026-05-30), and exit status. Emission lives in the apply-guard helper `manifest_execution_require_apply` (shipped 2026-05-30) so every `-y`-gated path emits exactly once. Route every written field through `manifest_redact` (shipped 2026-05-30) so no token-shaped value lands in the audit log. Add a regression that runs a fleet apply, asserts one event per member with matching plan hashes and a coherent timestamp ordering. The audit log path, like §5.6 diagnostic logs, must NOT fall under [`manifest_install_paths_cache_dirs`](../modules/system/manifest-install-paths.sh).
+  - **Depends on:** both blockers cleared — apply-guard helper and `manifest_plan_fingerprint` shipped 2026-05-30. §5.8 is now unblocked; the remaining work is the audit emitter, its placement in the apply-guard, and the fleet regression.
   - **Anchor:** [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh), [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh), [`modules/fleet/manifest-fleet-apply.sh`](../modules/fleet/manifest-fleet-apply.sh), [`modules/system/manifest-install-paths.sh`](../modules/system/manifest-install-paths.sh).
 
 ---
