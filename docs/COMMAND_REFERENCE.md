@@ -1,6 +1,6 @@
 # Manifest CLI Command Reference
 
-This reference documents the supported public command surface. Use `manifest <command> --help` for live help text.
+This reference documents the supported public command surface. Use `manifest <command> --help` for live help text. For the preview/apply model, `MANIFEST_CLI_AUTO_CONFIRM` semantics, and the release gate, see the [Migration Guide](MIGRATION.md).
 
 ## Global Rules
 

@@ -6,7 +6,8 @@ Manifest organizes release work into explicit stages:
 config -> init -> prep -> refresh -> ship
 ```
 
-Each mutating stage previews by default. Add `-y` or `--yes` to apply.
+Each mutating stage previews by default. Add `-y` or `--yes` to apply. New to
+the preview/apply model or the release gate? See the [Migration Guide](MIGRATION.md).
 
 ## Core Concepts
 
