@@ -595,6 +595,55 @@ manifest_ship_repo_resume_eligible() {
     return 0
 }
 
+# Pre-tag re-entrancy probe (sibling to the post-tag resume probe above).
+# Detects an interrupted ship — VERSION bumped but not yet committed — so a
+# re-run resumes in place instead of bumping a second time. Output:
+#   "<state>|<version>|<detail>"
+#     fresh            normal run; proceed with the bump
+#     resume-in-place  VERSION was bumped to <version>, is uncommitted, and no
+#                      tag exists yet -> skip the re-bump, commit/tag <version>
+#     tagged           <version> already has a release tag -> post-tag resume
+#                      domain; caller should defer to 'manifest ship repo resume'
+# Only the exact, unambiguous signal triggers resume-in-place: VERSION dirty vs
+# HEAD AND equal to what THIS increment would produce from the committed
+# version. A manual or divergent VERSION edit stays "fresh" so existing
+# behavior (auto-commit + bump) is preserved.
+manifest_ship_repo_pretag_state() {
+    local increment_type="$1"
+    local project_root="${PROJECT_ROOT:-$(pwd)}"
+    local working committed expected tag_name tmp
+
+    [[ -r "$project_root/VERSION" ]] || { echo "fresh||no VERSION"; return 0; }
+    working="$(tr -d '[:space:]' < "$project_root/VERSION" 2>/dev/null || echo "")"
+    [[ -n "$working" ]] || { echo "fresh||empty VERSION"; return 0; }
+
+    # VERSION unchanged vs HEAD -> not a bump-in-progress.
+    if git -C "$project_root" diff --quiet HEAD -- VERSION 2>/dev/null; then
+        echo "fresh|$working|VERSION matches HEAD"
+        return 0
+    fi
+
+    committed="$(git -C "$project_root" show HEAD:VERSION 2>/dev/null | tr -d '[:space:]' || echo "")"
+    # What THIS increment would produce from the committed version.
+    tmp="$(mktemp -d "${TMPDIR:-/tmp}/manifest-pretag.XXXXXX" 2>/dev/null)" || { echo "fresh|$working|"; return 0; }
+    printf '%s\n' "$committed" > "$tmp/VERSION"
+    expected="$( (cd "$tmp" && get_next_version "$increment_type" 2>/dev/null) || echo "" )"
+    rm -rf "$tmp" 2>/dev/null
+
+    if [[ -n "$expected" && "$working" == "$expected" ]]; then
+        tag_name="$(manifest_release_tag_name "$working" 2>/dev/null || echo "")"
+        if [[ -n "$tag_name" ]] && git -C "$project_root" rev-parse "${tag_name}^{commit}" >/dev/null 2>&1; then
+            echo "tagged|$working|release tag ${tag_name} already exists"
+            return 0
+        fi
+        echo "resume-in-place|$working|VERSION bumped to ${working}, uncommitted, no tag"
+        return 0
+    fi
+
+    echo "fresh|$working|VERSION dirty but not a ${increment_type} bump of ${committed:-?}"
+    return 0
+}
+
 manifest_ship_repo_resume() {
     if ! ensure_repository_root; then
         log_error "Repository root validation failed"
@@ -838,9 +887,35 @@ manifest_ship_workflow() {
     
     echo "📋 Version increment type: $increment_type"
     echo ""
-    
-    # Check for uncommitted changes
-    if [ -n "$(git status --porcelain)" ]; then
+
+    # Pre-tag re-entrancy: if a prior ship was interrupted between the version
+    # bump and the commit, VERSION is already at the next value but uncommitted.
+    # Resume in place (skip the re-bump) instead of double-bumping. Must run
+    # BEFORE the auto-commit below, which would otherwise sweep the dirty
+    # VERSION into a generic commit and destroy this signal.
+    local resume_in_place=false
+    local new_version=""
+    local pretag_state
+    pretag_state="$(manifest_ship_repo_pretag_state "$increment_type")"
+    case "$pretag_state" in
+        resume-in-place\|*)
+            resume_in_place=true
+            new_version="${pretag_state#resume-in-place|}"; new_version="${new_version%%|*}"
+            log_warning "Interrupted ship detected: VERSION already bumped to ${new_version} but not committed."
+            echo "↻ Resuming in place: skipping re-bump; will commit and tag ${new_version}."
+            echo ""
+            ;;
+        tagged\|*)
+            local _pt_ver="${pretag_state#tagged|}"; _pt_ver="${_pt_ver%%|*}"
+            log_error "VERSION ${_pt_ver} already has a release tag; nothing to re-bump."
+            log_error "Use 'manifest ship repo resume' to continue post-tag steps."
+            return 1
+            ;;
+    esac
+
+    # Check for uncommitted changes (skipped when resuming in place — the dirty
+    # VERSION and any generated docs are captured by the release commit below).
+    if [ "$resume_in_place" != "true" ] && [ -n "$(git status --porcelain)" ]; then
         echo "📝 Uncommitted changes detected. Committing first..."
         local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
         # Add a scope hint to the auto-commit subject so `git log --oneline`
@@ -860,10 +935,18 @@ manifest_ship_workflow() {
         echo ""
     fi
     
-    # Sync with remote
-    echo "🔄 Syncing with remote..."
-    sync_repository
-    echo ""
+    # Sync with remote. Skipped when resuming an interrupted ship: the
+    # pre-interrupt run already synced before bumping, and pulling now would run
+    # against the dirty uncommitted VERSION and could conflict on that very
+    # file — disrupting the resume this path exists to complete.
+    if [ "$resume_in_place" != "true" ]; then
+        echo "🔄 Syncing with remote..."
+        sync_repository
+        echo ""
+    else
+        echo "↻ Skipping remote sync on resume (recovering local release state)."
+        echo ""
+    fi
 
     # Release gate (pre-bump): run the project's tests before any mutation so a
     # failure leaves a pristine repo. Also emits the bypass notice for `none`.
@@ -873,19 +956,20 @@ manifest_ship_workflow() {
     fi
     echo ""
 
-    # Bump version
-    echo "📦 Bumping version..."
-    if ! bump_version "$increment_type"; then
-        log_error "Version bump failed"
-        return 1
+    # Bump version (skipped when resuming an interrupted ship — VERSION already
+    # holds the intended next value).
+    if [ "$resume_in_place" != "true" ]; then
+        echo "📦 Bumping version..."
+        if ! bump_version "$increment_type"; then
+            log_error "Version bump failed"
+            return 1
+        fi
+        new_version=""
+        if [ -f "VERSION" ]; then
+            new_version=$(cat VERSION)
+        fi
     fi
-    
-    # Get new version
-    local new_version=""
-    if [ -f "VERSION" ]; then
-        new_version=$(cat VERSION)
-    fi
-    
+
     if [ -z "$new_version" ]; then
         log_error "Could not determine new version"
         return 1
