@@ -12,6 +12,7 @@ Use this index by task. The README is the entry point; this directory carries th
 | Install Manifest for product use | [Installation](INSTALLATION.md) |
 | Run repo validation as a contributor | [tests/README.md](../tests/README.md) |
 | Learn the daily workflow | [User Guide](USER_GUIDE.md) |
+| Adopt the preview/apply model & release gate | [Migration Guide](MIGRATION.md) |
 
 ## Operate
 
