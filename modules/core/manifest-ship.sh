@@ -336,13 +336,16 @@ manifest_ship_repo() {
         return 1
     fi
 
-    if ! manifest_execution_require_apply "$execution_mode" "${PROJECT_ROOT:-$PWD}" "$(manifest_execution_replay_hint "$replay_command")"; then
+    local plan_fingerprint
+    plan_fingerprint="$(manifest_ship_repo_plan_fingerprint "$increment_type" "$local_only")"
+
+    if ! manifest_execution_require_apply "$execution_mode" "${PROJECT_ROOT:-$PWD}" "$(manifest_execution_replay_hint "$replay_command")" "$plan_fingerprint"; then
         return 1
     fi
 
     manifest_execution_apply_header
 
-    echo "  Plan fingerprint: $(manifest_ship_repo_plan_fingerprint "$increment_type" "$local_only")"
+    echo "  Plan fingerprint: $plan_fingerprint"
     if [[ "$local_only" == "true" ]]; then
         echo "Ship (local): $increment_type — no remote operations"
     else

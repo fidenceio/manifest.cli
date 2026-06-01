@@ -2487,6 +2487,10 @@ EOF
             export MANIFEST_CLI_AUTO_CONFIRM
             MANIFEST_CLI_SHIP_STATUS_FILE="$status_file"
             export MANIFEST_CLI_SHIP_STATUS_FILE
+            # Tag this member's apply-event audit record (§5.8) as fleet-sourced
+            # so per-member applies are distinguishable from a direct ship repo.
+            MANIFEST_CLI_AUDIT_SOURCE="cli-fleet"
+            export MANIFEST_CLI_AUDIT_SOURCE
             if [[ "$local_only" == "true" ]]; then
                 manifest_ship_repo "$increment_type" "--local" "-y"
             else

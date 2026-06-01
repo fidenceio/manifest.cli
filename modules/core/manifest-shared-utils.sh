@@ -299,6 +299,19 @@ _json_escape() {
     s="${s//$'\n'/\\n}"   # newline
     s="${s//$'\r'/\\r}"   # carriage return
     s="${s//$'\t'/\\t}"   # tab
+    # Any remaining C0 control byte must be \u-escaped (RFC 8259) or the line is
+    # invalid JSON — matters for the apply-event audit log, whose value is being
+    # machine-parseable. Only pay the per-char loop when one is actually present;
+    # the common path (no control bytes) skips it entirely.
+    if [[ "$s" == *[$'\x01'-$'\x1f']* ]]; then
+        local out="" c i
+        for (( i=0; i<${#s}; i++ )); do
+            c="${s:i:1}"
+            [[ "$c" == [$'\x01'-$'\x1f'] ]] && printf -v c '\\u%04x' "'$c"
+            out+="$c"
+        done
+        s="$out"
+    fi
     printf '%s' "$s"
 }
 
@@ -328,6 +341,54 @@ _json_value() {
             fi
             ;;
     esac
+}
+
+# -----------------------------------------------------------------------------
+# Apply-event audit log (CLI tracker §5.8). Append-only NDJSON record of every
+# apply that crosses the apply boundary: who authorized which plan, when, and
+# whether the authorization succeeded. This is the *who-authorized-what-when*
+# compliance record; per-run diagnostic logs (§5.6) are the separate
+# *what-happened-for-debug* record. Mirrors workspace cross-cut §1.2.
+#
+# One line per apply attempt. Every string field is routed through
+# manifest_redact so no token-shaped value can land in the audit log. The log
+# lives under the preserved global-state dir (in preserved_subdirs, so an
+# upgrade swap never wipes it; NOT under manifest_install_paths_cache_dirs, so
+# the runtime cache sweep never collects it). Best-effort: a failure to write
+# the audit line must never abort the apply, so every error path returns 0.
+# Usage: manifest_audit_apply_event SOURCE COMMAND SCOPE PLAN_HASH EXIT_STATUS
+# -----------------------------------------------------------------------------
+manifest_audit_apply_event() {
+    local event_source="$1" command="$2" scope="$3" plan_hash="$4" exit_status="$5"
+    local actor ts state_dir audit_dir audit_file line
+
+    actor="${MANIFEST_CLI_ACTOR:-${USER:-$(id -un 2>/dev/null || echo unknown)}}"
+    ts="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+    if declare -F manifest_install_paths_global_state_dir >/dev/null 2>&1; then
+        state_dir="$(manifest_install_paths_global_state_dir)"
+    else
+        state_dir="$HOME/.manifest-cli"
+    fi
+    audit_dir="$state_dir/audit"
+    audit_file="$audit_dir/apply-events.ndjson"
+    mkdir -p "$audit_dir" 2>/dev/null || return 0
+
+    # Single O_APPEND write of one short line: atomic on local POSIX filesystems
+    # regardless of PIPE_BUF (that governs pipes, not regular-file appends).
+    # Fleet ship is sequential, so the only concurrency is independent manifest
+    # processes; on a network filesystem append-atomicity is not guaranteed.
+
+    line="{$(_json_kv_str "ts" "$ts"),"
+    line+="$(_json_kv_str "actor" "$(manifest_redact "$actor")"),"
+    line+="$(_json_kv_str "source" "$(manifest_redact "$event_source")"),"
+    line+="$(_json_kv_str "command" "$(manifest_redact "$command")"),"
+    line+="$(_json_kv_str "scope" "$(manifest_redact "$scope")"),"
+    line+="$(_json_kv_str "plan_hash" "$(manifest_redact "$plan_hash")"),"
+    line+="$(_json_kv_raw "exit_status" "$(_json_value "$exit_status")")}"
+
+    printf '%s\n' "$line" >> "$audit_file" 2>/dev/null || return 0
+    return 0
 }
 
 # Common validation functions
@@ -761,6 +822,7 @@ export -f _trim_ws normalize_enum_value is_truthy is_falsy
 export -f _render_help _render_help_error _manifest_hash_short manifest_plan_fingerprint
 export -f manifest_redact _manifest_redaction_env_var_names
 export -f _json_escape _json_kv_str _json_kv_raw _json_value
+export -f manifest_audit_apply_event
 export -f get_script_dir get_script_parent_dir get_project_root get_modules_dir
 export -f is_installation_directory validate_repository_root ensure_repository_root
 export -f manifest_repo_scope_require_git manifest_git_preflight_write_access manifest_repo_scope_confirm_apply

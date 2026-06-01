@@ -96,8 +96,30 @@ manifest_execution_require_apply() {
     local mode="$1"
     local project_root="$2"
     local replay_hint="$3"
+    local plan_hash="${4:-}"
     [[ "$mode" == "apply" ]] || return 0
+
+    local rc git_root
     manifest_repo_scope_confirm_apply "$project_root" "$replay_hint"
+    rc=$?
+
+    # Audit every apply attempt that reached this boundary (CLI tracker §5.8):
+    # record who authorized which plan, when, and whether authorization +
+    # write-access preflight succeeded ($rc). Emitted here, the single
+    # apply-guard, so each -y-gated repo apply emits exactly once. Source is
+    # cli by default; fleet ship exports MANIFEST_CLI_AUDIT_SOURCE=cli-fleet so
+    # its per-member applies are distinguishable. Best-effort — never alters $rc.
+    if declare -F manifest_audit_apply_event >/dev/null 2>&1; then
+        git_root="$(git -C "$project_root" rev-parse --show-toplevel 2>/dev/null || echo "$project_root")"
+        manifest_audit_apply_event \
+            "${MANIFEST_CLI_AUDIT_SOURCE:-cli}" \
+            "$replay_hint" \
+            "$git_root" \
+            "$plan_hash" \
+            "$rc"
+    fi
+
+    return $rc
 }
 
 manifest_execution_footer() {
