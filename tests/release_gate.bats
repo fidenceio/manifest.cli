@@ -217,3 +217,50 @@ EOF
     MANIFEST_CLI_RELEASE_GATE="local-tests" run manifest_release_gate_run "pre-bump"
     [ "$status" -eq 1 ]   # member B: gated, fails on its own failing tests
 }
+
+# --- clean-room isolation of the gate command (_manifest_release_gate_exec) ---
+#
+# By the time the gate runs, the ship process has exported its config vars,
+# ~160 manifest_* functions, PROJECT_ROOT, etc. The gate command must run in a
+# fresh environment or hermetic tests inherit that state and fail spuriously.
+# These guard the env -i clean room.
+
+@test "gate exec: command runs in gate_root, exit code propagates" {
+    mkdir -p "$SCRATCH/gate"
+    run _manifest_release_gate_exec "$SCRATCH/gate" 'pwd'
+    [ "$status" -eq 0 ]
+    [ "$output" = "$SCRATCH/gate" ]
+
+    run _manifest_release_gate_exec "$SCRATCH/gate" 'exit 7'
+    [ "$status" -eq 7 ]
+}
+
+@test "gate exec: MANIFEST_CLI_* vars do not leak into the command" {
+    export MANIFEST_CLI_AUTO_CONFIRM=1
+    export MANIFEST_CLI_SOME_LEAK="leaked-value"
+    run _manifest_release_gate_exec "$SCRATCH" 'echo "AC=[${MANIFEST_CLI_AUTO_CONFIRM:-unset}] LEAK=[${MANIFEST_CLI_SOME_LEAK:-unset}]"'
+    [ "$status" -eq 0 ]
+    [ "$output" = "AC=[unset] LEAK=[unset]" ]
+}
+
+@test "gate exec: exported manifest functions do not leak into the command" {
+    manifest_repo_identity_block() { return 127; }
+    export -f manifest_repo_identity_block
+    run _manifest_release_gate_exec "$SCRATCH" 'type -t manifest_repo_identity_block || echo ABSENT'
+    [ "$status" -eq 0 ]
+    [ "$output" = "ABSENT" ]
+}
+
+@test "gate exec: leaked PROJECT_ROOT does not reach the command" {
+    export PROJECT_ROOT="$SCRATCH/proj"
+    run _manifest_release_gate_exec "$SCRATCH" 'echo "PR=[${PROJECT_ROOT:-unset}]"'
+    [ "$status" -eq 0 ]
+    [ "$output" = "PR=[unset]" ]
+}
+
+@test "gate exec: PATH and HOME are preserved so tools and sandboxing work" {
+    run _manifest_release_gate_exec "$SCRATCH" 'echo "HOME=[$HOME]"; command -v bash >/dev/null && echo BASH_FOUND'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"HOME=[$HOME]"* ]]
+    [[ "$output" == *"BASH_FOUND"* ]]
+}

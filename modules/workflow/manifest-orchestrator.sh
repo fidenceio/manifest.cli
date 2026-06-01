@@ -207,29 +207,34 @@ _MANIFEST_CLI_SHIP_LAST_GATE_POLICY=""
 #
 # By the time the gate fires, the ship process has sourced every module
 # (exporting ~160 manifest_* shell functions) and loaded config (exporting
-# ~130 MANIFEST_CLI_* vars, including MANIFEST_CLI_AUTO_CONFIRM). A `bash -c`
-# child would inherit all of it. The verification suite must instead see the
-# same environment a developer or CI uses — a fresh shell — or hermetic tests
-# pick up the releaser's internal state and fail spuriously: an exported
-# manifest_* function resolved against a half-initialized child (status 127),
-# or AUTO_CONFIRM=1 silently suppressing a confirmation the test asserts on.
+# ~130 MANIFEST_CLI_* vars, plus PROJECT_ROOT, GIT_*, MANIFEST_CLI_AUTO_CONFIRM,
+# …). A child that inherits any of it sees the releaser's internal state, not a
+# fresh shell, and hermetic tests fail spuriously: an exported manifest_*
+# function resolved against a half-initialized child (status 127), AUTO_CONFIRM=1
+# suppressing a confirmation under test, or a leaked PROJECT_ROOT redirecting a
+# test's sandboxed git/status checks at the real repo.
 #
-# Strip exactly manifest's own exports (every exported function — in this
-# process they are all manifest's — and every MANIFEST_CLI_* var) while leaving
-# the user's real environment (PATH, HOME, CI tokens, toolchain vars) intact,
-# then run the command. Always invoked inside a subshell so the unsets never
-# touch the live ship process.
+# Prefix-scrubbing one variable family at a time is whack-a-mole, so run the
+# command in a true clean room: env -i drops ALL inherited state (every var and
+# every exported function) and we rebuild only the minimal environment a
+# developer or CI shell provides — PATH (locate bats/bash/git), HOME (git config
+# and test sandboxing), TMPDIR (bats scratch), locale, and a few standard vars.
+# Verified to run the suite green even with the full ship environment present.
 _manifest_release_gate_exec() {
     local gate_root="$1" cmd="$2"
-    cd "$gate_root" || return 1
-    local _v _fn
-    for _v in $(compgen -e); do
-        case "$_v" in MANIFEST_CLI_*) unset "$_v" ;; esac
-    done
-    while IFS= read -r _fn; do
-        [ -n "$_fn" ] && unset -f "$_fn" 2>/dev/null
-    done < <(declare -F -x | awk '{print $3}')
-    bash -c "$cmd"
+    env -i \
+        PATH="${PATH-}" \
+        HOME="${HOME-}" \
+        USER="${USER-}" \
+        LOGNAME="${LOGNAME-}" \
+        SHELL="${SHELL-}" \
+        TERM="${TERM-}" \
+        TMPDIR="${TMPDIR-}" \
+        LANG="${LANG-}" \
+        LC_ALL="${LC_ALL-}" \
+        LC_CTYPE="${LC_CTYPE-}" \
+        TZ="${TZ-}" \
+        bash -c "cd \"\$1\" && $cmd" _ "$gate_root"
 }
 
 manifest_release_gate_run() {
