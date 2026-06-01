@@ -203,6 +203,35 @@ _manifest_release_gate_test_command() {
 _MANIFEST_CLI_SHIP_LAST_GATE_STATUS="not-run"
 _MANIFEST_CLI_SHIP_LAST_GATE_POLICY=""
 
+# Run a release-gate verification command in a clean room.
+#
+# By the time the gate fires, the ship process has sourced every module
+# (exporting ~160 manifest_* shell functions) and loaded config (exporting
+# ~130 MANIFEST_CLI_* vars, including MANIFEST_CLI_AUTO_CONFIRM). A `bash -c`
+# child would inherit all of it. The verification suite must instead see the
+# same environment a developer or CI uses — a fresh shell — or hermetic tests
+# pick up the releaser's internal state and fail spuriously: an exported
+# manifest_* function resolved against a half-initialized child (status 127),
+# or AUTO_CONFIRM=1 silently suppressing a confirmation the test asserts on.
+#
+# Strip exactly manifest's own exports (every exported function — in this
+# process they are all manifest's — and every MANIFEST_CLI_* var) while leaving
+# the user's real environment (PATH, HOME, CI tokens, toolchain vars) intact,
+# then run the command. Always invoked inside a subshell so the unsets never
+# touch the live ship process.
+_manifest_release_gate_exec() {
+    local gate_root="$1" cmd="$2"
+    cd "$gate_root" || return 1
+    local _v _fn
+    for _v in $(compgen -e); do
+        case "$_v" in MANIFEST_CLI_*) unset "$_v" ;; esac
+    done
+    while IFS= read -r _fn; do
+        [ -n "$_fn" ] && unset -f "$_fn" 2>/dev/null
+    done < <(declare -F -x | awk '{print $3}')
+    bash -c "$cmd"
+}
+
 manifest_release_gate_run() {
     local phase="$1"
     local policy
@@ -234,7 +263,7 @@ manifest_release_gate_run() {
                         return 1
                     fi
                     echo "🧪 Release gate: running tests before release (${cmd})..."
-                    if ( cd "$gate_root" && bash -c "$cmd" ); then
+                    if ( _manifest_release_gate_exec "$gate_root" "$cmd" ); then
                         echo "✅ Release gate: tests passed."
                         _MANIFEST_CLI_SHIP_LAST_GATE_STATUS="verified-local"
                     else
