@@ -1,5 +1,20 @@
 # Changelog
 
+## [51.1.0] - 2026-06-01
+
+**Release Type:** Minor
+
+### Changes
+
+- Add smart ship preview summaries
+- Update release copy and configuration examples
+- Add regression coverage for the changed CLI workflow
+- Add regression coverage for the changed CLI workflow
+- Add GitHub Release publishing support
+- Add GitHub Release publishing support
+- Add regression coverage for the changed CLI workflow
+
+
 ## [51.0.0] - 2026-05-31
 
 **Release Type:** Major
@@ -98,8 +113,3 @@ distribution history lives in `fidenceio.homebrew.tap/CHANGELOG.md`.
 
 - Drop 3 dead links from docs INDEX.md Architecture table
 - Remove inert branch-enforcement knobs from fleet config (B)
-
-
-## [49.0.1] - 2026-05-26
-
-**Release Type:** Patch — no user-facing changes.
