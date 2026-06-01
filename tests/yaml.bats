@@ -267,7 +267,13 @@ cloud:
   api_key_env: "TEST_MANIFEST_CLOUD_KEY"
 YAML
 
+    # Clear any inherited cloud-key env so the test is hermetic: "process env
+    # overrides YAML" is exactly what this asserts, so an ambient
+    # MANIFEST_CLI_CLOUD_API_KEY_ENV (e.g. exported by a parent manifest process
+    # whose global config sets cloud.api_key_env — as the release gate does)
+    # would otherwise override the YAML under test and mask the real behavior.
     run env \
+        -u MANIFEST_CLI_CLOUD_API_KEY_ENV -u MANIFEST_CLI_CLOUD_API_KEY \
         HOME="$SCRATCH/home" \
         PROJECT_ROOT="$SCRATCH/project" \
         MANIFEST_CLI_INTERACTIVE_MODE=true \
