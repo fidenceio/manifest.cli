@@ -1373,19 +1373,37 @@ EOF
             esac
             ;;
 
-        # Old "manifest cleanup" — plumbing, absorbed into "refresh"
+        # Old "manifest cleanup" — plumbing, absorbed into "refresh".
+        # main_cleanup() moves doc files and prunes empty dirs, so this
+        # deprecated alias is mutating and must obey the same safe-by-default
+        # contract as its replacement: preview unless -y is given.
         "cleanup")
+            local execution_mode="preview"
+            local _local_only=false
+            local cleanup_args=()
+            if ! manifest_execution_parse execution_mode _local_only cleanup_args "$@"; then
+                return 1
+            fi
+            set -- "${cleanup_args[@]}"
             if _manifest_cli_has_help_token "$@"; then
                 _render_help \
-                    "manifest cleanup" \
+                    "manifest cleanup [-y|--yes] [--dry-run]" \
                     "Deprecated documentation cleanup plumbing. Prefer manifest refresh repo."
                 return 0
             fi
-            echo "Repository cleanup operations..."
+            log_deprecated "manifest cleanup" "manifest refresh repo"
             local current_version=""
             if [ -f "$MANIFEST_CLI_VERSION_FILE" ]; then
                 current_version=$(cat "$MANIFEST_CLI_VERSION_FILE")
             fi
+            if [[ "$execution_mode" == "preview" ]]; then
+                manifest_execution_preview_header "manifest cleanup"
+                echo "Would move historical documentation to zArchive for v${current_version:-unknown}."
+                manifest_execution_footer "manifest cleanup -y"
+                return 0
+            fi
+            manifest_execution_apply_header
+            echo "Repository cleanup operations..."
             get_time_timestamp >/dev/null
             local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
             main_cleanup "$current_version" "$timestamp"
