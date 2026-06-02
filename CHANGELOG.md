@@ -1,5 +1,21 @@
 # Changelog
 
+## [51.3.0] - 2026-06-02
+
+**Release Type:** Minor
+
+### Changes
+
+- Fix(fleet): set -e-safe counters and portable mtime probe
+- Fix(ship): run pre-bump gate before auto-commit and remote sync
+- Fix(config): reject unknown keys in config set/unset; correct help examples
+- Fix(formula): correct license to Apache-2.0
+- Ci: run validation via the containerized runner
+- Docs: correct gate, transaction, docs-site, config-name, and security inaccuracies
+- Docs(tracker): file §5.11 GNU-userland standardization and §5.12 macOS CI verification
+- Fix(fleet): ship plan shows actual current branch, not configured target
+
+
 ## [51.2.0] - 2026-06-02
 
 **Release Type:** Minor
@@ -97,18 +113,3 @@ distribution history lives in `fidenceio.homebrew.tap/CHANGELOG.md`.
 
 - Stop a ship that would land on the wrong branch
 - Stop prescribing a branching workflow to users
-
-
-## [50.0.0] - 2026-05-27
-
-**Release Type:** Major
-
-### Changes
-
-- Notice brand-new untracked files before auto-commit sweeps them in
-- Fix install/upgrade channel divergence with one provenance predicate
-- Make --manual remove an existing Homebrew install (symmetric channel switch)
-- Merge branch 'fix-install-channel-provenance'
-- Harden destructive-op guards so a sandbox can never touch real installs
-- Merge branch 'notice-new-untracked-on-autocommit'
-- Uninstall: sweep shell completions across versions and both channels
