@@ -1,0 +1,29 @@
+# coverage-map.tsv — §5.10 change-aware test selection (run-tests.sh --changed).
+#
+# Format:  <path-glob><TAB><space-separated test files under tests/>
+# A changed path matching a row selects that row's test files; the smoke tier is
+# ALWAYS unioned in. Lines beginning with # and blank lines are ignored. The glob
+# is a bash [[ == ]] pattern, so * spans '/' — keep globs anchored to a directory.
+#
+# This map is a CONVENIENCE for local / CI-PR pre-checks only. It is deliberately
+# coarse (directory-level) and FAIL-SAFE: a changed path matching NO row, any
+# modules/core/* or tests/helpers/* change, or a change to this file itself forces
+# the FULL suite. Nothing merges to main or releases on a narrowed run — the
+# release gate and push-to-main always run full. When unsure, leave a path
+# unmapped; it falls back to full.
+#
+# Derivation: each row lists the tests that load/exercise that module directory
+# (evidence sweep over `source`/`load_modules` in tests/). Integration tests that
+# drive the whole dispatcher (help_dispatch, command_surface_inventory,
+# preview_no_write, canonical_repo, deprecation, namespace_audit_extended,
+# completions of the binary, …) are intentionally NOT attributed to one module —
+# an unmapped change runs them via the full fallback.
+
+modules/docs/*.sh	archive_move_log.bats archive_pre_move_safety.bats docs_generation.bats release_notes_provider.bats root_changelog.bats
+modules/fleet/*.sh	create_repo.bats doc_review.bats fleet_action_syntax.bats fleet_apply_lock.bats fleet_config_validation_knobs.bats fleet_dry_run.bats fleet_init_phase.bats fleet_partial_failure_recovery.bats fleet_plan_reconcile.bats fleet_preflight_git_write.bats fleet_private_routes.bats fleet_resume.bats fleet_ship_plan_dirty_column.bats status.bats
+modules/git/*.sh	doc_review.bats docs_generation.bats dry_run.bats fleet_apply_lock.bats fleet_resume.bats fleet_ship_plan_dirty_column.bats install_requirements.bats ship_pretag_reentrancy.bats ship_release_branch_guard.bats ship_resume.bats tag_target.bats version.bats
+modules/pr/*.sh	pr_native_safe_by_default.bats
+modules/recipe/*.sh	doc_review.bats recipe.bats
+modules/system/*.sh	apply_audit_log.bats fleet_apply_lock.bats install_cli_e2e.bats install_paths_centralized.bats install_paths_plugin_data_dirs.bats install_requirements.bats os_detection_preamble.bats runtime_cleanup.bats security_check.bats status.bats time.bats uninstall_sandbox_tripwire.bats
+modules/workflow/*.sh	doc_review.bats fleet_apply_lock.bats fleet_partial_failure_recovery.bats fleet_resume.bats fleet_ship_plan_dirty_column.bats github_actions_status.bats release_gate.bats ship_pretag_reentrancy.bats ship_release_branch_guard.bats ship_resume.bats
+completions/*	completions.bats

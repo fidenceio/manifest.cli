@@ -55,6 +55,15 @@ manifest_requirement_yq_is_supported() {
     manifest_requirement_yq_text_is_supported "$(manifest_requirement_yq_version_text "$yq_cmd")"
 }
 
+# bats parallelism (run-tests.sh --jobs) is built on GNU parallel. moreutils
+# ships an unrelated binary also named `parallel`, so presence alone isn't
+# enough — verify the GNU flavor specifically, mirroring the yq vendor check.
+manifest_requirement_parallel_is_gnu() {
+    local parallel_cmd="${1:-parallel}"
+    command -v "$parallel_cmd" >/dev/null 2>&1 || return 1
+    "$parallel_cmd" --version 2>/dev/null | grep -qi 'GNU parallel'
+}
+
 manifest_requirement_docker_command_exists() {
     local docker_cmd="${1:-$MANIFEST_CLI_REQUIRED_DOCKER_COMMAND}"
     command -v "$docker_cmd" >/dev/null 2>&1

@@ -666,6 +666,16 @@ set_default_configuration() {
     export MANIFEST_CLI_RELEASE_GATE="${MANIFEST_CLI_RELEASE_GATE:-local-tests}"
     # Command run for the local-tests phase. Empty = auto-detect ./scripts/run-tests.sh.
     export MANIFEST_CLI_RELEASE_GATE_COMMAND="${MANIFEST_CLI_RELEASE_GATE_COMMAND:-}"
+    # Test tier the local gate runs when it auto-detects ./scripts/run-tests.sh.
+    #   full   the entire suite (default — preserves "nothing releases without a full run")
+    #   smoke  the safety-contract subset (faster local ship; CI still enforces full on main)
+    # Ignored when release_gate_command is set — a custom command owns its own tiering.
+    export MANIFEST_CLI_RELEASE_GATE_TIER="${MANIFEST_CLI_RELEASE_GATE_TIER:-full}"
+    # How long a green test run stays reusable before run-tests.sh re-runs it
+    # (§5.10 TTL'd cache). English-reading duration: 4h / 30m / 90s / 2d, or
+    # 'off' to always run. Accelerates dev/CI loops only — the release gate
+    # passes --no-cache, so nothing ever releases on a cached result.
+    export MANIFEST_CLI_TEST_SKIP_UNCHANGED_WITHIN="${MANIFEST_CLI_TEST_SKIP_UNCHANGED_WITHIN:-4h}"
     export MANIFEST_CLI_GITHUB_RELEASE_ENABLED="${MANIFEST_CLI_GITHUB_RELEASE_ENABLED:-true}"
     export MANIFEST_CLI_GITHUB_RELEASE_REQUIRED="${MANIFEST_CLI_GITHUB_RELEASE_REQUIRED:-false}"
     export MANIFEST_CLI_GITHUB_RELEASE_DRAFT="${MANIFEST_CLI_GITHUB_RELEASE_DRAFT:-false}"

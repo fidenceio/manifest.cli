@@ -1,4 +1,6 @@
 #!/usr/bin/env bats
+# §5.10 smoke tier (safety-contract suite)
+# bats file_tags=smoke
 
 # Coverage for pre-tag re-entrancy (CLI tracker 5.5): if a ship is interrupted
 # between the version bump and the commit, VERSION holds the next value but is

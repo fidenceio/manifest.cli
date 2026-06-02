@@ -1,4 +1,6 @@
 #!/usr/bin/env bats
+# §5.10 smoke tier (safety-contract suite)
+# bats file_tags=smoke
 #
 # Regression: bash parameter-default expansion does NOT tilde-expand. A default
 # written as "${X:-~/...}" sets X to the literal string "~/..." — and any code

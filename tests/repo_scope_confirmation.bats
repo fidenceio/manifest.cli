@@ -10,6 +10,11 @@ setup() {
         "recipe/manifest-recipe.sh" \
         "core/manifest-ship.sh"
     SCRATCH="$(mk_scratch)"
+    # Isolate HOME so apply-path side effects (e.g. the §5.8 audit log under
+    # $HOME/.manifest-cli/audit) land in the sandbox, never the real home.
+    HOME="$SCRATCH/home"
+    mkdir -p "$HOME"
+    export HOME
 }
 
 teardown() {

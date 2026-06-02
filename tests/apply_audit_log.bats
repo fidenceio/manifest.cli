@@ -1,4 +1,6 @@
 #!/usr/bin/env bats
+# §5.10 smoke tier (safety-contract suite)
+# bats file_tags=smoke
 
 # Coverage for the apply-event audit log (CLI tracker §5.8): every apply that
 # crosses the apply guard appends exactly one NDJSON event recording actor,

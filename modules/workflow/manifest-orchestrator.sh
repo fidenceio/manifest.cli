@@ -178,19 +178,47 @@ manifest_release_gate_policy() {
     esac
 }
 
+# Echo the normalized gate test tier (smoke|full). Defaults to full so the
+# invariant holds — nothing releases without a full run unless a repo explicitly
+# opts its local gate down. Rejects unknown values (return 2) like the policy
+# normalizer, so a typo can never silently shrink what the gate runs.
+manifest_release_gate_tier() {
+    local norm
+    norm="$(normalize_enum_value "${MANIFEST_CLI_RELEASE_GATE_TIER:-full}")"
+    case "$norm" in
+        smoke|full) printf '%s' "$norm" ;;
+        *)
+            log_error "Invalid release_gate_tier '${MANIFEST_CLI_RELEASE_GATE_TIER}'. Expected: smoke, full."
+            return 2
+            ;;
+    esac
+}
+
 # Resolve the command run for the local-tests phase. Configured command wins;
-# otherwise auto-detect ./scripts/run-tests.sh. Returns 1 if none resolvable.
+# otherwise auto-detect ./scripts/run-tests.sh and pass the gate tier through to
+# it (arg 1, already normalized to smoke|full). Returns 1 if none resolvable.
 # The command is executed directly as the gate action — never interpolated into
 # another command (no eval). It carries the same trust as the repo's own test
-# tooling, which a release already runs.
+# tooling, which a release already runs. A configured command owns its own
+# tiering, so the tier is appended only on the auto-detect path.
+#
+# The gate runs --jobs 1 (serial): it executes on whatever host the user ships
+# from, and GNU parallel (run-tests.sh's parallel dependency) is provisioned
+# only in the environments we control — the test container and CI. Keeping the
+# gate serial means shipping never requires parallel on a developer's machine.
+# Local-ship speed comes from the tier (smoke), not parallelism.
 _manifest_release_gate_test_command() {
+    local tier="${1:-full}"
     local configured="${MANIFEST_CLI_RELEASE_GATE_COMMAND:-}"
     if [[ -n "${configured//[[:space:]]/}" ]]; then
         printf '%s' "$configured"
         return 0
     fi
     if [[ -x "${PROJECT_ROOT:-$PWD}/scripts/run-tests.sh" ]]; then
-        printf '%s' "./scripts/run-tests.sh"
+        # --no-cache: the release gate always executes the suite. The TTL'd
+        # green-run cache (§5.10) accelerates dev/CI loops, but nothing releases
+        # on a cached result — the gate must observe the tests passing here, now.
+        printf '%s' "./scripts/run-tests.sh --tier ${tier} --jobs 1 --no-cache"
         return 0
     fi
     return 1
@@ -251,8 +279,10 @@ manifest_release_gate_run() {
                     _MANIFEST_CLI_SHIP_LAST_GATE_STATUS="bypassed"
                     ;;
                 local-tests|all)
+                    local tier
+                    tier="$(manifest_release_gate_tier)" || return 1
                     local cmd
-                    if ! cmd="$(_manifest_release_gate_test_command)"; then
+                    if ! cmd="$(_manifest_release_gate_test_command "$tier")"; then
                         # Nothing to run: a repo without a discoverable test
                         # command can't be gated by local-tests. Warn and
                         # proceed rather than block — teams that need hard
