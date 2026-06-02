@@ -1859,6 +1859,18 @@ _fleet_scope_block() {
     printf "  %-10s %s\n" "Services:" "$count"
 }
 
+# A member whose release.strategy is "pr" must never be shipped directly by
+# `manifest ship fleet`: its release has to land through a reviewed pull request
+# (`manifest pr fleet ...`). This is the single self-describing config field
+# `release.strategy` (values: none | direct | pr) — not a separate boolean knob.
+# Returns 0 when the member is PR-gated, 1 otherwise.
+_fleet_service_pr_gated() {
+    local service="$1"
+    local release_strategy
+    release_strategy=$(get_fleet_service_property "$service" "release_strategy" "")
+    [[ "$release_strategy" == "pr" ]]
+}
+
 _fleet_service_release_reason() {
     local service="$1"
     local path="$2"
@@ -1875,6 +1887,13 @@ _fleet_service_release_reason() {
     fi
     if [[ ! -d "$path/.git" ]]; then
         echo "not a git repo"
+        return 1
+    fi
+
+    # PR-gated members are never directly releaseable, even if release.enabled
+    # is true — the gate takes precedence so `ship fleet` routes them to review.
+    if _fleet_service_pr_gated "$service"; then
+        echo "pr-gated"
         return 1
     fi
 
@@ -2005,6 +2024,38 @@ _fleet_preflight_on_default_branch() {
     return 1
 }
 
+# Fail-closed gate: `manifest ship fleet` must never directly ship a PR-gated
+# member (release.strategy: pr) — its release has to land through a reviewed
+# pull request. If any selected member is PR-gated, apply refuses before any
+# mutation and emits a structured error plus the exact `manifest pr fleet ... -y`
+# replay command. The preview (_fleet_ship_plan) already lists these members so
+# the refusal is never a surprise. Skipping them silently would leave the fleet
+# half-shipped, which §1.1 exists to prevent.
+_fleet_preflight_no_pr_gated() {
+    local gated=()
+    local service path
+    for service in $MANIFEST_CLI_FLEET_SERVICES; do
+        if _fleet_service_pr_gated "$service"; then
+            path=$(get_fleet_service_property "$service" "path")
+            gated+=("$(_fleet_plan_service_display_name "$service" "$path") ($path)")
+        fi
+    done
+
+    [[ ${#gated[@]} -eq 0 ]] && return 0
+
+    log_error "Pre-flight: ${#gated[@]} fleet member(s) are PR-gated (release.strategy: pr) and cannot be shipped directly:"
+    local entry
+    for entry in "${gated[@]}"; do
+        echo "  - $entry"
+    done
+    echo ""
+    echo "Reason:      a PR-gated member's release must land through a reviewed pull request,"
+    echo "             not a direct \`manifest ship fleet\` tag-and-push."
+    echo "Replay:      manifest pr fleet -y"
+    echo "Pre-flight refused before any mutation; no fleet member was shipped."
+    return 1
+}
+
 # Returns the user-facing service name for plan output. YAML keys are
 # intentionally dot-free for variable-name compatibility (see
 # manifest-fleet-config.sh `tr '[:lower:]-.' '[:upper:]__'`), so the
@@ -2071,13 +2122,21 @@ _fleet_ship_plan() {
 
     local service path reason effect decision type branch display_name dirty version current next
     local offbranch_count=0
+    local pr_gated_count=0
     for service in $MANIFEST_CLI_FLEET_SERVICES; do
         path=$(get_fleet_service_property "$service" "path")
         type=$(get_fleet_service_property "$service" "type" "service")
         display_name=$(_fleet_plan_service_display_name "$service" "$path")
         dirty=$(manifest_git_changes_dirty_summary "$path")
         current="$(tr -d '[:space:]' < "$path/VERSION" 2>/dev/null || echo "")"
-        if reason=$(_fleet_service_release_reason "$service" "$path"); then
+        if _fleet_service_pr_gated "$service"; then
+            # PR-gated members are listed separately from plain skips: apply will
+            # refuse them (fail-closed) and route their release through review.
+            pr_gated_count=$((pr_gated_count + 1))
+            branch=$(_fleet_plan_branch_cell "$path" false)
+            version="${current:-—}"
+            printf '%-30s %-12s %-12s %-15s %-7s %-9s %-13s %s\n' "$display_name" "$type" "$branch" "$version" "$dirty" "pr-gate" "needs PR" "$path (release.strategy: pr)"
+        elif reason=$(_fleet_service_release_reason "$service" "$path"); then
             releaseable_count=$((releaseable_count + 1))
             effect="release"
             if [[ "$local_only" == "true" ]]; then
@@ -2108,7 +2167,14 @@ _fleet_ship_plan() {
     done
 
     echo ""
-    echo "Plan summary: $releaseable_count releaseable, $skipped_count skipped"
+    echo "Plan summary: $releaseable_count releaseable, $pr_gated_count pr-gated, $skipped_count skipped"
+    if [[ $pr_gated_count -gt 0 ]]; then
+        echo ""
+        echo "⚠️  ${pr_gated_count} member(s) shown 'needs PR' are PR-gated (release.strategy: pr)."
+        echo "    Apply refuses these (fail-closed): a PR-gated release must land through a"
+        echo "    reviewed pull request, not a direct ship. Release them with:"
+        echo "        manifest pr fleet -y"
+    fi
     if [[ $offbranch_count -gt 0 ]]; then
         local _rel_branch="${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}"
         echo ""
@@ -2447,6 +2513,10 @@ EOF
     _fleet_scope_block
     _fleet_ship_plan "$increment_type" "$local_only"
     echo ""
+
+    if ! _fleet_preflight_no_pr_gated; then
+        return 1
+    fi
 
     if ! _fleet_preflight_git_writability; then
         return 1
