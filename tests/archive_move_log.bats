@@ -41,7 +41,7 @@ seed_committed_audit() {
     grep -q "## 2026-05-05 — v46.13.0 sweep" docs/zArchive/.archive-log.md
     grep -q "Timestamp: 2026-05-05 23:00:00 UTC" docs/zArchive/.archive-log.md
     grep -q "Moved 1 file:" docs/zArchive/.archive-log.md
-    grep -q "docs/SECURITY_ANALYSIS_REPORT_v46.0.0.md → docs/zArchive/v46/SECURITY_ANALYSIS_REPORT_v46.0.0.md" docs/zArchive/.archive-log.md
+    grep -q "docs/SECURITY_ANALYSIS_REPORT_v46.0.0.md → docs/zArchive/SECURITY_ANALYSIS_REPORT_v46.0.0.md" docs/zArchive/.archive-log.md
 }
 
 @test "subsequent sweep appends without losing prior entries" {
@@ -87,4 +87,23 @@ seed_committed_audit() {
     grep -q "SECURITY_ANALYSIS_REPORT_v46.0.0.md →" docs/zArchive/.archive-log.md
     grep -q "SECURITY_ANALYSIS_REPORT_v46.1.0.md →" docs/zArchive/.archive-log.md
     grep -q "SECURITY_ANALYSIS_REPORT_v46.2.0.md →" docs/zArchive/.archive-log.md
+}
+
+@test "sweep moves files flat and creates no archive-side INDEX.md" {
+    # zArchive is read-only "memory": files enter by move only and the sweep
+    # must never generate an index inside the archive (top-level or per-major).
+    seed_committed_audit "46.0.0"
+    seed_committed_audit "46.1.0"
+
+    run main_cleanup "46.13.0" "2026-05-05 23:00:00 UTC"
+    [ "$status" -eq 0 ]
+
+    # Files landed flat — no per-major v<major>/ routing.
+    [ -f "docs/zArchive/SECURITY_ANALYSIS_REPORT_v46.0.0.md" ]
+    [ -f "docs/zArchive/SECURITY_ANALYSIS_REPORT_v46.1.0.md" ]
+
+    # No generated index anywhere under the archive.
+    [ ! -f "docs/zArchive/INDEX.md" ]
+    [ -z "$(find docs/zArchive -name INDEX.md 2>/dev/null)" ]
+    [ -z "$(find docs/zArchive -type d -name 'v*' 2>/dev/null)" ]
 }

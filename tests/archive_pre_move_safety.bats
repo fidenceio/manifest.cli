@@ -41,7 +41,7 @@ seed_audit_file() {
     run main_cleanup "46.12.2" "2026-05-05 22:00:00 UTC"
     [ "$status" -eq 0 ]
     [ ! -f "docs/SECURITY_ANALYSIS_REPORT_v46.0.0.md" ]
-    [ -f "docs/zArchive/v46/SECURITY_ANALYSIS_REPORT_v46.0.0.md" ]
+    [ -f "docs/zArchive/SECURITY_ANALYSIS_REPORT_v46.0.0.md" ]
 }
 
 @test "archive sweep aborts on uncommitted edit to a sweepable file" {
@@ -55,7 +55,7 @@ seed_audit_file() {
     echo "$output" | grep -q "uncommitted changes"
     echo "$output" | grep -q "MANIFEST_CLI_DOCS_ARCHIVE_FORCE=1"
     [ -f "docs/SECURITY_ANALYSIS_REPORT_v46.0.0.md" ]
-    [ ! -f "docs/zArchive/v46/SECURITY_ANALYSIS_REPORT_v46.0.0.md" ]
+    [ ! -f "docs/zArchive/SECURITY_ANALYSIS_REPORT_v46.0.0.md" ]
 }
 
 @test "archive sweep aborts on untracked sweepable file" {
@@ -75,7 +75,7 @@ seed_audit_file() {
     MANIFEST_CLI_DOCS_ARCHIVE_FORCE=1 run main_cleanup "46.12.2" "2026-05-05 22:00:00 UTC"
     [ "$status" -eq 0 ]
     [ ! -f "docs/SECURITY_ANALYSIS_REPORT_v46.0.0.md" ]
-    [ -f "docs/zArchive/v46/SECURITY_ANALYSIS_REPORT_v46.0.0.md" ]
+    [ -f "docs/zArchive/SECURITY_ANALYSIS_REPORT_v46.0.0.md" ]
 }
 
 @test "non-sweepable filenames in active docs are left alone" {
@@ -87,5 +87,5 @@ seed_audit_file() {
     run main_cleanup "46.12.2" "2026-05-05 22:00:00 UTC"
     [ "$status" -eq 0 ]
     [ -f "docs/RELEASE_v46.0.0.md" ]
-    [ ! -f "docs/zArchive/v46/RELEASE_v46.0.0.md" ]
+    [ ! -f "docs/zArchive/RELEASE_v46.0.0.md" ]
 }
