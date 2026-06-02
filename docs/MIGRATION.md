@@ -49,7 +49,7 @@ what must be green:
 
 | Value | Behavior |
 | ----- | -------- |
-| `local-tests` (default) | Run the project's test command before any version mutation; a failure aborts with the repo untouched. |
+| `local-tests` (default) | Run the project's test command first — before auto-commit, remote sync, or any version mutation; a failure aborts with the repo untouched. |
 | `remote-ci` | Require the pushed commit's GitHub checks to be green before the GitHub Release / Homebrew publish (the tag is already pushed). |
 | `all` | `local-tests` **and** `remote-ci`. |
 | `none` | No verification. Emits a loud warning and records an audited bypass. |
@@ -65,13 +65,13 @@ release:
 ```
 
 If `local-tests` is selected but no test command can be resolved, Manifest warns
-and proceeds (it cannot run tests that do not exist) — set `gate_command` or use
+and proceeds (it cannot run tests that do not exist) — set `release.gate_command` or use
 `remote-ci`/`all` to enforce hard gating.
 
 **Upgrading existing automation:** if your pipeline previously shipped without
-running tests and you do not want that to change yet, set `release_gate: none`
+running tests and you do not want that to change yet, set `release.gate: none`
 explicitly (the bypass is logged and recorded in the ship status file). To adopt
-gating, point `gate_command` at your test entrypoint.
+gating, point `release.gate_command` at your test entrypoint.
 
 ## Versions are independent across a fleet
 

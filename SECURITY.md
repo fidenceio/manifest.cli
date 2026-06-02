@@ -70,7 +70,7 @@ Out of scope:
 Manifest CLI ships several defensive controls you can rely on and audit:
 
 - **Preview by default.** Mutating commands preview unless `-y` / `--yes` is given.
-- **Release gate.** `release_gate` (`local-tests` by default) blocks publishing a
+- **Release gate.** `release.gate` (`local-tests` by default) blocks publishing a
   release unless tests pass; `none` is loud and audited.
 - **Destructive-op guards.** Removal and global `brew` operations are gated; under a
   sandbox/test `HOME` they protectively skip rather than touch the real system.

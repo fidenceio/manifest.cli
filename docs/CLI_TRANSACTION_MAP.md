@@ -24,8 +24,8 @@ This map identifies high-consequence paths and their side-effect boundaries.
 7. Commit release files.
 8. Create tag.
 9. Push branch and tag.
-10. Create or reuse GitHub Release.
-11. Update Homebrew tap when canonical CLI release rules apply.
+10. Update Homebrew tap when canonical CLI release rules apply.
+11. Create or reuse GitHub Release.
 
 Preview mode stops before local and remote writes. `--local -y` allows local writes and suppresses remote writes.
 

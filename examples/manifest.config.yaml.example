@@ -70,8 +70,9 @@ release:
 
   # gate — what must be green before a release is published.
   #   none         No verification. Loud warning + audited bypass.
-  #   local-tests  (default) Run the test command before any version mutation;
-  #                a failure aborts with the repo untouched.
+  #   local-tests  (default) Run the test command first — before auto-commit,
+  #                remote sync, or any version mutation; a failure aborts with
+  #                the repo untouched.
   #   remote-ci    Require the pushed commit's GitHub checks to be green before
   #                the GitHub Release / Homebrew publish (tag is already pushed).
   #   all          local-tests AND remote-ci.

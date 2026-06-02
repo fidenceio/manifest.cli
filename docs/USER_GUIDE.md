@@ -193,7 +193,7 @@ manifest docs cleanup
 manifest docs fleet --dry-run
 ```
 
-Docs-site generation for Jekyll/GitHub Pages is optional and disabled by default. See [DOCS_SITE.md](DOCS_SITE.md).
+Docs-site generation for Jekyll/GitHub Pages is on by default; disable it via config if you don't want it. See [DOCS_SITE.md](DOCS_SITE.md).
 
 ## Testing Manifest
 
