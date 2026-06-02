@@ -718,9 +718,10 @@ get_fleet_config_value() {
         "push_strategy") yaml_path=".operations.push.strategy" ;;
         "commit_strategy") yaml_path=".operations.commit.strategy" ;;
         "default_bump") yaml_path=".operations.default_bump" ;;
-        "require_clean") yaml_path=".validation.require_clean_status" ;;
-        "enforce_deps") yaml_path=".validation.enforce_dependencies" ;;
-        "strict") yaml_path=".validation.strict" ;;
+        # NOTE: the former validation short keys (require_clean,
+        # enforce_deps, strict) were removed — they had no consumer and no
+        # gate read them. Clean-status enforcement is unconditional in the
+        # apply path; see CLI TRACKER §2.8.
         # Docs configuration
         "docs_strategy")              yaml_path=".docs.strategy" ;;
         "docs_fleet_root_enabled")    yaml_path=".docs.fleet_root.enabled" ;;
