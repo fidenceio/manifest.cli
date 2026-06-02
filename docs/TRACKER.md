@@ -13,12 +13,6 @@ Open work for the Manifest CLI repo, as one flat list.
 
 ---
 
-- **§1.1 Halt clearly when fleet release requires PR review first.**
-  - **Status:** T2.
-  - **Why:** fleet release should not silently skip PR-gated members. Silent skip leaves the fleet in an inconsistent state where some members shipped and others didn't.
-  - **Deliverable:** fleet ship preview lists PR-gated members; apply refuses with a structured error and a `manifest pr fleet ... -y` replay command.
-  - **Anchor:** [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
-
 - **§2.2 Finish shared plan rendering, fingerprint comparison, and the preview exit code.**
   - **Status:** T2 (partially shipped 2026-05-30).
   - **Shipped:** `manifest_plan_fingerprint` helper ([`manifest-shared-utils.sh`](../modules/core/manifest-shared-utils.sh)), displayed in the ship-repo preview and apply; the `Version` column (`current → next`, ASCII arrow) in the fleet ship plan; `_manifest_hash_short` exported.
