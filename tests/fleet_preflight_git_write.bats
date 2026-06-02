@@ -51,6 +51,9 @@ TSV
 }
 
 @test "ship fleet -y refuses pre-flight when a member's .git is not writable" {
+    if [ "$(id -u)" -eq 0 ]; then
+        skip "running as root bypasses chmod-based write restriction (covered by the non-root macOS CI leg)"
+    fi
     write_two_member_fleet
 
     chmod a-w "$SCRATCH/work/svc-a/.git"

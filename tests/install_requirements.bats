@@ -35,12 +35,18 @@ EOF
 
 @test "test container and CI install GNU parallel for run-tests.sh --jobs" {
     # Parallelism is a required test dependency (run-tests.sh defaults to --jobs
-    # auto), so every place that provisions the suite must install it: the
-    # disposable container and both CI legs. The host installer/formula must NOT
-    # — parallel is a test-only dep, like bats, never shipped to CLI users.
+    # auto), so every place that provisions the suite must install it. The Linux
+    # CI leg runs the suite inside the disposable container (no host installs), so
+    # it inherits parallel from there; the host-native macOS leg (no Docker on
+    # GitHub macOS runners) installs it via brew. The host installer/formula must
+    # NOT — parallel is a test-only dep, like bats, never shipped to CLI users.
     grep -F 'apk add --no-cache bash git bats parallel yq coreutils' \
         "$TEST_REPO_ROOT/scripts/run-tests-container.sh" >/dev/null
-    grep -F 'apt-get install -y bats parallel' "$TEST_REPO_ROOT/.github/workflows/test.yml" >/dev/null
+    # Linux leg runs via the containerized runner (parallel provisioned in-container)…
+    grep -F './scripts/run-tests-container.sh' "$TEST_REPO_ROOT/.github/workflows/test.yml" >/dev/null
+    # …and no longer installs test deps on the runner host.
+    ! grep -F 'apt-get install -y bats parallel' "$TEST_REPO_ROOT/.github/workflows/test.yml"
+    # macOS leg is host-native and brew-installs parallel.
     grep -F 'brew install bats-core yq bash coreutils parallel' "$TEST_REPO_ROOT/.github/workflows/test.yml" >/dev/null
 
     ! grep -iqE 'parallel' "$TEST_REPO_ROOT/install-cli.sh"

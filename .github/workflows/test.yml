@@ -75,21 +75,13 @@ jobs:
           # Full history so change-aware selection can find merge-base with main.
           fetch-depth: 0
 
-      - name: Install dependencies (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          set -euxo pipefail
-          sudo apt-get update -qq
-          # GNU parallel powers run-tests.sh --jobs (default 'auto'); required.
-          sudo apt-get install -y bats parallel
-          # Mike Farah's Go yq (apt 'yq' is the older Python tool we don't want)
-          YQ_VERSION="v4.44.3"
-          sudo curl -fsSL -o /usr/local/bin/yq \
-            "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
-          sudo chmod +x /usr/local/bin/yq
-          yq --version
-
-      - name: Install dependencies (macOS)
+      # Validation runs in the containerized runner — no test dependencies are
+      # installed on the runner host. The macOS leg is the sole exception:
+      # GitHub's macOS runners provide no Docker, and macOS is also the only leg
+      # that exercises the BSD-userland branches (sed -i '', date -r, stat -f) of
+      # the real Homebrew release path, so it stays host-native via brew.
+      # (Tracked follow-up: standardize on GNU userland to drop this exception.)
+      - name: Install dependencies (macOS, host-native)
         if: matrix.os == 'macos-latest'
         run: |
           set -euxo pipefail
@@ -102,13 +94,18 @@ jobs:
           /opt/homebrew/bin/bash --version | head -1
           yq --version
 
-      - name: Print environment
+      - name: Print environment (macOS host)
+        if: matrix.os == 'macos-latest'
         run: |
           bash --version | head -1
           bats --version
           yq --version
           git --version
           parallel --version | head -1
+
+      - name: Print environment (Linux, Docker)
+        if: matrix.os == 'ubuntu-latest'
+        run: docker --version
 
       - name: Ensure origin/main ref (change-aware base)
         if: needs.plan.outputs.changed == 'true'
@@ -118,18 +115,45 @@ jobs:
           # full suite (slower, never less safe).
           git fetch --no-tags origin main:refs/remotes/origin/main || true
 
-      - name: Run bats suite
+      - name: Build test args
+        id: args
         run: |
           set -euo pipefail
           args=(--tier "${{ needs.plan.outputs.tier }}")
           [ "${{ needs.plan.outputs.changed }}" = "true" ]  && args+=(--changed)
           [ "${{ needs.plan.outputs.no_cache }}" = "true" ] && args+=(--no-cache)
-          echo "run-tests.sh ${args[*]}"
-          ./scripts/run-tests.sh "${args[@]}"
+          echo "args=${args[*]}" >> "$GITHUB_OUTPUT"
 
-      - name: Smoke-test the CLI
+      - name: Run bats suite (Linux, containerized)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          set -euo pipefail
+          echo "run-tests-container.sh ${{ steps.args.outputs.args }}"
+          ./scripts/run-tests-container.sh ${{ steps.args.outputs.args }}
+
+      - name: Run bats suite (macOS, host-native)
+        if: matrix.os == 'macos-latest'
+        run: |
+          set -euo pipefail
+          echo "run-tests.sh ${{ steps.args.outputs.args }}"
+          ./scripts/run-tests.sh ${{ steps.args.outputs.args }}
+
+      - name: Smoke-test the CLI (macOS host)
+        if: matrix.os == 'macos-latest'
         run: |
           bash scripts/manifest-cli.sh version
           bash scripts/manifest-cli.sh help | head -40
           bash scripts/manifest-cli.sh status
           bash scripts/manifest-cli.sh doctor
+
+      - name: Smoke-test the CLI (Linux, containerized)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/work" -w /work alpine:3.20 sh -lc '
+            apk add --no-cache bash git yq coreutils >/dev/null
+            bash scripts/manifest-cli.sh version
+            bash scripts/manifest-cli.sh help | head -40
+            bash scripts/manifest-cli.sh status
+            bash scripts/manifest-cli.sh doctor
+          '
