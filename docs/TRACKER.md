@@ -18,12 +18,6 @@ Open work for the Manifest CLI repo, as one flat list.
   - **Why:** every CLI-side Cloud item activates 1:1 with a Cloud-tracker milestone — contract sources, `cloud.*` config surface, provider wiring, payload privacy assertions, recipe metadata, user-facing docs, and container verification. Tracking them as separate CLI items duplicates the Cloud tracker and creates drift sites for two-step changes. Cloud stays a no-op stub today ([`modules/stubs/manifest-cloud-stub.sh`](../modules/stubs/manifest-cloud-stub.sh)). Source of truth: [Cloud TRACKER §1 (Contracts/M0)](../../fidenceio.manifest.cloud/docs/TRACKER.md#1-contracts-m0-gate), [§2 (Service implementation/M1/M3)](../../fidenceio.manifest.cloud/docs/TRACKER.md#2-service-implementation-m1--m3-gates), [§3 (Security & platform/M3)](../../fidenceio.manifest.cloud/docs/TRACKER.md#3-security--platform-m3-gate). When a Cloud milestone lands, re-file specific CLI deliverables as new items here against the freshly-stable Cloud contract — do not pre-fork them.
   - **Anchor:** [`modules/core/manifest-yaml.sh`](../modules/core/manifest-yaml.sh), [`modules/core/manifest-config.sh`](../modules/core/manifest-config.sh), [`modules/docs/manifest-documentation.sh`](../modules/docs/manifest-documentation.sh), [`docs/contracts/recipe.schema.json`](contracts/recipe.schema.json), [`docs/USER_GUIDE.md`](USER_GUIDE.md), [`scripts/run-tests-container.sh`](../scripts/run-tests-container.sh).
 
-- **§3.8 Add Cloud apply-intent contract stubs.**
-  - **Status:** T3.
-  - **Why:** Cloud-backed mutation must fail closed when `execution_mode=apply` is missing. Enforcing this on the local stub now means that whenever §3.1 wires real Cloud calls, the contract is already pinned. Mirrors workspace cross-cut [§1.1](../../TRACKER.md#1-cross-cut-requirements). (Verified 2026-06-02: `tests/cloud_contract.bats` does not exist; the stub returns unconditional failure without inspecting apply intent.)
-  - **Deliverable:** local stub test that rejects a Cloud request missing apply intent before any provider or analyzer runs.
-  - **Anchor:** [`modules/stubs/manifest-cloud-stub.sh`](../modules/stubs/manifest-cloud-stub.sh), new `tests/cloud_contract.bats`.
-
 - **§5.1 Extract user global-config migration from `install-cli.sh`.**
   - **Status:** DEFER (pure refactor).
   - **Why:** `install-cli.sh` remains large, and the global-config migration (`migrate_user_global_configuration()`, currently inline) is a clean extraction boundary.
