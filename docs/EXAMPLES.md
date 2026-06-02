@@ -99,7 +99,7 @@ Run the focused generator regression in a container:
 
 ```bash
 manifest ship repo patch --local -y
-MANIFEST_CLI_CLOUD_ENABLED=false manifest ship repo patch
+MANIFEST_CLI_CLOUD_SKIP=true manifest ship repo patch
 ```
 
 Core release workflows are local-first. Cloud enriches optional paths but is not required for repo or fleet releases.

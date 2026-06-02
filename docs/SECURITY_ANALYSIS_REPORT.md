@@ -1,7 +1,7 @@
 # Manifest CLI Security Notes
 
-**Version:** 50.2.0
-**Updated:** 2026-05-30
+**Version:** 51.2.0
+**Updated:** 2026-06-01
 **Scope:** Current security posture and audit status
 
 ---
@@ -15,7 +15,8 @@ during release automation:
 
 - Pre-commit hook (`.git-hooks/pre-commit`) scans staged content for secrets,
   tokens, private environment files, and large files.
-- CI runs `gitleaks` over the tree on every push/PR (`.github/workflows/lint.yml`).
+- CI runs `gitleaks` over the tree on pushes to `main`, PRs targeting `main`, and
+  manual dispatch (`.github/workflows/lint.yml`).
 - `.gitignore` enforcement keeps local config and private environment files out
   of version control.
 - Output redaction: `manifest_redact` strips known credential env-var values
