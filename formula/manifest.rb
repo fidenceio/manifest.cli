@@ -3,7 +3,7 @@ class Manifest < Formula
   homepage "https://github.com/fidenceio/manifest.cli"
   url "https://github.com/fidenceio/manifest.cli/archive/refs/tags/v51.2.0.tar.gz"
   sha256 "fdc72cbab3d7986160a509f47728ee0c01307f1185cd59e7b07feb32ba3e8e31"
-  license "MIT"
+  license "Apache-2.0"
   head "https://github.com/fidenceio/manifest.cli.git", branch: "main"
 
   depends_on "bash"
