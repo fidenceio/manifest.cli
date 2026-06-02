@@ -1,29 +1,87 @@
 name: tests
 
 on:
+  # Every branch push is exercised; the `plan` job decides how much (see below).
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
     branches: [main]
+  # Nightly full run catches time/network/flaky drift that a change-scoped run
+  # would miss.
+  schedule:
+    - cron: '0 7 * * *'
   workflow_dispatch:
 
 jobs:
+  # Decide the test plan from the triggering event (§5.10 event-tiered matrix).
+  #
+  #   Full + OS matrix  — anything that gates merge or release confidence:
+  #                       PR-to-main, push-to-main, the nightly schedule, and
+  #                       manual dispatch. Runs --no-cache so the suite always
+  #                       executes here, now (mirrors the release gate).
+  #   Fast lane         — routine feature-branch pushes: smoke tier +
+  #                       change-aware selection on a single OS.
+  #
+  # The invariant — nothing merges to main or releases without a full run —
+  # holds structurally: both PR-to-main and push-to-main take the full path, so
+  # main is never advanced on a narrowed or cached result.
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    outputs:
+      tier: ${{ steps.decide.outputs.tier }}
+      changed: ${{ steps.decide.outputs.changed }}
+      no_cache: ${{ steps.decide.outputs.no_cache }}
+      os: ${{ steps.decide.outputs.os }}
+    steps:
+      - id: decide
+        run: |
+          set -euo pipefail
+          full() {
+            echo "tier=full"
+            echo "changed=false"
+            echo "no_cache=true"
+            echo 'os=["ubuntu-latest","macos-latest"]'
+          }
+          fast() {
+            echo "tier=smoke"
+            echo "changed=true"
+            echo "no_cache=false"
+            echo 'os=["ubuntu-latest"]'
+          }
+          {
+            case "${{ github.event_name }}" in
+              pull_request|schedule|workflow_dispatch) full ;;
+              push)
+                if [ "${{ github.ref }}" = "refs/heads/main" ]; then full; else fast; fi
+                ;;
+              *) full ;;   # unknown event → safe default
+            esac
+          } >> "$GITHUB_OUTPUT"
+          echo "event=${{ github.event_name }} ref=${{ github.ref }} ->"
+          cat "$GITHUB_OUTPUT"
+
   bats:
+    needs: plan
     name: bats (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: ${{ fromJSON(needs.plan.outputs.os) }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history so change-aware selection can find merge-base with main.
+          fetch-depth: 0
 
       - name: Install dependencies (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
           set -euxo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y bats
+          # GNU parallel powers run-tests.sh --jobs (default 'auto'); required.
+          sudo apt-get install -y bats parallel
           # Mike Farah's Go yq (apt 'yq' is the older Python tool we don't want)
           YQ_VERSION="v4.44.3"
           sudo curl -fsSL -o /usr/local/bin/yq \
@@ -35,7 +93,8 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: |
           set -euxo pipefail
-          brew install bats-core yq bash coreutils
+          # 'parallel' last keeps run-tests.sh --jobs (default 'auto') working.
+          brew install bats-core yq bash coreutils parallel
           # macos-latest still ships /bin/bash 3.2 (no associative arrays).
           # bats's `#!/usr/bin/env bash` picks whichever bash is first in PATH —
           # ensure that's Homebrew's modern bash for every subsequent step.
@@ -49,9 +108,24 @@ jobs:
           bats --version
           yq --version
           git --version
+          parallel --version | head -1
+
+      - name: Ensure origin/main ref (change-aware base)
+        if: needs.plan.outputs.changed == 'true'
+        run: |
+          # The fast lane diffs against merge-base(HEAD, origin/main). Make sure
+          # that ref exists; if the fetch fails, run-tests.sh fail-safes to the
+          # full suite (slower, never less safe).
+          git fetch --no-tags origin main:refs/remotes/origin/main || true
 
       - name: Run bats suite
-        run: ./scripts/run-tests.sh
+        run: |
+          set -euo pipefail
+          args=(--tier "${{ needs.plan.outputs.tier }}")
+          [ "${{ needs.plan.outputs.changed }}" = "true" ]  && args+=(--changed)
+          [ "${{ needs.plan.outputs.no_cache }}" = "true" ] && args+=(--no-cache)
+          echo "run-tests.sh ${args[*]}"
+          ./scripts/run-tests.sh "${args[@]}"
 
       - name: Smoke-test the CLI
         run: |

@@ -1,4 +1,6 @@
 #!/usr/bin/env bats
+# §5.10 smoke tier (safety-contract suite)
+# bats file_tags=smoke
 
 # Coverage for the release-branch guard. push_changes() pushes the *literal*
 # default-branch ref while the version commit/tag are made on whatever HEAD is

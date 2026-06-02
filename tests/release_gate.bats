@@ -1,4 +1,6 @@
 #!/usr/bin/env bats
+# §5.10 smoke tier (safety-contract suite)
+# bats file_tags=smoke
 
 # Coverage for the release gate (MANIFEST_CLI_RELEASE_GATE / release.gate):
 # the single self-describing policy that blocks a release until verification
@@ -113,6 +115,76 @@ EOF
     [ "$?" -eq 0 ]
     grep -q "no test command found" "$SCRATCH/out"
     [ "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS" = "unverified" ]
+}
+
+# --- pre-bump: gate tier (release.gate_tier) --------------------------------
+
+@test "release_gate: default tier is full" {
+    run manifest_release_gate_tier
+    [ "$status" -eq 0 ]
+    [ "$output" = "full" ]
+}
+
+@test "release_gate: tier tolerates whitespace and case" {
+    MANIFEST_CLI_RELEASE_GATE_TIER=" Smoke " run manifest_release_gate_tier
+    [ "$status" -eq 0 ]
+    [ "$output" = "smoke" ]
+}
+
+@test "release_gate: unknown tier is rejected, never silently shrunk" {
+    MANIFEST_CLI_RELEASE_GATE_TIER="quick" run manifest_release_gate_tier
+    [ "$status" -eq 2 ]
+    echo "$output" | grep -q "Invalid release_gate_tier"
+}
+
+@test "release_gate: an invalid tier hard-stops the gate (no run, no release)" {
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND="touch should-not-run.marker"
+    export MANIFEST_CLI_RELEASE_GATE_TIER="quick"
+    run manifest_release_gate_run "pre-bump"
+    [ "$status" -eq 1 ]
+    [ ! -e "$PROJECT_ROOT/should-not-run.marker" ]
+}
+
+# A stub run-tests.sh records the args it was invoked with so we can assert the
+# tier was threaded through to the auto-detected entrypoint.
+_install_recording_runtests() {
+    mkdir -p "$PROJECT_ROOT/scripts"
+    cat > "$PROJECT_ROOT/scripts/run-tests.sh" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" > "$PWD/runtests.args"
+exit 0
+EOF
+    chmod +x "$PROJECT_ROOT/scripts/run-tests.sh"
+}
+
+@test "release_gate: auto-detected run-tests.sh runs the full tier, serial by default" {
+    _install_recording_runtests
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"
+    run manifest_release_gate_run "pre-bump"
+    [ "$status" -eq 0 ]
+    # --jobs 1: the gate runs on an uncontrolled shipping host, so it must not
+    # depend on GNU parallel being installed there (parallel is provisioned only
+    # in the container and CI). See _manifest_release_gate_test_command.
+    # --no-cache: the gate never honors the §5.10 green-run cache — a release
+    # must observe the suite passing here, not trust a prior cached run.
+    [ "$(cat "$PROJECT_ROOT/runtests.args")" = "--tier full --jobs 1 --no-cache" ]
+}
+
+@test "release_gate: gate_tier=smoke threads --tier smoke to run-tests.sh (still serial)" {
+    _install_recording_runtests
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"
+    export MANIFEST_CLI_RELEASE_GATE_TIER="smoke"
+    run manifest_release_gate_run "pre-bump"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$PROJECT_ROOT/runtests.args")" = "--tier smoke --jobs 1 --no-cache" ]
+}
+
+@test "release_gate: a configured gate_command owns its tiering (no --tier appended)" {
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND="my-runner --everything"
+    run _manifest_release_gate_test_command "smoke"
+    [ "$status" -eq 0 ]
+    [ "$output" = "my-runner --everything" ]
 }
 
 # --- pre-bump: none (loud + audited) ----------------------------------------

@@ -1,4 +1,6 @@
 #!/usr/bin/env bats
+# §5.10 smoke tier (safety-contract suite)
+# bats file_tags=smoke
 #
 # Broad preview no-write coverage matrix (TRACKER §2.5).
 #

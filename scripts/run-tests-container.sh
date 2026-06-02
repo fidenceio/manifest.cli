@@ -10,5 +10,5 @@ docker run --rm \
     -v "$REPO_ROOT:/work" \
     -w /work \
     alpine:3.20 \
-    sh -lc 'apk add --no-cache bash git bats yq coreutils >/dev/null && bash scripts/run-tests.sh "$@"' \
+    sh -lc 'apk add --no-cache bash git bats parallel yq coreutils >/dev/null && bash scripts/run-tests.sh "$@"' \
     sh "$@"

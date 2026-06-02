@@ -1,4 +1,6 @@
 #!/usr/bin/env bats
+# §5.10 smoke tier (safety-contract suite)
+# bats file_tags=smoke
 
 # Coverage for the single-flight fleet lock (CLI tracker 1.7): concurrent
 # `manifest ship fleet ... -y` runs in one workspace must not race on shared

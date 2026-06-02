@@ -1,4 +1,6 @@
 #!/usr/bin/env bats
+# §5.10 smoke tier (safety-contract suite)
+# bats file_tags=smoke
 
 # Coverage for secret redaction (CLI tracker 2.7): tokens must never reach
 # stdout/stderr/logs/status files verbatim. manifest_redact catches both

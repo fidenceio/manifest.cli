@@ -1,4 +1,6 @@
 #!/usr/bin/env bats
+# §5.10 smoke tier (safety-contract suite)
+# bats file_tags=smoke
 
 # Coverage for the shared apply-guard helpers and the plan fingerprint
 # (CLI tracker 2.1 + 2.2): manifest_execution_require_apply /
