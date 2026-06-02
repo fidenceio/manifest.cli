@@ -117,169 +117,11 @@ validate_repository() {
 # audit artifacts (SECURITY_ANALYSIS_REPORT_v*) are archived now.
 _MANIFEST_ARCHIVABLE_REGEX='^SECURITY_ANALYSIS_REPORT_v[0-9]+\.[0-9]+\.[0-9]+(_[0-9]+T[0-9]+Z)?\.md$'
 
-# --- Archive index helpers -------------------------------------------------
-#
-# These regenerate docs/zArchive/INDEX.md (top-level) and
-# docs/zArchive/v<major>/INDEX.md (per-major) after every archive sweep,
-# so the indexes never drift from the file layout.
-
-_manifest_archive_extract_date() {
-    awk '
-      /^\*\*Release Date:\*\* / { sub(/^\*\*Release Date:\*\* /, ""); print substr($0, 1, 10); exit }
-      /^Release date: / { sub(/^Release date: */, ""); print substr($0, 1, 10); exit }
-      /^\*\*Date:\*\* / { sub(/^\*\*Date:\*\* /, ""); print substr($0, 1, 10); exit }
-    ' "$1"
-}
-
-_manifest_archive_extract_version_from_filename() {
-    basename "$1" | sed -E 's/^[A-Z_]+_v([0-9]+\.[0-9]+\.[0-9]+).*\.md$/\1/'
-}
-
-_manifest_archive_extract_type() {
-    case "$1" in
-        SECURITY_ANALYSIS_REPORT*) printf '%s\n' "Security Audit" ;;
-        *) printf '%s\n' "Document" ;;
-    esac
-}
-
-_manifest_archive_sort_key() {
-    local f="$1"
-    local v maj min pat
-    v="$(_manifest_archive_extract_version_from_filename "$f")"
-    IFS='.' read -r maj min pat <<<"$v"
-    printf '%05d.%05d.%05d\n' "${maj:-0}" "${min:-0}" "${pat:-0}"
-}
-
-_manifest_archive_generate_per_major_index() {
-    local archive_dir="$1"
-    local major="$2"
-    local dir="$archive_dir/v${major}"
-    [[ -d "$dir" ]] || return 0
-
-    local index_file="$dir/INDEX.md"
-    local count=0
-    local rows=""
-    local f
-
-    for f in "$dir"/*.md; do
-        [[ -f "$f" ]] || continue
-        [[ "$(basename "$f")" == "INDEX.md" ]] && continue
-        count=$((count + 1))
-        rows="${rows}$(_manifest_archive_sort_key "$f")|${f}"$'\n'
-    done
-
-    if [[ "$count" -eq 0 ]]; then
-        rm -f "$index_file"
-        rmdir "$dir" 2>/dev/null || true
-        return 0
-    fi
-
-    {
-        echo "# Manifest CLI Archive — v${major}"
-        echo
-        local plural=""
-        [[ "$count" -ne 1 ]] && plural="s"
-        echo "${count} archived document${plural} from the v${major} series."
-        echo
-        echo "| Document | Version | Date |"
-        echo "| --- | --- | --- |"
-        printf '%s' "$rows" | sort | while IFS='|' read -r _key f; do
-            [[ -z "$f" ]] && continue
-            local base v t d_str
-            base="$(basename "$f")"
-            v="$(_manifest_archive_extract_version_from_filename "$f")"
-            t="$(_manifest_archive_extract_type "$base")"
-            d_str="$(_manifest_archive_extract_date "$f")"
-            echo "| [${t} v${v}](${base}) | ${v} | ${d_str:-—} |"
-        done
-        echo
-        echo "[Back to archive index](../INDEX.md)"
-    } > "$index_file"
-}
-
-_manifest_archive_generate_top_level_index() {
-    local archive_dir="$1"
-    local index_file="$archive_dir/INDEX.md"
-
-    {
-        cat <<'INTRO'
-# Manifest CLI Archive
-
-Historical release notes, changelogs, and security audits from past versions.
-
-This archive contains documents that were promoted out of the active `docs/`
-directory when superseded by a newer release. Files are grouped by major
-version. Boilerplate auto-generated stubs (releases with no substantive
-content) have been pruned; only documents describing real changes or
-representing point-in-time security analyses are retained.
-
-| Major | Documents | Date range | Notes |
-| --- | --- | --- | --- |
-INTRO
-
-        local total_docs=0
-        local total_majors=0
-        local d
-        for d in "$archive_dir"/v*/; do
-            [[ -d "$d" ]] || continue
-            local major count min_date max_date types
-            major="$(basename "$d" | tr -d v)"
-            count=0
-            min_date=""
-            max_date=""
-            types=""
-
-            local f d_str
-            for f in "$d"*.md; do
-                [[ -f "$f" ]] || continue
-                [[ "$(basename "$f")" == "INDEX.md" ]] && continue
-                count=$((count + 1))
-                total_docs=$((total_docs + 1))
-                d_str="$(_manifest_archive_extract_date "$f")"
-                if [[ -z "$min_date" || "$d_str" < "$min_date" ]]; then min_date="$d_str"; fi
-                if [[ -z "$max_date" || "$d_str" > "$max_date" ]]; then max_date="$d_str"; fi
-                case "$(basename "$f")" in
-                    SECURITY_ANALYSIS_REPORT*) [[ "$types" == *security* ]] || types="${types}security " ;;
-                esac
-            done
-
-            [[ "$count" -gt 0 ]] || continue
-            total_majors=$((total_majors + 1))
-
-            local range
-            if [[ "$min_date" == "$max_date" ]]; then
-                range="${min_date:-—}"
-            else
-                range="${min_date} – ${max_date}"
-            fi
-
-            local label=""
-            case "$types" in
-                *security*\ ) label="Security audit$([ "$count" = 1 ] || echo "s")" ;;
-            esac
-            echo "| [v${major}](v${major}/INDEX.md) | ${count} | ${range} | ${label} |"
-        done
-        echo
-        echo "**Total:** ${total_docs} documents across ${total_majors} major versions."
-        echo
-        echo "[Back to current docs](../INDEX.md)"
-    } > "$index_file"
-}
-
-_manifest_archive_regenerate_indexes() {
-    local archive_dir
-    archive_dir="$(get_zarchive_dir)"
-    [[ -d "$archive_dir" ]] || return 0
-
-    local d major
-    for d in "$archive_dir"/v*/; do
-        [[ -d "$d" ]] || continue
-        major="$(basename "$d" | tr -d v)"
-        _manifest_archive_generate_per_major_index "$archive_dir" "$major"
-    done
-
-    _manifest_archive_generate_top_level_index "$archive_dir"
-}
+# Note: docs/zArchive/ is a read-only "memory" — files enter by move only,
+# and nothing is ever created or modified inside it. There is deliberately no
+# INDEX.md regeneration and no per-major v<major>/ routing here: a sweep moves
+# a file flat into docs/zArchive/ and stops. Legacy v<major>/ folders from
+# before this rule stay where they are; new moves go flat.
 
 # Append a sweep entry to docs/zArchive/.archive-log.md so each archive
 # action is auditable. Args:
@@ -370,11 +212,9 @@ main_cleanup() {
                 continue
             fi
 
-            local file_major
-            file_major="$(printf '%s' "$filename" | sed -E 's/^[A-Z_]+_v([0-9]+)\..*/\1/')"
-            local target_dir="${zarchive_dir}/v${file_major}"
-            mkdir -p "$target_dir"
-            local dest="${target_dir}/${filename}"
+            # Files land flat in docs/zArchive/ — no per-major v<major>/
+            # routing — so the sweep only ever moves, never creates.
+            local dest="${zarchive_dir}/${filename}"
 
             if ! is_truthy "${MANIFEST_CLI_DOCS_ARCHIVE_FORCE:-}"; then
                 local porcelain
@@ -388,7 +228,7 @@ main_cleanup() {
             fi
 
             if mv "$f" "$dest" 2>/dev/null; then
-                log_success "Moved: ${filename} → v${file_major}/"
+                log_success "Moved: ${filename} → zArchive/"
                 moved_count=$((moved_count + 1))
                 move_entries+=("${f#"$PROJECT_ROOT"/}|${dest#"$PROJECT_ROOT"/}")
             else
@@ -401,11 +241,6 @@ main_cleanup() {
 
     if [[ "$moved_count" -gt 0 ]]; then
         _manifest_archive_append_log_entry "$version" "$timestamp" "${move_entries[@]}"
-    fi
-
-    # Regenerate the archive indexes (idempotent rebuild from file state).
-    if [[ "$moved_count" -gt 0 ]] || [[ -d "$zarchive_dir" ]]; then
-        _manifest_archive_regenerate_indexes
     fi
 
     cleanup_temp_files

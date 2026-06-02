@@ -36,12 +36,6 @@ Open work for the Manifest CLI repo, as one flat list.
   - **Deliverable:** `completions/manifest.fish` plus install instructions in `completions/README.md`.
   - **Anchor:** [`completions/`](../completions/), [`tests/completions.bats`](../tests/completions.bats).
 
-- **§4.4 Make archive cleanup obey the read-only archive rule.**
-  - **Status:** T3.
-  - **Why:** archive cleanup still regenerates archive `INDEX.md` files — `_manifest_archive_regenerate_indexes()` is still called from [`manifest-cleanup-docs.sh`](../modules/docs/manifest-cleanup-docs.sh) (~line 408), producing generated output inside the archive. The active rule is: moved files only; no new generated output inside the archive. (Per-major `v<major>/` dirs are now only created as a side effect of moving a file into them, not pre-generated — confirmed 2026-06-02.)
-  - **Deliverable:** remove the archive index regeneration call and its helper functions; flatten future archive moves into `docs/zArchive/`; add a regression proving cleanup moves files without creating any archive-side generated files (no `docs/zArchive/INDEX.md`, no `docs/zArchive/v*/INDEX.md`).
-  - **Anchor:** [`modules/docs/manifest-cleanup-docs.sh`](../modules/docs/manifest-cleanup-docs.sh), [`tests/archive_move_log.bats`](../tests/archive_move_log.bats), [`tests/archive_pre_move_safety.bats`](../tests/archive_pre_move_safety.bats).
-
 - **§5.1 Extract user global-config migration from `install-cli.sh`.**
   - **Status:** DEFER (pure refactor).
   - **Why:** `install-cli.sh` remains large, and the global-config migration (`migrate_user_global_configuration()`, currently inline) is a clean extraction boundary.
