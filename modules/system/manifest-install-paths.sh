@@ -105,6 +105,16 @@ manifest_install_paths_locks_dir() {
     echo "$(manifest_install_paths_global_state_dir)/locks"
 }
 
+# Directory holding per-run diagnostic ship logs (CLI tracker §5.6 — the
+# *what-happened-for-debug* record). Lives under the preserved global-state
+# root (in preserved_subdirs, so an upgrade swap never wipes it) and is
+# deliberately NOT under manifest_install_paths_cache_dirs: diagnostic logs are
+# forensic, not transient, so the TTL-gated runtime cache sweep must never
+# collect them. Their own keep-last-N rotation bounds growth instead.
+manifest_install_paths_logs_dir() {
+    echo "$(manifest_install_paths_global_state_dir)/logs"
+}
+
 manifest_install_paths_install_dirs() {
     # Dedupe so the artifact list shown by uninstall/preview never repeats a
     # path (e.g. when MANIFEST_CLI_INSTALL_LOCATION points at $HOME/.manifest-cli,

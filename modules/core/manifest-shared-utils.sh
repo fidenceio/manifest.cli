@@ -484,6 +484,178 @@ manifest_audit_apply_event() {
     return 0
 }
 
+# -----------------------------------------------------------------------------
+# Per-run diagnostic ship log (CLI tracker §5.6). A timestamped plain-text log
+# of one ship run — each step boundary, the step's exit status, and any captured
+# stderr — so when a ship leaves the install or repo in an unexpected state,
+# diagnosis is "read the file" instead of guessing from git log + brew Cellar
+# timestamps. This is the *what-happened-for-debug* record; the apply-event
+# audit log above is the separate *who-authorized-what-when* compliance record.
+#
+# The log lives under manifest_install_paths_logs_dir() — in preserved_subdirs
+# (an upgrade swap never wipes it) and deliberately NOT under
+# manifest_install_paths_cache_dirs (the TTL-gated runtime cache sweep must
+# never collect a forensic log). Growth is bounded by keep-last-N rotation
+# (manifest_ship_log_rotate), not by the cache sweep.
+#
+# Every line that can carry interpolated values — step labels and captured
+# stderr — is routed through manifest_redact so a token-shaped value can never
+# land in the log. Best-effort throughout: a logging failure must never abort a
+# ship, so every error path returns 0. The active log path is carried in
+# MANIFEST_CLI_SHIP_LOG_FILE for the duration of the run.
+# -----------------------------------------------------------------------------
+
+# Resolve the logs dir, tolerating shared-utils being sourced before
+# install-paths (mirrors the audit emitter's fallback).
+_manifest_ship_log_dir() {
+    if declare -F manifest_install_paths_logs_dir >/dev/null 2>&1; then
+        manifest_install_paths_logs_dir
+    else
+        echo "$HOME/.manifest-cli/logs"
+    fi
+}
+
+# Number of past ship logs to retain. One self-describing knob: an integer count
+# of runs to keep. <1 disables rotation (keep everything).
+MANIFEST_CLI_SHIP_LOG_KEEP=${MANIFEST_CLI_SHIP_LOG_KEEP:-20}
+
+# Begin a per-run log. Echoes the log path (also exported as
+# MANIFEST_CLI_SHIP_LOG_FILE) so the caller can reference it; returns 0 even if
+# the file can't be created so a ship never aborts on logging.
+# Usage: manifest_ship_log_begin COMMAND
+manifest_ship_log_begin() {
+    local command="$1"
+    local dir ts file
+    dir="$(_manifest_ship_log_dir)"
+    mkdir -p "$dir" 2>/dev/null || { export MANIFEST_CLI_SHIP_LOG_FILE=""; return 0; }
+    # ship-<ts> sorts logs by start time. The date stamp is only second-resolved,
+    # so a PID + $RANDOM suffix guarantees uniqueness when two runs start in the
+    # same second (e.g. a ship and its auto-followup-patch) — otherwise they
+    # would append into one file and the diagnostic record would conflate runs.
+    ts="$(date -u +"%Y%m%dT%H%M%SZ")"
+    file="$dir/ship-${ts}-$$${RANDOM}.log"
+    {
+        printf 'ship-log v1\n'
+        printf 'started: %s\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+        printf 'command: %s\n' "$(manifest_redact "$command")"
+        printf 'actor:   %s\n' "$(manifest_redact "${MANIFEST_CLI_ACTOR:-${USER:-$(id -un 2>/dev/null || echo unknown)}}")"
+        printf -- '---\n'
+    } >> "$file" 2>/dev/null || { export MANIFEST_CLI_SHIP_LOG_FILE=""; return 0; }
+    export MANIFEST_CLI_SHIP_LOG_FILE="$file"
+    manifest_ship_log_rotate
+    printf '%s' "$file"
+    return 0
+}
+
+# Record a step boundary with its exit status and optional captured stderr.
+# Usage: manifest_ship_log_step STEP EXIT_STATUS [CAPTURED_STDERR]
+manifest_ship_log_step() {
+    local step="$1" exit_status="$2" captured="${3:-}"
+    local file="${MANIFEST_CLI_SHIP_LOG_FILE:-}"
+    [ -n "$file" ] || return 0
+    {
+        printf '%s  step=%s  exit=%s\n' \
+            "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+            "$(manifest_redact "$step")" \
+            "$exit_status"
+        if [ -n "$captured" ]; then
+            # Indent and redact every captured stderr line so no token leaks.
+            while IFS= read -r line || [ -n "$line" ]; do
+                printf '    stderr: %s\n' "$(manifest_redact "$line")"
+            done <<< "$captured"
+        fi
+    } >> "$file" 2>/dev/null || return 0
+    return 0
+}
+
+# Close out a per-run log with the overall result and the step it stopped at.
+# Usage: manifest_ship_log_end RESULT [LAST_STEP]
+manifest_ship_log_end() {
+    local result="$1" last_step="${2:-}"
+    local file="${MANIFEST_CLI_SHIP_LOG_FILE:-}"
+    [ -n "$file" ] || return 0
+    {
+        printf -- '---\n'
+        printf 'ended:   %s\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+        printf 'result:  %s\n' "$(manifest_redact "$result")"
+        [ -n "$last_step" ] && printf 'last_step: %s\n' "$(manifest_redact "$last_step")"
+    } >> "$file" 2>/dev/null || return 0
+    return 0
+}
+
+# Keep only the most recent MANIFEST_CLI_SHIP_LOG_KEEP ship logs; delete older
+# ones. Tied to a TTL marker (rotate.last) so the prune runs at most once per
+# MANIFEST_CLI_SHIP_LOG_ROTATE_PERIOD seconds — a burst of ships in one window
+# doesn't re-scan the dir on every run. Best-effort; returns 0 always.
+MANIFEST_CLI_SHIP_LOG_ROTATE_PERIOD=${MANIFEST_CLI_SHIP_LOG_ROTATE_PERIOD:-3600}
+manifest_ship_log_rotate() {
+    local keep="${MANIFEST_CLI_SHIP_LOG_KEEP:-20}"
+    [[ "$keep" =~ ^[0-9]+$ ]] || keep=20
+    [ "$keep" -lt 1 ] && return 0
+
+    local dir marker period now last
+    dir="$(_manifest_ship_log_dir)"
+    [ -d "$dir" ] || return 0
+    marker="$dir/rotate.last"
+    period="${MANIFEST_CLI_SHIP_LOG_ROTATE_PERIOD:-3600}"
+    [[ "$period" =~ ^[0-9]+$ ]] || period=3600
+
+    now="$(date -u +%s)"
+    last=0
+    if [ -f "$marker" ]; then
+        last="$(tr -d '[:space:]' < "$marker" 2>/dev/null || echo 0)"
+        [[ "$last" =~ ^[0-9]+$ ]] || last=0
+    fi
+    # period 0 disables the TTL gate (rotate every call) — used by tests.
+    if [ "$period" -gt 0 ] && [ $((now - last)) -lt "$period" ]; then
+        return 0
+    fi
+
+    # Newest-first by name (the ship-<ts> stamp sorts lexically by time); drop
+    # everything past the keep count. The rotate marker itself is not a log.
+    local f n=0
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        n=$((n + 1))
+        [ "$n" -le "$keep" ] && continue
+        rm -f "$f" 2>/dev/null || true
+    done < <(find "$dir" -maxdepth 1 -type f -name 'ship-*.log' 2>/dev/null | sort -r)
+
+    printf '%s\n' "$now" > "$marker" 2>/dev/null || true
+    return 0
+}
+
+# Echo the path of the most recent prior ship log (newest by name), or nothing.
+# Used by resume to report "picking up from step X" from the last run's record.
+manifest_ship_log_latest() {
+    local dir
+    dir="$(_manifest_ship_log_dir)"
+    [ -d "$dir" ] || return 0
+    find "$dir" -maxdepth 1 -type f -name 'ship-*.log' 2>/dev/null | sort -r | head -n1
+    return 0
+}
+
+# Echo the last recorded step label from a ship log, for resume's "picking up
+# from step X" report. Reads the trailing `last_step:` footer if present, else
+# the final `step=` boundary line.
+# Usage: manifest_ship_log_last_step LOGFILE
+manifest_ship_log_last_step() {
+    local file="$1"
+    [ -n "$file" ] && [ -f "$file" ] || return 0
+    local footer
+    footer="$(grep '^last_step: ' "$file" 2>/dev/null | tail -n1)"
+    if [ -n "$footer" ]; then
+        printf '%s' "${footer#last_step: }"
+        return 0
+    fi
+    local last
+    last="$(grep '  step=' "$file" 2>/dev/null | tail -n1)"
+    [ -n "$last" ] || return 0
+    last="${last#*step=}"
+    printf '%s' "${last%%  exit=*}"
+    return 0
+}
+
 # Common validation functions
 # Common path resolution utilities
 get_script_dir() {
@@ -919,6 +1091,9 @@ export -f manifest_preview_exit_code
 export -f manifest_redact _manifest_redaction_env_var_names
 export -f _json_escape _json_kv_str _json_kv_raw _json_value
 export -f manifest_audit_apply_event
+export -f _manifest_ship_log_dir manifest_ship_log_begin manifest_ship_log_step
+export -f manifest_ship_log_end manifest_ship_log_rotate
+export -f manifest_ship_log_latest manifest_ship_log_last_step
 export -f get_script_dir get_script_parent_dir get_project_root get_modules_dir
 export -f is_installation_directory validate_repository_root ensure_repository_root
 export -f manifest_repo_scope_require_git manifest_git_preflight_write_access manifest_repo_scope_confirm_apply
