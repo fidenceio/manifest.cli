@@ -978,6 +978,15 @@ manifest_ship_workflow() {
             ;;
     esac
 
+    # Release gate (pre-bump): run the project's tests BEFORE auto-committing,
+    # syncing the remote, or any version mutation, so a failing gate leaves the
+    # repo genuinely untouched. Also emits the bypass notice for `none`.
+    if ! manifest_release_gate_run "pre-bump"; then
+        emit_ship_failure_report "release_gate" "$workflow_start_sha" "$(cat "${PROJECT_ROOT:-$PWD}/VERSION" 2>/dev/null || echo unknown)" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+        return 1
+    fi
+    echo ""
+
     # Check for uncommitted changes (skipped when resuming in place — the dirty
     # VERSION and any generated docs are captured by the release commit below).
     if [ "$resume_in_place" != "true" ] && [ -n "$(git status --porcelain)" ]; then
@@ -1012,14 +1021,6 @@ manifest_ship_workflow() {
         echo "↻ Skipping remote sync on resume (recovering local release state)."
         echo ""
     fi
-
-    # Release gate (pre-bump): run the project's tests before any mutation so a
-    # failure leaves a pristine repo. Also emits the bypass notice for `none`.
-    if ! manifest_release_gate_run "pre-bump"; then
-        emit_ship_failure_report "release_gate" "$workflow_start_sha" "$(cat "${PROJECT_ROOT:-$PWD}/VERSION" 2>/dev/null || echo unknown)" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
-        return 1
-    fi
-    echo ""
 
     # Bump version (skipped when resuming an interrupted ship — VERSION already
     # holds the intended next value).
