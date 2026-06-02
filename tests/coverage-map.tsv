@@ -20,10 +20,10 @@
 # an unmapped change runs them via the full fallback.
 
 modules/docs/*.sh	archive_move_log.bats archive_pre_move_safety.bats docs_generation.bats release_notes_provider.bats root_changelog.bats
-modules/fleet/*.sh	create_repo.bats doc_review.bats fleet_action_syntax.bats fleet_apply_lock.bats fleet_config_validation_knobs.bats fleet_dry_run.bats fleet_init_phase.bats fleet_partial_failure_recovery.bats fleet_plan_reconcile.bats fleet_preflight_git_write.bats fleet_private_routes.bats fleet_resume.bats fleet_ship_plan_dirty_column.bats status.bats
-modules/git/*.sh	doc_review.bats docs_generation.bats dry_run.bats fleet_apply_lock.bats fleet_resume.bats fleet_ship_plan_dirty_column.bats install_requirements.bats ship_pretag_reentrancy.bats ship_release_branch_guard.bats ship_resume.bats tag_target.bats version.bats
+modules/fleet/*.sh	create_repo.bats doc_review.bats fleet_action_syntax.bats fleet_apply_lock.bats fleet_config_validation_knobs.bats fleet_dry_run.bats fleet_init_phase.bats fleet_partial_failure_recovery.bats fleet_plan_reconcile.bats fleet_preflight_git_write.bats fleet_private_routes.bats fleet_resume.bats fleet_ship_plan_dirty_column.bats ship_local_apply.bats status.bats
+modules/git/*.sh	doc_review.bats docs_generation.bats dry_run.bats fleet_apply_lock.bats fleet_resume.bats fleet_ship_plan_dirty_column.bats install_requirements.bats ship_local_apply.bats ship_pretag_reentrancy.bats ship_release_branch_guard.bats ship_resume.bats tag_target.bats version.bats
 modules/pr/*.sh	pr_native_safe_by_default.bats
 modules/recipe/*.sh	doc_review.bats recipe.bats
 modules/system/*.sh	apply_audit_log.bats fleet_apply_lock.bats install_cli_e2e.bats install_paths_centralized.bats install_paths_plugin_data_dirs.bats install_requirements.bats os_detection_preamble.bats runtime_cleanup.bats security_check.bats status.bats time.bats uninstall_sandbox_tripwire.bats
-modules/workflow/*.sh	doc_review.bats fleet_apply_lock.bats fleet_partial_failure_recovery.bats fleet_resume.bats fleet_ship_plan_dirty_column.bats github_actions_status.bats release_gate.bats ship_pretag_reentrancy.bats ship_release_branch_guard.bats ship_resume.bats
+modules/workflow/*.sh	doc_review.bats fleet_apply_lock.bats fleet_partial_failure_recovery.bats fleet_resume.bats fleet_ship_plan_dirty_column.bats github_actions_status.bats release_gate.bats ship_local_apply.bats ship_pretag_reentrancy.bats ship_release_branch_guard.bats ship_resume.bats
 completions/*	completions.bats
