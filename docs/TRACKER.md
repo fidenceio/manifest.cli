@@ -13,12 +13,6 @@ Open work for the Manifest CLI repo, as one flat list.
 
 ---
 
-- **§2.3 Finish the execution-policy edge audit.**
-  - **Status:** T2.
-  - **Why:** aliases, recursive Manifest calls, generated hooks, CI workflows, and unknown flag paths can still bypass the intended command surface if they are not checked together. Each unaudited path is a contract hole.
-  - **Deliverable:** audit deprecated aliases, `scripts/`, generated hook templates, and `.github/workflows/*.yml`; route mutating calls through explicit `-y`, explicit `--dry-run`, or a shared rejection path. Centralize unknown flag handling where practical.
-  - **Anchor:** [`modules/core/`](../modules/core/), [`scripts/`](../scripts/), [`.github/workflows/`](../.github/workflows/).
-
 - **§2.6 Add focused local-only apply tests.**
   - **Status:** T3.
   - **Why:** `--local -y` is its own contract and should prove local writes occur without remote dispatch. Enterprise wants offline-safe boundaries that are tested, not asserted. (Verified 2026-06-02: `tests/preview_no_write.bats` covers `--local` *preview* only; no `--local -y` apply test exists.)
