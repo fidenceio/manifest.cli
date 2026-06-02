@@ -13,12 +13,6 @@ Open work for the Manifest CLI repo, as one flat list.
 
 ---
 
-- **§2.6 Add focused local-only apply tests.**
-  - **Status:** T3.
-  - **Why:** `--local -y` is its own contract and should prove local writes occur without remote dispatch. Enterprise wants offline-safe boundaries that are tested, not asserted. (Verified 2026-06-02: `tests/preview_no_write.bats` covers `--local` *preview* only; no `--local -y` apply test exists.)
-  - **Deliverable:** targeted tests for local-only ship/refresh/fleet paths, including assertions that no remote push/API command is called.
-  - **Anchor:** [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh), [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh).
-
 - **§3.1 Cloud handoff CLI work — gated by Cloud-side milestones M0–M3.**
   - **Status:** DEFER.
   - **Why:** every CLI-side Cloud item activates 1:1 with a Cloud-tracker milestone — contract sources, `cloud.*` config surface, provider wiring, payload privacy assertions, recipe metadata, user-facing docs, and container verification. Tracking them as separate CLI items duplicates the Cloud tracker and creates drift sites for two-step changes. Cloud stays a no-op stub today ([`modules/stubs/manifest-cloud-stub.sh`](../modules/stubs/manifest-cloud-stub.sh)). Source of truth: [Cloud TRACKER §1 (Contracts/M0)](../../fidenceio.manifest.cloud/docs/TRACKER.md#1-contracts-m0-gate), [§2 (Service implementation/M1/M3)](../../fidenceio.manifest.cloud/docs/TRACKER.md#2-service-implementation-m1--m3-gates), [§3 (Security & platform/M3)](../../fidenceio.manifest.cloud/docs/TRACKER.md#3-security--platform-m3-gate). When a Cloud milestone lands, re-file specific CLI deliverables as new items here against the freshly-stable Cloud contract — do not pre-fork them.
