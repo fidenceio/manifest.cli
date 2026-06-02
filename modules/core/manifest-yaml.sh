@@ -192,6 +192,7 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     # automation / deprecations / network / cloud
     # -------------------------------------------------------------------------
     ["automation.auto_confirm"]="MANIFEST_CLI_AUTO_CONFIRM"
+    ["preview.exit_code"]="MANIFEST_CLI_PREVIEW_EXIT_CODE"
     ["deprecations.quiet"]="MANIFEST_CLI_QUIET_DEPRECATIONS"
     ["network.offline"]="MANIFEST_CLI_OFFLINE_MODE"
     ["cloud.skip"]="MANIFEST_CLI_CLOUD_SKIP"

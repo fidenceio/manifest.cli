@@ -102,7 +102,7 @@ Any flag not handled here is forwarded to 'gh pr create'." \
         [[ "$draft" == "true" ]] && replay_command="$replay_command --draft"
         [[ ${#args[@]} -gt 0 ]] && replay_command="$replay_command ${args[*]}"
         manifest_execution_footer "$replay_command -y"
-        return 0
+        return "$(manifest_preview_exit_code)"
     fi
 
     manifest_execution_apply_header
@@ -171,7 +171,7 @@ manifest_pr_ready() {
         manifest_execution_preview_header "manifest pr ready"
         echo "Would run: gh pr ready $*"
         manifest_execution_footer "manifest pr ready $* -y"
-        return 0
+        return "$(manifest_preview_exit_code)"
     fi
     manifest_execution_apply_header
     _manifest_require_gh || return 1
@@ -213,7 +213,7 @@ For richer queue/policy control, see Cloud's 'manifest pr queue'." \
         manifest_execution_preview_header "manifest pr merge"
         echo "Would run: gh pr merge ${args[*]}"
         manifest_execution_footer "manifest pr merge ${args[*]} -y"
-        return 0
+        return "$(manifest_preview_exit_code)"
     fi
     manifest_execution_apply_header
     _manifest_require_gh || return 1
@@ -247,7 +247,7 @@ manifest_pr_update() {
         manifest_execution_preview_header "manifest pr update"
         echo "Would run: gh pr update-branch $*"
         manifest_execution_footer "manifest pr update $* -y"
-        return 0
+        return "$(manifest_preview_exit_code)"
     fi
     manifest_execution_apply_header
     _manifest_require_gh || return 1

@@ -152,9 +152,9 @@ teardown() {
 
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Ship repo preview"
-    echo "$output" | grep -q "Release type:   minor"
-    echo "$output" | grep -q "Current version: 1.2.3"
-    echo "$output" | grep -q "Next version:    1.3.0"
+    echo "$output" | grep -q "Release type:     minor"
+    echo "$output" | grep -q "Current version:  1.2.3"
+    echo "$output" | grep -q "Next version:     1.3.0"
     echo "$output" | grep -q "What's new"
     echo "$output" | grep -q "Added smart ship preview summaries"
     echo "$output" | grep -q "Updated release copy and configuration examples"

@@ -2123,6 +2123,10 @@ _fleet_ship_plan() {
     local service path reason effect decision type branch display_name dirty version current next
     local offbranch_count=0
     local pr_gated_count=0
+    # Salient inputs for the fleet plan fingerprint: the increment type, the
+    # local/remote mode, and each releaseable member's name + version transition.
+    # Same shape -> same digest, so a preview and its apply can be compared.
+    local fp_parts=("ship-fleet" "$increment_type" "$local_only")
     for service in $MANIFEST_CLI_FLEET_SERVICES; do
         path=$(get_fleet_service_property "$service" "path")
         type=$(get_fleet_service_property "$service" "type" "service")
@@ -2157,6 +2161,7 @@ _fleet_ship_plan() {
                 version="—"
             fi
             printf '%-30s %-12s %-12s %-15s %-7s %-9s %-13s %s\n' "$display_name" "$type" "$branch" "$version" "$dirty" "$effect" "$decision" "$path"
+            fp_parts+=("${display_name}:${version}")
         else
             skipped_count=$((skipped_count + 1))
             # Skipped members never ship, so no off-branch marker is applied.
@@ -2168,6 +2173,11 @@ _fleet_ship_plan() {
 
     echo ""
     echo "Plan summary: $releaseable_count releaseable, $pr_gated_count pr-gated, $skipped_count skipped"
+    # Fleet plan fingerprint, rendered through the shared plan-table renderer so
+    # it reads identically to the single-repo preview. Exported for the caller to
+    # persist (preview) and re-compare (apply) — CLI tracker §2.2.
+    MANIFEST_CLI_FLEET_PLAN_FINGERPRINT="$(manifest_plan_fingerprint "${fp_parts[@]}")"
+    manifest_plan_render_fingerprint_line "$MANIFEST_CLI_FLEET_PLAN_FINGERPRINT"
     if [[ $pr_gated_count -gt 0 ]]; then
         echo ""
         echo "⚠️  ${pr_gated_count} member(s) shown 'needs PR' are PR-gated (release.strategy: pr)."
@@ -2503,15 +2513,22 @@ EOF
     if [[ "$execution_mode" == "preview" ]]; then
         _fleet_scope_block
         _fleet_ship_plan "$increment_type" "$local_only"
+        # Stash the fingerprint the user is reading so a later apply can warn if
+        # the fleet plan drifted between this preview and that apply.
+        manifest_plan_fingerprint_persist "ship-fleet" "${MANIFEST_CLI_FLEET_PLAN_FINGERPRINT:-}" "${MANIFEST_CLI_FLEET_ROOT:-$PWD}"
         local replay_command="manifest ship fleet $increment_type"
         [[ "$local_only" == "true" ]] && replay_command="$replay_command --local"
         manifest_execution_footer "$replay_command -y"
-        return 0
+        # Preview-without-consent exit code: 0 by default, or the distinct code
+        # when preview.exit_code=distinct (CLI tracker §2.2).
+        return "$(manifest_preview_exit_code)"
     fi
 
     echo "Starting fleet ship workflow ($increment_type)"
     _fleet_scope_block
     _fleet_ship_plan "$increment_type" "$local_only"
+    # Warn (never block) if the fleet plan drifted since the preview.
+    manifest_plan_fingerprint_warn_on_drift "ship-fleet" "${MANIFEST_CLI_FLEET_PLAN_FINGERPRINT:-}" "${MANIFEST_CLI_FLEET_ROOT:-$PWD}"
     echo ""
 
     if ! _fleet_preflight_no_pr_gated; then

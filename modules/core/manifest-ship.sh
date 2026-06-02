@@ -188,12 +188,17 @@ manifest_ship_preview_plan() {
         echo "Ship repo preview"
     fi
     echo "================="
-    echo "  Release type:   $increment_type"
-    echo "  Current version: $current_version"
-    echo "  Next version:    $next_version"
-    echo "  Release tag:     $tag_name"
-    echo "  Plan fingerprint: $(manifest_ship_repo_plan_fingerprint "$increment_type" "$local_only")"
-    echo "  Writes:          none in preview mode"
+    local plan_fingerprint
+    plan_fingerprint="$(manifest_ship_repo_plan_fingerprint "$increment_type" "$local_only")"
+    manifest_plan_render_field "Release type" "$increment_type"
+    manifest_plan_render_field "Current version" "$current_version"
+    manifest_plan_render_field "Next version" "$next_version"
+    manifest_plan_render_field "Release tag" "$tag_name"
+    manifest_plan_render_fingerprint_line "$plan_fingerprint"
+    manifest_plan_render_field "Writes" "none in preview mode"
+    # Stash the fingerprint the user is reading so a later apply can warn if the
+    # plan drifted between this preview and that apply (CLI tracker §2.2).
+    manifest_plan_fingerprint_persist "ship-repo" "$plan_fingerprint" "$repo_root"
     echo ""
 
     echo "What's new"
@@ -323,7 +328,10 @@ manifest_ship_repo() {
         manifest_ship_preview_plan "$increment_type" "$local_only"
         manifest_execution_footer "$(manifest_execution_replay_hint "$replay_command")"
         manifest_ship_repo_preview_preflight_notice
-        return 0
+        # Preview-without-consent exit code: 0 by default (the historical
+        # contract), or the distinct code when preview.exit_code=distinct so CI
+        # wrappers can tell "previewed, awaiting consent" from a real apply.
+        return "$(manifest_preview_exit_code)"
     fi
 
     local publish_release="true"
@@ -339,13 +347,16 @@ manifest_ship_repo() {
     local plan_fingerprint
     plan_fingerprint="$(manifest_ship_repo_plan_fingerprint "$increment_type" "$local_only")"
 
+    # Warn (never block) if the plan drifted since the preview the user read.
+    manifest_plan_fingerprint_warn_on_drift "ship-repo" "$plan_fingerprint" "${PROJECT_ROOT:-$PWD}"
+
     if ! manifest_execution_require_apply "$execution_mode" "${PROJECT_ROOT:-$PWD}" "$(manifest_execution_replay_hint "$replay_command")" "$plan_fingerprint"; then
         return 1
     fi
 
     manifest_execution_apply_header
 
-    echo "  Plan fingerprint: $plan_fingerprint"
+    manifest_plan_render_fingerprint_line "$plan_fingerprint"
     if [[ "$local_only" == "true" ]]; then
         echo "Ship (local): $increment_type — no remote operations"
     else

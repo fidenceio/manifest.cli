@@ -237,6 +237,99 @@ manifest_plan_fingerprint() {
 }
 
 # -----------------------------------------------------------------------------
+# Shared plan-table renderer — one source of truth for the preview key/value
+# rows and the fingerprint line, so ship/fleet/PR previews stop hand-rolling
+# their own alignment and label wording (CLI tracker §2.2). Callers still
+# choose WHICH fields to show; this only fixes how a field and the fingerprint
+# line are rendered, keeping every surface visually consistent.
+# -----------------------------------------------------------------------------
+# A single "  Label: value" row, label left-padded to a shared column width.
+manifest_plan_render_field() {
+    printf '  %-17s %s\n' "${1}:" "${2}"
+}
+
+# The "Plan fingerprint: <hash>" row. Shared so the literal label never drifts
+# between the surface that prints it at preview time and the apply-time drift
+# check that re-reads it.
+manifest_plan_render_fingerprint_line() {
+    manifest_plan_render_field "Plan fingerprint" "${1}"
+}
+
+# -----------------------------------------------------------------------------
+# Preview fingerprint persistence + apply-time drift warning (CLI tracker §2.2).
+#
+# At preview time we stash the fingerprint the user actually read under a
+# repo-scoped run/status dir. At apply time we re-read it and warn (never block)
+# if the freshly-recomputed fingerprint differs — i.e. the plan changed between
+# the preview the user approved and the apply they authorized. Purely additive:
+# a missing or unreadable stash is silent, so the historical apply path is
+# unchanged when no preview was persisted.
+# -----------------------------------------------------------------------------
+# Run/status dir for a repo's persisted preview state. Lives under the same
+# TTL-swept cache root as other scratch, keyed by the repo's git root so two
+# checkouts never collide. $1 = repo root (defaults to PROJECT_ROOT/PWD).
+manifest_plan_run_dir() {
+    local repo_root="${1:-${PROJECT_ROOT:-$PWD}}"
+    local git_root key root
+    git_root="$(git -C "$repo_root" rev-parse --show-toplevel 2>/dev/null || echo "$repo_root")"
+    key="$(printf '%s' "$git_root" | _manifest_hash_short)"
+    root="${TMPDIR:-/tmp}/manifest-cli/run/${key}"
+    mkdir -p "$root" 2>/dev/null || return 1
+    printf '%s' "$root"
+}
+
+# Persist the previewed fingerprint for a named plan kind (e.g. "ship-repo").
+# $1 = plan kind, $2 = fingerprint, $3 = repo root (optional). Best-effort.
+manifest_plan_fingerprint_persist() {
+    local kind="$1" fingerprint="$2" repo_root="${3:-${PROJECT_ROOT:-$PWD}}"
+    [[ -n "$kind" && -n "$fingerprint" ]] || return 0
+    local dir
+    dir="$(manifest_plan_run_dir "$repo_root")" || return 0
+    printf '%s\n' "$fingerprint" > "${dir}/${kind}.fingerprint" 2>/dev/null || return 0
+    return 0
+}
+
+# At apply time, compare the recomputed fingerprint against the persisted one.
+# $1 = plan kind, $2 = recomputed fingerprint, $3 = repo root (optional).
+# Warns to stderr when they differ; silent when no preview was persisted or the
+# fingerprints match. Always returns 0 — this is advisory, not a gate.
+manifest_plan_fingerprint_warn_on_drift() {
+    local kind="$1" current="$2" repo_root="${3:-${PROJECT_ROOT:-$PWD}}"
+    [[ -n "$kind" && -n "$current" ]] || return 0
+    local dir file previewed
+    dir="$(manifest_plan_run_dir "$repo_root")" || return 0
+    file="${dir}/${kind}.fingerprint"
+    [[ -r "$file" ]] || return 0
+    previewed="$(tr -d '[:space:]' < "$file" 2>/dev/null)"
+    [[ -n "$previewed" ]] || return 0
+    if [[ "$previewed" != "$current" ]]; then
+        log_warning "Plan changed since preview: previewed ${previewed}, applying ${current}. Re-preview to review the new plan."
+    fi
+    rm -f "$file" 2>/dev/null
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# Preview exit code — the single self-describing knob that lets CI wrappers
+# distinguish "preview happened, no consent" from "applied successfully" (both
+# historically exited 0). Config key preview.exit_code reads in English:
+#   "zero"     -> previews exit 0 (the historical contract; the default)
+#   "distinct" -> previews exit 10 ("preview happened, no consent")
+# A bare integer is also honored. --dry-run and apply exit semantics are
+# untouched: this only colors the no-consent preview return.
+# -----------------------------------------------------------------------------
+MANIFEST_CLI_PREVIEW_NO_CONSENT_EXIT_CODE=10
+
+manifest_preview_exit_code() {
+    case "$(normalize_enum_value "${MANIFEST_CLI_PREVIEW_EXIT_CODE:-zero}")" in
+        ''|zero|0) printf '0' ;;
+        distinct)  printf '%s' "$MANIFEST_CLI_PREVIEW_NO_CONSENT_EXIT_CODE" ;;
+        *[!0-9]*)  printf '0' ;;  # unrecognized word -> safe historical default
+        *)         printf '%s' "$(normalize_enum_value "${MANIFEST_CLI_PREVIEW_EXIT_CODE}")" ;;
+    esac
+}
+
+# -----------------------------------------------------------------------------
 # Secret redaction — keep tokens out of stdout/stderr, logs, and status files.
 # -----------------------------------------------------------------------------
 # Two layers: the exact values of known credential env vars (so a token leaks
@@ -820,6 +913,9 @@ export -f ensure_directory
 export -f show_usage_error show_required_arg_error
 export -f _trim_ws normalize_enum_value is_truthy is_falsy
 export -f _render_help _render_help_error _manifest_hash_short manifest_plan_fingerprint
+export -f manifest_plan_render_field manifest_plan_render_fingerprint_line
+export -f manifest_plan_run_dir manifest_plan_fingerprint_persist manifest_plan_fingerprint_warn_on_drift
+export -f manifest_preview_exit_code
 export -f manifest_redact _manifest_redaction_env_var_names
 export -f _json_escape _json_kv_str _json_kv_raw _json_value
 export -f manifest_audit_apply_event

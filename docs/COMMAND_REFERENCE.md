@@ -13,6 +13,17 @@ This reference documents the supported public command surface. Use `manifest <co
 | Repo identity | Repo scope uses the current `.git` root |
 | Fleet identity | Fleet scope uses fleet config and selected TSV entries |
 
+### Exit Codes
+
+| Code | Meaning |
+| ---- | ------- |
+| `0` | Command succeeded — an apply completed, or a preview ran (default) |
+| `1` | Error: bad arguments, failed pre-flight, declined confirmation, or a failed apply |
+| `3` | Protective skip — a sandbox guard refused a destructive op (e.g. uninstall under a temp `HOME`) |
+| `10` | Preview happened, no consent — emitted only when `preview.exit_code` is set to `distinct` |
+
+A preview returns `0` by default, exactly like a successful apply. CI wrappers that need to tell "previewed, awaiting `-y`" apart from a real apply can set `preview.exit_code: distinct` (env `MANIFEST_CLI_PREVIEW_EXIT_CODE=distinct`); every preview surface — `ship`, `ship fleet`, and the `pr` previews — then returns `10` instead of `0`. This is purely additive: `--dry-run` stays a preview, apply exit codes are unchanged, and the recomputed plan fingerprint is compared at apply time so a plan that drifted since the preview prints a non-blocking warning.
+
 ## Core Journey
 
 ### `manifest config`
@@ -159,6 +170,7 @@ Common environment variables:
 | Variable | Purpose |
 | -------- | ------- |
 | `MANIFEST_CLI_AUTO_CONFIRM` | Answer prompts after explicit apply selection |
+| `MANIFEST_CLI_PREVIEW_EXIT_CODE` | `zero` (default) or `distinct` — exit code for a preview-without-consent (see Exit Codes) |
 | `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH` | Control canonical follow-up patch behavior |
 | `MANIFEST_CLI_DOCS_GENERATE_SITE` | Enable docs-site generation |
 | `MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES` | Request Pages enablement through `gh api` |

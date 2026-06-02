@@ -252,6 +252,17 @@ automation:
   auto_confirm: false                # Prompt automation only; does not imply -y.
 
 # -----------------------------------------------------------------------------
+# Preview
+# -----------------------------------------------------------------------------
+preview:
+  # What exit code a preview-without-consent returns. "zero" keeps the
+  # historical contract (preview exits 0, like a successful apply). "distinct"
+  # makes preview-without-consent exit 10 so CI wrappers can tell "previewed,
+  # awaiting -y" apart from a real apply. --dry-run and apply exit codes are
+  # unchanged either way.
+  exit_code: "zero"                  # zero | distinct (or a bare integer)
+
+# -----------------------------------------------------------------------------
 # Deprecations
 # -----------------------------------------------------------------------------
 deprecations:
