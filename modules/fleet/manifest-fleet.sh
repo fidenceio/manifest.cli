@@ -2029,6 +2029,30 @@ _fleet_plan_service_display_name() {
     echo "$candidate"
 }
 
+# Branch cell for the ship plan: the member's ACTUAL current branch — matching
+# the apply guard (manifest_assert_release_branch), the --json output, and
+# `fleet status`, NOT the configured target branch (which is always the default
+# and so could never reveal a checkout on the wrong branch). Releaseable members
+# whose HEAD is off the release branch get a trailing "!" so the preview shows
+# what apply will refuse. Non-git paths render as "—"; detached HEAD as
+# "detached". Long names are truncated to keep the column aligned.
+_fleet_plan_branch_cell() {
+    local path="$1" releaseable="$2"
+    local expected="${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}"
+    if ! git -C "$path" rev-parse --git-dir >/dev/null 2>&1; then
+        echo "—"
+        return
+    fi
+    local cur
+    cur="$(git -C "$path" branch --show-current 2>/dev/null)"
+    [[ -z "$cur" ]] && cur="detached"
+    if [[ "$releaseable" == "true" && "$cur" != "$expected" ]]; then
+        echo "${cur:0:10}!"
+    else
+        echo "${cur:0:12}"
+    fi
+}
+
 _fleet_ship_plan() {
     local increment_type="$1"
     local local_only="$2"
@@ -2043,10 +2067,10 @@ _fleet_ship_plan() {
     printf '%-30s %-12s %-12s %-15s %-7s %-9s %-13s %s\n' "-------" "----" "------" "-------" "-----" "------" "--------" "-------------"
 
     local service path reason effect decision type branch display_name dirty version current next
+    local offbranch_count=0
     for service in $MANIFEST_CLI_FLEET_SERVICES; do
         path=$(get_fleet_service_property "$service" "path")
         type=$(get_fleet_service_property "$service" "type" "service")
-        branch=$(get_fleet_service_property "$service" "branch" "${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}")
         display_name=$(_fleet_plan_service_display_name "$service" "$path")
         dirty=$(manifest_git_changes_dirty_summary "$path")
         current="$(tr -d '[:space:]' < "$path/VERSION" 2>/dev/null || echo "")"
@@ -2058,6 +2082,9 @@ _fleet_ship_plan() {
             else
                 decision="would ship"
             fi
+            # Actual current branch; a trailing "!" marks members apply will refuse.
+            branch=$(_fleet_plan_branch_cell "$path" true)
+            [[ "$branch" == *"!" ]] && offbranch_count=$((offbranch_count + 1))
             # Per-member next version, computed against the member's own VERSION.
             next="$( (cd "$path" 2>/dev/null && get_next_version "$increment_type" 2>/dev/null) || echo "")"
             if [[ -n "$current" && -n "$next" ]]; then
@@ -2070,6 +2097,8 @@ _fleet_ship_plan() {
             printf '%-30s %-12s %-12s %-15s %-7s %-9s %-13s %s\n' "$display_name" "$type" "$branch" "$version" "$dirty" "$effect" "$decision" "$path"
         else
             skipped_count=$((skipped_count + 1))
+            # Skipped members never ship, so no off-branch marker is applied.
+            branch=$(_fleet_plan_branch_cell "$path" false)
             version="${current:-—}"
             printf '%-30s %-12s %-12s %-15s %-7s %-9s %-13s %s\n' "$display_name" "$type" "$branch" "$version" "$dirty" "read" "skip" "$path ($reason)"
         fi
@@ -2077,6 +2106,13 @@ _fleet_ship_plan() {
 
     echo ""
     echo "Plan summary: $releaseable_count releaseable, $skipped_count skipped"
+    if [[ $offbranch_count -gt 0 ]]; then
+        local _rel_branch="${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}"
+        echo ""
+        echo "⚠️  ${offbranch_count} releaseable member(s) marked '!' have HEAD off the release branch ('${_rel_branch}')."
+        echo "    Apply refuses these (manifest_assert_release_branch): the version commit and tag"
+        echo "    would land off '${_rel_branch}'. Move the work onto '${_rel_branch}' before re-running with -y."
+    fi
     return 0
 }
 

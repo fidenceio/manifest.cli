@@ -179,6 +179,66 @@ TSV
     echo "$output" | grep -E "clean-svc[[:space:]].*1\.2\.3->" >/dev/null
 }
 
+# --- Branch column (actual current branch, not configured target) -----------
+
+write_fleet_branch_members() {
+    git -C "$SCRATCH/work" init -q
+    git -C "$SCRATCH/work" config user.email test@example.com
+    git -C "$SCRATCH/work" config user.name "Test"
+    cat > "$SCRATCH/work/manifest.fleet.config.yaml" <<'YAML'
+fleet:
+  name: "test-fleet"
+  versioning: "none"
+services:
+  on-main:
+    path: "./on-main"
+    type: "service"
+    branch: "main"
+    release_enabled: true
+  off-main:
+    path: "./off-main"
+    type: "service"
+    branch: "main"
+    release_enabled: true
+YAML
+    cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
+true	on-main	./on-main	service	false
+true	off-main	./off-main	service	false
+TSV
+    init_git_repo "$SCRATCH/work/on-main"
+    git -C "$SCRATCH/work/on-main" branch -M main
+    echo "1.0.0" > "$SCRATCH/work/on-main/VERSION"
+    git -C "$SCRATCH/work/on-main" add VERSION
+    git -C "$SCRATCH/work/on-main" commit -q -m "version"
+    init_git_repo "$SCRATCH/work/off-main"
+    echo "1.0.0" > "$SCRATCH/work/off-main/VERSION"
+    git -C "$SCRATCH/work/off-main" add VERSION
+    git -C "$SCRATCH/work/off-main" commit -q -m "version"
+    # Put this member's HEAD on a non-default branch (releaseable but off-branch).
+    git -C "$SCRATCH/work/off-main" checkout -q -b feature/wip-123
+}
+
+@test "fleet ship preview: Branch column shows actual current branch, not the configured target" {
+    write_fleet_branch_members
+    cd "$SCRATCH/work"
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
+    [ "$status" -eq 0 ]
+    # Member on main shows 'main' with no off-branch marker.
+    echo "$output" | grep -E "on-main[[:space:]].*[[:space:]]main[[:space:]]" >/dev/null
+    # Member on feature/wip-123 shows the ACTUAL branch (truncated) with a '!'
+    # marker — proving the column reflects the checkout, not the configured 'main'.
+    echo "$output" | grep -E "off-main[[:space:]].*feature/wi!" >/dev/null
+}
+
+@test "fleet ship preview: off-release-branch member triggers the apply-refusal warning" {
+    write_fleet_branch_members
+    cd "$SCRATCH/work"
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -F "have HEAD off the release branch" >/dev/null
+    echo "$output" | grep -F "Apply refuses these" >/dev/null
+}
+
 # --- Apply-side regression guardrail ----------------------------------------
 
 @test "orchestrator preserves auto-commit notice (5ffb5c22 guardrail)" {
