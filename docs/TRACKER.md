@@ -13,13 +13,6 @@ Open work for the Manifest CLI repo, as one flat list.
 
 ---
 
-- **§2.2 Finish shared plan rendering, fingerprint comparison, and the preview exit code.**
-  - **Status:** T2 (partially shipped 2026-05-30).
-  - **Shipped:** `manifest_plan_fingerprint` helper ([`manifest-shared-utils.sh`](../modules/core/manifest-shared-utils.sh)), displayed in the ship-repo preview and apply; the `Version` column (`current → next`, ASCII arrow) in the fleet ship plan; `_manifest_hash_short` exported.
-  - **Why (residual):** the fingerprint is shown but not yet (a) computed via a single shared plan-table renderer reused across ship/fleet/PR previews — each surface still renders bespoke output, and (b) persisted at preview time and re-compared on apply, so apply cannot warn when the plan changed since the preview the user read. (c) The preview exit-code convention is also unaddressed: preview-without-consent and applied-successfully both still return 0, so CI wrappers can't distinguish them.
-  - **Deliverable:** extract a shared plan-table renderer used by ship/fleet/PR previews; persist the preview fingerprint (e.g. under the run/status dir) and warn on apply if the recomputed fingerprint differs; introduce a distinct preview exit code (proposed: a dedicated non-zero "preview happened, no consent" code, documented in COMMAND_REFERENCE and covered by a bats test) without breaking the existing `--dry-run` contract.
-  - **Anchor:** [`modules/core/manifest-execution-policy.sh`](../modules/core/manifest-execution-policy.sh), [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh), [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh), [`modules/fleet/manifest-fleet-plan.sh`](../modules/fleet/manifest-fleet-plan.sh), [`modules/pr/manifest-pr-native.sh`](../modules/pr/manifest-pr-native.sh).
-
 - **§2.3 Finish the execution-policy edge audit.**
   - **Status:** T2.
   - **Why:** aliases, recursive Manifest calls, generated hooks, CI workflows, and unknown flag paths can still bypass the intended command surface if they are not checked together. Each unaudited path is a contract hole.
