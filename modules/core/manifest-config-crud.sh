@@ -39,11 +39,22 @@ _cfg_layer_path() {
 # (git.tag_prefix) and env-var name (MANIFEST_CLI_GIT_TAG_PREFIX).
 _cfg_normalize_key() {
     local key="$1"
+    local path
     if [[ "$key" =~ ^MANIFEST_CLI_ ]]; then
-        env_var_to_yaml_path "$key"
+        # env_var_to_yaml_path validates against the reverse map and returns
+        # empty for env vars with no mapping.
+        path="$(env_var_to_yaml_path "$key" 2>/dev/null)"
     else
-        echo "$key"
+        path="$key"
     fi
+    # Reject keys that don't map to a known setting. Without this, `config set`
+    # would happily write a dotted key the runtime loader never reads (it only
+    # iterates _MANIFEST_YAML_TO_ENV), leaving inert YAML behind.
+    if [[ -z "${_MANIFEST_YAML_TO_ENV[$path]:-}" ]]; then
+        echo ""
+        return 1
+    fi
+    echo "$path"
 }
 
 # Echo "$file:$value" for the highest-precedence layer containing the path,
@@ -240,7 +251,7 @@ Default layer is 'local' (git-ignored). Writing 'global' prompts for
 confirmation via the global-config safety gate." \
                     "Examples" "  manifest config set git.default_branch main
   manifest config set --layer project version.format semver
-  manifest config set --layer global homebrew.formula_path Formula/manifest.rb"
+  manifest config set --layer global brew.tap_repo fidenceio/homebrew.tap"
                 return 0
                 ;;
             *) _render_help_error "Unknown option: $1" "manifest config set [--layer ...] <key> <value>"; return 1 ;;
@@ -368,7 +379,7 @@ manifest_config_describe() {
             "manifest config describe <key>" \
             "Show where a key's value comes from across layers, plus its env-var name." \
             "Examples" "  manifest config describe version.format
-  manifest config describe homebrew.formula_path"
+  manifest config describe brew.tap_repo"
         return 1
     fi
     local path env_var
