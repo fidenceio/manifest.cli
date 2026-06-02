@@ -1143,9 +1143,12 @@ changelog:
 # =============================================================================
 # VALIDATION
 # =============================================================================
-validation:
-  require_clean_status: true
-  enforce_dependencies: true
+# Fleet apply always requires a clean working tree: any service with
+# uncommitted changes is refused at plan and apply time. This guarantee is
+# unconditional and intentionally not configurable, so there is no
+# validation: block here — config that advertised a toggle the CLI ignores
+# was removed (see CLI TRACKER §2.8, following the require_expected_branch
+# precedent).
 EOF
 }
 
