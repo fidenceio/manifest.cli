@@ -40,6 +40,21 @@ _pr_require_repo() {
     return 0
 }
 
+# Internal: emit one apply-event audit record for a -y-gated PR mutation
+# (CLI tracker §5.9). PR ops never reach the ship apply guard
+# (manifest_execution_require_apply), so each PR apply boundary emits directly
+# with MANIFEST_CLI_AUDIT_SOURCE=cli-pr. PR ops carry no version plan, so the
+# plan_hash field is empty (the consumer tolerates an empty plan_hash). Scope
+# is the repo's git root, mirroring the ship guard. Best-effort: the emitter
+# itself never aborts, and we run after the gh call so $? is the gh exit code.
+_pr_audit_apply() {
+    local command="$1" exit_status="$2" git_root
+    declare -F manifest_audit_apply_event >/dev/null 2>&1 || return 0
+    git_root="$(git rev-parse --show-toplevel 2>/dev/null || echo ".")"
+    MANIFEST_CLI_AUDIT_SOURCE="cli-pr" manifest_audit_apply_event \
+        "cli-pr" "$command" "$git_root" "" "$exit_status"
+}
+
 # -----------------------------------------------------------------------------
 # manifest pr create [--draft] [--title <t>] [--body <b>] [--base <branch>]
 # -----------------------------------------------------------------------------
@@ -95,6 +110,9 @@ Any flag not handled here is forwarded to 'gh pr create'." \
     _pr_require_repo || return 1
     echo "→ ${cmd[*]}"
     "${cmd[@]}"
+    local rc=$?
+    _pr_audit_apply "${cmd[*]}" "$rc"
+    return $rc
 }
 
 # -----------------------------------------------------------------------------
@@ -159,6 +177,9 @@ manifest_pr_ready() {
     _manifest_require_gh || return 1
     _pr_require_repo || return 1
     gh pr ready "$@"
+    local rc=$?
+    _pr_audit_apply "gh pr ready $*" "$rc"
+    return $rc
 }
 
 # -----------------------------------------------------------------------------
@@ -198,6 +219,9 @@ For richer queue/policy control, see Cloud's 'manifest pr queue'." \
     _manifest_require_gh || return 1
     _pr_require_repo || return 1
     gh pr merge "${args[@]}"
+    local rc=$?
+    _pr_audit_apply "gh pr merge ${args[*]}" "$rc"
+    return $rc
 }
 
 # -----------------------------------------------------------------------------
@@ -229,6 +253,9 @@ manifest_pr_update() {
     _manifest_require_gh || return 1
     _pr_require_repo || return 1
     gh pr update-branch "$@"
+    local rc=$?
+    _pr_audit_apply "gh pr update-branch $*" "$rc"
+    return $rc
 }
 
 # -----------------------------------------------------------------------------
