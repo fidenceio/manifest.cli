@@ -19,6 +19,48 @@ _emit_ship_status_file() {
     done
 }
 
+# Run one ship step, recording its boundary in the per-run diagnostic log
+# (§5.6). Captures the step's stderr to a scratch file so it can be appended to
+# the log (redacted by manifest_ship_log_step) for forensic replay, then
+# replays that stderr to the terminal so the operator still sees it. Tracks the
+# step label in _MANIFEST_CLI_SHIP_LAST_STEP so a failing run's log footer and
+# the failure report agree on where the ship stopped. Returns the step's own
+# exit status, so callers keep their existing `if ! _ship_step ...; then` flow.
+#
+# Stderr is redirected to a file (not tee'd through a process substitution) so
+# the capture is exact and race-free: an async tee can outlive the step and
+# interleave with the next one, which would corrupt a forensic record. The
+# tradeoff is that a step's stderr surfaces after the step finishes rather than
+# streaming live — acceptable for these discrete, short-lived boundaries.
+# Usage: _manifest_ship_step STEP cmd [args...]
+_manifest_ship_step() {
+    local step="$1"; shift
+    _MANIFEST_CLI_SHIP_LAST_STEP="$step"
+
+    # No log this run (logging disabled or dir uncreatable) → run plainly.
+    if [ -z "${MANIFEST_CLI_SHIP_LOG_FILE:-}" ]; then
+        "$@"
+        return $?
+    fi
+
+    local err_file rc
+    err_file="$(mktemp "$(manifest_make_scratch_path ship-log)/stderr.XXXXXXXX" 2>/dev/null || true)"
+    if [ -z "$err_file" ]; then
+        "$@"
+        rc=$?
+        manifest_ship_log_step "$step" "$rc"
+        return $rc
+    fi
+
+    # Capture stderr synchronously, then replay it to the terminal.
+    "$@" 2>"$err_file"
+    rc=$?
+    cat "$err_file" >&2 2>/dev/null || true
+    manifest_ship_log_step "$step" "$rc" "$(cat "$err_file" 2>/dev/null || true)"
+    rm -f "$err_file" 2>/dev/null || true
+    return $rc
+}
+
 emit_ship_failure_report() {
     local failure_step="$1"
     local start_sha="$2"
@@ -90,6 +132,10 @@ emit_ship_failure_report() {
         tag "${tag_name:-}" \
         push_status "$push_status" \
         homebrew_status "$homebrew_status"
+
+    # Close the per-run diagnostic log (§5.6) on the failure path, recording
+    # the step the ship stopped at so resume can report "picking up from step X".
+    manifest_ship_log_end "failed" "$failure_step"
 }
 
 manifest_should_wait_for_github_actions() {
@@ -781,6 +827,17 @@ manifest_ship_repo_resume() {
     else
         echo "   working tree:  clean"
     fi
+
+    # Read the prior run's diagnostic log (§5.6) to report where it stopped, so
+    # resume tells the operator which step it is picking up from rather than
+    # leaving them to guess. Best-effort: silent if no prior log exists.
+    local prior_log prior_step
+    prior_log="$(manifest_ship_log_latest)"
+    if [ -n "$prior_log" ]; then
+        prior_step="$(manifest_ship_log_last_step "$prior_log")"
+        echo "   prior run log: $prior_log"
+        [ -n "$prior_step" ] && echo "   picking up from step: $prior_step"
+    fi
     echo ""
 
     if ! push_changes "$version"; then
@@ -843,8 +900,14 @@ manifest_ship_workflow() {
         increment_type="patch"
     fi
     
+    # Open the per-run diagnostic log (§5.6). Best-effort: never aborts a ship.
+    local _ship_log_path _ship_log_mode
+    [ "$publish_release" = "true" ] && _ship_log_mode="publish" || _ship_log_mode="local"
+    _ship_log_path="$(manifest_ship_log_begin "manifest ship repo ${increment_type} (${_ship_log_mode})")"
+
     echo "🚀 Starting automated Manifest process..."
     echo ""
+    [ -n "$_ship_log_path" ] && echo "   run log:           $_ship_log_path"
     echo "   git repo:          $(git remote get-url origin 2>/dev/null || echo 'none')"
     echo "   git branch (remote): $(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || echo 'none')"
     echo "   git branch (local):  $(git branch --show-current 2>/dev/null || echo 'unknown')"
@@ -981,7 +1044,7 @@ manifest_ship_workflow() {
     # Release gate (pre-bump): run the project's tests BEFORE auto-committing,
     # syncing the remote, or any version mutation, so a failing gate leaves the
     # repo genuinely untouched. Also emits the bypass notice for `none`.
-    if ! manifest_release_gate_run "pre-bump"; then
+    if ! _manifest_ship_step "release_gate" manifest_release_gate_run "pre-bump"; then
         emit_ship_failure_report "release_gate" "$workflow_start_sha" "$(cat "${PROJECT_ROOT:-$PWD}/VERSION" 2>/dev/null || echo unknown)" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
         return 1
     fi
@@ -1026,7 +1089,7 @@ manifest_ship_workflow() {
     # holds the intended next value).
     if [ "$resume_in_place" != "true" ]; then
         echo "📦 Bumping version..."
-        if ! bump_version "$increment_type"; then
+        if ! _manifest_ship_step "version_bump" bump_version "$increment_type"; then
             log_error "Version bump failed"
             return 1
         fi
@@ -1046,7 +1109,7 @@ manifest_ship_workflow() {
     # Generate documentation using new architecture
     local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
     echo "📚 Generating documentation and release notes..."
-    if ! manifest_docs_generate "$new_version" "$timestamp" "$increment_type"; then
+    if ! _manifest_ship_step "doc_generation" manifest_docs_generate "$new_version" "$timestamp" "$increment_type"; then
         log_error "Document generation aborted; aborting ship workflow."
         emit_ship_failure_report "doc_generation" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
         return 1
@@ -1056,7 +1119,7 @@ manifest_ship_workflow() {
     
     # Archive previous version documentation to zArchive (now that new version is created)
     echo "📁 Archiving previous version documentation..."
-    if ! main_cleanup "$new_version" "$timestamp"; then
+    if ! _manifest_ship_step "archive_sweep" main_cleanup "$new_version" "$timestamp"; then
         log_error "Archive sweep aborted; aborting ship workflow."
         emit_ship_failure_report "archive_sweep" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
         return 1
@@ -1076,7 +1139,7 @@ manifest_ship_workflow() {
     echo "💾 Committing version changes..."
     local pre_version_commit_sha
     pre_version_commit_sha="$(git rev-parse HEAD 2>/dev/null || echo "")"
-    if ! commit_changes "Bump version to $new_version" "$timestamp"; then
+    if ! _manifest_ship_step "version_commit" commit_changes "Bump version to $new_version" "$timestamp"; then
         log_error "Failed to commit version bump; aborting ship workflow."
         emit_ship_failure_report "version_commit" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
         return 1
@@ -1108,16 +1171,16 @@ manifest_ship_workflow() {
         tag_target_sha="$(resolve_tag_target_sha "$workflow_version_commit_sha")"
 
         # Create git tag
-        if ! create_tag "$new_version" "$tag_target_sha"; then
+        if ! _manifest_ship_step "create_tag" create_tag "$new_version" "$tag_target_sha"; then
             log_error "Tag creation failed; aborting ship workflow."
             emit_ship_failure_report "create_tag" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
             return 1
         fi
         echo ""
-        
+
         # Push changes
         workflow_push_status="attempted"
-        if ! push_changes "$new_version"; then
+        if ! _manifest_ship_step "push_changes" push_changes "$new_version"; then
             workflow_push_status="failed"
             log_error "Push failed; aborting ship workflow."
             emit_ship_failure_report "push_changes" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
@@ -1129,7 +1192,7 @@ manifest_ship_workflow() {
         # Release gate (post-push): for remote-ci/all, require the pushed
         # commit's CI to be green before publishing the GitHub Release and
         # Homebrew formula. The tag is already pushed; only the publish is gated.
-        if ! manifest_release_gate_run "post-push"; then
+        if ! _manifest_ship_step "release_gate_post_push" manifest_release_gate_run "post-push"; then
             emit_ship_failure_report "release_gate" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
             return 1
         fi
@@ -1194,6 +1257,9 @@ manifest_ship_workflow() {
         homebrew_status "${workflow_homebrew_status:-skipped}" \
         gate_status "${_MANIFEST_CLI_SHIP_LAST_GATE_STATUS:-not-run}" \
         gate_policy "${_MANIFEST_CLI_SHIP_LAST_GATE_POLICY:-}"
+
+    # Close the per-run diagnostic log (§5.6) on the success path.
+    manifest_ship_log_end "success" "${_MANIFEST_CLI_SHIP_LAST_STEP:-}"
 
     if manifest_ship_should_run_followup_patch "$increment_type" "$publish_release" "$workflow_tag_name"; then
         manifest_ship_run_followup_patch
