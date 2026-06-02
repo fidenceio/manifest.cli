@@ -7,6 +7,8 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Both jobs run their tooling inside pinned containers — no lint dependencies are
+# installed on the runner host (mirrors the container-only validation rule).
 jobs:
   shellcheck:
     name: shellcheck
@@ -14,34 +16,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install shellcheck
-        run: |
-          set -euxo pipefail
-          if ! command -v shellcheck >/dev/null 2>&1; then
-            sudo apt-get update -qq
-            sudo apt-get install -y shellcheck
-          fi
-          shellcheck --version
-
-      - name: Collect shell scripts
-        id: collect
-        run: |
-          set -euo pipefail
-          # All first-party shell sources. Reads .shellcheckrc automatically.
-          find modules scripts -name '*.sh' -type f -print0 > files.zero
-          printf '%s\0%s\0' install-cli.sh uninstall-cli.sh >> files.zero
-          echo "count=$(tr -dc '\0' < files.zero | wc -c)" >> "$GITHUB_OUTPUT"
-
       - name: ShellCheck (hard gate — errors block the build)
         run: |
           set -euo pipefail
-          xargs -0 shellcheck --severity=error < files.zero
+          docker run --rm -v "$PWD:/work" -w /work koalaman/shellcheck-alpine:v0.10.0 sh -lc '
+            set -euo pipefail
+            # All first-party shell sources. Reads .shellcheckrc automatically.
+            find modules scripts -name "*.sh" -type f -print0 > files.zero
+            printf "%s\0%s\0" install-cli.sh uninstall-cli.sh >> files.zero
+            echo "scripts: $(tr -dc "\0" < files.zero | wc -c)"
+            xargs -0 shellcheck --severity=error < files.zero
+          '
 
       - name: ShellCheck (advisory — warnings reported, do not block)
         continue-on-error: true
         run: |
           set -uo pipefail
-          xargs -0 shellcheck --severity=warning < files.zero
+          docker run --rm -v "$PWD:/work" -w /work koalaman/shellcheck-alpine:v0.10.0 sh -lc '
+            find modules scripts -name "*.sh" -type f -print0 > files.zero
+            printf "%s\0%s\0" install-cli.sh uninstall-cli.sh >> files.zero
+            xargs -0 shellcheck --severity=warning < files.zero
+          '
 
   gitleaks:
     name: gitleaks (secret scan)
@@ -51,18 +46,9 @@ jobs:
         with:
           fetch-depth: 0  # full history so commit-range scanning works
 
-      - name: Install gitleaks
-        run: |
-          set -euxo pipefail
-          GITLEAKS_VERSION="8.21.2"
-          curl -fsSL -o gitleaks.tar.gz \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          tar -xzf gitleaks.tar.gz gitleaks
-          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
-          gitleaks version
-
       - name: Scan repository for secrets
         run: |
           set -euo pipefail
           # Scan the working tree (committed files). Non-zero exit = leak found.
-          gitleaks dir . --redact --verbose
+          docker run --rm -v "$PWD:/work" -w /work \
+            zricethezav/gitleaks:v8.21.2 dir /work --redact --verbose
