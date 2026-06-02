@@ -1,6 +1,6 @@
 # Shell Completions
 
-Manifest ships Bash and zsh completions.
+Manifest ships Bash, zsh, and fish completions.
 
 ## Installed By Homebrew
 
@@ -8,6 +8,7 @@ The Homebrew formula installs:
 
 - `completions/manifest.bash` as Bash completion
 - `completions/_manifest` as zsh completion
+- `completions/manifest.fish` as fish completion
 
 ## Manual Bash Setup
 
@@ -24,6 +25,15 @@ fpath=("$PWD/completions" $fpath)
 autoload -Uz compinit
 compinit
 ```
+
+## Manual Fish Setup
+
+```fish
+mkdir -p ~/.config/fish/completions
+ln -sf "$PWD/completions/manifest.fish" ~/.config/fish/completions/manifest.fish
+```
+
+Fish loads completions from this directory automatically; no further configuration is required.
 
 ## Coverage
 

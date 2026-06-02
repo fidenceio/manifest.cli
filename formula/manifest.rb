@@ -16,6 +16,7 @@ class Manifest < Formula
     libexec.install Dir["*"]
     bash_completion.install libexec/"completions/manifest.bash" => "manifest"
     zsh_completion.install libexec/"completions/_manifest"
+    fish_completion.install libexec/"completions/manifest.fish"
 
     # Create a wrapper script that points to the installed location.
     # Homebrew may launch this through macOS /bin/bash 3.2; re-exec into the

@@ -30,12 +30,6 @@ Open work for the Manifest CLI repo, as one flat list.
   - **Deliverable:** local stub test that rejects a Cloud request missing apply intent before any provider or analyzer runs.
   - **Anchor:** [`modules/stubs/manifest-cloud-stub.sh`](../modules/stubs/manifest-cloud-stub.sh), new `tests/cloud_contract.bats`.
 
-- **§4.2 Add fish-shell completions.**
-  - **Status:** DEFER.
-  - **Why:** bash and zsh completions ship; fish remains missing. Fish users can use the CLI fine without; no contract surface.
-  - **Deliverable:** `completions/manifest.fish` plus install instructions in `completions/README.md`.
-  - **Anchor:** [`completions/`](../completions/), [`tests/completions.bats`](../tests/completions.bats).
-
 - **§5.1 Extract user global-config migration from `install-cli.sh`.**
   - **Status:** DEFER (pure refactor).
   - **Why:** `install-cli.sh` remains large, and the global-config migration (`migrate_user_global_configuration()`, currently inline) is a clean extraction boundary.
