@@ -1,5 +1,14 @@
 # Changelog
 
+## [51.2.0] - 2026-06-02
+
+**Release Type:** Minor
+
+### Changes
+
+- Add layered test-cost reduction (tier / select / parallelize / cache) — §5.10
+
+
 ## [51.1.0] - 2026-06-01
 
 **Release Type:** Minor
@@ -103,13 +112,3 @@ distribution history lives in `fidenceio.homebrew.tap/CHANGELOG.md`.
 - Harden destructive-op guards so a sandbox can never touch real installs
 - Merge branch 'notice-new-untracked-on-autocommit'
 - Uninstall: sweep shell completions across versions and both channels
-
-
-## [49.0.2] - 2026-05-27
-
-**Release Type:** Patch
-
-### Changes
-
-- Drop 3 dead links from docs INDEX.md Architecture table
-- Remove inert branch-enforcement knobs from fleet config (B)
