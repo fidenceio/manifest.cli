@@ -344,7 +344,7 @@ find_fleet_root() {
         fi
 
         current_dir="$parent_dir"
-        ((depth++))
+        depth=$((depth+1))
     done
 
     log_debug "Max search depth ($max_depth) reached without finding fleet config"
@@ -803,16 +803,16 @@ validate_fleet_config() {
     # Check fleet metadata
     if [[ -z "$MANIFEST_CLI_FLEET_NAME" ]] || [[ "$MANIFEST_CLI_FLEET_NAME" == "unnamed-fleet" ]]; then
         log_warning "Fleet name not set (using default)"
-        ((warnings++))
+        warnings=$((warnings+1))
     fi
 
     # Check services
     if [[ -z "$MANIFEST_CLI_FLEET_SERVICES" ]]; then
         log_error "No services defined in fleet"
-        ((errors++))
+        errors=$((errors+1))
     else
         for service in $MANIFEST_CLI_FLEET_SERVICES; do
-            _validate_service "$service" || ((errors++))
+            _validate_service "$service" || errors=$((errors+1))
         done
     fi
 
@@ -851,7 +851,7 @@ _validate_service() {
     # Must have either path or url
     if [[ -z "$path" ]] && [[ -z "$url" ]]; then
         log_error "Service '$service': must specify either 'path' or 'url'"
-        ((errors++))
+        errors=$((errors+1))
     fi
 
     # If path specified, check if directory exists
@@ -859,7 +859,7 @@ _validate_service() {
         # Only error if no URL to clone from
         if [[ -z "$url" ]]; then
             log_error "Service '$service': path does not exist and no url to clone: $path"
-            ((errors++))
+            errors=$((errors+1))
         else
             log_info "Service '$service': path not found, will clone from url"
         fi

@@ -125,26 +125,26 @@ _fleet_ensure_gitignores() {
 
         if [[ $rc -ne 0 ]]; then
             echo "  ✗ $name: failed to create .gitignore"
-            ((gitignore_failed++))
+            gitignore_failed=$((gitignore_failed+1))
             continue
         fi
 
         case "$result" in
             ".gitignore")
                 echo "  ✓ $name: created .gitignore"
-                ((gitignore_created++))
+                gitignore_created=$((gitignore_created+1))
                 ;;
             ".gitignore:empty-overwrite")
                 echo "  ✓ $name: created .gitignore"
-                ((gitignore_overwritten++))
+                gitignore_overwritten=$((gitignore_overwritten+1))
                 overwritten_repos+=("$name")
                 ;;
             ".gitignore.manifest")
                 echo "  ~ $name: existing .gitignore preserved, created .gitignore.manifest"
-                ((gitignore_ref++))
+                gitignore_ref=$((gitignore_ref+1))
                 ;;
             *)
-                ((gitignore_skipped++))
+                gitignore_skipped=$((gitignore_skipped+1))
                 ;;
         esac
     done <<< "$repos"
@@ -650,15 +650,15 @@ _fleet_start() {
     local scanned_total=0 listed_total=0 git_count=0 plain_count=0
     while IFS=$'\t' read -r name path type branch version url submodule has_git has_remote; do
         [[ -z "$name" ]] && continue
-        ((scanned_total++))
+        scanned_total=$((scanned_total+1))
     done <<< "$discovered"
     while IFS=$'\t' read -r name path type branch version url submodule has_git has_remote; do
         [[ -z "$name" ]] && continue
-        ((listed_total++))
+        listed_total=$((listed_total+1))
         if [[ "$has_git" == "true" ]]; then
-            ((git_count++))
+            git_count=$((git_count+1))
         else
-            ((plain_count++))
+            plain_count=$((plain_count+1))
         fi
     done <<< "$inventory"
 
@@ -932,14 +932,14 @@ EOF
             _fleet_init_directory "$abs_path" "$has_git" "$create_repo_visibility"
             case $? in
                 0)
-                    ((init_count++))
-                    [[ -n "$create_repo_visibility" ]] && ((gh_ok_count++))
+                    init_count=$((init_count+1))
+                    [[ -n "$create_repo_visibility" ]] && gh_ok_count=$((gh_ok_count+1))
                     ;;
                 1)
                     init_failed_paths+=("$path")
                     ;;
                 2)
-                    ((init_count++))
+                    init_count=$((init_count+1))
                     gh_failed_paths+=("$path")
                     ;;
                 3)
@@ -1018,7 +1018,7 @@ EOF
         local service_count=0
         while IFS=$'\t' read -r _n _p _t _h _u _b _v; do
             [[ -z "$_n" ]] && continue
-            ((service_count++))
+            service_count=$((service_count+1))
         done <<< "$selected"
         echo ""
         echo "✓ Fleet inventory: $service_count service(s) in manifest.fleet.tsv"
@@ -1039,7 +1039,7 @@ EOF
             local service_count=0
             while IFS=$'\t' read -r name path type branch version url submodule has_git has_remote; do
                 [[ -z "$name" ]] && continue
-                [[ "$has_git" == "true" ]] && ((service_count++))
+                [[ "$has_git" == "true" ]] && service_count=$((service_count+1))
             done <<< "$inventory"
             echo "✓ Fleet inventory: $service_count service(s) in manifest.fleet.tsv"
         fi
@@ -1438,9 +1438,9 @@ _fleet_sync_print_summary() {
         local result
         result=$(<"$result_file")
         case "$result" in
-            clone) ((cloned++)) ;;
-            pull)  ((pulled++)) ;;
-            fail)  ((failed++)) ;;
+            clone) cloned=$((cloned+1)) ;;
+            pull)  pulled=$((pulled+1)) ;;
+            fail)  failed=$((failed+1)) ;;
         esac
     done
 
@@ -1462,7 +1462,7 @@ _fleet_sync_sequential() {
 
     local total=0
     for service in $MANIFEST_CLI_FLEET_SERVICES; do
-        ((total++))
+        total=$((total+1))
         echo "[$total] $service"
         _fleet_sync_service "$service" "$clone_only" "$pull_only" "$result_dir" || true
     done
@@ -1497,7 +1497,7 @@ _fleet_sync_parallel() {
 
     local total=0
     for service in $MANIFEST_CLI_FLEET_SERVICES; do
-        ((total++))
+        total=$((total+1))
     done
 
     _fleet_sync_print_summary "$result_dir" "$total"
@@ -1585,12 +1585,12 @@ fleet_update() {
         local total=0 services=0 libraries=0 infra=0 tools=0
         while IFS=$'\t' read -r name path type rest; do
             [[ -z "$name" ]] && continue
-            ((total++))
+            total=$((total+1))
             case "$type" in
-                "service") ((services++)) ;;
-                "library") ((libraries++)) ;;
-                "infrastructure") ((infra++)) ;;
-                "tool") ((tools++)) ;;
+                "service") services=$((services+1)) ;;
+                "library") libraries=$((libraries+1)) ;;
+                "infrastructure") infra=$((infra+1)) ;;
+                "tool") tools=$((tools+1)) ;;
             esac
         done <<< "$discovered"
 
@@ -2235,8 +2235,12 @@ _fleet_proc_start_token() {
 }
 
 # Modification time of a path in epoch seconds (portable across macOS/Linux).
+# GNU first: on Linux `stat -c %Y` is the clean mtime. The BSD form must NOT run
+# first there — GNU `stat -f %m` mis-parses `%m` as a filename, dumps filesystem
+# info to stdout, and exits 1, so a BSD-first probe returns garbage on Linux. On
+# macOS `stat -c` is rejected (stderr only), so we fall back to BSD `stat -f %m`.
 _fleet_dir_mtime_epoch() {
-    stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null
+    stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null
 }
 
 # 0 if the recorded holder is a live process on THIS host (do not break it).

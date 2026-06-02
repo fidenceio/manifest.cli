@@ -69,7 +69,7 @@ _compute_relpath() {
     local common=0
     while [[ $common -lt ${#target_parts[@]} ]] && [[ $common -lt ${#base_parts[@]} ]] \
           && [[ "${target_parts[$common]}" == "${base_parts[$common]}" ]]; do
-        ((common++))
+        common=$((common+1))
     done
 
     # Build relative path: go up from base, then down to target
