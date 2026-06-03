@@ -25,6 +25,12 @@ brew update
 brew upgrade manifest
 ```
 
+The install script and `manifest upgrade` automatically trust the formula (narrow, formula-only) so Homebrew keeps loading it once tap-trust is enforced (`HOMEBREW_REQUIRE_TAP_TRUST=1`, slated to become the default in a future Homebrew). Older Homebrew without `brew trust` skips this step. If Homebrew ever warns that `fidenceio/tap` is untrusted — or an upgrade silently stays on the old version — trust it manually:
+
+```bash
+brew trust --formula fidenceio/tap/manifest
+```
+
 ### Install Script
 
 Use the install script when Homebrew is not the desired distribution path:

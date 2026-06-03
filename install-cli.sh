@@ -1402,6 +1402,15 @@ install_via_homebrew() {
     fi
     print_success "✅ Tapped $brew_tap"
 
+    # Trust the formula before install/upgrade. A single chokepoint here covers
+    # both branches below. Without it, a Homebrew enforcing tap-trust ignores
+    # the untrusted formula and brew install/upgrade silently no-op. Non-fatal.
+    manifest_install_paths_ensure_brew_trust
+    case $? in
+        0) print_success "✅ Trusted formula $brew_formula" ;;
+        1) print_warning "⚠️  Could not auto-trust $brew_formula. If a future Homebrew ignores untrusted taps, run: brew trust --formula $brew_formula" ;;
+    esac
+
     if manifest_install_paths_is_brew_managed; then
         print_status "Manifest CLI already installed via Homebrew, upgrading..."
         brew upgrade "$brew_formula" 2>/dev/null || true

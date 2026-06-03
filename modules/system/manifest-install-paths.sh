@@ -36,6 +36,28 @@ manifest_install_paths_is_brew_managed() {
     return 1
 }
 
+# Ensure Homebrew will keep loading the Manifest formula once tap-trust is
+# enforced. Newer Homebrew warns that non-official taps are untrusted, and once
+# HOMEBREW_REQUIRE_TAP_TRUST=1 becomes the default (slated for Homebrew 5.2/6.0)
+# it *ignores* untrusted formulae — so `brew install`/`brew upgrade manifest`
+# (incl. the post-push auto-upgrade) would silently no-op: no error, no new
+# version. Pre-empt that by trusting the formula narrowly (least privilege: this
+# formula, not the whole tap). Idempotent; safe to call before every
+# install/upgrade. Verified against Homebrew 5.1.15: `brew trust --formula
+# <target>`, state in ~/.homebrew/trust.json.
+#
+# Version-guarded — older Homebrew has no `trust` subcommand. Return codes let
+# callers report with their own UI helpers:
+#   0 - trust ensured (or already trusted)
+#   1 - `trust` present but the trust call failed (worth surfacing)
+#   2 - nothing to do (brew absent, or this Homebrew has no `trust` subcommand)
+manifest_install_paths_ensure_brew_trust() {
+    command -v brew >/dev/null 2>&1 || return 2
+    brew trust --help >/dev/null 2>&1 || return 2
+    brew trust --formula "$(manifest_install_paths_homebrew_formula)" >/dev/null 2>&1 || return 1
+    return 0
+}
+
 # Companion predicate — is there a --manual (source-tree) install? The manual
 # install writes the version-agnostic wrapper to the user-bin location; a
 # Homebrew install never does (it symlinks into $(brew --prefix)/bin instead),
