@@ -151,14 +151,86 @@ readonly MANIFEST_CLI_FLEET_IGNORE_TEMP=(
 # Detection Settings
 # -----------------------------------------------------------------------------
 
-# Maximum depth to search for repositories
+# Fallback depth for the raw discover_* functions when a caller invokes them
+# without first resolving --depth. Commands route through
+# manifest_fleet_resolve_depth instead (§7.3), so this is only the
+# direct-call default.
 readonly MANIFEST_CLI_FLEET_DEFAULT_DISCOVERY_DEPTH=5
 
 # Minimum depth (don't treat fleet root as a service)
 readonly MANIFEST_CLI_FLEET_MIN_DISCOVERY_DEPTH=1
 
+# Single source of truth for the DOWNWARD discovery-depth ceiling (§7.3): every
+# --depth value (explicit or resolved from `auto`) is clamped to this. Distinct
+# from MANIFEST_CLI_FLEET_DEFAULT_MAX_SEARCH_DEPTH in fleet-config.sh, which
+# bounds the UPWARD walk for the fleet config file — a different axis.
+readonly MANIFEST_CLI_FLEET_MAX_DISCOVERY_DEPTH=10
+
 # Whether to include submodules in discovery
 readonly MANIFEST_CLI_FLEET_DEFAULT_INCLUDE_SUBMODULES="true"
+
+# -----------------------------------------------------------------------------
+# Depth resolution (§7.3): one flag, one meaning, one cap.
+# -----------------------------------------------------------------------------
+# init / update / quickstart / detect / plan and fleet.mode: auto all resolve
+# --depth through here, so "scan depth" means the same thing everywhere: a
+# guardrail on how deep DOWNWARD discovery walks, clamped to a single ceiling.
+#
+# `auto` is adaptive: deepen level by level and stop at the SHALLOWEST depth
+# that finds a git repo — so a workspace of direct-child repos settles at depth
+# 1 instead of scanning the full cap — bounded by the ceiling. A workspace with
+# no repos has nothing to adapt to, so `auto` falls back to the cap. Mixed-depth
+# layouts (repos at depth 1 AND deeper) settle at the shallow level; pass an
+# explicit --depth N to scan deeper. Callers report the resolved depth so the
+# choice is never silent.
+
+# The ceiling — the one source of truth for "how deep is too deep" downward.
+manifest_fleet_depth_cap() {
+    echo "$MANIFEST_CLI_FLEET_MAX_DISCOVERY_DEPTH"
+}
+
+# Adaptive depth: the shallowest depth (>= MIN) at which a git repo appears,
+# clamped to the cap. Returns the cap when no repo is found by the ceiling.
+# Probes via discover_fleet_repos at increasing caps (stderr/log suppressed);
+# the common case — repos as direct children — resolves in a single depth-1 scan.
+_manifest_fleet_adaptive_depth() {
+    local root_dir="${1:-$(pwd)}"
+    local cap min d
+    cap="$(manifest_fleet_depth_cap)"
+    min="$MANIFEST_CLI_FLEET_MIN_DISCOVERY_DEPTH"
+    for (( d = min; d <= cap; d++ )); do
+        if [[ -n "$(discover_fleet_repos "$root_dir" "$d" 2>/dev/null)" ]]; then
+            echo "$d"
+            return 0
+        fi
+    done
+    echo "$cap"
+}
+
+# Resolve a --depth spec ("auto" | "" | non-negative integer) to a concrete
+# integer, clamped to [MIN, cap]. The single entry point every discovery command
+# uses for depth handling. Echoes the integer; returns 1 on an invalid spec.
+manifest_fleet_resolve_depth() {
+    local spec="${1:-auto}"
+    local root_dir="${2:-$(pwd)}"
+    local cap min
+    cap="$(manifest_fleet_depth_cap)"
+    min="$MANIFEST_CLI_FLEET_MIN_DISCOVERY_DEPTH"
+    case "$spec" in
+        auto|"")
+            _manifest_fleet_adaptive_depth "$root_dir"
+            ;;
+        *[!0-9]*)
+            log_error "Invalid --depth: '$spec' (expected a non-negative integer or 'auto')"
+            return 1
+            ;;
+        *)
+            (( spec < min )) && spec="$min"
+            (( spec > cap )) && spec="$cap"
+            echo "$spec"
+            ;;
+    esac
+}
 
 # Whether to include nested git repos (repos inside repos)
 readonly MANIFEST_CLI_FLEET_DEFAULT_INCLUDE_NESTED="false"

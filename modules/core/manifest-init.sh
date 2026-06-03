@@ -687,7 +687,7 @@ EOF
 # manifest-fleet.sh.
 #
 # ARGUMENTS:
-#   --depth N    Scan depth (default: 2)
+#   --depth N|auto  Scan depth; auto adapts to repos found (default: auto)
 #   --force      Overwrite existing files
 #   --name NAME  Fleet name
 # -----------------------------------------------------------------------------
@@ -699,13 +699,14 @@ _manifest_init_fleet_dry_run_phase1() {
     local create_repo_visibility="$5"
     local all_folders="${6:-false}"
 
-    if ! [[ "$depth" =~ ^[0-9]+$ ]]; then
-        log_error "--depth must be a non-negative integer"
-        return 1
-    fi
+    # Resolve --depth (N|auto) to a concrete scan depth; auto adapts to the
+    # shallowest level with repos (§7.3). Keep the original spec ($depth) for the
+    # replay hint so the default ("auto") replays as a bare command.
+    local resolved_depth
+    resolved_depth="$(manifest_fleet_resolve_depth "$depth" "$root_dir")" || return 1
 
     local discovered
-    discovered=$(discover_all_directories "$root_dir" "$depth")
+    discovered=$(discover_all_directories "$root_dir" "$resolved_depth")
 
     local rules="" inventory="$discovered"
     if [[ "$all_folders" != "true" ]]; then
@@ -731,7 +732,7 @@ _manifest_init_fleet_dry_run_phase1() {
     echo ""
     echo "Dry run - manifest init fleet (Phase 1/2): $root_dir"
     echo ""
-    echo "Would scan depth: $depth"
+    echo "Would scan depth: $resolved_depth"
     if [[ "$all_folders" == "true" ]]; then
         echo "Inventory mode:   all scanned folders"
     else
@@ -749,7 +750,7 @@ _manifest_init_fleet_dry_run_phase1() {
     fi
     echo ""
     local replay_command="manifest init fleet"
-    [[ "$depth" != "2" ]] && replay_command="$replay_command --depth $depth"
+    [[ "$depth" != "auto" ]] && replay_command="$replay_command --depth $depth"
     [[ "$force" == "true" ]] && replay_command="$replay_command --force"
     [[ -n "$create_repo_visibility" ]] && replay_command="$replay_command --create-repo-$create_repo_visibility"
     [[ "$all_folders" == "true" ]] && replay_command="$replay_command --all-folders"
@@ -821,7 +822,7 @@ _manifest_init_fleet_dry_run_phase2() {
 }
 
 manifest_init_fleet() {
-    local depth=2
+    local depth="auto"
     local force=false
     local dry_run=true
     local fleet_name=""
@@ -862,7 +863,7 @@ manifest_init_fleet() {
                 shift ;;
             -h|--help)
                 _render_help \
-                    "manifest init fleet [-y|--yes] [--dry-run] [--depth N] [--all-folders] [--force] [--name NAME] [--create-repo-private|--create-repo-public]" \
+                    "manifest init fleet [-y|--yes] [--dry-run] [--depth N|auto] [--all-folders] [--force] [--name NAME] [--create-repo-private|--create-repo-public]" \
                     "Two-phase fleet initialization." \
                     "Phases" "  Phase 1 (no TSV yet):  Scan directories, ask repo depth per
                          top-level folder when interactive, then write
@@ -871,7 +872,8 @@ manifest_init_fleet() {
                          manifest.fleet.config.yaml." \
                     "Options" "  --dry-run                  Explicit preview; no writes
   -y, --yes                  Apply the current fleet init phase
-  --depth N                  Scan guardrail in Phase 1 (default: 2)
+  --depth N|auto             Scan depth in Phase 1; auto deepens to the
+                             shallowest level with repos, capped (default: auto)
   --all-folders              Write every scanned folder to the TSV
   -f, --force                Overwrite existing files (re-runs Phase 1 + skips guard)
   -n, --name                 Fleet name (prompted if not provided)
@@ -890,7 +892,7 @@ manifest_init_fleet() {
             *)
                 _render_help_error \
                     "Unknown option: $1" \
-                    "manifest init fleet [--depth N] [--all-folders] [--force] [--dry-run] [--name NAME] [--create-repo-private|--create-repo-public]"
+                    "manifest init fleet [--depth N|auto] [--all-folders] [--force] [--dry-run] [--name NAME] [--create-repo-private|--create-repo-public]"
                 return 1
                 ;;
         esac

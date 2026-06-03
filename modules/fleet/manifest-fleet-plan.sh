@@ -232,8 +232,7 @@ generate_fleet_plan_yaml() {
     local safety_cap="${3:-10}"
     local fleet_name="${4:-}"
 
-    [[ "$max_scan_depth" == "auto" ]] && max_scan_depth="$safety_cap"
-    if ! [[ "$max_scan_depth" =~ ^[0-9]+$ ]]; then
+    if [[ "$max_scan_depth" != "auto" ]] && ! [[ "$max_scan_depth" =~ ^[0-9]+$ ]]; then
         log_error "max scan depth must be 'auto' or a non-negative integer"
         return 1
     fi
@@ -244,6 +243,14 @@ generate_fleet_plan_yaml() {
     fi
 
     root_dir=$(cd "$root_dir" && pwd)
+
+    # `auto` is adaptive (§7.3): deepen to the shallowest level with repos rather
+    # than always scanning to the cap. The --safety-cap flag still bounds the
+    # result as an explicit ceiling.
+    if [[ "$max_scan_depth" == "auto" ]]; then
+        max_scan_depth="$(manifest_fleet_resolve_depth auto "$root_dir")"
+        (( max_scan_depth > safety_cap )) && max_scan_depth="$safety_cap"
+    fi
     fleet_name="${fleet_name:-$(basename "$root_dir" | tr '[:upper:]' '[:lower:]' | tr '_' '-')}"
 
     local generated_at
@@ -258,7 +265,9 @@ generate_fleet_plan_yaml() {
     echo "fleet:"
     echo "  name: $(_fleet_plan_yaml_quote "$fleet_name")"
     echo "discovery:"
-    echo "  max_scan_depth: $(_fleet_plan_yaml_quote "${2:-auto}")"
+    # Record the RESOLVED depth (auto is resolved above) so the plan is
+    # deterministic between preview and apply (§7.3).
+    echo "  max_scan_depth: $(_fleet_plan_yaml_quote "$max_scan_depth")"
     echo "  safety_cap: $safety_cap"
     echo "rules:"
     echo "  - path: \"apps\""
