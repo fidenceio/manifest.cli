@@ -217,11 +217,85 @@ bump_version() {
         echo "$new_version" > VERSION
         echo "   ✅ VERSION file updated: $new_version"
     fi
-    
 
-    
+    # Mirror the new version into any opt-in version.sync targets (e.g.
+    # package.json). No-op when unset. Targets resolve relative to the repo
+    # root, which is the cwd here — the same as the VERSION write above.
+    if declare -F manifest_version_sync_apply >/dev/null 2>&1; then
+        manifest_version_sync_apply "$new_version"
+    fi
+
     echo "✅ Version bumped to $new_version"
     return 0
+}
+
+# Emit one version.sync target per line. Mirrors the security private-files
+# splitter (_manifest_security_private_env_files): accepts either a bash array
+# or a comma-separated string; unset/empty means no sync (opt-in, fail-closed).
+# Whitespace around each item is trimmed.
+_manifest_version_sync_targets() {
+    local decl
+    decl="$(declare -p MANIFEST_CLI_VERSION_SYNC 2>/dev/null || true)"
+    case "$decl" in
+        declare\ -a*|declare\ -ax*)
+            printf '%s\n' "${MANIFEST_CLI_VERSION_SYNC[@]}"
+            return 0
+            ;;
+    esac
+    local raw="${MANIFEST_CLI_VERSION_SYNC:-}"
+    [ -n "$raw" ] || return 0
+    local item
+    local -a _mvs_items
+    IFS=',' read -r -a _mvs_items <<< "$raw"
+    for item in "${_mvs_items[@]}"; do
+        item="${item#"${item%%[![:space:]]*}"}"
+        item="${item%"${item##*[![:space:]]}"}"
+        [ -n "$item" ] && printf '%s\n' "$item"
+    done
+}
+
+# Mirror the canonical version into the opt-in version.sync targets. Today only
+# JSON files (package.json-style) are rewritten, via a surgical sed of the
+# top-level "version" value — NO jq reserialize, so the diff is a single line
+# and the file's existing formatting is preserved. Non-JSON targets
+# (pyproject.toml / Cargo.toml, planned later) are recognized but skipped with a
+# notice, so a partial implementation is never mistaken for a complete one.
+# Fail-closed: a missing file or a missing "version" field is skipped, never
+# created. Targets resolve relative to the cwd (the repo root during a bump).
+manifest_version_sync_apply() {
+    local new_version="$1"
+    local target
+    while IFS= read -r target; do
+        [ -n "$target" ] || continue
+        if [ ! -f "$target" ]; then
+            echo "   ⚠️  version.sync: $target not found — skipped"
+            continue
+        fi
+        case "$target" in
+            *.json)
+                if ! grep -Eq '"version"[[:space:]]*:' "$target"; then
+                    echo "   ⚠️  version.sync: no \"version\" field in $target — skipped"
+                    continue
+                fi
+                # Rewrite only the top-level "version" value. The address range
+                # 1,/"version":/ ends at the FIRST version line, so a deeper
+                # "version": inside a nested object is out of range and left
+                # alone. Portable across BSD/GNU sed (no GNU-only 0,/re/ and no
+                # in-place -i flag — this helper can run before the §5.11
+                # GNU-userland PATH prepend), so we edit via a temp file.
+                local _tmp="${target}.manifest-sync.tmp"
+                if sed -E "1,/\"version\"[[:space:]]*:/ s/(\"version\"[[:space:]]*:[[:space:]]*\")[^\"]*\"/\\1${new_version}\"/" "$target" > "$_tmp" 2>/dev/null && mv "$_tmp" "$target"; then
+                    echo "   ✅ version.sync: $target -> $new_version"
+                else
+                    rm -f "$_tmp" 2>/dev/null
+                    echo "   ⚠️  version.sync: failed to update $target"
+                fi
+                ;;
+            *)
+                echo "   ⚠️  version.sync: $target type not yet supported (JSON only) — skipped"
+                ;;
+        esac
+    done < <(_manifest_version_sync_targets)
 }
 
 # Notice (not a prompt): list brand-new untracked files that a following
