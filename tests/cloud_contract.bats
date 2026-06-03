@@ -39,7 +39,7 @@ setup() {
 
     # The CLI execution mode the request declares; §3.1 will populate this from
     # the parsed CLI execution mode. Start with it unset (missing field).
-    unset MANIFEST_CLOUD_EXECUTION_MODE
+    unset MANIFEST_CLI_CLOUD_EXECUTION_MODE
 }
 
 teardown() {
@@ -55,17 +55,17 @@ teardown() {
 }
 
 @test "cloud contract: execution_mode=preview is rejected" {
-    MANIFEST_CLOUD_EXECUTION_MODE=preview run manifest_cloud_require_apply_intent
+    MANIFEST_CLI_CLOUD_EXECUTION_MODE=preview run manifest_cloud_require_apply_intent
     [ "$status" -ne 0 ]
 }
 
 @test "cloud contract: an unrecognized execution_mode is rejected" {
-    MANIFEST_CLOUD_EXECUTION_MODE=apply-soon run manifest_cloud_require_apply_intent
+    MANIFEST_CLI_CLOUD_EXECUTION_MODE=apply-soon run manifest_cloud_require_apply_intent
     [ "$status" -ne 0 ]
 }
 
 @test "cloud contract: execution_mode=apply passes the guard" {
-    MANIFEST_CLOUD_EXECUTION_MODE=apply run manifest_cloud_require_apply_intent
+    MANIFEST_CLI_CLOUD_EXECUTION_MODE=apply run manifest_cloud_require_apply_intent
     [ "$status" -eq 0 ]
 }
 
@@ -90,7 +90,7 @@ teardown() {
 }
 
 @test "cloud contract: with apply intent the request proceeds past the guard" {
-    MANIFEST_CLOUD_EXECUTION_MODE=apply run send_to_manifest_cloud "5.2.0" "$SCRATCH/changes" "patch"
+    MANIFEST_CLI_CLOUD_EXECUTION_MODE=apply run send_to_manifest_cloud "5.2.0" "$SCRATCH/changes" "patch"
     # Cloud is still a no-op stub, so the call ultimately fails — but only after
     # the guard passed and the post-guard path was reached.
     [ -e "$PROVIDER_MARKER" ]
