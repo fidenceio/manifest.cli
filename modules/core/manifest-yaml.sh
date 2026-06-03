@@ -58,6 +58,10 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     ["version.reset_components.revision"]="MANIFEST_CLI_REVISION_RESET_COMPONENTS"
     ["version.regex"]="MANIFEST_CLI_VERSION_REGEX"
     ["version.validation"]="MANIFEST_CLI_VERSION_VALIDATION"
+    # Opt-in list of files whose own version field mirrors VERSION on each bump.
+    # Comma-separated (e.g. "package.json"); unset = no sync. See
+    # _manifest_version_sync_targets / manifest_version_sync_apply.
+    ["version.sync"]="MANIFEST_CLI_VERSION_SYNC"
 
     # -------------------------------------------------------------------------
     # release — release artifact policy

@@ -207,6 +207,12 @@ manifest_ship_preview_plan() {
     echo ""
     manifest_ship_preview_dirty_files "$repo_root"
     echo "  - VERSION: update $current_version -> $next_version"
+    if declare -F _manifest_version_sync_targets >/dev/null 2>&1; then
+        local _sync_target
+        while IFS= read -r _sync_target; do
+            [ -n "$_sync_target" ] && echo "  - ${_sync_target}: sync version field -> $next_version (version.sync)"
+        done < <(_manifest_version_sync_targets 2>/dev/null)
+    fi
     echo "  - CHANGELOG.md: prepend the $next_version release entry"
     echo "  - README.md and docs/INDEX.md: refresh displayed current-version metadata when needed"
     echo "  - docs/: regenerate release documentation and command/reference indexes"
