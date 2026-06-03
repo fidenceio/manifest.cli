@@ -498,8 +498,10 @@ fleet_quickstart() {
         local config_file="$target_dir/manifest.fleet.config.yaml"
         local start_file="$target_dir/manifest.fleet.tsv"
         local local_config="$target_dir/manifest.config.local.yaml"
-        local discovered
-        discovered=$(discover_all_directories "$target_dir" 5)
+        local discovered _qs_depth
+        # Adaptive scan depth (§7.3); fall back to the legacy fixed 5 if unresolved.
+        _qs_depth="$(manifest_fleet_resolve_depth auto "$target_dir")" || _qs_depth=5
+        discovered=$(discover_all_directories "$target_dir" "$_qs_depth")
 
         local total=0 git_count=0
         while IFS=$'\t' read -r name _path _type _branch _version _url _submodule has_git _has_remote; do
@@ -558,12 +560,12 @@ fleet_quickstart() {
 # Called from manifest_init_fleet (Phase 1) in modules/core/manifest-init.sh.
 #
 # ARGUMENTS:
-#   --depth N       Maximum search depth (default: 5)
+#   --depth N|auto  Scan depth; auto deepens to repos found, capped (default: auto)
 #   --all-folders   Write every scanned folder to manifest.fleet.tsv
 #   --force         Overwrite existing manifest.fleet.tsv
 # -----------------------------------------------------------------------------
 _fleet_start() {
-    local depth=5
+    local depth="auto"
     local force=false
     local all_folders=false
 
@@ -581,13 +583,10 @@ _fleet_start() {
         esac
     done
 
-    if ! [[ "$depth" =~ ^[0-9]+$ ]]; then
-        log_error "--depth must be a non-negative integer"
-        return 1
-    fi
-
     local root_dir="$(pwd)"
     local start_file="$root_dir/manifest.fleet.tsv"
+    # Resolve --depth (N|auto) to a concrete scan depth (§7.3).
+    depth="$(manifest_fleet_resolve_depth "$depth" "$root_dir")" || return 1
 
     # Guard against overwriting a hand-edited file
     if [[ -f "$start_file" ]] && [[ "$force" != "true" ]]; then
@@ -1007,10 +1006,12 @@ EOF
         # Refresh TSV with updated metadata (directories now have git)
         echo ""
         echo "Refreshing manifest.fleet.tsv..."
-        local all_dirs
-        all_dirs=$(discover_all_directories "$target_dir" 5)
+        local all_dirs _refresh_depth
+        # Match Phase 1's adaptive depth so the refresh sees the same dirs (§7.3).
+        _refresh_depth="$(manifest_fleet_resolve_depth auto "$target_dir")" || _refresh_depth=5
+        all_dirs=$(discover_all_directories "$target_dir" "$_refresh_depth")
         if [[ -n "$all_dirs" ]]; then
-            merge_start_tsv "$all_dirs" "$start_file" "$target_dir" 5 > "${start_file}.tmp" 2>/dev/null
+            merge_start_tsv "$all_dirs" "$start_file" "$target_dir" "$_refresh_depth" > "${start_file}.tmp" 2>/dev/null
             mv "${start_file}.tmp" "$start_file"
             echo "✓ Updated: $start_file"
         fi
@@ -1026,8 +1027,9 @@ EOF
         # --- Auto-discovery path (quickstart): scan, populate TSV, bootstrap ---
         echo ""
         echo "Auto-discovering repositories..."
-        local all_dirs
-        all_dirs=$(discover_all_directories "$target_dir" 5)
+        local all_dirs _auto_depth
+        _auto_depth="$(manifest_fleet_resolve_depth auto "$target_dir")" || _auto_depth=5
+        all_dirs=$(discover_all_directories "$target_dir" "$_auto_depth")
         local inventory
         inventory=$(filter_start_inventory_git_repos "$all_dirs")
 
@@ -1165,7 +1167,7 @@ EOF
 fleet_discover() {
     if [[ "${1:-}" == "help" || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
         _render_help \
-            "manifest discover fleet [--depth N] [--json] [--quiet]" \
+            "manifest discover fleet [--depth N|auto] [--json] [--quiet]" \
             "Discover repositories for fleet membership without writing changes."
         return 0
     fi
@@ -1520,7 +1522,7 @@ _fleet_sync_parallel() {
 # changes without writing (this is what 'discover fleet' does).
 #
 # ARGUMENTS:
-#   --depth N      Maximum search depth (default: 5)
+#   --depth N|auto Scan depth; auto deepens to repos found, capped (default: auto)
 #   --dry-run      Preview only — do not modify manifest.fleet.config.yaml
 #   --json         Output JSON summary (implies --dry-run)
 #   --quiet, -q    Only output new repo lines, for scripting (implies --dry-run)
@@ -1531,7 +1533,7 @@ _fleet_sync_parallel() {
 #   manifest update fleet --dry-run
 # -----------------------------------------------------------------------------
 fleet_update() {
-    local depth=5
+    local depth="auto"
     local skip_init_check=false
     local dry_run=true
     local json_output=false
@@ -1560,11 +1562,11 @@ fleet_update() {
             -q|--quiet) quiet=true; dry_run=true; shift ;;
             -h|--help|help)
                 _render_help \
-                    "manifest update fleet [-y|--yes] [--dry-run] [--depth N] [--json] [--quiet]" \
+                    "manifest update fleet [-y|--yes] [--dry-run] [--depth N|auto] [--json] [--quiet]" \
                     "Re-scan fleet membership and add newly discovered repositories." \
                     "Options" "  --dry-run    Explicit preview; do not modify manifest.fleet.config.yaml
   -y, --yes    Apply fleet membership updates
-  --depth N    Maximum search depth (default: 5)
+  --depth N|auto  Scan depth; auto deepens to the shallowest level with repos, capped (default: auto)
   --json       Output JSON summary
   --quiet, -q  Only output new repo lines"
                 return 0
@@ -1573,12 +1575,10 @@ fleet_update() {
         esac
     done
 
-    if ! [[ "$depth" =~ ^[0-9]+$ ]]; then
-        log_error "--depth must be a non-negative integer"
-        return 1
-    fi
-
     local root_dir="${MANIFEST_CLI_FLEET_ROOT:-$(pwd)}"
+    # Resolve --depth (N|auto) to a concrete scan depth (§7.3). The JSON
+    # fast-summary path below keeps its own intentionally shallow fixed probe.
+    depth="$(manifest_fleet_resolve_depth "$depth" "$root_dir")" || return 1
 
     # --- JSON summary mode (fast, limited depth) ---
     if [[ "$json_output" == "true" ]]; then
@@ -3175,7 +3175,7 @@ COMMAND DETAILS:
     Two-phase fleet setup. Scans with a depth guardrail, then asks how deep
     repos should be under each top-level folder before writing manifest.fleet.tsv.
     Options:
-      --depth N          Scan guardrail (default: 2 via manifest init)
+      --depth N|auto     Scan depth; auto deepens to repos found, capped (default: auto)
       --all-folders      Write every scanned folder to manifest.fleet.tsv
       --name, -n NAME    Fleet name
       --force, -f        Overwrite generated files
@@ -3219,7 +3219,7 @@ COMMAND DETAILS:
     Options:
       -y, --yes          Apply fleet membership updates
       --dry-run          Preview only — do not modify manifest.fleet.config.yaml
-      --depth N          Maximum search depth (default: 5)
+      --depth N|auto     Scan depth; auto deepens to repos found, capped (default: auto)
       --json             Output JSON summary (implies --dry-run)
       --quiet, -q        Only output new repo lines (implies --dry-run)
 
