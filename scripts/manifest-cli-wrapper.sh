@@ -50,6 +50,10 @@ CLI_DIR="$(find_cli_dir)"
 # shellcheck disable=SC1091
 source "$CLI_DIR/modules/core/manifest-requirements.sh"
 
+# Put GNU sed/date/stat ahead of the BSD builtins on macOS before re-exec, so
+# the relaunched shell (and everything it sources) inherits the GNU userland.
+manifest_requirement_prepend_gnu_userland_path
+
 # Require the centralized Bash runtime version. If possible, re-exec into it.
 ensure_bash5_or_reexec() {
     local current_major="${BASH_VERSINFO[0]:-0}"

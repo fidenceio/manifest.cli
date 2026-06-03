@@ -247,10 +247,14 @@ _status_repo_latest_commit_timestamp() {
         epoch="$(git -C "$path" log -1 --format=%ct 2>/dev/null || echo "")"
         if [[ -z "$epoch" ]]; then
             echo "n/a"
-        elif date -r "$epoch" '+%Y-%m-%d %H:%M:%S %Z' >/dev/null 2>&1; then
-            date -r "$epoch" '+%Y-%m-%d %H:%M:%S %Z'
         else
-            date -d "@$epoch" '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo "n/a"
+            # GNU-first: the wrapper forces coreutils' gnubin onto PATH on macOS,
+            # so this takes the GNU `-d @<epoch>` branch there too. BSD
+            # `date -r <epoch>` is only a fallback — for contexts that ran without
+            # the prepend (a module sourced in isolation) or native BSDs.
+            date -d "@$epoch" '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null \
+                || date -r "$epoch" '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null \
+                || echo "n/a"
         fi
     else
         echo "n/a"

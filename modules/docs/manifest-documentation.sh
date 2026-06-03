@@ -849,10 +849,12 @@ _manifest_prune_root_changelog() {
     # sort lexicographically, so awk only needs string comparison.
     local cutoff_date=""
     if [[ "$kind" == "days" ]]; then
-        if date -u -v "-${value}d" '+%Y-%m-%d' >/dev/null 2>&1; then
-            cutoff_date="$(date -u -v "-${value}d" '+%Y-%m-%d')"
-        else
+        # GNU-first (the wrapper forces coreutils' gnubin onto PATH on macOS);
+        # BSD `date -v` only as a fallback for native BSDs without GNU date.
+        if date -u -d "${value} days ago" '+%Y-%m-%d' >/dev/null 2>&1; then
             cutoff_date="$(date -u -d "${value} days ago" '+%Y-%m-%d')"
+        else
+            cutoff_date="$(date -u -v "-${value}d" '+%Y-%m-%d')"
         fi
     fi
 
