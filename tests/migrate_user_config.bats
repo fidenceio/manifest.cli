@@ -83,6 +83,28 @@ EOF
     echo "$output" | grep -q "Migrating User Configuration"
 }
 
+@test "migrate: actually rewrites a legacy default end-to-end (leading-dot write path)" {
+    # Regression: the migration reads with a leading-dot path (get_yaml_value,
+    # fine) but also WROTE with a leading-dot path (set_yaml_value), which
+    # silently no-op'd — yq rejected the ".." expression and 2>/dev/null ate it.
+    # So on every upgrade the legacy time servers were never rewritten and the
+    # cache controls were never added. The other migrate tests deliberately
+    # defer post-write values to yaml.bats, so nothing here caught it. Assert the
+    # rewrite happens.
+    cat > "$CFG" <<'EOF'
+time:
+  server1: time.apple.com
+EOF
+
+    run _run_migration
+    [ "$status" -eq 0 ]
+
+    # Legacy default rewritten to the new endpoint...
+    [ "$(get_yaml_value "$CFG" ".time.server1" "")" = "https://www.cloudflare.com/cdn-cgi/trace" ]
+    # ...and the new cache controls added (were missing).
+    [ "$(get_yaml_value "$CFG" ".time.cache_ttl" "")" = "120" ]
+}
+
 @test "migrate: preserves user-customized values" {
     cat > "$CFG" <<'EOF'
 time:

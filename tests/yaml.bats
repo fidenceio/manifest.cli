@@ -134,6 +134,29 @@ EOF
     [ "$output" = "v" ]
 }
 
+@test "yaml: set_yaml_value accepts a leading-dot path (regression: silent no-op)" {
+    # Callers like migrate-user-config.sh pass a leading-dot path (".time.server1").
+    # Before normalization the yq expression became "..time.server1", which yq
+    # rejected — and with 2>/dev/null that was a silent no-op: file touched, key
+    # never written. A leading-dot path must address the same key as the bare one.
+    run set_yaml_value "$YAML" ".time.server1" "https://time.example.com"
+    [ "$status" -eq 0 ]
+    run yq e ".time.server1" "$YAML"
+    [ "$output" = "https://time.example.com" ]
+}
+
+@test "yaml: set_yaml_value leading-dot and bare paths address the same key" {
+    set_yaml_value "$YAML" "brew.tap_repo" "fidenceio/tap"
+    set_yaml_value "$YAML" ".brew.tap_repo" "fidenceio/homebrew-tap"
+    run yq e ".brew.tap_repo" "$YAML"
+    [ "$output" = "fidenceio/homebrew-tap" ]
+}
+
+@test "yaml: set_yaml_value rejects a dot-path that is only a dot" {
+    run set_yaml_value "$YAML" "." "x"
+    [ "$status" -eq 1 ]
+}
+
 @test "yaml: get_yaml_value reads a value previously written" {
     set_yaml_value "$YAML" "git.default_branch" "main"
     run get_yaml_value "$YAML" ".git.default_branch"
