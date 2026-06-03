@@ -1,5 +1,28 @@
 # Changelog
 
+## [52.0.0] - 2026-06-03
+
+**Release Type:** Major
+
+### Changes
+
+- Docs(tracker): flatten to one list; prune shipped §5.10
+- Refactor(fleet): remove inert validation knobs from fleet config
+- Feat(fleet): gate PR-gated members in ship-fleet preview and apply
+- Feat(pr): emit cli-pr apply-event audit record for -y-gated PR mutations
+- Feat(preview): shared plan renderer, fingerprint drift warning, opt-in no-consent exit code
+- Fix(cli): route deprecated cleanup alias through preview/-y gate
+- Fix(docs): make archive cleanup move-only, no generated archive output
+- Feat(completions): add fish-shell completions
+- Test(ship): cover local-only apply offline boundary
+- Test(cloud): pin apply-intent contract on the cloud stub
+- Test(homebrew-tap): cover brew-managed tap refresh candidate
+- Feat(orchestrator): capture per-run diagnostic ship logs (§5.6)
+- Refactor(install): extract user global-config migration to scripts/migrate-user-config.sh
+- Fix(cloud): conform cloud execution-mode var to MANIFEST_CLI namespace
+- Feat(portability): force GNU userland on macOS so CI can go container-only (§5.11)
+
+
 ## [51.3.0] - 2026-06-02
 
 **Release Type:** Minor
@@ -104,12 +127,3 @@
 This changelog is the product release history for Manifest CLI. Workspace
 coordination changes live in the parent workspace changelog; Homebrew formula
 distribution history lives in `fidenceio.homebrew.tap/CHANGELOG.md`.
-
-## [50.0.1] - 2026-05-28
-
-**Release Type:** Patch
-
-### Changes
-
-- Stop a ship that would land on the wrong branch
-- Stop prescribing a branching workflow to users
