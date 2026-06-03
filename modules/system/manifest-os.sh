@@ -123,11 +123,13 @@ detect_os() {
 
 # macOS-specific command setup
 setup_macos_commands() {
-    MANIFEST_CLI_OS_DATE_CMD="date -u -r"
+    # GNU userland is forced onto PATH (coreutils + gnu-sed gnubin), so date
+    # takes the GNU `-d @<epoch>` form here too — same as Linux.
+    MANIFEST_CLI_OS_DATE_CMD="date -u -d"
     MANIFEST_CLI_OS_TIMEOUT_CMD="gtimeout"  # Requires coreutils installation
     MANIFEST_CLI_OS_GREP_CMD="grep"
     MANIFEST_CLI_OS_SED_CMD="sed"
-    
+
     # Check if coreutils is installed for timeout
     if ! command -v gtimeout &> /dev/null; then
         echo "   ⚠️  gtimeout not found, using fallback timeout method"
@@ -146,6 +148,8 @@ setup_linux_commands() {
 
 # BSD-specific command setup
 setup_bsd_commands() {
+    # Non-macOS BSDs have no Homebrew gnubin to force onto PATH, so the native
+    # BSD date keeps the `-r <epoch>` form. (macOS is handled in setup_macos_commands.)
     MANIFEST_CLI_OS_DATE_CMD="date -u -r"
     MANIFEST_CLI_OS_TIMEOUT_CMD="timeout"  # May not be available on all BSDs
     MANIFEST_CLI_OS_GREP_CMD="grep"
@@ -198,6 +202,11 @@ timeout_fallback() {
 
 # Cross-platform date formatting function
 # Uses MANIFEST_CLI_TIMEZONE for timezone support (defaults to UTC)
+#
+# GNU-first: macOS now runs the GNU `-d @<epoch>` form too, because the wrapper
+# forces coreutils' gnubin onto PATH. The BSD `-r <epoch>` form is kept ONLY as
+# a fallback for native BSDs (FreeBSD/OpenBSD/NetBSD) and unknown platforms with
+# no GNU date — it is never tried first, so it cannot mis-fire under GNU.
 format_timestamp_cross_platform() {
     local timestamp="$1"
     local format="$2"
@@ -205,53 +214,20 @@ format_timestamp_cross_platform() {
 
     # For UTC, use the -u flag for simplicity and accuracy
     if [ "$timezone" = "UTC" ]; then
-        case "$MANIFEST_CLI_OS_OS" in
-            "macOS"|"FreeBSD"|"OpenBSD"|"NetBSD")
-                date -u -r "$timestamp" "$format"
-                ;;
-            "Linux"|"Windows")
-                date -u -d "@$timestamp" "$format"
-                ;;
-            *)
-                # Fallback for unknown platforms
-                if [[ "$timestamp" =~ ^[0-9]+$ ]]; then
-                    if date -u -d "@$timestamp" "$format" 2>/dev/null; then
-                        return 0
-                    fi
-                    if date -u -r "$timestamp" "$format" 2>/dev/null; then
-                        return 0
-                    fi
-                fi
-                date -u "$format"
-                ;;
-        esac
+        date -u -d "@$timestamp" "$format" 2>/dev/null && return 0
+        date -u -r "$timestamp" "$format" 2>/dev/null && return 0  # native-BSD fallback
+        date -u "$format"
     else
         # Use TZ environment variable for non-UTC timezones
-        case "$MANIFEST_CLI_OS_OS" in
-            "macOS"|"FreeBSD"|"OpenBSD"|"NetBSD")
-                TZ="$timezone" date -r "$timestamp" "$format"
-                ;;
-            "Linux"|"Windows")
-                TZ="$timezone" date -d "@$timestamp" "$format"
-                ;;
-            *)
-                # Fallback for unknown platforms
-                if [[ "$timestamp" =~ ^[0-9]+$ ]]; then
-                    if TZ="$timezone" date -d "@$timestamp" "$format" 2>/dev/null; then
-                        return 0
-                    fi
-                    if TZ="$timezone" date -r "$timestamp" "$format" 2>/dev/null; then
-                        return 0
-                    fi
-                fi
-                TZ="$timezone" date "$format"
-                ;;
-        esac
+        TZ="$timezone" date -d "@$timestamp" "$format" 2>/dev/null && return 0
+        TZ="$timezone" date -r "$timestamp" "$format" 2>/dev/null && return 0  # native-BSD fallback
+        TZ="$timezone" date "$format"
     fi
 }
 
 # Get the timezone abbreviation/offset for display
 # Returns the timezone abbreviation (e.g., "EST", "PST") or offset (e.g., "+0530")
+# GNU-first; native-BSD `-r` only as a fallback (see format_timestamp_cross_platform).
 get_timezone_display() {
     local timestamp="${1:-$(date +%s)}"
     local timezone="${MANIFEST_CLI_TIMEZONE:-UTC}"
@@ -262,23 +238,9 @@ get_timezone_display() {
     fi
 
     # Get the timezone abbreviation at the given timestamp
-    case "$MANIFEST_CLI_OS_OS" in
-        "macOS"|"FreeBSD"|"OpenBSD"|"NetBSD")
-            TZ="$timezone" date -r "$timestamp" '+%Z'
-            ;;
-        "Linux"|"Windows")
-            TZ="$timezone" date -d "@$timestamp" '+%Z'
-            ;;
-        *)
-            if TZ="$timezone" date -d "@$timestamp" '+%Z' 2>/dev/null; then
-                return 0
-            fi
-            if TZ="$timezone" date -r "$timestamp" '+%Z' 2>/dev/null; then
-                return 0
-            fi
-            echo "$timezone"
-            ;;
-    esac
+    TZ="$timezone" date -d "@$timestamp" '+%Z' 2>/dev/null && return 0
+    TZ="$timezone" date -r "$timestamp" '+%Z' 2>/dev/null && return 0  # native-BSD fallback
+    echo "$timezone"
 }
 
 # Cross-platform timeout function

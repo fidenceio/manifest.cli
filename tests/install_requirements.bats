@@ -46,8 +46,8 @@ EOF
     grep -F './scripts/run-tests-container.sh' "$TEST_REPO_ROOT/.github/workflows/test.yml" >/dev/null
     # …and no longer installs test deps on the runner host.
     ! grep -F 'apt-get install -y bats parallel' "$TEST_REPO_ROOT/.github/workflows/test.yml"
-    # macOS leg is host-native and brew-installs parallel.
-    grep -F 'brew install bats-core yq bash coreutils parallel' "$TEST_REPO_ROOT/.github/workflows/test.yml" >/dev/null
+    # macOS leg is host-native and brew-installs parallel (and gnu-sed for §5.11).
+    grep -F 'brew install bats-core yq bash coreutils gnu-sed parallel' "$TEST_REPO_ROOT/.github/workflows/test.yml" >/dev/null
 
     ! grep -iqE 'parallel' "$TEST_REPO_ROOT/install-cli.sh"
     ! grep -iqE 'parallel' "$TEST_REPO_ROOT/formula/manifest.rb"

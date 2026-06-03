@@ -9,7 +9,12 @@ class Manifest < Formula
   depends_on "bash"
   depends_on "git" => :recommended
   depends_on "yq"
+  # GNU userland: coreutils ships gdate/gstat (and the gnubin date/stat),
+  # gnu-sed ships GNU sed. The bin wrapper forces their gnubin onto PATH so the
+  # CLI runs one GNU codepath (sed -i / date -d / stat -c) instead of branching
+  # on BSD. coreutils alone is insufficient — GNU sed lives in gnu-sed.
   depends_on "coreutils"
+  depends_on "gnu-sed"
 
   def install
     # Copy all project files to libexec
@@ -27,6 +32,11 @@ class Manifest < Formula
 
       CLI_DIR="#{libexec}"
       source "$CLI_DIR/modules/core/manifest-requirements.sh"
+
+      # Put GNU sed/date/stat ahead of the BSD builtins on macOS before re-exec,
+      # so the relaunched shell (and every module) runs one GNU codepath. The
+      # formula declares coreutils + gnu-sed, so these gnubin dirs are present.
+      manifest_requirement_prepend_gnu_userland_path
 
       ensure_bash5_or_reexec() {
         local current_major="${BASH_VERSINFO[0]:-0}"

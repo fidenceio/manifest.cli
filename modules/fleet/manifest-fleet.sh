@@ -2349,11 +2349,12 @@ _fleet_proc_start_token() {
     fi
 }
 
-# Modification time of a path in epoch seconds (portable across macOS/Linux).
-# GNU first: on Linux `stat -c %Y` is the clean mtime. The BSD form must NOT run
-# first there — GNU `stat -f %m` mis-parses `%m` as a filename, dumps filesystem
-# info to stdout, and exits 1, so a BSD-first probe returns garbage on Linux. On
-# macOS `stat -c` is rejected (stderr only), so we fall back to BSD `stat -f %m`.
+# Modification time of a path in epoch seconds.
+# GNU-first: the wrapper forces coreutils' gnubin onto PATH on macOS, so
+# `stat -c %Y` is the clean mtime there. GNU MUST come first — BSD `stat -f %m`
+# run first on Linux mis-parses `%m` as a filename, dumps garbage and exits 1 —
+# so the BSD form is only a fallback, for contexts that ran without the prepend
+# (a module sourced in isolation) or native BSDs without GNU stat.
 _fleet_dir_mtime_epoch() {
     stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null
 }

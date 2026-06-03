@@ -77,16 +77,18 @@ jobs:
 
       # Validation runs in the containerized runner — no test dependencies are
       # installed on the runner host. The macOS leg is the sole exception:
-      # GitHub's macOS runners provide no Docker, and macOS is also the only leg
-      # that exercises the BSD-userland branches (sed -i '', date -r, stat -f) of
-      # the real Homebrew release path, so it stays host-native via brew.
-      # (Tracked follow-up: standardize on GNU userland to drop this exception.)
+      # GitHub's macOS runners provide no Docker. §5.11 forced the GNU userland
+      # (coreutils + gnu-sed gnubin) onto PATH so macOS runs the SAME GNU
+      # sed/date/stat as Linux; this leg now verifies that forcing works on a
+      # real runner (§5.12). It can be dropped for full container-only once §5.12
+      # is green. gnu-sed is required — update_homebrew_formula's GNU `sed -i`
+      # fails loud without it.
       - name: Install dependencies (macOS, host-native)
         if: matrix.os == 'macos-latest'
         run: |
           set -euxo pipefail
           # 'parallel' last keeps run-tests.sh --jobs (default 'auto') working.
-          brew install bats-core yq bash coreutils parallel
+          brew install bats-core yq bash coreutils gnu-sed parallel
           # macos-latest still ships /bin/bash 3.2 (no associative arrays).
           # bats's `#!/usr/bin/env bash` picks whichever bash is first in PATH —
           # ensure that's Homebrew's modern bash for every subsequent step.

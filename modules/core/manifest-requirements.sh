@@ -88,3 +88,49 @@ manifest_requirement_coreutils_timeout_command() {
             ;;
     esac
 }
+
+# Prepend the Homebrew GNU-userland gnubin directories to PATH so `sed`, `date`,
+# and `stat` resolve to the GNU coreutils/gnu-sed binaries on macOS — the same
+# tools that ship natively on Linux. This lets every call site use one GNU
+# codepath (`sed -i`, `date -d`, `stat -c`) instead of branching on BSD vs GNU.
+#
+# Linux is already GNU, so this is a macOS-only fixup and a no-op elsewhere.
+# Both wrappers source this file (and re-source it via manifest-core.sh) before
+# any module runs, so this is the single chokepoint for every channel: the brew
+# formula bin wrapper, the source-install wrapper, and the dev/test path that
+# sources manifest-core.sh directly.
+#
+# Idempotent: a gnubin dir is prepended only if it exists and is not already on
+# PATH. We prepend (not append) so GNU shadows the BSD builtins for the handful
+# of commands we branch on — but the gnubin dirs hold ONLY the coreutils/gnu-sed
+# tools, so this never shadows unrelated user binaries (e.g. a user's own `git`
+# or `python` stays first since those names are not in gnubin).
+#
+# Kept Bash 3.2-compatible: the wrappers call this before re-execing into Bash 5.
+manifest_requirement_prepend_gnu_userland_path() {
+    # Linux/other already ship GNU userland natively.
+    [ "$(uname -s 2>/dev/null || echo "")" = "Darwin" ] || return 0
+
+    local prefix gnubin
+    local prefixes="/opt/homebrew /usr/local"
+
+    # Fall back to an explicit `brew --prefix` when the formula lives somewhere
+    # non-standard (e.g. a custom HOMEBREW_PREFIX); harmless if brew is absent.
+    if command -v brew >/dev/null 2>&1; then
+        local brew_prefix
+        brew_prefix="$(brew --prefix 2>/dev/null || true)"
+        [ -n "$brew_prefix" ] && prefixes="$brew_prefix $prefixes"
+    fi
+
+    for prefix in $prefixes; do
+        for gnubin in "$prefix/opt/coreutils/libexec/gnubin" \
+                      "$prefix/opt/gnu-sed/libexec/gnubin"; do
+            [ -d "$gnubin" ] || continue
+            case ":$PATH:" in
+                *":$gnubin:"*) ;;                 # already present — leave order alone
+                *) PATH="$gnubin:$PATH" ;;
+            esac
+        done
+    done
+    export PATH
+}

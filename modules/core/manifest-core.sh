@@ -33,6 +33,8 @@ export PROJECT_ROOT
 
 # Source shared utilities first
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-requirements.sh"
+# Put GNU sed/date/stat on PATH (macOS) so every module runs one GNU codepath.
+manifest_requirement_prepend_gnu_userland_path
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-shared-utils.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-execution-policy.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-shared-functions.sh"
@@ -299,14 +301,17 @@ update_homebrew_formula() {
 
     # Update formula in this repo
     if [ -f "$formula_file" ]; then
-        # Cross-platform in-place sed (BSD on macOS requires -i '', GNU requires -i)
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' "s|url \"https://github.com/fidenceio/manifest.cli/archive/refs/tags/v.*\.tar\.gz\"|url \"${tarball_url}\"|" "$formula_file"
-            sed -i '' "s|sha256 \"[a-f0-9]*\"|sha256 \"${sha256}\"|" "$formula_file"
-        else
-            sed -i "s|url \"https://github.com/fidenceio/manifest.cli/archive/refs/tags/v.*\.tar\.gz\"|url \"${tarball_url}\"|" "$formula_file"
-            sed -i "s|sha256 \"[a-f0-9]*\"|sha256 \"${sha256}\"|" "$formula_file"
+        # GNU sed everywhere: the wrapper forces gnu-sed's gnubin onto PATH on
+        # macOS, so `sed -i` (no backup suffix) works on every platform. Guard a
+        # misconfigured env (gnu-sed absent -> BSD sed on PATH): BSD `sed -i`
+        # would read the script as a backup suffix and corrupt the formula, so
+        # fail loud with the remedy rather than silently mangle it.
+        if ! sed --version 2>/dev/null | grep -qi gnu; then
+            log_error "GNU sed is required to update the Homebrew formula (BSD sed would corrupt it). Install it with: brew install gnu-sed"
+            return 1
         fi
+        sed -i "s|url \"https://github.com/fidenceio/manifest.cli/archive/refs/tags/v.*\.tar\.gz\"|url \"${tarball_url}\"|" "$formula_file"
+        sed -i "s|sha256 \"[a-f0-9]*\"|sha256 \"${sha256}\"|" "$formula_file"
         echo "   ✅ Updated ${formula_file}"
     else
         log_error "Formula file not found: ${formula_file}"
