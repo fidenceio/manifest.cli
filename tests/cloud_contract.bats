@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
-# §3.8 smoke tier (safety-contract suite)
+# §3.1 smoke tier (safety-contract suite)
 # bats file_tags=smoke
 #
-# Cloud apply-intent contract (workspace §1.1, CLI §3.8): a Cloud-backed
+# Cloud apply-intent contract (workspace §1.1, CLI §3.1): a Cloud-backed
 # mutation must carry an explicit execution_mode=apply. Requests that omit the
 # field, or declare a non-apply mode, are rejected by the contract guard BEFORE
 # any provider or analyzer runs. The guard fails closed.
