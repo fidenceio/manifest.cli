@@ -65,9 +65,20 @@ More detail: [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
 ## First Release
 
+New here? `manifest first` inspects the current directory (single repo or a
+folder of repos), reports what's set up, and proposes the rest as a preview —
+writing only when you confirm with `-y`:
+
 ```bash
 cd your-project
 
+manifest first                  # read-only: inspect + preview the setup plan
+manifest first -y               # apply the proposed setup (audited)
+```
+
+Or drive each step yourself:
+
+```bash
 manifest init repo              # preview required files
 manifest init repo -y           # write VERSION, CHANGELOG.md, docs/, ignores
 
@@ -112,7 +123,7 @@ More detail: [docs/FLEET_DESIGN_SPEC.md](docs/FLEET_DESIGN_SPEC.md).
 
 | Area | Commands |
 | ---- | -------- |
-| Setup | `manifest config`, `manifest init repo`, `manifest init fleet` |
+| Setup | `manifest first`, `manifest config`, `manifest init repo`, `manifest init fleet` |
 | Preparation | `manifest prep repo`, `manifest prep fleet` |
 | Refresh | `manifest refresh repo`, `manifest refresh fleet` |
 | Release | `manifest ship repo <type>`, `manifest ship fleet <type>` |
