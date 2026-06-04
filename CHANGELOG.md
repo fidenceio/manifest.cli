@@ -1,5 +1,16 @@
 # Changelog
 
+## [52.1.1] - 2026-06-04
+
+**Release Type:** Patch
+
+### Changes
+
+- Fix(install): trust the formula at all brew chokepoints; refresh --depth help (§7.6/§7.8)
+- Ci: bump actions/checkout v4 → v6 (Node 24) before the Node 20 removal (§5.13)
+- Ci: bump GitHub Pages actions to current majors (Node 24)
+
+
 ## [52.1.0] - 2026-06-04
 
 **Release Type:** Minor
@@ -118,12 +129,3 @@
 ## [50.1.2] - 2026-05-28
 
 **Release Type:** Patch — no user-facing changes.
-
-
-## [50.1.1] - 2026-05-28
-
-**Release Type:** Patch
-
-### Changes
-
-- Triage CLI tracker after the 2026-05-28 ship cycle
