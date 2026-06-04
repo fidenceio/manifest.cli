@@ -21,6 +21,7 @@ run_manifest_from_plain_dir() {
 
 mutating_help_surfaces() {
     cat <<'EOF'
+first --help
 init repo --help
 init fleet --help
 quickstart fleet --help

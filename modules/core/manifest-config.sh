@@ -159,6 +159,9 @@ _manifest_config_migration_state_file() {
 # Ensure the state directory exists. Callers that intend to write must invoke
 # this; pure-read paths must not, so preview-mode commands never mutate disk.
 _manifest_config_state_dir_ensure() {
+    # Strictly read-only inspections (e.g. `manifest first`) set this so a
+    # config load never touches disk — return non-zero so atomic writers abort.
+    is_truthy "${MANIFEST_CLI_CONFIG_SKIP_WRITES:-0}" && return 1
     mkdir -p "$(_manifest_config_state_dir)" 2>/dev/null
 }
 
@@ -243,6 +246,9 @@ _manifest_config_should_run_auto_migration() {
 # advances any cooldowns whose notices fired during this CLI invocation. Lives
 # in config.sh so execution-policy.sh stays free of config-state coupling.
 _manifest_execution_apply_hook() {
+    # Honour the read-only guard: a strictly-inspecting command must not advance
+    # cooldown markers even if some path reaches the apply boundary.
+    is_truthy "${MANIFEST_CLI_CONFIG_SKIP_WRITES:-0}" && return 0
     local now
     now=$(date +%s)
     if [ "${_MANIFEST_CLI_DEPRECATION_WARNED:-0}" = "1" ]; then
@@ -397,6 +403,9 @@ _manifest_config_apply_migrations() {
 }
 
 auto_migrate_user_global_configuration() {
+    # Strictly read-only inspections (e.g. `manifest first`) set this so the
+    # config load never rewrites — or nags about — the global config.
+    is_truthy "${MANIFEST_CLI_CONFIG_SKIP_WRITES:-0}" && return 0
     local config_file="$MANIFEST_CLI_GLOBAL_CONFIG"
     [ -f "$config_file" ] || return 0
     if ! _manifest_config_should_run_auto_migration; then

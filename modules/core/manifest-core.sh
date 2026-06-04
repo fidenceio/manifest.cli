@@ -88,6 +88,7 @@ source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-ship.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-status.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-doctor.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-config-crud.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-first.sh"
 
 # Function to get the CLI installation directory dynamically
 get_cli_dir() {
@@ -542,7 +543,7 @@ main() {
     # =========================================================================
     case "$command" in
         # Commands that do NOT require a Git repository
-        "help"|"-help"|"--help"|"-h"|"version"|"-version"|"--version"|"-v"|"-V"|"uninstall"|"reinstall"|"add"|"discover"|"fleet"|"quickstart"|"update"|"upgrade"|"validate"|"config")
+        "help"|"-help"|"--help"|"-h"|"version"|"-version"|"--version"|"-v"|"-V"|"uninstall"|"reinstall"|"add"|"discover"|"fleet"|"update"|"upgrade"|"validate"|"config")
             case "$command" in
                 "config")
                     PROJECT_ROOT="$(pwd)"
@@ -566,6 +567,16 @@ main() {
             export PROJECT_ROOT
             load_configuration "$PROJECT_ROOT" "false"
             ;;
+        # first (and its deprecated alias quickstart) onboards single repos AND
+        # fleet roots (which need not be git repos), so don't require one. The
+        # inspection must not touch disk: load config with the read-only guard
+        # so no incidental migration or marker writes happen. The -y apply path
+        # uses the audited writers.
+        "first"|"quickstart")
+            PROJECT_ROOT="$(pwd)"
+            export PROJECT_ROOT
+            MANIFEST_CLI_CONFIG_SKIP_WRITES=1 load_configuration "$PROJECT_ROOT" "false"
+            ;;
         "recipe")
             if [[ "${1:-}" == "run" ]] && ! _manifest_cli_is_help_request "$command" "$@"; then
                 if ! ensure_repository_root; then
@@ -583,7 +594,7 @@ main() {
                 load_configuration "$PROJECT_ROOT" "false"
             fi
             ;;
-        "docs"|"pr"|"quickstart"|"plan"|"reconcile"|"discover"|"add"|"update"|"validate")
+        "docs"|"pr"|"plan"|"reconcile"|"discover"|"add"|"update"|"validate")
             if [[ "${1:-}" == "fleet" ]] || _manifest_cli_is_help_request "$command" "$@"; then
                 PROJECT_ROOT="$(pwd)"
                 export PROJECT_ROOT
@@ -631,36 +642,44 @@ main() {
     case "$command" in
 
         # =====================================================================
-        # CORE JOURNEY: config → init → prep → refresh → ship
+        # CORE JOURNEY: first → config → init → prep → refresh → ship
         # =====================================================================
+        "first")
+            manifest_first "$@"
+            ;;
+
+        # `quickstart` is a deprecated alias for `manifest first`. It forwards
+        # all arguments verbatim so preview-by-default and -y semantics are
+        # preserved; only the help/scope shape changes.
         "quickstart")
             case "${1:-}" in
                 fleet)
                     shift || true
                     if _manifest_cli_has_help_token "$@"; then
                         _render_help \
-                            "manifest quickstart fleet [-y|--yes] [--dry-run] [--name NAME] [--force]" \
-                            "Initialize a fleet by auto-discovering existing git repositories." \
+                            "manifest quickstart fleet  (deprecated → manifest first)" \
+                            "Deprecated alias. Use 'manifest first' for guided onboarding." \
                             "Options" "  --dry-run      Explicit preview; no writes
-  -y, --yes      Apply the quickstart plan
+  -y, --yes      Apply the setup
   --name NAME    Fleet name
   --force        Overwrite existing generated files"
                         return 0
                     fi
-                    fleet_quickstart "$@"
+                    log_deprecated "manifest quickstart fleet" "manifest first"
+                    manifest_first "$@"
                     ;;
                 help|-h|--help)
                     _render_help \
-                        "manifest quickstart <fleet> [options]" \
-                        "Run an opinionated quickstart workflow." \
+                        "manifest quickstart <fleet> [options]  (deprecated)" \
+                        "Deprecated alias for 'manifest first'." \
                         "Scopes" "  fleet   Auto-discover existing git repos and initialize a fleet"
                     ;;
                 "")
-                    _render_help_error "quickstart requires a scope" "manifest quickstart <fleet>"
-                    return 1
+                    log_deprecated "manifest quickstart" "manifest first"
+                    manifest_first
                     ;;
                 *)
-                    _render_help_error "Unknown quickstart scope: $1" "manifest quickstart <fleet>"
+                    _render_help_error "Unknown quickstart scope: $1" "manifest first"
                     return 1
                     ;;
             esac
@@ -1442,6 +1461,7 @@ Manifest CLI
 Usage: manifest <command> [scope] [options]
 
   Core workflow:
+    first                               Guided onboarding: inspect + set up
     config                              Setup wizard / show configuration
     init repo|fleet                     Scaffold repo or fleet
     status                              Read-only snapshot (next bump, sync state)
