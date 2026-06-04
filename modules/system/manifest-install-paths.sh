@@ -46,6 +46,15 @@ manifest_install_paths_is_brew_managed() {
 # install/upgrade. Verified against Homebrew 5.1.15: `brew trust --formula
 # <target>`, state in ~/.homebrew/trust.json.
 #
+# Threat-model boundary (§7.6): `brew trust` trusts by tap/formula *identity*,
+# not by pinned *content*, and we re-trust on every install/upgrade — so this
+# does NOT defend against a compromised tap pushing a malicious formula
+# revision. It only keeps a legitimate, already-chosen formula loadable once
+# Homebrew starts ignoring untrusted taps. Defending against tap compromise
+# would mean pinning an expected formula revision (a content change then forces
+# a fresh prompt) or scoping auto-trust to first-install only — neither is in
+# scope for this helper.
+#
 # Version-guarded — older Homebrew has no `trust` subcommand. Return codes let
 # callers report with their own UI helpers:
 #   0 - trust ensured (or already trusted)
