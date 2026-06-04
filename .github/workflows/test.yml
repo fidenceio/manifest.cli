@@ -154,6 +154,9 @@ jobs:
           set -euo pipefail
           docker run --rm -v "$PWD:/work" -w /work alpine:3.20 sh -lc '
             apk add --no-cache bash git yq coreutils >/dev/null
+            # Mounted repo is host-owned but the container is root: tell git the
+            # mount is safe so repo-scoped commands do not trip dubious-ownership.
+            git config --global --add safe.directory "*"
             bash scripts/manifest-cli.sh version
             bash scripts/manifest-cli.sh help | head -40
             bash scripts/manifest-cli.sh status
