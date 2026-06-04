@@ -12,7 +12,7 @@ _manifest_cloud_not_available() {
     return 1
 }
 
-# Apply-intent contract guard (workspace §1.1, CLI §3.8).
+# Apply-intent contract guard (workspace §1.1, CLI §3.1).
 #
 # Every Cloud-backed mutation must carry an explicit execution_mode=apply.
 # Requests that omit the field — or that declare preview while asking the

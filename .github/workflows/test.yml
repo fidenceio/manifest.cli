@@ -77,12 +77,13 @@ jobs:
 
       # Validation runs in the containerized runner — no test dependencies are
       # installed on the runner host. The macOS leg is the sole exception:
-      # GitHub's macOS runners provide no Docker. §5.11 forced the GNU userland
-      # (coreutils + gnu-sed gnubin) onto PATH so macOS runs the SAME GNU
-      # sed/date/stat as Linux; this leg now verifies that forcing works on a
-      # real runner (§5.12). It can be dropped for full container-only once §5.12
-      # is green. gnu-sed is required — update_homebrew_formula's GNU `sed -i`
-      # fails loud without it.
+      # GitHub's macOS runners provide no Docker. The forced GNU userland
+      # (coreutils + gnu-sed gnubin on PATH) makes macOS run the SAME GNU
+      # sed/date/stat as Linux. This leg is KEPT (not dropped) as standing
+      # regression coverage of real macOS hardware and the macOS-only `sed -i`
+      # formula-rewrite path — the one path that never runs in the container.
+      # gnu-sed is required: update_homebrew_formula's GNU `sed -i` fails loud
+      # without it.
       - name: Install dependencies (macOS, host-native)
         if: matrix.os == 'macos-latest'
         run: |
