@@ -1,5 +1,10 @@
 # Changelog
 
+## [52.2.0] - 2026-06-04
+
+**Release Type:** Minor — no user-facing changes.
+
+
 ## [52.1.1] - 2026-06-04
 
 **Release Type:** Patch
@@ -124,8 +129,3 @@
 ### Changes
 
 - Add Manifest-generated Jekyll docs site and Pages workflow
-
-
-## [50.1.2] - 2026-05-28
-
-**Release Type:** Patch — no user-facing changes.
