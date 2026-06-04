@@ -61,3 +61,35 @@ teardown() {
     run bash -c "PATH=/usr/bin:/bin; source '$TEST_REPO_ROOT/modules/system/manifest-install-paths.sh'; manifest_install_paths_ensure_brew_trust; echo rc=\$?"
     [[ "$output" == *"rc=2"* ]]
 }
+
+# --- §7.6: every brew (re)install/upgrade chokepoint routes through the helper.
+# Structural guards: the trust call must precede the executable brew command in
+# each site, so a future edit that adds a brew install/upgrade without trusting
+# first (→ silent no-op under enforced tap-trust) trips a red test.
+
+# Echo the 1-based line of the first match of $2 in file $1, or empty.
+_first_line() { grep -nE "$2" "$1" | head -1 | cut -d: -f1; }
+
+@test "tap-trust: installer trusts before brew install/upgrade" {
+    f="$TEST_REPO_ROOT/install-cli.sh"
+    t="$(_first_line "$f" 'manifest_install_paths_ensure_brew_trust')"
+    b="$(_first_line "$f" 'brew (install|upgrade) "\$brew_formula"')"
+    [ -n "$t" ] && [ -n "$b" ]
+    [ "$t" -lt "$b" ]
+}
+
+@test "tap-trust: reinstall trusts before brew reinstall/install" {
+    f="$TEST_REPO_ROOT/modules/core/manifest-core.sh"
+    t="$(_first_line "$f" 'manifest_install_paths_ensure_brew_trust')"
+    b="$(_first_line "$f" 'brew reinstall fidenceio/tap/manifest')"
+    [ -n "$t" ] && [ -n "$b" ]
+    [ "$t" -lt "$b" ]
+}
+
+@test "tap-trust: ship self-upgrade trusts before brew upgrade" {
+    f="$TEST_REPO_ROOT/modules/workflow/manifest-orchestrator.sh"
+    t="$(_first_line "$f" 'manifest_install_paths_ensure_brew_trust')"
+    b="$(_first_line "$f" '&& brew upgrade manifest 2>&1')"
+    [ -n "$t" ] && [ -n "$b" ]
+    [ "$t" -lt "$b" ]
+}

@@ -826,11 +826,11 @@ EOF
                     shift || true
                     if _manifest_cli_has_help_token "$@"; then
                         _render_help \
-                            "manifest discover fleet [--depth N] [--json] [--quiet]" \
+                            "manifest discover fleet [--depth N|auto] [--json] [--quiet]" \
                             "Discover repositories for fleet membership without writing changes." \
-                            "Options" "  --depth N    Maximum search depth (default: 5)
-  --json       Output JSON summary
-  --quiet, -q  Only output new repo lines"
+                            "Options" "  --depth N|auto  Scan depth; auto deepens to repos found, capped (default: auto)
+  --json          Output JSON summary
+  --quiet, -q     Only output new repo lines"
                         return 0
                     fi
                     fleet_discover "$@"
@@ -891,13 +891,13 @@ EOF
                     shift || true
                     if _manifest_cli_has_help_token "$@"; then
                         _render_help \
-                            "manifest update fleet [-y|--yes] [--dry-run] [--depth N] [--json] [--quiet]" \
+                            "manifest update fleet [-y|--yes] [--dry-run] [--depth N|auto] [--json] [--quiet]" \
                             "Re-scan fleet membership and add newly discovered repositories." \
-                            "Options" "  --dry-run    Explicit preview; do not modify manifest.fleet.config.yaml
-  -y, --yes    Apply fleet membership updates
-  --depth N    Maximum search depth (default: 5)
-  --json       Output JSON summary
-  --quiet, -q  Only output new repo lines"
+                            "Options" "  --dry-run       Explicit preview; do not modify manifest.fleet.config.yaml
+  -y, --yes       Apply fleet membership updates
+  --depth N|auto  Scan depth; auto deepens to repos found, capped (default: auto)
+  --json          Output JSON summary
+  --quiet, -q     Only output new repo lines"
                         return 0
                     fi
                     fleet_update "$@"
@@ -1183,6 +1183,14 @@ EOF
             if command -v brew &>/dev/null; then
                 echo "Reinstalling via Homebrew..."
                 brew tap fidenceio/tap 2>/dev/null
+                # Trust the formula before (re)install. Once tap-trust is
+                # enforced (HOMEBREW_REQUIRE_TAP_TRUST=1) Homebrew ignores an
+                # untrusted formula and the reinstall silently no-ops — no
+                # error, same version. Non-fatal; older brew has no `trust`. (§7.6)
+                manifest_install_paths_ensure_brew_trust
+                case $? in
+                    1) log_warning "Could not auto-trust $(manifest_install_paths_homebrew_formula); if Homebrew enforces tap-trust this reinstall may be ignored. Run: brew trust --formula $(manifest_install_paths_homebrew_formula)" ;;
+                esac
                 if manifest_install_paths_is_brew_managed; then
                     brew reinstall fidenceio/tap/manifest || brew reinstall manifest
                 else
