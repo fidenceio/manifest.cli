@@ -70,7 +70,7 @@ jobs:
       matrix:
         os: ${{ fromJSON(needs.plan.outputs.os) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # Full history so change-aware selection can find merge-base with main.
           fetch-depth: 0
