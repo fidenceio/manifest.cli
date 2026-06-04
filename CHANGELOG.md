@@ -1,5 +1,21 @@
 # Changelog
 
+## [52.1.0] - 2026-06-04
+
+**Release Type:** Minor
+
+### Changes
+
+- Fix(config): normalize leading-dot path in set_yaml_value (silent no-op)
+- Feat(install): narrowly trust the Homebrew formula before install/upgrade (§7.1)
+- Feat(version): opt-in package.json version-sync on bump (§7.2)
+- Fleet: unify --depth on one flag, one meaning, adaptive auto
+- Fix(ci): mark the bind-mounted repo as a git safe.directory in the container
+- Fix(ci): system-scope safe.directory + install jq in the test container
+- Feat(first): land `manifest first` onboarding command; defer Postman (§7.4/§7.5)
+- Docs(tracker): reconcile CLI tracker after the backlog scrub
+
+
 ## [52.0.0] - 2026-06-03
 
 **Release Type:** Major
@@ -111,19 +127,3 @@
 ### Changes
 
 - Triage CLI tracker after the 2026-05-28 ship cycle
-
-
-## [50.1.0] - 2026-05-28
-
-**Release Type:** Minor
-
-### Changes
-
-- Rewrite CLI documentation
-- Restore README runtime contract
-- Fix atomic-upgrade symlink swap on Linux
-
-
-This changelog is the product release history for Manifest CLI. Workspace
-coordination changes live in the parent workspace changelog; Homebrew formula
-distribution history lives in `fidenceio.homebrew.tap/CHANGELOG.md`.
