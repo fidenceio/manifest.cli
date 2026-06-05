@@ -1,5 +1,16 @@
 # Changelog
 
+## [52.3.1] - 2026-06-05
+
+**Release Type:** Patch
+
+### Changes
+
+- Fix(version.sync): target the top-level "version" by JSON depth, not first match
+- Feat(doctor,install): warn before ship when GNU sed is missing on macOS
+- Docs(tracker): drop §7.7 and §7.9 — implemented
+
+
 ## [52.3.0] - 2026-06-05
 
 **Release Type:** Minor — no user-facing changes.
@@ -116,12 +127,3 @@
 - Refresh SECURITY_ANALYSIS_REPORT to v50.2.0
 - Add public-release migration note (tracker 4.3)
 - Reconcile tracker after enterprise-hardening pass
-
-
-## [50.2.0] - 2026-05-30
-
-**Release Type:** Minor
-
-### Changes
-
-- Always generate docs site; make GitHub Pages enablement best-effort
