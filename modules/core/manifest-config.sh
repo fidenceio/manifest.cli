@@ -76,6 +76,41 @@ _manifest_config_warn() {
 }
 
 # -----------------------------------------------------------------------------
+# Function: _manifest_config_backup_before_migration
+# -----------------------------------------------------------------------------
+# §8.4b: snapshot the global config ONCE before the first in-place (`yq -i`)
+# mutating write of a migration. A crash / Ctrl-C / disk-full mid-rewrite — or
+# a yq bug — would otherwise destroy the user's only copy of their hand-tuned
+# config. Mirrors the install-cli.sh pre-commit-hook backup pattern.
+#
+# Honors MANIFEST_CLI_CONFIG_SKIP_WRITES (no backup when writes are skipped).
+# The backup is FATAL-on-failure: the whole point is not to lose the file, so
+# if the snapshot can't be made we refuse to start mutating (return 1) rather
+# than rewrite in place with no safety net.
+#
+# ARGUMENTS:
+#   $1 - config file path to snapshot
+#
+# RETURNS:
+#   0 on success (backup created) or skipped via SKIP_WRITES
+#   1 if the backup could not be created (caller must abort the migration)
+# -----------------------------------------------------------------------------
+_manifest_config_backup_before_migration() {
+    local config_file="$1"
+    is_truthy "${MANIFEST_CLI_CONFIG_SKIP_WRITES:-0}" && return 0
+    [ -f "$config_file" ] || return 0
+    local stamp backup_file
+    stamp="$(date +%Y%m%d_%H%M%S)"
+    backup_file="${config_file}.bak.${stamp}"
+    if cp -p "$config_file" "$backup_file" 2>/dev/null; then
+        _manifest_config_warn "Backed up config before migration: $backup_file"
+        return 0
+    fi
+    _manifest_config_warn "Could not back up config before migration: $config_file — aborting to avoid data loss."
+    return 1
+}
+
+# -----------------------------------------------------------------------------
 # Global Config Safety Gate
 # -----------------------------------------------------------------------------
 # The user's global config (~/.manifest-cli/manifest.config.global.yaml)
@@ -374,6 +409,17 @@ _manifest_config_apply_migrations() {
     local config_file="$1"
     local dry_run="$2"
     local applied=0
+    # §8.4b: snapshot the live config once, lazily, immediately before the FIRST
+    # mutating write — so we never create a spurious backup when there is nothing
+    # to migrate, and never start rewriting in place without a safety net.
+    local backed_up=0
+
+    # MANIFEST_CLI_CONFIG_SKIP_WRITES is the global "do not touch the config"
+    # contract (read-only inspections set it). Honor it here too: degrade to a
+    # write-free preview so neither a backup nor an in-place mutation happens.
+    if is_truthy "${MANIFEST_CLI_CONFIG_SKIP_WRITES:-0}"; then
+        dry_run="true"
+    fi
 
     while IFS='|' read -r issue_type key from to; do
         [ -n "$issue_type" ] || continue
@@ -382,6 +428,10 @@ _manifest_config_apply_migrations() {
                 if [ "$dry_run" = "true" ]; then
                     echo "would-update|$key|$from|$to"
                 else
+                    if [ "$backed_up" -eq 0 ]; then
+                        _manifest_config_backup_before_migration "$config_file" || return 1
+                        backed_up=1
+                    fi
                     _manifest_config_upsert_key "$config_file" "$key" "$to" && applied=$((applied + 1))
                     echo "updated|$key|$from|$to"
                 fi
@@ -390,6 +440,10 @@ _manifest_config_apply_migrations() {
                 if [ "$dry_run" = "true" ]; then
                     echo "would-add|$key||$to"
                 else
+                    if [ "$backed_up" -eq 0 ]; then
+                        _manifest_config_backup_before_migration "$config_file" || return 1
+                        backed_up=1
+                    fi
                     _manifest_config_upsert_key "$config_file" "$key" "$to" && applied=$((applied + 1))
                     echo "added|$key||$to"
                 fi
@@ -599,17 +653,28 @@ load_configuration() {
     # Baseline defaults first (so YAML layers override them)
     set_default_configuration
 
+    # §8.4a: a config file that is PRESENT but unparseable is FATAL. Silently
+    # reverting to defaults on a malformed file (the old behavior) would let a
+    # ship proceed with the wrong branch/gate/policy. An ABSENT file stays
+    # non-fatal exactly as before — the `[ -f ... ]` guards establish presence,
+    # so a nonzero return here can only mean present-but-broken.
     # Layer 1: User global configuration
     if [ -f "$MANIFEST_CLI_GLOBAL_CONFIG" ]; then
         echo "🔧 Loading user global configuration from: $MANIFEST_CLI_GLOBAL_CONFIG"
-        load_yaml_to_env "$MANIFEST_CLI_GLOBAL_CONFIG"
+        if ! load_yaml_to_env "$MANIFEST_CLI_GLOBAL_CONFIG"; then
+            log_error "Refusing to continue: user global configuration is present but could not be parsed: $MANIFEST_CLI_GLOBAL_CONFIG"
+            return 1
+        fi
     fi
 
     # Layer 2: Project shared configuration
     local project_shared="$project_root/manifest.config.yaml"
     if [ -f "$project_shared" ]; then
         echo "🔧 Loading project configuration from: manifest.config.yaml (Project: $project_root)"
-        load_yaml_to_env "$project_shared"
+        if ! load_yaml_to_env "$project_shared"; then
+            log_error "Refusing to continue: project configuration is present but could not be parsed: $project_shared"
+            return 1
+        fi
     fi
 
     # Layer 3: Project local overrides (only when requested)
@@ -617,7 +682,10 @@ load_configuration() {
         local project_local="$project_root/manifest.config.local.yaml"
         if [ -f "$project_local" ]; then
             echo "🔧 Loading project local configuration from: manifest.config.local.yaml (Project: $project_root)"
-            load_yaml_to_env "$project_local"
+            if ! load_yaml_to_env "$project_local"; then
+                log_error "Refusing to continue: project local configuration is present but could not be parsed: $project_local"
+                return 1
+            fi
         fi
     fi
 

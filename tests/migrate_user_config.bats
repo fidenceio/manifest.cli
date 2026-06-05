@@ -137,3 +137,56 @@ EOF
     [ "$status" -eq 0 ]
     [ ! -f "$CFG" ]
 }
+
+# --- §8.4b: backup-before-rewrite -------------------------------------------
+
+@test "migrate: backs up the live config to .bak.* before the first rewrite" {
+    cat > "$CFG" <<'EOF'
+time:
+  server1: time.apple.com
+EOF
+    local pre
+    pre="$(cat "$CFG")"
+
+    run _run_migration
+    [ "$status" -eq 0 ]
+
+    # A snapshot equal to the pre-migration file must exist.
+    local bak
+    bak="$(ls "$CFG".bak.* 2>/dev/null | head -1)"
+    [ -n "$bak" ]
+    [ "$(cat "$bak")" = "$pre" ]
+
+    # And the migration still rewrote the live file.
+    [ "$(get_yaml_value "$CFG" ".time.server1" "")" = "https://www.cloudflare.com/cdn-cgi/trace" ]
+}
+
+@test "migrate: a no-op (already-migrated) config creates no backup" {
+    cat > "$CFG" <<'EOF'
+time:
+  cache_ttl: 120
+  cache_cleanup_period: 3600
+  cache_stale_max_age: 21600
+EOF
+
+    run _run_migration
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "No user config migrations needed"
+    ! ls "$CFG".bak.* >/dev/null 2>&1
+}
+
+@test "migrate: MANIFEST_CLI_CONFIG_SKIP_WRITES suppresses both backup and mutation" {
+    cat > "$CFG" <<'EOF'
+time:
+  server1: time.apple.com
+EOF
+    local pre
+    pre="$(cat "$CFG")"
+
+    MANIFEST_CLI_CONFIG_SKIP_WRITES=1 run _run_migration
+    [ "$status" -eq 0 ]
+
+    # No backup, and the file is byte-identical (no in-place rewrite happened).
+    ! ls "$CFG".bak.* >/dev/null 2>&1
+    [ "$(cat "$CFG")" = "$pre" ]
+}

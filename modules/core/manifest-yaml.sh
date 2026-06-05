@@ -23,6 +23,17 @@ if ! command -v manifest_requirement_yq_is_supported &>/dev/null; then
     unset _manifest_yaml_dir
 fi
 
+# Source install-paths for manifest_make_scratch_path (used by load_yaml_to_env's
+# whole-document validation, §8.4a) when loaded outside the full core stack.
+if ! command -v manifest_make_scratch_path &>/dev/null; then
+    _manifest_yaml_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [[ -f "$_manifest_yaml_dir/../system/manifest-install-paths.sh" ]]; then
+        # shellcheck disable=SC1091
+        source "$_manifest_yaml_dir/../system/manifest-install-paths.sh"
+    fi
+    unset _manifest_yaml_dir
+fi
+
 # Guard: provide no-op log functions if shared-utils not yet sourced
 if ! command -v log_debug &>/dev/null; then
     log_debug()   { :; }
@@ -642,6 +653,8 @@ _manifest_yaml_expand_home_prefix() {
 # RETURNS:
 #   0 on success (even if some keys are missing — that is normal)
 #   1 if the file does not exist or cannot be read
+#   2 if the file exists but is not parseable YAML (fail-loud; do NOT silently
+#     fall back to defaults — see §8.4a)
 #
 # EXAMPLE:
 #   load_yaml_to_env "$HOME/.manifest-cli/config.yaml"
@@ -663,6 +676,34 @@ load_yaml_to_env() {
     if [[ ! -r "$yaml_file" ]]; then
         log_error "load_yaml_to_env: file not readable: $yaml_file"
         return 1
+    fi
+
+    # §8.4a: validate the WHOLE document once before the per-key loop. Without
+    # this, a single syntax error (unterminated quote, tab indent) makes yq
+    # fail on every key inside the loop; get_yaml_value then can't distinguish
+    # that from "key not found" and returns the built-in default — so the
+    # ENTIRE config silently reverts to defaults and a ship proceeds with the
+    # wrong branch/gate/policy. Surface yq's own diagnostic and return a
+    # distinct code (2) so callers can treat a present-but-broken file as fatal.
+    local tmp_err
+    tmp_err=$(mktemp "$(manifest_make_scratch_path yaml)/tmp.XXXXXXXX" 2>/dev/null) || tmp_err=""
+    if [[ -n "$tmp_err" ]]; then
+        if ! yq e '.' "$yaml_file" >/dev/null 2>"$tmp_err"; then
+            local yq_err
+            yq_err=$(cat "$tmp_err" 2>/dev/null)
+            rm -f "$tmp_err" 2>/dev/null || true
+            log_error "load_yaml_to_env: config file is not valid YAML: $yaml_file"
+            [[ -n "$yq_err" ]] && log_error "load_yaml_to_env: yq: $yq_err"
+            return 2
+        fi
+        rm -f "$tmp_err" 2>/dev/null || true
+    else
+        # No scratch temp available: validate without capturing stderr rather
+        # than skipping the check entirely (still fail loud on a broken file).
+        if ! yq e '.' "$yaml_file" >/dev/null 2>&1; then
+            log_error "load_yaml_to_env: config file is not valid YAML: $yaml_file"
+            return 2
+        fi
     fi
 
     log_debug "load_yaml_to_env: loading config from $yaml_file"
