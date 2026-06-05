@@ -80,6 +80,18 @@ manifest_doctor() {
         _doctor_warn "gh (optional)" "not installed — required for 'manifest pr'"
     fi
 
+    # GNU sed: only the maintainer path that rewrites the Homebrew formula needs
+    # it (BSD `sed -i` would corrupt the formula). macOS-only — Linux ships GNU
+    # sed. Reports the runtime-resolved sed (after the gnubin prepend), so it
+    # stays quiet when gnu-sed is installed but its gnubin isn't on the login PATH.
+    if [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then
+        if manifest_requirement_runtime_sed_is_gnu; then
+            _doctor_ok "GNU sed (optional)" "available"
+        else
+            _doctor_warn "GNU sed (optional)" "missing — brew install gnu-sed (needed only to publish a Homebrew formula update)"
+        fi
+    fi
+
     # -- Configuration ------------------------------------------------------
     _doctor_section "Configuration:"
     local global="${MANIFEST_CLI_GLOBAL_CONFIG:-$HOME/.manifest-cli/manifest.config.global.yaml}"

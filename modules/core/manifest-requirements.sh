@@ -134,3 +134,29 @@ manifest_requirement_prepend_gnu_userland_path() {
     done
     export PATH
 }
+
+# GNU sed is required ONLY on the maintainer/canonical-repo path that rewrites
+# the Homebrew formula in place (update_homebrew_formula): BSD `sed -i` reads the
+# next token as a backup suffix and would corrupt the formula. Everyday version/
+# changelog/tag work does not need it — so callers treat this as a SOFT check
+# (warn, not fail). Mirrors the yq/parallel vendor checks: presence isn't enough,
+# the GNU flavor specifically must answer. Pass an explicit command to probe a
+# non-default sed (e.g. `gsed`); defaults to `sed`.
+manifest_requirement_sed_command_is_gnu() {
+    "${1:-sed}" --version 2>/dev/null | grep -qi gnu
+}
+
+# Will the Manifest runtime resolve GNU sed? The runtime forces gnu-sed's gnubin
+# onto PATH on macOS (manifest_requirement_prepend_gnu_userland_path), so a
+# `brew install gnu-sed` makes `sed` GNU at run time even when the user's login
+# PATH still points at BSD sed (the normal post-install state — gnubin isn't on
+# PATH by default). Run that idempotent prepend in a SUBSHELL so this read-only
+# probe never mutates the caller's PATH, then ask whether `sed` is GNU. This is
+# what install/doctor should report (§7.9), not the raw login-shell `sed`, which
+# would over-warn whenever gnu-sed is installed-but-not-on-PATH.
+manifest_requirement_runtime_sed_is_gnu() {
+    (
+        manifest_requirement_prepend_gnu_userland_path >/dev/null 2>&1
+        manifest_requirement_sed_command_is_gnu sed
+    )
+}

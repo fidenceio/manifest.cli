@@ -288,6 +288,20 @@ validate_system() {
         errors=$((errors + 1))
     fi
 
+    # GNU sed (macOS only): a WARNING, not a hard requirement. Only the
+    # maintainer/canonical-repo path that publishes a Homebrew formula update
+    # needs it (BSD `sed -i` would corrupt the formula). Surfacing the gap here
+    # beats discovering it mid-ship, after a tag and push (§7.9). Linux/WSL ship
+    # GNU sed natively, so this is macOS-scoped.
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        if manifest_requirement_runtime_sed_is_gnu; then
+            print_success "✅ GNU sed is available"
+        else
+            print_warning "⚠️  GNU sed not found (BSD sed detected)"
+            print_warning "   Needed only to publish a Homebrew formula update (maintainers): brew install gnu-sed"
+        fi
+    fi
+
     # Docker
     if ! manifest_requirement_docker_command_exists; then
         print_error "❌ ${MANIFEST_CLI_REQUIRED_DOCKER_LABEL} is required."
