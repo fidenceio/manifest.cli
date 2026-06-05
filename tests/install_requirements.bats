@@ -53,6 +53,51 @@ EOF
     ! grep -iqE 'parallel' "$TEST_REPO_ROOT/formula/manifest.rb"
 }
 
+@test "requirements expose a GNU-specific sed check (rejects BSD sed of the same name) (§7.9)" {
+    load_modules
+
+    declare -F manifest_requirement_sed_command_is_gnu >/dev/null
+    declare -F manifest_requirement_runtime_sed_is_gnu >/dev/null
+
+    # A missing binary is not GNU sed.
+    ! manifest_requirement_sed_command_is_gnu /nonexistent-sed-xyz
+
+    # BSD sed (the macOS default) has no GNU banner — it must be rejected, not
+    # accepted just because something called 'sed' is on PATH.
+    local fake_bsd="$BATS_TEST_TMPDIR/sed-bsd-fake"
+    cat >"$fake_bsd" <<'EOF'
+#!/bin/sh
+echo "usage: sed [-Ealn] command [file ...]" >&2
+exit 1
+EOF
+    chmod +x "$fake_bsd"
+    ! manifest_requirement_sed_command_is_gnu "$fake_bsd"
+
+    # A GNU sed banner is accepted.
+    local fake_gnu="$BATS_TEST_TMPDIR/sed-gnu-fake"
+    cat >"$fake_gnu" <<'EOF'
+#!/bin/sh
+echo "sed (GNU sed) 4.9"
+EOF
+    chmod +x "$fake_gnu"
+    manifest_requirement_sed_command_is_gnu "$fake_gnu"
+}
+
+@test "install + doctor surface the gnu-sed gap as a macOS WARNING, not a hard error (§7.9)" {
+    # Pre-ship, not mid-ship (§7.9): the gap is reported at install-time
+    # validation and in `manifest doctor`, scoped to macOS, pointing at
+    # `brew install gnu-sed`. Only the maintainer formula-rewrite path needs it,
+    # so it must NEVER be a hard install error.
+    grep -F 'manifest_requirement_runtime_sed_is_gnu' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
+    grep -F 'manifest_requirement_runtime_sed_is_gnu' "$TEST_REPO_ROOT/modules/core/manifest-doctor.sh" >/dev/null
+    grep -F 'brew install gnu-sed' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
+    grep -F 'brew install gnu-sed' "$TEST_REPO_ROOT/modules/core/manifest-doctor.sh" >/dev/null
+    # Warning, not error: surfaced via print_warning / _doctor_warn only.
+    grep -F 'print_warning "⚠️  GNU sed not found' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
+    ! grep -qF 'print_error "❌ GNU sed' "$TEST_REPO_ROOT/install-cli.sh"
+    grep -F '_doctor_warn "GNU sed (optional)"' "$TEST_REPO_ROOT/modules/core/manifest-doctor.sh" >/dev/null
+}
+
 @test "requirements preserve Bash 5 and Mike Farah yq as runtime contract" {
     load_modules
 
