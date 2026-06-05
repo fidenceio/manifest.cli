@@ -132,3 +132,71 @@ JSON
     # Opt-in: untouched because version.sync was not set.
     [ "$(jq -r '.version' package.json)" = "0.0.0" ]
 }
+
+# --- §7.7: depth-aware targeting + semver guard ------------------------------
+
+@test "version-sync: a nested 'version' that sorts BEFORE the top-level one is not mistaken for it (§7.7)" {
+    write_version "1.0.0"
+    # The corruption case: the FIRST "version": line is the nested one. The old
+    # 1,/"version":/ range rewrote it; depth-aware targeting must skip it.
+    cat > package.json <<'JSON'
+{
+  "bundledDep": {
+    "version": "9.9.9"
+  },
+  "version": "1.0.0"
+}
+JSON
+    export MANIFEST_CLI_VERSION_SYNC="package.json"
+    run bump_version "patch"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.version' package.json)" = "1.0.1" ]
+    [ "$(jq -r '.bundledDep.version' package.json)" = "9.9.9" ]
+}
+
+@test "version-sync: braces inside a string value don't skew depth detection (§7.7)" {
+    write_version "2.0.0"
+    cat > package.json <<'JSON'
+{
+  "description": "uses {curly} and [square] brackets and a : colon",
+  "nested": { "version": "9.9.9" },
+  "version": "2.0.0"
+}
+JSON
+    export MANIFEST_CLI_VERSION_SYNC="package.json"
+    run bump_version "patch"
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.version' package.json)" = "2.0.1" ]
+    [ "$(jq -r '.nested.version' package.json)" = "9.9.9" ]
+    [ "$(jq -r '.description' package.json)" = "uses {curly} and [square] brackets and a : colon" ]
+}
+
+@test "version-sync: a JSON file with only a nested version (no top-level) is left untouched (§7.7)" {
+    write_version "1.0.0"
+    cat > package.json <<'JSON'
+{
+  "bundledDep": {
+    "version": "9.9.9"
+  }
+}
+JSON
+    export MANIFEST_CLI_VERSION_SYNC="package.json"
+    run bump_version "patch"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "no top-level"
+    [ "$(jq -r '.bundledDep.version' package.json)" = "9.9.9" ]
+}
+
+@test "version-sync: refuses an unsafe (non-semver) version string, leaving the file untouched (§7.7)" {
+    cat > package.json <<'JSON'
+{
+  "version": "1.0.0"
+}
+JSON
+    export MANIFEST_CLI_VERSION_SYNC="package.json"
+    # A "/" in the value would corrupt the sed substitution; the guard refuses it.
+    run manifest_version_sync_apply 'a/b&c'
+    [ "$status" -ne 0 ]
+    echo "$output" | grep -qi "unsafe"
+    [ "$(jq -r '.version' package.json)" = "1.0.0" ]
+}

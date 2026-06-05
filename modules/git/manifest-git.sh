@@ -254,16 +254,73 @@ _manifest_version_sync_targets() {
     done
 }
 
+# Print the 1-based line number of the top-level (object depth 1) "version" key
+# in a JSON file, or nothing if there is none. The scan is string-aware — braces,
+# brackets and colons inside string values don't skew the nesting depth — so the
+# version.sync rewrite targets the REAL top-level version even when a nested
+# "version" appears textually FIRST (the §7.7 corruption case the old
+# 1,/"version":/ range got wrong). Assumes pretty-printed JSON (the top-level
+# key:value on its own line), matching the surgical single-line sed below.
+_manifest_json_toplevel_version_line() {
+    awk '
+        BEGIN { depth = 0; in_str = 0; esc = 0 }
+        {
+            line = $0
+            m = length(line)
+            p = 1
+            while (p <= m) {
+                c = substr(line, p, 1)
+                if (in_str) {
+                    if (esc) { esc = 0; p++; continue }
+                    if (c == "\\") { esc = 1; p++; continue }
+                    if (c == "\"") { in_str = 0; p++; continue }
+                    p++; continue
+                }
+                if (c == "\"") {
+                    q = p + 1
+                    tok = ""
+                    while (q <= m) {
+                        cq = substr(line, q, 1)
+                        if (cq == "\\") { q += 2; continue }
+                        if (cq == "\"") break
+                        tok = tok cq
+                        q++
+                    }
+                    if (q > m) { in_str = 1; p = m + 1; continue }
+                    if (depth == 1 && tok == "version") {
+                        r = q + 1
+                        while (r <= m && (substr(line, r, 1) == " " || substr(line, r, 1) == "\t")) r++
+                        if (substr(line, r, 1) == ":") { print NR; exit }
+                    }
+                    p = q + 1
+                    continue
+                }
+                if (c == "{" || c == "[") { depth++; p++; continue }
+                if (c == "}" || c == "]") { depth--; p++; continue }
+                p++
+            }
+        }
+    ' "$1"
+}
+
 # Mirror the canonical version into the opt-in version.sync targets. Today only
 # JSON files (package.json-style) are rewritten, via a surgical sed of the
 # top-level "version" value — NO jq reserialize, so the diff is a single line
 # and the file's existing formatting is preserved. Non-JSON targets
 # (pyproject.toml / Cargo.toml, planned later) are recognized but skipped with a
 # notice, so a partial implementation is never mistaken for a complete one.
-# Fail-closed: a missing file or a missing "version" field is skipped, never
-# created. Targets resolve relative to the cwd (the repo root during a bump).
+# Fail-closed: a missing file or a missing top-level "version" field is skipped,
+# never created. Targets resolve relative to the cwd (the repo root during a bump).
 manifest_version_sync_apply() {
     local new_version="$1"
+    # Validate a safe semver shape before the value ever reaches a sed
+    # replacement string: the helper trusts its caller, and a "/", "&" or "\"
+    # in the value would corrupt the substitution. Callers pass clean
+    # integer-arithmetic semver today; this fail-closes loudly if that changes.
+    if ! [[ "$new_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.+-]+)?$ ]]; then
+        echo "   ⚠️  version.sync: refusing unsafe version string '${new_version}' — skipped"
+        return 1
+    fi
     local target
     while IFS= read -r target; do
         [ -n "$target" ] || continue
@@ -273,18 +330,20 @@ manifest_version_sync_apply() {
         fi
         case "$target" in
             *.json)
-                if ! grep -Eq '"version"[[:space:]]*:' "$target"; then
-                    echo "   ⚠️  version.sync: no \"version\" field in $target — skipped"
+                local _line
+                _line="$(_manifest_json_toplevel_version_line "$target")"
+                if [ -z "$_line" ]; then
+                    echo "   ⚠️  version.sync: no top-level \"version\" field in $target — skipped"
                     continue
                 fi
-                # Rewrite only the top-level "version" value. The address range
-                # 1,/"version":/ ends at the FIRST version line, so a deeper
-                # "version": inside a nested object is out of range and left
-                # alone. Portable across BSD/GNU sed (no GNU-only 0,/re/ and no
-                # in-place -i flag — this helper can run before the §5.11
-                # GNU-userland PATH prepend), so we edit via a temp file.
+                # Rewrite ONLY the located top-level "version" line. Depth-aware
+                # targeting (above) replaces the old 1,/"version":/ range, which
+                # silently rewrote a nested "version" that sorted first. Portable
+                # across BSD/GNU sed (numeric line address + -E, no GNU-only
+                # 0,/re/ and no in-place -i flag — this helper can run before the
+                # §5.11 GNU-userland PATH prepend), so we edit via a temp file.
                 local _tmp="${target}.manifest-sync.tmp"
-                if sed -E "1,/\"version\"[[:space:]]*:/ s/(\"version\"[[:space:]]*:[[:space:]]*\")[^\"]*\"/\\1${new_version}\"/" "$target" > "$_tmp" 2>/dev/null && mv "$_tmp" "$target"; then
+                if sed -E "${_line}s/(\"version\"[[:space:]]*:[[:space:]]*\")[^\"]*\"/\\1${new_version}\"/" "$target" > "$_tmp" 2>/dev/null && mv "$_tmp" "$target"; then
                     echo "   ✅ version.sync: $target -> $new_version"
                 else
                     rm -f "$_tmp" 2>/dev/null
