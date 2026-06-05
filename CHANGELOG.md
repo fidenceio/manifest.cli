@@ -1,5 +1,10 @@
 # Changelog
 
+## [52.3.0] - 2026-06-05
+
+**Release Type:** Minor — no user-facing changes.
+
+
 ## [52.2.0] - 2026-06-04
 
 **Release Type:** Minor — no user-facing changes.
@@ -120,12 +125,3 @@
 ### Changes
 
 - Always generate docs site; make GitHub Pages enablement best-effort
-
-
-## [50.1.3] - 2026-05-28
-
-**Release Type:** Patch
-
-### Changes
-
-- Add Manifest-generated Jekyll docs site and Pages workflow
