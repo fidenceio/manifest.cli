@@ -475,7 +475,34 @@ manifest_ship_repo() {
         trap '_fleet_lock_release "${repo_lock:-}"; trap - TERM; kill -TERM $$' TERM
     fi
 
-    manifest_ship_workflow "$increment_type" "$interactive" "$publish_release"
+    local workflow_rc=0
+    manifest_ship_workflow "$increment_type" "$interactive" "$publish_release" || workflow_rc=$?
+
+    # Completion audit event (§8.3a): the authorization event emitted at the
+    # apply guard recorded only whether the *confirmation* succeeded — a ship
+    # that passed confirmation then failed at push/gate is logged authorized:0.
+    # Emit a second event here carrying the REAL workflow rc so the durable log
+    # shows OUTCOME, not just authorization. Reuse the same plan fingerprint the
+    # authorization path recorded, and thread the release-gate disposition
+    # (§8.3b) from _MANIFEST_CLI_SHIP_LAST_GATE_STATUS so a `none` bypass or an
+    # `unverified` fail-open is observable after the fact. Source mirrors the
+    # guard (cli, or cli-fleet for a fleet member's subshell). Best-effort: never
+    # alters the returned rc. This runs for direct ship repo AND, because the
+    # fleet child invokes this same function in a subshell, per fleet member.
+    if declare -F manifest_audit_apply_event >/dev/null 2>&1; then
+        local _ship_git_root
+        _ship_git_root="$(git -C "${PROJECT_ROOT:-$PWD}" rev-parse --show-toplevel 2>/dev/null || echo "${PROJECT_ROOT:-$PWD}")"
+        manifest_audit_apply_event \
+            "${MANIFEST_CLI_AUDIT_SOURCE:-cli}" \
+            "$(manifest_execution_replay_hint "$replay_command")" \
+            "$_ship_git_root" \
+            "$plan_fingerprint" \
+            "$workflow_rc" \
+            "completed" \
+            "${_MANIFEST_CLI_SHIP_LAST_GATE_STATUS:-not-run}"
+    fi
+
+    return "$workflow_rc"
 }
 
 # -----------------------------------------------------------------------------

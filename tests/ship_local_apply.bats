@@ -236,6 +236,100 @@ assert_no_remote_dispatch() {
 }
 
 # -----------------------------------------------------------------------------
+# Apply-event audit: authorization + completion (CLI tracker §8.3a / §8.3b)
+#
+# The apply guard emits an "authorized" event (was the confirmation OK); after
+# the workflow runs, ship emits a "completed" event carrying the REAL workflow
+# rc and the release-gate disposition. These tests drive the real ship path and
+# assert BOTH lines land in the durable apply-events log.
+# -----------------------------------------------------------------------------
+
+AUDIT_FILE() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
+
+@test "ship audit: a successful local ship logs an authorized AND a completed event (exit 0)" {
+    local repo audit
+    repo="$(mk_repo 1.2.3)"
+    audit="$(AUDIT_FILE)"
+
+    cd "$repo"
+    PROJECT_ROOT="$repo" run manifest_ship_repo minor --local -y
+    [ "$status" -eq 0 ]
+
+    [ -f "$audit" ]
+    # Both events exist for the one apply.
+    [ "$(grep -c '"event":"authorized"' "$audit")" -eq 1 ]
+    [ "$(grep -c '"event":"completed"' "$audit")" -eq 1 ]
+    # The completion event records the REAL workflow outcome (success -> 0) and
+    # the gate disposition (release_gate=none in setup -> bypassed).
+    run grep '"event":"completed"' "$audit"
+    [[ "$output" == *'"exit_status":0'* ]]
+    [[ "$output" == *'"gate_status":"bypassed"'* ]]
+    [[ "$output" == *'"source":"cli"'* ]]
+}
+
+@test "ship audit: a failing workflow logs a completed event with a NON-zero exit_status" {
+    local repo audit
+    repo="$(mk_repo 1.2.3)"
+    audit="$(AUDIT_FILE)"
+
+    # Force the workflow to fail AFTER the apply guard has emitted authorization,
+    # the way the §8.3a fix must surface outcome (not just authorization). Stub
+    # the orchestrator entrypoint to fail with a distinctive status.
+    manifest_ship_workflow() { return 37; }
+
+    cd "$repo"
+    PROJECT_ROOT="$repo" run manifest_ship_repo minor --local -y
+    [ "$status" -eq 37 ]
+
+    [ -f "$audit" ]
+    # Authorization still recorded (it ran before the workflow).
+    [ "$(grep -c '"event":"authorized"' "$audit")" -eq 1 ]
+    # Completion recorded with the real, non-zero workflow rc.
+    [ "$(grep -c '"event":"completed"' "$audit")" -eq 1 ]
+    run grep '"event":"completed"' "$audit"
+    [[ "$output" == *'"exit_status":37'* ]]
+    [[ "$output" != *'"exit_status":0'* ]]
+}
+
+@test "ship audit: the completion event carries the gate_status disposition (§8.3b)" {
+    local repo audit
+    repo="$(mk_repo 1.2.3)"
+    audit="$(AUDIT_FILE)"
+
+    # release_gate=none is set in setup; assert the durable record shows it so a
+    # force-bypass is observable after the fact (not only in the ephemeral var).
+    cd "$repo"
+    PROJECT_ROOT="$repo" run manifest_ship_repo patch --local -y
+    [ "$status" -eq 0 ]
+
+    run grep '"event":"completed"' "$audit"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"gate_status":"bypassed"'* ]]
+}
+
+@test "ship audit: fleet members each log a cli-fleet completion event with their real rc" {
+    local work audit
+    work="$(mk_fleet 1.2.3)"
+    audit="$(AUDIT_FILE)"
+
+    export MANIFEST_CLI_FLEET_ROOT="$work"
+    cd "$work"
+    load_fleet_config "$work" >/dev/null 2>&1 || true
+
+    run fleet_ship minor --local -y
+    [ "$status" -eq 0 ]
+
+    [ -f "$audit" ]
+    # The member's apply (run in the fleet child subshell) records both events,
+    # tagged cli-fleet, and the completion carries the member's real ship rc.
+    [ "$(grep -c '"source":"cli-fleet"' "$audit")" -ge 2 ]
+    run grep '"event":"completed"' "$audit"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'"source":"cli-fleet"'* ]]
+    [[ "$output" == *'"exit_status":0'* ]]
+}
+
+# -----------------------------------------------------------------------------
 # refresh repo --local -y
 #
 # refresh never has remote operations regardless of --local; this proves the

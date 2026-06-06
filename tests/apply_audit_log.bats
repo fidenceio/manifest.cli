@@ -40,6 +40,13 @@ teardown() {
 
 gh_classic() { printf 'gh%s_%s' "p" "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"; }
 
+# Portable octal permission mode of a path: GNU stat first (`-c %a`), BSD fallback
+# (`-f %Lp`), mirroring the GNU-first/BSD-fallback convention used elsewhere in
+# the codebase (manifest-fleet.sh mtime probe).
+perm_mode() {
+    stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null
+}
+
 # Create a fresh git repo so the apply guard's write-access preflight passes.
 mk_git_repo() {
     local root="$1"
@@ -69,6 +76,55 @@ mk_git_repo() {
     [[ "$line" == *'"exit_status":0'* ]]
     [[ "$line" == *'"ts":"'* ]]
     [[ "$line" == *'"actor":"'* ]]
+}
+
+@test "audit: event field defaults to authorized when no event arg is given" {
+    manifest_audit_apply_event "cli" "manifest ship repo patch -y" "/repo" "h" "0"
+    [[ "$(cat "$AUDIT_FILE")" == *'"event":"authorized"'* ]]
+}
+
+@test "audit: an explicit completed event with gate_status is recorded (§8.3a/§8.3b)" {
+    manifest_audit_apply_event "cli" "manifest ship repo patch -y" "/repo" "h" "5" "completed" "unverified"
+    line="$(cat "$AUDIT_FILE")"
+    [[ "$line" == *'"event":"completed"'* ]]
+    [[ "$line" == *'"gate_status":"unverified"'* ]]
+    # The real workflow rc rides on exit_status (numeric).
+    [[ "$line" == *'"exit_status":5'* ]]
+}
+
+@test "audit: gate_status is omitted from the line when not provided" {
+    manifest_audit_apply_event "cli" "cmd" "/repo" "h" "0" "authorized"
+    [[ "$(cat "$AUDIT_FILE")" != *'gate_status'* ]]
+}
+
+@test "audit: existing 5-arg callers are unbroken (no event/gate args)" {
+    # Backward-compat contract: the three in-tree callers pass exactly 5 args.
+    run manifest_audit_apply_event "cli-pr" "manifest pr create -y" "/repo" "" "0"
+    [ "$status" -eq 0 ]
+    line="$(cat "$AUDIT_FILE")"
+    [[ "$line" == *'"source":"cli-pr"'* ]]
+    [[ "$line" == *'"event":"authorized"'* ]]
+    [[ "$line" != *'gate_status'* ]]
+}
+
+# --- §8.3d: the audit log is not world-readable -----------------------------
+
+@test "audit: the audit file is created mode 0600 (not world-readable)" {
+    manifest_audit_apply_event "cli" "manifest ship repo patch -y" "/repo" "h" "0"
+    [ -f "$AUDIT_FILE" ]
+    [ "$(perm_mode "$AUDIT_FILE")" = "600" ]
+}
+
+@test "audit: the audit dir is created mode 0700 (not world-traversable)" {
+    manifest_audit_apply_event "cli" "manifest ship repo patch -y" "/repo" "h" "0"
+    [ "$(perm_mode "$HOME/.manifest-cli/audit")" = "700" ]
+}
+
+@test "audit: a pre-existing 0755 audit dir is tightened to 0700 on next write" {
+    mkdir -p "$HOME/.manifest-cli/audit"
+    chmod 755 "$HOME/.manifest-cli/audit"
+    manifest_audit_apply_event "cli" "cmd" "/repo" "h" "0"
+    [ "$(perm_mode "$HOME/.manifest-cli/audit")" = "700" ]
 }
 
 @test "audit: MANIFEST_CLI_ACTOR overrides the recorded actor" {
