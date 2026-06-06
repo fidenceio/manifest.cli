@@ -67,21 +67,94 @@ init_repo_fixture() {
     ! echo "$output" | grep -q "Apply target repository"
 }
 
-@test "ship repo apply refuses non-interactive confirmation before mutation" {
-    init_repo_fixture
+# --- consent model C: non-interactive apply-target gate ----------------------
+# Pre-model-C contract (now retired): a non-TTY apply without
+# MANIFEST_CLI_AUTO_CONFIRM=1 ALWAYS refused with "Repo confirmation requires an
+# interactive terminal", even with a named branch + origin. Model C drops that
+# blanket refusal in favour of an unambiguity check (named branch + origin when
+# required). The cases below pin the new gate directly.
 
-    PROJECT_ROOT="$SCRATCH" run manifest_ship_repo patch -y < /dev/null
+@test "gate: non-TTY + named branch + origin auto-confirms on -y (no AUTO_CONFIRM)" {
+    init_repo_fixture
+    # Ensure a named branch even on an unborn HEAD (fresh init gives one).
+    git -C "$SCRATCH" symbolic-ref --short -q HEAD
+    [ -z "${MANIFEST_CLI_AUTO_CONFIRM:-}" ]
+
+    PROJECT_ROOT="$SCRATCH" run manifest_repo_scope_confirm_apply "$SCRATCH" "manifest ship repo patch -y" < /dev/null
+
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Apply target repository"
+    echo "$output" | grep -q "Auto-confirmed unambiguous target (non-interactive apply via -y)"
+    ! echo "$output" | grep -q "Repo confirmation requires an interactive terminal"
+}
+
+@test "gate: non-TTY + NO origin (origin_required default) refuses as ambiguous" {
+    init_repo_fixture
+    git -C "$SCRATCH" remote remove origin
+
+    PROJECT_ROOT="$SCRATCH" run manifest_repo_scope_confirm_apply "$SCRATCH" "manifest ship repo patch -y" < /dev/null
 
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Repo identity"
-    echo "$output" | grep -q "Current repo:.*example/repo"
     echo "$output" | grep -q "Apply target repository"
-    echo "$output" | grep -q "Changes will be made to this Git repository only"
-    echo "$output" | grep -q "Git root:"
+    echo "$output" | grep -q "Ambiguous apply target in a non-interactive context"
     echo "$output" | grep -Fq "$SCRATCH"
-    echo "$output" | grep -q "Repo confirmation requires an interactive terminal"
-    ! echo "$output" | grep -q "Applying because -y/--yes was provided"
-    [ "$(cat "$SCRATCH/VERSION")" = "1.2.3" ]
+}
+
+@test "gate: non-TTY + detached HEAD refuses as ambiguous" {
+    init_repo_fixture
+    git -C "$SCRATCH" add VERSION
+    git -C "$SCRATCH" commit -q -m "seed"
+    git -C "$SCRATCH" checkout -q --detach HEAD
+
+    PROJECT_ROOT="$SCRATCH" run manifest_repo_scope_confirm_apply "$SCRATCH" "manifest ship repo patch -y" < /dev/null
+
+    [ "$status" -ne 0 ]
+    echo "$output" | grep -q "Ambiguous apply target in a non-interactive context"
+}
+
+@test "gate: AUTO_CONFIRM=1 still proceeds even when target is ambiguous" {
+    init_repo_fixture
+    git -C "$SCRATCH" remote remove origin
+
+    MANIFEST_CLI_AUTO_CONFIRM=1 PROJECT_ROOT="$SCRATCH" \
+        run manifest_repo_scope_confirm_apply "$SCRATCH" "manifest ship repo patch -y" < /dev/null
+
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Auto-confirmed repository target (MANIFEST_CLI_AUTO_CONFIRM=1)"
+}
+
+@test "gate: non-TTY + no origin + origin_required=false proceeds (onboarding case)" {
+    init_repo_fixture
+    git -C "$SCRATCH" remote remove origin
+
+    PROJECT_ROOT="$SCRATCH" run manifest_repo_scope_confirm_apply "$SCRATCH" "manifest first -y" "false" < /dev/null
+
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Auto-confirmed unambiguous target (non-interactive apply via -y)"
+}
+
+@test "target_unambiguous: named branch + origin is unambiguous (origin required)" {
+    init_repo_fixture
+    run manifest_repo_scope_target_unambiguous "$SCRATCH" "true"
+    [ "$status" -eq 0 ]
+}
+
+@test "target_unambiguous: no origin is ambiguous when origin required, fine otherwise" {
+    init_repo_fixture
+    git -C "$SCRATCH" remote remove origin
+    run manifest_repo_scope_target_unambiguous "$SCRATCH" "true"
+    [ "$status" -ne 0 ]
+    run manifest_repo_scope_target_unambiguous "$SCRATCH" "false"
+    [ "$status" -eq 0 ]
+}
+
+@test "target_unambiguous: detached HEAD is ambiguous regardless of origin" {
+    init_repo_fixture
+    git -C "$SCRATCH" add VERSION
+    git -C "$SCRATCH" commit -q -m "seed"
+    git -C "$SCRATCH" checkout -q --detach HEAD
+    run manifest_repo_scope_target_unambiguous "$SCRATCH" "false"
+    [ "$status" -ne 0 ]
 }
 
 @test "ship repo apply fails before version bump when git index is locked" {

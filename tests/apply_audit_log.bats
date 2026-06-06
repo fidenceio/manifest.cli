@@ -169,11 +169,14 @@ mk_git_repo() {
     [[ "$(cat "$AUDIT_FILE")" == *"member-3"* ]]
 }
 
-@test "audit: declined apply (non-interactive, no auto-confirm) records non-zero exit status" {
+@test "audit: declined apply (non-interactive, ambiguous target) records non-zero exit status" {
     local repo="$SCRATCH/repo"
     mk_git_repo "$repo"
-    # No MANIFEST_CLI_AUTO_CONFIRM and no TTY -> confirm fails; the attempt is
-    # still audited, with a non-zero exit status.
+    # mk_git_repo has a named branch but NO origin. Under consent model C the
+    # require_apply guard gates with origin_required=true (the default), so this
+    # is an AMBIGUOUS non-interactive target without MANIFEST_CLI_AUTO_CONFIRM ->
+    # the gate refuses. The attempt is still audited, with a non-zero exit
+    # status. (Pre-model-C this refused purely for being non-interactive.)
     run manifest_execution_require_apply "apply" "$repo" "manifest ship repo patch -y" "h" </dev/null
     [ "$status" -ne 0 ]
     [ "$(wc -l < "$AUDIT_FILE")" -eq 1 ]

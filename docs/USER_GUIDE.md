@@ -48,6 +48,15 @@ Fleet commands print the fleet root, config path, selected services, release dec
 
 ## First-Time Setup
 
+Start with `manifest first` — the guided onboarding front door. It inspects the current directory (a single repo, a directory of repos, or an already-configured project) and previews an opinionated setup, writing nothing until you apply.
+
+```bash
+manifest first
+manifest first -y
+```
+
+`manifest first` previews by default and applies the proposed setup with `-y` (audited). Under the hood it delegates to the initializers below, so you can also drive them directly:
+
 ```bash
 manifest doctor
 manifest config show

@@ -6,21 +6,35 @@ load 'helpers/setup'
     grep -Eq 'top_cmds=.*(^| )plan( |")' "$TEST_REPO_ROOT/completions/manifest.bash"
     grep -Eq 'top_cmds=.*(^| )reconcile( |")' "$TEST_REPO_ROOT/completions/manifest.bash"
     grep -Eq 'top_cmds=.*(^| )recipe( |")' "$TEST_REPO_ROOT/completions/manifest.bash"
-    grep -Eq 'init\|quickstart\|plan\|reconcile' "$TEST_REPO_ROOT/completions/manifest.bash"
+    grep -Eq 'first\|init\|quickstart\|plan\|reconcile' "$TEST_REPO_ROOT/completions/manifest.bash"
+}
+
+@test "bash completion includes first as a top command" {
+    grep -Eq 'top_cmds="first ' "$TEST_REPO_ROOT/completions/manifest.bash"
 }
 
 @test "zsh completion includes plan and reconcile" {
     grep -q "'plan:Generate an adoption plan'" "$TEST_REPO_ROOT/completions/_manifest"
     grep -q "'reconcile:Validate and apply an adoption plan'" "$TEST_REPO_ROOT/completions/_manifest"
     grep -q "'recipe:Inspect workflow recipes'" "$TEST_REPO_ROOT/completions/_manifest"
-    grep -Eq 'init\|quickstart\|plan\|reconcile' "$TEST_REPO_ROOT/completions/_manifest"
+    grep -Eq 'first\|init\|quickstart\|plan\|reconcile' "$TEST_REPO_ROOT/completions/_manifest"
+}
+
+@test "zsh completion includes first as a top command and marks quickstart deprecated" {
+    grep -q "'first:" "$TEST_REPO_ROOT/completions/_manifest"
+    grep -q "'quickstart:(deprecated" "$TEST_REPO_ROOT/completions/_manifest"
 }
 
 @test "fish completion includes plan and reconcile" {
     grep -q "a plan .*-d 'Generate an adoption plan'" "$TEST_REPO_ROOT/completions/manifest.fish"
     grep -q "a reconcile .*-d 'Validate and apply an adoption plan'" "$TEST_REPO_ROOT/completions/manifest.fish"
     grep -q "a recipe .*-d 'Inspect workflow recipes'" "$TEST_REPO_ROOT/completions/manifest.fish"
-    grep -q "init quickstart plan reconcile" "$TEST_REPO_ROOT/completions/manifest.fish"
+    grep -q "first init quickstart plan reconcile" "$TEST_REPO_ROOT/completions/manifest.fish"
+}
+
+@test "fish completion includes first as a top command and marks quickstart deprecated" {
+    grep -q "a first " "$TEST_REPO_ROOT/completions/manifest.fish"
+    grep -q "a quickstart .*-d '(deprecated" "$TEST_REPO_ROOT/completions/manifest.fish"
 }
 
 @test "completions expose fleet adoption flags" {

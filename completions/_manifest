@@ -15,9 +15,10 @@ _manifest_keys() {
 _manifest() {
     local -a top_cmds
     top_cmds=(
+        'first:Guided onboarding — inspect this directory and set up Manifest'
         'config:Setup wizard / show configuration'
         'init:Scaffold a repo or fleet'
-        'quickstart:Run an opinionated quickstart workflow'
+        'quickstart:(deprecated → first) Guided onboarding alias'
         'plan:Generate an adoption plan'
         'reconcile:Validate and apply an adoption plan'
         'status:Read-only snapshot'
@@ -59,7 +60,7 @@ _manifest() {
             ;;
         subcommand)
             case $words[2] in
-                init|quickstart|plan|reconcile|discover|update|add|validate|prep|refresh|docs|ship)
+                first|init|quickstart|plan|reconcile|discover|update|add|validate|prep|refresh|docs|ship)
                     _values 'scope' "${scopes[@]}"
                     ;;
                 config)

@@ -154,7 +154,7 @@ manifest_first() {
         case "$1" in
             -h|--help|help)
                 _render_help \
-                    "manifest first [-y|--yes] [--dry-run] [--depth N|auto] [--name NAME]" \
+                    "manifest first [-y|--yes] [--dry-run] [--depth N|auto] [--name NAME] [-f|--force]" \
                     "Guided onboarding: inspect this directory and set up Manifest." \
                     "Options" "  --dry-run        Explicit preview; no writes (default)
   -y, --yes        Apply the proposed setup (audited)
@@ -171,12 +171,16 @@ manifest_first() {
                 fi
                 depth_spec="$2"; shift 2 ;;
             -n|--name)
-                if [[ -z "${2:-}" || "${2:-}" == --* ]]; then
+                if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
                     log_error "--name requires a value"; return 1
                 fi
                 fleet_name="$2"; shift 2 ;;
             -f|--force) force=true; shift ;;
-            *) shift ;;
+            *)
+                _render_help_error "Unknown option: $1" \
+                    "manifest first [-y|--yes] [--dry-run] [--depth N|auto] [--name NAME] [-f|--force]"
+                return 1
+                ;;
         esac
     done
 
@@ -224,11 +228,23 @@ manifest_first() {
         local rc=0 applied=false
         case "$context" in
             repo-uninitialized)
-                local _init_args=(-y)
-                [[ "$force" == "true" ]] && _init_args+=(--force)
-                # `|| rc=$?` so a delegate failure is captured (and audited)
-                # rather than aborting under set -e before we record it.
-                manifest_init_repo "${_init_args[@]}" || rc=$?
+                # Route the single-repo apply through the shared apply gate
+                # (consent model C) before any write. origin_required=false:
+                # onboarding repos often have no remote yet, and a named branch
+                # alone makes the target unambiguous. On refusal, capture the rc
+                # and skip the init — write nothing — but still audit below.
+                if manifest_repo_scope_confirm_apply \
+                        "$root" \
+                        "$(manifest_execution_replay_hint "manifest first")" \
+                        "false"; then
+                    local _init_args=(-y)
+                    [[ "$force" == "true" ]] && _init_args+=(--force)
+                    # `|| rc=$?` so a delegate failure is captured (and audited)
+                    # rather than aborting under set -e before we record it.
+                    manifest_init_repo "${_init_args[@]}" || rc=$?
+                else
+                    rc=$?
+                fi
                 applied=true
                 ;;
             fleet-candidate|fleet-pending)
@@ -254,6 +270,9 @@ manifest_first() {
         # apply-event audit of their own, so record one here at first's apply
         # boundary — exactly once, only when something was actually applied.
         if [[ "$applied" == "true" ]] && declare -F manifest_audit_apply_event >/dev/null 2>&1; then
+            # plan_hash is intentionally empty: onboarding has no release-plan
+            # fingerprint to record (it scaffolds files, it does not compute a
+            # version bump). The empty field here is deliberate, not a bug.
             manifest_audit_apply_event \
                 "${MANIFEST_CLI_AUDIT_SOURCE:-cli}" \
                 "$(manifest_execution_replay_hint "manifest first")" \
