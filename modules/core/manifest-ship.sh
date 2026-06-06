@@ -34,6 +34,94 @@ if [[ -n "${_MANIFEST_SHIP_LOADED:-}" ]]; then
 fi
 _MANIFEST_SHIP_LOADED=1
 
+# -----------------------------------------------------------------------------
+# Single-flight per-repo lock
+# -----------------------------------------------------------------------------
+# Serialize concurrent `manifest ship repo ... -y` runs in the SAME repo so two
+# invocations (e.g. a human + a CI runner) cannot race on the VERSION bump, tag
+# creation, or push and leave a half-shipped repo. The fleet lock guards only
+# the FLEET apply path; this protects the direct repo path. We deliberately
+# REUSE the battle-tested fleet lock primitives (atomic mkdir mutex, PID +
+# process-start-token + same-host liveness, race-safe stale reclaim, TOCTOU
+# grace) rather than inventing a second locking scheme — they are defined in
+# manifest-fleet.sh, which is sourced before this module in the same process.
+
+# Lock dir for the current repo, keyed by the canonicalized git root so that
+# `.`, an absolute path, and a symlinked path all resolve to one lock.
+_manifest_repo_lock_dir_path() {
+    local repo_root git_root hash
+    repo_root="${PROJECT_ROOT:-$PWD}"
+    git_root="$(git -C "$repo_root" rev-parse --show-toplevel 2>/dev/null)" || git_root="$repo_root"
+    git_root="$(cd "$git_root" 2>/dev/null && pwd -P)" || git_root="$repo_root"
+    hash="$(printf '%s' "$git_root" | _manifest_hash_short)"
+    printf '%s/repo-%s.lock.d' "$(manifest_install_paths_locks_dir)" "${hash:0:16}"
+}
+
+# Canonicalized git root for the current repo (used both for the lock key and
+# the MANIFEST_CLI_REPO_LOCK_HELD marker). Echoes the path.
+_manifest_repo_lock_git_root() {
+    local repo_root git_root
+    repo_root="${PROJECT_ROOT:-$PWD}"
+    git_root="$(git -C "$repo_root" rev-parse --show-toplevel 2>/dev/null)" || git_root="$repo_root"
+    git_root="$(cd "$git_root" 2>/dev/null && pwd -P)" || git_root="$repo_root"
+    printf '%s' "$git_root"
+}
+
+# Guard: should a `manifest ship repo` APPLY acquire the per-repo lock?
+# Returns 0 (yes, lock) by default; returns 1 (no, SKIP) for the nested cases
+# where the parent already holds a lock and re-acquiring would DEADLOCK:
+#   1. Fleet child: `ship fleet` runs each member as `manifest ship repo ...`
+#      with MANIFEST_CLI_AUDIT_SOURCE=cli-fleet, sequentially, while already
+#      holding the fleet lock — members must NOT take a repo lock.
+#   2. Follow-up patch: a ship re-invokes `ship repo patch -y` with
+#      MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE set while the PARENT is still
+#      inside manifest_ship_workflow holding THIS repo's lock — the child would
+#      self-deadlock on the same lock dir.
+# Defense-in-depth: MANIFEST_CLI_REPO_LOCK_HELD marks the git root whose lock is
+# already held in this process tree, so any other nested manifest invocation in
+# the same tree for the same root also skips. The two env-var checks above are
+# the primary mechanism.
+_manifest_ship_repo_should_lock() {
+    [[ "${MANIFEST_CLI_AUDIT_SOURCE:-}" != "cli-fleet" ]] || return 1
+    [[ -z "${MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE:-}" ]] || return 1
+    if [[ -n "${MANIFEST_CLI_REPO_LOCK_HELD:-}" ]]; then
+        [[ "${MANIFEST_CLI_REPO_LOCK_HELD}" != "$(_manifest_repo_lock_git_root)" ]] || return 1
+    fi
+    return 0
+}
+
+# Acquire the per-repo single-flight lock for the current repo's APPLY path,
+# unless an exemption applies. Must run in the CALLER's shell (not a command
+# substitution) so the mkdir lock, the exported MANIFEST_CLI_REPO_LOCK_HELD
+# marker, and the lock-dir handoff all persist for the caller.
+#   - Exits 0 with _MANIFEST_CLI_SHIP_REPO_LOCK_DIR="" when exempt (no lock taken).
+#   - Exits 0 with _MANIFEST_CLI_SHIP_REPO_LOCK_DIR=<dir> when the lock is held;
+#     the caller wires a release trap on that dir and clears the global.
+#   - Exits 1 on acquire failure (holder + path already printed).
+_manifest_ship_repo_lock_acquire() {
+    _MANIFEST_CLI_SHIP_REPO_LOCK_DIR=""
+    if ! _manifest_ship_repo_should_lock; then
+        return 0
+    fi
+    local lock_dir
+    lock_dir="$(_manifest_repo_lock_dir_path)"
+    # _fleet_lock_acquire surfaces the holder identity + lock path on failure,
+    # but its banner names "fleet ship". Add a repo-scoped line so the operator
+    # sees the correct context (another `ship repo` is in progress here).
+    if ! _fleet_lock_acquire "$lock_dir"; then
+        log_error "Another 'manifest ship repo' is already applying in this repository."
+        if [ -r "$lock_dir/holder" ]; then
+            log_error "  Lock holder: $(tr '\n' ' ' < "$lock_dir/holder" 2>/dev/null)"
+        fi
+        log_error "  Lock: $lock_dir"
+        return 1
+    fi
+    MANIFEST_CLI_REPO_LOCK_HELD="$(_manifest_repo_lock_git_root)"
+    export MANIFEST_CLI_REPO_LOCK_HELD
+    _MANIFEST_CLI_SHIP_REPO_LOCK_DIR="$lock_dir"
+    return 0
+}
+
 manifest_ship_preview_next_version() {
     local increment_type="$1"
     local repo_root="${PROJECT_ROOT:-$PWD}"
@@ -367,6 +455,24 @@ manifest_ship_repo() {
         echo "Ship (local): $increment_type — no remote operations"
     else
         echo "Ship: $increment_type"
+    fi
+
+    # Single-flight: only one `ship repo` may APPLY in this repository at a time
+    # (preview returned above and writes nothing, so it never locks). Exempt the
+    # nested fleet-child and follow-up-patch paths (see the guard helper) to
+    # avoid deadlocking under an already-locked parent.
+    if ! _manifest_ship_repo_lock_acquire; then
+        return 1
+    fi
+    local repo_lock="${_MANIFEST_CLI_SHIP_REPO_LOCK_DIR:-}"
+    if [ -n "$repo_lock" ]; then
+        # Release the lock on ANY exit from this function. RETURN is
+        # function-scoped (functrace is off) so it never clobbers the CLI's
+        # top-level traps. INT/TERM additionally re-raise so Ctrl-C still
+        # terminates with the correct status. Mirrors fleet_ship's pattern.
+        trap '_fleet_lock_release "${repo_lock:-}"' RETURN
+        trap '_fleet_lock_release "${repo_lock:-}"; trap - INT; kill -INT $$' INT
+        trap '_fleet_lock_release "${repo_lock:-}"; trap - TERM; kill -TERM $$' TERM
     fi
 
     manifest_ship_workflow "$increment_type" "$interactive" "$publish_release"
