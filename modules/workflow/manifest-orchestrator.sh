@@ -774,6 +774,30 @@ manifest_ship_repo_resume() {
     PROJECT_ROOT="$(pwd)"
     export PROJECT_ROOT
 
+    # Resume is a mutating apply (push, post-push steps, metadata) and reaches
+    # the same shared per-repo state as a normal ship, so it must hold the
+    # per-repo single-flight lock too. Reuses the ship module's lock helpers,
+    # which honor the fleet-child / follow-up-patch exemptions and the
+    # MANIFEST_CLI_REPO_LOCK_HELD marker. Released on any exit (mirrors the
+    # main ship path's trap). The helper lives in manifest-ship.sh and the
+    # release primitive in manifest-fleet.sh; the real loader sources both
+    # before any of these run, but this module is also loaded in isolation
+    # (unit tests, a sourced subset), so guard on the helper's presence —
+    # matching the declare-F guards used elsewhere in this module — rather
+    # than hard-failing under set -e when the lock stack isn't loaded.
+    local repo_lock=""
+    if declare -F _manifest_ship_repo_lock_acquire >/dev/null 2>&1; then
+        if ! _manifest_ship_repo_lock_acquire; then
+            return 1
+        fi
+        repo_lock="${_MANIFEST_CLI_SHIP_REPO_LOCK_DIR:-}"
+    fi
+    if [ -n "$repo_lock" ]; then
+        trap '_fleet_lock_release "${repo_lock:-}"' RETURN
+        trap '_fleet_lock_release "${repo_lock:-}"; trap - INT; kill -INT $$' INT
+        trap '_fleet_lock_release "${repo_lock:-}"; trap - TERM; kill -TERM $$' TERM
+    fi
+
     local probe code version tag_name detail
     probe="$(manifest_ship_repo_resume_eligible)"
     IFS='|' read -r code version tag_name detail <<<"$probe"
