@@ -648,41 +648,29 @@ main() {
             manifest_first "$@"
             ;;
 
-        # `quickstart` is a deprecated alias for `manifest first`. It forwards
-        # all arguments verbatim so preview-by-default and -y semantics are
-        # preserved; only the help/scope shape changes.
+        # `quickstart` is a deprecated alias for `manifest first`. It is a TRUE
+        # pass-through: it forwards every argument to manifest_first so the
+        # full flag surface (-y, --dry-run, --name, --depth, --force) and
+        # preview-by-default semantics are preserved. A leading `fleet` token is
+        # stripped (a no-op for first — fleet vs repo is auto-detected from the
+        # cwd). Help tokens short-circuit to the deprecated alias help.
         "quickstart")
-            case "${1:-}" in
-                fleet)
-                    shift || true
-                    if _manifest_cli_has_help_token "$@"; then
-                        _render_help \
-                            "manifest quickstart fleet  (deprecated → manifest first)" \
-                            "Deprecated alias. Use 'manifest first' for guided onboarding." \
-                            "Options" "  --dry-run      Explicit preview; no writes
-  -y, --yes      Apply the setup
-  --name NAME    Fleet name
-  --force        Overwrite existing generated files"
-                        return 0
-                    fi
-                    log_deprecated "manifest quickstart fleet" "manifest first"
-                    manifest_first "$@"
-                    ;;
-                help|-h|--help)
-                    _render_help \
-                        "manifest quickstart <fleet> [options]  (deprecated)" \
-                        "Deprecated alias for 'manifest first'." \
-                        "Scopes" "  fleet   Auto-discover existing git repos and initialize a fleet"
-                    ;;
-                "")
-                    log_deprecated "manifest quickstart" "manifest first"
-                    manifest_first
-                    ;;
-                *)
-                    _render_help_error "Unknown quickstart scope: $1" "manifest first"
-                    return 1
-                    ;;
-            esac
+            if _manifest_cli_has_help_token "$@"; then
+                _render_help \
+                    "manifest quickstart [fleet] [options]  (deprecated → manifest first)" \
+                    "Deprecated alias for 'manifest first'. Use 'manifest first' for guided onboarding." \
+                    "Options" "  --dry-run        Explicit preview; no writes (default)
+  -y, --yes        Apply the proposed setup (audited)
+  --depth N|auto   Fleet discovery depth (default: auto)
+  --name NAME      Fleet name (fleet onboarding)
+  -f, --force      Overwrite existing generated files"
+                return 0
+            fi
+            log_deprecated "manifest quickstart" "manifest first"
+            # Strip a single leading `fleet` token (legacy scope; first
+            # auto-detects fleet vs repo from the current directory).
+            [[ "${1:-}" == "fleet" ]] && shift
+            manifest_first "$@"
             ;;
 
         "config")

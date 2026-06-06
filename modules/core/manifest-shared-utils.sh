@@ -889,9 +889,34 @@ manifest_git_preflight_write_access() {
     return 0
 }
 
+# Consent model C: is the apply target unambiguous enough to auto-confirm in a
+# non-interactive context (after apply intent was given via -y)? Returns 0 iff:
+#   * HEAD is a NAMED branch (not detached). `symbolic-ref --short -q HEAD`
+#     prints the branch name even for an unborn branch on a fresh `git init`
+#     (e.g. "main" with no commits) — that counts as unambiguous. Detached HEAD
+#     prints nothing → ambiguous.
+#   * if origin_required is true: `git remote get-url origin` succeeds (a
+#     non-empty origin remote exists).
+# git-root existence is guaranteed by the manifest_repo_scope_require_git call
+# at the top of the gate, so it is not re-checked here.
+manifest_repo_scope_target_unambiguous() {
+    local git_root="$1"
+    local origin_required="${2:-true}"
+    local head_ref
+
+    head_ref="$(git -C "$git_root" symbolic-ref --short -q HEAD 2>/dev/null)"
+    [[ -n "$head_ref" ]] || return 1
+
+    if [[ "$origin_required" == "true" ]]; then
+        git -C "$git_root" remote get-url origin >/dev/null 2>&1 || return 1
+    fi
+    return 0
+}
+
 manifest_repo_scope_confirm_apply() {
     local project_root="${1:-${PROJECT_ROOT:-$(pwd)}}"
     local replay_command="${2:-manifest command -y}"
+    local origin_required="${3:-true}"
     local git_root branch origin answer
 
     if ! manifest_repo_scope_require_git "$replay_command"; then
@@ -916,19 +941,26 @@ manifest_repo_scope_confirm_apply() {
     echo "  Command:  $replay_command"
     echo ""
 
+    # Explicit override: authorize even an ambiguous target. Stays the escape
+    # hatch for detached HEAD / no-origin non-interactive applies.
     if [[ "${MANIFEST_CLI_AUTO_CONFIRM:-0}" == "1" ]]; then
         echo "Auto-confirmed repository target (MANIFEST_CLI_AUTO_CONFIRM=1): $git_root"
         manifest_git_preflight_write_access "$git_root" "$replay_command"
         return $?
     fi
 
+    # Non-interactive (no TTY to answer the target prompt). Under model C an
+    # unambiguous target (named branch + origin when required) is auto-confirmed
+    # on the strength of -y alone; an ambiguous one still refuses.
     if [[ ! -t 0 ]]; then
-        log_error "Repo confirmation requires an interactive terminal."
-        log_error "Run this from the intended repository folder, preview with:"
-        log_error "  ${replay_command% -y}"
-        log_error "Then apply interactively with:"
-        log_error "  $replay_command"
-        log_error "Or in scripted contexts set MANIFEST_CLI_AUTO_CONFIRM=1 (apply must still be authorized via -y)."
+        if manifest_repo_scope_target_unambiguous "$git_root" "$origin_required"; then
+            echo "Auto-confirmed unambiguous target (non-interactive apply via -y): $git_root"
+            manifest_git_preflight_write_access "$git_root" "$replay_command"
+            return $?
+        fi
+        log_error "Ambiguous apply target in a non-interactive context (no origin remote, or detached HEAD)."
+        log_error "Run interactively to confirm, run from the intended repo, or set MANIFEST_CLI_AUTO_CONFIRM=1 to authorize explicitly."
+        log_error "  Target: $git_root"
         return 1
     fi
 
@@ -1096,7 +1128,7 @@ export -f manifest_ship_log_end manifest_ship_log_rotate
 export -f manifest_ship_log_latest manifest_ship_log_last_step
 export -f get_script_dir get_script_parent_dir get_project_root get_modules_dir
 export -f is_installation_directory validate_repository_root ensure_repository_root
-export -f manifest_repo_scope_require_git manifest_git_preflight_write_access manifest_repo_scope_confirm_apply
+export -f manifest_repo_scope_require_git manifest_git_preflight_write_access manifest_repo_scope_confirm_apply manifest_repo_scope_target_unambiguous
 export -f show_file_error show_git_error show_config_error
 export -f show_validation_error show_permission_error show_dependency_error
 export -f sanitize_filename sanitize_version sanitize_path validate_version_format

@@ -108,22 +108,87 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
 }
 
 @test "first: -y on uninitialized repo delegates to init and scaffolds" {
+    # mkrepo gives a named branch (fresh `git init`) but no origin. The
+    # repo-uninitialized apply now routes through the shared gate with
+    # origin_required=false, so this unambiguous target auto-confirms on -y
+    # alone in this non-interactive context (consent model C).
     mkrepo "$SCRATCH/repo"
+    cd "$SCRATCH/repo"
     PROJECT_ROOT="$SCRATCH/repo" run manifest_first -y
     [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Auto-confirmed unambiguous target (non-interactive apply via -y)"
     [ -f "$SCRATCH/repo/VERSION" ]
     [ -f "$SCRATCH/repo/manifest.config.local.yaml" ]
 }
 
 @test "first: -y emits exactly one cli apply-event audit record" {
     # Uninitialized repo so the init delegate actually applies (the apply
-    # boundary that records the audit event).
+    # boundary that records the audit event). The gate runs first; with a
+    # named branch + origin_required=false it auto-confirms and the single
+    # apply-event is still recorded exactly once.
     mkrepo "$SCRATCH/repo"
+    cd "$SCRATCH/repo"
     PROJECT_ROOT="$SCRATCH/repo" run manifest_first -y
     [ "$status" -eq 0 ]
     local audit="$HOME/.manifest-cli/audit/apply-events.ndjson"
     [ -f "$audit" ]
     [ "$(grep -c '"source":"cli"' "$audit")" -eq 1 ]
+}
+
+@test "first: -y on a detached-HEAD uninitialized repo refuses and writes nothing" {
+    # Detached HEAD is ambiguous even with origin_required=false, so the gate
+    # refuses; the init delegate must not run and no files are scaffolded.
+    mkrepo "$SCRATCH/repo"
+    cd "$SCRATCH/repo"
+    git -C "$SCRATCH/repo" config user.email t@example.com
+    git -C "$SCRATCH/repo" config user.name "Test User"
+    : > "$SCRATCH/repo/seed"
+    git -C "$SCRATCH/repo" add seed
+    git -C "$SCRATCH/repo" commit -q -m seed
+    git -C "$SCRATCH/repo" checkout -q --detach HEAD
+    PROJECT_ROOT="$SCRATCH/repo" run manifest_first -y
+    [ "$status" -ne 0 ]
+    echo "$output" | grep -q "Ambiguous apply target in a non-interactive context"
+    [ ! -f "$SCRATCH/repo/VERSION" ]
+    [ ! -f "$SCRATCH/repo/manifest.config.local.yaml" ]
+}
+
+# --- flag completeness (T3) --------------------------------------------------
+
+@test "first: unknown flag errors non-zero with a usage line" {
+    mkrepo "$SCRATCH/repo"
+    PROJECT_ROOT="$SCRATCH/repo" run manifest_first --bogus
+    [ "$status" -ne 0 ]
+    echo "$output" | grep -q "Unknown option: --bogus"
+    echo "$output" | grep -q "Usage: manifest first"
+}
+
+@test "first: --name with a missing value errors" {
+    mkrepo "$SCRATCH/repo"
+    PROJECT_ROOT="$SCRATCH/repo" run manifest_first --name
+    [ "$status" -ne 0 ]
+    echo "$output" | grep -q -- "--name requires a value"
+}
+
+@test "first: --name followed by a flag errors (consumes no flag)" {
+    mkrepo "$SCRATCH/repo"
+    PROJECT_ROOT="$SCRATCH/repo" run manifest_first --name -f
+    [ "$status" -ne 0 ]
+    echo "$output" | grep -q -- "--name requires a value"
+}
+
+@test "first: --depth with a missing value errors" {
+    mkrepo "$SCRATCH/repo"
+    PROJECT_ROOT="$SCRATCH/repo" run manifest_first --depth
+    [ "$status" -ne 0 ]
+    echo "$output" | grep -q -- "--depth requires a value"
+}
+
+@test "first: --help usage line lists -f|--force" {
+    mkdir -p "$SCRATCH/plain"
+    PROJECT_ROOT="$SCRATCH/plain" run manifest_first --help
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q -- "-f|--force"
 }
 
 # --- read-only config guard (the mechanism `manifest first` relies on) --------
@@ -175,6 +240,54 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "deprecated"
     echo "$output" | grep -q "manifest first"
+}
+
+@test "first (cli): quickstart --dry-run forwards to first preview (no fleet token)" {
+    mkrepo "$SCRATCH/repo"
+    cd "$SCRATCH/repo"
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" quickstart --dry-run
+    [ "$status" -eq 0 ]
+    # Reached `first` (its preview surface), not the old "Unknown scope" arm.
+    echo "$output" | grep -q "single repo (not yet initialized)"
+    echo "$output" | grep -q "No changes written. Re-run with -y"
+    ! echo "$output" | grep -q "Unknown quickstart scope"
+    [ ! -f "$SCRATCH/repo/VERSION" ]
+}
+
+@test "first (cli): quickstart -y forwards to first apply (audited)" {
+    mkrepo "$SCRATCH/repo"
+    cd "$SCRATCH/repo"
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" quickstart -y
+    [ "$status" -eq 0 ]
+    [ -f "$SCRATCH/repo/VERSION" ]
+    [ -f "$HOME/.manifest-cli/audit/apply-events.ndjson" ]
+}
+
+@test "first (cli): quickstart --name forwards the value to first" {
+    mkdir -p "$SCRATCH/ws"
+    mkrepo "$SCRATCH/ws/alpha"
+    mkrepo "$SCRATCH/ws/beta"
+    cd "$SCRATCH/ws"
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" quickstart --name myfleet
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Fleet name:.*myfleet"
+}
+
+@test "first (cli): quickstart --depth forwards to first" {
+    mkdir -p "$SCRATCH/ws"
+    mkrepo "$SCRATCH/ws/alpha"
+    cd "$SCRATCH/ws"
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" quickstart --depth 2
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "fleet candidate"
+}
+
+@test "first (cli): quickstart deprecation notice fires exactly once" {
+    mkrepo "$SCRATCH/repo"
+    cd "$SCRATCH/repo"
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" quickstart --dry-run
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | grep -c "is deprecated")" -eq 1 ]
 }
 
 @test "first (cli): -y applies a fleet, audited" {
