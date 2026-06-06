@@ -449,10 +449,26 @@ _json_value() {
 # upgrade swap never wipes it; NOT under manifest_install_paths_cache_dirs, so
 # the runtime cache sweep never collects it). Best-effort: a failure to write
 # the audit line must never abort the apply, so every error path returns 0.
-# Usage: manifest_audit_apply_event SOURCE COMMAND SCOPE PLAN_HASH EXIT_STATUS
+#
+# Two events are emitted per apply (CLI tracker §8.3a): an "authorized" event at
+# the apply guard recording who authorized which plan and whether the
+# *confirmation* succeeded, and a "completed" event after the workflow runs
+# carrying the REAL workflow rc. An auditor reading only the authorization event
+# would see a clean success for a ship that later failed at push/gate; the
+# completion event closes that gap. The optional gate_status field (§8.3b)
+# records the release-gate disposition (none/unverified/verified-local/...) so a
+# fail-open or env-var bypass is observable in the durable log.
+#
+# Usage: manifest_audit_apply_event SOURCE COMMAND SCOPE PLAN_HASH EXIT_STATUS \
+#                                   [EVENT] [GATE_STATUS]
+#   EVENT       defaults to "authorized" (the pre-apply guard event); the
+#               completion path passes "completed".
+#   GATE_STATUS optional release-gate disposition; emitted only when non-empty.
+# Existing 5-arg callers are unchanged: EVENT/GATE_STATUS are trailing optionals.
 # -----------------------------------------------------------------------------
 manifest_audit_apply_event() {
     local event_source="$1" command="$2" scope="$3" plan_hash="$4" exit_status="$5"
+    local event="${6:-authorized}" gate_status="${7:-}"
     local actor ts state_dir audit_dir audit_file line
 
     actor="${MANIFEST_CLI_ACTOR:-${USER:-$(id -un 2>/dev/null || echo unknown)}}"
@@ -465,7 +481,13 @@ manifest_audit_apply_event() {
     fi
     audit_dir="$state_dir/audit"
     audit_file="$audit_dir/apply-events.ndjson"
-    mkdir -p "$audit_dir" 2>/dev/null || return 0
+    # The audit log is the compliance record a missed token shape would sit in,
+    # so lock it down (§8.3d): dir 0700, file 0600. umask 077 in a subshell makes
+    # the create-with-mode atomic (no 0644 window). Best-effort: a umask/mkdir
+    # failure must never abort the apply (the "audit never aborts a ship"
+    # contract), and chmod after the fact repairs a dir that pre-existed 0755.
+    ( umask 077; mkdir -p "$audit_dir" ) 2>/dev/null || return 0
+    chmod 700 "$audit_dir" 2>/dev/null || true
 
     # Single O_APPEND write of one short line: atomic on local POSIX filesystems
     # regardless of PIPE_BUF (that governs pipes, not regular-file appends).
@@ -475,11 +497,23 @@ manifest_audit_apply_event() {
     line="{$(_json_kv_str "ts" "$ts"),"
     line+="$(_json_kv_str "actor" "$(manifest_redact "$actor")"),"
     line+="$(_json_kv_str "source" "$(manifest_redact "$event_source")"),"
+    line+="$(_json_kv_str "event" "$(manifest_redact "$event")"),"
     line+="$(_json_kv_str "command" "$(manifest_redact "$command")"),"
     line+="$(_json_kv_str "scope" "$(manifest_redact "$scope")"),"
     line+="$(_json_kv_str "plan_hash" "$(manifest_redact "$plan_hash")"),"
+    # Gate disposition is part of the completion record; emit only when present
+    # so the authorization event's shape is unchanged for existing consumers.
+    if [ -n "$gate_status" ]; then
+        line+="$(_json_kv_str "gate_status" "$(manifest_redact "$gate_status")"),"
+    fi
     line+="$(_json_kv_raw "exit_status" "$(_json_value "$exit_status")")}"
 
+    # Create the file 0600 before the first append (umask 077 covers the touch),
+    # so the record is never world-readable even for a single write window.
+    if [ ! -e "$audit_file" ]; then
+        ( umask 077; : >> "$audit_file" ) 2>/dev/null || true
+        chmod 600 "$audit_file" 2>/dev/null || true
+    fi
     printf '%s\n' "$line" >> "$audit_file" 2>/dev/null || return 0
     return 0
 }
@@ -527,13 +561,20 @@ manifest_ship_log_begin() {
     local command="$1"
     local dir ts file
     dir="$(_manifest_ship_log_dir)"
-    mkdir -p "$dir" 2>/dev/null || { export MANIFEST_CLI_SHIP_LOG_FILE=""; return 0; }
+    # Diagnostic logs can carry captured stderr that a missed redaction pattern
+    # left token-shaped, so lock them down like the audit log (§8.3d): dir 0700,
+    # files 0600, created with mode under umask 077 to avoid a 0644 window.
+    # Best-effort: a perm failure must never abort a ship.
+    ( umask 077; mkdir -p "$dir" ) 2>/dev/null || { export MANIFEST_CLI_SHIP_LOG_FILE=""; return 0; }
+    chmod 700 "$dir" 2>/dev/null || true
     # ship-<ts> sorts logs by start time. The date stamp is only second-resolved,
     # so a PID + $RANDOM suffix guarantees uniqueness when two runs start in the
     # same second (e.g. a ship and its auto-followup-patch) — otherwise they
     # would append into one file and the diagnostic record would conflate runs.
     ts="$(date -u +"%Y%m%dT%H%M%SZ")"
     file="$dir/ship-${ts}-$$${RANDOM}.log"
+    ( umask 077; : >> "$file" ) 2>/dev/null || true
+    chmod 600 "$file" 2>/dev/null || true
     {
         printf 'ship-log v1\n'
         printf 'started: %s\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"

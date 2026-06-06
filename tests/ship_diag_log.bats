@@ -57,6 +57,17 @@ gh_classic() { printf 'gh%s_%s' "p" "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"; }
     [ -f "$output" ]
 }
 
+# Portable octal permission mode: GNU stat first, BSD fallback (matches the
+# codebase's GNU-first/BSD-fallback convention).
+_perm_mode() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null; }
+
+@test "diag log: the log dir is 0700 and the log file is 0600 (§8.3d, not world-readable)" {
+    local file; file="$(manifest_ship_log_begin "manifest ship repo patch")"
+    [ -f "$file" ]
+    [ "$(_perm_mode "$LOG_DIR")" = "700" ]
+    [ "$(_perm_mode "$file")" = "600" ]
+}
+
 @test "diag log: two runs starting in the same second get distinct log files" {
     # The date stamp is second-resolved; back-to-back begins (e.g. a ship and
     # its auto-followup-patch) must not append into one conflated file.

@@ -189,15 +189,45 @@ EOF
 
 # --- pre-bump: none (loud + audited) ----------------------------------------
 
-@test "release_gate: none warns loudly and records an audited bypass" {
+# The durable apply-events log; the gate disposition rides the completion event
+# (§8.3b). Emitted by manifest_ship_repo after the workflow; here we drive the
+# same emit the ship path does so the test asserts the disposition actually
+# reaches the DURABLE record, not only the ephemeral var. Resolved at call time
+# (a function, not a top-level var) so it tracks the per-test HOME set in setup.
+_audit_file() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
+
+@test "release_gate: none warns loudly and records an audited bypass IN THE DURABLE LOG (§8.3b)" {
     export MANIFEST_CLI_RELEASE_GATE="none"
-    # Call directly (not via `run`) so the disposition var is observable; the
-    # final ship emit threads this into the status file on success.
+    # Call directly (not via `run`) so the disposition var is observable.
     manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
     [ "$?" -eq 0 ]
     grep -q "Release gate disabled" "$SCRATCH/out"
     [ "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS" = "bypassed" ]
     [ "$_MANIFEST_CLI_SHIP_LAST_GATE_POLICY" = "none" ]
+
+    # The completion event (what manifest_ship_repo emits) must carry the
+    # bypass so an auditor can see a force-bypassed release after the fact —
+    # the in-memory var alone was NOT audited.
+    manifest_audit_apply_event "cli" "manifest ship repo patch -y" "$PROJECT_ROOT" \
+        "h" "0" "completed" "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS"
+    local audit; audit="$(_audit_file)"
+    [ -f "$audit" ]
+    [[ "$(cat "$audit")" == *'"gate_status":"bypassed"'* ]]
+    [[ "$(cat "$audit")" == *'"event":"completed"'* ]]
+}
+
+@test "release_gate: an unverified (no test command) ship appends gate_status=unverified to the durable log (§8.3b)" {
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"
+    # No gate_command and no scripts/run-tests.sh -> the gate fails open with the
+    # 'unverified' disposition. The whole point of §8.3b is that this fail-open
+    # is observable in the durable record.
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
+    [ "$?" -eq 0 ]
+    [ "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS" = "unverified" ]
+
+    manifest_audit_apply_event "cli" "manifest ship repo patch -y" "$PROJECT_ROOT" \
+        "h" "0" "completed" "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS"
+    [[ "$(cat "$(_audit_file)")" == *'"gate_status":"unverified"'* ]]
 }
 
 @test "release_gate: a passing local-tests run records verified-local" {
