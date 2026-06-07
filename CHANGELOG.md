@@ -1,5 +1,20 @@
 # Changelog
 
+## [52.4.1] - 2026-06-07
+
+**Release Type:** Patch
+
+### Changes
+
+- Fix(config): fail loud on malformed config + back up before migration
+- Feat(consent)!: model C — -y authorizes an unambiguous non-interactive apply; complete `manifest first`
+- Feat(ship): per-repo single-flight lock so concurrent applies can't race
+- Feat(audit): record apply OUTCOME + gate disposition; lock audit/ship logs to 0600
+- Fix(ship): create GitHub Release before Homebrew + retry the tarball SHA fetch
+- Docs(tracker): file §8 enterprise-readiness audit — open items + this session's done work
+- Fix(ship): portable sha256 (sha256sum fallback) so the formula fetch works on Linux
+
+
 ## [52.4.0] - 2026-06-05
 
 **Release Type:** Minor — no user-facing changes.
@@ -99,18 +114,3 @@
 ### Changes
 
 - Add layered test-cost reduction (tier / select / parallelize / cache) — §5.10
-
-
-## [51.1.0] - 2026-06-01
-
-**Release Type:** Minor
-
-### Changes
-
-- Add smart ship preview summaries
-- Update release copy and configuration examples
-- Add regression coverage for the changed CLI workflow
-- Add regression coverage for the changed CLI workflow
-- Add GitHub Release publishing support
-- Add GitHub Release publishing support
-- Add regression coverage for the changed CLI workflow
