@@ -290,14 +290,34 @@ update_homebrew_formula() {
 
     echo "🍺 Updating Homebrew formula to ${tag}..."
 
-    # Get SHA256 of the release tarball
+    # Get SHA256 of the release tarball.
+    # GitHub's auto-generated tag tarball can lag the tag push by a few seconds,
+    # so a single fetch may transiently 404/return empty and strand a public tag
+    # with no formula. Retry with a bounded backoff. Detect fetch failure
+    # explicitly (`if ! sha256=$(...)`) rather than relying on the empty-string
+    # check below — under `set -e` a failing curl in the pipeline aborts the
+    # assignment before the empty guard can run.
     echo "   Fetching SHA256 for ${tag}..."
-    local sha256
-    sha256=$(curl -fsSL "$tarball_url" | shasum -a 256 | cut -d' ' -f1)
-    if [ -z "$sha256" ]; then
-        log_error "Failed to fetch tarball SHA256 for ${tag}"
-        return 1
-    fi
+    local sha256=""
+    local sha_retries="${MANIFEST_CLI_TARBALL_SHA_RETRIES:-5}"
+    local sha_delay="${MANIFEST_CLI_TARBALL_SHA_RETRY_DELAY:-3}"
+    local attempt=1
+    while :; do
+        if sha256=$(curl -fsSL "$tarball_url" | shasum -a 256 | cut -d' ' -f1) && [ -n "$sha256" ]; then
+            break
+        fi
+        sha256=""
+        if [ "$attempt" -ge "$sha_retries" ]; then
+            log_error "Failed to fetch tarball SHA256 for ${tag} after ${sha_retries} attempt(s) (${tarball_url})."
+            log_error "GitHub's tag tarball may still be generating; re-run 'manifest ship repo resume' shortly."
+            return 1
+        fi
+        echo "   ⚠️  SHA256 fetch failed for ${tag} (attempt ${attempt}/${sha_retries}); retrying in ${sha_delay}s..."
+        if [ "$sha_delay" -gt 0 ]; then
+            sleep "$sha_delay"
+        fi
+        attempt=$((attempt + 1))
+    done
     echo "   SHA256: ${sha256}"
 
     # Update formula in this repo

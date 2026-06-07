@@ -498,7 +498,28 @@ manifest_ship_post_push_steps() {
     local workflow_github_release_status="skipped"
     _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="not_attempted"
 
-    # Update Homebrew formula only for the Manifest CLI canonical repository.
+    # (B) GitHub Release first: it is the highest-value release artifact, so a
+    # complete release should exist even if the Homebrew step (A) later fails.
+    # Idempotent on resume — manifest_create_github_release_for_tag's
+    # `gh release view` guard returns 0 ("exists") so a retry skips re-creating.
+    # At this point the Homebrew step has not been attempted, so
+    # workflow_homebrew_status is still "skipped" and the failure report
+    # correctly reflects that nothing was pushed to the tap yet.
+    workflow_github_release_status="attempted"
+    if manifest_create_github_release_for_tag "$new_version" "$workflow_tag_name"; then
+        workflow_github_release_status="success"
+    else
+        local github_release_rc=$?
+        if [[ "$github_release_rc" -eq 1 ]]; then
+            workflow_github_release_status="failed"
+            emit_ship_failure_report "github_release" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+            return 1
+        fi
+        workflow_github_release_status="skipped"
+    fi
+    echo ""
+
+    # (A) Update Homebrew formula only for the Manifest CLI canonical repository.
     if [ -f "$PROJECT_ROOT/formula/manifest.rb" ] && should_update_homebrew_for_repo; then
         workflow_homebrew_status="attempted"
         echo "🍺 Updating Homebrew formula..."
@@ -535,20 +556,6 @@ manifest_ship_post_push_steps() {
         echo "🍺 Skipping Homebrew formula update for non-canonical repo: ${origin_slug}"
         echo ""
     fi
-
-    workflow_github_release_status="attempted"
-    if manifest_create_github_release_for_tag "$new_version" "$workflow_tag_name" "$release_type" "$previous_version"; then
-        workflow_github_release_status="success"
-    else
-        local github_release_rc=$?
-        if [[ "$github_release_rc" -eq 1 ]]; then
-            workflow_github_release_status="failed"
-            emit_ship_failure_report "github_release" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
-            return 1
-        fi
-        workflow_github_release_status="skipped"
-    fi
-    echo ""
 
     # Only run when this ship actually pushed a new formula to the tap; otherwise
     # brew upgrades against stale tap state and reports a misleading "upgraded to vN".
