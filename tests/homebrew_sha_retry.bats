@@ -89,7 +89,11 @@ teardown() {
     # The formula's sha256 was rewritten to the real digest of the stub bytes
     # — not left as the all-zero placeholder.
     local expected
-    expected="$(printf 'tarball-bytes-for-tag\n' | shasum -a 256 | cut -d' ' -f1)"
+    if command -v shasum >/dev/null 2>&1; then
+        expected="$(printf 'tarball-bytes-for-tag\n' | shasum -a 256 | cut -d' ' -f1)"
+    else
+        expected="$(printf 'tarball-bytes-for-tag\n' | sha256sum | cut -d' ' -f1)"
+    fi
     grep -q "sha256 \"${expected}\"" "$PROJECT_ROOT/formula/manifest.rb"
     ! grep -q 'sha256 "0000000000000000000000000000000000000000000000000000000000000000"' "$PROJECT_ROOT/formula/manifest.rb"
 }

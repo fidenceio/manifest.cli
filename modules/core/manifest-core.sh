@@ -301,9 +301,20 @@ update_homebrew_formula() {
     local sha256=""
     local sha_retries="${MANIFEST_CLI_TARBALL_SHA_RETRIES:-5}"
     local sha_delay="${MANIFEST_CLI_TARBALL_SHA_RETRY_DELAY:-3}"
+    # Portable sha256: macOS ships `shasum`, Linux/alpine ships `sha256sum`.
+    # Both emit "<hash>  <name>" so `cut -d' ' -f1` extracts the digest either way.
+    local sha_cmd=""
+    if command -v shasum >/dev/null 2>&1; then
+        sha_cmd="shasum -a 256"
+    elif command -v sha256sum >/dev/null 2>&1; then
+        sha_cmd="sha256sum"
+    else
+        log_error "No sha256 tool available (need shasum or sha256sum) to compute the formula checksum."
+        return 1
+    fi
     local attempt=1
     while :; do
-        if sha256=$(curl -fsSL "$tarball_url" | shasum -a 256 | cut -d' ' -f1) && [ -n "$sha256" ]; then
+        if sha256=$(curl -fsSL "$tarball_url" | $sha_cmd | cut -d' ' -f1) && [ -n "$sha256" ]; then
             break
         fi
         sha256=""
