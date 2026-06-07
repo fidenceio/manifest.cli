@@ -25,6 +25,57 @@ Open work for the Manifest CLI repo, as one flat list.
 
 ---
 
+## §8 — Enterprise-readiness audit (2026-06-05)
+
+Seven-dimension code audit (atomicity, concurrency, security, test-gating, audit/observability, config/portability, ops/governance). **Implemented & committed this session (clear on next release):** §8.1b ship reorder + tarball-SHA retry + stray-arg removal; §8.2a per-repo ship lock; §8.3a/b/d audit OUTCOME event + gate disposition + 0600 log perms; §8.4a/b malformed-config fail-loud + migration backup; consent-model **C** (`-y` alone authorizes an unambiguous non-interactive apply; `AUTO_CONFIRM` only for ambiguous targets) applied CLI-wide; `manifest first` completion (gating, quickstart pass-through, flags, docs, completions). Open items below.
+
+- **§8.1 Ship transaction — post-tag integrity (remaining).**
+  - **§8.1a** [T1, conditional on ≥2 remotes] Multi-remote partial push mis-classified as rollback-safe: `push_changes` returns on the first failing remote, so a branch/tag already public on remote #1 can be offered a `git reset --hard` recovery; `resume` only probes `origin`. Track per-remote outcome (`push_status="partial"`), suppress hard-reset advice, emit per-remote retry. Anchor: [`modules/git/manifest-git.sh`](../modules/git/manifest-git.sh) (`push_changes`), [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh) (`emit_ship_failure_report`, resume probe).
+  - **§8.1c** [T2] Formula commit is not tag-reachable and pushed only to `origin` → mirrors diverge. Push the formula commit through the same remote-set helper as `push_changes`; document the post-tag ordering in CLI_TRANSACTION_MAP.
+  - **§8.1d** [T2] `resume` re-derives the formula sha256 from the current tarball with no compare against the existing formula value → silent drift. Read existing `sha256`, warn + require `--force` on mismatch. (Pairs with §8.1g.)
+  - **§8.1e** [T2] Tap `git pull --ff-only` failure is swallowed ("continuing with local state") → formula committed onto a stale/diverged tap. Treat ff-only failure as fatal for the tap sync. Anchor: [`modules/core/manifest-core.sh`](../modules/core/manifest-core.sh) (`update_homebrew_formula`).
+  - **§8.1g** [T3] No durable transaction-state file; recovery is inferred from git/gh/brew probes. Journal `{version, tag, commit_sha, intended_sha256, last_step}` per step; have resume prefer it.
+
+- **§8.2 Concurrency & locking (remaining).** Consider factoring a shared `modules/system/manifest-lock.sh` consumed by fleet + repo + the below.
+  - **§8.2b** [T2] Install lock releases on `EXIT` but not `SIGINT`/`SIGTERM`, and has no PID-reuse guard. Mirror the fleet trap pattern + add a start-time token. Anchor: [`install-cli.sh`](../install-cli.sh) (`acquire_install_lock`/`release_install_lock`).
+  - **§8.2c** [T2] Config lock has zero stale handling → a dead writer wedges all config writes for that file. Give it the fleet lock's holder + liveness reclaim. Anchor: [`modules/core/manifest-config.sh`](../modules/core/manifest-config.sh) (`_manifest_config_lock_acquire`).
+  - **§8.2d** [T3] No generic re-entrancy guard against a user hook/recipe re-entering `ship` (only the follow-up patch is guarded). Export a process-tree `MANIFEST_CLI_SHIP_ACTIVE` guard.
+  - **§8.2e** [T3] Fleet member subshell inherits parent INT/TERM traps (idempotent today, cosmetic). Reset `trap - INT TERM RETURN` inside the member subshell.
+  - **§8.2f** [T3] Pretag probe uses raw `mktemp` outside the swept scratch root → leaked dir the TTL sweep can never collect. Funnel through `manifest_make_scratch_path`. Anchor: [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh) (`manifest_ship_repo_pretag_state`).
+
+- **§8.3 Audit log as compliance record (remaining).**
+  - **§8.3c** [T2] `reconcile fleet --apply` mutates members (incl. irreversible `mv`) then aborts mid-loop with no per-member classification and no audit — unlike `ship fleet`. Bring it to `ship fleet` parity (recovery report + per-member audit). Anchor: [`modules/fleet/manifest-fleet-apply.sh`](../modules/fleet/manifest-fleet-apply.sh) (`_fleet_apply_plan`), [`modules/fleet/manifest-fleet.sh`](../modules/fleet/manifest-fleet.sh) (`fleet_reconcile`).
+  - **§8.3e** [T3] Audit log is append-only but not tamper-evident. Add a `prev_hash` chain + `manifest audit verify`.
+  - **§8.3f** [T3] Audit log has no rotation / unbounded growth. Monthly segments or size-based rolling; keep durable (never under cache_dirs).
+
+- **§8.4 Config validation & safety (remaining).**
+  - **§8.4c** [T2] No type/range/enum validation of config values (a typo'd `release.gate: locl-tests` silently falls through). Add a value-validation table + a committed `docs/contracts/config.schema.json` (mirror `recipe.schema.json`), enforced in `config set` + at load. Anchor: [`modules/core/manifest-config.sh`](../modules/core/manifest-config.sh), [`modules/core/manifest-config-crud.sh`](../modules/core/manifest-config-crud.sh).
+  - **§8.4d** [T2] Unknown keys silently dropped; the fleet path persists them to an inert `custom.*` namespace, masking typos. Add an unknown-key report in `config doctor`; gate the `custom.*` silent-write.
+  - **§8.4e** [T3] `config doctor`/`doctor` report "no drift"/"schema current" without validating values → overstates. Wire §8.4c/d in once they land; soften wording until then.
+
+- **§8.5 Security (non-audit-log).**
+  - **§8.5a** [T2, recommended-next] `manifest security` regenerates a hard-coded template asserting false claims ("No eval Usage" — there are 3; a fabricated "A+ 95/100") and `cp`s it OVER the accurate hand-maintained `docs/SECURITY_ANALYSIS_REPORT.md`. Stop overwriting the curated doc; emit run-results elsewhere; drop the fabricated claims. Anchor: [`modules/system/manifest-security.sh`](../modules/system/manifest-security.sh) (`generate_security_report`, ~:465).
+  - **§8.5b** [T3] Markdown/HTML pass-through from commit subjects into the public Release body + CHANGELOG. Neutralize angle-brackets / markdown link syntax or render as inline code. Anchor: [`modules/git/manifest-git-changes.sh`](../modules/git/manifest-git-changes.sh) (`analyze_changes`).
+  - **§8.5c** [T3] Token value-redaction is inert under `gh`-managed auth (no `GITHUB_TOKEN` env var to match). Document the limitation; lean on the §8.3d perms backstop.
+  - **§8.5d** [DEFER] No artifact signing / content verification anywhere in the chain — confirmed extension of the known tap-trust boundary (identity-not-content). Larger design change.
+
+- **§8.6 Test-gate observability & strict mode.**
+  - **§8.6a** [T2] `local-tests` is fail-OPEN when no test command resolves (Cloud §6.5). Add opt-in `MANIFEST_CLI_RELEASE_GATE_REQUIRE_COMMAND` strict mode (default off). Anchor: [`modules/workflow/manifest-orchestrator.sh`](../modules/workflow/manifest-orchestrator.sh) (`manifest_release_gate_run`).
+  - **§8.6b** [T3] shellcheck hard-gate excludes `.bats`, `completions/`, `.git-hooks/pre-commit`. Extend the lint glob (fish via `fish -n`). Anchor: [`.github/workflows/lint.yml`](../.github/workflows/lint.yml).
+  - **§8.6c** [T3] macOS leg (only real-hardware + only `sed -i` coverage) skipped on routine feature-branch pushes. Optionally escalate via a `formula/**`/`sed`-path condition. Anchor: [`.github/workflows/test.yml`](../.github/workflows/test.yml).
+
+- **§8.7 Portability.** [T2] `timeout_fallback` doesn't bound hangs (full-duration sleep, no `-9` escalation) where coreutils `timeout` is absent; and decide/document whether Linux is supported (add a CI lane) or best-effort. Anchor: [`modules/system/manifest-os.sh`](../modules/system/manifest-os.sh) (`timeout_fallback`).
+
+- **§8.8 Operations docs & recovery discoverability.** [T2/T3] Author `docs/OPERATIONS.md` (DR runbooks: ship-failed-mid-flight decision tree, roll-back-a-public-release, wedged-lock recovery, corrupted-config; a GitHub-token least-privilege scope table; the audit-log schema + `MANIFEST_CLI_ACTOR`; a CI-integration guide). Add `resume`/`revert` to COMMAND_REFERENCE + a USER_GUIDE Recovery section. **§8.8-revert** [T3]: `revert` is mislabeled "Roll back to a previous version" but only does a detached-HEAD `git checkout` — relabel now, then decide whether to build a guarded `rollback` or document roll-forward as a Non-Goal. Anchor: [`modules/git/manifest-git.sh`](../modules/git/manifest-git.sh) (`revert_version`), [`docs/COMMAND_REFERENCE.md`](COMMAND_REFERENCE.md), [`docs/USER_GUIDE.md`](USER_GUIDE.md).
+
+- **§8.9 Empty-release guardrail.** [T3] Add one self-describing opt-in key `release.empty: allow | warn | block` (default `allow`), wired into the pre-bump gate — the current warning is a *preview* line never seen under `-y`/CI. Anchor: [`modules/core/manifest-ship.sh`](../modules/core/manifest-ship.sh).
+
+- **§8.10 Quick wins.** [T3] SECURITY.md "Supported Versions" stale (50.x vs 52.x) → make it version-agnostic. Document `return 2` as an internal-only sentinel in the exit-code contract table. Trial `set -u` behind a flag (no live data-loss path found). (NB: `ship --json` is NOT here — it remains rejected as §6.3; the redacted `_emit_ship_status_file` surface already exists.)
+
+- **§8.11 Bare `init` gating + audit parity.** [T2] Deferred from consent-model C: `manifest init repo -y` still scaffolds without the consent gate and emits NO audit event (unlike `manifest first`, now gated+audited). Decide whether to gate it (note the git-init-a-fresh-dir regime) and add an apply-event audit. Anchor: [`modules/core/manifest-init.sh`](../modules/core/manifest-init.sh).
+
+---
+
 ## See also
 
 - Workspace milestones: [`../../TRACKER.md`](../../TRACKER.md)
