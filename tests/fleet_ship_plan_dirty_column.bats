@@ -179,6 +179,36 @@ TSV
     echo "$output" | grep -E "clean-svc[[:space:]].*1\.2\.3->" >/dev/null
 }
 
+@test "fleet ship preview: release-disabled member without VERSION does not emit shell error" {
+    git -C "$SCRATCH/work" init -q
+    git -C "$SCRATCH/work" config user.email test@example.com
+    git -C "$SCRATCH/work" config user.name "Test"
+    cat > "$SCRATCH/work/manifest.fleet.config.yaml" <<'YAML'
+fleet:
+  name: "test-fleet"
+  versioning: "none"
+services:
+  formula-only:
+    path: "./formula-only"
+    type: "infrastructure"
+    branch: "main"
+    release:
+      enabled: false
+YAML
+    cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
+true	formula-only	./formula-only	infrastructure	false
+TSV
+    init_git_repo "$SCRATCH/work/formula-only"
+    rm -f "$SCRATCH/work/formula-only/VERSION"
+
+    cd "$SCRATCH/work"
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
+
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"No such file or directory"* ]]
+    echo "$output" | grep -E "formula-only[[:space:]].*read[[:space:]]+skip[[:space:]].*release disabled" >/dev/null
+}
+
 # --- Branch column (actual current branch, not configured target) -----------
 
 write_fleet_branch_members() {
