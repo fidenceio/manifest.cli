@@ -28,6 +28,24 @@ manifest ship repo minor --local -y
 
 Use local apply when you want the version, changelog, docs, and commit locally but do not want tag, push, GitHub Release, or tap publication yet.
 
+## Keep Package Files Untouched
+
+No package file is synced unless `version.sync` is set:
+
+```bash
+manifest ship repo patch
+# preview shows VERSION only when version.sync is unset
+```
+
+To mirror the canonical version into `package.json`, opt in explicitly:
+
+```bash
+manifest config set version.sync package.json
+manifest ship repo patch
+```
+
+`package-lock.json` and other lockfiles remain untouched unless they are explicitly listed.
+
 ## Inspect A Built-In Recipe
 
 ```bash

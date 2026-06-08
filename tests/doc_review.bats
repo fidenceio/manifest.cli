@@ -59,6 +59,20 @@ teardown() {
     grep -q "runtime_changed: 1" "$report"
 }
 
+@test "documentation review classifies core helper modules and catalogs" {
+    mkdir -p modules/core modules/catalog
+    echo "# helper" > modules/core/manifest-version-surfaces.sh
+    echo "npm-package	package.json	package-manifest	json" > modules/catalog/version-handlers.tsv
+
+    run manifest_smart_documentation_review "Add version surface helper"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Documentation impact detected; review docs before committing."* ]]
+    report="$(ls docs/documentation-reviews/DOC_REVIEW_*.md)"
+    grep -q "runtime_changed: 1" "$report"
+    grep -q "configuration_changed: 1" "$report"
+}
+
 @test "commit_changes commits documentation review report and commit body" {
     mkdir -p modules/core docs
     echo "# change" > modules/core/manifest-core.sh

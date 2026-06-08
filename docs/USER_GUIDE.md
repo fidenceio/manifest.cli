@@ -104,6 +104,23 @@ manifest ship repo minor --local -y
 
 Repo ship can bump `VERSION`, update `CHANGELOG.md`, refresh docs, commit, tag, push, create a GitHub Release, and update the Homebrew formula when the repo is the canonical CLI repo.
 
+## Version Ownership
+
+Manifest has one canonical release-writer file today: `VERSION`.
+
+Other version-bearing files are non-canonical. This includes package manifests, package locks, module files, and chart files such as `package.json`, `package-lock.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, and `Chart.yaml`. Manifest can detect these surfaces from the committed handler catalog, but detection is passive: it does not rewrite them, print noisy warnings during scripts, or stop non-interactive runs.
+
+To mirror the canonical version into selected JSON files, opt in with `version.sync`:
+
+```yaml
+version:
+  sync: "package.json"
+```
+
+Unset `version.sync` is the default and leaves package files and lockfiles untouched. The current writer only updates a top-level JSON `"version"` field and skips missing, nested-only, or non-JSON targets.
+
+`files.version` is available in configuration and is used by the passive scanner to classify a custom version file as canonical. Repo ship, status, doctor, resume, and fleet release paths still treat `VERSION` as the release-writer file; full custom canonical filename support is tracked in [TRACKER §8.12](TRACKER.md#8--enterprise-readiness-audit-2026-06-05).
+
 ## Fleet Workflow
 
 ### Initialize A Fleet

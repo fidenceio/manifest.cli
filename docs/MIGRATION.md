@@ -77,7 +77,7 @@ gating, point `release.gate_command` at your test entrypoint.
 
 Each repository bumps from its own `VERSION`. Manifest never aligns or locksteps
 versions across a fleet; a fleet ship runs each member's own release with its own
-versioning and its own release gate.
+versioning, explicit `version.sync` targets, and its own release gate.
 
 ## See also
 

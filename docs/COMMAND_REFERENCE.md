@@ -96,6 +96,12 @@ Repo ship can bump version, generate docs, commit, tag, push, publish GitHub Rel
 
 Fleet ship applies the same release policy to release-enabled fleet services.
 
+Version-file behavior:
+
+- Repo and fleet release writers use `VERSION` as the canonical version file today.
+- `version.sync` is opt-in. When unset, package manifests and lockfiles are not incremented.
+- The passive version-surface scanner uses `modules/catalog/version-handlers.tsv` to describe known package/version files. It recognizes `files.version` for classification, but it is an internal detection surface today, not a separate public command.
+
 ## Fleet Operations
 
 ```bash

@@ -30,6 +30,14 @@ manifest ship repo patch --local -y
 
 `--dry-run` is the explicit preview spelling. `--local -y` applies local release work without tag, push, GitHub Release, or Homebrew publication. `MANIFEST_CLI_AUTO_CONFIRM=1` can answer prompts after apply mode is selected; it does not authorize apply by itself.
 
+## Version Ownership
+
+Manifest treats `VERSION` as the canonical release file for repo and fleet ship today. It does not rewrite package-manager files such as `package.json`, `package-lock.json`, `pyproject.toml`, `Cargo.toml`, or lockfiles unless the project explicitly opts in.
+
+`version.sync` is the opt-in mirror list for files whose own top-level version field should follow the canonical version during a bump. With `version.sync` unset, `manifest ship repo patch -y` updates the canonical version only.
+
+Manifest also ships a committed handler catalog at [modules/catalog/version-handlers.tsv](modules/catalog/version-handlers.tsv). The catalog powers passive detection of non-canonical version surfaces so future status, doctor, and fleet reports can notify without mutating files or blocking non-interactive scripts. `files.version` is mapped and recognized by the passive scanner, but full ship/status/doctor support for custom canonical filenames is tracked work rather than a public release-writer contract today.
+
 ## Install
 
 For product use, install from the Homebrew tap:
@@ -159,6 +167,7 @@ Schema example: [examples/manifest.config.yaml.example](examples/manifest.config
 | [docs/INSTALLATION.md](docs/INSTALLATION.md) | Product install and contributor validation |
 | [docs/FLEET_DESIGN_SPEC.md](docs/FLEET_DESIGN_SPEC.md) | Fleet architecture |
 | [docs/CLI_TRANSACTION_MAP.md](docs/CLI_TRANSACTION_MAP.md) | High-consequence transaction paths |
+| [modules/catalog/version-handlers.tsv](modules/catalog/version-handlers.tsv) | Known non-canonical version/package surfaces |
 | [tests/README.md](tests/README.md) | Containerized test workflow |
 
 ## Optional Cloud

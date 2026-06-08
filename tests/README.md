@@ -21,6 +21,9 @@ Run tests in containers. Do not install test dependencies on the host.
 - Preview/apply safety gates
 - YAML config layering and env mapping
 - Version math and changelog updates
+- Canonical-version ownership and opt-in `version.sync`
+- Passive version-surface discovery for package manifests and lockfiles
+- Shared iterative discovery used by fleet and version scanners
 - Repo and fleet release paths
 - Homebrew tap update behavior
 - GitHub Actions and GitHub Release integration
@@ -33,6 +36,7 @@ Run tests in containers. Do not install test dependencies on the host.
 - Tests that need destructive behavior must keep it inside the test sandbox.
 - New command behavior needs help/docs coverage when user-visible.
 - New mutating routes must advertise `--dry-run`, `-y`, and `--yes`.
+- Internal detection helpers should document their output contracts and add focused Bats coverage even when they do not add a public command.
 
 ## Host Runner
 

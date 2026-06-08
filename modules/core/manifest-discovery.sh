@@ -281,6 +281,8 @@ _manifest_discovery_walk_recursive() {
     return 0
 }
 
+# Emit git repositories under ROOT as TSV:
+#   rel_path, abs_path, depth, is_submodule
 manifest_discovery_find_git_repos() {
     local root_dir="${1:-$(pwd)}"
     local max_depth="${2:-$MANIFEST_CLI_DISCOVERY_DEFAULT_MAX_DEPTH}"
@@ -299,6 +301,8 @@ manifest_discovery_find_git_repos() {
     done < <(manifest_discovery_walk_directories "$root_dir" "$max_depth" "$min_depth" "$profile")
 }
 
+# Emit matching files under ROOT as TSV:
+#   rel_file, abs_file, depth, rel_dir, basename
 manifest_discovery_find_files() {
     local root_dir="${1:-$(pwd)}"
     local max_depth="${2:-$MANIFEST_CLI_DISCOVERY_DEFAULT_MAX_DEPTH}"

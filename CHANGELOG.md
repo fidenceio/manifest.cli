@@ -7,8 +7,9 @@
 ### Changes
 
 - Docs(tracker): drop §8 top tier (shipped in 52.4.1) per drift policy; file GNU-sed guard quirk
-- Wire first-class CLI commands to inspectable built-in recipe definitions
-- Add regression coverage for the changed CLI workflow
+- Add shared filesystem discovery helpers consumed by fleet detection
+- Add passive version-surface detection and a committed handler catalog for known package/version files
+- Add regression coverage for discovery, version-surface scans, and default no-sync package-lock behavior
 
 
 ## [52.4.1] - 2026-06-07

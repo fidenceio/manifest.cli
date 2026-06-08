@@ -24,6 +24,9 @@ version:
   max_values: "0,0,0"          # 0 = unlimited
   regex: "^[0-9]+(\\.[0-9]+)*$"
   validation: true
+  sync: ""                       # Optional comma-separated JSON files whose
+                                  # top-level "version" mirrors VERSION on bump.
+                                  # Empty = only VERSION.
 
   component_position:
     major: 1
@@ -204,7 +207,8 @@ time:
 # -----------------------------------------------------------------------------
 files:
   readme: "README.md"
-  version: "VERSION"
+  version: "VERSION"             # Recognized by passive version-surface scans.
+                                  # Repo/fleet ship still writes VERSION today.
   gitignore: ".gitignore"
   archive_dir: "zArchive"
   git_dir: ".git"

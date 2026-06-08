@@ -37,6 +37,8 @@ manifest_version_catalog_file() {
     fi
 }
 
+# Emit known handler rows as TSV:
+#   id, file, role, kind
 manifest_version_catalog_entries() {
     local catalog_file
     catalog_file="$(manifest_version_catalog_file)"
@@ -162,6 +164,10 @@ _manifest_version_surface_read_value() {
     esac
 }
 
+# Emit detected version surfaces under ROOT as TSV:
+#   id, role, kind, relationship, rel_file, version_value
+# relationship is "canonical" only for files.version; all other surfaces are
+# noncanonical and must remain read-only unless another writer explicitly opts in.
 manifest_version_surface_scan() {
     local root_dir="${1:-$(pwd)}"
     local max_depth="${2:-${MANIFEST_CLI_VERSION_SURFACE_SCAN_DEPTH:-$MANIFEST_CLI_VERSION_SURFACES_DEFAULT_DEPTH}}"
