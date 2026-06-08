@@ -1,5 +1,14 @@
 # Changelog
 
+## [52.6.0] - 2026-06-08
+
+**Release Type:** Minor
+
+### Changes
+
+- Add regression coverage for the changed CLI workflow
+
+
 ## [52.5.2] - 2026-06-08
 
 **Release Type:** Patch
@@ -83,19 +92,3 @@
 - Fix(install): trust the formula at all brew chokepoints; refresh --depth help (§7.6/§7.8)
 - Ci: bump actions/checkout v4 → v6 (Node 24) before the Node 20 removal (§5.13)
 - Ci: bump GitHub Pages actions to current majors (Node 24)
-
-
-## [52.1.0] - 2026-06-04
-
-**Release Type:** Minor
-
-### Changes
-
-- Fix(config): normalize leading-dot path in set_yaml_value (silent no-op)
-- Feat(install): narrowly trust the Homebrew formula before install/upgrade (§7.1)
-- Feat(version): opt-in package.json version-sync on bump (§7.2)
-- Fleet: unify --depth on one flag, one meaning, adaptive auto
-- Fix(ci): mark the bind-mounted repo as a git safe.directory in the container
-- Fix(ci): system-scope safe.directory + install jq in the test container
-- Feat(first): land `manifest first` onboarding command; defer Postman (§7.4/§7.5)
-- Docs(tracker): reconcile CLI tracker after the backlog scrub
