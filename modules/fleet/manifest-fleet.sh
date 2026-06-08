@@ -1967,7 +1967,14 @@ _fleet_service_has_release_changes() {
     if [[ -z "$tag_commit" || -z "$head_commit" ]]; then
         return 0
     fi
-    if [[ "$tag_commit" != "$head_commit" ]]; then
+    if [[ "$tag_commit" == "$head_commit" ]]; then
+        return 1
+    fi
+
+    local changed_files
+    changed_files="$(git -C "$path" diff --name-only "$tag_commit..$head_commit" 2>/dev/null \
+        | awk '$0 != "formula/manifest.rb" && NF > 0 { print }' || true)"
+    if [[ -n "$changed_files" ]]; then
         return 0
     fi
 

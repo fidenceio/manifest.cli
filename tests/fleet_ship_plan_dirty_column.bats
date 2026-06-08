@@ -197,6 +197,21 @@ TSV
     echo "$output" | grep -E "Plan summary: 2 releaseable, 0 pr-gated, 0 skipped" >/dev/null
 }
 
+@test "fleet ship preview: formula-only commit after current tag is skipped" {
+    write_fleet_with_two_members
+    mkdir -p "$SCRATCH/work/clean-svc/formula"
+    echo "formula update" > "$SCRATCH/work/clean-svc/formula/manifest.rb"
+    git -C "$SCRATCH/work/clean-svc" add formula/manifest.rb
+    git -C "$SCRATCH/work/clean-svc" commit -q -m "Update Homebrew formula"
+
+    cd "$SCRATCH/work"
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -E "clean-svc[[:space:]].*read[[:space:]]+skip[[:space:]].*no changes" >/dev/null
+    ! echo "$output" | grep -E "clean-svc[[:space:]].*1\.2\.3->" >/dev/null
+    echo "$output" | grep -E "dirty-svc[[:space:]].*4\.5\.6->4\.5\.7" >/dev/null
+}
+
 # --- Version column (current → next) ----------------------------------------
 
 @test "fleet ship preview: Version column header and per-member current version" {
