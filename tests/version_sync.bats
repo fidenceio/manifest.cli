@@ -126,11 +126,18 @@ JSON
   "version": "0.0.0"
 }
 JSON
+    cat > package-lock.json <<'JSON'
+{
+  "version": "0.0.0",
+  "lockfileVersion": 3
+}
+JSON
     unset MANIFEST_CLI_VERSION_SYNC
     run bump_version "patch"
     [ "$status" -eq 0 ]
     # Opt-in: untouched because version.sync was not set.
     [ "$(jq -r '.version' package.json)" = "0.0.0" ]
+    [ "$(jq -r '.version' package-lock.json)" = "0.0.0" ]
 }
 
 # --- §7.7: depth-aware targeting + semver guard ------------------------------

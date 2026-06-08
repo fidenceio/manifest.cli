@@ -1,0 +1,13 @@
+# id	file	role	kind
+manifest-version-file	VERSION	canonical	text
+npm-package	package.json	package-manifest	json
+npm-lock	package-lock.json	lockfile	json
+npm-shrinkwrap	npm-shrinkwrap.json	lockfile	json
+pnpm-lock	pnpm-lock.yaml	lockfile	yaml
+yarn-lock	yarn.lock	lockfile	text
+pyproject	pyproject.toml	package-manifest	toml
+poetry-lock	poetry.lock	lockfile	toml
+cargo-manifest	Cargo.toml	package-manifest	toml
+cargo-lock	Cargo.lock	lockfile	toml
+go-module	go.mod	package-manifest	text
+helm-chart	Chart.yaml	package-manifest	yaml
