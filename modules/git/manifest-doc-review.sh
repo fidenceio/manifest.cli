@@ -76,8 +76,12 @@ _manifest_doc_review_classify_file() {
             printf '%s\n' "runtime" ;;
         completions/*)
             printf '%s\n' "completion" ;;
+        modules/catalog/*)
+            printf '%s\n' "configuration" ;;
         examples/*.yaml|examples/*.yml|modules/core/manifest-yaml.sh|modules/core/manifest-config.sh)
             printf '%s\n' "configuration" ;;
+        modules/core/*.sh)
+            printf '%s\n' "runtime" ;;
         tests/*)
             printf '%s\n' "tests" ;;
         *)

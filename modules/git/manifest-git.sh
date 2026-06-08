@@ -125,6 +125,10 @@ git_retry() {
     return 0
 }
 
+# Bump the repo release version.
+#
+# Current writer contract: VERSION is the canonical release file. Additional
+# JSON files are updated only when explicitly listed in version.sync.
 bump_version() {
     local increment_type="$1"
     

@@ -46,3 +46,5 @@ Completions cover:
 - Common flags
 
 When adding or removing public commands, update completions with help text and command-reference docs in the same change.
+
+Internal scanners, catalogs, and detection helpers do not add completion entries until they become public command or flag surfaces.

@@ -25,6 +25,8 @@ Manifest Fleet coordinates independent Git repositories from one workspace. It d
 1. Scan directories and write `manifest.fleet.tsv`.
 2. After review, consume the TSV and write fleet config/scaffolding.
 
+Fleet scanning uses the shared discovery walker in `modules/core/manifest-discovery.sh` with the fleet profile. That profile preserves fleet-specific pruning, including dependency/build directories and package workspace directories that should not become fleet members by default.
+
 Useful flags:
 
 ```bash
@@ -74,6 +76,8 @@ services:
 - `pr` — the member is **PR-gated**: its release must land through a reviewed pull request. `manifest ship fleet` lists PR-gated members in the preview and **refuses to apply** them (fail-closed), printing a `manifest pr fleet ... -y` replay command. Release them with `manifest pr fleet -y`.
 
 Release-disabled services appear in status and planning output but are skipped by `manifest ship fleet`.
+
+Fleet release still operates each member through the repo release flow, whose version writer updates that member's `VERSION` file and explicit `version.sync` targets only.
 
 ## Repo Identity
 

@@ -76,6 +76,8 @@ Seven-dimension code audit (atomicity, concurrency, security, test-gating, audit
 
 - **§8.11 Bare `init` gating + audit parity.** [T2] Deferred from consent-model C: `manifest init repo -y` still scaffolds without the consent gate and emits NO audit event (unlike `manifest first`, now gated+audited). Decide whether to gate it (note the git-init-a-fresh-dir regime) and add an apply-event audit. Anchor: [`modules/core/manifest-init.sh`](../modules/core/manifest-init.sh).
 
+- **§8.12 Version-surface reporting + YAML policy.** [T3] CLI 52.5.0 added the shared discovery walker, passive scanner, and committed handler catalog, but did not yet add public reporting or YAML-backed handler policy. Next step: add global/local YAML keys for catalog path, scan depth, enablement, and notification mode; surface detected non-canonical files through quiet status/doctor/fleet diagnostics without changing default mutation behavior; keep `VERSION` canonical unless `version.sync` explicitly lists a target. Separate subtask: carry `files.version` beyond passive scanner classification into repo ship, status, doctor, resume, and fleet release before documenting custom canonical filenames as a public release-writer contract. Anchor: [`modules/core/manifest-discovery.sh`](../modules/core/manifest-discovery.sh), [`modules/core/manifest-version-surfaces.sh`](../modules/core/manifest-version-surfaces.sh), [`modules/catalog/version-handlers.tsv`](../modules/catalog/version-handlers.tsv), [`modules/core/manifest-yaml.sh`](../modules/core/manifest-yaml.sh), [`modules/core/manifest-status.sh`](../modules/core/manifest-status.sh), [`modules/core/manifest-doctor.sh`](../modules/core/manifest-doctor.sh).
+
 ---
 
 ## See also

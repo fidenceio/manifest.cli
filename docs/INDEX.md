@@ -20,6 +20,7 @@ Use this index by task. The README is the entry point; this directory carries th
 | ---- | -------- |
 | Ship one repo | [User Guide: Repository release workflow](USER_GUIDE.md#repository-release-workflow) |
 | Ship a fleet | [User Guide: Fleet workflow](USER_GUIDE.md#fleet-workflow) |
+| Understand canonical vs non-canonical version files | [User Guide: Version ownership](USER_GUIDE.md#version-ownership) |
 | Use PR commands | [User Guide: Pull request workflow](USER_GUIDE.md#pull-request-workflow) |
 | Configure Manifest | [User Guide: Configuration](USER_GUIDE.md#configuration) |
 | Publish generated docs | [Docs site generation](DOCS_SITE.md) |
@@ -33,6 +34,7 @@ Use this index by task. The README is the entry point; this directory carries th
 | [Fleet Design Spec](FLEET_DESIGN_SPEC.md) | Fleet config, detection, adoption, reconciliation, and release behavior |
 | [CLI Transaction Map](CLI_TRANSACTION_MAP.md) | Release and tap transaction boundaries |
 | [YAML config example](../examples/manifest.config.yaml.example) | Full config shape with comments |
+| [Version handler catalog](../modules/catalog/version-handlers.tsv) | Known package/version surfaces used by passive detection |
 | [Recipe schema](contracts/recipe.schema.json) | Built-in and project recipe contract |
 
 ## Project Direction
