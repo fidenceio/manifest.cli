@@ -38,6 +38,8 @@ manifest_requirement_prepend_gnu_userland_path
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-shared-utils.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-execution-policy.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-shared-functions.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-discovery.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-version-surfaces.sh"
 
 # Source YAML module before config (config depends on YAML functions)
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-yaml.sh"

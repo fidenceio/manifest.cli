@@ -647,11 +647,19 @@ _fleet_start() {
 
     # Count stats for summary
     local scanned_total=0 listed_total=0 git_count=0 plain_count=0
-    while IFS=$'\t' read -r name path type branch version url submodule has_git has_remote; do
+    local line
+    while IFS= read -r line; do
+        local fields=()
+        _manifest_fleet_tsv_read_line "$line" fields
+        local name="${fields[0]:-}"
         [[ -z "$name" ]] && continue
         scanned_total=$((scanned_total+1))
     done <<< "$discovered"
-    while IFS=$'\t' read -r name path type branch version url submodule has_git has_remote; do
+    while IFS= read -r line; do
+        local fields=()
+        _manifest_fleet_tsv_read_line "$line" fields
+        local name="${fields[0]:-}"
+        local has_git="${fields[7]:-}"
         [[ -z "$name" ]] && continue
         listed_total=$((listed_total+1))
         if [[ "$has_git" == "true" ]]; then
@@ -1039,7 +1047,11 @@ EOF
             echo "✓ Created: $start_file"
 
             local service_count=0
-            while IFS=$'\t' read -r name path type branch version url submodule has_git has_remote; do
+            while IFS= read -r line; do
+                local fields=()
+                _manifest_fleet_tsv_read_line "$line" fields
+                local name="${fields[0]:-}"
+                local has_git="${fields[7]:-}"
                 [[ -z "$name" ]] && continue
                 [[ "$has_git" == "true" ]] && service_count=$((service_count+1))
             done <<< "$inventory"

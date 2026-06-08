@@ -50,6 +50,15 @@ _MANIFEST_CLI_FLEET_DETECT_LOADED=1
 readonly MANIFEST_CLI_FLEET_DETECT_MODULE_VERSION="1.0.0"
 readonly MANIFEST_CLI_FLEET_DETECT_MODULE_NAME="manifest-fleet-detect"
 
+MANIFEST_CLI_FLEET_DETECT_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MANIFEST_CLI_FLEET_DETECT_MODULES_DIR="${MANIFEST_CLI_CORE_MODULES_DIR:-$(dirname "$MANIFEST_CLI_FLEET_DETECT_SCRIPT_DIR")}"
+if ! declare -F manifest_discovery_walk_directories >/dev/null 2>&1 || \
+   ! declare -F _manifest_discovery_walk_recursive >/dev/null 2>&1 || \
+   [[ -z "${MANIFEST_CLI_DISCOVERY_MAX_DEPTH_CAP+x}" ]]; then
+    # shellcheck disable=SC1091
+    source "$MANIFEST_CLI_FLEET_DETECT_MODULES_DIR/core/manifest-discovery.sh"
+fi
+
 _manifest_fleet_tsv_read_line() {
     local line="$1"
     local _arr_name="$2"
@@ -199,7 +208,7 @@ _manifest_fleet_adaptive_depth() {
     cap="$(manifest_fleet_depth_cap)"
     min="$MANIFEST_CLI_FLEET_MIN_DISCOVERY_DEPTH"
     for (( d = min; d <= cap; d++ )); do
-        if [[ -n "$(discover_fleet_repos "$root_dir" "$d" 2>/dev/null)" ]]; then
+        if [[ -n "$(manifest_discovery_find_git_repos "$root_dir" "$d" "$MANIFEST_CLI_FLEET_DEFAULT_INCLUDE_SUBMODULES" "$MANIFEST_CLI_FLEET_MIN_DISCOVERY_DEPTH" fleet 2>/dev/null)" ]]; then
             echo "$d"
             return 0
         fi
@@ -258,31 +267,7 @@ readonly MANIFEST_CLI_FLEET_DEFAULT_INCLUDE_NESTED="false"
 # -----------------------------------------------------------------------------
 _should_ignore_directory() {
     local dirname="$1"
-
-    # Check against all ignore lists
-    local all_ignore=(
-        "${MANIFEST_CLI_FLEET_IGNORE_DEPS[@]}"
-        "${MANIFEST_CLI_FLEET_IGNORE_BUILD[@]}"
-        "${MANIFEST_CLI_FLEET_IGNORE_IDE[@]}"
-        "${MANIFEST_CLI_FLEET_IGNORE_VCS[@]}"
-        "${MANIFEST_CLI_FLEET_IGNORE_ARCHIVE[@]}"
-        "${MANIFEST_CLI_FLEET_IGNORE_FIXTURES[@]}"
-        "${MANIFEST_CLI_FLEET_IGNORE_DOCS[@]}"
-        "${MANIFEST_CLI_FLEET_IGNORE_TEMP[@]}"
-    )
-
-    for pattern in "${all_ignore[@]}"; do
-        if [[ "$dirname" == "$pattern" ]]; then
-            return 0  # Should ignore
-        fi
-    done
-
-    # Check for hidden directories (except specific ones we want)
-    if [[ "$dirname" == .* ]] && [[ "$dirname" != ".git" ]]; then
-        return 0  # Should ignore hidden directories
-    fi
-
-    return 1  # Should not ignore
+    manifest_discovery_should_ignore_directory "$dirname" fleet
 }
 
 # -----------------------------------------------------------------------------
@@ -302,23 +287,7 @@ _should_ignore_directory() {
 # -----------------------------------------------------------------------------
 _is_git_repository() {
     local dir="$1"
-
-    # Check for .git directory (normal repo)
-    if [[ -d "$dir/.git" ]]; then
-        return 0
-    fi
-
-    # Check for .git file (normal working tree for git submodules)
-    if [[ -f "$dir/.git" ]]; then
-        return 0
-    fi
-
-    # Check for bare repository markers
-    if [[ -f "$dir/HEAD" ]] && [[ -d "$dir/objects" ]] && [[ -d "$dir/refs" ]]; then
-        return 0
-    fi
-
-    return 1
+    manifest_discovery_is_git_repository "$dir"
 }
 
 # -----------------------------------------------------------------------------
@@ -341,21 +310,7 @@ _is_git_repository() {
 _is_git_submodule() {
     local dir="$1"
     local parent="${2:-}"
-
-    # Submodules have .git as a file, not a directory
-    if [[ -f "$dir/.git" ]]; then
-        return 0
-    fi
-
-    # Check parent's .gitmodules if provided
-    if [[ -n "$parent" ]] && [[ -f "$parent/.gitmodules" ]]; then
-        local rel_path="${dir#"$parent"/}"
-        if grep -qF "path = $rel_path" "$parent/.gitmodules" 2>/dev/null; then
-            return 0
-        fi
-    fi
-
-    return 1
+    manifest_discovery_is_git_submodule "$dir" "$parent"
 }
 
 # -----------------------------------------------------------------------------
@@ -654,11 +609,30 @@ discover_fleet_repos() {
 
     log_info "Discovering repositories in: $root_dir (max depth: $max_depth)"
 
-    # Track discovered repos to avoid duplicates
-    local discovered_paths=()
+    local rel_path abs_path depth is_submodule
+    while IFS=$'\t' read -r rel_path abs_path depth is_submodule; do
+        [[ -n "$rel_path" ]] || continue
 
-    # Recursive discovery function
-    _discover_repos_recursive "$root_dir" "$root_dir" 0 "$max_depth" "$include_submodules" discovered_paths
+        local name
+        name=$(_extract_service_name "$abs_path" "$root_dir")
+
+        local type
+        type=$(_classify_repository "$abs_path")
+
+        local branch
+        branch=$(_get_repo_default_branch "$abs_path")
+
+        local version
+        version=$(_get_repo_version "$abs_path")
+
+        local url
+        url=$(_get_repo_remote_url "$abs_path")
+
+        printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+            "$name" "$rel_path" "$type" "$branch" "$version" "$url" "$is_submodule"
+
+        log_debug "Discovered: $name ($type) at $rel_path"
+    done < <(manifest_discovery_find_git_repos "$root_dir" "$max_depth" "$include_submodules" "$MANIFEST_CLI_FLEET_MIN_DISCOVERY_DEPTH" fleet)
     return 0
 }
 
@@ -801,8 +775,31 @@ discover_all_directories() {
 
     log_info "Scanning all directories in: $root_dir (max depth: $max_depth)"
 
-    local discovered_paths=()
-    _discover_dirs_recursive "$root_dir" "$root_dir" 0 "$max_depth" discovered_paths
+    local depth rel_path abs_path dirname has_git is_submodule
+    while IFS=$'\t' read -r depth rel_path abs_path dirname has_git is_submodule; do
+        [[ -n "$rel_path" ]] || continue
+
+        local name
+        name=$(_extract_service_name "$abs_path" "$root_dir")
+
+        local type
+        type=$(_classify_repository "$abs_path")
+
+        local has_remote="false"
+        local branch="" version="0.0.0" url=""
+
+        if [[ "$has_git" == "true" ]]; then
+            branch=$(_get_repo_default_branch "$abs_path")
+            version=$(_get_repo_version "$abs_path")
+            url=$(_get_repo_remote_url "$abs_path")
+            [[ -n "$url" ]] && has_remote="true"
+        fi
+
+        printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+            "$name" "$rel_path" "$type" "$branch" "$version" "$url" "$is_submodule" "$has_git" "$has_remote"
+
+        log_debug "Found directory: $name (has_git=$has_git) at $rel_path"
+    done < <(manifest_discovery_walk_directories "$root_dir" "$max_depth" "$MANIFEST_CLI_FLEET_MIN_DISCOVERY_DEPTH" fleet)
     return 0
 }
 
@@ -1029,7 +1026,19 @@ filter_start_inventory_by_repo_depth() {
         rule_by_top["$top"]="$value"
     done <<< "$rules"
 
-    while IFS=$'\t' read -r name path type branch version url submodule has_git has_remote; do
+    local line
+    while IFS= read -r line; do
+        local fields=()
+        _manifest_fleet_tsv_read_line "$line" fields
+        local name="${fields[0]:-}"
+        local path="${fields[1]:-}"
+        local type="${fields[2]:-}"
+        local branch="${fields[3]:-}"
+        local version="${fields[4]:-}"
+        local url="${fields[5]:-}"
+        local submodule="${fields[6]:-}"
+        local has_git="${fields[7]:-}"
+        local has_remote="${fields[8]:-}"
         [[ -z "$name" ]] && continue
 
         if [[ "$has_git" == "true" ]]; then
