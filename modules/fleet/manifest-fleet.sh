@@ -2119,6 +2119,12 @@ _fleet_plan_branch_cell() {
     fi
 }
 
+_fleet_plan_current_version() {
+    local path="$1"
+    [[ -n "$path" && -f "$path/VERSION" ]] || return 0
+    tr -d '[:space:]' < "$path/VERSION" 2>/dev/null || true
+}
+
 _fleet_ship_plan() {
     local increment_type="$1"
     local local_only="$2"
@@ -2144,7 +2150,7 @@ _fleet_ship_plan() {
         type=$(get_fleet_service_property "$service" "type" "service")
         display_name=$(_fleet_plan_service_display_name "$service" "$path")
         dirty=$(manifest_git_changes_dirty_summary "$path")
-        current="$(tr -d '[:space:]' < "$path/VERSION" 2>/dev/null || echo "")"
+        current="$(_fleet_plan_current_version "$path")"
         if _fleet_service_pr_gated "$service"; then
             # PR-gated members are listed separately from plain skips: apply will
             # refuse them (fail-closed) and route their release through review.
