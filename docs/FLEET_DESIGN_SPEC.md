@@ -75,9 +75,11 @@ services:
 - `none` — the member is never released by fleet ship (skipped).
 - `pr` — the member is **PR-gated**: its release must land through a reviewed pull request. `manifest ship fleet` lists PR-gated members in the preview and **refuses to apply** them (fail-closed), printing a `manifest pr fleet ... -y` replay command. Release them with `manifest pr fleet -y`.
 
-Release-disabled services appear in status and planning output but are skipped by `manifest ship fleet`.
+Release-disabled services appear in status and planning output but are skipped by `manifest ship fleet`. Ship preview classifies them from config before release probes, so a release-disabled member is not scanned for `VERSION` or non-canonical version surfaces during ship planning.
 
-Fleet release still operates each member through the repo release flow, whose version writer updates that member's `VERSION` file and explicit `version.sync` targets only.
+Release-enabled services are eligible, not unconditional. Fleet ship skips an eligible member when its worktree is clean and its HEAD is already the commit tagged for the current `VERSION`; dirty files or commits after that tag make the member releaseable.
+
+Fleet release still operates each member through the repo release flow, whose version writer updates that member's `VERSION` file and explicit `version.sync` targets only. Fleet status and ship preview can report non-canonical package/version surfaces read-only; detection never adds a release target by itself.
 
 ## Repo Identity
 

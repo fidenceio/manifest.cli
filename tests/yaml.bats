@@ -63,6 +63,24 @@ EOF
     [ "$output" = "release.tag_target" ]
 }
 
+@test "yaml: maps version surface reporting policy" {
+    run yaml_path_to_env_var "version.surfaces.enabled"
+    [ "$status" -eq 0 ]
+    [ "$output" = "MANIFEST_CLI_VERSION_SURFACES_ENABLED" ]
+
+    run yaml_path_to_env_var "version.surfaces.catalog"
+    [ "$status" -eq 0 ]
+    [ "$output" = "MANIFEST_CLI_VERSION_HANDLER_CATALOG" ]
+
+    run yaml_path_to_env_var "version.surfaces.scan_depth"
+    [ "$status" -eq 0 ]
+    [ "$output" = "MANIFEST_CLI_VERSION_SURFACE_SCAN_DEPTH" ]
+
+    run env_var_to_yaml_path "MANIFEST_CLI_VERSION_SURFACE_NOTIFICATION_MODE"
+    [ "$status" -eq 0 ]
+    [ "$output" = "version.surfaces.notification_mode" ]
+}
+
 @test "yaml: maps GitHub release policy" {
     run yaml_path_to_env_var "github.release.enabled"
     [ "$status" -eq 0 ]
@@ -200,6 +218,22 @@ EOF
     [ "$MANIFEST_CLI_DOCS_GENERATE_ENABLED" = "false" ]
     [ "$MANIFEST_CLI_DOCS_SITE_SOURCE_DIR" = "site-docs" ]
     [ "$MANIFEST_CLI_DOCS_SITE_THEME" = "minimal" ]
+}
+
+@test "yaml: load_yaml_to_env exports version surface policy keys" {
+    set_yaml_value "$YAML" "version.surfaces.enabled" "false"
+    set_yaml_value "$YAML" "version.surfaces.catalog" "config/version-handlers.tsv"
+    set_yaml_value "$YAML" "version.surfaces.scan_depth" "3"
+    set_yaml_value "$YAML" "version.surfaces.notification_mode" "list"
+    unset MANIFEST_CLI_VERSION_SURFACES_ENABLED MANIFEST_CLI_VERSION_HANDLER_CATALOG
+    unset MANIFEST_CLI_VERSION_SURFACE_SCAN_DEPTH MANIFEST_CLI_VERSION_SURFACE_NOTIFICATION_MODE
+
+    load_yaml_to_env "$YAML"
+
+    [ "$MANIFEST_CLI_VERSION_SURFACES_ENABLED" = "false" ]
+    [ "$MANIFEST_CLI_VERSION_HANDLER_CATALOG" = "config/version-handlers.tsv" ]
+    [ "$MANIFEST_CLI_VERSION_SURFACE_SCAN_DEPTH" = "3" ]
+    [ "$MANIFEST_CLI_VERSION_SURFACE_NOTIFICATION_MODE" = "list" ]
 }
 
 @test "yaml: load_yaml_to_env exports lifted config-surface keys" {

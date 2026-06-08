@@ -3,7 +3,7 @@
 load 'helpers/setup'
 
 setup() {
-    load_modules
+    load_modules "core/manifest-discovery.sh" "core/manifest-version-surfaces.sh"
     SCRATCH="$(mk_scratch)"
 }
 
@@ -76,9 +76,51 @@ teardown() {
     echo "$output" | grep -q '"version":'
     echo "$output" | grep -q '"fleet":{'
     echo "$output" | grep -q '"config":{'
+    echo "$output" | grep -q '"version_surfaces":{'
     # Non-git directory -> in_git false, no version.
     echo "$output" | grep -q '"in_git":false'
     echo "$output" | grep -q '"version":null'
+}
+
+@test "status --json: includes detected noncanonical version surfaces" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-status.sh"
+    cd "$SCRATCH"
+    git init -q
+    git config user.email t@e.com
+    git config user.name t
+    echo "1.2.3" > VERSION
+    printf '{"version":"0.1.0"}\n' > package.json
+
+    run manifest_status --json
+    [ "$status" -eq 0 ]
+    echo "$output" | yq e '.' - >/dev/null
+    [ "$(echo "$output" | yq e '.version_surfaces.noncanonical_count' -)" = "1" ]
+    [ "$(echo "$output" | yq e '.version_surfaces.items[] | select(.relationship == "noncanonical") | .path' -)" = "package.json" ]
+    [ "$(echo "$output" | yq e '.version_surfaces.items[] | select(.path == "package.json") | .relationship' -)" = "noncanonical" ]
+}
+
+@test "status fleet --json: includes per-repository version surfaces" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-status.sh"
+    mkdir -p "$SCRATCH/svc-a"
+    git -C "$SCRATCH/svc-a" init -q
+    git -C "$SCRATCH/svc-a" config user.email t@e.com
+    git -C "$SCRATCH/svc-a" config user.name t
+    echo "1.2.3" > "$SCRATCH/svc-a/VERSION"
+    printf '{"version":"0.1.0"}\n' > "$SCRATCH/svc-a/package.json"
+    cat > "$SCRATCH/manifest.fleet.yaml" <<'YAML'
+fleet:
+  name: test-fleet
+services:
+  svc-a:
+    path: ./svc-a
+YAML
+
+    cd "$SCRATCH"
+    run manifest_status fleet --json
+    [ "$status" -eq 0 ]
+    echo "$output" | yq e '.' - >/dev/null
+    [ "$(echo "$output" | yq e '.repositories[0].version_surfaces.noncanonical_count' -)" = "1" ]
+    [ "$(echo "$output" | yq e '.repositories[0].version_surfaces.items[] | select(.relationship == "noncanonical") | .path' -)" = "package.json" ]
 }
 
 @test "status --json: includes version + numeric bump previews when VERSION exists" {

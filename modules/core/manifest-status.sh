@@ -261,6 +261,157 @@ _status_repo_latest_commit_timestamp() {
     fi
 }
 
+_status_version_sync_target_count() {
+    local count=0 target
+    if declare -F _manifest_version_sync_targets >/dev/null 2>&1; then
+        while IFS= read -r target; do
+            [[ -n "$target" ]] || continue
+            count=$((count + 1))
+        done < <(_manifest_version_sync_targets 2>/dev/null || true)
+    fi
+    echo "$count"
+}
+
+_status_version_surfaces_empty_json() {
+    local policy_json
+    if declare -F manifest_version_surface_policy_json >/dev/null 2>&1; then
+        policy_json="$(manifest_version_surface_policy_json)"
+    else
+        policy_json='{"enabled":false,"notification_mode":"off","depth":0,"catalog":""}'
+    fi
+    printf '{"policy":%s,"canonical_count":0,"noncanonical_count":0,"sync_target_count":0,"items":[]}' "$policy_json"
+}
+
+_status_version_surfaces_json() {
+    local root="$1"
+    if [[ ! -d "$root" ]] || ! declare -F manifest_version_surface_scan >/dev/null 2>&1; then
+        _status_version_surfaces_empty_json
+        return 0
+    fi
+
+    local policy_json
+    policy_json="$(manifest_version_surface_policy_json)"
+    if ! manifest_version_surfaces_enabled; then
+        printf '{"policy":%s,"canonical_count":0,"noncanonical_count":0,"sync_target_count":0,"items":[]}' "$policy_json"
+        return 0
+    fi
+
+    local canonical_count=0 noncanonical_count=0 sync_count
+    local items_json="" first=true
+    local id role kind relationship rel_file version_value
+    while IFS=$'\t' read -r id role kind relationship rel_file version_value; do
+        [[ -n "$rel_file" ]] || continue
+        case "$relationship" in
+            canonical) canonical_count=$((canonical_count + 1)) ;;
+            *) noncanonical_count=$((noncanonical_count + 1)) ;;
+        esac
+        local item
+        item="{$(_json_kv_str "id" "$id"),$(_json_kv_str "role" "$role"),$(_json_kv_str "kind" "$kind"),$(_json_kv_str "relationship" "$relationship"),$(_json_kv_str "path" "$rel_file"),$(_json_kv_str "version" "$version_value")}"
+        if [[ "$first" == "true" ]]; then
+            items_json="$item"
+            first=false
+        else
+            items_json="$items_json,$item"
+        fi
+    done < <(manifest_version_surface_scan "$root" 2>/dev/null || true)
+
+    sync_count="$(_status_version_sync_target_count)"
+    printf '{"policy":%s,"canonical_count":%s,"noncanonical_count":%s,"sync_target_count":%s,"items":[%s]}' \
+        "$policy_json" "$canonical_count" "$noncanonical_count" "$sync_count" "$items_json"
+}
+
+_status_version_surfaces_report() {
+    local root="$1"
+    [[ -d "$root" ]] || return 0
+    declare -F manifest_version_surface_scan >/dev/null 2>&1 || return 0
+    manifest_version_surfaces_enabled || return 0
+
+    local mode
+    mode="$(manifest_version_surface_notification_mode)"
+    [[ "$mode" != "off" ]] || return 0
+
+    local canonical_count=0 noncanonical_count=0 sync_count
+    local rows=()
+    local id role kind relationship rel_file version_value
+    while IFS=$'\t' read -r id role kind relationship rel_file version_value; do
+        [[ -n "$rel_file" ]] || continue
+        if [[ "$relationship" == "canonical" ]]; then
+            canonical_count=$((canonical_count + 1))
+        else
+            noncanonical_count=$((noncanonical_count + 1))
+            rows+=("$(printf "    %-32s %-18s %-8s %s" "$rel_file" "$role" "$kind" "${version_value:-unknown}")")
+        fi
+    done < <(manifest_version_surface_scan "$root" 2>/dev/null || true)
+
+    if [[ "$noncanonical_count" -eq 0 ]]; then
+        return 0
+    fi
+
+    sync_count="$(_status_version_sync_target_count)"
+    local sync_note="version.sync unset"
+    if [[ "$sync_count" -gt 0 ]]; then
+        sync_note="${sync_count} version.sync target(s)"
+    fi
+
+    _status_line "Version files:" "${noncanonical_count} noncanonical detected (read-only; ${sync_note})"
+
+    if [[ "$mode" == "list" && "${#rows[@]}" -gt 0 ]]; then
+        local row
+        for row in "${rows[@]}"; do
+            printf "%s\n" "$row"
+        done
+    fi
+}
+
+_status_version_surfaces_fleet_report() {
+    local fleet_root="$1"
+    local config_file="$2"
+    [[ -f "$config_file" ]] || return 0
+    declare -F manifest_version_surface_scan >/dev/null 2>&1 || return 0
+    manifest_version_surfaces_enabled || return 0
+
+    local mode
+    mode="$(manifest_version_surface_notification_mode)"
+    [[ "$mode" != "off" ]] || return 0
+
+    local scanned=0 repos_with_surfaces=0 total_noncanonical=0
+    local rows=()
+    local service raw_path path id role kind relationship rel_file version_value
+    while IFS= read -r service; do
+        [[ -n "$service" ]] || continue
+        raw_path="$(SERVICE="$service" yq e '.services[strenv(SERVICE)].path // ""' "$config_file" 2>/dev/null)"
+        path="$(_status_resolve_member_path "$fleet_root" "$raw_path")"
+        [[ -d "$path" ]] || continue
+        scanned=$((scanned + 1))
+        local repo_noncanonical=0 repo_rows=()
+        while IFS=$'\t' read -r id role kind relationship rel_file version_value; do
+            [[ -n "$rel_file" ]] || continue
+            [[ "$relationship" != "canonical" ]] || continue
+            repo_noncanonical=$((repo_noncanonical + 1))
+            repo_rows+=("$(printf "    %-28s %-32s %-18s %-8s %s" "$service" "$rel_file" "$role" "$kind" "${version_value:-unknown}")")
+        done < <(manifest_version_surface_scan "$path" 2>/dev/null || true)
+        if [[ "$repo_noncanonical" -gt 0 ]]; then
+            repos_with_surfaces=$((repos_with_surfaces + 1))
+            total_noncanonical=$((total_noncanonical + repo_noncanonical))
+            if [[ "$mode" == "list" ]]; then
+                rows+=("${repo_rows[@]}")
+            fi
+        fi
+    done < <(yq e '.services | keys | .[]' "$config_file" 2>/dev/null)
+
+    [[ "$scanned" -gt 0 && "$total_noncanonical" -gt 0 ]] || return 0
+    echo ""
+    echo "Version surfaces"
+    echo "  ${total_noncanonical} noncanonical detected across ${repos_with_surfaces} repo(s) (read-only)"
+    if [[ "$mode" == "list" && "${#rows[@]}" -gt 0 ]]; then
+        local row
+        printf "    %-28s %-32s %-18s %-8s %s\n" "Repo" "Path" "Role" "Kind" "Version"
+        for row in "${rows[@]}"; do
+            printf "%s\n" "$row"
+        done
+    fi
+}
+
 _manifest_status_fleet_json() {
     local proj="$1"
     local config_file
@@ -279,7 +430,7 @@ _manifest_status_fleet_json() {
     local repos_json="" service first=true
     while IFS= read -r service; do
         [[ -z "$service" ]] && continue
-        local raw_path path branch state version commit commit_timestamp expected_branch
+        local raw_path path branch state version commit commit_timestamp expected_branch surfaces_json
         raw_path="$(SERVICE="$service" yq e '.services[strenv(SERVICE)].path // ""' "$config_file" 2>/dev/null)"
         path="$(_status_resolve_member_path "$proj" "$raw_path")"
         expected_branch="$(SERVICE="$service" yq e '.services[strenv(SERVICE)].branch // ""' "$config_file" 2>/dev/null)"
@@ -292,8 +443,9 @@ _manifest_status_fleet_json() {
         version="$(_status_repo_version "$path")"
         commit="$(_status_repo_latest_commit "$path")"
         commit_timestamp="$(_status_repo_latest_commit_timestamp "$path")"
+        surfaces_json="$(_status_version_surfaces_json "$path")"
         local item
-        item="{$(_json_kv_str "name" "$service"),$(_json_kv_str "path" "$path"),$(_json_kv_str "branch" "$branch"),$(_json_kv_str "state" "$state"),$(_json_kv_str "version" "$version"),$(_json_kv_str "latest_commit_timestamp" "$commit_timestamp"),$(_json_kv_str "latest_commit" "$commit")}"
+        item="{$(_json_kv_str "name" "$service"),$(_json_kv_str "path" "$path"),$(_json_kv_str "branch" "$branch"),$(_json_kv_str "state" "$state"),$(_json_kv_str "version" "$version"),$(_json_kv_str "latest_commit_timestamp" "$commit_timestamp"),$(_json_kv_str "latest_commit" "$commit"),$(_json_kv_raw "version_surfaces" "$surfaces_json")}"
         if [[ "$first" == "true" ]]; then
             repos_json="$item"
             first=false
@@ -385,6 +537,7 @@ _manifest_status_fleet() {
     for row in "${rows[@]}"; do
         printf "%s\n" "$row"
     done
+    _status_version_surfaces_fleet_report "$proj" "$config_file"
     echo ""
     echo "Next actions"
     echo "  manifest status repo      Show status for this repo only"
@@ -446,7 +599,7 @@ _manifest_status_json() {
     [[ "$modified" =~ ^[0-9]+$ ]] || modified=0
     [[ "$untracked" =~ ^[0-9]+$ ]] || untracked=0
 
-    local repo_json branch_json version_json fleet_json config_json
+    local repo_json branch_json version_json fleet_json config_json surfaces_json
     repo_json="{$(_json_kv_raw "in_git" "$in_git"),$(_json_kv_str "slug" "$slug"),$(_json_kv_raw "canonical" "$canonical"),$(_json_kv_str "path" "$proj")}"
     branch_json="{$(_json_kv_str "name" "$branch"),$(_json_kv_str "upstream" "$upstream"),$(_json_kv_raw "ahead" "$ahead"),$(_json_kv_raw "behind" "$behind"),$(_json_kv_raw "modified" "$modified"),$(_json_kv_raw "untracked" "$untracked")}"
     if [[ -n "$current_version" ]]; then
@@ -468,13 +621,15 @@ _manifest_status_json() {
     p_p="$([ -f "$ps" ] && echo true || echo false)"
     l_p="$([ -f "$pl" ] && echo true || echo false)"
     config_json="{\"global\":{$(_json_kv_str "path" "$g"),$(_json_kv_raw "present" "$g_p")},\"project\":{$(_json_kv_str "path" "$ps"),$(_json_kv_raw "present" "$p_p")},\"local\":{$(_json_kv_str "path" "$pl"),$(_json_kv_raw "present" "$l_p")}}"
+    surfaces_json="$(_status_version_surfaces_json "$proj")"
 
-    printf '{%s,%s,%s,%s,%s}\n' \
+    printf '{%s,%s,%s,%s,%s,%s}\n' \
         "$(_json_kv_raw "repository" "$repo_json")" \
         "$(_json_kv_raw "branch" "$branch_json")" \
         "$(_json_kv_raw "version" "$version_json")" \
         "$(_json_kv_raw "fleet" "$fleet_json")" \
-        "$(_json_kv_raw "config" "$config_json")"
+        "$(_json_kv_raw "config" "$config_json")" \
+        "$(_json_kv_raw "version_surfaces" "$surfaces_json")"
 }
 
 _manifest_status_repo() {
@@ -555,6 +710,7 @@ _manifest_status_repo() {
     else
         _status_line "Version:" "(no VERSION file — run 'manifest init repo')"
     fi
+    _status_version_surfaces_report "$proj"
 
     # -- Single-repo vs fleet ----------------------------------------------
     local fleet_mode="single-repo"

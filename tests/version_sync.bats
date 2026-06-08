@@ -1,10 +1,10 @@
 #!/usr/bin/env bats
 #
-# §7.2: opt-in package.json (JSON) version-sync. On a bump, VERSION stays
-# canonical and each file listed in `version.sync` has its top-level "version"
-# value mirrored via a surgical sed (no jq reserialize → minimal diff, existing
-# formatting preserved). Fail-closed: missing file or missing field is skipped,
-# never created. Non-JSON targets are recognized but skipped (JSON only, first cut).
+# §7.2: opt-in package/version version-sync. On a bump, VERSION stays canonical
+# and each JSON/TOML/YAML file listed in `version.sync` has its top-level
+# "version" value mirrored via a surgical single-line edit (no reserialize →
+# minimal diff, existing formatting preserved). Fail-closed: missing file or
+# missing field is skipped, never created.
 
 load 'helpers/setup'
 
@@ -109,14 +109,95 @@ JSON
     [ "$(cat config.json)" = '{"name":"x"}' ]
 }
 
-@test "version-sync: a non-JSON target is recognized but skipped (JSON only)" {
+@test "version-sync: bump mirrors the version into TOML, surgically" {
     write_version "1.0.0"
-    printf 'version = "1.0.0"\n' > pyproject.toml
-    export MANIFEST_CLI_VERSION_SYNC="pyproject.toml"
+    cat > package.toml <<'TOML'
+name = "demo"
+version = "1.0.0" # release package
+
+[tool.demo]
+version = "9.9.9"
+TOML
+    export MANIFEST_CLI_VERSION_SYNC="package.toml"
     run bump_version "patch"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "not yet supported"
-    [ "$(cat pyproject.toml)" = 'version = "1.0.0"' ]
+    [ "$(cat VERSION)" = "1.0.1" ]
+
+    grep -q '^version = "1.0.1" # release package$' package.toml
+    grep -q '^version = "9.9.9"$' package.toml
+}
+
+@test "version-sync: TOML without a top-level version field is left untouched (fail-closed)" {
+    write_version "1.0.0"
+    cat > package.toml <<'TOML'
+[project]
+version = "1.0.0"
+TOML
+    export MANIFEST_CLI_VERSION_SYNC="package.toml"
+    run bump_version "patch"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "no top-level"
+    [ "$(cat package.toml)" = $'[project]\nversion = "1.0.0"' ]
+}
+
+@test "version-sync: bump mirrors the version into YAML, surgically" {
+    write_version "1.0.0"
+cat > package.yaml <<'YAML'
+name: demo
+version: 1.0.0 # release package
+package:
+  version: '9.9.9'
+YAML
+    export MANIFEST_CLI_VERSION_SYNC="package.yaml"
+    run bump_version "minor"
+    [ "$status" -eq 0 ]
+    [ "$(cat VERSION)" = "1.1.0" ]
+
+    grep -q "^version: 1.1.0 # release package$" package.yaml
+    grep -q "^  version: '9.9.9'$" package.yaml
+}
+
+@test "version-sync: YAML without a top-level version field is left untouched (fail-closed)" {
+    write_version "1.0.0"
+    cat > package.yml <<'YAML'
+package:
+  version: 1.0.0
+YAML
+    export MANIFEST_CLI_VERSION_SYNC="package.yml"
+    run bump_version "patch"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "no top-level"
+    [ "$(cat package.yml)" = $'package:\n  version: 1.0.0' ]
+}
+
+@test "version-sync: missing TOML/YAML targets are skipped, not created (fail-closed)" {
+    write_version "1.0.0"
+    export MANIFEST_CLI_VERSION_SYNC="package.toml, package.yaml"
+    run bump_version "patch"
+    [ "$status" -eq 0 ]
+    [ ! -f package.toml ]
+    [ ! -f package.yaml ]
+}
+
+@test "version-sync: TOML/YAML files with no version field are left untouched (fail-closed)" {
+    write_version "1.0.0"
+    printf 'name = "demo"\n' > package.toml
+    printf 'name: demo\n' > package.yaml
+    export MANIFEST_CLI_VERSION_SYNC="package.toml, package.yaml"
+    run bump_version "patch"
+    [ "$status" -eq 0 ]
+    [ "$(cat package.toml)" = 'name = "demo"' ]
+    [ "$(cat package.yaml)" = 'name: demo' ]
+}
+
+@test "version-sync: an unsupported target is recognized but skipped" {
+    write_version "1.0.0"
+    printf 'version = "1.0.0"\n' > package.txt
+    export MANIFEST_CLI_VERSION_SYNC="package.txt"
+    run bump_version "patch"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "type not supported"
+    [ "$(cat package.txt)" = 'version = "1.0.0"' ]
 }
 
 @test "version-sync: no sync targets leaves a stray package.json alone" {

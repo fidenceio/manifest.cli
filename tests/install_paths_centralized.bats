@@ -13,6 +13,8 @@
 #     tree is missing — kept inline by design so the script is usable on
 #     broken installs)
 
+bats_require_minimum_version 1.5.0
+
 load 'helpers/setup'
 
 # Count files under the install/uninstall scope that contain a given literal.

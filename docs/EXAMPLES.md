@@ -37,14 +37,22 @@ manifest ship repo patch
 # preview shows VERSION only when version.sync is unset
 ```
 
-To mirror the canonical version into `package.json`, opt in explicitly:
+To mirror the canonical version into supported package/version files, opt in explicitly:
 
 ```bash
-manifest config set version.sync package.json
+manifest config set version.sync package.json,pyproject.toml,Chart.yaml
 manifest ship repo patch
 ```
 
-`package-lock.json` and other lockfiles remain untouched unless they are explicitly listed.
+Manifest updates top-level JSON, TOML, and YAML `version` fields only. `package-lock.json` and other lockfiles remain untouched unless they are explicitly listed.
+
+To make passive detections more verbose in diagnostics:
+
+```bash
+manifest config set version.surfaces.notification_mode list
+manifest status
+manifest doctor
+```
 
 ## Inspect A Built-In Recipe
 

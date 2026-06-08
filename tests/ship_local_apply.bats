@@ -188,6 +188,49 @@ YAML
     echo "$work"
 }
 
+mk_two_member_fleet_with_clean_skip() {
+    local work="$SCRATCH/work" version="${1:-1.2.3}"
+    mkdir -p "$work/clean-svc" "$work/dirty-svc"
+    cat > "$work/manifest.fleet.config.yaml" <<'YAML'
+fleet:
+  name: "test-fleet"
+  versioning: "none"
+services:
+  clean-svc:
+    path: "./clean-svc"
+    type: "service"
+    branch: "main"
+    release:
+      enabled: true
+  dirty-svc:
+    path: "./dirty-svc"
+    type: "service"
+    branch: "main"
+    release:
+      enabled: true
+YAML
+    {
+        printf 'true\tclean-svc\t./clean-svc\tservice\tfalse\t\tmain\t%s\n' "$version"
+        printf 'true\tdirty-svc\t./dirty-svc\tservice\tfalse\t\tmain\t%s\n' "$version"
+    } > "$work/manifest.fleet.tsv"
+
+    local repo
+    for repo in clean-svc dirty-svc; do
+        "$REAL_GIT" -C "$work/$repo" init -q
+        "$REAL_GIT" -C "$work/$repo" symbolic-ref HEAD refs/heads/main
+        "$REAL_GIT" -C "$work/$repo" config user.email test@example.com
+        "$REAL_GIT" -C "$work/$repo" config user.name test
+        echo "$version" > "$work/$repo/VERSION"
+        "$REAL_GIT" -C "$work/$repo" add VERSION
+        "$REAL_GIT" -C "$work/$repo" commit -qm "init $version"
+        "$REAL_GIT" -C "$work/$repo" tag "v$version"
+        "$REAL_GIT" -C "$work/$repo" remote add origin "https://example.invalid/$repo.git"
+    done
+
+    echo "pending work" > "$work/dirty-svc/feature.txt"
+    echo "$work"
+}
+
 # Shared offline-boundary assertions: no push attempted, no gh, no brew.
 assert_no_remote_dispatch() {
     # The git shim logs every network subcommand it refused; none may be push.
@@ -382,6 +425,30 @@ AUDIT_FILE() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
     [ "$("$REAL_GIT" -C "$work/svc" rev-parse HEAD)" != "$before" ]
     # ... with no release tag pushed or created.
     [ -z "$("$REAL_GIT" -C "$work/svc" tag)" ]
+
+    assert_no_remote_dispatch
+}
+
+@test "ship fleet --local -y: skips unchanged tagged members" {
+    local work
+    work="$(mk_two_member_fleet_with_clean_skip 1.2.3)"
+    local clean_before dirty_before
+    clean_before="$("$REAL_GIT" -C "$work/clean-svc" rev-parse HEAD)"
+    dirty_before="$("$REAL_GIT" -C "$work/dirty-svc" rev-parse HEAD)"
+
+    export MANIFEST_CLI_FLEET_ROOT="$work"
+    cd "$work"
+    load_fleet_config "$work" >/dev/null 2>&1 || true
+
+    run fleet_ship patch --local -y
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"clean-svc: skipped (no changes)"* ]]
+    [[ "$output" == *"dirty-svc: shipping patch"* ]]
+
+    [ "$(cat "$work/clean-svc/VERSION")" = "1.2.3" ]
+    [ "$("$REAL_GIT" -C "$work/clean-svc" rev-parse HEAD)" = "$clean_before" ]
+    [ "$(cat "$work/dirty-svc/VERSION")" = "1.2.4" ]
+    [ "$("$REAL_GIT" -C "$work/dirty-svc" rev-parse HEAD)" != "$dirty_before" ]
 
     assert_no_remote_dispatch
 }
