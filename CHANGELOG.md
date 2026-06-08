@@ -1,5 +1,17 @@
 # Changelog
 
+## [52.7.0] - 2026-06-08
+
+**Release Type:** Minor
+
+### Changes
+
+- Add GitHub Release publishing support
+- Update release copy and configuration examples
+- Add a containerized test runner for Manifest CLI
+- Add regression coverage for the changed CLI workflow
+
+
 ## [52.6.0] - 2026-06-08
 
 **Release Type:** Minor
@@ -81,14 +93,3 @@
 ## [52.2.0] - 2026-06-04
 
 **Release Type:** Minor — no user-facing changes.
-
-
-## [52.1.1] - 2026-06-04
-
-**Release Type:** Patch
-
-### Changes
-
-- Fix(install): trust the formula at all brew chokepoints; refresh --depth help (§7.6/§7.8)
-- Ci: bump actions/checkout v4 → v6 (Node 24) before the Node 20 removal (§5.13)
-- Ci: bump GitHub Pages actions to current majors (Node 24)
