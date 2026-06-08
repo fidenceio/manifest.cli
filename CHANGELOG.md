@@ -1,5 +1,17 @@
 # Changelog
 
+## [52.5.1] - 2026-06-08
+
+**Release Type:** Patch
+
+### Changes
+
+- Update release copy and configuration examples
+- Update shell completions for new command options
+- Add regression coverage for the changed CLI workflow
+- Backfill and clarify release history in the root changelog
+
+
 ## [52.5.0] - 2026-06-08
 
 **Release Type:** Minor
@@ -101,19 +113,3 @@
 - Refactor(install): extract user global-config migration to scripts/migrate-user-config.sh
 - Fix(cloud): conform cloud execution-mode var to MANIFEST_CLI namespace
 - Feat(portability): force GNU userland on macOS so CI can go container-only (§5.11)
-
-
-## [51.3.0] - 2026-06-02
-
-**Release Type:** Minor
-
-### Changes
-
-- Fix(fleet): set -e-safe counters and portable mtime probe
-- Fix(ship): run pre-bump gate before auto-commit and remote sync
-- Fix(config): reject unknown keys in config set/unset; correct help examples
-- Fix(formula): correct license to Apache-2.0
-- Ci: run validation via the containerized runner
-- Docs: correct gate, transaction, docs-site, config-name, and security inaccuracies
-- Docs(tracker): file §5.11 GNU-userland standardization and §5.12 macOS CI verification
-- Fix(fleet): ship plan shows actual current branch, not configured target
