@@ -7,7 +7,7 @@
 # Implements: manifest ship repo|fleet <patch|minor|major|revision> [--local]
 #
 # PURPOSE:
-#   Publish a release — version bump, docs, commit, tag, push, Homebrew.
+#   Publish a release — version bump, docs, commit, tag, push, tap formula.
 #   Highest consequence command in the CLI.
 #
 # KEY CHANGES from pre-v42:
@@ -16,7 +16,7 @@
 #   - Fleet release syntax is "manifest ship fleet <type>"
 #
 # COMMANDS:
-#   manifest ship repo <type>           Full release (tag + push + Homebrew)
+#   manifest ship repo <type>           Full release (tag + push + tap formula)
 #   manifest ship repo <type> --local   Local-only (no tag, no push)
 #   manifest ship repo resume           Resume post-release steps after failure
 #   manifest ship fleet <type>          Coordinated fleet release
@@ -333,8 +333,8 @@ manifest_ship_repo_preview_preflight_notice() {
 # -----------------------------------------------------------------------------
 # Function: manifest_ship_repo
 # -----------------------------------------------------------------------------
-# Ship a single repo: version bump + docs + commit + tag + push + Homebrew.
-# With --local: everything except tag/push/Homebrew.
+# Ship a single repo: version bump + docs + commit + tag + push + tap formula.
+# With --local: everything except tag/push/tap publish.
 #
 # ARGUMENTS:
 #   $1             Increment type: patch|minor|major|revision
@@ -546,7 +546,7 @@ manifest_ship_fleet() {
                     "manifest ship fleet <patch|minor|major|revision>|resume [-y|--yes] [--dry-run] [--local] [fleet options]" \
                     "Preview or publish a coordinated fleet release across eligible services." \
                     "Options" "  patch | minor | major | revision   Release type
-  resume                   Resume stranded fleet members (push tag + formula for each eligible repo)
+  resume                   Resume stranded fleet members (push tag + tap formula for each eligible repo)
   --dry-run                Explicit preview; no writes, commits, tags, pushes, or PRs
   -y, --yes                Apply the fleet release plan
   --local                  With -y, local only — no push, no tags (ship only; not valid for resume)

@@ -38,6 +38,8 @@ Manifest treats `VERSION` as the canonical release file for repo and fleet ship 
 
 Manifest also ships a committed handler catalog at [modules/catalog/version-handlers.tsv](modules/catalog/version-handlers.tsv). The catalog powers passive detection of non-canonical version surfaces in `manifest status`, `manifest doctor`, `manifest status fleet`, and fleet ship previews without mutating files or blocking non-interactive scripts. Tune reporting with `version.surfaces.enabled`, `version.surfaces.catalog`, `version.surfaces.scan_depth`, and `version.surfaces.notification_mode` (`summary`, `list`, or `off`). `files.version` is mapped and recognized by the passive scanner, but full repo/fleet release writing still uses `VERSION` today.
 
+Canonical CLI releases may publish the Homebrew tap formula after the GitHub Release exists. That tap formula publish is a distribution update only; Manifest must not add a generated post-tag formula commit to the CLI repo.
+
 ## Install
 
 For product use, install from the Homebrew tap:

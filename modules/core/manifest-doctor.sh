@@ -119,15 +119,15 @@ manifest_doctor() {
         _doctor_warn "gh (optional)" "not installed — required for 'manifest pr'"
     fi
 
-    # GNU sed: only the maintainer path that rewrites the Homebrew formula needs
-    # it (BSD `sed -i` would corrupt the formula). macOS-only — Linux ships GNU
-    # sed. Reports the runtime-resolved sed (after the gnubin prepend), so it
-    # stays quiet when gnu-sed is installed but its gnubin isn't on the login PATH.
+    # GNU sed: macOS source/development compatibility warning. Homebrew installs
+    # include it; Linux ships GNU sed. Reports the runtime-resolved sed (after the
+    # gnubin prepend), so it stays quiet when gnu-sed is installed but its gnubin
+    # isn't on the login PATH.
     if [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then
         if manifest_requirement_runtime_sed_is_gnu; then
             _doctor_ok "GNU sed (optional)" "available"
         else
-            _doctor_warn "GNU sed (optional)" "missing — brew install gnu-sed (needed only to publish a Homebrew formula update)"
+            _doctor_warn "GNU sed (optional)" "missing — brew install gnu-sed (recommended for macOS source/development installs)"
         fi
     fi
 
@@ -173,7 +173,7 @@ manifest_doctor() {
         fi
 
         if manifest_is_canonical_repo "$proj" 2>/dev/null; then
-            _doctor_ok "Canonical repo" "yes — Homebrew formula updates apply here"
+            _doctor_ok "Canonical repo" "yes — Homebrew tap formula publishes from here"
         else
             _doctor_ok "Canonical repo" "no (normal for user projects)"
         fi

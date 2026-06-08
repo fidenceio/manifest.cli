@@ -45,19 +45,20 @@ Fleet output must make skipped and failed services explicit.
 
 ## Homebrew Tap Transaction
 
-The canonical CLI release may update `fidenceio.homebrew.tap/Formula/manifest.rb` after the CLI release artifact is available.
+The canonical CLI release may publish an updated `fidenceio.homebrew.tap/Formula/manifest.rb` after the CLI release artifact is available. Manifest generates the tap formula from the CLI repo's tracked `formula/manifest.rb` template, but it does not commit a release-time formula change back into the CLI repo.
 
 Boundaries:
 
 - Formula update is a distribution update, not a separate product release.
 - The tap repo should remain formula-focused.
 - The CLI changelog remains the product release source of truth.
+- The CLI release branch must not move past the release tag solely for generated Homebrew formula content.
 
 ## GitHub Release Transaction
 
 GitHub Release creation runs after tag push when `github.release.enabled` is true.
 
-If the release already exists, Manifest reports it and continues. Missing `gh`, missing auth, or non-GitHub origin is a warning unless `github.release.required` is true. This step runs before the Homebrew formula update so a normal release artifact exists even if formula publication later fails.
+If the release already exists, Manifest reports it and continues. Missing `gh`, missing auth, or non-GitHub origin is a warning unless `github.release.required` is true. This step runs before the Homebrew tap formula publish so a normal release artifact exists even if formula publication later fails.
 
 ## Docs Site Transaction
 

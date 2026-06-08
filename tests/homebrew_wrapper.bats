@@ -2,14 +2,14 @@
 
 load 'helpers/setup'
 
-@test "Homebrew formula installs Bash as a required dependency" {
+@test "Homebrew formula template installs Bash as a required dependency" {
     run grep -F 'depends_on "bash"' "$TEST_REPO_ROOT/formula/manifest.rb"
 
     [ "$status" -eq 0 ]
     [[ "$output" != *'=> :recommended'* ]]
 }
 
-@test "Homebrew formula installs coreutils as a required dependency" {
+@test "Homebrew formula template installs coreutils as a required dependency" {
     run grep -F 'depends_on "coreutils"' "$TEST_REPO_ROOT/formula/manifest.rb"
 
     [ "$status" -eq 0 ]
@@ -31,16 +31,16 @@ load 'helpers/setup'
     ! grep -F 'if [ "${MANIFEST_CLI_BASH_REEXEC:-0}" = "1" ]; then' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
 }
 
-@test "Homebrew formula smoke-tests installed status command" {
+@test "Homebrew formula template smoke-tests installed status command" {
     grep -F 'system bin/"manifest", "status"' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
 }
 
-@test "Homebrew formula installs shell completions" {
+@test "Homebrew formula template installs shell completions" {
     grep -F 'bash_completion.install libexec/"completions/manifest.bash" => "manifest"' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
     grep -F 'zsh_completion.install libexec/"completions/_manifest"' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
 }
 
-@test "Homebrew formula caveats describe uninstall preview and apply commands" {
+@test "Homebrew formula template caveats describe uninstall preview and apply commands" {
     grep -F 'To preview a clean uninstall:' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
     grep -F 'To uninstall cleanly (removes config and env vars too):' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
     grep -F 'manifest uninstall -y' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null

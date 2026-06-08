@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 #
 # §8.1b-1: the post-push transaction must create the GitHub Release BEFORE
-# updating the Homebrew formula, keep the local brew upgrade gated on Homebrew
+# publishing the Homebrew tap formula, keep the local brew upgrade gated on Homebrew
 # success, and stay idempotent on the resume path (release view-guard).
 
 load 'helpers/setup'
@@ -55,7 +55,7 @@ teardown() {
     rm -rf "$SCRATCH"
 }
 
-@test "post-push creates the GitHub Release before updating the Homebrew formula" {
+@test "post-push creates the GitHub Release before publishing the Homebrew tap formula" {
     run manifest_ship_post_push_steps "1.2.3" "$(git rev-parse HEAD)" "v1.2.3" "success"
     [ "$status" -eq 0 ]
 
@@ -67,6 +67,24 @@ teardown() {
     gh_line="$(grep -n '^github_release$' "$ORDER_LOG" | head -1 | cut -d: -f1)"
     brew_line="$(grep -n '^homebrew_formula$' "$ORDER_LOG" | head -1 | cut -d: -f1)"
     [ "$gh_line" -lt "$brew_line" ]
+}
+
+@test "post-push refuses source formula dirt instead of committing past the tag" {
+    update_homebrew_formula() {
+        echo "homebrew_formula" >> "$ORDER_LOG"
+        echo "generated formula" > formula/manifest.rb
+        return 0
+    }
+    local pre_head
+    pre_head="$(git rev-parse HEAD)"
+
+    run manifest_ship_post_push_steps "1.2.3" "$pre_head" "v1.2.3" "success"
+    [ "$status" -eq 1 ]
+
+    [ "$(git rev-parse HEAD)" = "$pre_head" ]
+    [[ "$output" == *"modified formula/manifest.rb in the CLI repo"* ]]
+    [[ "$output" == *"Refusing to create a post-tag CLI commit"* ]]
+    ! git log --format=%s | grep -q "Update Homebrew formula to v1.2.3"
 }
 
 @test "GitHub Release failure (required) aborts before Homebrew with homebrew status still skipped" {

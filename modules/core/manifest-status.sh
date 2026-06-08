@@ -659,7 +659,7 @@ _manifest_status_repo() {
     if [[ -z "$slug" ]]; then
         slug="(no origin remote)"
     elif manifest_is_canonical_repo "$proj" 2>/dev/null; then
-        canonical_marker="  (canonical — Homebrew formula updates here)"
+        canonical_marker="  (canonical — Homebrew tap formula publishes from here)"
     fi
     _status_line "Repository:" "${slug}${canonical_marker}"
 

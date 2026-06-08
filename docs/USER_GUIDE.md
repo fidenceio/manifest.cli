@@ -102,7 +102,7 @@ Local-only apply:
 manifest ship repo minor --local -y
 ```
 
-Repo ship can bump `VERSION`, update `CHANGELOG.md`, refresh docs, commit, tag, push, create a GitHub Release, and update the Homebrew formula when the repo is the canonical CLI repo.
+Repo ship can bump `VERSION`, update `CHANGELOG.md`, refresh docs, commit, tag, push, create a GitHub Release, and publish the Homebrew tap formula when the repo is the canonical CLI repo. The tap formula publish does not create a post-tag commit in the CLI repo.
 
 ## Version Ownership
 

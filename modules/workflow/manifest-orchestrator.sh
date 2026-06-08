@@ -199,7 +199,7 @@ manifest_check_github_actions_for_head() {
 #   none        no verification (loud + audited bypass)
 #   local-tests run the project's test command before any mutation (default)
 #   remote-ci   require the pushed commit's GitHub checks to be green before
-#               the GitHub Release / Homebrew publish
+#               the GitHub Release / Homebrew tap publish
 #   all         local-tests AND remote-ci
 #
 # The gate runs per repository, so a fleet ship verifies each member against its
@@ -519,32 +519,30 @@ manifest_ship_post_push_steps() {
     fi
     echo ""
 
-    # (A) Update Homebrew formula only for the Manifest CLI canonical repository.
+    # (A) Publish Homebrew tap formula only for the Manifest CLI canonical repository.
+    # The CLI repo's formula/manifest.rb is a source template. The publisher must
+    # generate a tap formula without committing a post-tag formula change here;
+    # otherwise main can drift one generated commit ahead of the release tag.
     if [ -f "$PROJECT_ROOT/formula/manifest.rb" ] && should_update_homebrew_for_repo; then
         workflow_homebrew_status="attempted"
-        echo "🍺 Updating Homebrew formula..."
+        echo "🍺 Publishing Homebrew tap formula..."
+        local formula_status_before=""
+        formula_status_before="$(git status --porcelain formula/manifest.rb 2>/dev/null || true)"
         if update_homebrew_formula; then
-            # Commit the formula change to this repo
-            if [ -n "$(git status --porcelain formula/manifest.rb 2>/dev/null)" ]; then
-                git add formula/manifest.rb
-                if ! git commit -m "Update Homebrew formula to v$new_version"; then
-                    workflow_homebrew_status="failed"
-                    log_error "Failed to commit Homebrew formula update."
-                    emit_ship_failure_report "homebrew_commit" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
-                    return 1
-                fi
-                if ! git push origin "${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}"; then
-                    workflow_homebrew_status="failed"
-                    log_error "Failed to push Homebrew formula commit."
-                    emit_ship_failure_report "homebrew_push" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
-                    return 1
-                fi
+            local formula_status_after=""
+            formula_status_after="$(git status --porcelain formula/manifest.rb 2>/dev/null || true)"
+            if [[ "$formula_status_after" != "$formula_status_before" ]]; then
+                workflow_homebrew_status="failed"
+                log_error "Homebrew tap formula publication modified formula/manifest.rb in the CLI repo."
+                log_error "Refusing to create a post-tag CLI commit; fix the publisher to write only to the tap."
+                emit_ship_failure_report "homebrew_update" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+                return 1
             fi
             workflow_homebrew_status="success"
-            echo "✅ Homebrew formula updated"
+            echo "✅ Homebrew tap formula published"
         else
             workflow_homebrew_status="failed"
-            log_error "Homebrew formula update failed; aborting ship workflow."
+            log_error "Homebrew tap formula publish failed; aborting ship workflow."
             emit_ship_failure_report "homebrew_update" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
             return 1
         fi
@@ -553,7 +551,7 @@ manifest_ship_post_push_steps() {
         workflow_homebrew_status="skipped_non_canonical_repo"
         local origin_slug=""
         origin_slug="$(manifest_origin_repo_slug || echo "unknown")"
-        echo "🍺 Skipping Homebrew formula update for non-canonical repo: ${origin_slug}"
+        echo "🍺 Skipping Homebrew tap formula publish for non-canonical repo: ${origin_slug}"
         echo ""
     fi
 
@@ -1000,7 +998,7 @@ manifest_ship_workflow() {
         echo "   • Commit local changes"
         if [ "$publish_release" = "true" ]; then
             echo "   • Create Git tag and push to remote repository"
-            echo "   • Update Homebrew formula"
+            echo "   • Publish Homebrew tap formula"
         else
             echo "   • No remote pushes/tags (local-only prep mode)"
         fi
@@ -1205,10 +1203,9 @@ manifest_ship_workflow() {
         # Resolve which commit the release tag should point at.
         # version_commit — the explicit "Bump version to X" commit, even when
         #                  a CHANGELOG commit follows it. Default.
-        # release_head   — current HEAD at tagging time (post-CHANGELOG,
-        #                  pre-Homebrew). Homebrew commits cannot be included
-        #                  because update_homebrew_formula needs the GitHub
-        #                  tarball SHA256 of an already-pushed tag.
+        # release_head   — current HEAD at tagging time (post-CHANGELOG).
+        #                  Homebrew publication happens later by generating a
+        #                  tap formula; it must not create a CLI repo commit.
         local tag_target_sha
         tag_target_sha="$(resolve_tag_target_sha "$workflow_version_commit_sha")"
 
@@ -1232,8 +1229,8 @@ manifest_ship_workflow() {
         echo ""
 
         # Release gate (post-push): for remote-ci/all, require the pushed
-        # commit's CI to be green before publishing the GitHub Release and
-        # Homebrew formula. The tag is already pushed; only the publish is gated.
+        # commit's CI to be green before publishing the GitHub Release and tap
+        # formula. The tag is already pushed; only the publish is gated.
         if ! _manifest_ship_step "release_gate_post_push" manifest_release_gate_run "post-push"; then
             emit_ship_failure_report "release_gate" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
             return 1
@@ -1261,7 +1258,7 @@ manifest_ship_workflow() {
         fi
         echo ""
     else
-        echo "🧰 Prep mode complete: skipped tag/push/Homebrew publish steps."
+        echo "🧰 Prep mode complete: skipped tag/push/Homebrew tap publish steps."
         echo ""
     fi
 

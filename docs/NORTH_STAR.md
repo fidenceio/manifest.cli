@@ -23,7 +23,7 @@ Give developers a safe way to ship fast agent-assisted changes without losing co
 2. Keep help, docs, examples, completions, and tests in sync.
 3. Make five-repo fleet dogfood acceptance boring.
 4. Use Cloud for optional Standard release-note enrichment without weakening local-first release mechanics.
-5. Keep Homebrew publication narrow and automated: formula update only.
+5. Keep Homebrew publication narrow and automated: tap formula publish only.
 
 ## Non-Goals
 

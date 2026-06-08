@@ -1,3 +1,6 @@
+# Source template for the Homebrew tap formula. Release publishing renders a
+# concrete copy of this file with the release tag URL and sha256, then commits
+# that generated copy only to fidenceio.homebrew.tap/Formula/manifest.rb.
 class Manifest < Formula
   desc "A powerful CLI tool for managing manifest files, versioning, and repository operations with trusted timestamp verification"
   homepage "https://github.com/fidenceio/manifest.cli"

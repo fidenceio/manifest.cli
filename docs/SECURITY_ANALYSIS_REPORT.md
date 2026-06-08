@@ -43,10 +43,10 @@ during release automation:
 
 - Release gate (`release_gate`, default `local-tests`) blocks publishing a
   release until verification passes; `remote-ci` requires the pushed commit's CI
-  to be green before the GitHub Release / Homebrew publish; `none` is loud and
+  to be green before the GitHub Release / Homebrew tap publish; `none` is loud and
   audited.
 - Single-flight fleet lock serializes concurrent `manifest ship fleet -y` runs
-  in a workspace so they cannot race on shared version/tag/formula state. Stale
+  in a workspace so they cannot race on shared version/tag/tap-publish state. Stale
   locks are reclaimed only from a provably dead local holder; live or cross-host
   holders are never broken.
 - Pre-tag re-entrancy: an interrupted ship (VERSION bumped but uncommitted)

@@ -264,13 +264,15 @@ EOF
     return "$push_status"
 }
 
-# Update Homebrew formula in both this repo and the tap repo
+# Generate the Homebrew tap formula from the tracked CLI copy and publish it to the
+# tap repo. The tracked CLI copy is a source template; release-time formula
+# writes must not dirty or commit the CLI repo after its release tag is pushed.
 update_homebrew_formula() {
     if ! should_update_homebrew_for_repo; then
         local origin_slug=""
         origin_slug="$(manifest_origin_repo_slug || echo "unknown")"
-        echo "🍺 Skipping Homebrew formula update for repository: ${origin_slug}"
-        echo "   Homebrew updates run only for: ${MANIFEST_CLI_CANONICAL_REPO_SLUGS:-fidenceio/manifest.cli,fidenceio/fidenceio.manifest.cli}"
+        echo "🍺 Skipping Homebrew tap formula publish for repository: ${origin_slug}"
+        echo "   Homebrew tap publishes run only for: ${MANIFEST_CLI_CANONICAL_REPO_SLUGS:-fidenceio/manifest.cli,fidenceio/fidenceio.manifest.cli}"
         return 0
     fi
 
@@ -288,9 +290,9 @@ update_homebrew_formula() {
         tag="v${version}"
     fi
     local tarball_url="https://github.com/fidenceio/manifest.cli/archive/refs/tags/${tag}.tar.gz"
-    local formula_file="$PROJECT_ROOT/formula/manifest.rb"
+    local formula_source_file="$PROJECT_ROOT/formula/manifest.rb"
 
-    echo "🍺 Updating Homebrew formula to ${tag}..."
+    echo "🍺 Publishing Homebrew tap formula for ${tag}..."
 
     # Get SHA256 of the release tarball.
     # GitHub's auto-generated tag tarball can lag the tag push by a few seconds,
@@ -333,24 +335,32 @@ update_homebrew_formula() {
     done
     echo "   SHA256: ${sha256}"
 
-    # Update formula in this repo
-    if [ -f "$formula_file" ]; then
-        # GNU sed everywhere: the wrapper forces gnu-sed's gnubin onto PATH on
-        # macOS, so `sed -i` (no backup suffix) works on every platform. Guard a
-        # misconfigured env (gnu-sed absent -> BSD sed on PATH): BSD `sed -i`
-        # would read the script as a backup suffix and corrupt the formula, so
-        # fail loud with the remedy rather than silently mangle it.
-        if ! sed --version 2>/dev/null | grep -qi gnu; then
-            log_error "GNU sed is required to update the Homebrew formula (BSD sed would corrupt it). Install it with: brew install gnu-sed"
-            return 1
-        fi
-        sed -i "s|url \"https://github.com/fidenceio/manifest.cli/archive/refs/tags/v.*\.tar\.gz\"|url \"${tarball_url}\"|" "$formula_file"
-        sed -i "s|sha256 \"[a-f0-9]*\"|sha256 \"${sha256}\"|" "$formula_file"
-        echo "   ✅ Updated ${formula_file}"
-    else
-        log_error "Formula file not found: ${formula_file}"
+    if [ ! -f "$formula_source_file" ]; then
+        log_error "Formula file not found: ${formula_source_file}"
         return 1
     fi
+
+    local formula_file
+    formula_file="$(mktemp "$(manifest_make_scratch_path core)/manifest-formula.XXXXXXXX")" || {
+        log_error "Could not create temporary Homebrew tap formula file"
+        return 1
+    }
+    if ! sed \
+        -e "s|url \"https://github.com/fidenceio/manifest.cli/archive/refs/tags/v.*\.tar\.gz\"|url \"${tarball_url}\"|" \
+        -e "s|sha256 \"[a-f0-9]*\"|sha256 \"${sha256}\"|" \
+        "$formula_source_file" >"$formula_file"; then
+        rm -f "$formula_file"
+        log_error "Failed to generate Homebrew tap formula from ${formula_source_file}"
+        return 1
+    fi
+    if ! grep -F "url \"${tarball_url}\"" "$formula_file" >/dev/null 2>&1 || \
+       ! grep -F "sha256 \"${sha256}\"" "$formula_file" >/dev/null 2>&1; then
+        rm -f "$formula_file"
+        log_error "Generated Homebrew tap formula did not include expected URL and SHA256."
+        log_error "Check formula/manifest.rb for a changed url/sha256 layout."
+        return 1
+    fi
+    echo "   ✅ Generated tap formula from ${formula_source_file}"
 
     # Sync to the Homebrew tap repo
     local tap_dir
@@ -369,17 +379,20 @@ update_homebrew_formula() {
             echo "   ⚠️  Could not pull latest from homebrew-tap — continuing with local state"
         fi
         if ! manifest_homebrew_tap_push_formula "$tap_dir" "$formula_file" "$tag"; then
+            rm -f "$formula_file"
             return 1
         fi
     else
+        rm -f "$formula_file"
         log_error "Homebrew tap not found locally at ${tap_dir:-<unset>} — formula sync would silently skip and leave the tap stale."
         log_error "Run: brew tap fidenceio/tap && brew install manifest, then re-ship."
         return 1
     fi
+    rm -f "$formula_file"
 
     manifest_refresh_homebrew_tap_checkouts "$tap_dir"
 
-    echo "🍺 Homebrew formula update complete"
+    echo "🍺 Homebrew tap formula publish complete"
 }
 
 # Upgrade CLI function
@@ -1379,7 +1392,7 @@ EOF
                     update_repository_metadata
                     ;;
                 "homebrew")
-                    echo "Homebrew formula is updated automatically by 'manifest ship'"
+                    echo "Homebrew tap formula is published automatically by 'manifest ship'"
                     ;;
                 "cleanup")
                     local cleanup_version=""

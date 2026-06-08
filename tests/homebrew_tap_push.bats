@@ -126,7 +126,7 @@ STUB
     unset MANIFEST_CLI_CANONICAL_REPO_SLUGS
     PROJECT_ROOT="$SCRATCH" run update_homebrew_formula
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Skipping Homebrew formula update for repository"* ]]
+    [[ "$output" == *"Skipping Homebrew tap formula publish for repository"* ]]
     [[ "$output" == *"other-org/other-repo"* ]]
     [ ! -f "$sentinel" ]
 }

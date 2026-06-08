@@ -288,17 +288,16 @@ validate_system() {
         errors=$((errors + 1))
     fi
 
-    # GNU sed (macOS only): a WARNING, not a hard requirement. Only the
-    # maintainer/canonical-repo path that publishes a Homebrew formula update
-    # needs it (BSD `sed -i` would corrupt the formula). Surfacing the gap here
-    # beats discovering it mid-ship, after a tag and push (§7.9). Linux/WSL ship
-    # GNU sed natively, so this is macOS-scoped.
+    # GNU sed (macOS only): a WARNING, not a hard requirement. Homebrew installs
+    # include it, and source/development installs surface the gap early because
+    # maintainer scripts are validated against the GNU userland used in CI.
+    # Linux/WSL ship GNU sed natively, so this is macOS-scoped.
     if [[ "$OSTYPE" == "darwin"* ]]; then
         if manifest_requirement_runtime_sed_is_gnu; then
             print_success "✅ GNU sed is available"
         else
             print_warning "⚠️  GNU sed not found (BSD sed detected)"
-            print_warning "   Needed only to publish a Homebrew formula update (maintainers): brew install gnu-sed"
+            print_warning "   Recommended for macOS source/development installs: brew install gnu-sed"
         fi
     fi
 
@@ -1466,7 +1465,7 @@ Options:
                         (Homebrew routing skipped); removes an existing
                         Homebrew-managed copy so source is the only channel.
                         Use this to test changes not yet shipped to the tap.
-  --brew, --homebrew    Force a Homebrew install of the SHIPPED formula
+  --brew, --homebrew    Force a Homebrew install from the published tap formula
                         ('brew install fidenceio/tap/manifest'), removing an
                         existing manual install so brew is the only channel.
   -h, --help            Show this help.
@@ -1498,7 +1497,7 @@ EOF
         print_status "📦 --manual specified — installing directly from this source tree (Homebrew routing skipped)"
         echo
     elif [ "$install_mode" = "brew" ]; then
-        print_status "🍺 --brew specified — installing the shipped Homebrew formula"
+        print_status "🍺 --brew specified — installing from the published Homebrew tap formula"
         echo
     fi
 
@@ -1513,8 +1512,8 @@ EOF
     # --- Resolve install channel (provenance-aware) --------------------------
     # The channel is decided by how Manifest is *currently* installed, not by
     # whether brew merely exists on this machine. Conflating those is what let a
-    # bare re-run silently convert a --manual source install onto the shipped
-    # formula. manifest_install_paths_is_brew_managed is the single source of
+    # bare re-run silently convert a --manual source install onto the published
+    # tap formula. manifest_install_paths_is_brew_managed is the single source of
     # truth, shared with uninstall, the doctor reinstall, and the post-ship
     # self-upgrade — so none of them can disagree about "are we on brew".
     #   --manual : force a source-tree install

@@ -2505,7 +2505,7 @@ _fleet_emit_recovery_report() {
 # -----------------------------------------------------------------------------
 # Serialize concurrent `manifest ship fleet ... -y` runs in the same workspace
 # so two invocations cannot race on shared per-member state (VERSION bumps, tag
-# creation, Homebrew formula updates). Portable mkdir-based mutex — `flock` is
+# creation, Homebrew tap formula publishes). Portable mkdir-based mutex — `flock` is
 # absent on stock macOS. A lock left by a dead holder is reclaimed; a lock held
 # by a live process — including one on another host when $HOME is on shared
 # storage — is never broken.
