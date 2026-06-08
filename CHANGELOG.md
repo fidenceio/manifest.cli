@@ -1,5 +1,14 @@
 # Changelog
 
+## [52.5.2] - 2026-06-08
+
+**Release Type:** Patch
+
+### Changes
+
+- Add regression coverage for the changed CLI workflow
+
+
 ## [52.5.1] - 2026-06-08
 
 **Release Type:** Patch
@@ -90,26 +99,3 @@
 - Fix(ci): system-scope safe.directory + install jq in the test container
 - Feat(first): land `manifest first` onboarding command; defer Postman (§7.4/§7.5)
 - Docs(tracker): reconcile CLI tracker after the backlog scrub
-
-
-## [52.0.0] - 2026-06-03
-
-**Release Type:** Major
-
-### Changes
-
-- Docs(tracker): flatten to one list; prune shipped §5.10
-- Refactor(fleet): remove inert validation knobs from fleet config
-- Feat(fleet): gate PR-gated members in ship-fleet preview and apply
-- Feat(pr): emit cli-pr apply-event audit record for -y-gated PR mutations
-- Feat(preview): shared plan renderer, fingerprint drift warning, opt-in no-consent exit code
-- Fix(cli): route deprecated cleanup alias through preview/-y gate
-- Fix(docs): make archive cleanup move-only, no generated archive output
-- Feat(completions): add fish-shell completions
-- Test(ship): cover local-only apply offline boundary
-- Test(cloud): pin apply-intent contract on the cloud stub
-- Test(homebrew-tap): cover brew-managed tap refresh candidate
-- Feat(orchestrator): capture per-run diagnostic ship logs (§5.6)
-- Refactor(install): extract user global-config migration to scripts/migrate-user-config.sh
-- Fix(cloud): conform cloud execution-mode var to MANIFEST_CLI namespace
-- Feat(portability): force GNU userland on macOS so CI can go container-only (§5.11)
