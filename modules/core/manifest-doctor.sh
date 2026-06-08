@@ -26,6 +26,45 @@ _doctor_warn()  { printf "  \033[33m⚠\033[0m %-22s %s\n" "$1" "$2"; _doctor_wa
 _doctor_fail()  { printf "  \033[31m✗\033[0m %-22s %s\n" "$1" "$2"; _doctor_errs=$((_doctor_errs + 1)); }
 _doctor_section() { echo ""; echo "$1"; }
 
+_doctor_version_surface_report() {
+    local root="$1"
+    [[ -d "$root" ]] || return 0
+    declare -F manifest_version_surface_scan >/dev/null 2>&1 || return 0
+
+    local policy_warning
+    if declare -F manifest_version_surface_policy_warnings >/dev/null 2>&1; then
+        while IFS= read -r policy_warning; do
+            [[ -n "$policy_warning" ]] && _doctor_warn "Version surfaces" "$policy_warning"
+        done < <(manifest_version_surface_policy_warnings)
+    fi
+
+    if ! manifest_version_surfaces_enabled; then
+        _doctor_ok "Version surfaces" "disabled by policy"
+        return 0
+    fi
+
+    local canonical_count=0 noncanonical_count=0
+    local first_noncanonical=""
+    local id role kind relationship rel_file version_value
+    while IFS=$'\t' read -r id role kind relationship rel_file version_value; do
+        [[ -n "$rel_file" ]] || continue
+        if [[ "$relationship" == "canonical" ]]; then
+            canonical_count=$((canonical_count + 1))
+        else
+            noncanonical_count=$((noncanonical_count + 1))
+            [[ -z "$first_noncanonical" ]] && first_noncanonical="$rel_file"
+        fi
+    done < <(manifest_version_surface_scan "$root" 2>/dev/null || true)
+
+    if [[ "$noncanonical_count" -gt 0 ]]; then
+        _doctor_warn "Version surfaces" "${noncanonical_count} noncanonical detected; read-only unless listed in version.sync (first: ${first_noncanonical})"
+    elif [[ "$canonical_count" -gt 0 ]]; then
+        _doctor_ok "Version surfaces" "canonical only"
+    else
+        _doctor_ok "Version surfaces" "none detected"
+    fi
+}
+
 manifest_doctor() {
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
         echo "Usage: manifest doctor"
@@ -144,6 +183,7 @@ manifest_doctor() {
         else
             _doctor_warn "VERSION file" "missing — run 'manifest init repo'"
         fi
+        _doctor_version_surface_report "$proj"
     else
         _doctor_warn "Git repository" "not in a git repo (skipping repo checks)"
     fi

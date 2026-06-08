@@ -3,7 +3,7 @@
 load 'helpers/setup'
 
 setup() {
-    load_modules
+    load_modules "core/manifest-discovery.sh" "core/manifest-version-surfaces.sh"
     # shellcheck disable=SC1091
     source "$TEST_REPO_ROOT/modules/core/manifest-status.sh"
     SCRATCH="$(mk_scratch)"
@@ -53,6 +53,55 @@ teardown() {
     echo "$output" | grep -q "patch → 3.7.2"
     echo "$output" | grep -q "minor → 3.8.0"
     echo "$output" | grep -q "major → 4.0.0"
+}
+
+@test "status: reports noncanonical version surfaces without mutating them" {
+    cd "$SCRATCH"
+    git init -q
+    git config user.email t@e.com
+    git config user.name t
+    echo "3.7.1" > VERSION
+    cat > package.json <<'JSON'
+{
+  "name": "demo",
+  "version": "0.0.0"
+}
+JSON
+
+    run manifest_status repo
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Version files:.*1 noncanonical detected"
+    echo "$output" | grep -q "read-only"
+    echo "$output" | grep -q "version.sync unset"
+    [ "$(yq e -r '.version' package.json)" = "0.0.0" ]
+}
+
+@test "status: version surface list mode prints detected files" {
+    cd "$SCRATCH"
+    git init -q
+    git config user.email t@e.com
+    git config user.name t
+    echo "1.0.0" > VERSION
+    printf '{"version":"0.1.0"}\n' > package.json
+    export MANIFEST_CLI_VERSION_SURFACE_NOTIFICATION_MODE="list"
+
+    run manifest_status repo
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "package.json.*package-manifest.*json.*0.1.0"
+}
+
+@test "status: version surface reporting can be disabled by policy" {
+    cd "$SCRATCH"
+    git init -q
+    git config user.email t@e.com
+    git config user.name t
+    echo "1.0.0" > VERSION
+    printf '{"version":"0.1.0"}\n' > package.json
+    export MANIFEST_CLI_VERSION_SURFACES_ENABLED="false"
+
+    run manifest_status repo
+    [ "$status" -eq 0 ]
+    ! echo "$output" | grep -q "Version files:"
 }
 
 @test "status: working-tree counts render as one clean line" {
@@ -131,7 +180,8 @@ YAML
     git -C "$SCRATCH/svc-a" config user.email t@e.com
     git -C "$SCRATCH/svc-a" config user.name t
     echo "1.2.3" > "$SCRATCH/svc-a/VERSION"
-    git -C "$SCRATCH/svc-a" add VERSION
+    printf '{"version":"0.1.0"}\n' > "$SCRATCH/svc-a/package.json"
+    git -C "$SCRATCH/svc-a" add VERSION package.json
     GIT_AUTHOR_DATE="2026-05-01T12:00:00Z" GIT_COMMITTER_DATE="2026-05-01T12:00:00Z" \
         git -C "$SCRATCH/svc-a" commit -qm "Initial A"
     local branch_a
@@ -171,6 +221,8 @@ YAML
     echo "$output" | grep -q "Repo.*Branch.*State.*Version.*Timestamp.*Path.*Latest commit"
     echo "$output" | grep -q "svc-a.*${branch_a}.*clean.*1.2.3.*2026-05-01.*$SCRATCH/svc-a.*Initial A"
     echo "$output" | grep -q "svc-b.*${branch_b}.*dirty.*2.0.0.*2026-05-02.*$SCRATCH/svc-b.*Initial B"
+    echo "$output" | grep -q "Version surfaces"
+    echo "$output" | grep -q "1 noncanonical detected across 1 repo"
 }
 
 @test "runtime bash detection reports current interpreter, not PATH bash" {

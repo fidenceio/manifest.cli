@@ -17,6 +17,7 @@ _MANIFEST_CLI_VERSION_SURFACES_LOADED=1
 readonly MANIFEST_CLI_VERSION_SURFACES_MODULE_VERSION="1.0.0"
 readonly MANIFEST_CLI_VERSION_SURFACES_MODULE_NAME="manifest-version-surfaces"
 readonly MANIFEST_CLI_VERSION_SURFACES_DEFAULT_DEPTH=5
+readonly MANIFEST_CLI_VERSION_SURFACES_DEFAULT_NOTIFICATION_MODE="summary"
 
 _manifest_version_surfaces_module_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _manifest_version_surfaces_modules_dir="$(dirname "$_manifest_version_surfaces_module_dir")"
@@ -35,6 +36,88 @@ manifest_version_catalog_file() {
     else
         echo "$_manifest_version_surfaces_modules_dir/catalog/version-handlers.tsv"
     fi
+}
+
+manifest_version_surfaces_enabled() {
+    local enabled="${MANIFEST_CLI_VERSION_SURFACES_ENABLED:-true}"
+    case "${enabled,,}" in
+        0|false|no|off|disabled)
+            return 1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
+
+manifest_version_surface_scan_depth() {
+    local depth="${MANIFEST_CLI_VERSION_SURFACE_SCAN_DEPTH:-$MANIFEST_CLI_VERSION_SURFACES_DEFAULT_DEPTH}"
+    _manifest_discovery_clamp_depth "$depth" "$MANIFEST_CLI_DISCOVERY_MAX_DEPTH_CAP"
+}
+
+manifest_version_surface_notification_mode() {
+    local mode="${MANIFEST_CLI_VERSION_SURFACE_NOTIFICATION_MODE:-${MANIFEST_CLI_VERSION_SURFACE_NOTIFY:-$MANIFEST_CLI_VERSION_SURFACES_DEFAULT_NOTIFICATION_MODE}}"
+    case "${mode,,}" in
+        off|none|quiet|disabled)
+            echo "off"
+            ;;
+        list|detail|details|verbose)
+            echo "list"
+            ;;
+        summary|"")
+            echo "summary"
+            ;;
+        *)
+            echo "summary"
+            ;;
+    esac
+}
+
+manifest_version_surface_policy_json() {
+    local enabled="true"
+    manifest_version_surfaces_enabled || enabled="false"
+    local mode depth catalog
+    mode="$(manifest_version_surface_notification_mode)"
+    depth="$(manifest_version_surface_scan_depth)"
+    catalog="$(manifest_version_catalog_file)"
+
+    if declare -F _json_kv_raw >/dev/null 2>&1 && declare -F _json_kv_str >/dev/null 2>&1; then
+        printf '{%s,%s,%s,%s}' \
+            "$(_json_kv_raw "enabled" "$enabled")" \
+            "$(_json_kv_str "notification_mode" "$mode")" \
+            "$(_json_kv_raw "depth" "$depth")" \
+            "$(_json_kv_str "catalog" "$catalog")"
+    else
+        printf '{"enabled":%s,"notification_mode":"%s","depth":%s,"catalog":"%s"}' "$enabled" "$mode" "$depth" "$catalog"
+    fi
+}
+
+manifest_version_surface_catalog_warning() {
+    local configured="${MANIFEST_CLI_VERSION_HANDLER_CATALOG:-}"
+    [[ -n "$configured" && ! -f "$configured" ]]
+}
+
+manifest_version_surface_policy_warnings() {
+    local configured="${MANIFEST_CLI_VERSION_HANDLER_CATALOG:-}"
+    if [[ -n "$configured" && ! -f "$configured" ]]; then
+        echo "catalog not found: $configured (using built-in catalog)"
+    fi
+
+    local raw_depth="${MANIFEST_CLI_VERSION_SURFACE_SCAN_DEPTH:-$MANIFEST_CLI_VERSION_SURFACES_DEFAULT_DEPTH}"
+    if ! [[ "$raw_depth" =~ ^[0-9]+$ ]]; then
+        echo "scan_depth '$raw_depth' is invalid (using $MANIFEST_CLI_VERSION_SURFACES_DEFAULT_DEPTH)"
+    elif (( raw_depth > MANIFEST_CLI_DISCOVERY_MAX_DEPTH_CAP )); then
+        echo "scan_depth '$raw_depth' exceeds cap $MANIFEST_CLI_DISCOVERY_MAX_DEPTH_CAP (using $MANIFEST_CLI_DISCOVERY_MAX_DEPTH_CAP)"
+    fi
+
+    local raw_mode="${MANIFEST_CLI_VERSION_SURFACE_NOTIFICATION_MODE:-${MANIFEST_CLI_VERSION_SURFACE_NOTIFY:-$MANIFEST_CLI_VERSION_SURFACES_DEFAULT_NOTIFICATION_MODE}}"
+    case "${raw_mode,,}" in
+        off|none|quiet|disabled|list|detail|details|verbose|summary|"")
+            ;;
+        *)
+            echo "notification_mode '$raw_mode' is invalid (using summary)"
+            ;;
+    esac
 }
 
 # Emit known handler rows as TSV:
@@ -170,7 +253,7 @@ _manifest_version_surface_read_value() {
 # noncanonical and must remain read-only unless another writer explicitly opts in.
 manifest_version_surface_scan() {
     local root_dir="${1:-$(pwd)}"
-    local max_depth="${2:-${MANIFEST_CLI_VERSION_SURFACE_SCAN_DEPTH:-$MANIFEST_CLI_VERSION_SURFACES_DEFAULT_DEPTH}}"
+    local max_depth="${2:-$(manifest_version_surface_scan_depth)}"
     local canonical_file="${MANIFEST_CLI_VERSION_FILE:-VERSION}"
     canonical_file="${canonical_file#./}"
 
@@ -221,4 +304,10 @@ export -f _manifest_version_surface_json_value
 export -f _manifest_version_surface_read_value
 export -f manifest_version_catalog_file
 export -f manifest_version_catalog_entries
+export -f manifest_version_surfaces_enabled
+export -f manifest_version_surface_scan_depth
+export -f manifest_version_surface_notification_mode
+export -f manifest_version_surface_policy_json
+export -f manifest_version_surface_catalog_warning
+export -f manifest_version_surface_policy_warnings
 export -f manifest_version_surface_scan

@@ -19,7 +19,7 @@ This map identifies high-consequence paths and their side-effect boundaries.
 2. Load config layers.
 3. Check working tree and branch policy.
 4. Compute next version.
-5. Bump `VERSION` and any explicit `version.sync` JSON targets.
+5. Bump `VERSION` and any explicit `version.sync` JSON/TOML/YAML targets.
 6. Generate release notes and changelog entry.
 7. Update README/docs metadata.
 8. Commit release files.
@@ -37,8 +37,8 @@ Preview mode stops before local and remote writes. `--local -y` allows local wri
 1. Resolve fleet root and config.
 2. Load selected services discovered through the shared filesystem walker.
 3. Inspect each service branch, version, status, and release policy.
-4. Skip release-disabled services.
-5. Execute repo release flow for release-enabled services.
+4. Skip release-disabled services and eligible services with no release changes.
+5. Execute repo release flow for release-enabled services with release changes.
 6. Report per-service success or failure.
 
 Fleet output must make skipped and failed services explicit.

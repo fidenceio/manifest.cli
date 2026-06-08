@@ -35,6 +35,14 @@ init_git_repo() {
     git -C "$dir" commit -q -m "initial"
 }
 
+seed_version_tag() {
+    local dir="$1" version="$2"
+    echo "$version" > "$dir/VERSION"
+    git -C "$dir" add VERSION
+    git -C "$dir" commit -q -m "version $version"
+    git -C "$dir" tag "v$version"
+}
+
 source_git_changes() {
     # shellcheck disable=SC1091
     source "$TEST_REPO_ROOT/modules/git/manifest-doc-review.sh"
@@ -136,6 +144,8 @@ true	dirty-svc	./dirty-svc	service	false
 TSV
     init_git_repo "$SCRATCH/work/clean-svc"
     init_git_repo "$SCRATCH/work/dirty-svc"
+    seed_version_tag "$SCRATCH/work/clean-svc" "1.2.3"
+    seed_version_tag "$SCRATCH/work/dirty-svc" "4.5.6"
     # Dirty the second member: one modified + one untracked.
     echo "edit" >> "$SCRATCH/work/dirty-svc/README"
     : > "$SCRATCH/work/dirty-svc/new.file"
@@ -161,22 +171,56 @@ TSV
     ! echo "$output" | grep -E "clean-svc[[:space:]].*[0-9]+m\+[0-9]+u" >/dev/null
 }
 
+@test "fleet ship preview: unchanged tagged member is skipped, changed member is releaseable" {
+    write_fleet_with_two_members
+    cd "$SCRATCH/work"
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -E "clean-svc[[:space:]].*read[[:space:]]+skip[[:space:]].*no changes" >/dev/null
+    ! echo "$output" | grep -E "clean-svc[[:space:]].*1\.2\.3->" >/dev/null
+    echo "$output" | grep -E "dirty-svc[[:space:]].*4\.5\.6->4\.5\.7" >/dev/null
+    echo "$output" | grep -E "Plan summary: 1 releaseable, 0 pr-gated, 1 skipped" >/dev/null
+}
+
+@test "fleet ship preview: clean member with commits after current tag is releaseable" {
+    write_fleet_with_two_members
+    git -C "$SCRATCH/work/clean-svc" tag -d v1.2.3 >/dev/null
+    git -C "$SCRATCH/work/clean-svc" tag v1.2.3 HEAD~0
+    echo "post-tag work" > "$SCRATCH/work/clean-svc/feature.txt"
+    git -C "$SCRATCH/work/clean-svc" add feature.txt
+    git -C "$SCRATCH/work/clean-svc" commit -q -m "feature after release"
+
+    cd "$SCRATCH/work"
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -E "clean-svc[[:space:]].*1\.2\.3->1\.2\.4" >/dev/null
+    echo "$output" | grep -E "Plan summary: 2 releaseable, 0 pr-gated, 0 skipped" >/dev/null
+}
+
 # --- Version column (current → next) ----------------------------------------
 
 @test "fleet ship preview: Version column header and per-member current version" {
     write_fleet_with_two_members
-    # Seed VERSION files so the plan can render current → next.
-    echo "1.2.3" > "$SCRATCH/work/clean-svc/VERSION"
-    git -C "$SCRATCH/work/clean-svc" add VERSION
-    git -C "$SCRATCH/work/clean-svc" commit -q -m "version"
-    echo "4.5.6" > "$SCRATCH/work/dirty-svc/VERSION"
     cd "$SCRATCH/work"
     run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
     [ "$status" -eq 0 ]
     # Header must list a Version column between Branch and Dirty.
     echo "$output" | grep -E "Service.*Type.*Branch.*Version.*Dirty.*Effect" >/dev/null
-    # Releaseable member with a VERSION renders current→next (e.g. 1.2.3→1.2.4).
-    echo "$output" | grep -E "clean-svc[[:space:]].*1\.2\.3->" >/dev/null
+    # Releaseable member with a VERSION renders current→next (e.g. 4.5.6→4.5.7).
+    echo "$output" | grep -E "dirty-svc[[:space:]].*4\.5\.6->" >/dev/null
+    # Unchanged tagged members show the current version without a bump arrow.
+    echo "$output" | grep -E "clean-svc[[:space:]].*1\.2\.3[[:space:]].*no changes" >/dev/null
+}
+
+@test "fleet ship preview: reports noncanonical surfaces for releaseable members" {
+    write_fleet_with_two_members
+    printf '{"version":"0.1.0"}\n' > "$SCRATCH/work/dirty-svc/package.json"
+
+    cd "$SCRATCH/work"
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Version surfaces: 1 noncanonical detected across 1 releaseable repo"
+    echo "$output" | grep -q "version.sync"
 }
 
 @test "fleet ship preview: release-disabled member without VERSION is not release-probed" {
@@ -209,6 +253,38 @@ TSV
     [ "$status" -eq 0 ]
     [[ "$output" != *"No such file or directory"* ]]
     [[ "$output" != *"1m+1u"* ]]
+    echo "$output" | grep -E "formula-only[[:space:]].*read[[:space:]]+skip[[:space:]].*release disabled" >/dev/null
+}
+
+@test "fleet ship preview: release-disabled member package surfaces are not scanned" {
+    git -C "$SCRATCH/work" init -q
+    git -C "$SCRATCH/work" config user.email test@example.com
+    git -C "$SCRATCH/work" config user.name "Test"
+    cat > "$SCRATCH/work/manifest.fleet.config.yaml" <<'YAML'
+fleet:
+  name: "test-fleet"
+  versioning: "none"
+services:
+  formula-only:
+    path: "./formula-only"
+    type: "infrastructure"
+    branch: "main"
+    release:
+      enabled: false
+YAML
+    cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
+true	formula-only	./formula-only	infrastructure	false
+TSV
+    init_git_repo "$SCRATCH/work/formula-only"
+    rm -f "$SCRATCH/work/formula-only/VERSION"
+    printf '{"version":"9.9.9"}\n' > "$SCRATCH/work/formula-only/package.json"
+
+    cd "$SCRATCH/work"
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
+
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"Version surfaces:"* ]]
+    [[ "$output" != *"package.json"* ]]
     echo "$output" | grep -E "formula-only[[:space:]].*read[[:space:]]+skip[[:space:]].*release disabled" >/dev/null
 }
 

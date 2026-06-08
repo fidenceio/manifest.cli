@@ -128,7 +128,7 @@ git_retry() {
 # Bump the repo release version.
 #
 # Current writer contract: VERSION is the canonical release file. Additional
-# JSON files are updated only when explicitly listed in version.sync.
+# package/version files are updated only when explicitly listed in version.sync.
 bump_version() {
     local increment_type="$1"
     
@@ -307,12 +307,108 @@ _manifest_json_toplevel_version_line() {
     ' "$1"
 }
 
-# Mirror the canonical version into the opt-in version.sync targets. Today only
-# JSON files (package.json-style) are rewritten, via a surgical sed of the
-# top-level "version" value — NO jq reserialize, so the diff is a single line
-# and the file's existing formatting is preserved. Non-JSON targets
-# (pyproject.toml / Cargo.toml, planned later) are recognized but skipped with a
-# notice, so a partial implementation is never mistaken for a complete one.
+_manifest_toml_toplevel_version_line() {
+    awk '
+        /^[[:space:]]*#/ || /^[[:space:]]*$/ { next }
+        /^[[:space:]]*\[/ { exit }
+        /^[[:space:]]*version[[:space:]]*=/ { print NR; exit }
+    ' "$1"
+}
+
+_manifest_yaml_toplevel_version_line() {
+    awk '
+        /^version:[[:space:]]*[^[:space:]#]/ { print NR; exit }
+    ' "$1"
+}
+
+_manifest_replace_line() {
+    local target="$1"
+    local line_number="$2"
+    local replacement="$3"
+    local tmp="${target}.manifest-sync.tmp"
+
+    if awk -v n="$line_number" -v repl="$replacement" 'NR == n { print repl; next } { print }' "$target" > "$tmp" 2>/dev/null && mv "$tmp" "$target"; then
+        return 0
+    fi
+
+    rm -f "$tmp" 2>/dev/null
+    return 1
+}
+
+_manifest_toml_version_replacement_line() {
+    local line_text="$1"
+    local new_version="$2"
+    local double_re='^([[:space:]]*version[[:space:]]*=[[:space:]]*")([^"]*)(".*)$'
+    local single_re="^([[:space:]]*version[[:space:]]*=[[:space:]]*')([^']*)('.*)$"
+
+    if [[ "$line_text" =~ $double_re ]]; then
+        printf '%s%s%s\n' "${BASH_REMATCH[1]}" "$new_version" "${BASH_REMATCH[3]}"
+        return 0
+    fi
+    if [[ "$line_text" =~ $single_re ]]; then
+        printf '%s%s%s\n' "${BASH_REMATCH[1]}" "$new_version" "${BASH_REMATCH[3]}"
+        return 0
+    fi
+
+    return 1
+}
+
+_manifest_yaml_version_replacement_line() {
+    local line_text="$1"
+    local new_version="$2"
+    local double_re='^(version:[[:space:]]*")([^"]*)(".*)$'
+    local single_re="^(version:[[:space:]]*')([^']*)('.*)$"
+    local bare_comment_re='^(version:[[:space:]]*)([0-9A-Za-z]([^#]*[^[:space:]])?)([[:space:]]+#.*)$'
+    local bare_re='^(version:[[:space:]]*)([0-9A-Za-z]([^#]*[^[:space:]])?)([[:space:]]*)$'
+
+    if [[ "$line_text" =~ $double_re ]]; then
+        printf '%s%s%s\n' "${BASH_REMATCH[1]}" "$new_version" "${BASH_REMATCH[3]}"
+        return 0
+    fi
+    if [[ "$line_text" =~ $single_re ]]; then
+        printf '%s%s%s\n' "${BASH_REMATCH[1]}" "$new_version" "${BASH_REMATCH[3]}"
+        return 0
+    fi
+    if [[ "$line_text" =~ $bare_comment_re ]]; then
+        printf '%s%s%s\n' "${BASH_REMATCH[1]}" "$new_version" "${BASH_REMATCH[4]}"
+        return 0
+    fi
+    if [[ "$line_text" =~ $bare_re ]]; then
+        printf '%s%s%s\n' "${BASH_REMATCH[1]}" "$new_version" "${BASH_REMATCH[4]}"
+        return 0
+    fi
+
+    return 1
+}
+
+_manifest_version_sync_rewrite_line() {
+    local target="$1"
+    local line_number="$2"
+    local new_version="$3"
+    local format="$4"
+    local line_text=""
+    local replacement=""
+
+    line_text="$(sed -n "${line_number}p" "$target")"
+    case "$format" in
+        toml)
+            replacement="$(_manifest_toml_version_replacement_line "$line_text" "$new_version")" || return 1
+            ;;
+        yaml)
+            replacement="$(_manifest_yaml_version_replacement_line "$line_text" "$new_version")" || return 1
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+
+    _manifest_replace_line "$target" "$line_number" "$replacement"
+}
+
+# Mirror the canonical version into the opt-in version.sync targets. JSON,
+# TOML, and YAML package/version files are rewritten via surgical single-line
+# edits of a top-level version field, so diffs stay small and existing
+# formatting is preserved where practical.
 # Fail-closed: a missing file or a missing top-level "version" field is skipped,
 # never created. Targets resolve relative to the cwd (the repo root during a bump).
 manifest_version_sync_apply() {
@@ -354,8 +450,34 @@ manifest_version_sync_apply() {
                     echo "   ⚠️  version.sync: failed to update $target"
                 fi
                 ;;
+            *.toml)
+                local _line
+                _line="$(_manifest_toml_toplevel_version_line "$target")"
+                if [ -z "$_line" ]; then
+                    echo "   ⚠️  version.sync: no top-level \"version\" field in $target — skipped"
+                    continue
+                fi
+                if _manifest_version_sync_rewrite_line "$target" "$_line" "$new_version" "toml"; then
+                    echo "   ✅ version.sync: $target -> $new_version"
+                else
+                    echo "   ⚠️  version.sync: failed to update $target"
+                fi
+                ;;
+            *.yaml|*.yml)
+                local _line
+                _line="$(_manifest_yaml_toplevel_version_line "$target")"
+                if [ -z "$_line" ]; then
+                    echo "   ⚠️  version.sync: no top-level \"version\" field in $target — skipped"
+                    continue
+                fi
+                if _manifest_version_sync_rewrite_line "$target" "$_line" "$new_version" "yaml"; then
+                    echo "   ✅ version.sync: $target -> $new_version"
+                else
+                    echo "   ⚠️  version.sync: failed to update $target"
+                fi
+                ;;
             *)
-                echo "   ⚠️  version.sync: $target type not yet supported (JSON only) — skipped"
+                echo "   ⚠️  version.sync: $target type not supported (JSON/TOML/YAML only) — skipped"
                 ;;
         esac
     done < <(_manifest_version_sync_targets)

@@ -1922,7 +1922,59 @@ _fleet_service_config_skip_reason() {
     esac
 }
 
-_fleet_service_release_reason() {
+_fleet_service_dirty_summary() {
+    local path="$1"
+    if declare -F manifest_git_changes_dirty_summary >/dev/null 2>&1; then
+        manifest_git_changes_dirty_summary "$path"
+        return 0
+    fi
+
+    [[ -n "$path" && -d "$path/.git" ]] || return 0
+    local porcelain modified untracked
+    porcelain=$(git -C "$path" status --porcelain 2>/dev/null \
+        | awk '$2 != "formula/manifest.rb" && NF > 0 { print }' || true)
+    [[ -n "$porcelain" ]] || return 0
+    modified=$({ printf '%s\n' "$porcelain" | grep -cv '^??'; } 2>/dev/null || true)
+    untracked=$({ printf '%s\n' "$porcelain" | grep -c '^??'; } 2>/dev/null || true)
+    : "${modified:=0}" "${untracked:=0}"
+    printf '%dm+%du' "$modified" "$untracked"
+}
+
+_fleet_service_has_release_changes() {
+    local path="$1"
+    [[ -n "$path" && -d "$path/.git" ]] || return 1
+
+    if [[ -n "$(_fleet_service_dirty_summary "$path")" ]]; then
+        return 0
+    fi
+
+    local current tag tag_commit head_commit
+    current="$(_fleet_plan_current_version "$path")"
+    [[ -n "$current" ]] || return 1
+
+    if declare -F manifest_release_tag_name >/dev/null 2>&1; then
+        tag="$(manifest_release_tag_name "$current")"
+    else
+        tag="v$current"
+    fi
+
+    if ! git -C "$path" rev-parse -q --verify "refs/tags/$tag^{commit}" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    tag_commit="$(git -C "$path" rev-parse "refs/tags/$tag^{commit}" 2>/dev/null || true)"
+    head_commit="$(git -C "$path" rev-parse HEAD 2>/dev/null || true)"
+    if [[ -z "$tag_commit" || -z "$head_commit" ]]; then
+        return 0
+    fi
+    if [[ "$tag_commit" != "$head_commit" ]]; then
+        return 0
+    fi
+
+    return 1
+}
+
+_fleet_service_static_release_reason() {
     local service="$1"
     local path="$2"
     local config_skip
@@ -1984,6 +2036,24 @@ _fleet_service_release_reason() {
 
     echo "no VERSION"
     return 1
+}
+
+_fleet_service_release_reason() {
+    local service="$1"
+    local path="$2"
+    local reason
+
+    if ! reason=$(_fleet_service_static_release_reason "$service" "$path"); then
+        echo "$reason"
+        return 1
+    fi
+    if ! _fleet_service_has_release_changes "$path"; then
+        echo "no changes"
+        return 1
+    fi
+
+    echo "$reason"
+    return 0
 }
 
 # Probes whether the caller can write under <path>/.git. Sandboxed
@@ -2150,6 +2220,56 @@ _fleet_plan_current_version() {
     tr -d '[:space:]' < "$path/VERSION" 2>/dev/null || true
 }
 
+_fleet_plan_version_surface_report() {
+    local labels_name="$1"
+    local paths_name="$2"
+    local -n _surface_labels="$labels_name"
+    local -n _surface_paths="$paths_name"
+
+    [[ "${#_surface_paths[@]}" -gt 0 ]] || return 0
+    declare -F manifest_version_surface_scan >/dev/null 2>&1 || return 0
+    manifest_version_surfaces_enabled || return 0
+
+    local mode
+    mode="$(manifest_version_surface_notification_mode)"
+    [[ "$mode" != "off" ]] || return 0
+
+    local total_noncanonical=0 repos_with_surfaces=0
+    local rows=()
+    local i path label id role kind relationship rel_file version_value
+    for i in "${!_surface_paths[@]}"; do
+        path="${_surface_paths[$i]}"
+        label="${_surface_labels[$i]}"
+        [[ -d "$path" ]] || continue
+        local repo_noncanonical=0 repo_rows=()
+        while IFS=$'\t' read -r id role kind relationship rel_file version_value; do
+            [[ -n "$rel_file" ]] || continue
+            [[ "$relationship" != "canonical" ]] || continue
+            repo_noncanonical=$((repo_noncanonical + 1))
+            repo_rows+=("$(printf "    %-30s %-32s %-18s %-8s %s" "$label" "$rel_file" "$role" "$kind" "${version_value:-unknown}")")
+        done < <(manifest_version_surface_scan "$path" 2>/dev/null || true)
+        if [[ "$repo_noncanonical" -gt 0 ]]; then
+            repos_with_surfaces=$((repos_with_surfaces + 1))
+            total_noncanonical=$((total_noncanonical + repo_noncanonical))
+            if [[ "$mode" == "list" ]]; then
+                rows+=("${repo_rows[@]}")
+            fi
+        fi
+    done
+
+    [[ "$total_noncanonical" -gt 0 ]] || return 0
+    echo ""
+    echo "Version surfaces: ${total_noncanonical} noncanonical detected across ${repos_with_surfaces} releaseable repo(s)"
+    echo "  Read-only in this preview; only explicit version.sync targets are rewritten during ship."
+    if [[ "$mode" == "list" && "${#rows[@]}" -gt 0 ]]; then
+        local row
+        printf "    %-30s %-32s %-18s %-8s %s\n" "Service" "Path" "Role" "Kind" "Version"
+        for row in "${rows[@]}"; do
+            printf "%s\n" "$row"
+        done
+    fi
+}
+
 _fleet_ship_plan() {
     local increment_type="$1"
     local local_only="$2"
@@ -2170,6 +2290,8 @@ _fleet_ship_plan() {
     # local/remote mode, and each releaseable member's name + version transition.
     # Same shape -> same digest, so a preview and its apply can be compared.
     local fp_parts=("ship-fleet" "$increment_type" "$local_only")
+    local surface_labels=()
+    local surface_paths=()
     for service in $MANIFEST_CLI_FLEET_SERVICES; do
         path=$(get_fleet_service_property "$service" "path")
         type=$(get_fleet_service_property "$service" "type" "service")
@@ -2190,7 +2312,7 @@ _fleet_ship_plan() {
             continue
         fi
 
-        dirty=$(manifest_git_changes_dirty_summary "$path")
+        dirty=$(_fleet_service_dirty_summary "$path")
         current="$(_fleet_plan_current_version "$path")"
         if reason=$(_fleet_service_release_reason "$service" "$path"); then
             releaseable_count=$((releaseable_count + 1))
@@ -2214,6 +2336,8 @@ _fleet_ship_plan() {
             fi
             printf '%-30s %-12s %-12s %-15s %-7s %-9s %-13s %s\n' "$display_name" "$type" "$branch" "$version" "$dirty" "$effect" "$decision" "$path"
             fp_parts+=("${display_name}:${version}")
+            surface_labels+=("$display_name")
+            surface_paths+=("$path")
         else
             skipped_count=$((skipped_count + 1))
             # Skipped members never ship, so no off-branch marker is applied.
@@ -2225,6 +2349,7 @@ _fleet_ship_plan() {
 
     echo ""
     echo "Plan summary: $releaseable_count releaseable, $pr_gated_count pr-gated, $skipped_count skipped"
+    _fleet_plan_version_surface_report surface_labels surface_paths
     # Fleet plan fingerprint, rendered through the shared plan-table renderer so
     # it reads identically to the single-repo preview. Exported for the caller to
     # persist (preview) and re-compare (apply) — CLI tracker §2.2.
@@ -2733,9 +2858,11 @@ _fleet_resume_classify() {
     local service path reason probe code version tag_name detail
     for service in $MANIFEST_CLI_FLEET_SERVICES; do
         path=$(get_fleet_service_property "$service" "path")
-        if ! reason=$(_fleet_service_release_reason "$service" "$path"); then
-            # Includes "not a git repo", "missing path", "release disabled",
-            # "excluded", etc. — anything fleet ship would also skip.
+        if ! reason=$(_fleet_service_static_release_reason "$service" "$path"); then
+            # Includes static target exclusions such as "not a git repo",
+            # "missing path", "release disabled", and "excluded". Resume then
+            # runs its own per-repo probe, because stranded release state can be
+            # clean except for formula-only files that ship intentionally skips.
             disabled+=("$service|$path|$reason")
             continue
         fi

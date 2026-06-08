@@ -73,6 +73,12 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     # Comma-separated (e.g. "package.json"); unset = no sync. See
     # _manifest_version_sync_targets / manifest_version_sync_apply.
     ["version.sync"]="MANIFEST_CLI_VERSION_SYNC"
+    # Passive version-surface detection policy. Detection is read-only; writers
+    # still require explicit version.sync targets.
+    ["version.surfaces.enabled"]="MANIFEST_CLI_VERSION_SURFACES_ENABLED"
+    ["version.surfaces.catalog"]="MANIFEST_CLI_VERSION_HANDLER_CATALOG"
+    ["version.surfaces.scan_depth"]="MANIFEST_CLI_VERSION_SURFACE_SCAN_DEPTH"
+    ["version.surfaces.notification_mode"]="MANIFEST_CLI_VERSION_SURFACE_NOTIFICATION_MODE"
 
     # -------------------------------------------------------------------------
     # release — release artifact policy

@@ -2,6 +2,10 @@
 
 Run tests in containers. Do not install test dependencies on the host.
 
+`scripts/run-tests-container.sh` builds a reusable local image from
+`tests/containers/run-tests.Dockerfile`, keyed by the Dockerfile hash, then
+bind-mounts the repo into `/work`.
+
 ## Full Suite
 
 ```bash
@@ -21,10 +25,11 @@ Run tests in containers. Do not install test dependencies on the host.
 - Preview/apply safety gates
 - YAML config layering and env mapping
 - Version math and changelog updates
-- Canonical-version ownership and opt-in `version.sync`
-- Passive version-surface discovery for package manifests and lockfiles
+- Canonical-version ownership and opt-in JSON/TOML/YAML `version.sync`
+- Passive version-surface discovery, YAML policy, status/doctor/fleet reporting
 - Shared iterative discovery used by fleet and version scanners
 - Repo and fleet release paths
+- Fleet ship skips unchanged members that are already tagged at their current version
 - Homebrew tap update behavior
 - GitHub Actions and GitHub Release integration
 - Docs generation and managed Pages workflow generation

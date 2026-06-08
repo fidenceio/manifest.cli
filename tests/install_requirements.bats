@@ -40,10 +40,13 @@ EOF
     # it inherits parallel from there; the host-native macOS leg (no Docker on
     # GitHub macOS runners) installs it via brew. The host installer/formula must
     # NOT — parallel is a test-only dep, like bats, never shipped to CLI users.
-    grep -F 'apk add --no-cache bash git bats parallel yq coreutils' \
+    grep -F 'apk add --no-cache bash git bats parallel yq coreutils jq' \
+        "$TEST_REPO_ROOT/tests/containers/run-tests.Dockerfile" >/dev/null
+    grep -F 'docker build -q -f "$DOCKERFILE"' \
         "$TEST_REPO_ROOT/scripts/run-tests-container.sh" >/dev/null
     # Linux leg runs via the containerized runner (parallel provisioned in-container)…
     grep -F './scripts/run-tests-container.sh' "$TEST_REPO_ROOT/.github/workflows/test.yml" >/dev/null
+    grep -F './scripts/run-tests-container.sh --print-image' "$TEST_REPO_ROOT/.github/workflows/test.yml" >/dev/null
     # …and no longer installs test deps on the runner host.
     ! grep -F 'apt-get install -y bats parallel' "$TEST_REPO_ROOT/.github/workflows/test.yml"
     # macOS leg is host-native and brew-installs parallel (and gnu-sed for §5.11).

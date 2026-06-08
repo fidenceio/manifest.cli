@@ -108,18 +108,31 @@ Repo ship can bump `VERSION`, update `CHANGELOG.md`, refresh docs, commit, tag, 
 
 Manifest has one canonical release-writer file today: `VERSION`.
 
-Other version-bearing files are non-canonical. This includes package manifests, package locks, module files, and chart files such as `package.json`, `package-lock.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, and `Chart.yaml`. Manifest can detect these surfaces from the committed handler catalog, but detection is passive: it does not rewrite them, print noisy warnings during scripts, or stop non-interactive runs.
+Other version-bearing files are non-canonical. This includes package manifests, package locks, module files, and chart files such as `package.json`, `package-lock.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, and `Chart.yaml`. Manifest detects these surfaces from the committed handler catalog, but detection is passive: it does not rewrite them, print noisy warnings during scripts, or stop non-interactive runs.
 
-To mirror the canonical version into selected JSON files, opt in with `version.sync`:
+To mirror the canonical version into selected package/version files, opt in with `version.sync`:
 
 ```yaml
 version:
-  sync: "package.json"
+  sync: "package.json,pyproject.toml,Chart.yaml"
 ```
 
-Unset `version.sync` is the default and leaves package files and lockfiles untouched. The current writer only updates a top-level JSON `"version"` field and skips missing, nested-only, or non-JSON targets.
+Unset `version.sync` is the default and leaves package files and lockfiles untouched. The current writer updates only top-level JSON, TOML, and YAML `version` fields and skips missing, nested-only, or unsupported targets.
 
-`files.version` is available in configuration and is used by the passive scanner to classify a custom version file as canonical. Repo ship, status, doctor, resume, and fleet release paths still treat `VERSION` as the release-writer file; full custom canonical filename support is tracked in [TRACKER §8.12](TRACKER.md#8--enterprise-readiness-audit-2026-06-05).
+Version-surface reporting is configurable:
+
+```yaml
+version:
+  surfaces:
+    enabled: true
+    catalog: ""          # empty = built-in catalog
+    scan_depth: 5
+    notification_mode: summary # summary | list | off
+```
+
+Human `manifest status` and fleet status stay quiet when only canonical version files are present, summarize non-canonical detections by default, and list files when `notification_mode` is `list`. `manifest status --json` includes the full `version_surfaces` object. `manifest doctor` reports invalid policy and non-canonical detections as warnings only.
+
+`files.version` is available in configuration and is used by the passive scanner to classify a custom version file as canonical. Repo ship, the main status version field, resume, and fleet release paths still treat `VERSION` as the release-writer file; full custom canonical filename support is tracked in [TRACKER §8.12](TRACKER.md#8--enterprise-readiness-audit-2026-06-05).
 
 ## Fleet Workflow
 
@@ -161,7 +174,7 @@ manifest ship fleet patch -y
 manifest ship fleet patch --local -y
 ```
 
-Release-disabled services are listed and skipped by ship.
+Release-disabled services are listed and skipped by ship. Release-enabled services are still skipped when they have no release changes, which means a clean worktree whose HEAD already matches the current `VERSION` tag.
 
 ## Pull Request Workflow
 

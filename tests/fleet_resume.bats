@@ -237,7 +237,7 @@ setup_three_member_fleet() {
 @test "classifier: member without .git is classified as disabled (not a git repo)" {
     mkdir -p "$SCRATCH/work/svc-x"
     echo "1.2.3" > "$SCRATCH/work/svc-x/VERSION"
-    # No git init — _fleet_service_release_reason will return "not a git repo".
+    # No git init — static release-target classification returns "not a git repo".
     export MANIFEST_CLI_FLEET_SERVICES="svcx"
     get_fleet_service_property() {
         local svc="$1" prop="$2" default="${3:-}"

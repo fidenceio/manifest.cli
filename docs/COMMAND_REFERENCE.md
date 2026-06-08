@@ -94,13 +94,15 @@ manifest ship fleet patch|minor|major|revision [--dry-run] [-y|--yes] [--local]
 
 Repo ship can bump version, generate docs, commit, tag, push, publish GitHub Release notes, and update the Homebrew tap when applicable.
 
-Fleet ship applies the same release policy to release-enabled fleet services.
+Fleet ship applies the same release policy to release-enabled fleet services that have release changes. Already-tagged, clean members are listed and skipped as `no changes`.
 
 Version-file behavior:
 
 - Repo and fleet release writers use `VERSION` as the canonical version file today.
 - `version.sync` is opt-in. When unset, package manifests and lockfiles are not incremented.
-- The passive version-surface scanner uses `modules/catalog/version-handlers.tsv` to describe known package/version files. It recognizes `files.version` for classification, but it is an internal detection surface today, not a separate public command.
+- `version.sync` supports top-level JSON, TOML, and YAML `version` fields. Missing, nested-only, and unsupported targets are skipped.
+- The passive version-surface scanner uses `modules/catalog/version-handlers.tsv` to describe known package/version files. `manifest status`, `manifest status --json`, `manifest doctor`, fleet status, and fleet ship previews surface detections without mutating those files.
+- Configure passive reporting with `version.surfaces.enabled`, `version.surfaces.catalog`, `version.surfaces.scan_depth`, and `version.surfaces.notification_mode`.
 
 ## Fleet Operations
 

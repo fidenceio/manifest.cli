@@ -874,6 +874,10 @@ set_default_configuration() {
     # Advanced Configuration
     export MANIFEST_CLI_VERSION_REGEX="${MANIFEST_CLI_VERSION_REGEX:-^[0-9]+(\.[0-9]+)*$}"
     export MANIFEST_CLI_VERSION_VALIDATION="${MANIFEST_CLI_VERSION_VALIDATION:-true}"
+    export MANIFEST_CLI_VERSION_SURFACES_ENABLED="${MANIFEST_CLI_VERSION_SURFACES_ENABLED:-true}"
+    export MANIFEST_CLI_VERSION_HANDLER_CATALOG="${MANIFEST_CLI_VERSION_HANDLER_CATALOG:-}"
+    export MANIFEST_CLI_VERSION_SURFACE_SCAN_DEPTH="${MANIFEST_CLI_VERSION_SURFACE_SCAN_DEPTH:-5}"
+    export MANIFEST_CLI_VERSION_SURFACE_NOTIFICATION_MODE="${MANIFEST_CLI_VERSION_SURFACE_NOTIFICATION_MODE:-summary}"
     
     # Development & Debugging
     export MANIFEST_CLI_DEBUG="${MANIFEST_CLI_DEBUG:-false}"
@@ -1247,6 +1251,10 @@ show_configuration() {
     echo "⚙️  Advanced Configuration:"
     echo "   Version Regex: ${MANIFEST_CLI_VERSION_REGEX}"
     echo "   Version Validation: ${MANIFEST_CLI_VERSION_VALIDATION}"
+    echo "   Version Surface Detection: ${MANIFEST_CLI_VERSION_SURFACES_ENABLED}"
+    echo "   Version Surface Catalog: ${MANIFEST_CLI_VERSION_HANDLER_CATALOG:-built-in}"
+    echo "   Version Surface Depth: ${MANIFEST_CLI_VERSION_SURFACE_SCAN_DEPTH}"
+    echo "   Version Surface Notifications: ${MANIFEST_CLI_VERSION_SURFACE_NOTIFICATION_MODE}"
     echo ""
     
     echo "🔄 Auto-Upgrade Configuration:"

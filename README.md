@@ -34,9 +34,9 @@ manifest ship repo patch --local -y
 
 Manifest treats `VERSION` as the canonical release file for repo and fleet ship today. It does not rewrite package-manager files such as `package.json`, `package-lock.json`, `pyproject.toml`, `Cargo.toml`, or lockfiles unless the project explicitly opts in.
 
-`version.sync` is the opt-in mirror list for files whose own top-level version field should follow the canonical version during a bump. With `version.sync` unset, `manifest ship repo patch -y` updates the canonical version only.
+`version.sync` is the opt-in mirror list for files whose own top-level version field should follow the canonical version during a bump. With `version.sync` unset, `manifest ship repo patch -y` updates the canonical version only. Sync writers currently support top-level JSON, TOML, and YAML `version` fields and skip missing, nested-only, or unsupported targets without creating files.
 
-Manifest also ships a committed handler catalog at [modules/catalog/version-handlers.tsv](modules/catalog/version-handlers.tsv). The catalog powers passive detection of non-canonical version surfaces so future status, doctor, and fleet reports can notify without mutating files or blocking non-interactive scripts. `files.version` is mapped and recognized by the passive scanner, but full ship/status/doctor support for custom canonical filenames is tracked work rather than a public release-writer contract today.
+Manifest also ships a committed handler catalog at [modules/catalog/version-handlers.tsv](modules/catalog/version-handlers.tsv). The catalog powers passive detection of non-canonical version surfaces in `manifest status`, `manifest doctor`, `manifest status fleet`, and fleet ship previews without mutating files or blocking non-interactive scripts. Tune reporting with `version.surfaces.enabled`, `version.surfaces.catalog`, `version.surfaces.scan_depth`, and `version.surfaces.notification_mode` (`summary`, `list`, or `off`). `files.version` is mapped and recognized by the passive scanner, but full repo/fleet release writing still uses `VERSION` today.
 
 ## Install
 
@@ -112,9 +112,11 @@ A fleet is a workspace of independent Git repositories described by `manifest.fl
 ```bash
 manifest init fleet             # scan or consume fleet TSV
 manifest status fleet           # inspect selected repos
-manifest ship fleet patch       # preview releaseable services
-manifest ship fleet patch -y    # apply releaseable services
+manifest ship fleet patch       # preview services with release changes
+manifest ship fleet patch -y    # apply services with release changes
 ```
+
+Fleet ship skips unchanged members. A release-enabled member is eligible for release, but it is only bumped when its worktree has release changes or its HEAD differs from the current `VERSION` tag.
 
 Fleet adoption and reconciliation stay preview-first:
 
