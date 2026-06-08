@@ -92,7 +92,7 @@ manifest ship repo patch|minor|major|revision [--dry-run] [-y|--yes] [--local] [
 manifest ship fleet patch|minor|major|revision [--dry-run] [-y|--yes] [--local]
 ```
 
-Repo ship can bump version, generate docs, commit, tag, push, publish GitHub Release notes, and publish the Homebrew tap formula when applicable.
+Repo ship can bump version, generate docs, commit, tag, push, publish GitHub Release notes, and publish the Homebrew tap formula when applicable. Completion requires a clean source tree; published ships also require `HEAD` to remain at the pushed release head.
 
 Fleet ship applies the same release policy to release-enabled fleet services that have release changes. Already-tagged, clean members are listed and skipped as `no changes`.
 

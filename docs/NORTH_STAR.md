@@ -24,6 +24,7 @@ Give developers a safe way to ship fast agent-assisted changes without losing co
 3. Make five-repo fleet dogfood acceptance boring.
 4. Use Cloud for optional Standard release-note enrichment without weakening local-first release mechanics.
 5. Keep Homebrew publication narrow and automated: tap formula publish only.
+6. Never report a completed ship while source release changes remain dirty or post-push commits have advanced the repo past the pushed release head.
 
 ## Non-Goals
 

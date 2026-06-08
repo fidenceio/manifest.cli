@@ -27,6 +27,7 @@ This map identifies high-consequence paths and their side-effect boundaries.
 10. Push branch and tag.
 11. Create or reuse GitHub Release.
 12. Update Homebrew tap when canonical CLI release rules apply.
+13. Verify completion cleanliness before printing success: the source tree must be clean, and published ships must still have `HEAD` at the pushed release head.
 
 Preview mode stops before local and remote writes. `--local -y` allows local writes and suppresses remote writes.
 
@@ -53,6 +54,7 @@ Boundaries:
 - The tap repo should remain formula-focused.
 - The CLI changelog remains the product release source of truth.
 - The CLI release branch must not move past the release tag solely for generated Homebrew formula content.
+- Ship completion fails closed if any post-push step dirties the CLI repo or creates a source commit after the pushed release head.
 
 ## GitHub Release Transaction
 
