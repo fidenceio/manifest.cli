@@ -273,7 +273,7 @@ assert_no_remote_dispatch() {
     PROJECT_ROOT="$repo" run manifest_ship_repo patch --local -y
     [ "$status" -eq 0 ]
     [[ "$output" == *"no remote operations"* ]]
-    [[ "$output" == *"skipped tag/push/Homebrew publish steps"* ]]
+    [[ "$output" == *"skipped tag/push/Homebrew tap publish steps"* ]]
 
     assert_no_remote_dispatch
 }

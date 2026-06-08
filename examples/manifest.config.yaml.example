@@ -57,13 +57,10 @@ version:
 #       the bump but before the tag is created.
 #
 #   "release_head"
-#       Tag whatever HEAD is at tag-creation time (post-bump, post-CHANGELOG,
-#       pre-Homebrew).  Note: the Homebrew formula commit cannot be inside
-#       the tag — `update_homebrew_formula` curls the GitHub tarball at the
-#       tag URL to compute SHA256, which would require the formula to contain
-#       its own SHA256 (chicken-and-egg).  So `release_head` means "last
-#       release-prep commit *before* Homebrew", not literally the final
-#       commit of the release.
+#       Tag whatever HEAD is at tag-creation time (post-bump, post-CHANGELOG).
+#       Homebrew publication happens later by generating a concrete tap formula
+#       from the CLI repo's formula template. That tap publish is distribution
+#       metadata, not a post-tag CLI repo commit.
 #
 # Deprecated: "final_release_commit" — alias for "release_head", will warn.
 # Tolerant of surrounding whitespace and case (Version_Commit, " release_head ").
@@ -77,7 +74,7 @@ release:
   #                remote sync, or any version mutation; a failure aborts with
   #                the repo untouched.
   #   remote-ci    Require the pushed commit's GitHub checks to be green before
-  #                the GitHub Release / Homebrew publish (tag is already pushed).
+#                the GitHub Release / Homebrew tap publish (tag is already pushed).
   #   all          local-tests AND remote-ci.
   # Tolerant of surrounding whitespace and case.
   gate: "local-tests"

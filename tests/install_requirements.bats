@@ -76,6 +76,16 @@ EOF
     chmod +x "$fake_bsd"
     ! manifest_requirement_sed_command_is_gnu "$fake_bsd"
 
+    # Busybox has historically emitted text containing "not GNU sed"; substring
+    # matching must not accept that as GNU.
+    local fake_not_gnu="$BATS_TEST_TMPDIR/sed-not-gnu-fake"
+    cat >"$fake_not_gnu" <<'EOF'
+#!/bin/sh
+echo "This is not GNU sed version 4.0"
+EOF
+    chmod +x "$fake_not_gnu"
+    ! manifest_requirement_sed_command_is_gnu "$fake_not_gnu"
+
     # A GNU sed banner is accepted.
     local fake_gnu="$BATS_TEST_TMPDIR/sed-gnu-fake"
     cat >"$fake_gnu" <<'EOF'
@@ -89,8 +99,7 @@ EOF
 @test "install + doctor surface the gnu-sed gap as a macOS WARNING, not a hard error (§7.9)" {
     # Pre-ship, not mid-ship (§7.9): the gap is reported at install-time
     # validation and in `manifest doctor`, scoped to macOS, pointing at
-    # `brew install gnu-sed`. Only the maintainer formula-rewrite path needs it,
-    # so it must NEVER be a hard install error.
+    # `brew install gnu-sed`. It must NEVER be a hard install error.
     grep -F 'manifest_requirement_runtime_sed_is_gnu' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
     grep -F 'manifest_requirement_runtime_sed_is_gnu' "$TEST_REPO_ROOT/modules/core/manifest-doctor.sh" >/dev/null
     grep -F 'brew install gnu-sed' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null

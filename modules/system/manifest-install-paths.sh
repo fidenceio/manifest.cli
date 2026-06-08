@@ -23,7 +23,7 @@ manifest_install_paths_homebrew_tap()     { echo "fidenceio/tap"; }
 # currently installed *and managed by Homebrew*". This is deliberately distinct
 # from "is brew available on this machine" (`command -v brew`): conflating the
 # two is what let a bare `install-cli.sh` re-run silently convert a --manual
-# source install onto the shipped formula. Every site that must decide
+# source install onto the published tap formula. Every site that must decide
 # brew-vs-source provenance (installer routing, uninstall, doctor reinstall,
 # post-ship self-upgrade) routes here so the answer can never drift.
 #

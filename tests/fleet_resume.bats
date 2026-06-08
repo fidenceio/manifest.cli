@@ -45,9 +45,9 @@ mk_member_repo() {
     git -C "$repo" commit -qm "Bump version to $version"
 }
 
-# Drop a member repo into a stranded state: VERSION + local tag + dirty formula.
-# Mirrors production "ship pushed tag, formula commit pending" state — formula
-# is tracked (`git add` + commit before tag), then dirtied post-tag.
+# Drop a member repo into a legacy stranded state: VERSION + local tag + dirty
+# formula. Modern ship should not dirty the source formula, but resume still
+# accepts this historical failure shape.
 mk_stranded_member() {
     local repo="$1" version="${2:-1.2.3}"
     mk_member_repo "$repo" "$version"

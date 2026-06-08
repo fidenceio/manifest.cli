@@ -135,15 +135,16 @@ manifest_requirement_prepend_gnu_userland_path() {
     export PATH
 }
 
-# GNU sed is required ONLY on the maintainer/canonical-repo path that rewrites
-# the Homebrew formula in place (update_homebrew_formula): BSD `sed -i` reads the
-# next token as a backup suffix and would corrupt the formula. Everyday version/
-# changelog/tag work does not need it — so callers treat this as a SOFT check
-# (warn, not fail). Mirrors the yq/parallel vendor checks: presence isn't enough,
-# the GNU flavor specifically must answer. Pass an explicit command to probe a
-# non-default sed (e.g. `gsed`); defaults to `sed`.
+# GNU sed is a macOS source/development compatibility check. Homebrew installs
+# include it, and source installs warn rather than fail so routine use can still
+# proceed. Mirrors the yq/parallel vendor checks: presence isn't enough, the GNU
+# flavor specifically must answer. Pass an explicit command to probe a non-default
+# sed (e.g. `gsed`); defaults to `sed`.
 manifest_requirement_sed_command_is_gnu() {
-    "${1:-sed}" --version 2>/dev/null | grep -qi gnu
+    local version_text
+    version_text="$("${1:-sed}" --version 2>/dev/null | head -n1)" || return 1
+    printf '%s\n' "$version_text" | grep -qiE '(^|[[:space:](])GNU sed([[:space:])]|$)' || return 1
+    ! printf '%s\n' "$version_text" | grep -qiE 'not[[:space:]]+GNU sed'
 }
 
 # Will the Manifest runtime resolve GNU sed? The runtime forces gnu-sed's gnubin

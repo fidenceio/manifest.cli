@@ -34,9 +34,12 @@ RUBY
     CURL_FAILS_FILE="$SCRATCH/curl-fails"
 
     # Short-circuit everything AFTER the sha fetch so the test isolates the
-    # retry loop: the sha is written via sed (real GNU sed on PATH via wrapper),
-    # then the tap sync / refresh are stubbed to no-ops.
-    manifest_homebrew_tap_push_formula() { return 0; }
+    # retry loop: the generated tap formula is captured, then refresh is stubbed.
+    PUSHED_FORMULA="$SCRATCH/pushed-formula.rb"
+    manifest_homebrew_tap_push_formula() {
+        cp "$2" "$PUSHED_FORMULA"
+        return 0
+    }
     manifest_refresh_homebrew_tap_checkouts() { return 0; }
     # Provide a fake tap dir with a Formula/ so the `[ -d ]` branch is taken.
     brew() {
@@ -84,18 +87,21 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"retrying in 0s"* ]]
     [[ "$output" == *"SHA256:"* ]]
-    [[ "$output" == *"Homebrew formula update complete"* ]]
+    [[ "$output" == *"Homebrew tap formula publish complete"* ]]
 
-    # The formula's sha256 was rewritten to the real digest of the stub bytes
-    # — not left as the all-zero placeholder.
+    # The tap formula's sha256 was rewritten to the real digest of the stub bytes
+    # — not left as the all-zero placeholder. The tracked CLI source template is
+    # intentionally untouched so release publish cannot create a post-tag commit.
     local expected
     if command -v shasum >/dev/null 2>&1; then
         expected="$(printf 'tarball-bytes-for-tag\n' | shasum -a 256 | cut -d' ' -f1)"
     else
         expected="$(printf 'tarball-bytes-for-tag\n' | sha256sum | cut -d' ' -f1)"
     fi
-    grep -q "sha256 \"${expected}\"" "$PROJECT_ROOT/formula/manifest.rb"
-    ! grep -q 'sha256 "0000000000000000000000000000000000000000000000000000000000000000"' "$PROJECT_ROOT/formula/manifest.rb"
+    grep -q "sha256 \"${expected}\"" "$PUSHED_FORMULA"
+    grep -q "url \"https://github.com/fidenceio/manifest.cli/archive/refs/tags/v1.2.3.tar.gz\"" "$PUSHED_FORMULA"
+    grep -q 'sha256 "0000000000000000000000000000000000000000000000000000000000000000"' "$PROJECT_ROOT/formula/manifest.rb"
+    grep -q 'url "https://github.com/fidenceio/manifest.cli/archive/refs/tags/v0.0.0.tar.gz"' "$PROJECT_ROOT/formula/manifest.rb"
 }
 
 @test "SHA256 fetch fails loud after exhausting retries and writes no bad sha" {
@@ -108,10 +114,11 @@ teardown() {
     [[ "$output" == *"Failed to fetch tarball SHA256"* ]]
     [[ "$output" == *"after 3 attempt(s)"* ]]
 
-    # The formula must be untouched: still the all-zero placeholder, never an
-    # empty or partial sha.
+    # The source formula must be untouched: still the all-zero placeholder, never
+    # an empty or partial sha.
     grep -q 'sha256 "0000000000000000000000000000000000000000000000000000000000000000"' "$PROJECT_ROOT/formula/manifest.rb"
     ! grep -q 'sha256 ""' "$PROJECT_ROOT/formula/manifest.rb"
+    [ ! -f "$PUSHED_FORMULA" ]
 }
 
 @test "SHA256 fetch succeeds on first attempt with no retry message" {

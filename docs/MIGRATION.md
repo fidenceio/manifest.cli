@@ -20,7 +20,7 @@ manifest ship repo patch -y     # apply — performs the release
 | (no flag) | Preview. Prints the plan; makes no changes. |
 | `--dry-run` | Explicit preview. Same as no flag; use it to be unambiguous in scripts. |
 | `-y` / `--yes` | Apply. Performs the planned changes. |
-| `--local -y` | Apply local release work only — no tag, push, GitHub Release, or Homebrew publish. |
+| `--local -y` | Apply local release work only — no tag, push, GitHub Release, or Homebrew tap publish. |
 
 You cannot combine `--dry-run` with `-y`; preview is already the default, so the
 combination is rejected rather than silently guessed.
@@ -50,7 +50,7 @@ what must be green:
 | Value | Behavior |
 | ----- | -------- |
 | `local-tests` (default) | Run the project's test command first — before auto-commit, remote sync, or any version mutation; a failure aborts with the repo untouched. |
-| `remote-ci` | Require the pushed commit's GitHub checks to be green before the GitHub Release / Homebrew publish (the tag is already pushed). |
+| `remote-ci` | Require the pushed commit's GitHub checks to be green before the GitHub Release / Homebrew tap publish (the tag is already pushed). |
 | `all` | `local-tests` **and** `remote-ci`. |
 | `none` | No verification. Emits a loud warning and records an audited bypass. |
 
