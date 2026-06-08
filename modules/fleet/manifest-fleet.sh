@@ -1883,14 +1883,52 @@ _fleet_service_pr_gated() {
     [[ "$release_strategy" == "pr" ]]
 }
 
+_fleet_service_config_skip_reason() {
+    local service="$1"
+    local excluded release_enabled release_strategy
+
+    excluded=$(get_fleet_service_property "$service" "excluded" "false")
+    if [[ "$excluded" == "true" ]]; then
+        echo "excluded"
+        return 0
+    fi
+
+    # Direct fleet shipping must not inspect PR-gated members. They are
+    # surfaced in the plan as a routing decision, then fail closed on apply.
+    if _fleet_service_pr_gated "$service"; then
+        echo "pr-gated"
+        return 0
+    fi
+
+    release_enabled=$(get_fleet_service_property "$service" "release_enabled" "")
+    if [[ -n "$release_enabled" ]] && is_falsy "$release_enabled"; then
+        echo "release disabled"
+        return 0
+    fi
+
+    release_strategy=$(get_fleet_service_property "$service" "release_strategy" "")
+    case "$release_strategy" in
+        none)
+            echo "release strategy none"
+            return 0
+            ;;
+        direct|"")
+            return 1
+            ;;
+        *)
+            echo "unsupported release strategy: $release_strategy"
+            return 0
+            ;;
+    esac
+}
+
 _fleet_service_release_reason() {
     local service="$1"
     local path="$2"
-    local excluded
-    excluded=$(get_fleet_service_property "$service" "excluded" "false")
+    local config_skip
 
-    if [[ "$excluded" == "true" ]]; then
-        echo "excluded"
+    if config_skip=$(_fleet_service_config_skip_reason "$service"); then
+        echo "$config_skip"
         return 1
     fi
     if [[ -z "$path" || ! -d "$path" ]]; then
@@ -1902,19 +1940,8 @@ _fleet_service_release_reason() {
         return 1
     fi
 
-    # PR-gated members are never directly releaseable, even if release.enabled
-    # is true — the gate takes precedence so `ship fleet` routes them to review.
-    if _fleet_service_pr_gated "$service"; then
-        echo "pr-gated"
-        return 1
-    fi
-
     local release_enabled
     release_enabled=$(get_fleet_service_property "$service" "release_enabled" "")
-    if [[ -n "$release_enabled" ]] && is_falsy "$release_enabled"; then
-        echo "release disabled"
-        return 1
-    fi
     if [[ -n "$release_enabled" ]] && is_truthy "$release_enabled"; then
         echo "release enabled"
         return 0
@@ -1923,10 +1950,6 @@ _fleet_service_release_reason() {
     local release_strategy
     release_strategy=$(get_fleet_service_property "$service" "release_strategy" "")
     case "$release_strategy" in
-        none)
-            echo "release strategy none"
-            return 1
-            ;;
         direct)
             echo "release strategy direct"
             return 0
@@ -1934,6 +1957,8 @@ _fleet_service_release_reason() {
         "")
             ;;
         *)
+            # Unsupported values are handled by _fleet_service_config_skip_reason
+            # before any repo probes; this branch is kept as a defensive fallback.
             echo "unsupported release strategy: $release_strategy"
             return 1
             ;;
@@ -2138,7 +2163,7 @@ _fleet_ship_plan() {
     printf '%-30s %-12s %-12s %-15s %-7s %-9s %-13s %s\n' "Service" "Type" "Branch" "Version" "Dirty" "Effect" "Decision" "Path / reason"
     printf '%-30s %-12s %-12s %-15s %-7s %-9s %-13s %s\n' "-------" "----" "------" "-------" "-----" "------" "--------" "-------------"
 
-    local service path reason effect decision type branch display_name dirty version current next
+    local service path reason effect decision type branch display_name dirty version current next config_skip
     local offbranch_count=0
     local pr_gated_count=0
     # Salient inputs for the fleet plan fingerprint: the increment type, the
@@ -2149,16 +2174,25 @@ _fleet_ship_plan() {
         path=$(get_fleet_service_property "$service" "path")
         type=$(get_fleet_service_property "$service" "type" "service")
         display_name=$(_fleet_plan_service_display_name "$service" "$path")
+        if config_skip=$(_fleet_service_config_skip_reason "$service"); then
+            branch="—"
+            version="—"
+            dirty=""
+            if [[ "$config_skip" == "pr-gated" ]]; then
+                # PR-gated members are listed separately from plain skips: apply will
+                # refuse them (fail-closed) and route their release through review.
+                pr_gated_count=$((pr_gated_count + 1))
+                printf '%-30s %-12s %-12s %-15s %-7s %-9s %-13s %s\n' "$display_name" "$type" "$branch" "$version" "$dirty" "pr-gate" "needs PR" "$path (release.strategy: pr)"
+            else
+                skipped_count=$((skipped_count + 1))
+                printf '%-30s %-12s %-12s %-15s %-7s %-9s %-13s %s\n' "$display_name" "$type" "$branch" "$version" "$dirty" "read" "skip" "$path ($config_skip)"
+            fi
+            continue
+        fi
+
         dirty=$(manifest_git_changes_dirty_summary "$path")
         current="$(_fleet_plan_current_version "$path")"
-        if _fleet_service_pr_gated "$service"; then
-            # PR-gated members are listed separately from plain skips: apply will
-            # refuse them (fail-closed) and route their release through review.
-            pr_gated_count=$((pr_gated_count + 1))
-            branch=$(_fleet_plan_branch_cell "$path" false)
-            version="${current:-—}"
-            printf '%-30s %-12s %-12s %-15s %-7s %-9s %-13s %s\n' "$display_name" "$type" "$branch" "$version" "$dirty" "pr-gate" "needs PR" "$path (release.strategy: pr)"
-        elif reason=$(_fleet_service_release_reason "$service" "$path"); then
+        if reason=$(_fleet_service_release_reason "$service" "$path"); then
             releaseable_count=$((releaseable_count + 1))
             effect="release"
             if [[ "$local_only" == "true" ]]; then
