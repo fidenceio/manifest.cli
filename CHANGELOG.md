@@ -1,5 +1,16 @@
 # Changelog
 
+## [53.0.1] - 2026-06-08
+
+**Release Type:** Patch
+
+### Changes
+
+- Add GitHub Release publishing support
+- Update release copy and configuration examples
+- Add regression coverage for the changed CLI workflow
+
+
 ## [53.0.0] - 2026-06-08
 
 **Release Type:** Major
@@ -94,14 +105,3 @@
 ## [52.4.0] - 2026-06-05
 
 **Release Type:** Minor — no user-facing changes.
-
-
-## [52.3.1] - 2026-06-05
-
-**Release Type:** Patch
-
-### Changes
-
-- Fix(version.sync): target the top-level "version" by JSON depth, not first match
-- Feat(doctor,install): warn before ship when GNU sed is missing on macOS
-- Docs(tracker): drop §7.7 and §7.9 — implemented
