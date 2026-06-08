@@ -106,7 +106,14 @@ emit_ship_failure_report() {
     git status --short --branch 2>/dev/null || echo "   (unavailable)"
     echo ""
     echo "🛠️  Recovery commands:"
-    if [[ "$push_status" == "success" && "$failure_step" =~ ^(homebrew_|github_release) ]]; then
+    if [[ "$push_status" == "success" && "$failure_step" == "completion_clean" ]]; then
+        echo "   Release artifacts are already pushed. Do not delete the tag or hard-reset unless you are intentionally rolling back a public release."
+        echo "   Inspect status:  git status --short"
+        if [ -n "$tag_name" ] && [ "$tag_name" != "none" ]; then
+            echo "   Inspect commits: git log --oneline ${tag_name}..HEAD"
+            echo "   Verify tag:      git ls-remote --tags origin ${tag_name}"
+        fi
+    elif [[ "$push_status" == "success" && "$failure_step" =~ ^(homebrew_|github_release) ]]; then
         echo "   Release artifacts are already pushed. Do not delete the tag or hard-reset unless you are intentionally rolling back a public release."
         echo "   Resume:      manifest ship repo resume"
         echo "   Retry branch push if needed: git push origin ${branch}"
@@ -120,7 +127,7 @@ emit_ship_failure_report() {
     else
         echo "   Retry push:  git push origin ${branch}"
     fi
-    if [ -n "$start_sha" ] && ! [[ "$push_status" == "success" && "$failure_step" =~ ^(homebrew_|github_release) ]]; then
+    if [ -n "$start_sha" ] && ! [[ "$push_status" == "success" && "$failure_step" =~ ^(homebrew_|github_release$|completion_clean$) ]]; then
         echo "   Roll back:   git reset --hard ${start_sha}"
     fi
     echo ""
@@ -600,6 +607,36 @@ manifest_ship_post_push_steps() {
     return 0
 }
 
+manifest_ship_assert_completion_clean() {
+    local publish_release="${1:-false}"
+    local pushed_head_sha="${2:-}"
+
+    local dirty_snapshot=""
+    dirty_snapshot="$(git status --porcelain 2>/dev/null || true)"
+    if [ -n "$dirty_snapshot" ]; then
+        log_error "Ship completion invariant failed: working tree is not clean."
+        log_error "Manifest refuses to report success while release changes remain uncommitted or unstaged."
+        while IFS= read -r dirty_line; do
+            [ -n "$dirty_line" ] && log_error "   $dirty_line"
+        done <<< "$dirty_snapshot"
+        return 1
+    fi
+
+    if [ "$publish_release" = "true" ] && [ -n "$pushed_head_sha" ]; then
+        local current_head_sha=""
+        current_head_sha="$(git rev-parse HEAD 2>/dev/null || echo "")"
+        if [ -z "$current_head_sha" ] || [ "$current_head_sha" != "$pushed_head_sha" ]; then
+            log_error "Ship completion invariant failed: HEAD changed after branch/tag push."
+            log_error "Pushed release head: ${pushed_head_sha}"
+            log_error "Current HEAD:        ${current_head_sha:-unknown}"
+            log_error "Manifest refuses to report success after creating post-push source commits."
+            return 1
+        fi
+    fi
+
+    return 0
+}
+
 # `brew update` / `brew upgrade` resets the tap checkout's `origin` URL back to
 # the canonical HTTPS form. Future `manifest ship` runs from this canonical repo
 # push the formula via the explicit `MANIFEST_CLI_HOMEBREW_TAP_REMOTE_URL` (SSH
@@ -885,6 +922,8 @@ manifest_ship_repo_resume() {
         emit_ship_failure_report "resume_push" "$(git rev-parse HEAD 2>/dev/null || echo "")" "$version" "$tag_name" "failed" "skipped"
         return 1
     fi
+    local pushed_head_sha
+    pushed_head_sha="$(git rev-parse HEAD 2>/dev/null || echo "")"
     echo ""
 
     if ! manifest_ship_post_push_steps "$version" "$(git rev-parse HEAD 2>/dev/null || echo "")" "$tag_name" "success"; then
@@ -892,6 +931,10 @@ manifest_ship_repo_resume() {
     fi
 
     update_repository_metadata
+    if ! manifest_ship_assert_completion_clean "true" "$pushed_head_sha"; then
+        emit_ship_failure_report "completion_clean" "$(git rev-parse HEAD 2>/dev/null || echo "")" "$version" "$tag_name" "success" "${_MANIFEST_SHIP_LAST_HOMEBREW_STATUS:-skipped}"
+        return 1
+    fi
     echo ""
     echo "✅ Ship resume completed for v${version}"
 }
@@ -908,6 +951,7 @@ manifest_ship_workflow() {
     local workflow_homebrew_status="not_applicable"
     local workflow_github_release_status="not_applicable"
     local workflow_actions_status="not_applicable"
+    local workflow_pushed_head_sha=""
     local workflow_version_commit_sha=""
 
     if [ "$publish_release" = "true" ]; then
@@ -1226,6 +1270,7 @@ manifest_ship_workflow() {
             return 1
         fi
         workflow_push_status="success"
+        workflow_pushed_head_sha="$(git rev-parse HEAD 2>/dev/null || echo "")"
         echo ""
 
         # Release gate (post-push): for remote-ci/all, require the pushed
@@ -1264,6 +1309,10 @@ manifest_ship_workflow() {
 
     # Update repository metadata
     update_repository_metadata
+    if ! manifest_ship_assert_completion_clean "$publish_release" "$workflow_pushed_head_sha"; then
+        emit_ship_failure_report "completion_clean" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+        return 1
+    fi
     echo ""
     
     # Success message

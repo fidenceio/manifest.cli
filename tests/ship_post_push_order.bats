@@ -165,6 +165,52 @@ teardown() {
     [ "$gh_line" -lt "$brew_line" ]
 }
 
+@test "completion invariant accepts clean repo when published HEAD is unchanged" {
+    local pushed_head
+    pushed_head="$(git rev-parse HEAD)"
+
+    run manifest_ship_assert_completion_clean "true" "$pushed_head"
+    [ "$status" -eq 0 ]
+}
+
+@test "completion invariant rejects dirty working tree before success" {
+    echo "pending" > pending.txt
+
+    run manifest_ship_assert_completion_clean "false" ""
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"working tree is not clean"* ]]
+    [[ "$output" == *"?? pending.txt"* ]]
+}
+
+@test "completion invariant rejects post-push source commits" {
+    local pushed_head
+    pushed_head="$(git rev-parse HEAD)"
+    git commit --allow-empty -qm "Post-push source drift"
+
+    run manifest_ship_assert_completion_clean "true" "$pushed_head"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"HEAD changed after branch/tag push"* ]]
+    [[ "$output" == *"Manifest refuses to report success after creating post-push source commits"* ]]
+}
+
+@test "completion invariant does not compare HEAD for local-only ships" {
+    local pushed_head
+    pushed_head="$(git rev-parse HEAD)"
+    git commit --allow-empty -qm "Local-only follow-up commit"
+
+    run manifest_ship_assert_completion_clean "false" "$pushed_head"
+    [ "$status" -eq 0 ]
+}
+
+@test "completion-clean failure report avoids reset advice for already-pushed releases" {
+    run emit_ship_failure_report "completion_clean" "$(git rev-parse HEAD)" "1.2.3" "v1.2.3" "success" "success"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Release artifacts are already pushed"* ]]
+    [[ "$output" == *"Inspect status:  git status --short"* ]]
+    [[ "$output" == *"Inspect commits: git log --oneline v1.2.3..HEAD"* ]]
+    [[ "$output" != *"Roll back:"* ]]
+}
+
 @test "real view-guard skips 'release create' when the release already exists (resume idempotency)" {
     # Exercise the ACTUAL manifest_create_github_release_for_tag (not a stub)
     # through the gh stub. With GH_STUB_EXIT=0, `gh release view` succeeds, so
