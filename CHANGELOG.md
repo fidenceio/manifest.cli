@@ -1,5 +1,18 @@
 # Changelog
 
+## [53.0.0] - 2026-06-08
+
+**Release Type:** Major
+
+### Changes
+
+- Add GitHub Release publishing support
+- Add smart ship preview summaries
+- Update release copy and configuration examples
+- Wire first-class CLI commands to inspectable built-in recipe definitions
+- Add regression coverage for the changed CLI workflow
+
+
 ## [52.7.1] - 2026-06-08
 
 **Release Type:** Patch
@@ -92,8 +105,3 @@
 - Fix(version.sync): target the top-level "version" by JSON depth, not first match
 - Feat(doctor,install): warn before ship when GNU sed is missing on macOS
 - Docs(tracker): drop §7.7 and §7.9 — implemented
-
-
-## [52.3.0] - 2026-06-05
-
-**Release Type:** Minor — no user-facing changes.
