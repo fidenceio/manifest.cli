@@ -286,6 +286,33 @@ check_directory_exists() {
     fi
 }
 
+# Pure classifier: does an Apple build identifier denote a pre-release seed?
+# Apple seed builds (developer/public betas, RCs) carry a trailing lowercase
+# letter — e.g. 26A5353q — while shipping builds end in a digit — e.g. 23A344.
+# Kept separate from the environment lookup so it is trivially unit-testable.
+# Returns 0 (pre-release) / 1 (release or unrecognized).
+manifest_os_build_id_is_prerelease() {
+    local build="$1"
+    [ -n "$build" ] || return 1
+    case "$build" in
+        *[a-z]) return 0 ;;
+        *)      return 1 ;;
+    esac
+}
+
+# Is the host running a macOS pre-release (beta/RC/seed)? Used only to enrich
+# advisory messaging — never to gate behavior — so an imperfect read is harmless.
+# Two signals: a ProductVersionExtra entry (present on betas/RCs/RSRs), else the
+# build-id seed signature above. Returns 0 (pre-release) / 1 (release or non-mac).
+manifest_os_macos_is_prerelease() {
+    [ "$(uname -s 2>/dev/null)" = "Darwin" ] || return 1
+    command -v sw_vers >/dev/null 2>&1 || return 1
+    if sw_vers 2>/dev/null | grep -q 'ProductVersionExtra'; then
+        return 0
+    fi
+    manifest_os_build_id_is_prerelease "$(sw_vers -buildVersion 2>/dev/null)"
+}
+
 # Display OS information
 # Initialize OS detection when module is sourced
 detect_os

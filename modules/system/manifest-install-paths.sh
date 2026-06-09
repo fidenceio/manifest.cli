@@ -123,6 +123,22 @@ manifest_install_paths_brew_trust_manual_command() {
     printf '%s\n' "${_MANIFEST_CLI_LAST_BREW_TRUST_COMMAND:-brew trust --formula $formula}"
 }
 
+# Pure classifier over captured `brew upgrade` output: did Homebrew refuse the
+# operation because the host Xcode / Command Line Tools are below its minimum
+# for the running macOS? Homebrew emits "Your Xcode (...) ... is too outdated."
+# and/or "Your Command Line Tools are too outdated." and exits non-zero without
+# installing. This is a host-toolchain requirement, not a Manifest failure, so
+# the ship flow reports it as an environmental skip rather than a defect.
+# Returns 0 (toolchain gate) / 1 (any other failure). Silent.
+manifest_install_paths_brew_error_is_toolchain_gate() {
+    local output="$1"
+    case "$output" in
+        *"is too outdated"*)                     return 0 ;;
+        *"Command Line Tools are too outdated"*) return 0 ;;
+        *)                                       return 1 ;;
+    esac
+}
+
 # Companion predicate — is there a --manual (source-tree) install? The manual
 # install writes the version-agnostic wrapper to the user-bin location; a
 # Homebrew install never does (it symlinks into $(brew --prefix)/bin instead),
