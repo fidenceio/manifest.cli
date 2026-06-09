@@ -41,10 +41,12 @@ manifest_install_paths_is_brew_managed() {
 # HOMEBREW_REQUIRE_TAP_TRUST=1 becomes the default (slated for Homebrew 5.2/6.0)
 # it *ignores* untrusted formulae — so `brew install`/`brew upgrade manifest`
 # (incl. the post-push auto-upgrade) would silently no-op: no error, no new
-# version. Pre-empt that by trusting the formula narrowly (least privilege: this
-# formula, not the whole tap). Idempotent; safe to call before every
+# version. Pre-empt that by trusting the formula narrowly when Homebrew allows it.
+# Homebrew refuses item-level trust for taps using custom remotes (for example an
+# SSH tap origin); in that case, fall back to trusting the tap because Homebrew
+# offers no narrower valid command. Idempotent; safe to call before every
 # install/upgrade. Verified against Homebrew 5.1.15: `brew trust --formula
-# <target>`, state in ~/.homebrew/trust.json.
+# <target>` / `brew trust <tap>`, state in ~/.homebrew/trust.json.
 #
 # Threat-model boundary (§7.6): `brew trust` trusts by tap/formula *identity*,
 # not by pinned *content*, and we re-trust on every install/upgrade — so this
@@ -61,10 +63,50 @@ manifest_install_paths_is_brew_managed() {
 #   1 - `trust` present but the trust call failed (worth surfacing)
 #   2 - nothing to do (brew absent, or this Homebrew has no `trust` subcommand)
 manifest_install_paths_ensure_brew_trust() {
+    _MANIFEST_CLI_LAST_BREW_TRUST_SCOPE=""
+    _MANIFEST_CLI_LAST_BREW_TRUST_COMMAND=""
+    _MANIFEST_CLI_LAST_BREW_TRUST_ERROR=""
     command -v brew >/dev/null 2>&1 || return 2
     brew trust --help >/dev/null 2>&1 || return 2
-    brew trust --formula "$(manifest_install_paths_homebrew_formula)" >/dev/null 2>&1 || return 1
-    return 0
+
+    local formula tap err_file formula_err
+    formula="$(manifest_install_paths_homebrew_formula)"
+    tap="$(manifest_install_paths_homebrew_tap)"
+    _MANIFEST_CLI_LAST_BREW_TRUST_COMMAND="brew trust --formula $formula"
+
+    err_file="$(mktemp "${TMPDIR:-/tmp}/manifest-brew-trust.XXXXXX" 2>/dev/null || true)"
+    if [ -z "$err_file" ]; then
+        brew trust --formula "$formula" >/dev/null 2>&1 || return 1
+        _MANIFEST_CLI_LAST_BREW_TRUST_SCOPE="formula"
+        return 0
+    fi
+
+    if brew trust --formula "$formula" >/dev/null 2>"$err_file"; then
+        rm -f "$err_file" 2>/dev/null || true
+        _MANIFEST_CLI_LAST_BREW_TRUST_SCOPE="formula"
+        return 0
+    fi
+
+    formula_err="$(cat "$err_file" 2>/dev/null || true)"
+    _MANIFEST_CLI_LAST_BREW_TRUST_ERROR="$formula_err"
+    if printf '%s\n' "$formula_err" | grep -qiE 'Cannot trust individual items|custom remote'; then
+        _MANIFEST_CLI_LAST_BREW_TRUST_COMMAND="brew trust $tap"
+        if brew trust "$tap" >/dev/null 2>"$err_file"; then
+            rm -f "$err_file" 2>/dev/null || true
+            _MANIFEST_CLI_LAST_BREW_TRUST_SCOPE="tap"
+            return 0
+        fi
+        _MANIFEST_CLI_LAST_BREW_TRUST_ERROR="$(cat "$err_file" 2>/dev/null || true)"
+    fi
+
+    rm -f "$err_file" 2>/dev/null || true
+    return 1
+}
+
+manifest_install_paths_brew_trust_manual_command() {
+    local formula
+    formula="$(manifest_install_paths_homebrew_formula)"
+    printf '%s\n' "${_MANIFEST_CLI_LAST_BREW_TRUST_COMMAND:-brew trust --formula $formula}"
 }
 
 # Companion predicate — is there a --manual (source-tree) install? The manual

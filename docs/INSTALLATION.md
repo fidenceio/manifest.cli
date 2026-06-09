@@ -25,13 +25,19 @@ brew update
 brew upgrade manifest
 ```
 
-The install script, `manifest upgrade`, `manifest reinstall`, and the post-ship self-upgrade automatically trust the formula (narrow, formula-only) so Homebrew keeps loading it once tap-trust is enforced (`HOMEBREW_REQUIRE_TAP_TRUST=1`, slated to become the default in a future Homebrew). Older Homebrew without `brew trust` skips this step. If Homebrew ever warns that `fidenceio/tap` is untrusted — or an upgrade silently stays on the old version — trust it manually:
+The install script, `manifest upgrade`, `manifest reinstall`, and the post-ship self-upgrade automatically trust the formula when Homebrew allows formula-level trust, then fall back to tap-level trust only when Homebrew rejects individual formula trust for a custom-remote tap. This keeps Homebrew loading Manifest once tap-trust is enforced (`HOMEBREW_REQUIRE_TAP_TRUST=1`, slated to become the default in a future Homebrew). Older Homebrew without `brew trust` skips this step. If Homebrew ever warns that `fidenceio/tap` is untrusted — or an upgrade silently stays on the old version — trust it manually:
 
 ```bash
 brew trust --formula fidenceio/tap/manifest
 ```
 
-> **Security boundary:** auto-trust only keeps a formula you already chose loadable once Homebrew starts ignoring untrusted taps. It trusts by tap/formula *identity*, not pinned *content*, and is re-applied on every upgrade — so it is **not** a defense against a compromised tap. To defend against that, pin an expected formula revision so a content change forces a fresh `brew trust` prompt.
+If Homebrew responds that it cannot trust individual items because `fidenceio/tap` uses a custom remote, trust the tap instead:
+
+```bash
+brew trust fidenceio/tap
+```
+
+> **Security boundary:** auto-trust only keeps a formula/tap you already chose loadable once Homebrew starts ignoring untrusted taps. It trusts by Homebrew *identity*, not pinned *content*, and is re-applied on every upgrade — so it is **not** a defense against a compromised tap. To defend against that, pin an expected formula revision so a content change forces a fresh `brew trust` prompt.
 
 ### Install Script
 
