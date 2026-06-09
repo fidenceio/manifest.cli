@@ -1,5 +1,15 @@
 # Changelog
 
+## [53.2.0] - 2026-06-09
+
+**Release Type:** Minor
+
+### Changes
+
+- Feat: core auto-upgrade on invocation (brew-managed, bottle-only, detached)
+- Test(runner): add opt-in --progress milestone indicator
+
+
 ## [53.1.0] - 2026-06-09
 
 **Release Type:** Minor
@@ -88,13 +98,4 @@
 - Add GitHub Release publishing support
 - Update release copy and configuration examples
 - Add a containerized test runner for Manifest CLI
-- Add regression coverage for the changed CLI workflow
-
-
-## [52.6.0] - 2026-06-08
-
-**Release Type:** Minor
-
-### Changes
-
 - Add regression coverage for the changed CLI workflow
