@@ -1,5 +1,15 @@
 # Changelog
 
+## [53.0.3] - 2026-06-09
+
+**Release Type:** Patch
+
+### Changes
+
+- Docs(tracker): §8.13 — brew-managed provenance check should use filesystem, not brew list exit status
+- Fix(install): base brew-managed provenance on the Cellar, not `brew list` (§8.13)
+
+
 ## [53.0.2] - 2026-06-09
 
 **Release Type:** Patch
@@ -94,18 +104,3 @@
 - Add shared filesystem discovery helpers consumed by fleet detection
 - Add passive version-surface detection and a committed handler catalog for known package/version files
 - Add regression coverage for discovery, version-surface scans, and default no-sync package-lock behavior
-
-
-## [52.4.1] - 2026-06-07
-
-**Release Type:** Patch
-
-### Changes
-
-- Fix(config): fail loud on malformed config + back up before migration
-- Feat(consent)!: model C — -y authorizes an unambiguous non-interactive apply; complete `manifest first`
-- Feat(ship): per-repo single-flight lock so concurrent applies can't race
-- Feat(audit): record apply OUTCOME + gate disposition; lock audit/ship logs to 0600
-- Fix(ship): create GitHub Release before Homebrew + retry the tarball SHA fetch
-- Docs(tracker): file §8 enterprise-readiness audit — open items + this session's done work
-- Fix(ship): portable sha256 (sha256sum fallback) so the formula fetch works on Linux
