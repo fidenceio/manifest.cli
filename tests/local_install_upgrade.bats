@@ -194,3 +194,86 @@ teardown() {
     run manifest_install_paths_is_brew_managed
     [ "$status" -eq 1 ]
 }
+
+@test "brew_error_is_toolchain_gate: Xcode-too-outdated output is a toolchain gate" {
+    run manifest_install_paths_brew_error_is_toolchain_gate \
+        "Error: Your Xcode (26.5) at /Applications/Xcode.app is too outdated."
+    [ "$status" -eq 0 ]
+}
+
+@test "brew_error_is_toolchain_gate: CLT-too-outdated output is a toolchain gate" {
+    run manifest_install_paths_brew_error_is_toolchain_gate \
+        "Error: Your Command Line Tools are too outdated."
+    [ "$status" -eq 0 ]
+}
+
+@test "brew_error_is_toolchain_gate: an unrelated brew failure is NOT a toolchain gate" {
+    run manifest_install_paths_brew_error_is_toolchain_gate \
+        "Error: manifest 53.0.3 is already installed and up-to-date."
+    [ "$status" -eq 1 ]
+}
+
+@test "build_id_is_prerelease: seed build (trailing lowercase) is a pre-release" {
+    run manifest_os_build_id_is_prerelease "26A5353q"
+    [ "$status" -eq 0 ]
+}
+
+@test "build_id_is_prerelease: shipping build (ends in digit) is not a pre-release" {
+    run manifest_os_build_id_is_prerelease "23A344"
+    [ "$status" -eq 1 ]
+}
+
+@test "build_id_is_prerelease: empty build id is not a pre-release" {
+    run manifest_os_build_id_is_prerelease ""
+    [ "$status" -eq 1 ]
+}
+
+@test "local upgrade: host-toolchain gate is an environmental skip, not a Manifest failure" {
+    # brew refuses the upgrade because the host Xcode/CLT are below its minimum
+    # for the running macOS (the macOS-beta scenario). The ship must classify this
+    # as an environmental skip — not print the misleading generic warning, and not
+    # touch the tap SSH origin (that only follows a real upgrade).
+    manifest_os_macos_is_prerelease() { return 1; }   # deterministic: suppress beta line
+    local sentinel="$SCRATCH/ssh-restore-fired"
+    manifest_ship_restore_tap_ssh_origin() { touch "$sentinel"; }
+    brew() {
+        case "$1 ${2:-} ${3:-}" in
+            "list "*) return 0 ;;
+            "update "*|"update") return 0 ;;
+            "upgrade manifest"*)
+                echo "Error: Your Xcode (26.5) at /Applications/Xcode.app is too outdated."
+                echo "Error: Your Command Line Tools are too outdated."
+                return 1 ;;
+            *) return 0 ;;
+        esac
+    }
+
+    run manifest_ship_post_push_steps "1.2.3" "$(git rev-parse HEAD)" "v1.2.3" "success"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Homebrew declined the local upgrade"
+    echo "$output" | grep -q "shipped fine"
+    ! echo "$output" | grep -q "Homebrew upgrade did not complete"
+    ! echo "$output" | grep -q "Local installation upgraded"
+    [ ! -f "$sentinel" ]
+}
+
+@test "local upgrade: toolchain-gate message gains a pre-release note on a macOS beta" {
+    manifest_os_macos_is_prerelease() { return 0; }   # force the beta branch
+    brew() {
+        case "$1 ${2:-} ${3:-}" in
+            "list "*) return 0 ;;
+            "update "*|"update") return 0 ;;
+            "upgrade manifest"*)
+                echo "Error: Your Xcode (26.5) is too outdated."
+                return 1 ;;
+            *) return 0 ;;
+        esac
+    }
+
+    run manifest_ship_post_push_steps "1.2.3" "$(git rev-parse HEAD)" "v1.2.3" "success"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Homebrew declined the local upgrade"
+    echo "$output" | grep -q "macOS pre-release"
+}

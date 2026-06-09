@@ -131,7 +131,7 @@ _first_line() { grep -nE "$2" "$1" | head -1 | cut -d: -f1; }
 @test "tap-trust: ship self-upgrade trusts before brew upgrade" {
     f="$TEST_REPO_ROOT/modules/workflow/manifest-orchestrator.sh"
     t="$(_first_line "$f" 'manifest_install_paths_ensure_brew_trust')"
-    b="$(_first_line "$f" '&& brew upgrade manifest 2>&1')"
+    b="$(_first_line "$f" 'brew upgrade manifest 2>&1')"
     [ -n "$t" ] && [ -n "$b" ]
     [ "$t" -lt "$b" ]
 }

@@ -581,10 +581,31 @@ manifest_ship_post_push_steps() {
                 case $? in
                     1) echo "   ⚠️  Could not auto-trust Manifest for Homebrew tap-trust; the upgrade may be ignored. Run: $(manifest_install_paths_brew_trust_manual_command)" ;;
                 esac
-                if brew update &>/dev/null && brew upgrade manifest 2>&1; then
+                # `brew update` is advisory — a stale index shouldn't block the
+                # upgrade attempt. Capture brew's output (while still streaming it
+                # live via tee) so a failure can be classified: a host-toolchain
+                # gate is an environmental skip, not a Manifest defect.
+                brew update &>/dev/null || true
+                local brew_upgrade_out="" brew_upgrade_rc=0 brew_upgrade_tmp=""
+                brew_upgrade_tmp="$(mktemp 2>/dev/null || echo "/tmp/manifest-brew-upgrade.$$")"
+                brew upgrade manifest 2>&1 | tee "$brew_upgrade_tmp"
+                brew_upgrade_rc=${PIPESTATUS[0]}
+                brew_upgrade_out="$(cat "$brew_upgrade_tmp" 2>/dev/null)"
+                rm -f "$brew_upgrade_tmp"
+                if [ "$brew_upgrade_rc" -eq 0 ]; then
                     echo "✅ Local installation upgraded to v$new_version via Homebrew"
                     _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="success"
                     manifest_ship_restore_tap_ssh_origin
+                elif manifest_install_paths_brew_error_is_toolchain_gate "$brew_upgrade_out"; then
+                    echo "ℹ️  Homebrew declined the local upgrade: the host Xcode / Command Line"
+                    echo "    Tools are older than Homebrew's minimum for this macOS. That is a"
+                    echo "    Homebrew host requirement, not a Manifest problem — release"
+                    echo "    v$new_version shipped fine; only this machine's auto-upgrade is deferred."
+                    if manifest_os_macos_is_prerelease; then
+                        echo "    (Expected on a macOS pre-release — a matching Xcode/CLT may not exist yet.)"
+                    fi
+                    echo "    Once the toolchain is current: brew upgrade $(manifest_install_paths_homebrew_formula)"
+                    _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="skipped_host_toolchain_outdated"
                 else
                     echo "⚠️  Homebrew upgrade did not complete — try 'brew update && brew upgrade manifest' manually"
                     _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="failed"
