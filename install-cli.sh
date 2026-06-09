@@ -1420,8 +1420,14 @@ install_via_homebrew() {
     # the untrusted formula and brew install/upgrade silently no-op. Non-fatal.
     manifest_install_paths_ensure_brew_trust
     case $? in
-        0) print_success "✅ Trusted formula $brew_formula" ;;
-        1) print_warning "⚠️  Could not auto-trust $brew_formula. If a future Homebrew ignores untrusted taps, run: brew trust --formula $brew_formula" ;;
+        0)
+            if [ "${_MANIFEST_CLI_LAST_BREW_TRUST_SCOPE:-formula}" = "tap" ]; then
+                print_success "✅ Trusted Homebrew tap $brew_tap"
+            else
+                print_success "✅ Trusted formula $brew_formula"
+            fi
+            ;;
+        1) print_warning "⚠️  Could not auto-trust $brew_formula. If Homebrew ignores untrusted taps, run: $(manifest_install_paths_brew_trust_manual_command)" ;;
     esac
 
     if manifest_install_paths_is_brew_managed; then

@@ -1,9 +1,11 @@
 #!/usr/bin/env bats
 #
-# §7.1: manifest_install_paths_ensure_brew_trust narrowly trusts the Manifest
-# formula so Homebrew keeps loading it once HOMEBREW_REQUIRE_TAP_TRUST is the
-# default (untrusted formulae are otherwise ignored → silent install/upgrade
-# no-op). Version-guarded against older Homebrew that has no `brew trust`.
+# §7.1: manifest_install_paths_ensure_brew_trust trusts the Manifest formula
+# narrowly when Homebrew allows it, and falls back to tap-level trust only for
+# custom-remote taps where Homebrew rejects individual formula trust. This keeps
+# Manifest loadable once HOMEBREW_REQUIRE_TAP_TRUST is enforced (untrusted
+# formulae are otherwise ignored → silent install/upgrade no-op). Version-guarded
+# against older Homebrew that has no `brew trust`.
 
 load 'helpers/setup'
 
@@ -32,6 +34,46 @@ teardown() {
     [ "$status" -eq 0 ]
     # Narrow, formula-qualified target — never the whole tap.
     [ "$(cat "$SCRATCH/trusted")" = "fidenceio/tap/manifest" ]
+}
+
+@test "tap-trust: falls back to tap trust when Homebrew refuses formula trust for custom remotes" {
+    brew() {
+        if [ "$1" = "trust" ] && [ "$2" = "--help" ]; then return 0; fi
+        if [ "$1" = "trust" ] && [ "$2" = "--formula" ]; then
+            echo "Error: Invalid usage: Cannot trust individual items in fidenceio/tap as it uses a custom remote." >&2
+            return 1
+        fi
+        if [ "$1" = "trust" ] && [ "$2" = "fidenceio/tap" ]; then
+            printf 'tap:%s\n' "$2" >> "$SCRATCH/trusted"
+            return 0
+        fi
+        return 1
+    }
+    export -f brew
+
+    run manifest_install_paths_ensure_brew_trust
+    [ "$status" -eq 0 ]
+    [ "$(cat "$SCRATCH/trusted")" = "tap:fidenceio/tap" ]
+}
+
+@test "tap-trust: non-custom formula trust failure does not broaden to the tap" {
+    brew() {
+        if [ "$1" = "trust" ] && [ "$2" = "--help" ]; then return 0; fi
+        if [ "$1" = "trust" ] && [ "$2" = "--formula" ]; then
+            echo "Error: trust database unavailable" >&2
+            return 1
+        fi
+        if [ "$1" = "trust" ] && [ "$2" = "fidenceio/tap" ]; then
+            printf 'tap:%s\n' "$2" >> "$SCRATCH/trusted"
+            return 0
+        fi
+        return 1
+    }
+    export -f brew
+
+    run manifest_install_paths_ensure_brew_trust
+    [ "$status" -eq 1 ]
+    [ ! -e "$SCRATCH/trusted" ]
 }
 
 @test "tap-trust: skips cleanly on a Homebrew without the trust subcommand" {

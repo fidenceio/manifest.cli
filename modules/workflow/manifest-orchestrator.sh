@@ -579,7 +579,7 @@ manifest_ship_post_push_steps() {
                 # Non-fatal; older brew has no `trust`. (§7.6)
                 manifest_install_paths_ensure_brew_trust
                 case $? in
-                    1) echo "   ⚠️  Could not auto-trust the Manifest formula; if Homebrew enforces tap-trust the upgrade may be ignored. Run: brew trust --formula $(manifest_install_paths_homebrew_formula)" ;;
+                    1) echo "   ⚠️  Could not auto-trust Manifest for Homebrew tap-trust; the upgrade may be ignored. Run: $(manifest_install_paths_brew_trust_manual_command)" ;;
                 esac
                 if brew update &>/dev/null && brew upgrade manifest 2>&1; then
                     echo "✅ Local installation upgraded to v$new_version via Homebrew"

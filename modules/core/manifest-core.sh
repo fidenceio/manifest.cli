@@ -1223,7 +1223,7 @@ EOF
                 # error, same version. Non-fatal; older brew has no `trust`. (§7.6)
                 manifest_install_paths_ensure_brew_trust
                 case $? in
-                    1) log_warning "Could not auto-trust $(manifest_install_paths_homebrew_formula); if Homebrew enforces tap-trust this reinstall may be ignored. Run: brew trust --formula $(manifest_install_paths_homebrew_formula)" ;;
+                    1) log_warning "Could not auto-trust Manifest for Homebrew tap-trust; this reinstall may be ignored. Run: $(manifest_install_paths_brew_trust_manual_command)" ;;
                 esac
                 if manifest_install_paths_is_brew_managed; then
                     brew reinstall fidenceio/tap/manifest || brew reinstall manifest
