@@ -157,3 +157,40 @@ teardown() {
     ! echo "$output" | grep -q "Local manifest is not installed via Homebrew"
     ! echo "$output" | grep -q "Homebrew upgrade did not complete"
 }
+
+@test "is_brew_managed: Cellar keg is authoritative even when brew list transiently fails (§8.13)" {
+    # Regression: provenance must come from the install location, not `brew list`
+    # exit status — which can transiently fail right after the same ship refreshes
+    # the tap checkout. A present Cellar keg with a failing `brew list` must still
+    # report brew-managed.
+    local cellar="$SCRATCH/cellar"
+    mkdir -p "$cellar/manifest/1.2.3"
+    brew() {
+        case "$1" in
+            --cellar) echo "$cellar"; return 0 ;;
+            list)     return 1 ;;   # transient failure, both tap-qualified and bare forms
+            *)        return 0 ;;
+        esac
+    }
+
+    run manifest_install_paths_is_brew_managed
+    [ "$status" -eq 0 ]
+}
+
+@test "is_brew_managed: not managed when no Cellar keg and brew list fails (§8.13 boundary)" {
+    # Boundary: a Cellar exists but holds no manifest keg, and `brew list` fails →
+    # genuinely not brew-managed. Guards against the filesystem check matching too
+    # eagerly.
+    local cellar="$SCRATCH/cellar"
+    mkdir -p "$cellar"
+    brew() {
+        case "$1" in
+            --cellar) echo "$cellar"; return 0 ;;
+            list)     return 1 ;;
+            *)        return 0 ;;
+        esac
+    }
+
+    run manifest_install_paths_is_brew_managed
+    [ "$status" -eq 1 ]
+}
