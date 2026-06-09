@@ -87,6 +87,11 @@ fi
 # --print-cache-key prints the resolved cache fingerprint and exits (the cache
 # analogue of that seam).
 #
+# --progress / --no-progress emit a lightweight "N/TOTAL (pct%)" line to stderr at
+# each 10% boundary as tests complete — a cheap progress indicator for the long
+# full suite. TAP on stdout is unchanged. Off by default; MANIFEST_CLI_TEST_PROGRESS=1
+# defaults it on.
+#
 # Any remaining args pass through to bats (e.g. explicit test files to run).
 TIER="full"
 JOBS="auto"
@@ -94,6 +99,13 @@ PRINT_CMD=0
 PRINT_CACHE_KEY=0
 CHANGED=0
 CACHE_ENABLED=1
+# --progress prints a lightweight "N/TOTAL (pct%)" milestone line to stderr at
+# each 10% boundary as tests complete — a cheap "how far along are we" indicator
+# for the long full suite. Off by default (keeps CI/gate logs and the TAP stream
+# on stdout untouched); set MANIFEST_CLI_TEST_PROGRESS=1 to default it on, or pass
+# --progress / --no-progress per run. It only counts TAP lines — no extra compute.
+PROGRESS=0
+case "${MANIFEST_CLI_TEST_PROGRESS:-}" in 1|true|on|yes) PROGRESS=1 ;; esac
 BATS_ARGS=()
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -123,6 +135,14 @@ while [ "$#" -gt 0 ]; do
             ;;
         --no-cache)
             CACHE_ENABLED=0
+            shift
+            ;;
+        --progress)
+            PROGRESS=1
+            shift
+            ;;
+        --no-progress)
+            PROGRESS=0
             shift
             ;;
         --print-cmd)
@@ -410,8 +430,37 @@ if [ "$CACHE_ENABLED" -eq 1 ]; then
     fi
 fi
 
-bats "${PARALLEL[@]}" "${FILTER[@]}" "${TARGET[@]}"
-status=$?
+# Lightweight progress: pass every TAP line straight through to stdout (so the
+# results stream and any consumer are untouched) while emitting a "N/TOTAL
+# (pct%)" line to stderr at each 10% boundary. Pure line-counting in awk — no
+# extra processes per test, no cursor control (renders the same piped or in a
+# terminal). Total comes from TAP's `1..N` plan line; works with parallel runs
+# since it counts completed `ok`/`not ok` lines regardless of order.
+_progress_filter() {
+    awk '
+        BEGIN { next_ms = 10 }
+        /^1\.\.[0-9]+$/ { total = substr($0, 4) + 0 }
+        { print; fflush() }
+        (/^ok / || /^not ok /) && total > 0 {
+            completed++
+            pct = int(completed * 100 / total)
+            if (pct >= next_ms && next_ms < 100) {
+                printf "  …running tests: %d/%d (%d%%)\n", completed, total, pct > "/dev/stderr"
+                fflush("/dev/stderr")
+                while (next_ms <= pct) next_ms += 10
+            }
+        }
+        END { if (total > 0) printf "  …tests complete: %d/%d\n", completed, total > "/dev/stderr" }
+    '
+}
+
+if [ "$PROGRESS" -eq 1 ]; then
+    bats "${PARALLEL[@]}" "${FILTER[@]}" "${TARGET[@]}" | _progress_filter
+    status=${PIPESTATUS[0]}
+else
+    bats "${PARALLEL[@]}" "${FILTER[@]}" "${TARGET[@]}"
+    status=$?
+fi
 if [ "$status" -eq 0 ] && [ "$CACHE_ENABLED" -eq 1 ] && [ "$CACHE_WINDOW" -gt 0 ] && [ -n "$CACHE_FP" ]; then
     if mkdir -p "$CACHE_DIR" 2>/dev/null && printf '%s\n' "$(date +%s)" > "$CACHE_DIR/$CACHE_FP" 2>/dev/null; then
         echo "[cache] recorded green run (scope: $(_run_scope))." >&2
