@@ -49,11 +49,17 @@ class Manifest < Formula
         fi
 
         local candidate major
+        # Fully static candidate list (no build-time interpolation) so
+        # `def install` produces byte-identical output on every build platform.
+        # That makes a single platform-agnostic (:all) bottle valid, which lets
+        # `brew upgrade` pull the bottle and skip the source-build path — and its
+        # host Xcode/CLT minimum-version gate. Covers Homebrew on Apple Silicon,
+        # Intel, and Linuxbrew, then PATH and the system bash as a last resort.
         local candidates=(
           "${MANIFEST_CLI_BASH_PATH:-}"
-          "#{Formula["bash"].opt_bin}/bash"
           "/opt/homebrew/bin/bash"
           "/usr/local/bin/bash"
+          "/home/linuxbrew/.linuxbrew/bin/bash"
           "$(command -v bash 2>/dev/null || true)"
           "/bin/bash"
         )

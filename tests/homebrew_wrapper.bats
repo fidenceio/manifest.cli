@@ -26,7 +26,12 @@ load 'helpers/setup'
     local source_line="${output%%:*}"
 
     [ "$guard_line" -lt "$source_line" ]
-    grep -F '#{Formula["bash"].opt_bin}/bash' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
+    # The bash-candidate list must be fully static — no build-time #{...}
+    # interpolation — so install output is byte-identical across platforms and a
+    # single :all bottle is valid (lets brew upgrade skip the source-build gate).
+    ! grep -F '#{Formula["bash"].opt_bin}' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
+    grep -F '/opt/homebrew/bin/bash' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
+    grep -F '/home/linuxbrew/.linuxbrew/bin/bash' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
     grep -F 'MANIFEST_CLI_BASH_REEXEC=1 exec "$candidate" "$0" "$@"' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
     ! grep -F 'if [ "${MANIFEST_CLI_BASH_REEXEC:-0}" = "1" ]; then' "$TEST_REPO_ROOT/formula/manifest.rb" >/dev/null
 }
