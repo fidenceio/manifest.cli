@@ -27,10 +27,24 @@ manifest_install_paths_homebrew_tap()     { echo "fidenceio/tap"; }
 # brew-vs-source provenance (installer routing, uninstall, doctor reinstall,
 # post-ship self-upgrade) routes here so the answer can never drift.
 #
-# Checks the tap-qualified formula first, then the bare leaf name, matching how
-# a tap install registers. Silent; returns 0 (brew-managed) / 1 (not).
+# Decides from the install *location* (deterministic) before falling back to
+# `brew list` (a stateful query). A Homebrew keg directory under the Cellar is
+# authoritative and immune to transient `brew list` failures — e.g. the tap
+# checkout mid-refresh during the same ship's formula publish, the SSH<->HTTPS
+# origin swap, or a `brew` auto-update — which previously made the post-ship
+# self-upgrade wrongly report "not brew-managed" and skip the upgrade (§8.13).
+# Silent; returns 0 (brew-managed) / 1 (not).
 manifest_install_paths_is_brew_managed() {
     command -v brew >/dev/null 2>&1 || return 1
+
+    # Authoritative: the install location can't be perturbed by brew's runtime
+    # tap/auto-update state. `brew --cellar` just prints the Cellar path (no
+    # network, no formula/tap resolution), so a present keg dir is conclusive.
+    local brew_cellar
+    brew_cellar="$(brew --cellar 2>/dev/null)"
+    [ -n "$brew_cellar" ] && [ -d "$brew_cellar/manifest" ] && return 0
+
+    # Secondary signals — resilient if `--cellar` is unavailable on older brew.
     brew list "$(manifest_install_paths_homebrew_formula)" >/dev/null 2>&1 && return 0
     brew list manifest >/dev/null 2>&1 && return 0
     return 1
