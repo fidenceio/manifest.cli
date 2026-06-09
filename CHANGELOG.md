@@ -1,5 +1,14 @@
 # Changelog
 
+## [53.0.5] - 2026-06-09
+
+**Release Type:** Patch
+
+### Changes
+
+- Formula: make the bash-wrapper candidate list fully static (:all-bottle ready)
+
+
 ## [53.0.4] - 2026-06-09
 
 **Release Type:** Patch
@@ -89,15 +98,3 @@
 ### Changes
 
 - Add regression coverage for the changed CLI workflow
-
-
-## [52.5.1] - 2026-06-08
-
-**Release Type:** Patch
-
-### Changes
-
-- Update release copy and configuration examples
-- Update shell completions for new command options
-- Add regression coverage for the changed CLI workflow
-- Backfill and clarify release history in the root changelog
