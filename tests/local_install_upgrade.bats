@@ -277,3 +277,102 @@ teardown() {
     echo "$output" | grep -q "Homebrew declined the local upgrade"
     echo "$output" | grep -q "macOS pre-release"
 }
+
+@test "auto-upgrade: opt-out via MANIFEST_CLI_AUTO_UPDATE=false does nothing" {
+    export MANIFEST_CLI_AUTO_UPDATE=false
+    local sd="$SCRATCH/state"; mkdir -p "$sd"
+    manifest_install_paths_global_state_dir() { echo "$sd"; }
+    manifest_install_paths_is_brew_managed() { return 0; }
+    manifest_install_paths_home_looks_sandboxed() { return 1; }  # opt out of the sandbox gate to test the logic
+    brew() { return 0; }
+    local spawned="$SCRATCH/spawned"
+    manifest_install_paths_auto_upgrade_spawn() { touch "$spawned"; }
+
+    run manifest_install_paths_auto_upgrade
+    [ "$status" -eq 0 ]
+    [ ! -f "$spawned" ]
+    [ ! -f "$sd/.auto_upgrade_last_check" ]
+}
+
+@test "auto-upgrade: skipped when the install is not brew-managed" {
+    local sd="$SCRATCH/state"; mkdir -p "$sd"
+    manifest_install_paths_global_state_dir() { echo "$sd"; }
+    manifest_install_paths_is_brew_managed() { return 1; }   # source/manual install
+    manifest_install_paths_home_looks_sandboxed() { return 1; }  # opt out of the sandbox gate to test the logic
+    brew() { return 0; }
+    local spawned="$SCRATCH/spawned"
+    manifest_install_paths_auto_upgrade_spawn() { touch "$spawned"; }
+
+    run manifest_install_paths_auto_upgrade
+    [ "$status" -eq 0 ]
+    [ ! -f "$spawned" ]
+}
+
+@test "auto-upgrade: within the cooldown window it does not spawn" {
+    local sd="$SCRATCH/state"; mkdir -p "$sd"
+    manifest_install_paths_global_state_dir() { echo "$sd"; }
+    manifest_install_paths_is_brew_managed() { return 0; }
+    manifest_install_paths_home_looks_sandboxed() { return 1; }  # opt out of the sandbox gate to test the logic
+    brew() { return 0; }
+    local spawned="$SCRATCH/spawned"
+    manifest_install_paths_auto_upgrade_spawn() { touch "$spawned"; }
+    date +%s > "$sd/.auto_upgrade_last_check"   # last check = now → diff 0 < cooldown
+
+    run manifest_install_paths_auto_upgrade
+    [ "$status" -eq 0 ]
+    [ ! -f "$spawned" ]
+}
+
+@test "auto-upgrade: past the cooldown it spawns and re-stamps the check time" {
+    local sd="$SCRATCH/state"; mkdir -p "$sd"
+    manifest_install_paths_global_state_dir() { echo "$sd"; }
+    manifest_install_paths_is_brew_managed() { return 0; }
+    manifest_install_paths_home_looks_sandboxed() { return 1; }  # opt out of the sandbox gate to test the logic
+    brew() { return 0; }
+    local spawned="$SCRATCH/spawned"
+    manifest_install_paths_auto_upgrade_spawn() { touch "$spawned"; }
+    echo 0 > "$sd/.auto_upgrade_last_check"   # epoch 0 → far past any cooldown
+
+    run manifest_install_paths_auto_upgrade
+    [ "$status" -eq 0 ]
+    [ -f "$spawned" ]
+    local stamped; stamped="$(cat "$sd/.auto_upgrade_last_check")"
+    [ "$stamped" -gt 0 ]
+}
+
+@test "auto-upgrade: surfaces a completed background upgrade once, then clears it" {
+    local sd="$SCRATCH/state"; mkdir -p "$sd"
+    manifest_install_paths_global_state_dir() { echo "$sd"; }
+    manifest_install_paths_is_brew_managed() { return 0; }
+    manifest_install_paths_home_looks_sandboxed() { return 1; }  # opt out of the sandbox gate to test the logic
+    brew() { return 0; }
+    manifest_install_paths_auto_upgrade_spawn() { :; }   # no-op
+    echo "53.1.0" > "$sd/.auto_upgrade_result"
+    date +%s > "$sd/.auto_upgrade_last_check"            # within cooldown → isolate the notice
+
+    run manifest_install_paths_auto_upgrade
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "auto-upgraded to v53.1.0"
+    [ ! -f "$sd/.auto_upgrade_result" ]
+}
+
+@test "auto-upgrade worker: pours a bottle with --force-bottle and records the new version" {
+    # The detached worker must use --force-bottle (pour-or-fail-fast; never a
+    # source build → never the Xcode gate) and record the new version on change.
+    local sd="$SCRATCH/state"; mkdir -p "$sd"
+    local result="$sd/.auto_upgrade_result"
+    local brewlog="$SCRATCH/brewcmds"; local upgraded="$SCRATCH/upgraded"
+    brew() {
+        case "$1 ${2:-}" in
+            "list --versions") if [ -f "$upgraded" ]; then echo "manifest 53.1.0"; else echo "manifest 53.0.5"; fi ;;
+            "upgrade --force-bottle") echo "$*" >> "$brewlog"; touch "$upgraded"; return 0 ;;
+            *) return 0 ;;
+        esac
+    }
+
+    run manifest_install_paths_auto_upgrade_bg "$result" "fidenceio/tap/manifest"
+    [ "$status" -eq 0 ]
+    [ -f "$result" ]
+    [ "$(cat "$result")" = "53.1.0" ]
+    grep -q -- "--force-bottle" "$brewlog"
+}
