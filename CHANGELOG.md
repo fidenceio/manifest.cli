@@ -1,5 +1,14 @@
 # Changelog
 
+## [53.0.2] - 2026-06-09
+
+**Release Type:** Patch
+
+### Changes
+
+- Fix(install): fall back to tap-level brew trust on custom-remote taps (§7.6)
+
+
 ## [53.0.1] - 2026-06-08
 
 **Release Type:** Patch
@@ -100,8 +109,3 @@
 - Fix(ship): create GitHub Release before Homebrew + retry the tarball SHA fetch
 - Docs(tracker): file §8 enterprise-readiness audit — open items + this session's done work
 - Fix(ship): portable sha256 (sha256sum fallback) so the formula fetch works on Linux
-
-
-## [52.4.0] - 2026-06-05
-
-**Release Type:** Minor — no user-facing changes.
