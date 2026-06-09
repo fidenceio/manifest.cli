@@ -162,6 +162,81 @@ manifest_install_paths_global_state_dir() {
     echo "$HOME/.manifest-cli"
 }
 
+# --- Auto-upgrade on invocation --------------------------------------------
+# For brew-managed installs, keep the local CLI current without manual steps.
+# Runs on real command invocations (see check_auto_upgrade): cooldown-gated, it
+# spawns a DETACHED, bottle-only `brew upgrade` so it never blocks the user's
+# command and never source-builds (→ never trips the host Xcode/CLT gate that
+# blocks upgrades on a macOS pre-release). A completed upgrade is surfaced as a
+# one-liner on the next invocation. Opt out with MANIFEST_CLI_AUTO_UPDATE=false;
+# tune the window with MANIFEST_CLI_AUTO_UPDATE_COOLDOWN_MINUTES (default 360).
+
+# The detached worker: pour a bottle if one is available, else fail fast.
+# `--force-bottle` makes brew use a bottle or error immediately — it never falls
+# back to a source build, so the toolchain gate is never reached. On a real
+# version change it records the new version for the next-invocation notice.
+manifest_install_paths_auto_upgrade_bg() {
+    local result_file="$1" formula="$2" before after
+    before="$(brew list --versions manifest 2>/dev/null | awk '{print $2}')"
+    brew update >/dev/null 2>&1
+    brew upgrade --force-bottle "$formula" >/dev/null 2>&1 \
+        || brew upgrade --force-bottle manifest >/dev/null 2>&1 || true
+    after="$(brew list --versions manifest 2>/dev/null | awk '{print $2}')"
+    if [ -n "$after" ] && [ "$after" != "$before" ]; then
+        printf '%s\n' "$after" > "$result_file" 2>/dev/null || true
+    fi
+}
+
+# Spawn the worker fully detached: a subshell that ignores SIGHUP so it survives
+# the parent CLI process exiting (and the terminal closing). Factored out so
+# tests can stub the spawn and assert the foreground gating without backgrounding.
+manifest_install_paths_auto_upgrade_spawn() {
+    local result_file="$1" formula
+    formula="$(manifest_install_paths_homebrew_formula)"
+    ( trap '' HUP; manifest_install_paths_auto_upgrade_bg "$result_file" "$formula" ) >/dev/null 2>&1 &
+    disown 2>/dev/null || true
+}
+
+manifest_install_paths_auto_upgrade() {
+    [ "${MANIFEST_CLI_AUTO_UPDATE:-true}" = "false" ] && return 0
+    # Never touch the system from a sandbox/test HOME: no state writes, and never
+    # spawn a real `brew upgrade`. Keeps preview/no-write contracts intact and is
+    # the same guard the destructive-brew path uses.
+    manifest_install_paths_home_looks_sandboxed && return 0
+    command -v brew >/dev/null 2>&1 || return 0
+    manifest_install_paths_is_brew_managed || return 0
+
+    local state_dir result_file state_file
+    state_dir="$(manifest_install_paths_global_state_dir 2>/dev/null)"
+    [ -n "$state_dir" ] || return 0
+    mkdir -p "$state_dir" 2>/dev/null || return 0
+    result_file="$state_dir/.auto_upgrade_result"
+    state_file="$state_dir/.auto_upgrade_last_check"
+
+    # Surface a completed background upgrade exactly once, then clear it.
+    if [ -f "$result_file" ]; then
+        local upgraded_to
+        upgraded_to="$(cat "$result_file" 2>/dev/null)"
+        [ -n "$upgraded_to" ] && echo "✓ Manifest auto-upgraded to v${upgraded_to} via Homebrew"
+        rm -f "$result_file" 2>/dev/null || true
+    fi
+
+    # Cooldown gate — stamp before spawning so a no-op/failed window doesn't spin.
+    local cooldown now last diff
+    cooldown="${MANIFEST_CLI_AUTO_UPDATE_COOLDOWN_MINUTES:-360}"
+    case "$cooldown" in ''|*[!0-9]*) cooldown=360 ;; esac
+    now="$(date +%s 2>/dev/null)" || return 0
+    last=0
+    [ -f "$state_file" ] && last="$(cat "$state_file" 2>/dev/null || echo 0)"
+    case "$last" in ''|*[!0-9]*) last=0 ;; esac
+    diff=$(( (now - last) / 60 ))
+    [ "$diff" -ge "$cooldown" ] || return 0
+    echo "$now" > "$state_file" 2>/dev/null || true
+
+    manifest_install_paths_auto_upgrade_spawn "$result_file"
+    return 0
+}
+
 manifest_install_paths_user_global_config() {
     echo "$HOME/.manifest-cli/manifest.config.global.yaml"
 }

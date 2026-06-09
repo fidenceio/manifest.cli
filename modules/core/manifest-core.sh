@@ -399,11 +399,15 @@ update_homebrew_formula() {
 # Test mode function
 # get_next_version() - Now available from manifest-shared-functions.sh
 
-# Auto-upgrade check with cooldown
+# Auto-upgrade check with cooldown.
+# Core, always-present behavior: for brew-managed installs, keep the CLI current
+# by spawning a detached, bottle-only `brew upgrade` (cooldown-gated, never
+# blocks, never source-builds). Self-contained in manifest-install-paths.sh so
+# it works without the optional Cloud plugin. The explicit `manifest upgrade`
+# command path is separate and unchanged.
 check_auto_upgrade() {
-    # Load from Cloud plugins; silently skip if not installed
-    if manifest_load_plugin "workflow/manifest-auto-upgrade.sh"; then
-        check_auto_upgrade_internal
+    if declare -F manifest_install_paths_auto_upgrade >/dev/null 2>&1; then
+        manifest_install_paths_auto_upgrade
     fi
 }
 
