@@ -60,8 +60,12 @@ _manifest_complete() {
                     COMPREPLY=( $(compgen -W "-y --yes --depth --all-folders --force --dry-run --name --create-repo-private --create-repo-public --help" -- "$cur") )
                     return 0
                     ;;
-                "ship repo"|"ship fleet")
-                    COMPREPLY=( $(compgen -W "$bumps -y --yes --local --dry-run --explain -i --interactive --only --except --noprep" -- "$cur") )
+                "ship repo")
+                    COMPREPLY=( $(compgen -W "$bumps -y --yes --local --dry-run --explain -i --interactive" -- "$cur") )
+                    return 0
+                    ;;
+                "ship fleet")
+                    COMPREPLY=( $(compgen -W "$bumps resume -y --yes --local --dry-run --explain --noprep" -- "$cur") )
                     return 0
                     ;;
                 "topics fleet")

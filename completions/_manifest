@@ -89,8 +89,11 @@ _manifest() {
                 "init fleet")
                     _values 'option' -y --yes --depth --all-folders --force --dry-run --name --create-repo-private --create-repo-public --help
                     ;;
-                "ship repo"|"ship fleet")
-                    _values 'release type / option' "${bumps[@]}" -y --yes --local --dry-run --explain -i --interactive --only --except --noprep
+                "ship repo")
+                    _values 'release type / option' "${bumps[@]}" -y --yes --local --dry-run --explain -i --interactive
+                    ;;
+                "ship fleet")
+                    _values 'release type / option' "${bumps[@]}" resume -y --yes --local --dry-run --explain --noprep
                     ;;
                 "topics fleet")
                     _values 'option' -y --yes --dry-run --help
