@@ -28,6 +28,12 @@ setup() {
     should_update_homebrew_for_repo() { return 0; }
     update_homebrew_formula() { return 0; }
     manifest_create_github_release_for_tag() { return 2; }
+
+    # The upgrade paths stamp/clear the auto-upgrade cooldown — keep every
+    # state write inside the scratch dir, never the developer's real HOME.
+    manifest_install_paths_global_state_dir() { echo "$SCRATCH/state"; }
+    # The bottle-wait loop sleeps between polls; never block the suite.
+    sleep() { :; }
 }
 
 teardown() {
@@ -70,6 +76,9 @@ teardown() {
     echo "$output" | grep -q "Local installation upgraded to v1.2.3 via Homebrew"
     ! echo "$output" | grep -q "Local manifest is not installed via Homebrew"
     ! echo "$output" | grep -q "Homebrew upgrade did not complete"
+    # A completed ship upgrade stamps the cooldown: the next ambient
+    # auto-upgrade check would be a no-op, so don't burn a brew update on it.
+    [ -f "$SCRATCH/state/.auto_upgrade_last_check" ]
 }
 
 @test "successful brew upgrade invokes the SSH-restore helper" {
@@ -129,6 +138,11 @@ teardown() {
             *) return 0 ;;
         esac
     }
+    # A failed ship upgrade must hand off to the invocation-time auto-upgrade
+    # immediately — the cooldown paces ambient checks, not a ship that just
+    # published a formula this machine still needs.
+    mkdir -p "$SCRATCH/state"
+    date +%s > "$SCRATCH/state/.auto_upgrade_last_check"
 
     run manifest_ship_post_push_steps "1.2.3" "$(git rev-parse HEAD)" "v1.2.3" "success"
 
@@ -137,6 +151,7 @@ teardown() {
     echo "$output" | grep -q "brew update && brew upgrade manifest"
     ! echo "$output" | grep -q "Local manifest is not installed via Homebrew"
     ! echo "$output" | grep -q "Local installation upgraded"
+    [ ! -f "$SCRATCH/state/.auto_upgrade_last_check" ]
 }
 
 @test "local upgrade is skipped entirely when tap push did not succeed" {
@@ -228,20 +243,60 @@ teardown() {
     [ "$status" -eq 1 ]
 }
 
-@test "local upgrade: host-toolchain gate is an environmental skip, not a Manifest failure" {
-    # brew refuses the upgrade because the host Xcode/CLT are below its minimum
-    # for the running macOS (the macOS-beta scenario). The ship must classify this
-    # as an environmental skip — not print the misleading generic warning, and not
-    # touch the tap SSH origin (that only follows a real upgrade).
+@test "local upgrade: toolchain gate waits for the bottle and pours it when CI publishes" {
+    # brew can't source-build (host Xcode/CLT gate), so the ship waits for tap
+    # CI's :all bottle and pours it with --force-bottle. Here the bottle "lands"
+    # on the first poll: the upgrade must complete, fire the SSH-restore step,
+    # and stamp the auto-upgrade cooldown (the next ambient check is a no-op).
     manifest_os_macos_is_prerelease() { return 1; }   # deterministic: suppress beta line
+    export MANIFEST_CLI_SHIP_BOTTLE_WAIT_MINUTES=1
     local sentinel="$SCRATCH/ssh-restore-fired"
     manifest_ship_restore_tap_ssh_origin() { touch "$sentinel"; }
     brew() {
         case "$1 ${2:-} ${3:-}" in
+            "list --versions manifest")
+                if [ -f "$SCRATCH/bottle-poured" ]; then echo "manifest 1.2.3"; else echo "manifest 1.2.2"; fi
+                return 0 ;;
             "list "*) return 0 ;;
             "update "*|"update") return 0 ;;
+            "upgrade --force-bottle"*) touch "$SCRATCH/bottle-poured"; return 0 ;;
             "upgrade manifest"*)
                 echo "Error: Your Xcode (26.5) at /Applications/Xcode.app is too outdated."
+                return 1 ;;
+            *) return 0 ;;
+        esac
+    }
+
+    run manifest_ship_post_push_steps "1.2.3" "$(git rev-parse HEAD)" "v1.2.3" "success"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "can't source-build"
+    echo "$output" | grep -q "Waiting for tap CI"
+    echo "$output" | grep -q "Local installation upgraded to v1.2.3 via Homebrew bottle"
+    ! echo "$output" | grep -q "Homebrew upgrade did not complete"
+    [ -f "$sentinel" ]
+    [ -f "$SCRATCH/state/.auto_upgrade_last_check" ]
+}
+
+@test "local upgrade: unpublished bottle defers to auto-upgrade and clears the cooldown" {
+    # The gate fires and the bottle never lands inside the wait window. The ship
+    # must not print the misleading generic warning, must not touch the tap SSH
+    # origin (that only follows a real upgrade), and must clear the cooldown
+    # stamp so the very next invocation pours the bottle instead of waiting out
+    # the window — the cooldown paces ambient checks, not a post-ship catch-up.
+    manifest_os_macos_is_prerelease() { return 1; }   # deterministic: suppress beta line
+    export MANIFEST_CLI_SHIP_BOTTLE_WAIT_MINUTES=1
+    local sentinel="$SCRATCH/ssh-restore-fired"
+    manifest_ship_restore_tap_ssh_origin() { touch "$sentinel"; }
+    mkdir -p "$SCRATCH/state"
+    date +%s > "$SCRATCH/state/.auto_upgrade_last_check"
+    brew() {
+        case "$1 ${2:-} ${3:-}" in
+            "list --versions manifest") echo "manifest 1.2.2"; return 0 ;;
+            "list "*) return 0 ;;
+            "update "*|"update") return 0 ;;
+            "upgrade --force-bottle"*) return 1 ;;   # no bottle to pour yet
+            "upgrade manifest"*)
                 echo "Error: Your Command Line Tools are too outdated."
                 return 1 ;;
             *) return 0 ;;
@@ -251,15 +306,43 @@ teardown() {
     run manifest_ship_post_push_steps "1.2.3" "$(git rev-parse HEAD)" "v1.2.3" "success"
 
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Homebrew declined the local upgrade"
-    echo "$output" | grep -q "shipped fine"
+    echo "$output" | grep -q "can't source-build"
+    echo "$output" | grep -q "is not published yet"
+    echo "$output" | grep -q "shipped"
+    echo "$output" | grep -q "cooldown has been cleared"
     ! echo "$output" | grep -q "Homebrew upgrade did not complete"
     ! echo "$output" | grep -q "Local installation upgraded"
     [ ! -f "$sentinel" ]
+    [ ! -f "$SCRATCH/state/.auto_upgrade_last_check" ]
+}
+
+@test "local upgrade: bottle wait window of 0 defers immediately without polling" {
+    export MANIFEST_CLI_SHIP_BOTTLE_WAIT_MINUTES=0
+    manifest_os_macos_is_prerelease() { return 1; }
+    local brewlog="$SCRATCH/brewcmds"
+    brew() {
+        case "$1 ${2:-} ${3:-}" in
+            "list "*) return 0 ;;
+            "update "*|"update") return 0 ;;
+            "upgrade --force-bottle"*) echo "$*" >> "$brewlog"; return 0 ;;
+            "upgrade manifest"*)
+                echo "Error: Your Xcode (26.5) is too outdated."
+                return 1 ;;
+            *) return 0 ;;
+        esac
+    }
+
+    run manifest_ship_post_push_steps "1.2.3" "$(git rev-parse HEAD)" "v1.2.3" "success"
+
+    [ "$status" -eq 0 ]
+    ! echo "$output" | grep -q "Waiting for tap CI"
+    echo "$output" | grep -q "is not published yet"
+    [ ! -f "$brewlog" ]
 }
 
 @test "local upgrade: toolchain-gate message gains a pre-release note on a macOS beta" {
     manifest_os_macos_is_prerelease() { return 0; }   # force the beta branch
+    export MANIFEST_CLI_SHIP_BOTTLE_WAIT_MINUTES=0    # skip the wait; the note prints first
     brew() {
         case "$1 ${2:-} ${3:-}" in
             "list "*) return 0 ;;
@@ -274,7 +357,7 @@ teardown() {
     run manifest_ship_post_push_steps "1.2.3" "$(git rev-parse HEAD)" "v1.2.3" "success"
 
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Homebrew declined the local upgrade"
+    echo "$output" | grep -q "can't source-build"
     echo "$output" | grep -q "macOS pre-release"
 }
 
