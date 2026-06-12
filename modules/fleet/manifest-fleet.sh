@@ -82,6 +82,7 @@ readonly MANIFEST_CLI_FLEET_MODULE_NAME="manifest-fleet"
 # Source fleet sub-modules
 source "$MANIFEST_CLI_FLEET_SCRIPT_DIR/manifest-fleet-config.sh"
 source "$MANIFEST_CLI_FLEET_SCRIPT_DIR/manifest-fleet-detect.sh"
+source "$MANIFEST_CLI_FLEET_SCRIPT_DIR/manifest-fleet-topics.sh"
 source "$MANIFEST_CLI_FLEET_SCRIPT_DIR/manifest-fleet-docs.sh"
 source "$MANIFEST_CLI_FLEET_SCRIPT_DIR/manifest-fleet-plan.sh"
 source "$MANIFEST_CLI_FLEET_SCRIPT_DIR/manifest-fleet-apply.sh"
@@ -1123,6 +1124,16 @@ EOF
 
     # Add operations section
     cat >> "$config_file" << 'EOF'
+# =============================================================================
+# GITHUB TOPICS (opt-in; off while commented out)
+# =============================================================================
+# Derive GitHub topics from each member's dot-separated repo name and push
+# the missing ones (additive-only) on `manifest update fleet -y`. Modes:
+#   inner          fidence.service.accounting.avalara -> service, accounting
+#   all-but-first  fidence.service.accounting.avalara -> service, accounting, avalara
+#   all            every slug becomes a topic
+# topics:
+#   from_name: inner
 
 # =============================================================================
 # OPERATIONS
@@ -1654,6 +1665,10 @@ EOF
     local config_file
     config_file=$(_fleet_resolve_config "$root_dir")
 
+    # §9.1: an invalid topics.from_name fails loud BEFORE any mutation —
+    # a typo must never silently disable topic projection.
+    manifest_fleet_topics_mode "$config_file" >/dev/null || return 1
+
     local header_label="MANIFEST FLEET UPDATE"
     [[ "$dry_run" == "true" ]] && header_label="MANIFEST FLEET UPDATE (dry-run)"
 
@@ -1767,6 +1782,10 @@ EOF
             echo "✓ Updated manifest.fleet.tsv"
         fi
     fi
+
+    # §9.1: project repo-name slugs onto GitHub topics (opt-in; silent no-op
+    # when topics.from_name is unset).
+    manifest_fleet_topics_run "$root_dir" "$config_file" "$dry_run" || return 1
 
     echo ""
 }
