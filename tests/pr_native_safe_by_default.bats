@@ -11,13 +11,13 @@ teardown() {
     cd /tmp
     rm -rf "$SCRATCH"
     unset _MANIFEST_GH_VALIDATED_AT MANIFEST_CLI_GH_VALIDATION_TTL
-    unset GH_STUB_LOG GH_STUB_EXIT GH_STUB_AUTH_EXIT GH_STUB_STDOUT GH_STUB_STDERR
+    unset MANIFEST_CLI_GH_STUB_LOG MANIFEST_CLI_GH_STUB_EXIT MANIFEST_CLI_GH_STUB_AUTH_EXIT MANIFEST_CLI_GH_STUB_STDOUT MANIFEST_CLI_GH_STUB_STDERR
 }
 
 @test "pr create preview does not require gh auth or repo detection" {
     gh_stub_install
-    export GH_STUB_AUTH_EXIT=99
-    export GH_STUB_EXIT=99
+    export MANIFEST_CLI_GH_STUB_AUTH_EXIT=99
+    export MANIFEST_CLI_GH_STUB_EXIT=99
     cd "$SCRATCH"
 
     run manifest_pr_create --draft --base main
@@ -26,7 +26,7 @@ teardown() {
     echo "$output" | grep -q "Preview - no changes written: manifest pr create"
     echo "$output" | grep -q "Would run: gh pr create --draft --fill --base main"
     echo "$output" | grep -q "manifest pr create --draft --base main -y"
-    [ ! -s "$GH_STUB_LOG" ]
+    [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
 }
 
 @test "pr create -y requires gh and invokes the exact create command" {
@@ -38,9 +38,9 @@ teardown() {
 
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Applying because -y/--yes was provided."
-    grep -q $'\tauth\tstatus' "$GH_STUB_LOG"
-    grep -q $'\trepo\tview\t--json\tname' "$GH_STUB_LOG"
-    grep -q $'\tpr\tcreate\t--draft\t--fill\t--base\tmain' "$GH_STUB_LOG"
+    grep -q $'\tauth\tstatus' "$MANIFEST_CLI_GH_STUB_LOG"
+    grep -q $'\trepo\tview\t--json\tname' "$MANIFEST_CLI_GH_STUB_LOG"
+    grep -q $'\tpr\tcreate\t--draft\t--fill\t--base\tmain' "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
 @test "pr ready merge and update previews do not call gh" {
@@ -50,17 +50,17 @@ teardown() {
     run manifest_pr_ready 123
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Would run: gh pr ready 123"
-    [ ! -s "$GH_STUB_LOG" ]
+    [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
 
     run manifest_pr_merge 123 --auto
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Would run: gh pr merge 123 --auto --squash"
-    [ ! -s "$GH_STUB_LOG" ]
+    [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
 
     run manifest_pr_update 123 --rebase
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Would run: gh pr update-branch 123 --rebase"
-    [ ! -s "$GH_STUB_LOG" ]
+    [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
 }
 
 @test "fleet PR mutating dispatch previews before loading cloud implementation" {

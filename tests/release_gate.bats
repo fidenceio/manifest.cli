@@ -268,8 +268,8 @@ _audit_file() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
     git -C "$PROJECT_ROOT" config user.email t@e.co
     git -C "$PROJECT_ROOT" config user.name t
     ( cd "$PROJECT_ROOT" && echo x > f && git add f && git commit -q -m c )
-    export GH_STUB_STDOUT="99999"   # gh run list returns a run id
-    export GH_STUB_EXIT=0           # gh run watch exits green
+    export MANIFEST_CLI_GH_STUB_STDOUT="99999"   # gh run list returns a run id
+    export MANIFEST_CLI_GH_STUB_EXIT=0           # gh run watch exits green
     export MANIFEST_CLI_RELEASE_GATE="remote-ci"
     run manifest_release_gate_run "post-push"
     [ "$status" -eq 0 ]
@@ -282,9 +282,9 @@ _audit_file() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
     git -C "$PROJECT_ROOT" config user.email t@e.co
     git -C "$PROJECT_ROOT" config user.name t
     ( cd "$PROJECT_ROOT" && echo x > f && git add f && git commit -q -m c )
-    export GH_STUB_STDOUT="99999"   # run id present
-    export GH_STUB_EXIT=1           # gh run watch exits non-zero (red)
-    export GH_STUB_AUTH_EXIT=0      # but auth is fine
+    export MANIFEST_CLI_GH_STUB_STDOUT="99999"   # run id present
+    export MANIFEST_CLI_GH_STUB_EXIT=1           # gh run watch exits non-zero (red)
+    export MANIFEST_CLI_GH_STUB_AUTH_EXIT=0      # but auth is fine
     export MANIFEST_CLI_RELEASE_GATE="remote-ci"
     run manifest_release_gate_run "post-push"
     [ "$status" -eq 1 ]
@@ -297,7 +297,7 @@ _audit_file() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
     git -C "$PROJECT_ROOT" config user.email t@e.co
     git -C "$PROJECT_ROOT" config user.name t
     ( cd "$PROJECT_ROOT" && echo x > f && git add f && git commit -q -m c )
-    export GH_STUB_AUTH_EXIT=1      # gh installed but not authenticated -> rc2 path
+    export MANIFEST_CLI_GH_STUB_AUTH_EXIT=1      # gh installed but not authenticated -> rc2 path
     export MANIFEST_CLI_RELEASE_GATE="remote-ci"
     run manifest_release_gate_run "post-push"
     [ "$status" -eq 1 ]

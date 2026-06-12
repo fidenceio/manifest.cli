@@ -24,7 +24,7 @@ teardown() {
     rm -rf "$SCRATCH"
     unset MANIFEST_CLI_AUTO_CONFIRM
     unset _MANIFEST_GH_VALIDATED_AT MANIFEST_CLI_GH_VALIDATION_TTL
-    unset GH_STUB_LOG GH_STUB_EXIT GH_STUB_AUTH_EXIT GH_STUB_STDOUT GH_STUB_STDERR
+    unset MANIFEST_CLI_GH_STUB_LOG MANIFEST_CLI_GH_STUB_EXIT MANIFEST_CLI_GH_STUB_AUTH_EXIT MANIFEST_CLI_GH_STUB_STDOUT MANIFEST_CLI_GH_STUB_STDERR
     # Apply-hook markers exported by warn_deprecated_configuration /
     # auto_migrate_user_global_configuration. Subprocess exports cannot leak
     # back into the test shell, but unsetting is defensive against any
@@ -358,102 +358,102 @@ TSV
 
 @test "pr create: default preview makes no writes and does not call gh" {
     gh_stub_install
-    export GH_STUB_AUTH_EXIT=99 GH_STUB_EXIT=99
+    export MANIFEST_CLI_GH_STUB_AUTH_EXIT=99 MANIFEST_CLI_GH_STUB_EXIT=99
     setup_bare_repo
     assert_preview_clean pr create --draft --base main
-    [ ! -s "$GH_STUB_LOG" ]
+    [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
 }
 
 @test "pr create: --dry-run makes no writes and does not call gh" {
     gh_stub_install
-    export GH_STUB_AUTH_EXIT=99 GH_STUB_EXIT=99
+    export MANIFEST_CLI_GH_STUB_AUTH_EXIT=99 MANIFEST_CLI_GH_STUB_EXIT=99
     setup_bare_repo
     assert_preview_clean pr create --draft --base main --dry-run
-    [ ! -s "$GH_STUB_LOG" ]
+    [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
 }
 
 @test "pr create: AUTO_CONFIRM=1 default still previews, no writes, no gh" {
     gh_stub_install
-    export GH_STUB_AUTH_EXIT=99 GH_STUB_EXIT=99
+    export MANIFEST_CLI_GH_STUB_AUTH_EXIT=99 MANIFEST_CLI_GH_STUB_EXIT=99
     export MANIFEST_CLI_AUTO_CONFIRM=1
     setup_bare_repo
     assert_preview_clean pr create --draft --base main
-    [ ! -s "$GH_STUB_LOG" ]
+    [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
 }
 
 @test "pr ready: default preview makes no writes and does not call gh" {
     gh_stub_install
-    export GH_STUB_AUTH_EXIT=99 GH_STUB_EXIT=99
+    export MANIFEST_CLI_GH_STUB_AUTH_EXIT=99 MANIFEST_CLI_GH_STUB_EXIT=99
     setup_bare_repo
     assert_preview_clean pr ready 123
-    [ ! -s "$GH_STUB_LOG" ]
+    [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
 }
 
 @test "pr ready: --dry-run makes no writes and does not call gh" {
     gh_stub_install
-    export GH_STUB_AUTH_EXIT=99 GH_STUB_EXIT=99
+    export MANIFEST_CLI_GH_STUB_AUTH_EXIT=99 MANIFEST_CLI_GH_STUB_EXIT=99
     setup_bare_repo
     assert_preview_clean pr ready 123 --dry-run
-    [ ! -s "$GH_STUB_LOG" ]
+    [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
 }
 
 @test "pr ready: AUTO_CONFIRM=1 default still previews, no writes, no gh" {
     gh_stub_install
-    export GH_STUB_AUTH_EXIT=99 GH_STUB_EXIT=99
+    export MANIFEST_CLI_GH_STUB_AUTH_EXIT=99 MANIFEST_CLI_GH_STUB_EXIT=99
     export MANIFEST_CLI_AUTO_CONFIRM=1
     setup_bare_repo
     assert_preview_clean pr ready 123
-    [ ! -s "$GH_STUB_LOG" ]
+    [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
 }
 
 @test "pr merge: default preview makes no writes and does not call gh" {
     gh_stub_install
-    export GH_STUB_AUTH_EXIT=99 GH_STUB_EXIT=99
+    export MANIFEST_CLI_GH_STUB_AUTH_EXIT=99 MANIFEST_CLI_GH_STUB_EXIT=99
     setup_bare_repo
     assert_preview_clean pr merge 123 --auto
-    [ ! -s "$GH_STUB_LOG" ]
+    [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
 }
 
 @test "pr merge: --dry-run makes no writes and does not call gh" {
     gh_stub_install
-    export GH_STUB_AUTH_EXIT=99 GH_STUB_EXIT=99
+    export MANIFEST_CLI_GH_STUB_AUTH_EXIT=99 MANIFEST_CLI_GH_STUB_EXIT=99
     setup_bare_repo
     assert_preview_clean pr merge 123 --auto --dry-run
-    [ ! -s "$GH_STUB_LOG" ]
+    [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
 }
 
 @test "pr merge: AUTO_CONFIRM=1 default still previews, no writes, no gh" {
     gh_stub_install
-    export GH_STUB_AUTH_EXIT=99 GH_STUB_EXIT=99
+    export MANIFEST_CLI_GH_STUB_AUTH_EXIT=99 MANIFEST_CLI_GH_STUB_EXIT=99
     export MANIFEST_CLI_AUTO_CONFIRM=1
     setup_bare_repo
     assert_preview_clean pr merge 123 --auto
-    [ ! -s "$GH_STUB_LOG" ]
+    [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
 }
 
 @test "pr update: default preview makes no writes and does not call gh" {
     gh_stub_install
-    export GH_STUB_AUTH_EXIT=99 GH_STUB_EXIT=99
+    export MANIFEST_CLI_GH_STUB_AUTH_EXIT=99 MANIFEST_CLI_GH_STUB_EXIT=99
     setup_bare_repo
     assert_preview_clean pr update 123 --rebase
-    [ ! -s "$GH_STUB_LOG" ]
+    [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
 }
 
 @test "pr update: --dry-run makes no writes and does not call gh" {
     gh_stub_install
-    export GH_STUB_AUTH_EXIT=99 GH_STUB_EXIT=99
+    export MANIFEST_CLI_GH_STUB_AUTH_EXIT=99 MANIFEST_CLI_GH_STUB_EXIT=99
     setup_bare_repo
     assert_preview_clean pr update 123 --rebase --dry-run
-    [ ! -s "$GH_STUB_LOG" ]
+    [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
 }
 
 @test "pr update: AUTO_CONFIRM=1 default still previews, no writes, no gh" {
     gh_stub_install
-    export GH_STUB_AUTH_EXIT=99 GH_STUB_EXIT=99
+    export MANIFEST_CLI_GH_STUB_AUTH_EXIT=99 MANIFEST_CLI_GH_STUB_EXIT=99
     export MANIFEST_CLI_AUTO_CONFIRM=1
     setup_bare_repo
     assert_preview_clean pr update 123 --rebase
-    [ ! -s "$GH_STUB_LOG" ]
+    [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
 }
 
 # -----------------------------------------------------------------------------

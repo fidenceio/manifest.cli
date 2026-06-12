@@ -213,7 +213,7 @@ teardown() {
 
 @test "real view-guard skips 'release create' when the release already exists (resume idempotency)" {
     # Exercise the ACTUAL manifest_create_github_release_for_tag (not a stub)
-    # through the gh stub. With GH_STUB_EXIT=0, `gh release view` succeeds, so
+    # through the gh stub. With MANIFEST_CLI_GH_STUB_EXIT=0, `gh release view` succeeds, so
     # the view-guard reports "exists" and returns 0 BEFORE reaching
     # `gh release create`. The recorded call log proves create was never issued.
     # Re-source the orchestrator so the real function replaces the setup() stub.
@@ -221,14 +221,14 @@ teardown() {
     source "$TEST_REPO_ROOT/modules/workflow/manifest-orchestrator.sh"
     git remote add origin "git@github.com:fidenceio/manifest.cli.git"
     gh_stub_install
-    export GH_STUB_EXIT=0
+    export MANIFEST_CLI_GH_STUB_EXIT=0
 
     run manifest_create_github_release_for_tag "1.2.3" "v1.2.3"
     [ "$status" -eq 0 ]
     [[ "$output" == *"GitHub Release: exists (v1.2.3)"* ]]
 
     # The view-guard ran...
-    grep -q $'\trelease\tview' "$GH_STUB_LOG"
+    grep -q $'\trelease\tview' "$MANIFEST_CLI_GH_STUB_LOG"
     # ...and create was never reached.
-    ! grep -q $'\trelease\tcreate' "$GH_STUB_LOG"
+    ! grep -q $'\trelease\tcreate' "$MANIFEST_CLI_GH_STUB_LOG"
 }

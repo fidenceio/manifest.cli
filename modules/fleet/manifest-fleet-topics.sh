@@ -28,6 +28,21 @@
 #   - gh missing/unauthenticated, non-GitHub origins, and repos whose names
 #     derive zero slugs are per-member skips with a notice, never failures
 #     (same degraded-mode posture as GitHub release creation).
+#
+# Roster (Phase 2): with topics on, the run also lists org repos that match
+# the fleet's naming family (same first dot-slug as an enrolled member) but
+# are not in the local fleet — new family repos nobody has cloned yet.
+# This is READ-ONLY and REPORT-ONLY by design:
+#   - enumeration uses the full org list (gh repo list --json name); a
+#     fleet-topic-filtered query could never find untagged new repos
+#   - candidates are reported with a clone-to-enroll hint, never written to
+#     the TSV (merge_start_tsv rebuilds the TSV from the local scan, so a
+#     remote-only row would be silently wiped on the next apply) and never
+#     topic-stamped (writes to un-enrolled repos would break the consent
+#     boundary) — cloning into the fleet root IS the enrollment act
+#   - a failed org listing degrades to a per-owner notice, never a failure
+#   - MANIFEST_CLI_FLEET_TOPICS_ROSTER_LIMIT (default 1000) bounds the
+#     listing; hitting the cap is reported, never silent
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -131,6 +146,86 @@ _fleet_topics_current() {
 }
 
 # -----------------------------------------------------------------------------
+# Function: _fleet_topics_org_candidates
+# -----------------------------------------------------------------------------
+# Pure candidate filter (no gh): given one owner, the newline list of known
+# member slugs (owner/name), the newline list of family prefixes (lowercased
+# first dot-slugs of enrolled members), and the newline list of the owner's
+# org repo names, echoes "owner/name" for each org repo that belongs to the
+# naming family but is not an enrolled member.
+# -----------------------------------------------------------------------------
+_fleet_topics_org_candidates() {
+    local owner="$1"
+    local known="$2"
+    local prefixes="$3"
+    local org_names="$4"
+
+    local name first
+    while IFS= read -r name; do
+        [[ -z "$name" ]] && continue
+        printf '%s\n' "$known" | grep -qxF "$owner/$name" && continue
+        first=$(printf '%s' "${name%%.*}" | tr '[:upper:]' '[:lower:]')
+        [[ -z "$first" ]] && continue
+        printf '%s\n' "$prefixes" | grep -qxF "$first" || continue
+        echo "$owner/$name"
+    done <<< "$org_names"
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# Function: _fleet_topics_roster_report
+# -----------------------------------------------------------------------------
+# Lists unenrolled family repos per owner (read-only, report-only — see the
+# module header). Always returns 0: a failed org listing is a notice.
+#
+# ARGUMENTS:
+#   $1   - newline list of known member slugs (owner/name)
+#   $2   - newline list of family prefixes (lowercased first slugs)
+#   $3.. - distinct owners to query
+# -----------------------------------------------------------------------------
+_fleet_topics_roster_report() {
+    local known="$1"
+    local prefixes="$2"
+    shift 2
+    [[ $# -eq 0 ]] && return 0
+
+    local limit="${MANIFEST_CLI_FLEET_TOPICS_ROSTER_LIMIT:-1000}"
+    local owner names count candidates=""
+
+    for owner in "$@"; do
+        [[ -z "$owner" ]] && continue
+        if ! names=$(gh repo list "$owner" --no-archived --limit "$limit" \
+            --json name --jq '.[].name' 2>/dev/null); then
+            echo "  ⚠ Roster check skipped for $owner (gh repo list failed)"
+            continue
+        fi
+        count=$(printf '%s\n' "$names" | grep -c . || true)
+        if [[ "$count" -ge "$limit" ]]; then
+            echo "  ℹ Roster check covered only the first $limit repos of $owner"
+        fi
+        local found
+        found=$(_fleet_topics_org_candidates "$owner" "$known" "$prefixes" "$names")
+        [[ -n "$found" ]] && candidates+="$found"$'\n'
+    done
+
+    candidates=$(printf '%s' "$candidates" | awk 'NF && !seen[$0]++')
+    if [[ -z "$candidates" ]]; then
+        echo "  Roster: no unenrolled family repos found on GitHub"
+        return 0
+    fi
+
+    local n
+    n=$(printf '%s\n' "$candidates" | grep -c .)
+    echo "  Roster: $n family repo(s) exist on GitHub but are not in this fleet:"
+    local c
+    while IFS= read -r c; do
+        echo "    - $c"
+    done <<< "$candidates"
+    echo "  Clone into the fleet root, then run 'manifest update fleet' to enroll."
+    return 0
+}
+
+# -----------------------------------------------------------------------------
 # Function: manifest_fleet_topics_run
 # -----------------------------------------------------------------------------
 # The single hook called at the end of `manifest update fleet`. Preview mode
@@ -178,6 +273,8 @@ manifest_fleet_topics_run() {
     fi
 
     local pushed=0 unchanged=0 skipped=0 failed=0
+    local roster_known="" roster_prefixes=""
+    local -a roster_owners=()
     local member_rows
     member_rows=$(parse_start_tsv "$tsv_file")
 
@@ -204,6 +301,17 @@ manifest_fleet_topics_run() {
         fi
 
         local repo_name="${slug##*/}"
+
+        # Roster bookkeeping: enrolled slugs, family prefixes, distinct owners.
+        local owner="${slug%%/*}" first_slug
+        roster_known+="$slug"$'\n'
+        first_slug=$(printf '%s' "${repo_name%%.*}" | tr '[:upper:]' '[:lower:]')
+        [[ -n "$first_slug" ]] && roster_prefixes+="$first_slug"$'\n'
+        case " ${roster_owners[*]:-} " in
+            *" $owner "*) ;;
+            *) roster_owners+=("$owner") ;;
+        esac
+
         local desired
         desired=$(_fleet_topics_derive "$repo_name" "$mode")
         if [[ -n "$fleet_topic" ]]; then
@@ -261,6 +369,12 @@ manifest_fleet_topics_run() {
     echo "  Topics summary: $pushed $verb, $unchanged up to date, $skipped skipped, $failed failed"
     if [[ "$dry_run" == "true" && "$pushed" -gt 0 ]]; then
         echo "  To apply, run: manifest update fleet -y"
+    fi
+
+    # Phase 2 roster: read-only, report-only (see module header). No GitHub
+    # members enrolled means there is no family to roster against.
+    if [[ ${#roster_owners[@]} -gt 0 ]]; then
+        _fleet_topics_roster_report "$roster_known" "$roster_prefixes" "${roster_owners[@]}"
     fi
 
     return 0

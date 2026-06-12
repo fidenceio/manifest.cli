@@ -187,6 +187,8 @@ topics:
 
 Modes: `inner` (drop first and last slug), `all-but-first`, `all`. Members also receive a `fleet-<name>` topic. `manifest update fleet` previews the per-repo delta; `-y` applies it. Pushes are additive-only — Manifest reads each repo's existing topics first, never re-pushes one that is already defined, and never removes anything. Removing the key stops topic management without undoing prior pushes. When `gh` is missing or unauthenticated the step is skipped with a notice.
 
+The same run also reports a roster check: org repos that share a naming family with an enrolled member (same first dot-slug) but are not in the local fleet — typically new repos nobody has cloned yet. The roster is read-only; clone a listed repo into the fleet root and rerun `manifest update fleet` to enroll it.
+
 ## Pull Request Workflow
 
 Native PR commands wrap `gh` and do not require Manifest Cloud:

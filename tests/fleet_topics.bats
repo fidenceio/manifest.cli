@@ -19,10 +19,34 @@ setup() {
 }
 
 teardown() {
-    unset MANIFEST_CLI_FLEET_TOPICS_FROM_NAME GH_STUB_LOG GH_STUB_EXIT \
-        GH_STUB_AUTH_EXIT GH_STUB_STDOUT GH_STUB_STDERR
+    unset MANIFEST_CLI_FLEET_TOPICS_FROM_NAME MANIFEST_CLI_GH_STUB_LOG MANIFEST_CLI_GH_STUB_EXIT \
+        MANIFEST_CLI_GH_STUB_AUTH_EXIT MANIFEST_CLI_GH_STUB_STDOUT MANIFEST_CLI_GH_STUB_STDERR \
+        MANIFEST_CLI_FLEET_TOPICS_ROSTER_LIMIT \
+        MANIFEST_CLI_GH_VIEW_STDOUT MANIFEST_CLI_GH_VIEW_EXIT MANIFEST_CLI_GH_LIST_STDOUT MANIFEST_CLI_GH_LIST_EXIT MANIFEST_CLI_GH_EDIT_EXIT
     cd /tmp
     rm -rf "$SCRATCH"
+}
+
+# Routing gh stub: unlike the shared gh_stub.sh (one stdout for every call),
+# this one answers `repo view` and `repo list` from separate env vars so a
+# single run can see member topics AND an org roster.
+gh_router_install() {
+    mkdir -p "$SCRATCH/.gh-router"
+    cat > "$SCRATCH/.gh-router/gh" <<'SH'
+#!/usr/bin/env bash
+{ printf 'gh'; for a in "$@"; do printf '\t%s' "$a"; done; printf '\n'; } >> "${MANIFEST_CLI_GH_STUB_LOG:-/dev/null}"
+case "${1:-} ${2:-}" in
+    "auth status") exit 0 ;;
+    "repo view") [[ -n "${MANIFEST_CLI_GH_VIEW_STDOUT:-}" ]] && printf '%s\n' "$MANIFEST_CLI_GH_VIEW_STDOUT"; exit "${MANIFEST_CLI_GH_VIEW_EXIT:-0}" ;;
+    "repo list") [[ -n "${MANIFEST_CLI_GH_LIST_STDOUT:-}" ]] && printf '%s\n' "$MANIFEST_CLI_GH_LIST_STDOUT"; exit "${MANIFEST_CLI_GH_LIST_EXIT:-0}" ;;
+    "repo edit") exit "${MANIFEST_CLI_GH_EDIT_EXIT:-0}" ;;
+    *) exit 0 ;;
+esac
+SH
+    chmod +x "$SCRATCH/.gh-router/gh"
+    export PATH="$SCRATCH/.gh-router:$PATH"
+    export MANIFEST_CLI_GH_STUB_LOG="$SCRATCH/.gh-router/calls.log"
+    : > "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
 # --- helpers -----------------------------------------------------------------
@@ -147,7 +171,7 @@ accounting" ]
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "true"
     [ "$status" -eq 0 ]
     [ -z "$output" ]
-    [ ! -s "$GH_STUB_LOG" ]
+    [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
 }
 
 # --- run: preview and apply --------------------------------------------------
@@ -166,14 +190,14 @@ accounting" ]
     [[ "$output" == *"+accounting"* ]]
     [[ "$output" == *"+fleet-test-fleet"* ]]
     [[ "$output" == *"manifest update fleet -y"* ]]
-    ! grep -q "edit" "$GH_STUB_LOG"
+    ! grep -q "edit" "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
 @test "run: apply pushes only topics GitHub does not already have" {
     gh_stub_install "$SCRATCH/.gh-stub"
     # Repo already carries 'service' and the fleet topic — only 'accounting'
     # is missing and may be pushed.
-    export GH_STUB_STDOUT=$'service\nfleet-test-fleet'
+    export MANIFEST_CLI_GH_STUB_STDOUT=$'service\nfleet-test-fleet'
     write_config 'topics:
   from_name: inner'
     make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
@@ -182,14 +206,14 @@ accounting" ]
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false"
     [ "$status" -eq 0 ]
     [[ "$output" == *"1 updated"* ]]
-    grep -q -e $'--add-topic\taccounting' "$GH_STUB_LOG"
-    ! grep -q -e $'--add-topic\tservice' "$GH_STUB_LOG"
-    ! grep -q -e $'--add-topic\tfleet-test-fleet' "$GH_STUB_LOG"
+    grep -q -e $'--add-topic\taccounting' "$MANIFEST_CLI_GH_STUB_LOG"
+    ! grep -q -e $'--add-topic\tservice' "$MANIFEST_CLI_GH_STUB_LOG"
+    ! grep -q -e $'--add-topic\tfleet-test-fleet' "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
 @test "run: fully up-to-date repo gets zero writes" {
     gh_stub_install "$SCRATCH/.gh-stub"
-    export GH_STUB_STDOUT=$'service\naccounting\nfleet-test-fleet'
+    export MANIFEST_CLI_GH_STUB_STDOUT=$'service\naccounting\nfleet-test-fleet'
     write_config 'topics:
   from_name: inner'
     make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
@@ -198,7 +222,7 @@ accounting" ]
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false"
     [ "$status" -eq 0 ]
     [[ "$output" == *"1 up to date"* ]]
-    ! grep -q "edit" "$GH_STUB_LOG"
+    ! grep -q "edit" "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
 @test "run: non-GitHub origin is skipped, never written" {
@@ -211,7 +235,7 @@ accounting" ]
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false"
     [ "$status" -eq 0 ]
     [[ "$output" == *"1 skipped"* ]]
-    ! grep -q "edit" "$GH_STUB_LOG"
+    ! grep -q "edit" "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
 # --- run: degraded gh, never fatal -------------------------------------------
@@ -229,7 +253,7 @@ accounting" ]
 
 @test "run: gh unauthenticated yields a skip notice, rc 0, no further calls" {
     gh_stub_install "$SCRATCH/.gh-stub"
-    export GH_STUB_AUTH_EXIT=1
+    export MANIFEST_CLI_GH_STUB_AUTH_EXIT=1
     write_config 'topics:
   from_name: inner'
     make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
@@ -238,7 +262,7 @@ accounting" ]
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false"
     [ "$status" -eq 0 ]
     [[ "$output" == *"not authenticated"* ]]
-    ! grep -q "repo" "$GH_STUB_LOG"
+    ! grep -q "repo" "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
 # --- wiring: manifest update fleet -------------------------------------------
@@ -264,8 +288,86 @@ accounting" ]
     [ "$status" -eq 0 ]
     [[ "$output" == *"Topics (topics.from_name: inner)"* ]]
     [[ "$output" == *"+service"* ]]
-    ! grep -q "edit" "$GH_STUB_LOG"
+    ! grep -q "edit" "$MANIFEST_CLI_GH_STUB_LOG"
 }
+
+# --- Phase 2 roster: pure candidate matching ---------------------------------
+
+@test "roster: candidates share a family prefix, exclude enrolled and unrelated" {
+    local known=$'acme/fidence.service.accounting.avalara'
+    local prefixes=$'fidence'
+    local org=$'fidence.service.accounting.avalara\nfidence.service.billing.stripe\nunrelated-repo\nFidence.Tools.cli'
+    run _fleet_topics_org_candidates "acme" "$known" "$prefixes" "$org"
+    [ "$status" -eq 0 ]
+    [ "$output" = "acme/fidence.service.billing.stripe
+acme/Fidence.Tools.cli" ]
+}
+
+@test "roster: empty org list yields no candidates" {
+    run _fleet_topics_org_candidates "acme" $'acme/fidence.x' $'fidence' ""
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+# --- Phase 2 roster: end-to-end through the run ------------------------------
+
+@test "roster: reports unenrolled family repos with a clone-to-enroll hint" {
+    gh_router_install
+    export MANIFEST_CLI_GH_LIST_STDOUT=$'fidence.service.accounting.avalara\nfidence.service.billing.stripe\nunrelated-repo'
+    write_config 'topics:
+  from_name: inner'
+    make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+
+    run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "true"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Roster: 1 family repo(s) exist on GitHub but are not in this fleet:"* ]]
+    [[ "$output" == *"- acme/fidence.service.billing.stripe"* ]]
+    [[ "$output" == *"Clone into the fleet root"* ]]
+    [[ "$output" != *"unrelated-repo"* ]]
+    grep -q -e $'repo\tlist\tacme\t--no-archived' "$MANIFEST_CLI_GH_STUB_LOG"
+}
+
+@test "roster: failed org listing degrades to a notice, rc 0" {
+    gh_router_install
+    export MANIFEST_CLI_GH_LIST_EXIT=1
+    write_config 'topics:
+  from_name: inner'
+    make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+
+    run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "true"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Roster check skipped for acme (gh repo list failed)"* ]]
+}
+
+@test "roster: hitting the listing cap is reported, never silent" {
+    gh_router_install
+    export MANIFEST_CLI_FLEET_TOPICS_ROSTER_LIMIT=2
+    export MANIFEST_CLI_GH_LIST_STDOUT=$'fidence.alpha\nfidence.beta'
+    write_config 'topics:
+  from_name: inner'
+    make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+
+    run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "true"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"covered only the first 2 repos of acme"* ]]
+}
+
+@test "roster: no GitHub members means no org listing at all" {
+    gh_router_install
+    write_config 'topics:
+  from_name: inner'
+    write_tsv $'true\tsvc\t./svc\tservice\tfalse\t\tmain'
+
+    run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "true"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"Roster"* ]]
+    ! grep -q -e $'repo\tlist' "$MANIFEST_CLI_GH_STUB_LOG"
+}
+
+# --- wiring smoke for no-topics path (unchanged by Phase 2) ------------------
 
 @test "update fleet: no topics config means no topics output at all" {
     gh_stub_install "$SCRATCH/.gh-stub"
