@@ -1,5 +1,17 @@
 # Changelog
 
+## [53.3.0] - 2026-06-12
+
+**Release Type:** Minor
+
+### Changes
+
+- Docs(tracker): file §9.1 — GitHub topics projection from repo-name slugs
+- Feat(fleet): project repo-name slugs onto GitHub topics (§9.1)
+- Docs(tracker): §9.1 Phase 2 — roster from the full org list, not the topic-filtered query
+- Feat(fleet): §9.1 Phase 2 — read-only roster of unenrolled family repos
+
+
 ## [53.2.0] - 2026-06-09
 
 **Release Type:** Minor
@@ -86,16 +98,4 @@
 
 ### Changes
 
-- Add regression coverage for the changed CLI workflow
-
-
-## [52.7.0] - 2026-06-08
-
-**Release Type:** Minor
-
-### Changes
-
-- Add GitHub Release publishing support
-- Update release copy and configuration examples
-- Add a containerized test runner for Manifest CLI
 - Add regression coverage for the changed CLI workflow
