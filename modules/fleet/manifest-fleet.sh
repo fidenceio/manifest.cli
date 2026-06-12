@@ -3552,15 +3552,16 @@ COMMAND DETAILS:
       manifest pr fleet --method squash         # Preferred team path
       manifest pr fleet queue --method merge    # Explicit equivalent
 
-  manifest ship fleet [patch|minor|major|revision] [options]
+  manifest ship fleet [patch|minor|major|revision]|resume [options]
     Highest-level coordinated fleet workflow.
     Options:
-      --noprep
-      --safe
-      --method <merge|squash|rebase>
-      --force
-      --no-delete-branch
-      --draft
+      --dry-run          Explicit preview; no writes, commits, tags, or pushes
+      -y, --yes          Apply the fleet release plan
+      --local            With -y, local release prep only
+      --noprep           Skip per-service prep step (requires clean trees)
+      --explain          Show the built-in recipe definition without running it
+    PR flags (--safe, --method, --force, --no-delete-branch, --draft) belong
+    under 'manifest pr fleet ...'.
 
   manifest topics fleet [-y|--yes] [--dry-run]
     Project fleet repo-name slugs onto GitHub topics (additive-only; §9.1).

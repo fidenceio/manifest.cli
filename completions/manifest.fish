@@ -88,9 +88,9 @@ complete -c manifest -n '__manifest_token_count 2; and __manifest_path reinstall
 complete -c manifest -n '__manifest_path init fleet' \
     -a '-y --yes --depth --all-folders --force --dry-run --name --create-repo-private --create-repo-public --help'
 complete -c manifest -n '__manifest_path ship repo' \
-    -a 'patch minor major revision -y --yes --local --dry-run --explain -i --interactive --only --except --noprep'
+    -a 'patch minor major revision -y --yes --local --dry-run --explain -i --interactive'
 complete -c manifest -n '__manifest_path ship fleet' \
-    -a 'patch minor major revision -y --yes --local --dry-run --explain -i --interactive --only --except --noprep'
+    -a 'patch minor major revision resume -y --yes --local --dry-run --explain --noprep'
 complete -c manifest -n '__manifest_path topics fleet' \
     -a '-y --yes --dry-run --help'
 complete -c manifest -n '__manifest_path plan fleet' \
