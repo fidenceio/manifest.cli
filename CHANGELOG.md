@@ -1,5 +1,16 @@
 # Changelog
 
+## [53.4.0] - 2026-06-12
+
+**Release Type:** Minor
+
+### Changes
+
+- Fix(ship): wait for the tap bottle so a canonical ship lands locally
+- Feat(fleet): §9.1 — topics command, quiet post-ship pass, host-local key
+- Fix(completions): drop ship flags the parsers reject
+
+
 ## [53.3.0] - 2026-06-12
 
 **Release Type:** Minor
@@ -89,13 +100,4 @@
 - Add smart ship preview summaries
 - Update release copy and configuration examples
 - Wire first-class CLI commands to inspectable built-in recipe definitions
-- Add regression coverage for the changed CLI workflow
-
-
-## [52.7.1] - 2026-06-08
-
-**Release Type:** Patch
-
-### Changes
-
 - Add regression coverage for the changed CLI workflow
