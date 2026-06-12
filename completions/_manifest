@@ -30,6 +30,7 @@ _manifest() {
         'prep:Connect remotes, pull latest'
         'refresh:Regenerate docs and metadata'
         'docs:Generate fleet documentation'
+        'topics:Project repo-name slugs onto GitHub topics'
         'ship:Publish a release (version + tag + push)'
         'pr:Pull-request operations (gh wrapper)'
         'doctor:Health check'
@@ -63,6 +64,9 @@ _manifest() {
                 first|init|quickstart|plan|reconcile|discover|update|add|validate|prep|refresh|docs|ship)
                     _values 'scope' "${scopes[@]}"
                     ;;
+                topics)
+                    _values 'scope' fleet
+                    ;;
                 config)
                     _values 'config subcommand' "${config_subs[@]}"
                     ;;
@@ -87,6 +91,9 @@ _manifest() {
                     ;;
                 "ship repo"|"ship fleet")
                     _values 'release type / option' "${bumps[@]}" -y --yes --local --dry-run --explain -i --interactive --only --except --noprep
+                    ;;
+                "topics fleet")
+                    _values 'option' -y --yes --dry-run --help
                     ;;
                 "plan fleet")
                     _values 'option' --apply --do --dry-run --depth --safety-cap --plan --name --force --help

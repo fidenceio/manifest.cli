@@ -644,7 +644,7 @@ main() {
                 load_configuration "$PROJECT_ROOT" "false"
             fi
             ;;
-        "docs"|"pr"|"plan"|"reconcile"|"discover"|"add"|"update"|"validate")
+        "docs"|"pr"|"plan"|"reconcile"|"discover"|"add"|"update"|"validate"|"topics")
             if [[ "${1:-}" == "fleet" ]] || _manifest_cli_is_help_request "$command" "$@"; then
                 PROJECT_ROOT="$(pwd)"
                 export PROJECT_ROOT
@@ -953,6 +953,37 @@ EOF
                     ;;
                 *)
                     _render_help_error "Unknown update scope: $1" "manifest update <fleet>"
+                    return 1
+                    ;;
+            esac
+            ;;
+
+        "topics")
+            case "${1:-}" in
+                fleet)
+                    shift || true
+                    if _manifest_cli_has_help_token "$@"; then
+                        _render_help \
+                            "manifest topics fleet [-y|--yes] [--dry-run]" \
+                            "Project fleet repo-name slugs onto GitHub topics (additive-only)." \
+                            "Options" "  --dry-run    Explicit preview; no GitHub writes
+  -y, --yes    Push the missing topics"
+                        return 0
+                    fi
+                    fleet_topics "$@"
+                    ;;
+                help|-h|--help)
+                    _render_help \
+                        "manifest topics <fleet>" \
+                        "Project repo-name slugs onto GitHub topics." \
+                        "Scopes" "  fleet   Stamp topics across fleet members"
+                    ;;
+                "")
+                    _render_help_error "topics requires a scope" "manifest topics <fleet>"
+                    return 1
+                    ;;
+                *)
+                    _render_help_error "Unknown topics scope: $1" "manifest topics <fleet>"
                     return 1
                     ;;
             esac

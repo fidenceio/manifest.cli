@@ -113,11 +113,20 @@ manifest add fleet <path> --name <name> [--dry-run] [-y|--yes]
 manifest update fleet [--dry-run] [-y|--yes]
 manifest validate fleet
 manifest docs fleet [--dry-run] [-y|--yes]
+manifest topics fleet [--dry-run] [-y|--yes]
 manifest plan fleet [--apply]
 manifest reconcile fleet [--do|--apply] [--commit] [--push] [--adopt-submodules]
 ```
 
 Action-first fleet syntax is the supported surface.
+
+`manifest topics fleet` projects repo-name slugs onto GitHub topics (additive-only).
+It activates only when `topics.from_name` is set (`inner` | `all` | `all-but-first`) —
+in `manifest.fleet.config.yaml` for the whole fleet, or host-local for one machine via
+`manifest config set topics.from_name inner --layer global` (the layered/env value
+takes precedence over the fleet yaml). When enabled, the same projection also runs
+as part of `manifest update fleet`, and quietly (one summary line at most) at the
+end of a completed `manifest ship fleet -y`.
 
 ## Diagnostics
 

@@ -55,6 +55,7 @@ complete -c manifest -n '__manifest_token_count 1' -a validate    -d 'Validate f
 complete -c manifest -n '__manifest_token_count 1' -a prep        -d 'Connect remotes, pull latest'
 complete -c manifest -n '__manifest_token_count 1' -a refresh     -d 'Regenerate docs and metadata'
 complete -c manifest -n '__manifest_token_count 1' -a docs        -d 'Generate fleet documentation'
+complete -c manifest -n '__manifest_token_count 1' -a topics      -d 'Project repo-name slugs onto GitHub topics'
 complete -c manifest -n '__manifest_token_count 1' -a ship        -d 'Publish a release (version + tag + push)'
 complete -c manifest -n '__manifest_token_count 1' -a pr          -d 'Pull-request operations (gh wrapper)'
 complete -c manifest -n '__manifest_token_count 1' -a doctor      -d 'Health check'
@@ -73,6 +74,9 @@ for cmd in (string split ' ' $__manifest_scoped)
     complete -c manifest -n "__manifest_token_count 2; and __manifest_path $cmd" -a fleet -d 'Fleet scope'
 end
 
+# topics is fleet-scoped only (no repo scope).
+complete -c manifest -n '__manifest_token_count 2; and __manifest_path topics' -a fleet -d 'Fleet scope'
+
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path config' -a 'show list get set unset describe doctor setup time'
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path recipe' -a 'list show explain help'
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path pr'     -a 'create status checks ready merge update queue policy fleet help'
@@ -87,6 +91,8 @@ complete -c manifest -n '__manifest_path ship repo' \
     -a 'patch minor major revision -y --yes --local --dry-run --explain -i --interactive --only --except --noprep'
 complete -c manifest -n '__manifest_path ship fleet' \
     -a 'patch minor major revision -y --yes --local --dry-run --explain -i --interactive --only --except --noprep'
+complete -c manifest -n '__manifest_path topics fleet' \
+    -a '-y --yes --dry-run --help'
 complete -c manifest -n '__manifest_path plan fleet' \
     -a '--apply --do --dry-run --depth --safety-cap --plan --name --force --help'
 complete -c manifest -n '__manifest_path reconcile fleet' \

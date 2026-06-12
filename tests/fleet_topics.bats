@@ -15,7 +15,9 @@ setup() {
     HOME="$SCRATCH/home"
     mkdir -p "$HOME" "$SCRATCH/work"
     export HOME
-    load_modules "fleet/manifest-fleet-detect.sh" "fleet/manifest-fleet-topics.sh"
+    # manifest-fleet.sh self-sources detect + topics (sentinel-guarded) and
+    # carries _fleet_ship_topics_pass, the post-ship quiet hook under test.
+    load_modules "fleet/manifest-fleet-detect.sh" "fleet/manifest-fleet-topics.sh" "fleet/manifest-fleet.sh"
 }
 
 teardown() {
@@ -377,4 +379,170 @@ acme/Fidence.Tools.cli" ]
     run_manifest update fleet
     [ "$status" -eq 0 ]
     [[ "$output" != *"Topics"* ]]
+}
+
+# --- quiet mode (the post-ship pass) ------------------------------------------
+
+@test "run quiet: apply with changes prints exactly one summary line" {
+    gh_stub_install "$SCRATCH/.gh-stub"
+    write_config 'topics:
+  from_name: inner'
+    make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+
+    run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false" "true"
+    [ "$status" -eq 0 ]
+    [ "$output" = "🏷️  GitHub topics: 1 repo(s) updated" ]
+    grep -q "edit" "$MANIFEST_CLI_GH_STUB_LOG"
+}
+
+@test "run quiet: nothing to update prints nothing at all" {
+    gh_stub_install "$SCRATCH/.gh-stub"
+    export MANIFEST_CLI_GH_STUB_STDOUT=$'service\naccounting\nfleet-test-fleet'
+    write_config 'topics:
+  from_name: inner'
+    make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+
+    run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false" "true"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "run quiet: degraded gh (missing) is fully silent, rc 0" {
+    # Mode comes from the env (not YAML): with PATH gutted there is no yq for
+    # the config read — same shape as the non-quiet gh-missing test above.
+    mkdir -p "$SCRATCH/no-gh"
+    write_config ""
+    write_tsv $'true\tsvc\t./svc\tservice\ttrue\t\tmain'
+
+    MANIFEST_CLI_FLEET_TOPICS_FROM_NAME=inner PATH="$SCRATCH/no-gh" \
+        run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false" "true"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "run quiet: failed pushes surface one line with a re-run hint" {
+    gh_router_install
+    export MANIFEST_CLI_GH_EDIT_EXIT=1
+    write_config 'topics:
+  from_name: inner'
+    make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+
+    run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false" "true"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"0 updated, 1 failed"* ]]
+    [[ "$output" == *"manifest topics fleet -y"* ]]
+}
+
+@test "run quiet: roster is never printed" {
+    gh_router_install
+    export MANIFEST_CLI_GH_LIST_STDOUT=$'fidence.service.newrepo'
+    write_config 'topics:
+  from_name: inner'
+    make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+
+    run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false" "true"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"Roster"* ]]
+    ! grep -q -e $'repo\tlist' "$MANIFEST_CLI_GH_STUB_LOG"
+}
+
+# --- wiring: manifest topics fleet ---------------------------------------------
+
+@test "topics fleet: preview lists the delta with its own apply hint, no writes" {
+    gh_stub_install "$SCRATCH/.gh-stub"
+    write_config 'topics:
+  from_name: inner'
+    make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+
+    run_manifest topics fleet
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Topics (topics.from_name: inner)"* ]]
+    [[ "$output" == *"+service"* ]]
+    [[ "$output" == *"To apply, run: manifest topics fleet -y"* ]]
+    ! grep -q "edit" "$MANIFEST_CLI_GH_STUB_LOG"
+}
+
+@test "topics fleet: -y pushes the missing topics" {
+    gh_stub_install "$SCRATCH/.gh-stub"
+    write_config 'topics:
+  from_name: inner'
+    make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+
+    run_manifest topics fleet -y
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"1 updated"* ]]
+    grep -q -e $'--add-topic\tservice' "$MANIFEST_CLI_GH_STUB_LOG"
+}
+
+@test "topics fleet: off prints an enable hint and makes zero gh calls" {
+    gh_stub_install "$SCRATCH/.gh-stub"
+    write_config ""
+    write_tsv $'true\tsvc\t./svc\tservice\tfalse\t\tmain'
+
+    run_manifest topics fleet
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Topics are off"* ]]
+    [[ "$output" == *"topics.from_name"* ]]
+    [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
+}
+
+@test "topics fleet: invalid topics.from_name fails loud" {
+    write_config 'topics:
+  from_name: midle'
+    write_tsv $'true\tsvc\t./svc\tservice\tfalse\t\tmain'
+
+    run_manifest topics fleet
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Invalid topics.from_name"* ]]
+}
+
+# --- wiring: post-ship quiet pass ----------------------------------------------
+
+@test "ship topics pass: enabled topics run quietly with apply semantics" {
+    local calls="$SCRATCH/topics-pass-calls"
+    _fleet_resolve_config() { echo "$SCRATCH/work/$CONFIG"; }
+    manifest_fleet_topics_run() { printf '%s|%s|%s|%s\n' "$1" "$2" "$3" "$4" > "$calls"; return 0; }
+    MANIFEST_CLI_FLEET_ROOT="$SCRATCH/work"
+
+    run _fleet_ship_topics_pass "false"
+    [ "$status" -eq 0 ]
+    [ -f "$calls" ]
+    [ "$(cat "$calls")" = "$SCRATCH/work|$SCRATCH/work/$CONFIG|false|true" ]
+}
+
+@test "ship topics pass: --local ship never touches topics" {
+    local calls="$SCRATCH/topics-pass-calls"
+    _fleet_resolve_config() { echo "$SCRATCH/work/$CONFIG"; }
+    manifest_fleet_topics_run() { touch "$calls"; }
+    MANIFEST_CLI_FLEET_ROOT="$SCRATCH/work"
+
+    run _fleet_ship_topics_pass "true"
+    [ "$status" -eq 0 ]
+    [ ! -f "$calls" ]
+}
+
+@test "ship topics pass: a failing topics run never fails the ship" {
+    _fleet_resolve_config() { echo "$SCRATCH/work/$CONFIG"; }
+    manifest_fleet_topics_run() { return 1; }
+    MANIFEST_CLI_FLEET_ROOT="$SCRATCH/work"
+
+    run _fleet_ship_topics_pass "false"
+    [ "$status" -eq 0 ]
+}
+
+@test "ship topics pass: no resolvable fleet config is a silent no-op" {
+    local calls="$SCRATCH/topics-pass-calls"
+    _fleet_resolve_config() { return 1; }
+    manifest_fleet_topics_run() { touch "$calls"; }
+    MANIFEST_CLI_FLEET_ROOT="$SCRATCH/work"
+
+    run _fleet_ship_topics_pass "false"
+    [ "$status" -eq 0 ]
+    [ ! -f "$calls" ]
 }

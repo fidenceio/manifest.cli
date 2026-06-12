@@ -228,14 +228,23 @@ _fleet_topics_roster_report() {
 # -----------------------------------------------------------------------------
 # Function: manifest_fleet_topics_run
 # -----------------------------------------------------------------------------
-# The single hook called at the end of `manifest update fleet`. Preview mode
-# lists the per-member topic delta; apply mode pushes it. Off (no mode) is a
-# silent no-op with zero gh calls.
+# The single hook called at the end of `manifest update fleet`, by the
+# `manifest topics fleet` command, and (quietly) at the end of a fleet ship.
+# Preview mode lists the per-member topic delta; apply mode pushes it. Off
+# (no mode) is a silent no-op with zero gh calls.
+#
+# Quiet mode is for the ship path: no header, no per-member lines, no roster —
+# one summary line only when something was pushed or failed, and degraded-mode
+# skips (gh missing/unauthenticated) stay fully silent. Topics are post-release
+# metadata grooming; they must never add noise to a clean ship.
 #
 # ARGUMENTS:
 #   $1 - Fleet root directory
 #   $2 - Fleet config file path
 #   $3 - dry_run ("true" = preview, anything else = apply)
+#   $4 - quiet ("true" = ship mode as above; default "false")
+#   $5 - apply hint shown after a preview with changes
+#        (default "manifest update fleet -y")
 #
 # RETURNS:
 #   0 on success or any skip; 1 only on an invalid topics.from_name value.
@@ -244,6 +253,8 @@ manifest_fleet_topics_run() {
     local root_dir="$1"
     local config_file="$2"
     local dry_run="${3:-true}"
+    local quiet="${4:-false}"
+    local apply_hint="${5:-manifest update fleet -y}"
 
     local mode
     mode=$(manifest_fleet_topics_mode "$config_file") || return 1
@@ -252,15 +263,17 @@ manifest_fleet_topics_run() {
     local tsv_file="$root_dir/manifest.fleet.tsv"
     [[ -f "$tsv_file" ]] || return 0
 
-    echo ""
-    echo "Topics (topics.from_name: $mode):"
+    if [[ "$quiet" != "true" ]]; then
+        echo ""
+        echo "Topics (topics.from_name: $mode):"
+    fi
 
     if ! command -v gh >/dev/null 2>&1; then
-        echo "  ⚠ skipped — 'gh' (GitHub CLI) is not installed"
+        [[ "$quiet" != "true" ]] && echo "  ⚠ skipped — 'gh' (GitHub CLI) is not installed"
         return 0
     fi
     if ! gh auth status >/dev/null 2>&1; then
-        echo "  ⚠ skipped — 'gh' is not authenticated (run: gh auth login)"
+        [[ "$quiet" != "true" ]] && echo "  ⚠ skipped — 'gh' is not authenticated (run: gh auth login)"
         return 0
     fi
 
@@ -349,26 +362,37 @@ manifest_fleet_topics_run() {
         for topic in "${delta[@]}"; do delta_label+=" +$topic"; done
 
         if [[ "$dry_run" == "true" ]]; then
-            printf "  + %-25s%s\n" "$repo_name" "$delta_label"
+            [[ "$quiet" != "true" ]] && printf "  + %-25s%s\n" "$repo_name" "$delta_label"
             pushed=$((pushed + 1))
         else
             local -a edit_args=("repo" "edit" "$slug")
             for topic in "${delta[@]}"; do edit_args+=("--add-topic" "$topic"); done
             if gh "${edit_args[@]}" >/dev/null 2>&1; then
-                printf "  ✓ %-25s%s\n" "$repo_name" "$delta_label"
+                [[ "$quiet" != "true" ]] && printf "  ✓ %-25s%s\n" "$repo_name" "$delta_label"
                 pushed=$((pushed + 1))
             else
-                printf "  ⚠ %-25s failed to update topics (continuing)\n" "$repo_name"
+                [[ "$quiet" != "true" ]] && printf "  ⚠ %-25s failed to update topics (continuing)\n" "$repo_name"
                 failed=$((failed + 1))
             fi
         fi
     done <<< "$member_rows"
 
+    if [[ "$quiet" == "true" ]]; then
+        # One line, and only when there is something to say: changes made, or
+        # failures that must not go silent.
+        if [[ "$failed" -gt 0 ]]; then
+            echo "🏷️  GitHub topics: $pushed updated, $failed failed (re-run: manifest topics fleet -y)"
+        elif [[ "$pushed" -gt 0 ]]; then
+            echo "🏷️  GitHub topics: $pushed repo(s) updated"
+        fi
+        return 0
+    fi
+
     local verb="updated"
     [[ "$dry_run" == "true" ]] && verb="to update"
     echo "  Topics summary: $pushed $verb, $unchanged up to date, $skipped skipped, $failed failed"
     if [[ "$dry_run" == "true" && "$pushed" -gt 0 ]]; then
-        echo "  To apply, run: manifest update fleet -y"
+        echo "  To apply, run: $apply_hint"
     fi
 
     # Phase 2 roster: read-only, report-only (see module header). No GitHub
