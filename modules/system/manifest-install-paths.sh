@@ -177,11 +177,11 @@ manifest_install_paths_global_state_dir() {
 # version change it records the new version for the next-invocation notice.
 manifest_install_paths_auto_upgrade_bg() {
     local result_file="$1" formula="$2" before after
-    before="$(brew list --versions manifest 2>/dev/null | awk '{print $2}')"
+    before="$(manifest_install_paths_installed_brew_version)"
     brew update >/dev/null 2>&1
     brew upgrade --force-bottle "$formula" >/dev/null 2>&1 \
         || brew upgrade --force-bottle manifest >/dev/null 2>&1 || true
-    after="$(brew list --versions manifest 2>/dev/null | awk '{print $2}')"
+    after="$(manifest_install_paths_installed_brew_version)"
     if [ -n "$after" ] && [ "$after" != "$before" ]; then
         printf '%s\n' "$after" > "$result_file" 2>/dev/null || true
     fi
@@ -211,7 +211,7 @@ manifest_install_paths_auto_upgrade() {
     [ -n "$state_dir" ] || return 0
     mkdir -p "$state_dir" 2>/dev/null || return 0
     result_file="$state_dir/.auto_upgrade_result"
-    state_file="$state_dir/.auto_upgrade_last_check"
+    state_file="$(manifest_install_paths_auto_upgrade_stamp_file)"
 
     # Surface a completed background upgrade exactly once, then clear it.
     if [ -f "$result_file" ]; then
@@ -235,6 +235,37 @@ manifest_install_paths_auto_upgrade() {
 
     manifest_install_paths_auto_upgrade_spawn "$result_file"
     return 0
+}
+
+# Cooldown-stamp manipulation for the ship path. A canonical-repo ship that
+# publishes a formula owns the local upgrade: on success it stamps the check
+# time (the next ambient check would be a no-op), and on a deferred upgrade it
+# clears the stamp so the very next invocation pours the bottle immediately.
+# The cooldown exists to pace ambient invocations on machines that did not
+# just publish a formula — never to delay a ship's own upgrade.
+manifest_install_paths_auto_upgrade_stamp_file() {
+    local state_dir
+    state_dir="$(manifest_install_paths_global_state_dir 2>/dev/null)"
+    [ -n "$state_dir" ] || return 1
+    echo "$state_dir/.auto_upgrade_last_check"
+}
+
+manifest_install_paths_auto_upgrade_mark_checked() {
+    local stamp_file
+    stamp_file="$(manifest_install_paths_auto_upgrade_stamp_file)" || return 0
+    mkdir -p "${stamp_file%/*}" 2>/dev/null || return 0
+    date +%s > "$stamp_file" 2>/dev/null || true
+}
+
+manifest_install_paths_auto_upgrade_clear_cooldown() {
+    local stamp_file
+    stamp_file="$(manifest_install_paths_auto_upgrade_stamp_file)" || return 0
+    rm -f "$stamp_file" 2>/dev/null || true
+}
+
+# Installed manifest keg version as brew reports it; empty when not installed.
+manifest_install_paths_installed_brew_version() {
+    brew list --versions manifest 2>/dev/null | awk '{print $2}'
 }
 
 manifest_install_paths_user_global_config() {

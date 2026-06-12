@@ -496,6 +496,33 @@ manifest_create_github_release_for_tag() {
     return 2
 }
 
+# A host that can't source-build (Xcode/CLT toolchain gate) can still take the
+# upgrade the moment tap CI publishes the :all bottle — that lands minutes after
+# the formula push this ship just made. Poll with --force-bottle (pour-or-fail-
+# fast, never a source build) until the installed keg matches the shipped
+# version. Sleep first: a toolchain-gate failure on the plain upgrade proves no
+# bottle existed seconds ago (brew prefers bottles), so an immediate retry is
+# pointless. Returns 0 once the keg matches, 1 when the window closes.
+# Window via MANIFEST_CLI_SHIP_BOTTLE_WAIT_MINUTES (default 10; 0 = don't wait).
+manifest_ship_wait_for_bottle_upgrade() {
+    local new_version="$1" wait_minutes="$2" formula poll_seconds attempts i
+    case "$wait_minutes" in ''|*[!0-9]*) wait_minutes=10 ;; esac
+    [ "$wait_minutes" -eq 0 ] && return 1
+    formula="$(manifest_install_paths_homebrew_formula)"
+    poll_seconds=20
+    attempts=$(( wait_minutes * 60 / poll_seconds ))
+    for (( i = 1; i <= attempts; i++ )); do
+        sleep "$poll_seconds"
+        brew update &>/dev/null || true
+        brew upgrade --force-bottle "$formula" &>/dev/null \
+            || brew upgrade --force-bottle manifest &>/dev/null || true
+        if [ "$(manifest_install_paths_installed_brew_version)" = "$new_version" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 manifest_ship_post_push_steps() {
     local new_version="$1"
     local workflow_start_sha="$2"
@@ -596,19 +623,36 @@ manifest_ship_post_push_steps() {
                     echo "✅ Local installation upgraded to v$new_version via Homebrew"
                     _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="success"
                     manifest_ship_restore_tap_ssh_origin
+                    manifest_install_paths_auto_upgrade_mark_checked
                 elif manifest_install_paths_brew_error_is_toolchain_gate "$brew_upgrade_out"; then
-                    echo "ℹ️  Homebrew declined the local upgrade: the host Xcode / Command Line"
-                    echo "    Tools are older than Homebrew's minimum for this macOS. That is a"
-                    echo "    Homebrew host requirement, not a Manifest problem — release"
-                    echo "    v$new_version shipped fine; only this machine's auto-upgrade is deferred."
+                    local bottle_wait_minutes
+                    bottle_wait_minutes="${MANIFEST_CLI_SHIP_BOTTLE_WAIT_MINUTES:-10}"
+                    case "$bottle_wait_minutes" in ''|*[!0-9]*) bottle_wait_minutes=10 ;; esac
+                    echo "ℹ️  Homebrew can't source-build here: the host Xcode / Command Line Tools"
+                    echo "    are older than Homebrew's minimum for this macOS."
                     if manifest_os_macos_is_prerelease; then
                         echo "    (Expected on a macOS pre-release — a matching Xcode/CLT may not exist yet.)"
                     fi
-                    echo "    Once the toolchain is current: brew upgrade $(manifest_install_paths_homebrew_formula)"
-                    _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="skipped_host_toolchain_outdated"
+                    if [ "$bottle_wait_minutes" -gt 0 ]; then
+                        echo "    Waiting for tap CI to publish the :all bottle instead (up to ${bottle_wait_minutes}m)..."
+                    fi
+                    if manifest_ship_wait_for_bottle_upgrade "$new_version" "$bottle_wait_minutes"; then
+                        echo "✅ Local installation upgraded to v$new_version via Homebrew bottle"
+                        _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="success"
+                        manifest_ship_restore_tap_ssh_origin
+                        manifest_install_paths_auto_upgrade_mark_checked
+                    else
+                        echo "⚠️  The :all bottle for v$new_version is not published yet. v$new_version shipped"
+                        echo "    fine — the auto-upgrade cooldown has been cleared, so the next manifest"
+                        echo "    command on this machine pours the bottle as soon as tap CI publishes it."
+                        echo "    Or pour it manually: brew upgrade $(manifest_install_paths_homebrew_formula)"
+                        _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="deferred_bottle_pending"
+                        manifest_install_paths_auto_upgrade_clear_cooldown
+                    fi
                 else
                     echo "⚠️  Homebrew upgrade did not complete — try 'brew update && brew upgrade manifest' manually"
                     _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="failed"
+                    manifest_install_paths_auto_upgrade_clear_cooldown
                 fi
             fi
         else
