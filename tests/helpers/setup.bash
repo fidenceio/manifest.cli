@@ -38,7 +38,7 @@ load_modules() {
 # Install the gh stub from tests/helpers/gh_stub.sh onto a per-test PATH
 # directory. Tests should call this from setup() (or inline) when they need
 # to exercise live `gh` invocations without touching the network. Each test
-# is responsible for clearing GH_STUB_* env vars in its own teardown if it
+# is responsible for clearing MANIFEST_CLI_GH_STUB_* env vars in its own teardown if it
 # diverges from the suite default.
 gh_stub_install() {
     local stub_dir="${1:-$SCRATCH/.gh-stub}"
@@ -46,8 +46,8 @@ gh_stub_install() {
     cp "$TEST_REPO_ROOT/tests/helpers/gh_stub.sh" "$stub_dir/gh"
     chmod +x "$stub_dir/gh"
     export PATH="$stub_dir:$PATH"
-    export GH_STUB_LOG="$stub_dir/calls.log"
-    : > "$GH_STUB_LOG"
+    export MANIFEST_CLI_GH_STUB_LOG="$stub_dir/calls.log"
+    : > "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
 # Run a function with a fully-isolated PROJECT_ROOT and HOME so config/git

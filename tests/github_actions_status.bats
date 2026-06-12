@@ -15,7 +15,7 @@ teardown() {
     unset MANIFEST_CLI_GITHUB_RELEASE_REQUIRED
     unset MANIFEST_CLI_GITHUB_RELEASE_DRAFT
     unset MANIFEST_CLI_GITHUB_RELEASE_PRERELEASE
-    unset GH_TEST_LOG
+    unset MANIFEST_CLI_GH_TEST_LOG
 }
 
 @test "github actions check can be disabled" {
@@ -99,10 +99,10 @@ teardown() {
     git remote add origin https://github.com/example/project.git
     PROJECT_ROOT="$SCRATCH/repo"
     export PROJECT_ROOT
-    GH_TEST_LOG="$SCRATCH/gh-release-existing.log"
-    export GH_TEST_LOG
+    MANIFEST_CLI_GH_TEST_LOG="$SCRATCH/gh-release-existing.log"
+    export MANIFEST_CLI_GH_TEST_LOG
     gh() {
-        printf '%s\n' "$*" >> "$GH_TEST_LOG"
+        printf '%s\n' "$*" >> "$MANIFEST_CLI_GH_TEST_LOG"
         case "$1 $2" in
             "auth status") return 0 ;;
             "release view") return 0 ;;
@@ -115,8 +115,8 @@ teardown() {
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"GitHub Release: exists (v1.2.3)"* ]]
-    grep -q "release view v1.2.3" "$GH_TEST_LOG"
-    ! grep -q "release create" "$GH_TEST_LOG"
+    grep -q "release view v1.2.3" "$MANIFEST_CLI_GH_TEST_LOG"
+    ! grep -q "release create" "$MANIFEST_CLI_GH_TEST_LOG"
 }
 
 @test "github release creation creates missing release with changelog notes" {
@@ -138,10 +138,10 @@ teardown() {
 EOF
     PROJECT_ROOT="$SCRATCH/repo"
     export PROJECT_ROOT
-    GH_TEST_LOG="$SCRATCH/gh-release-create.log"
-    export GH_TEST_LOG
+    MANIFEST_CLI_GH_TEST_LOG="$SCRATCH/gh-release-create.log"
+    export MANIFEST_CLI_GH_TEST_LOG
     gh() {
-        printf '%s\n' "$*" >> "$GH_TEST_LOG"
+        printf '%s\n' "$*" >> "$MANIFEST_CLI_GH_TEST_LOG"
         case "$1 $2" in
             "auth status") return 0 ;;
             "release view") return 1 ;;
@@ -155,6 +155,6 @@ EOF
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"GitHub Release: created (v1.2.3)"* ]]
-    grep -q "release create v1.2.3 --repo example/project" "$GH_TEST_LOG"
-    grep -q "Add GitHub Release integration" "$GH_TEST_LOG"
+    grep -q "release create v1.2.3 --repo example/project" "$MANIFEST_CLI_GH_TEST_LOG"
+    grep -q "Add GitHub Release integration" "$MANIFEST_CLI_GH_TEST_LOG"
 }

@@ -12,10 +12,10 @@ teardown() {
     rm -rf "$SCRATCH"
     # _MANIFEST_GH_VALIDATED_AT is module-scope; clear it so memoization
     # state cannot leak between tests when the suite is filtered or
-    # re-ordered. GH_STUB_* belong to the gh_stub harness and would
+    # re-ordered. MANIFEST_CLI_GH_STUB_* belong to the gh_stub harness and would
     # similarly leak across tests if any test forgot to clean up.
     unset _MANIFEST_GH_VALIDATED_AT MANIFEST_CLI_GH_VALIDATION_TTL
-    unset GH_STUB_LOG GH_STUB_EXIT GH_STUB_AUTH_EXIT GH_STUB_STDOUT GH_STUB_STDERR
+    unset MANIFEST_CLI_GH_STUB_LOG MANIFEST_CLI_GH_STUB_EXIT MANIFEST_CLI_GH_STUB_AUTH_EXIT MANIFEST_CLI_GH_STUB_STDOUT MANIFEST_CLI_GH_STUB_STDERR
 }
 
 # -----------------------------------------------------------------------------
@@ -303,7 +303,7 @@ teardown() {
 @test "_manifest_require_gh: re-checks after TTL expiry" {
     source "$TEST_REPO_ROOT/modules/core/manifest-shared-functions.sh"
     gh_stub_install
-    export GH_STUB_AUTH_EXIT=1
+    export MANIFEST_CLI_GH_STUB_AUTH_EXIT=1
 
     # Stale timestamp + tiny TTL forces a re-check.
     _MANIFEST_GH_VALIDATED_AT=1
@@ -312,7 +312,7 @@ teardown() {
     run _manifest_require_gh
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "not authenticated"
-    grep -q $'\tauth\tstatus' "$GH_STUB_LOG"
+    grep -q $'\tauth\tstatus' "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
 # -----------------------------------------------------------------------------
@@ -406,8 +406,8 @@ teardown() {
 
     run _manifest_gh_repo_create "$SCRATCH/myrepo" "private"
     [ "$status" -eq 0 ]
-    grep -q $'repo\tcreate\tmyrepo\t--private' "$GH_STUB_LOG"
-    grep -q -- "--remote=origin" "$GH_STUB_LOG"
+    grep -q $'repo\tcreate\tmyrepo\t--private' "$MANIFEST_CLI_GH_STUB_LOG"
+    grep -q -- "--remote=origin" "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
 @test "_manifest_gh_repo_create (live): returns 1 when gh repo create fails" {
@@ -416,22 +416,22 @@ teardown() {
     git init -q "$SCRATCH/badrepo"
     gh_stub_install
     # Stub `gh auth status` succeeds (default 0); only `gh repo create` fails.
-    export GH_STUB_EXIT=1
-    export GH_STUB_AUTH_EXIT=0
+    export MANIFEST_CLI_GH_STUB_EXIT=1
+    export MANIFEST_CLI_GH_STUB_AUTH_EXIT=0
 
     run _manifest_gh_repo_create "$SCRATCH/badrepo" "public"
     [ "$status" -eq 1 ]
     echo "$output" | grep -q "gh repo create failed"
     # Stub WAS invoked — proves we tried the live call rather than
     # short-circuiting on a guard.
-    grep -q $'repo\tcreate\tbadrepo\t--public' "$GH_STUB_LOG"
+    grep -q $'repo\tcreate\tbadrepo\t--public' "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
 @test "_manifest_require_gh (live): returns 1 when gh auth status exits non-zero" {
     source "$TEST_REPO_ROOT/modules/core/manifest-shared-functions.sh"
 
     gh_stub_install
-    export GH_STUB_AUTH_EXIT=1
+    export MANIFEST_CLI_GH_STUB_AUTH_EXIT=1
     # Force re-check (don't use a memoized success from a prior session).
     unset _MANIFEST_GH_VALIDATED_AT
 
