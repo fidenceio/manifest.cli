@@ -176,6 +176,17 @@ manifest ship fleet patch --local -y
 
 Release-disabled services are listed and skipped by ship. Release-enabled services are still skipped when they have no release changes, which means a clean worktree whose HEAD already matches the current `VERSION` tag.
 
+### Project Repo Names Onto GitHub Topics
+
+Fleets whose repo names follow a dot-separated convention can mirror that taxonomy as GitHub topics, making the org page filterable (`?q=topic:accounting`). Opt in with one key in `manifest.fleet.config.yaml`:
+
+```yaml
+topics:
+  from_name: inner   # fidence.service.accounting.avalara -> service, accounting
+```
+
+Modes: `inner` (drop first and last slug), `all-but-first`, `all`. Members also receive a `fleet-<name>` topic. `manifest update fleet` previews the per-repo delta; `-y` applies it. Pushes are additive-only — Manifest reads each repo's existing topics first, never re-pushes one that is already defined, and never removes anything. Removing the key stops topic management without undoing prior pushes. When `gh` is missing or unauthenticated the step is skipped with a notice.
+
 ## Pull Request Workflow
 
 Native PR commands wrap `gh` and do not require Manifest Cloud:
