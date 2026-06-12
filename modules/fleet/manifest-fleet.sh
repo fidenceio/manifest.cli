@@ -1791,6 +1791,69 @@ EOF
 }
 
 # =============================================================================
+# COMMAND: topics fleet
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Function: fleet_topics
+# -----------------------------------------------------------------------------
+# Direct entry to the §9.1 topics projection: preview the per-member topic
+# delta by default, push it with -y. Runs the same single hook as `manifest
+# update fleet` and the quiet post-ship pass — on demand, with full output.
+# -----------------------------------------------------------------------------
+fleet_topics() {
+    local execution_mode="preview"
+    local _local_only=false
+    local remaining_args=()
+    if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
+        return 1
+    fi
+    set -- "${remaining_args[@]}"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help|help)
+                _render_help \
+                    "manifest topics fleet [-y|--yes] [--dry-run]" \
+                    "Project fleet repo-name slugs onto GitHub topics (additive-only)." \
+                    "Options" "  --dry-run    Explicit preview; no GitHub writes
+  -y, --yes    Push the missing topics"
+                return 0
+                ;;
+            *)
+                log_error "Unknown option for 'manifest topics fleet': $1"
+                return 1
+                ;;
+        esac
+    done
+
+    if ! _fleet_require_initialized "topics"; then
+        return 1
+    fi
+
+    local root_dir="${MANIFEST_CLI_FLEET_ROOT:-$(pwd)}"
+    local config_file
+    config_file=$(_fleet_resolve_config "$root_dir") || return 1
+
+    local mode
+    mode=$(manifest_fleet_topics_mode "$config_file") || return 1
+    if [[ -z "$mode" ]]; then
+        echo "Topics are off. Enable with topics.from_name in manifest.fleet.config.yaml"
+        echo "(inner | all | all-but-first), or for this machine only:"
+        echo "  manifest config set topics.from_name inner --layer global"
+        return 0
+    fi
+
+    local dry_run=true
+    [[ "$execution_mode" == "apply" ]] && dry_run=false
+
+    manifest_fleet_topics_run "$root_dir" "$config_file" "$dry_run" "false" "manifest topics fleet -y" || return 1
+
+    if [[ "$dry_run" == "true" ]]; then
+        return "$(manifest_preview_exit_code)"
+    fi
+}
+
+# =============================================================================
 # COMMAND: prep fleet
 # =============================================================================
 
@@ -2860,7 +2923,35 @@ EOF
     fi
 
     rm -rf "$status_dir" 2>/dev/null
+
+    _fleet_ship_topics_pass "$local_only"
+
     echo "✅ Fleet ship workflow complete."
+}
+
+# -----------------------------------------------------------------------------
+# Function: _fleet_ship_topics_pass
+# -----------------------------------------------------------------------------
+# §9.1: with topics enabled (yaml key or env override), groom GitHub topics at
+# the end of a completed fleet ship — quiet: one line when something changed
+# or failed, nothing otherwise. Skipped for --local ships (no remote writes
+# were consented to). Post-release metadata grooming never fails a completed
+# ship; an invalid topics.from_name still logs loud via the mode probe.
+#
+# ARGUMENTS:
+#   $1 - local_only flag from the ship ("true" = skip)
+# -----------------------------------------------------------------------------
+_fleet_ship_topics_pass() {
+    local local_only="${1:-false}"
+    [[ "$local_only" == "true" ]] && return 0
+
+    local topics_root topics_config
+    topics_root="${MANIFEST_CLI_FLEET_ROOT:-$PWD}"
+    topics_config=$(_fleet_resolve_config "$topics_root" 2>/dev/null) || topics_config=""
+    [[ -n "$topics_config" ]] || return 0
+
+    manifest_fleet_topics_run "$topics_root" "$topics_config" "false" "true" || true
+    return 0
 }
 
 # =============================================================================
@@ -3371,6 +3462,7 @@ Use action-first commands:
   manifest validate fleet       Validate fleet configuration
   manifest add fleet <path>     Add a service to the fleet
   manifest docs fleet           Generate fleet documentation
+  manifest topics fleet         Project repo-name slugs onto GitHub topics
   manifest pr fleet             Fleet-wide PR operations
   manifest ship fleet <bump>    Coordinated release
 
@@ -3469,6 +3561,14 @@ COMMAND DETAILS:
       --force
       --no-delete-branch
       --draft
+
+  manifest topics fleet [-y|--yes] [--dry-run]
+    Project fleet repo-name slugs onto GitHub topics (additive-only; §9.1).
+    Preview by default; -y pushes the missing topics. Requires topics.from_name
+    (inner | all | all-but-first) in manifest.fleet.config.yaml, or host-local:
+      manifest config set topics.from_name inner --layer global
+    With topics enabled, 'manifest ship fleet -y' also runs this quietly after
+    a completed ship.
 
   manifest docs fleet [subcommand] [-y|--yes] [--dry-run] [options]
     Generate fleet documentation per configured strategy.
