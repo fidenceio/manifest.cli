@@ -748,6 +748,101 @@ _fleet_init_directory() {
     return 0
 }
 
+# -----------------------------------------------------------------------------
+# Function: create_fleet_gitignore (internal)
+# -----------------------------------------------------------------------------
+# Writes an ALLOWLIST .gitignore for a fleet coordination root: ignore everything,
+# then re-include ONLY Manifest's coordination files. This keeps the coordination
+# repo from ever tracking member repos, service source, secrets, or workspace
+# artifacts — the full fleet layout lives in manifest.fleet.tsv.
+#
+# No-clobber policy mirrors ensure_gitignore_smart(): an existing populated
+# .gitignore is preserved and the allowlist is written to .gitignore.manifest
+# as a reference instead.
+#
+# Output (stdout): ".gitignore" | ".gitignore:empty-overwrite" | ".gitignore.manifest" | ""
+# Returns 0 on success, 1 on write failure.
+# -----------------------------------------------------------------------------
+_fleet_write_allowlist_gitignore() {
+    local dest="$1"
+    local tmp="${dest}.tmp.$$"
+    # Write to a sibling temp then atomically rename, so an interrupted write
+    # never leaves a truncated .gitignore (pattern: _manifest_config_atomic_write_timestamp).
+    if ! cat > "$tmp" << 'EOF'
+# =============================================================================
+# Manifest fleet — coordination repo .gitignore (ALLOWLIST model)
+# =============================================================================
+# This local-only git repo exists to satisfy Manifest's fleet-root requirement:
+# date-versioned fleets commit FLEET_VERSION here, and the fleet config is tracked
+# for the team. It tracks ONLY Manifest's coordination files — never member repos,
+# service source, secrets, or workspace artifacts. The full fleet layout lives in
+# manifest.fleet.tsv (the structure-of-record).
+#
+# Model: ignore everything, then re-include only the coordination files.
+
+# Ignore everything…
+/*
+
+# …then re-include only the coordination files (all at the fleet root).
+!/.gitignore
+!/manifest.fleet.config.yaml
+!/manifest.fleet.tsv
+!/FLEET_VERSION
+!/CHANGELOG_FLEET.md
+EOF
+    then
+        rm -f "$tmp" 2>/dev/null
+        return 1
+    fi
+    mv -f "$tmp" "$dest" 2>/dev/null || { rm -f "$tmp" 2>/dev/null; return 1; }
+    return 0
+}
+
+# True when DIR is itself the root of a git work tree (has its own .git), as
+# opposed to merely being nested inside a parent repo. Reuses the discovery
+# helper when loaded; falls back to a direct .git check so it is correct in any
+# sourcing order.
+_fleet_dir_is_own_git_repo() {
+    local dir="$1"
+    if declare -F manifest_discovery_is_git_repository >/dev/null 2>&1; then
+        manifest_discovery_is_git_repository "$dir"
+    else
+        [[ -d "$dir/.git" ]] || [[ -f "$dir/.git" ]]
+    fi
+}
+
+create_fleet_gitignore() {
+    local fleet_root="$1"
+    local gitignore_file="$fleet_root/.gitignore"
+    local manifest_ref="$fleet_root/.gitignore.manifest"
+
+    if [[ ! -f "$gitignore_file" ]]; then
+        _fleet_write_allowlist_gitignore "$gitignore_file" || return 1
+        echo ".gitignore"; return 0
+    fi
+
+    # Idempotent: an existing allowlist is already correct — no-op, and do NOT
+    # spawn a redundant .gitignore.manifest on repeat runs.
+    if grep -q 'coordination repo .gitignore (ALLOWLIST model)' "$gitignore_file" 2>/dev/null \
+       && grep -qxF '/*' "$gitignore_file" 2>/dev/null; then
+        return 0
+    fi
+
+    local entry_count
+    entry_count=$(grep -cvE '^\s*$|^\s*#' "$gitignore_file" 2>/dev/null || echo "0")
+    if [[ "$entry_count" -eq 0 ]]; then
+        _fleet_write_allowlist_gitignore "$gitignore_file" || return 1
+        echo ".gitignore:empty-overwrite"; return 0
+    fi
+
+    if [[ ! -f "$manifest_ref" ]]; then
+        _fleet_write_allowlist_gitignore "$manifest_ref" || return 1
+        echo ".gitignore.manifest"; return 0
+    fi
+
+    return 0
+}
+
 # =============================================================================
 # INTERNAL: fleet init (Phase 2 of init fleet)
 # =============================================================================
@@ -909,6 +1004,38 @@ fleet:
   # push_strategy: "batched"
 EOF
         echo "✓ Created: $local_config"
+    fi
+
+    # Ensure the fleet ROOT is itself a git repo with a coordination allowlist.
+    # All fleet roots get this: date-versioned fleets must commit FLEET_VERSION
+    # here, and every fleet benefits from a tracked, shareable config. The repo is
+    # LOCAL-ONLY — no remote is added. The allowlist guarantees only coordination
+    # files can ever be tracked (never member repos, service source, or secrets).
+    echo ""
+    if _fleet_dir_is_own_git_repo "$target_dir"; then
+        echo "Fleet-root git repo: present"
+    else
+        if git -C "$target_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            log_warning "Fleet root is nested inside a parent git repo; creating a separate local-only coordination repo here."
+        fi
+        echo "Initializing fleet-root git repo (local-only, no remote)..."
+        if git init -b main "$target_dir" >/dev/null 2>&1 || git init "$target_dir" >/dev/null 2>&1; then
+            echo "✓ git init: $(basename "$target_dir")"
+        else
+            log_error "Could not git init fleet root: $target_dir (fleet ship needs a git root)"
+            _fleet_init_status=1
+        fi
+    fi
+    local _fleet_root_gi
+    if _fleet_root_gi=$(create_fleet_gitignore "$target_dir"); then
+        case "$_fleet_root_gi" in
+            .gitignore) echo "✓ Created: $target_dir/.gitignore (coordination allowlist)" ;;
+            .gitignore:empty-overwrite) echo "✓ Wrote coordination allowlist into empty $target_dir/.gitignore" ;;
+            .gitignore.manifest) echo "✓ Created: $target_dir/.gitignore.manifest (existing .gitignore preserved — merge the allowlist as needed)" ;;
+        esac
+    else
+        log_error "Could not write fleet-root .gitignore in $target_dir"
+        _fleet_init_status=1
     fi
 
     if [[ "$use_start_file" == "true" ]]; then
@@ -2716,6 +2843,163 @@ _fleet_lock_release() {
 
 # PR orchestration belongs under `manifest pr fleet ...`, never here.
 # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Function: _fleet_next_version (internal)
+# -----------------------------------------------------------------------------
+# Compute the next FLEET-level version for a versioning scheme.
+#   $1 scheme         none | date | semver | increment
+#   $2 current        current FLEET_VERSION value (may be empty)
+#   $3 increment_type patch | minor | major | revision (used by semver)
+# Echoes the next version; echoes nothing for scheme=none.
+# -----------------------------------------------------------------------------
+_fleet_next_version() {
+    local scheme="$1" current="$2" increment_type="${3:-patch}"
+    case "$scheme" in
+        none|"")
+            return 0
+            ;;
+        date)
+            local today
+            today="$(date -u +%Y.%m.%d)"
+            if [[ "$current" == "$today" ]]; then
+                echo "${today}.1"
+            elif [[ "$current" == "$today".* ]]; then
+                local counter="${current##*.}"
+                if [[ "$counter" =~ ^[0-9]+$ ]]; then
+                    echo "${today}.$((counter + 1))"
+                else
+                    echo "${today}.1"
+                fi
+            else
+                echo "$today"
+            fi
+            ;;
+        increment)
+            if [[ "$current" =~ ^[0-9]+$ ]]; then
+                echo "$((current + 1))"
+            else
+                echo "1"
+            fi
+            ;;
+        semver|*)
+            local major minor patch revision
+            IFS='.' read -r major minor patch revision <<< "${current:-0.0.0}"
+            major=${major:-0}; minor=${minor:-0}; patch=${patch:-0}; revision=${revision:-0}
+            case "$increment_type" in
+                minor) minor=$((minor + 1)); patch=0 ;;
+                major) major=$((major + 1)); minor=0; patch=0 ;;
+                revision) revision=$((revision + 1)) ;;
+                *) patch=$((patch + 1)) ;;
+            esac
+            if [[ "$revision" -gt 0 ]]; then
+                echo "$major.$minor.$patch.$revision"
+            else
+                echo "$major.$minor.$patch"
+            fi
+            ;;
+    esac
+}
+
+# -----------------------------------------------------------------------------
+# Function: _fleet_root_release (internal)
+# -----------------------------------------------------------------------------
+# After a successful fleet ship, bump + commit the fleet-level version file at
+# the coordination root. SECURITY: stages ONLY coordination files (by name) and
+# verifies the staged set before committing — never `git add .`/-A — so a dirty
+# root can never sweep member repos, source, or secrets into the commit.
+#
+#   $1 increment_type   $2 execution_mode (preview|apply)
+#   $3 local_only (true|false)   $4 completed_count (members that shipped)
+# Idempotent: no-op when scheme=none, no member shipped, or the version is
+# unchanged. Returns non-zero on real failure (caller treats it as a warning —
+# members have already shipped).
+# -----------------------------------------------------------------------------
+_fleet_root_release() {
+    local increment_type="$1" execution_mode="$2" local_only="$3" completed_count="${4:-0}"
+    local scheme="${MANIFEST_CLI_FLEET_VERSIONING:-none}"
+    local root="${MANIFEST_CLI_FLEET_ROOT:-$PWD}"
+
+    [[ "$scheme" != "none" ]] || return 0
+    [[ "${completed_count:-0}" -gt 0 ]] || return 0
+
+    local version_name version_file current next
+    version_name="$(get_yaml_value "${MANIFEST_CLI_FLEET_CONFIG_FILE:-$root/manifest.fleet.config.yaml}" ".fleet.version_file" "${MANIFEST_CLI_FLEET_DEFAULT_VERSION_FILE:-FLEET_VERSION}")"
+    version_file="$root/$version_name"
+    current="${MANIFEST_CLI_FLEET_VERSION:-}"
+    next="$(_fleet_next_version "$scheme" "$current" "$increment_type")"
+
+    [[ -n "$next" && "$next" != "$current" ]] || return 0
+
+    if [[ "$execution_mode" != "apply" ]]; then
+        echo "  - fleet root: would bump fleet version ${current:-(unset)} → $next (commit $version_name)"
+        return 0
+    fi
+
+    # Ensure the root is a coordination git repo with the allowlist in place.
+    if ! _fleet_dir_is_own_git_repo "$root"; then
+        git init -b main "$root" >/dev/null 2>&1 || git init "$root" >/dev/null 2>&1 || {
+            log_error "Fleet-root release: could not git init $root"; return 1; }
+    fi
+    create_fleet_gitignore "$root" >/dev/null || {
+        log_error "Fleet-root release: could not write allowlist .gitignore"; return 1; }
+
+    # Write the version file atomically (temp + rename).
+    local tmp="${version_file}.tmp.$$"
+    if ! printf '%s\n' "$next" > "$tmp" 2>/dev/null; then
+        rm -f "$tmp" 2>/dev/null
+        log_error "Fleet-root release: could not write $version_name"; return 1
+    fi
+    mv -f "$tmp" "$version_file" 2>/dev/null || {
+        rm -f "$tmp" 2>/dev/null; log_error "Fleet-root release: rename of $version_name failed"; return 1; }
+
+    # SECURITY: stage ONLY coordination files, by name. The version file is
+    # force-added (it is coordination by definition, even under a custom name);
+    # everything else is left to the allowlist.
+    local f
+    for f in .gitignore manifest.fleet.config.yaml manifest.fleet.tsv CHANGELOG_FLEET.md; do
+        [[ -f "$root/$f" ]] && git -C "$root" add -- "$f" 2>/dev/null
+    done
+    [[ -f "$version_file" ]] && git -C "$root" add -f -- "$version_name" 2>/dev/null
+
+    # Defense-in-depth: refuse to commit if ANYTHING outside the allowlist is staged.
+    local staged bad="" line
+    staged="$(git -C "$root" diff --cached --name-only 2>/dev/null)"
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        case "$line" in
+            .gitignore|"$version_name"|manifest.fleet.config.yaml|manifest.fleet.tsv|CHANGELOG_FLEET.md) ;;
+            *) bad="$bad $line" ;;
+        esac
+    done <<< "$staged"
+    if [[ -n "$bad" ]]; then
+        log_error "Fleet-root release ABORTED: non-coordination files staged at the root:$bad"
+        log_error "Refusing to commit — this would leak workspace content into the coordination repo."
+        git -C "$root" reset -q >/dev/null 2>&1 || true
+        return 1
+    fi
+
+    # Nothing staged (version file unchanged on disk) -> idempotent skip.
+    [[ -n "$staged" ]] || return 0
+
+    if ! git -C "$root" commit -q -m "Bump fleet version to $next" >/dev/null 2>&1; then
+        log_error "Fleet-root release: commit failed (is git user.name/user.email configured?)"
+        return 1
+    fi
+    echo "  - fleet root: committed fleet version $next"
+
+    # Push only on a non-local ship, and only when a remote is configured.
+    if [[ "$local_only" != "true" ]] && git -C "$root" remote get-url origin >/dev/null 2>&1; then
+        local branch
+        branch="$(git -C "$root" symbolic-ref --short HEAD 2>/dev/null || echo main)"
+        if git -C "$root" push origin "$branch" >/dev/null 2>&1; then
+            echo "  - fleet root: pushed $branch"
+        else
+            log_warning "Fleet-root release: push failed; the fleet version commit is local."
+        fi
+    fi
+    return 0
+}
+
 fleet_ship() {
     local execution_mode="preview"
     local local_only=false
@@ -2780,6 +3064,7 @@ EOF
     if [[ "$execution_mode" == "preview" ]]; then
         _fleet_scope_block
         _fleet_ship_plan "$increment_type" "$local_only"
+        _fleet_root_release "$increment_type" "preview" "$local_only" 1
         # Stash the fingerprint the user is reading so a later apply can warn if
         # the fleet plan drifted between this preview and that apply.
         manifest_plan_fingerprint_persist "ship-fleet" "${MANIFEST_CLI_FLEET_PLAN_FINGERPRINT:-}" "${MANIFEST_CLI_FLEET_ROOT:-$PWD}"
@@ -2923,6 +3208,12 @@ EOF
     fi
 
     rm -rf "$status_dir" 2>/dev/null
+
+    # Fleet-level version bump + commit at the coordination root (members done).
+    # A failure here is a warning, not fatal: member releases have already applied.
+    if ! _fleet_root_release "$increment_type" "apply" "$local_only" "${#completed[@]}"; then
+        log_warning "Fleet-root version bump did not complete; member releases already applied."
+    fi
 
     _fleet_ship_topics_pass "$local_only"
 

@@ -802,6 +802,19 @@ _manifest_init_fleet_dry_run_phase2() {
     else
         echo "Would create:    $root_dir/manifest.config.local.yaml"
     fi
+    if [[ -d "$root_dir/.git" ]] || [[ -f "$root_dir/.git" ]]; then
+        echo "Exists:          fleet-root git repo ($root_dir/.git)"
+    else
+        echo "Would init:      fleet-root git repo (local-only, no remote)"
+        if git -C "$root_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            echo "                 note: root is nested in a parent repo; a separate coordination repo will be created here"
+        fi
+    fi
+    if [[ -f "$root_dir/.gitignore" ]]; then
+        echo "Exists:          $root_dir/.gitignore (allowlist saved as .gitignore.manifest if it has entries)"
+    else
+        echo "Would create:    $root_dir/.gitignore (coordination allowlist)"
+    fi
     echo "Fleet name:      $fleet_name"
     echo "Selected rows:   $selected_count ($existing_count existing, $missing_count missing)"
     echo "Would git init:  $needs_git_count selected director$( [[ "$needs_git_count" == "1" ]] && echo "y" || echo "ies" ) without git"
