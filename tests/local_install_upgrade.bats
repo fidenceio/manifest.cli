@@ -459,3 +459,98 @@ teardown() {
     [ "$(cat "$result")" = "53.1.0" ]
     grep -q -- "--force-bottle" "$brewlog"
 }
+
+# --- Hook 2: ambient tap reconciliation in the detached worker ----------------
+# Bare tap remote with C1 then a CI-style writeback C2, plus a local checkout
+# parked at C1 — the "1 behind" state the worker's refresh must reconcile.
+_seed_behind_tap_checkout() {
+    local tap="$1"
+    local remote="$SCRATCH/homebrew-tap.git"
+    local writer="$SCRATCH/writer"
+
+    git init --bare -q "$remote"
+    git clone -q "$remote" "$writer"
+    git -C "$writer" checkout -q -b main
+    git -C "$writer" config user.email "test@example.com"
+    git -C "$writer" config user.name "Test"
+    mkdir -p "$writer/Formula"
+    echo "C1" > "$writer/Formula/manifest.rb"
+    git -C "$writer" add Formula/manifest.rb
+    git -C "$writer" commit -qm "Update formula to v1.2.3"
+    git -C "$writer" push -q -u origin main
+    git --git-dir="$remote" symbolic-ref HEAD refs/heads/main
+
+    git clone -q "$remote" "$tap"                 # local checkout parked at C1
+
+    echo "C2-bottle-sha" > "$writer/Formula/manifest.rb"
+    git -C "$writer" add Formula/manifest.rb
+    git -C "$writer" commit -qm "Add :all bottle for manifest 1.2.3 [skip ci]"
+    git -C "$writer" push -q origin main          # CI writeback C2 lands on origin
+}
+
+@test "auto-upgrade worker: fast-forwards a behind-by-one workspace tap checkout" {
+    # The real refresh + candidate discovery live in core, which this file's
+    # setup() does not load; source it so the worker's guarded call resolves.
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/core/manifest-core.sh"
+
+    local tap="$SCRATCH/tap"
+    _seed_behind_tap_checkout "$tap"
+    [ "$(cat "$tap/Formula/manifest.rb")" = "C1" ]   # starts one commit behind
+    # Fixture remote is a local path → its origin slug won't match the canonical
+    # tap slug; disable the slug guard, and pin the checkout as a candidate.
+    export MANIFEST_CLI_HOMEBREW_TAP_CHECKOUT="$tap"
+    export MANIFEST_CLI_HOMEBREW_TAP_SLUG=""
+
+    local sd="$SCRATCH/state"; mkdir -p "$sd"
+    brew() {
+        case "$1 ${2:-}" in
+            "list --versions") echo "manifest 1.2.3" ;;   # already current → no result write
+            *) return 0 ;;
+        esac
+    }
+
+    run manifest_install_paths_auto_upgrade_bg "$sd/.auto_upgrade_result" "fidenceio/tap/manifest"
+    [ "$status" -eq 0 ]
+
+    # The checkout advanced C1 → C2 and now matches origin/main.
+    [ "$(cat "$tap/Formula/manifest.rb")" = "C2-bottle-sha" ]
+    [ "$(git -C "$tap" rev-parse HEAD)" = "$(git -C "$tap" rev-parse origin/main)" ]
+}
+
+@test "auto-upgrade worker: leaves a dirty workspace tap checkout untouched" {
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/core/manifest-core.sh"
+
+    local tap="$SCRATCH/tap" before
+    _seed_behind_tap_checkout "$tap"
+    before="$(git -C "$tap" rev-parse HEAD)"
+    echo "local edit" >> "$tap/Formula/manifest.rb"   # uncommitted local work
+    export MANIFEST_CLI_HOMEBREW_TAP_CHECKOUT="$tap"
+    export MANIFEST_CLI_HOMEBREW_TAP_SLUG=""
+
+    local sd="$SCRATCH/state"; mkdir -p "$sd"
+    brew() { case "$1 ${2:-}" in "list --versions") echo "manifest 1.2.3" ;; *) return 0 ;; esac; }
+
+    run manifest_install_paths_auto_upgrade_bg "$sd/.auto_upgrade_result" "fidenceio/tap/manifest"
+    [ "$status" -eq 0 ]
+    [ "$(git -C "$tap" rev-parse HEAD)" = "$before" ]   # skipped, not mutated
+}
+
+@test "auto-upgrade: sandboxed HOME never spawns the worker (no tap refresh, no brew)" {
+    # The detached worker — and therefore its tap refresh — must never run from a
+    # sandbox/test HOME. The sandbox gate short-circuits before spawn, the same
+    # guard the destructive-brew path uses.
+    local sd="$SCRATCH/state"; mkdir -p "$sd"
+    manifest_install_paths_global_state_dir() { echo "$sd"; }
+    manifest_install_paths_is_brew_managed() { return 0; }
+    manifest_install_paths_home_looks_sandboxed() { return 0; }   # sandboxed → must bail
+    brew() { return 0; }
+    local spawned="$SCRATCH/spawned"
+    manifest_install_paths_auto_upgrade_spawn() { touch "$spawned"; }
+
+    run manifest_install_paths_auto_upgrade
+    [ "$status" -eq 0 ]
+    [ ! -f "$spawned" ]
+    [ ! -f "$sd/.auto_upgrade_last_check" ]
+}
