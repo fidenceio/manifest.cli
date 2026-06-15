@@ -1,5 +1,19 @@
 # Changelog
 
+## [54.0.0] - 2026-06-15
+
+**Release Type:** Major
+
+### Changes
+
+- Docs(tracker): §9.1 status — shipped in v53.4.0
+- Docs(tracker): file §9.2 — rate limiting for fleet gh loops (user directive: 150)
+- Docs(tracker): file §9.3 — GitHub owner/org targeting for repo creation
+- Docs(tracker): §9.3 — mixed-owner fleets (pre-existing-remote escape hatch + TSV OWNER column cost)
+- Update release copy and configuration examples
+- Add regression coverage for the changed CLI workflow
+
+
 ## [53.4.0] - 2026-06-12
 
 **Release Type:** Minor
@@ -87,17 +101,4 @@
 
 - Add GitHub Release publishing support
 - Update release copy and configuration examples
-- Add regression coverage for the changed CLI workflow
-
-
-## [53.0.0] - 2026-06-08
-
-**Release Type:** Major
-
-### Changes
-
-- Add GitHub Release publishing support
-- Add smart ship preview summaries
-- Update release copy and configuration examples
-- Wire first-class CLI commands to inspectable built-in recipe definitions
 - Add regression coverage for the changed CLI workflow
