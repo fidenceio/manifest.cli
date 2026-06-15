@@ -640,6 +640,15 @@ manifest_ship_post_push_steps() {
                         echo "✅ Local installation upgraded to v$new_version via Homebrew bottle"
                         _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="success"
                         manifest_ship_restore_tap_ssh_origin
+                        # The bottle just poured, which means tap origin/main now
+                        # carries the CI bottle-SHA writeback commit — pushed AFTER
+                        # the formula push, so the post-push tap refresh ran one
+                        # commit too early and left the workspace tap checkout behind.
+                        # The wait loop's own `brew update` already fetched that
+                        # commit, so fast-forward the checkouts to it now (one
+                        # fetch + ff-only each; the brew-managed dir is a no-op).
+                        # No added delay — origin is confirmed at the new commit.
+                        manifest_refresh_homebrew_tap_checkouts
                         manifest_install_paths_auto_upgrade_mark_checked
                     else
                         echo "⚠️  The :all bottle for v$new_version is not published yet. v$new_version shipped"
