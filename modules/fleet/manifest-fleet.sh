@@ -2257,13 +2257,17 @@ _fleet_service_static_release_reason() {
 _fleet_service_release_reason() {
     local service="$1"
     local path="$2"
+    local force_bump="${3:-false}"
     local reason
 
     if ! reason=$(_fleet_service_static_release_reason "$service" "$path"); then
         echo "$reason"
         return 1
     fi
-    if ! _fleet_service_has_release_changes "$path"; then
+    # --force-bump bypasses ONLY the dynamic "no changes since tag" gate. The
+    # static/policy gates above (excluded, pr-gated, release-disabled, no VERSION,
+    # tap, fleet root) are always honored — force-bump never ships those.
+    if [[ "$force_bump" != "true" ]] && ! _fleet_service_has_release_changes "$path"; then
         echo "no changes"
         return 1
     fi
@@ -2293,11 +2297,12 @@ _fleet_preflight_git_writable() {
 # repo, release disabled, etc.) are not probed — fleet apply never writes
 # into them.
 _fleet_preflight_git_writability() {
+    local force_bump="${1:-false}"
     local failed=()
     local service path reason
     for service in $MANIFEST_CLI_FLEET_SERVICES; do
         path=$(get_fleet_service_property "$service" "path")
-        if ! reason=$(_fleet_service_release_reason "$service" "$path"); then
+        if ! reason=$(_fleet_service_release_reason "$service" "$path" "$force_bump"); then
             continue
         fi
         if ! _fleet_preflight_git_writable "$path"; then
@@ -2328,11 +2333,12 @@ _fleet_preflight_git_writability() {
 # once so the user can fix the whole fleet before retrying. Skipped members are
 # not checked — fleet apply never ships them.
 _fleet_preflight_on_default_branch() {
+    local force_bump="${1:-false}"
     local failed=0
     local service path reason
     for service in $MANIFEST_CLI_FLEET_SERVICES; do
         path=$(get_fleet_service_property "$service" "path")
-        if ! reason=$(_fleet_service_release_reason "$service" "$path"); then
+        if ! reason=$(_fleet_service_release_reason "$service" "$path" "$force_bump"); then
             continue
         fi
         if ! manifest_assert_release_branch "$path" "  "; then
@@ -2489,6 +2495,7 @@ _fleet_plan_version_surface_report() {
 _fleet_ship_plan() {
     local increment_type="$1"
     local local_only="$2"
+    local force_bump="${3:-false}"
     local releaseable_count=0
     local skipped_count=0
 
@@ -2530,10 +2537,12 @@ _fleet_ship_plan() {
 
         dirty=$(_fleet_service_dirty_summary "$path")
         current="$(_fleet_plan_current_version "$path")"
-        if reason=$(_fleet_service_release_reason "$service" "$path"); then
+        if reason=$(_fleet_service_release_reason "$service" "$path" "$force_bump"); then
             releaseable_count=$((releaseable_count + 1))
             effect="release"
-            if [[ "$local_only" == "true" ]]; then
+            if [[ "$force_bump" == "true" ]]; then
+                decision="would force"
+            elif [[ "$local_only" == "true" ]]; then
                 decision="would local"
             else
                 decision="would ship"
@@ -2565,6 +2574,9 @@ _fleet_ship_plan() {
 
     echo ""
     echo "Plan summary: $releaseable_count releaseable, $pr_gated_count pr-gated, $skipped_count skipped"
+    if [[ "$force_bump" == "true" ]]; then
+        echo "force-bump: members with no changes since their tag are included (forward-only — new commit + tag, no history rewrite). Policy-gated members (pr-gated, release-disabled) are still skipped."
+    fi
     _fleet_plan_version_surface_report surface_labels surface_paths
     # Fleet plan fingerprint, rendered through the shared plan-table renderer so
     # it reads identically to the single-repo preview. Exported for the caller to
@@ -3011,6 +3023,7 @@ fleet_ship() {
 
     local increment_type="patch"
     local run_prep=true
+    local force_bump=false
     local any_failures=0
 
     while [[ $# -gt 0 ]]; do
@@ -3021,6 +3034,10 @@ fleet_ship() {
                 ;;
             --noprep)
                 run_prep=false
+                shift
+                ;;
+            --force-bump)
+                force_bump=true
                 shift
                 ;;
             --safe|--force|--no-delete-branch|--draft)
@@ -3040,6 +3057,8 @@ Options:
   -y, --yes                 Apply the fleet release plan
   --local                   With -y, apply local release prep only
   --noprep                  Skip per-service prep step during apply
+  --force-bump              Ship every release-eligible member even with no changes
+                            since its tag (forward-only; honors pr-gated/disabled)
 
 Flow:
   default: preview release plan
@@ -3063,7 +3082,7 @@ EOF
 
     if [[ "$execution_mode" == "preview" ]]; then
         _fleet_scope_block
-        _fleet_ship_plan "$increment_type" "$local_only"
+        _fleet_ship_plan "$increment_type" "$local_only" "$force_bump"
         _fleet_root_release "$increment_type" "preview" "$local_only" 1
         # Stash the fingerprint the user is reading so a later apply can warn if
         # the fleet plan drifted between this preview and that apply.
@@ -3078,7 +3097,7 @@ EOF
 
     echo "Starting fleet ship workflow ($increment_type)"
     _fleet_scope_block
-    _fleet_ship_plan "$increment_type" "$local_only"
+    _fleet_ship_plan "$increment_type" "$local_only" "$force_bump"
     # Warn (never block) if the fleet plan drifted since the preview.
     manifest_plan_fingerprint_warn_on_drift "ship-fleet" "${MANIFEST_CLI_FLEET_PLAN_FINGERPRINT:-}" "${MANIFEST_CLI_FLEET_ROOT:-$PWD}"
     echo ""
@@ -3087,11 +3106,11 @@ EOF
         return 1
     fi
 
-    if ! _fleet_preflight_git_writability; then
+    if ! _fleet_preflight_git_writability "$force_bump"; then
         return 1
     fi
 
-    if ! _fleet_preflight_on_default_branch; then
+    if ! _fleet_preflight_on_default_branch "$force_bump"; then
         return 1
     fi
 
@@ -3149,12 +3168,16 @@ EOF
     for service in "${member_list[@]}"; do
         idx=$((idx + 1))
         path=$(get_fleet_service_property "$service" "path")
-        if ! reason=$(_fleet_service_release_reason "$service" "$path"); then
+        if ! reason=$(_fleet_service_release_reason "$service" "$path" "$force_bump"); then
             echo "  - $service: skipped ($reason)"
             skipped+=("$service|$path|$reason")
             continue
         fi
-        echo "  - $service: shipping $increment_type"
+        if [[ "$force_bump" == "true" ]]; then
+            echo "  - $service: force-bumping $increment_type"
+        else
+            echo "  - $service: shipping $increment_type"
+        fi
         status_file="$status_dir/${service}.status"
 
         # Fleet's -y is the apply consent; suppress the per-member confirmation
@@ -3173,11 +3196,12 @@ EOF
             # so per-member applies are distinguishable from a direct ship repo.
             MANIFEST_CLI_AUDIT_SOURCE="cli-fleet"
             export MANIFEST_CLI_AUDIT_SOURCE
-            if [[ "$local_only" == "true" ]]; then
-                manifest_ship_repo "$increment_type" "--local" "-y"
-            else
-                manifest_ship_repo "$increment_type" "-y"
-            fi
+            # Forced members must carry --force-bump into the per-member ship, or
+            # the repo-level gate (Commit 1) would re-skip a clean, at-tag member.
+            member_ship_args=("$increment_type" "-y")
+            [[ "$local_only" == "true" ]] && member_ship_args+=("--local")
+            [[ "$force_bump" == "true" ]] && member_ship_args+=("--force-bump")
+            manifest_ship_repo "${member_ship_args[@]}"
         )
         rc=$?
         if [[ $rc -ne 0 ]]; then
@@ -3187,7 +3211,7 @@ EOF
             for ((rem_idx=idx; rem_idx<${#member_list[@]}; rem_idx++)); do
                 rem="${member_list[$rem_idx]}"
                 rem_path=$(get_fleet_service_property "$rem" "path")
-                if rem_reason=$(_fleet_service_release_reason "$rem" "$rem_path"); then
+                if rem_reason=$(_fleet_service_release_reason "$rem" "$rem_path" "$force_bump"); then
                     not_started+=("$rem|$rem_path")
                 else
                     skipped+=("$rem|$rem_path|$rem_reason")

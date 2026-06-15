@@ -56,7 +56,7 @@ Line two." \
 
     run manifest_ship_repo --help
     [ "$status" -eq 0 ]
-    echo "$output" | grep -qFx "Usage: manifest ship repo <patch|minor|major|revision>|resume [-y|--yes] [--dry-run] [--local] [-i]"
+    echo "$output" | grep -qFx "Usage: manifest ship repo <patch|minor|major|revision>|resume [-y|--yes] [--dry-run] [--local] [--force-bump] [-i]"
     echo "$output" | grep -qFx "Options:"
     echo "$output" | grep -qFx "Examples:"
 }

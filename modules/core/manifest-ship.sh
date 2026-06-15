@@ -346,6 +346,7 @@ manifest_ship_repo() {
     local local_only=false
     local interactive=false
     local explain=false
+    local force_bump=false
     local execution_mode="preview"
     local remaining_args=()
 
@@ -367,10 +368,11 @@ manifest_ship_repo() {
             -M) increment_type="major"; shift ;;
             -r) increment_type="revision"; shift ;;
             -i|--interactive) interactive=true; shift ;;
+            --force-bump) force_bump=true; shift ;;
             --explain) explain=true; shift ;;
             -h|--help)
                 _render_help \
-                    "manifest ship repo <patch|minor|major|revision>|resume [-y|--yes] [--dry-run] [--local] [-i]" \
+                    "manifest ship repo <patch|minor|major|revision>|resume [-y|--yes] [--dry-run] [--local] [--force-bump] [-i]" \
                     "Preview or publish a release: version bump, docs, commit, tag, push." \
                     "Options" "  patch | -p          Increment patch version (e.g. 1.2.3 -> 1.2.4)
   minor | -m          Increment minor version (e.g. 1.2.3 -> 1.3.0)
@@ -380,11 +382,14 @@ manifest_ship_repo() {
   -y, --yes           Apply the release plan
   --local             With -y, local only — no tag, push, or Homebrew update
   -i, --interactive   Enable interactive safety prompts
+  --force-bump        Bump, commit, and push even with no changes since the last
+                      tag (forward-only — new commit + tag; never rewrites history)
   --explain           Show the built-in recipe definition without running it
   resume              Continue safe post-release steps for current VERSION/tag" \
                     "Examples" "  manifest ship repo patch
   manifest ship repo patch -y
   manifest ship repo minor --local -y
+  manifest ship repo patch --force-bump -y
   manifest ship repo -M -i -y
   manifest ship repo resume"
                 return 0
@@ -415,6 +420,31 @@ manifest_ship_repo() {
 
     if ! manifest_repo_scope_require_git "$replay_command"; then
         return 1
+    fi
+
+    # Symmetric "nothing to release" gate (parity with ship fleet's per-member
+    # skip): a clean working tree already at the current release tag has nothing
+    # to ship. Reuses the repo-side predicate so repo and fleet decide
+    # identically. --force-bump bypasses it to cut a deliberate forward-only
+    # release (new commit + tag; the bump itself becomes the change).
+    if [[ "$force_bump" == "true" ]]; then
+        echo "force-bump: cutting a release regardless of changes since the last tag (forward-only — new commit + tag, no history rewrite)."
+    else
+        local _repo_root="${PROJECT_ROOT:-$PWD}"
+        local _cur_version _cur_tag
+        _cur_version="$(tr -d '[:space:]' < "$_repo_root/VERSION" 2>/dev/null || echo "unknown")"
+        if [[ "$_cur_version" != "unknown" ]] && declare -F manifest_release_tag_name >/dev/null 2>&1; then
+            _cur_tag="$(manifest_release_tag_name "$_cur_version")"
+        else
+            _cur_tag="v${_cur_version}"
+        fi
+        if declare -F manifest_ship_followup_has_releasable_changes >/dev/null 2>&1 \
+            && ! ( cd "$_repo_root" 2>/dev/null && manifest_ship_followup_has_releasable_changes "$_cur_tag" ); then
+            echo "Nothing to release: HEAD is at ${_cur_tag} and the working tree is clean."
+            echo "  Re-run to cut a release anyway:"
+            echo "    ${replay_command} --force-bump -y"
+            return 0
+        fi
     fi
 
     if [[ "$execution_mode" == "preview" ]]; then
@@ -551,7 +581,9 @@ manifest_ship_fleet() {
   -y, --yes                Apply the fleet release plan
   --local                  With -y, local only — no push, no tags (ship only; not valid for resume)
   --explain                Show the built-in recipe definition without running it
-  --noprep                 Skip per-service prep step (requires clean trees)" \
+  --noprep                 Skip per-service prep step (requires clean trees)
+  --force-bump             Ship every release-eligible member even with no changes since its tag
+                           (forward-only — new commit + tag; honors pr-gated/release-disabled)" \
                     "Flow" "  preview:  load fleet -> render per-service release plan
   apply:    load fleet -> ship release-enabled services directly
   resume:   load fleet -> per-member eligibility probe -> delegate to repo resume
