@@ -293,12 +293,14 @@ teardown() {
     [ "$acquire_line" -gt "$preview_return_line" ]
 }
 
-@test "repo lock: wired into ship repo apply with acquire + RETURN/INT/TERM release" {
+@test "repo lock: wired into ship repo apply with acquire + RETURN/INT/TERM/HUP release" {
     local f="$TEST_REPO_ROOT/modules/core/manifest-ship.sh"
     grep -q '_manifest_ship_repo_lock_acquire' "$f"
     grep -q "_fleet_lock_release .* RETURN" "$f"
     grep -q "kill -INT \$\$' INT" "$f"
     grep -q "kill -TERM \$\$' TERM" "$f"
+    # HUP = terminal/tab closed; release promptly instead of leaking the lock.
+    grep -q "kill -HUP \$\$' HUP" "$f"
 }
 
 @test "repo lock: wired into ship repo resume apply with acquire + traps" {

@@ -301,10 +301,26 @@ _MANIFEST_CLI_SHIP_LAST_GATE_POLICY=""
 # developer or CI shell provides — PATH (locate bats/bash/git), HOME (git config
 # and test sandboxing), TMPDIR (bats scratch), locale, and a few standard vars.
 # Verified to run the suite green even with the full ship environment present.
+# Guarantee a usable PATH for the release-gate clean room (below). `env -i` drops
+# the inherited environment, so PATH is rebuilt from what the caller had PLUS a
+# standard system + Homebrew floor. The floor is APPENDED — a healthy caller PATH
+# is unchanged (its entries keep precedence), but a clobbered or empty caller PATH
+# (e.g. an IDE/agent shell that reset its terminal env after an interrupt) can
+# never strand the gate without core tools like tr/date/git/bash. CLI tracker §8.x.
+_manifest_gate_path_floor() {
+    local inherited="${1-}"
+    local floor="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    if [ -n "$inherited" ]; then
+        printf '%s' "${inherited}:${floor}"
+    else
+        printf '%s' "$floor"
+    fi
+}
+
 _manifest_release_gate_exec() {
     local gate_root="$1" cmd="$2"
     env -i \
-        PATH="${PATH-}" \
+        PATH="$(_manifest_gate_path_floor "${PATH-}")" \
         HOME="${HOME-}" \
         USER="${USER-}" \
         LOGNAME="${LOGNAME-}" \
