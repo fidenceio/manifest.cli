@@ -232,3 +232,102 @@ teardown() {
     # ...and create was never reached.
     ! grep -q $'\trelease\tcreate' "$MANIFEST_CLI_GH_STUB_LOG"
 }
+
+# --- Hook 1: tap reconciliation after the bottle-wait upgrade -----------------
+# The post-push tap refresh runs right after the formula push (commit C1), but
+# tap CI appends the :all bottle-SHA writeback (commit C2) AFTERwards. On a
+# toolchain-gated host, ship waits for that bottle to pour; by the time it does,
+# origin/main is at C2 and the local workspace checkout is one commit behind.
+# Hook 1 re-runs the idempotent refresh at the wait-success point to close it.
+
+# Bare tap remote with C1 then a CI-style writeback C2, plus a local checkout
+# parked at C1 — the exact "1 behind" state Hook 1 must reconcile.
+_seed_behind_tap_checkout() {
+    local tap="$1"
+    local remote="$SCRATCH/homebrew-tap.git"
+    local writer="$SCRATCH/writer"
+
+    git init --bare -q "$remote"
+    git clone -q "$remote" "$writer"
+    git -C "$writer" checkout -q -b main
+    git -C "$writer" config user.email "test@example.com"
+    git -C "$writer" config user.name "Test"
+    mkdir -p "$writer/Formula"
+    echo "C1" > "$writer/Formula/manifest.rb"
+    git -C "$writer" add Formula/manifest.rb
+    git -C "$writer" commit -qm "Update formula to v1.2.3"
+    git -C "$writer" push -q -u origin main
+    git --git-dir="$remote" symbolic-ref HEAD refs/heads/main
+
+    # Local checkout at C1 — what the post-push refresh already fast-forwarded to.
+    git clone -q "$remote" "$tap"
+
+    # CI lands the :all bottle SHA as a SECOND commit, after the formula push.
+    echo "C2-bottle-sha" > "$writer/Formula/manifest.rb"
+    git -C "$writer" add Formula/manifest.rb
+    git -C "$writer" commit -qm "Add :all bottle for manifest 1.2.3 [skip ci]"
+    git -C "$writer" push -q origin main
+}
+
+# Force manifest_ship_post_push_steps down the toolchain-gated bottle-wait
+# SUCCESS branch, with the REAL tap refresh wired in against $tap.
+_arrange_bottle_wait_success() {
+    local tap="$1"
+    # The real refresh + candidate discovery live in core, which the shared
+    # setup() does not load; source it, then re-assert the stubs it overrides.
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/core/manifest-core.sh"
+    should_update_homebrew_for_repo() { return 0; }
+    update_homebrew_formula() { return 0; }
+
+    # The fixture remote is a local path, so its origin slug won't match the
+    # canonical tap slug — disable the slug guard (as homebrew_tap_refresh does).
+    export MANIFEST_CLI_HOMEBREW_TAP_CHECKOUT="$tap"
+    export MANIFEST_CLI_HOMEBREW_TAP_SLUG=""
+
+    brew() {
+        case "$1" in
+            update) return 0 ;;
+            upgrade) echo "Error: Your Xcode is too outdated for this macOS"; return 1 ;;
+            --prefix) echo "$SCRATCH/no-such-brew-prefix"; return 0 ;;
+            *) return 0 ;;
+        esac
+    }
+    manifest_install_paths_is_brew_managed() { return 0; }
+    manifest_install_paths_ensure_brew_trust() { return 0; }
+    manifest_install_paths_brew_error_is_toolchain_gate() { return 0; }
+    manifest_ship_wait_for_bottle_upgrade() { return 0; }
+    manifest_ship_restore_tap_ssh_origin() { return 0; }
+    manifest_install_paths_auto_upgrade_mark_checked() { return 0; }
+}
+
+@test "bottle-wait success fast-forwards the workspace tap checkout to the CI writeback commit" {
+    local tap="$SCRATCH/tap"
+    _seed_behind_tap_checkout "$tap"
+    [ "$(cat "$tap/Formula/manifest.rb")" = "C1" ]   # starts one commit behind
+    _arrange_bottle_wait_success "$tap"
+
+    run manifest_ship_post_push_steps "1.2.3" "$(git rev-parse HEAD)" "v1.2.3" "success"
+    [ "$status" -eq 0 ]
+
+    [[ "$output" == *"upgraded to v1.2.3 via Homebrew bottle"* ]]
+    [[ "$output" == *"Refreshed local Homebrew tap checkout: $tap"* ]]
+    # The checkout advanced C1 → C2 and now matches origin/main.
+    [ "$(cat "$tap/Formula/manifest.rb")" = "C2-bottle-sha" ]
+    [ "$(git -C "$tap" rev-parse HEAD)" = "$(git -C "$tap" rev-parse origin/main)" ]
+}
+
+@test "bottle-wait success leaves a dirty workspace tap checkout untouched" {
+    local tap="$SCRATCH/tap" before
+    _seed_behind_tap_checkout "$tap"
+    before="$(git -C "$tap" rev-parse HEAD)"
+    echo "local edit" >> "$tap/Formula/manifest.rb"   # uncommitted local work
+    _arrange_bottle_wait_success "$tap"
+
+    run manifest_ship_post_push_steps "1.2.3" "$(git rev-parse HEAD)" "v1.2.3" "success"
+    [ "$status" -eq 0 ]
+
+    # Ship still succeeds, but the dirty checkout is skipped, not mutated.
+    [[ "$output" == *"Skipped local Homebrew tap checkout: $tap (dirty)"* ]]
+    [ "$(git -C "$tap" rev-parse HEAD)" = "$before" ]
+}
