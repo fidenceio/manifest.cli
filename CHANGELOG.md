@@ -1,5 +1,15 @@
 # Changelog
 
+## [54.1.0] - 2026-06-15
+
+**Release Type:** Minor
+
+### Changes
+
+- Feat(ship): add --force-bump for repo + fleet; symmetric no-changes gate
+- Docs(tracker): fold §8.1h tap-sync resolution into a §8.1e disambiguation
+
+
 ## [54.0.1] - 2026-06-15
 
 **Release Type:** Patch
@@ -92,12 +102,3 @@
 
 - Docs(tracker): §8.13 — brew-managed provenance check should use filesystem, not brew list exit status
 - Fix(install): base brew-managed provenance on the Cellar, not `brew list` (§8.13)
-
-
-## [53.0.2] - 2026-06-09
-
-**Release Type:** Patch
-
-### Changes
-
-- Fix(install): fall back to tap-level brew trust on custom-remote taps (§7.6)
