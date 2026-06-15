@@ -1,5 +1,15 @@
 # Changelog
 
+## [54.0.1] - 2026-06-15
+
+**Release Type:** Patch
+
+### Changes
+
+- Fix(ship): reconcile tap checkout after the bottle-wait upgrade
+- Fix(upgrade): fast-forward the workspace tap checkout in the auto-upgrade worker
+
+
 ## [54.0.0] - 2026-06-15
 
 **Release Type:** Major
@@ -91,14 +101,3 @@
 ### Changes
 
 - Fix(install): fall back to tap-level brew trust on custom-remote taps (§7.6)
-
-
-## [53.0.1] - 2026-06-08
-
-**Release Type:** Patch
-
-### Changes
-
-- Add GitHub Release publishing support
-- Update release copy and configuration examples
-- Add regression coverage for the changed CLI workflow
