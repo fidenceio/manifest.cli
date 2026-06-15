@@ -3130,6 +3130,10 @@ EOF
     trap '_fleet_lock_release "${fleet_lock:-}"; [ -n "${status_dir:-}" ] && rm -rf "${status_dir}" 2>/dev/null' RETURN
     trap '_fleet_lock_release "${fleet_lock:-}"; [ -n "${status_dir:-}" ] && rm -rf "${status_dir}" 2>/dev/null; trap - INT; kill -INT $$' INT
     trap '_fleet_lock_release "${fleet_lock:-}"; [ -n "${status_dir:-}" ] && rm -rf "${status_dir}" 2>/dev/null; trap - TERM; kill -TERM $$' TERM
+    # SIGHUP = the controlling terminal/tab was closed (the common IDE "interrupt").
+    # Without this the lock would leak until the next ship's stale-reclaim; release
+    # it promptly here too. See CLI tracker §8.x (interrupted-ship robustness).
+    trap '_fleet_lock_release "${fleet_lock:-}"; [ -n "${status_dir:-}" ] && rm -rf "${status_dir}" 2>/dev/null; trap - HUP; kill -HUP $$' HUP
 
     if [ "$run_prep" != "true" ]; then
         echo "⏭️  Skipping fleet prep (--noprep)."

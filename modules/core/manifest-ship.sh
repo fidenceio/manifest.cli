@@ -503,6 +503,9 @@ manifest_ship_repo() {
         trap '_fleet_lock_release "${repo_lock:-}"' RETURN
         trap '_fleet_lock_release "${repo_lock:-}"; trap - INT; kill -INT $$' INT
         trap '_fleet_lock_release "${repo_lock:-}"; trap - TERM; kill -TERM $$' TERM
+        # SIGHUP (terminal/tab closed) would otherwise leak the lock until the next
+        # ship's stale-reclaim; release promptly here too. CLI tracker §8.x.
+        trap '_fleet_lock_release "${repo_lock:-}"; trap - HUP; kill -HUP $$' HUP
     fi
 
     local workflow_rc=0

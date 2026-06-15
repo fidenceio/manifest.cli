@@ -163,14 +163,17 @@ teardown() {
 # Behavioral coverage above proves the lock mechanism. These guard that it
 # stays wired into fleet_ship's apply path and is released on every exit.
 
-@test "fleet lock: wired into fleet_ship apply with acquire + RETURN/INT/TERM release" {
+@test "fleet lock: wired into fleet_ship apply with acquire + RETURN/INT/TERM/HUP release" {
     local f="$TEST_REPO_ROOT/modules/fleet/manifest-fleet.sh"
     # Acquire is invoked on the apply path.
     grep -q '_fleet_lock_acquire "\$fleet_lock"' "$f"
-    # Released on normal return AND on signal (with re-raise).
+    # Released on normal return AND on signal (with re-raise). HUP = the terminal
+    # tab/pane was closed (the common IDE "interrupt"); without it the lock leaks
+    # until the next ship's stale-reclaim.
     grep -q "_fleet_lock_release .* RETURN" "$f"
     grep -q "kill -INT \$\$' INT" "$f"
     grep -q "kill -TERM \$\$' TERM" "$f"
+    grep -q "kill -HUP \$\$' HUP" "$f"
 }
 
 @test "fleet lock: acquired only after the read-only pre-flights, never in preview" {

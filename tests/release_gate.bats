@@ -94,6 +94,36 @@ teardown() {
     [ -e "$PROJECT_ROOT/ran.marker" ]
 }
 
+# --- clean-room PATH floor: never strand the gate without core tools ---------
+# The gate runs in an `env -i` clean room. If manifest is invoked from a shell
+# whose PATH was clobbered (e.g. an IDE/agent terminal that reset its env after
+# an interrupt), the gate must NOT inherit a broken PATH and fail with "tr/date
+# don't resolve". The floor guarantees system + Homebrew dirs are always present.
+
+@test "release_gate: PATH floor restores system dirs when the caller PATH is empty" {
+    run _manifest_gate_path_floor ""
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"/usr/bin"* ]]
+    [[ "$output" == *":/bin:"* ]]
+    [[ "$output" == *"/opt/homebrew/bin"* ]]
+}
+
+@test "release_gate: PATH floor keeps inherited entries first, appends the floor" {
+    run _manifest_gate_path_floor "/caller/only"
+    [ "$status" -eq 0 ]
+    [[ "$output" == "/caller/only:"* ]]
+    [[ "$output" == *"/usr/bin"* ]]
+    [[ "$output" == *":/bin:"* ]]
+}
+
+@test "release_gate: clean room resolves core tools (tr/date/git) via the floor" {
+    run _manifest_release_gate_exec "$PROJECT_ROOT" 'command -v tr && command -v date && command -v git'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"tr"* ]]
+    [[ "$output" == *"date"* ]]
+    [[ "$output" == *"git"* ]]
+}
+
 @test "release_gate: local-tests auto-detects ./scripts/run-tests.sh" {
     mkdir -p "$PROJECT_ROOT/scripts"
     cat > "$PROJECT_ROOT/scripts/run-tests.sh" <<'EOF'
