@@ -179,6 +179,19 @@ manifest_install_paths_auto_upgrade_bg() {
     local result_file="$1" formula="$2" before after
     before="$(manifest_install_paths_installed_brew_version)"
     brew update >/dev/null 2>&1
+    # Ambient tap reconciliation. `brew update` just fast-forwarded the
+    # brew-managed tap, but a maintainer's persistent workspace tap checkout
+    # only advances when the refresh runs. This is the catch-all for the cases
+    # the ship-time hook can't reach: the CI bottle-SHA writeback lands AFTER
+    # the formula push, so a non-gated host (where `brew upgrade` succeeded
+    # immediately) or a ship whose bottle wait was disabled/timed out leaves the
+    # checkout one commit behind until now. Piggybacks on the `brew update`
+    # above — no extra fetch is scheduled — and is silent/idempotent (skips a
+    # dirty/divergent/wrong-remote checkout). Guarded so a stripped module set
+    # without the core refresh never errors the detached worker.
+    if declare -F manifest_refresh_homebrew_tap_checkouts >/dev/null 2>&1; then
+        manifest_refresh_homebrew_tap_checkouts >/dev/null 2>&1 || true
+    fi
     brew upgrade --force-bottle "$formula" >/dev/null 2>&1 \
         || brew upgrade --force-bottle manifest >/dev/null 2>&1 || true
     after="$(manifest_install_paths_installed_brew_version)"
