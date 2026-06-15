@@ -1,5 +1,14 @@
 # Changelog
 
+## [54.1.1] - 2026-06-15
+
+**Release Type:** Patch
+
+### Changes
+
+- Fix(ship): floor release-gate PATH + release ship lock on SIGHUP
+
+
 ## [54.1.0] - 2026-06-15
 
 **Release Type:** Minor
@@ -92,13 +101,3 @@
 ### Changes
 
 - Ship: classify Homebrew host-toolchain gate as an environmental skip
-
-
-## [53.0.3] - 2026-06-09
-
-**Release Type:** Patch
-
-### Changes
-
-- Docs(tracker): §8.13 — brew-managed provenance check should use filesystem, not brew list exit status
-- Fix(install): base brew-managed provenance on the Cellar, not `brew list` (§8.13)
