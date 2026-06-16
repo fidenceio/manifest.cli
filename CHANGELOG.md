@@ -1,5 +1,14 @@
 # Changelog
 
+## [55.0.1] - 2026-06-16
+
+**Release Type:** Patch
+
+### Changes
+
+- Fleet: make `init fleet` re-run idempotent — preserve config, backfill members
+
+
 ## [55.0.0] - 2026-06-16
 
 **Release Type:** Major
@@ -96,12 +105,3 @@
 
 - Feat: core auto-upgrade on invocation (brew-managed, bottle-only, detached)
 - Test(runner): add opt-in --progress milestone indicator
-
-
-## [53.1.0] - 2026-06-09
-
-**Release Type:** Minor
-
-### Changes
-
-- Formula: make the bash-wrapper candidate list fully static (:all-bottle ready)
