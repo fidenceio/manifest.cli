@@ -98,27 +98,6 @@ TSV
     [ ! -f "$SCRATCH/work/manifest.config.local.yaml" ]
 }
 
-# quickstart is now a deprecated alias for `manifest first` (§7.4). It warns,
-# then forwards verbatim — so its dry-run is first's fleet-candidate preview.
-@test "quickstart fleet --dry-run is a deprecated alias previewing first's plan" {
-    mkdir -p "$SCRATCH/work/svc"
-    git -C "$SCRATCH/work/svc" init -q
-
-    run_manifest quickstart fleet --dry-run --name test-fleet
-
-    [ "$status" -eq 0 ]
-    [[ "$output" == *"deprecated"* ]]
-    [[ "$output" == *"manifest first"* ]]
-    [[ "$output" == *"Initialize a fleet across"*"discovered repo"* ]]
-    [[ "$output" == *"would create:"*"manifest.fleet.config.yaml"* ]]
-    [[ "$output" == *"would create:"*"manifest.fleet.tsv"* ]]
-    [[ "$output" == *"Fleet name"*"test-fleet"* ]]
-    [[ "$output" == *"No changes written. Re-run with -y to apply this plan:"* ]]
-    [[ "$output" == *"manifest first -y"* ]]
-    [ ! -f "$SCRATCH/work/manifest.fleet.config.yaml" ]
-    [ ! -f "$SCRATCH/work/manifest.fleet.tsv" ]
-}
-
 @test "add fleet --dry-run previews YAML and leaves config unchanged" {
     mkdir -p "$SCRATCH/work/services/new-api"
     write_fleet_config

@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# §7.4: `manifest first` — guided onboarding front door (supersedes quickstart).
+# §7.4: `manifest first` — guided onboarding front door.
 # Read-only inspection by default; writes only on -y through the audited apply
 # path.
 
@@ -232,62 +232,15 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
     [ ! -d "$HOME/.manifest-cli" ]
 }
 
-@test "first (cli): quickstart is a deprecated alias forwarding to first" {
-    mkdir -p "$SCRATCH/ws"
-    mkrepo "$SCRATCH/ws/alpha"
-    cd "$SCRATCH/ws"
-    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" quickstart fleet
-    [ "$status" -eq 0 ]
-    echo "$output" | grep -q "deprecated"
-    echo "$output" | grep -q "manifest first"
-}
-
-@test "first (cli): quickstart --dry-run forwards to first preview (no fleet token)" {
+@test "first (cli): quickstart is fully retired — no longer a recognized command" {
+    # quickstart (command + alias) was removed 2026-06-15; `first` is the only
+    # onboarding front door. The token must now fall through to the unknown-
+    # command handler rather than forward anywhere.
     mkrepo "$SCRATCH/repo"
     cd "$SCRATCH/repo"
-    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" quickstart --dry-run
-    [ "$status" -eq 0 ]
-    # Reached `first` (its preview surface), not the old "Unknown scope" arm.
-    echo "$output" | grep -q "single repo (not yet initialized)"
-    echo "$output" | grep -q "No changes written. Re-run with -y"
-    ! echo "$output" | grep -q "Unknown quickstart scope"
-    [ ! -f "$SCRATCH/repo/VERSION" ]
-}
-
-@test "first (cli): quickstart -y forwards to first apply (audited)" {
-    mkrepo "$SCRATCH/repo"
-    cd "$SCRATCH/repo"
-    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" quickstart -y
-    [ "$status" -eq 0 ]
-    [ -f "$SCRATCH/repo/VERSION" ]
-    [ -f "$HOME/.manifest-cli/audit/apply-events.ndjson" ]
-}
-
-@test "first (cli): quickstart --name forwards the value to first" {
-    mkdir -p "$SCRATCH/ws"
-    mkrepo "$SCRATCH/ws/alpha"
-    mkrepo "$SCRATCH/ws/beta"
-    cd "$SCRATCH/ws"
-    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" quickstart --name myfleet
-    [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Fleet name:.*myfleet"
-}
-
-@test "first (cli): quickstart --depth forwards to first" {
-    mkdir -p "$SCRATCH/ws"
-    mkrepo "$SCRATCH/ws/alpha"
-    cd "$SCRATCH/ws"
-    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" quickstart --depth 2
-    [ "$status" -eq 0 ]
-    echo "$output" | grep -q "fleet candidate"
-}
-
-@test "first (cli): quickstart deprecation notice fires exactly once" {
-    mkrepo "$SCRATCH/repo"
-    cd "$SCRATCH/repo"
-    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" quickstart --dry-run
-    [ "$status" -eq 0 ]
-    [ "$(echo "$output" | grep -c "is deprecated")" -eq 1 ]
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" quickstart
+    [ "$status" -ne 0 ]
+    echo "$output" | grep -q "Unknown command: quickstart"
 }
 
 @test "first (cli): -y applies a fleet, audited" {

@@ -49,13 +49,6 @@ run_manifest_from_plain_dir() {
     run_manifest_from_plain_dir pr fleet help
     [ "$status" -eq 0 ]
     [[ "$output" == *"Usage: manifest pr fleet"* ]]
-
-    # quickstart is a deprecated alias for `manifest first`; its help advertises
-    # the alias shape and the deprecation, not a dedicated `quickstart fleet`.
-    run_manifest_from_plain_dir quickstart fleet --help
-    [ "$status" -eq 0 ]
-    [[ "$output" == *"Usage: manifest quickstart"* ]]
-    [[ "$output" == *"deprecated"* ]]
 }
 
 @test "old object-first fleet routes no longer execute" {

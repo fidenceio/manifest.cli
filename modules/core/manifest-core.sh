@@ -617,12 +617,11 @@ main() {
             export PROJECT_ROOT
             load_configuration "$PROJECT_ROOT" "false"
             ;;
-        # first (and its deprecated alias quickstart) onboards single repos AND
-        # fleet roots (which need not be git repos), so don't require one. The
-        # inspection must not touch disk: load config with the read-only guard
-        # so no incidental migration or marker writes happen. The -y apply path
-        # uses the audited writers.
-        "first"|"quickstart")
+        # first onboards single repos AND fleet roots (which need not be git
+        # repos), so don't require one. The inspection must not touch disk: load
+        # config with the read-only guard so no incidental migration or marker
+        # writes happen. The -y apply path uses the audited writers.
+        "first")
             PROJECT_ROOT="$(pwd)"
             export PROJECT_ROOT
             MANIFEST_CLI_CONFIG_SKIP_WRITES=1 load_configuration "$PROJECT_ROOT" "false"
@@ -695,31 +694,6 @@ main() {
         # CORE JOURNEY: first → config → init → prep → refresh → ship
         # =====================================================================
         "first")
-            manifest_first "$@"
-            ;;
-
-        # `quickstart` is a deprecated alias for `manifest first`. It is a TRUE
-        # pass-through: it forwards every argument to manifest_first so the
-        # full flag surface (-y, --dry-run, --name, --depth, --force) and
-        # preview-by-default semantics are preserved. A leading `fleet` token is
-        # stripped (a no-op for first — fleet vs repo is auto-detected from the
-        # cwd). Help tokens short-circuit to the deprecated alias help.
-        "quickstart")
-            if _manifest_cli_has_help_token "$@"; then
-                _render_help \
-                    "manifest quickstart [fleet] [options]  (deprecated → manifest first)" \
-                    "Deprecated alias for 'manifest first'. Use 'manifest first' for guided onboarding." \
-                    "Options" "  --dry-run        Explicit preview; no writes (default)
-  -y, --yes        Apply the proposed setup (audited)
-  --depth N|auto   Fleet discovery depth (default: auto)
-  --name NAME      Fleet name (fleet onboarding)
-  -f, --force      Overwrite existing generated files"
-                return 0
-            fi
-            log_deprecated "manifest quickstart" "manifest first"
-            # Strip a single leading `fleet` token (legacy scope; first
-            # auto-detects fleet vs repo from the current directory).
-            [[ "${1:-}" == "fleet" ]] && shift
             manifest_first "$@"
             ;;
 

@@ -316,17 +316,18 @@ teardown() {
 }
 
 # -----------------------------------------------------------------------------
-# Quickstart hard-error: --create-repo-* is silently ignored on the
-# auto-discovery branch, which only writes the TSV (no per-row bootstrap).
+# Auto-discovery hard-error: --create-repo-* is silently ignored on the
+# auto-discovery branch (--_autodiscover), which only writes the TSV (no
+# per-row bootstrap). This is the path `manifest first` (fleet) uses.
 # -----------------------------------------------------------------------------
 
-@test "fleet_quickstart --create-repo-private: hard-errors instead of silently no-opping" {
+@test "_fleet_init --_autodiscover --create-repo-private: hard-errors instead of silently no-opping" {
     source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet.sh"
     cd "$SCRATCH"
 
-    run fleet_quickstart --create-repo-private
+    run _fleet_init --_autodiscover --create-repo-private
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "not supported with quickstart"
+    echo "$output" | grep -q "not supported with auto-discovery"
     echo "$output" | grep -q "manifest init fleet --create-repo-private"
 }
 

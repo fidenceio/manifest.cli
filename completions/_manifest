@@ -18,7 +18,6 @@ _manifest() {
         'first:Guided onboarding — inspect this directory and set up Manifest'
         'config:Setup wizard / show configuration'
         'init:Scaffold a repo or fleet'
-        'quickstart:(deprecated → first) Guided onboarding alias'
         'plan:Generate an adoption plan'
         'reconcile:Validate and apply an adoption plan'
         'status:Read-only snapshot'
@@ -61,7 +60,7 @@ _manifest() {
             ;;
         subcommand)
             case $words[2] in
-                first|init|quickstart|plan|reconcile|discover|update|add|validate|prep|refresh|docs|ship)
+                first|init|plan|reconcile|discover|update|add|validate|prep|refresh|docs|ship)
                     _values 'scope' "${scopes[@]}"
                     ;;
                 topics)

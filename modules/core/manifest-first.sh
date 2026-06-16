@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # =============================================================================
-# manifest first — guided onboarding front door (supersedes `quickstart`)
+# manifest first — guided onboarding front door
 # =============================================================================
 #
 # One command to answer "I just installed Manifest — now what?". It runs a
@@ -15,7 +15,7 @@
 # and the preview path simply renders and never calls a writer.
 #
 # Apply delegates the heavy lifting to the existing initializers
-# (manifest_init_repo for a single repo, _fleet_init --_quickstart for a
+# (manifest_init_repo for a single repo, _fleet_init --_autodiscover for a
 # fleet) rather than re-implementing their writes. Those initializers carry no
 # apply-event audit of their own, so first records one cli audit event at its
 # own apply boundary.
@@ -249,7 +249,7 @@ manifest_first() {
                 ;;
             fleet-candidate|fleet-pending)
                 manifest_execution_apply_header
-                local _fl_args=(--_quickstart)
+                local _fl_args=(--_autodiscover)
                 [[ -n "$fleet_name" ]] && _fl_args+=(--name "$fleet_name")
                 [[ "$force" == "true" ]] && _fl_args+=(--force)
                 _fleet_init "${_fl_args[@]}" || rc=$?
