@@ -358,3 +358,55 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
     # Absent file backfilled.
     [ -f "$SCRATCH/ws/alpha/CHANGELOG.md" ]
 }
+
+@test "first (cli): re-running init fleet -y on an initialized fleet preserves config and backfills a member (no bail)" {
+    # The §9.5 follow-up, end-to-end: a SECOND `init fleet -y` on an
+    # already-initialized fleet must not bail at the "already initialized"
+    # guard — it preserves the curated config verbatim and backfills any
+    # selected member still missing its Manifest files (no-clobber).
+    mkdir -p "$SCRATCH/ws"
+    mkrepo "$SCRATCH/ws/alpha"
+    mkrepo "$SCRATCH/ws/beta"
+    cd "$SCRATCH/ws"
+
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" first -y
+    [ "$status" -eq 0 ]
+
+    # First apply: select alpha only (deselecting beta also defeats the
+    # stale-TSV guard). beta stays a bare git repo.
+    awk 'BEGIN{FS=OFS="\t"} $2=="beta"{$1="false"} {print}' \
+        "$SCRATCH/ws/manifest.fleet.tsv" > "$SCRATCH/ws/manifest.fleet.tsv.new"
+    mv "$SCRATCH/ws/manifest.fleet.tsv.new" "$SCRATCH/ws/manifest.fleet.tsv"
+
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" init fleet -y
+    [ "$status" -eq 0 ]
+    [ -f "$SCRATCH/ws/manifest.fleet.config.yaml" ]
+    [ -f "$SCRATCH/ws/alpha/VERSION" ]
+    [ ! -f "$SCRATCH/ws/beta/VERSION" ]
+    local config_before
+    config_before="$(cat "$SCRATCH/ws/manifest.fleet.config.yaml")"
+
+    # Review again: now also select beta, then re-run the SAME verb.
+    awk 'BEGIN{FS=OFS="\t"} $2=="beta"{$1="true"} {print}' \
+        "$SCRATCH/ws/manifest.fleet.tsv" > "$SCRATCH/ws/manifest.fleet.tsv.new"
+    mv "$SCRATCH/ws/manifest.fleet.tsv.new" "$SCRATCH/ws/manifest.fleet.tsv"
+
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" init fleet -y
+    [ "$status" -eq 0 ]
+    # Did NOT take the old "already initialized" bail path.
+    [[ "$output" != *"To reinitialize from scratch"* ]]
+    [[ "$output" == *"Preserved:"*"manifest.fleet.config.yaml"* ]]
+
+    # Curated config preserved byte-for-byte (no --force → no regeneration).
+    [ "$(cat "$SCRATCH/ws/manifest.fleet.config.yaml")" = "$config_before" ]
+
+    # The newly selected member is backfilled with the full required set.
+    [ -f "$SCRATCH/ws/beta/VERSION" ]
+    [ -f "$SCRATCH/ws/beta/README.md" ]
+    [ -f "$SCRATCH/ws/beta/CHANGELOG.md" ]
+    [ -d "$SCRATCH/ws/beta/docs" ]
+
+    # Backfill writes but never commits.
+    run git -C "$SCRATCH/ws/beta" status --porcelain
+    echo "$output" | grep -q "VERSION"
+}
