@@ -1047,17 +1047,35 @@ EOF
             fi
         fi
 
-        # Refresh TSV with updated metadata (directories now have git)
+        # Refresh the TSV's git metadata for any directories the loop just
+        # git-init'd — but ONLY on a first-time apply. On a re-run/backfill
+        # (config preexisting) the TSV is a curated membership list, so we
+        # preserve it byte-for-byte exactly like the config: a merge rescan
+        # would drop any curated row the (shallower, adaptive) scan doesn't
+        # re-find. Users who want to re-scan run `manifest update fleet`.
         echo ""
-        echo "Refreshing manifest.fleet.tsv..."
-        local all_dirs _refresh_depth
-        # Match Phase 1's adaptive depth so the refresh sees the same dirs (§7.3).
-        _refresh_depth="$(manifest_fleet_resolve_depth auto "$target_dir")" || _refresh_depth=5
-        all_dirs=$(discover_all_directories "$target_dir" "$_refresh_depth")
-        if [[ -n "$all_dirs" ]]; then
-            merge_start_tsv "$all_dirs" "$start_file" "$target_dir" "$_refresh_depth" > "${start_file}.tmp" 2>/dev/null
-            mv "${start_file}.tmp" "$start_file"
-            echo "✓ Updated: $start_file"
+        if [[ "$config_preexisting" == "true" ]]; then
+            echo "Preserving manifest.fleet.tsv (curated membership — run 'manifest update fleet' to rescan)..."
+            echo "✓ Preserved: $start_file"
+        else
+            echo "Refreshing manifest.fleet.tsv..."
+            local all_dirs _refresh_depth
+            # Rescan at the depth that PRODUCED this TSV (its recorded "# Depth:"
+            # header), not a fresh `auto` resolve — otherwise a TSV written at an
+            # explicit deeper --depth would be rewritten at the shallower adaptive
+            # depth, dropping its deeper rows (§7.3). Fall back to auto if absent.
+            _refresh_depth="$(_fleet_tsv_header_depth "$start_file")"
+            if [[ -n "$_refresh_depth" ]]; then
+                _refresh_depth="$(manifest_fleet_resolve_depth "$_refresh_depth" "$target_dir")" || _refresh_depth=5
+            else
+                _refresh_depth="$(manifest_fleet_resolve_depth auto "$target_dir")" || _refresh_depth=5
+            fi
+            all_dirs=$(discover_all_directories "$target_dir" "$_refresh_depth")
+            if [[ -n "$all_dirs" ]]; then
+                merge_start_tsv "$all_dirs" "$start_file" "$target_dir" "$_refresh_depth" > "${start_file}.tmp" 2>/dev/null
+                mv "${start_file}.tmp" "$start_file"
+                echo "✓ Updated: $start_file"
+            fi
         fi
 
         local service_count=0

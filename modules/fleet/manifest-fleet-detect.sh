@@ -1198,6 +1198,33 @@ parse_start_tsv() {
 }
 
 # -----------------------------------------------------------------------------
+# Function: _fleet_tsv_header_depth
+# -----------------------------------------------------------------------------
+# Reads the recorded scan depth from a TSV's "# Depth: N" header line.
+# Echoes the integer when present and well-formed; echoes nothing otherwise so
+# the caller can fall back to `auto`. A Phase-2 refresh uses this to rescan at
+# the depth that PRODUCED the TSV rather than re-resolving `auto` — re-resolving
+# would shrink a TSV written at an explicit deeper --depth down to the shallowest
+# adaptive level, silently dropping its deeper rows (§7.3).
+# -----------------------------------------------------------------------------
+_fleet_tsv_header_depth() {
+    local tsv="$1"
+    [[ -f "$tsv" ]] || return 0
+    local line depth
+    while IFS= read -r line; do
+        case "$line" in
+            "# Depth: "*)
+                depth="${line#\# Depth: }"
+                depth="${depth//[[:space:]]/}"
+                [[ "$depth" =~ ^[0-9]+$ ]] && echo "$depth"
+                return 0 ;;
+            "#"*) ;;          # other header/comment line — keep scanning
+            *) return 0 ;;    # reached data rows; no depth header found
+        esac
+    done < "$tsv"
+}
+
+# -----------------------------------------------------------------------------
 # Function: merge_start_tsv
 # -----------------------------------------------------------------------------
 # Merges fresh scan results into an existing manifest.fleet.tsv,

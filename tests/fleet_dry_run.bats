@@ -111,6 +111,9 @@ TSV
     # Curated config is preserved, not overwritten, and the preview says so.
     [[ "$output" == *"Would preserve:"*"manifest.fleet.config.yaml"* ]]
     [[ "$output" != *"Would overwrite:"* ]]
+    # The curated TSV is preserved too (backfill mode never rescans it).
+    [[ "$output" == *"Would preserve:"*"manifest.fleet.tsv"* ]]
+    [[ "$output" != *"Would refresh:"*"manifest.fleet.tsv"* ]]
     # Preview names the real apply work: no-clobber member scaffolding.
     [[ "$output" == *"Would scaffold:"*"VERSION/README/CHANGELOG"* ]]
     # Read-only: nothing changes on disk.
@@ -128,6 +131,8 @@ TSV
     [ "$status" -eq 0 ]
     [[ "$output" == *"Would overwrite:"*"manifest.fleet.config.yaml"* ]]
     [[ "$output" != *"Would preserve:"* ]]
+    # --force regenerates, so the TSV refresh path is shown (not preserve).
+    [[ "$output" == *"Would refresh:"*"manifest.fleet.tsv"* ]]
 }
 
 @test "add fleet --dry-run previews YAML and leaves config unchanged" {
