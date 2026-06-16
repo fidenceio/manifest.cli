@@ -81,7 +81,7 @@ setup() {
     run fleet_main help
     [ "$status" -eq 0 ]
     [[ "$output" == *"action-first commands"* ]]
-    [[ "$output" == *"manifest quickstart fleet"* ]]
+    [[ "$output" != *"quickstart"* ]]
     [[ "$output" == *"manifest status"* ]]
     [[ "$output" == *"manifest update fleet"* ]]
     [[ "$output" == *"manifest docs fleet"* ]]
@@ -93,15 +93,15 @@ setup() {
 }
 
 # -----------------------------------------------------------------------------
-# Quickstart still calls _fleet_init internally (renamed callsite).
-# We don't fully exercise quickstart here — just confirm the function body
-# references the new private name, not the old public one.
+# `manifest first` (fleet) drives auto-discovery via `_fleet_init --_autodiscover`
+# — the private flag that replaced the retired `--_quickstart`. Confirm _fleet_init
+# still recognizes the new name (and no longer the old one), so first's fleet
+# engine keeps working after the quickstart removal.
 # -----------------------------------------------------------------------------
 
-@test "fleet_quickstart: body invokes _fleet_init (not legacy fleet_init)" {
+@test "_fleet_init: parses the --_autodiscover private flag (first's fleet engine)" {
     local body
-    body="$(declare -f fleet_quickstart)"
-    [[ "$body" == *"_fleet_init"* ]]
-    # No bare-word 'fleet_init' that isn't preceded by an underscore.
-    ! grep -Eq '(^|[^_])fleet_init\b' <<< "$body"
+    body="$(declare -f _fleet_init)"
+    [[ "$body" == *"--_autodiscover"* ]]
+    [[ "$body" != *"--_quickstart"* ]]
 }

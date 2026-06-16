@@ -24,7 +24,6 @@ mutating_help_surfaces() {
 first --help
 init repo --help
 init fleet --help
-quickstart fleet --help
 prep repo --help
 prep fleet --help
 refresh repo --help

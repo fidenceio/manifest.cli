@@ -43,7 +43,6 @@ complete -c manifest -f
 complete -c manifest -n '__manifest_token_count 1' -a first       -d 'Guided onboarding — inspect this directory and set up Manifest'
 complete -c manifest -n '__manifest_token_count 1' -a config      -d 'Setup wizard / show configuration'
 complete -c manifest -n '__manifest_token_count 1' -a init        -d 'Scaffold a repo or fleet'
-complete -c manifest -n '__manifest_token_count 1' -a quickstart  -d '(deprecated → first) Guided onboarding alias'
 complete -c manifest -n '__manifest_token_count 1' -a plan        -d 'Generate an adoption plan'
 complete -c manifest -n '__manifest_token_count 1' -a reconcile   -d 'Validate and apply an adoption plan'
 complete -c manifest -n '__manifest_token_count 1' -a status      -d 'Read-only snapshot'
@@ -68,7 +67,7 @@ complete -c manifest -n '__manifest_token_count 1' -a help        -d 'Show help'
 # --- subcommands (token 2) ---------------------------------------------------
 
 # Commands that take a repo|fleet scope.
-set -l __manifest_scoped 'first init quickstart plan reconcile discover update add validate prep refresh docs ship'
+set -l __manifest_scoped 'first init plan reconcile discover update add validate prep refresh docs ship'
 for cmd in (string split ' ' $__manifest_scoped)
     complete -c manifest -n "__manifest_token_count 2; and __manifest_path $cmd" -a repo  -d 'Single-repo scope'
     complete -c manifest -n "__manifest_token_count 2; and __manifest_path $cmd" -a fleet -d 'Fleet scope'

@@ -39,8 +39,6 @@ manifest first -f|--force
 
 The guided onboarding front door. By default it runs a read-only inspection of the current directory and previews an opinionated setup — a single repo, a fleet candidate, or an already-configured repo/fleet — writing nothing. With `-y` it applies the proposed setup through the audited apply gate (one apply-event record per run); for a single repo the apply is confirmed with no extra env var when the target is unambiguous (a named branch — an origin remote is not required during onboarding).
 
-`quickstart` is a deprecated alias for `manifest first` and forwards all arguments. Prefer `manifest first`.
-
 ### `manifest config`
 
 ```bash

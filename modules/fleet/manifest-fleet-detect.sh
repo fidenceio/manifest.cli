@@ -181,7 +181,7 @@ readonly MANIFEST_CLI_FLEET_DEFAULT_INCLUDE_SUBMODULES="true"
 # -----------------------------------------------------------------------------
 # Depth resolution (§7.3): one flag, one meaning, one cap.
 # -----------------------------------------------------------------------------
-# init / update / quickstart / detect / plan and fleet.mode: auto all resolve
+# init / update / detect / plan and fleet.mode: auto all resolve
 # --depth through here, so "scan depth" means the same thing everywhere: a
 # guardrail on how deep DOWNWARD discovery walks, clamped to a single ceiling.
 #

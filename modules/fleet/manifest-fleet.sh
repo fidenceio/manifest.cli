@@ -44,7 +44,6 @@
 #   manifest update fleet    - Re-scan and add new repos (--dry-run to preview)
 #   manifest discover fleet  - Alias for 'update fleet --dry-run'
 #   manifest add fleet       - Add a service to fleet
-#   manifest quickstart fleet - Auto-discover git repos (skips TSV selection)
 #   manifest prep fleet      - Coordinated version bump (no commit/push)
 #   manifest docs fleet      - Generate unified documentation
 #   manifest validate fleet  - Validate configuration
@@ -435,119 +434,6 @@ _fleet_status_json() {
 }
 
 # =============================================================================
-# COMMAND: fleet quickstart
-# =============================================================================
-
-# -----------------------------------------------------------------------------
-# Function: fleet_quickstart
-# -----------------------------------------------------------------------------
-# Shortcut that skips the selection file and auto-discovers existing git repos.
-# Equivalent to: manifest init fleet with the quickstart path.
-# -----------------------------------------------------------------------------
-fleet_quickstart() {
-    local original_args=("$@")
-    local dry_run=true
-    local fleet_name=""
-    local force=false
-    local create_repo_visibility=""
-    local execution_mode="preview"
-    local _local_only=false
-    local remaining_args=()
-
-    if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
-        return 1
-    fi
-    [[ "$execution_mode" == "apply" ]] && dry_run=false
-    original_args=("${remaining_args[@]}")
-    set -- "${remaining_args[@]}"
-
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            -n|--name)
-                if [[ -z "${2:-}" ]] || [[ "${2:-}" == --* ]]; then
-                    log_error "--name requires a value"
-                    return 1
-                fi
-                fleet_name="$2"; shift 2 ;;
-            -f|--force) force=true; shift ;;
-            --create-repo-private)
-                create_repo_visibility=$(_manifest_parse_create_repo_flag "$create_repo_visibility" "private") || return 1
-                shift ;;
-            --create-repo-public)
-                create_repo_visibility=$(_manifest_parse_create_repo_flag "$create_repo_visibility" "public") || return 1
-                shift ;;
-            *) shift ;;
-        esac
-    done
-
-    if [[ "${original_args[0]:-}" == "help" || "${original_args[0]:-}" == "-h" || "${original_args[0]:-}" == "--help" ]]; then
-        _render_help \
-            "manifest quickstart fleet [-y|--yes] [--dry-run] [--name NAME] [--force]" \
-            "Initialize a fleet by auto-discovering existing git repositories."
-        return 0
-    fi
-
-    if [[ "$dry_run" == "true" ]]; then
-        if [[ -n "$create_repo_visibility" ]]; then
-            log_error "--create-repo-$create_repo_visibility is not supported with quickstart."
-            log_error "Quickstart discovers existing repos; --create-repo-* is for fresh dirs."
-            log_error "Use 'manifest init fleet --create-repo-$create_repo_visibility --dry-run' instead."
-            return 1
-        fi
-
-        local target_dir="$(pwd)"
-        local config_file="$target_dir/manifest.fleet.config.yaml"
-        local start_file="$target_dir/manifest.fleet.tsv"
-        local local_config="$target_dir/manifest.config.local.yaml"
-        local discovered _qs_depth
-        # Adaptive scan depth (§7.3); fall back to the legacy fixed 5 if unresolved.
-        _qs_depth="$(manifest_fleet_resolve_depth auto "$target_dir")" || _qs_depth=5
-        discovered=$(discover_all_directories "$target_dir" "$_qs_depth")
-
-        local total=0 git_count=0
-        while IFS=$'\t' read -r name _path _type _branch _version _url _submodule has_git _has_remote; do
-            [[ -z "$name" ]] && continue
-            ((total += 1))
-            [[ "$has_git" == "true" ]] && ((git_count += 1))
-        done <<< "$discovered"
-
-        if [[ -z "$fleet_name" ]]; then
-            fleet_name=$(basename "$target_dir" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
-        fi
-
-        echo ""
-        echo "Dry run - manifest quickstart fleet: $target_dir"
-        echo ""
-        if [[ -f "$config_file" && "$force" == "true" ]]; then
-            echo "Would overwrite: $config_file"
-        elif [[ -f "$config_file" ]]; then
-            echo "Exists:          $config_file"
-        else
-            echo "Would create:    $config_file"
-        fi
-        if [[ -f "$local_config" ]]; then
-            echo "Exists:          $local_config"
-        else
-            echo "Would create:    $local_config"
-        fi
-        if [[ -f "$start_file" ]]; then
-            echo "Would update:    $start_file"
-        else
-            echo "Would create:    $start_file"
-        fi
-        echo "Fleet name:      $fleet_name"
-        echo "Would scan:      $total directories"
-        echo "Would list:      $git_count existing git repos in manifest.fleet.tsv"
-        echo ""
-        manifest_execution_footer "manifest quickstart fleet -y"
-        return 0
-    fi
-
-    manifest_execution_apply_header
-    _fleet_init --_quickstart "${original_args[@]}"
-}
-
-# =============================================================================
 # INTERNAL: fleet start (Phase 1 of init fleet)
 # =============================================================================
 
@@ -856,7 +742,7 @@ create_fleet_gitignore() {
 #
 # If manifest.fleet.tsv exists (from Phase 1 / _fleet_start), reads the user's
 # selections and initializes those directories. Otherwise, falls back to
-# auto-discovery via fleet_update (--_quickstart forces this path).
+# auto-discovery via fleet_update (--_autodiscover forces this path).
 #
 # BEHAVIOR (with start file):
 #   1. Reads selected directories from manifest.fleet.tsv
@@ -865,7 +751,7 @@ create_fleet_gitignore() {
 #   4. Creates manifest.config.local.yaml
 #   5. Validates the configuration
 #
-# BEHAVIOR (without start file / --_quickstart):
+# BEHAVIOR (without start file / --_autodiscover):
 #   1. Creates skeleton manifest.fleet.config.yaml
 #   2. Calls fleet_update --_from-init to auto-discover git repos
 #   3. Validates the configuration
@@ -874,7 +760,7 @@ create_fleet_gitignore() {
 #   --name, -n NAME              Fleet name (prompted if not provided)
 #   --template, -t               Use minimal template (no comments)
 #   --force, -f                  Overwrite existing manifest.fleet.config.yaml
-#   --_quickstart                Skip start file, use auto-discovery (used by fleet_quickstart)
+#   --_autodiscover              Skip start file, use auto-discovery (used by manifest first)
 #   --create-repo-private        After init, gh-create a private GitHub repo per dir
 #   --create-repo-public         After init, gh-create a public  GitHub repo per dir
 #
@@ -902,7 +788,7 @@ _fleet_init() {
                 fleet_name="$2"; shift 2 ;;
             -t|--template) minimal_template=true; shift ;;
             -f|--force) force=true; shift ;;
-            --_quickstart) skip_start=true; shift ;;
+            --_autodiscover) skip_start=true; shift ;;
             --create-repo-private)
                 create_repo_visibility=$(_manifest_parse_create_repo_flag "$create_repo_visibility" "private") || return 1
                 shift ;;
@@ -913,13 +799,13 @@ _fleet_init() {
         esac
     done
 
-    # Quickstart discovers existing git repos and writes the TSV; it does
-    # not loop through _fleet_init_directory, so --create-repo-* would
+    # Auto-discovery mode discovers existing git repos and writes the TSV; it
+    # does not loop through _fleet_init_directory, so --create-repo-* would
     # silently no-op. Hard-error instead of paying the gh pre-flight then
     # ignoring the flag.
     if [[ "$skip_start" == "true" && -n "$create_repo_visibility" ]]; then
-        log_error "--create-repo-$create_repo_visibility is not supported with quickstart."
-        log_error "Quickstart discovers existing repos; --create-repo-* is for fresh dirs."
+        log_error "--create-repo-$create_repo_visibility is not supported with auto-discovery."
+        log_error "Auto-discovery registers existing repos; --create-repo-* is for fresh dirs."
         log_error "Use 'manifest init fleet --create-repo-$create_repo_visibility' instead."
         return 1
     fi
@@ -954,8 +840,8 @@ _fleet_init() {
     elif [[ "$skip_start" != "true" ]] && [[ ! -f "$start_file" ]]; then
         log_warning "No selection file found."
         echo ""
-        echo "  Recommended:  manifest init fleet           (scan and select directories)"
-        echo "  Quick start:  manifest quickstart fleet     (auto-discover git repos)"
+        echo "  Recommended:   manifest init fleet   (scan and select directories)"
+        echo "  Auto-discover: manifest first        (register existing git repos)"
         return 1
     fi
 
@@ -1160,7 +1046,7 @@ EOF
         echo ""
         echo "✓ Fleet inventory: $service_count service(s) in manifest.fleet.tsv"
     else
-        # --- Auto-discovery path (quickstart): scan, populate TSV, bootstrap ---
+        # --- Auto-discovery path: scan, populate TSV, register existing git repos ---
         echo ""
         echo "Auto-discovering repositories..."
         local all_dirs _auto_depth
@@ -3726,7 +3612,7 @@ fleet_main() {
         help|--help|-h)
             fleet_help
             ;;
-        add|discover|docs|init|prep|pr|quickstart|ship|start|status|sync|update|validate)
+        add|discover|docs|init|prep|pr|ship|start|status|sync|update|validate)
             local replacement
             case "$subcommand" in
                 add)        replacement="manifest add fleet" ;;
@@ -3735,7 +3621,6 @@ fleet_main() {
                 init|start) replacement="manifest init fleet" ;;
                 prep|sync)  replacement="manifest prep fleet" ;;
                 pr)         replacement="manifest pr fleet" ;;
-                quickstart) replacement="manifest quickstart fleet" ;;
                 ship)       replacement="manifest ship fleet" ;;
                 status)     replacement="manifest status" ;;
                 update)     replacement="manifest update fleet" ;;
@@ -3774,7 +3659,6 @@ Use action-first commands:
   manifest plan fleet           Generate an adoption plan (dry-run by default)
   manifest reconcile fleet      Apply a validated adoption plan (--apply/--do)
   manifest prep fleet           Clone/pull
-  manifest quickstart fleet     Auto-discover git repos, skip TSV selection
   manifest discover fleet       Preview fleet membership discovery
   manifest update fleet         Re-scan and add new repos
   manifest refresh fleet        Re-scan + regenerate docs
@@ -3796,15 +3680,6 @@ COMMAND DETAILS:
       --name, -n NAME    Fleet name
       --force, -f        Overwrite generated files
       --dry-run          Preview files and discovery without writing
-
-  manifest quickstart fleet [options]
-    Quick fleet setup — auto-discovers existing git repos, skips selection.
-    Equivalent to: manifest init fleet (without the TSV selection step).
-    Options:
-      -y, --yes         Apply the quickstart plan
-      --dry-run          Preview files and discovery without writing
-      --name, -n NAME    Fleet name
-      --force, -f        Overwrite existing manifest.fleet.config.yaml
 
   manifest plan fleet [options]
     Generate manifest.fleet.plan.yaml for fleet adoption.
@@ -3916,9 +3791,6 @@ EXAMPLES:
   manifest init fleet                   # choose repo depths, write manifest.fleet.tsv
   # ... review manifest.fleet.tsv ...
   manifest init fleet                   # apply selections (Phase 2)
-
-  # Quick setup (auto-discover git repos, no selection step)
-  manifest quickstart fleet --dry-run
 
   # Add newly discovered repos to an existing fleet
   manifest refresh fleet                # also regenerates docs
