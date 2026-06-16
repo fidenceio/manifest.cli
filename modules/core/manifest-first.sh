@@ -14,11 +14,13 @@
 # MANIFEST_CLI_CONFIG_SKIP_WRITES=1 (no incidental migration/marker writes),
 # and the preview path simply renders and never calls a writer.
 #
-# Apply delegates the heavy lifting to the existing initializers
-# (manifest_init_repo for a single repo, _fleet_init --_autodiscover for a
-# fleet) rather than re-implementing their writes. Those initializers carry no
-# apply-event audit of their own, so first records one cli audit event at its
-# own apply boundary.
+# Apply delegates the heavy lifting to the existing initializers rather than
+# re-implementing their writes: manifest_init_repo for a single repo (one-shot,
+# fully scaffolded), and manifest_init_fleet for a fleet. A fleet candidate runs
+# only Phase 1 (write the reviewable manifest.fleet.tsv, then stop) — the curated
+# apply (config + member scaffolding) belongs to `manifest init fleet -y` after
+# the user reviews membership. Those initializers carry no apply-event audit of
+# their own, so first records one cli audit event at its own apply boundary.
 # =============================================================================
 
 if [[ -n "${_MANIFEST_CLI_FIRST_LOADED:-}" ]]; then
@@ -161,8 +163,11 @@ manifest_first() {
   --depth N|auto   Fleet discovery depth (default: auto)
   --name NAME      Fleet name (fleet onboarding)
   -f, --force      Overwrite existing generated files" \
-                    "Examples" "  manifest first
-  manifest first -y"
+                    "Examples" "  manifest first                     # inspect + preview
+  manifest first -y                  # single repo → fully initialized
+  manifest first -y                  # fleet → writes manifest.fleet.tsv, then stops
+  vim manifest.fleet.tsv             # fleet → review membership (SELECT column)
+  manifest init fleet -y             # fleet → apply: config + scaffold members"
                 return 0
                 ;;
             --depth)
@@ -247,13 +252,28 @@ manifest_first() {
                 fi
                 applied=true
                 ;;
-            fleet-candidate|fleet-pending)
-                manifest_execution_apply_header
-                local _fl_args=(--_autodiscover)
+            fleet-candidate)
+                # Phase 1 only: delegate to the canonical fleet-init engine to
+                # write the reviewable membership list (manifest.fleet.tsv), then
+                # stop. With no TSV present, manifest_init_fleet -y runs Phase 1
+                # and returns (it prints its own "review … then run
+                # 'manifest init fleet -y'" footer). `first` never runs Phase 2
+                # itself — the curated apply belongs to `manifest init fleet`.
+                # ( cd "$root" … ) because the engine resolves its target via $(pwd).
+                local _fl_args=(-y)
+                [[ "$depth_spec" != "auto" ]] && _fl_args+=(--depth "$depth_spec")
                 [[ -n "$fleet_name" ]] && _fl_args+=(--name "$fleet_name")
                 [[ "$force" == "true" ]] && _fl_args+=(--force)
-                _fleet_init "${_fl_args[@]}" || rc=$?
+                ( cd "$root" && manifest_init_fleet "${_fl_args[@]}" ) || rc=$?
                 applied=true
+                ;;
+            fleet-pending)
+                # TSV already exists (Phase 1 ran, or the user re-ran `first`).
+                # `first` does not run Phase 2 — hand off to the curated apply so
+                # membership is reviewed first. Pure report: nothing applied.
+                echo ""
+                echo "Membership list manifest.fleet.tsv is ready for review."
+                echo "Edit the SELECT column as needed, then run:  manifest init fleet -y"
                 ;;
             repo-initialized|fleet)
                 echo ""
@@ -291,13 +311,21 @@ manifest_first() {
             echo "  would create:    VERSION, README.md, CHANGELOG.md, docs/, .gitignore"
             echo "  would create:    manifest.config.local.yaml"
             ;;
-        fleet-candidate|fleet-pending)
-            echo "Initialize a fleet across $repo_count discovered repo(s):"
-            echo "  would create:    manifest.fleet.config.yaml"
-            echo "  would create:    manifest.fleet.tsv"
-            echo "  would create:    manifest.config.local.yaml"
+        fleet-candidate)
+            echo "Set up a fleet across $repo_count discovered repo(s) — two steps:"
+            echo "  Step 1  'manifest first -y'"
+            echo "          writes manifest.fleet.tsv — an editable membership list"
+            echo "          (one row per repo; the SELECT column controls membership)"
+            echo "  Step 2  edit SELECT, then 'manifest init fleet -y'"
+            echo "          writes config + scaffolds each selected member"
+            echo "          (VERSION, README.md, CHANGELOG.md, docs/)"
             manifest_plan_render_field "Fleet name" "$fleet_name"
             [[ -n "$resolved_depth" ]] && manifest_plan_render_field "Scan depth" "$resolved_depth"
+            ;;
+        fleet-pending)
+            echo "Membership list manifest.fleet.tsv already exists — review, then apply:"
+            echo "  edit the SELECT column to choose members, then run:"
+            echo "    manifest init fleet -y   (writes config + scaffolds each member)"
             ;;
         repo-initialized)
             echo "This repository is already initialized — nothing structural to create."
@@ -313,7 +341,9 @@ manifest_first() {
             ;;
     esac
 
-    if [[ "$context" != "empty" ]]; then
+    # fleet-pending's next command is `manifest init fleet -y` (named in its
+    # body above), not `manifest first -y`, so skip the standard replay footer.
+    if [[ "$context" != "empty" && "$context" != "fleet-pending" ]]; then
         local replay="manifest first -y"
         [[ -n "$fleet_name" ]] && replay+=" --name \"$fleet_name\""
         manifest_execution_footer "$replay"
