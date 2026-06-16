@@ -62,19 +62,48 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
     echo "$output" | grep -q "already initialized"
 }
 
-@test "first: fleet candidate previews fleet plan with discovered repo count" {
+@test "first: fleet candidate previews the two-step plan and writes nothing" {
     mkdir -p "$SCRATCH/ws"
     mkrepo "$SCRATCH/ws/alpha"
     mkrepo "$SCRATCH/ws/beta"
     PROJECT_ROOT="$SCRATCH/ws" run manifest_first
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "fleet candidate"
-    echo "$output" | grep -q "Initialize a fleet across 2 discovered repo"
+    echo "$output" | grep -q "Set up a fleet across 2 discovered repo"
+    # The two-step loop must be self-explanatory in the preview.
+    echo "$output" | grep -q "Step 1"
+    echo "$output" | grep -q "manifest.fleet.tsv"
+    echo "$output" | grep -q "Step 2"
+    echo "$output" | grep -q "manifest init fleet -y"
     echo "$output" | grep -q "Fleet name:"
     echo "$output" | grep -q "Scan depth:"
     echo "$output" | grep -q "Re-run with -y"
     [ ! -f "$SCRATCH/ws/manifest.fleet.config.yaml" ]
     [ ! -f "$SCRATCH/ws/manifest.fleet.tsv" ]
+}
+
+@test "first: fleet-pending reports the handoff to init fleet and writes no config" {
+    # A TSV already exists (Phase 1 ran, or the user re-runs first). `first`
+    # does not run Phase 2 itself — it points at the curated apply.
+    mkdir -p "$SCRATCH/ws"
+    mkrepo "$SCRATCH/ws/alpha"
+    {
+        printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
+        printf "true\talpha\t./alpha\trepo\ttrue\t\t\t0.0.0\n"
+    } > "$SCRATCH/ws/manifest.fleet.tsv"
+
+    # Preview names the next command.
+    PROJECT_ROOT="$SCRATCH/ws" run manifest_first
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "manifest init fleet -y"
+
+    # Apply does NOT proceed to Phase 2 — no config, no member scaffolding.
+    PROJECT_ROOT="$SCRATCH/ws" run manifest_first -y
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "ready for review"
+    echo "$output" | grep -q "manifest init fleet -y"
+    [ ! -f "$SCRATCH/ws/manifest.fleet.config.yaml" ]
+    [ ! -f "$SCRATCH/ws/alpha/VERSION" ]
 }
 
 # --- flags: help, policy -----------------------------------------------------
@@ -225,8 +254,9 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
     run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" first
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "fleet candidate"
-    echo "$output" | grep -q "Initialize a fleet across 2 discovered repo"
+    echo "$output" | grep -q "Set up a fleet across 2 discovered repo"
     echo "$output" | grep -q "manifest first -y"
+    echo "$output" | grep -q "manifest init fleet -y"
     # Read-only: nothing written, no state dir created during inspection.
     [ ! -f "$SCRATCH/ws/manifest.fleet.tsv" ]
     [ ! -d "$HOME/.manifest-cli" ]
@@ -243,7 +273,10 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
     echo "$output" | grep -q "Unknown command: quickstart"
 }
 
-@test "first (cli): -y applies a fleet, audited" {
+@test "first (cli): -y on a fleet candidate runs Phase 1 only — writes TSV, stops, audited" {
+    # Aligned behavior: `first -y` on a fleet writes the reviewable membership
+    # list and STOPS (no config, no member scaffolding). The curated apply is a
+    # separate verb, `manifest init fleet -y`.
     mkdir -p "$SCRATCH/ws"
     mkrepo "$SCRATCH/ws/alpha"
     mkrepo "$SCRATCH/ws/beta"
@@ -251,5 +284,77 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
     run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" first -y
     [ "$status" -eq 0 ]
     [ -f "$SCRATCH/ws/manifest.fleet.tsv" ]
-    [ -f "$HOME/.manifest-cli/audit/apply-events.ndjson" ]
+    # Phase 1 stopped: no config and no member files yet.
+    [ ! -f "$SCRATCH/ws/manifest.fleet.config.yaml" ]
+    [ ! -f "$SCRATCH/ws/alpha/VERSION" ]
+    [ ! -f "$SCRATCH/ws/beta/VERSION" ]
+    # Exactly one cli apply-event for the Phase-1 apply.
+    local audit="$HOME/.manifest-cli/audit/apply-events.ndjson"
+    [ -f "$audit" ]
+    [ "$(grep -c '"source":"cli"' "$audit")" -eq 1 ]
+}
+
+@test "first (cli): two-phase fleet — first -y writes TSV, init fleet -y scaffolds selected members" {
+    # The headline §9.5 flow end-to-end under real module loading + set -e:
+    # first -y (Phase 1) → review/edit SELECT → manifest init fleet -y (Phase 2)
+    # leaves every SELECTED member Manifest-trackable (VERSION/README/CHANGELOG/docs).
+    mkdir -p "$SCRATCH/ws"
+    mkrepo "$SCRATCH/ws/alpha"
+    mkrepo "$SCRATCH/ws/beta"
+    cd "$SCRATCH/ws"
+
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" first -y
+    [ "$status" -eq 0 ]
+    [ -f "$SCRATCH/ws/manifest.fleet.tsv" ]
+
+    # Simulate review: deselect beta. This both exercises selective membership
+    # and defeats the stale-TSV guard (SELECT now differs from the default).
+    awk 'BEGIN{FS=OFS="\t"} $2=="beta"{$1="false"} {print}' \
+        "$SCRATCH/ws/manifest.fleet.tsv" > "$SCRATCH/ws/manifest.fleet.tsv.new"
+    mv "$SCRATCH/ws/manifest.fleet.tsv.new" "$SCRATCH/ws/manifest.fleet.tsv"
+
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" init fleet -y
+    [ "$status" -eq 0 ]
+    [ -f "$SCRATCH/ws/manifest.fleet.config.yaml" ]
+
+    # alpha (selected) is now Manifest-trackable.
+    [ -f "$SCRATCH/ws/alpha/VERSION" ]
+    [ -f "$SCRATCH/ws/alpha/README.md" ]
+    [ -f "$SCRATCH/ws/alpha/CHANGELOG.md" ]
+    [ -d "$SCRATCH/ws/alpha/docs" ]
+
+    # No commit: scaffolded files land untracked (parity with init repo).
+    run git -C "$SCRATCH/ws/alpha" status --porcelain
+    echo "$output" | grep -q "VERSION"
+
+    # beta (deselected) was not touched.
+    [ ! -f "$SCRATCH/ws/beta/VERSION" ]
+}
+
+@test "first (cli): init fleet -y preserves existing member files (no-clobber)" {
+    # Pre-seeded member content must survive Phase 2 scaffolding; only absent
+    # files are backfilled.
+    mkdir -p "$SCRATCH/ws"
+    mkrepo "$SCRATCH/ws/alpha"
+    mkrepo "$SCRATCH/ws/beta"
+    printf '2.5.0\n' > "$SCRATCH/ws/alpha/VERSION"
+    printf '# Custom alpha readme\n' > "$SCRATCH/ws/alpha/README.md"
+    cd "$SCRATCH/ws"
+
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" first -y
+    [ "$status" -eq 0 ]
+
+    # Review: deselect beta (also defeats the stale-TSV guard), then apply.
+    awk 'BEGIN{FS=OFS="\t"} $2=="beta"{$1="false"} {print}' \
+        "$SCRATCH/ws/manifest.fleet.tsv" > "$SCRATCH/ws/manifest.fleet.tsv.new"
+    mv "$SCRATCH/ws/manifest.fleet.tsv.new" "$SCRATCH/ws/manifest.fleet.tsv"
+
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" init fleet -y
+    [ "$status" -eq 0 ]
+
+    # Existing files preserved byte-for-byte.
+    [ "$(cat "$SCRATCH/ws/alpha/VERSION")" = "2.5.0" ]
+    grep -q "Custom alpha readme" "$SCRATCH/ws/alpha/README.md"
+    # Absent file backfilled.
+    [ -f "$SCRATCH/ws/alpha/CHANGELOG.md" ]
 }

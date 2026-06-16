@@ -93,15 +93,17 @@ setup() {
 }
 
 # -----------------------------------------------------------------------------
-# `manifest first` (fleet) drives auto-discovery via `_fleet_init --_autodiscover`
-# — the private flag that replaced the retired `--_quickstart`. Confirm _fleet_init
-# still recognizes the new name (and no longer the old one), so first's fleet
-# engine keeps working after the quickstart removal.
+# Auto-discovery retirement. `_fleet_init` once had an auto-discovery branch
+# driven by an internal flag (`--_quickstart`, later `--_autodiscover`) that
+# `manifest first` (fleet) used to write the TSV in one pass. Since the
+# first/fleet alignment, `manifest first` routes through manifest_init_fleet's
+# two-phase rails and the auto-discovery branch + flag were removed. Confirm
+# neither private flag survives in _fleet_init — Phase 2 is start-file only.
 # -----------------------------------------------------------------------------
 
-@test "_fleet_init: parses the --_autodiscover private flag (first's fleet engine)" {
+@test "_fleet_init: auto-discovery flag is fully retired (no --_autodiscover/--_quickstart)" {
     local body
     body="$(declare -f _fleet_init)"
-    [[ "$body" == *"--_autodiscover"* ]]
+    [[ "$body" != *"--_autodiscover"* ]]
     [[ "$body" != *"--_quickstart"* ]]
 }

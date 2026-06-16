@@ -740,27 +740,23 @@ create_fleet_gitignore() {
 #
 # Called from manifest_init_fleet (Phase 2) in modules/core/manifest-init.sh.
 #
-# If manifest.fleet.tsv exists (from Phase 1 / _fleet_start), reads the user's
-# selections and initializes those directories. Otherwise, falls back to
-# auto-discovery via fleet_update (--_autodiscover forces this path).
+# Reads the reviewed selections from manifest.fleet.tsv (written by Phase 1 /
+# _fleet_start, or by `manifest first` on a fleet) and initializes the selected
+# directories. Phase 2 requires the TSV — there is no auto-discovery fallback
+# (that path was retired with the internal `--_autodiscover` flag once
+# `manifest first` moved onto the two-phase rails).
 #
-# BEHAVIOR (with start file):
+# BEHAVIOR:
 #   1. Reads selected directories from manifest.fleet.tsv
-#   2. Bootstraps each directory (git init, .gitignore)
-#   3. Creates skeleton manifest.fleet.config.yaml with selected services
-#   4. Creates manifest.config.local.yaml
+#   2. Bootstraps each directory (git init, .gitignore, optional gh repo)
+#   3. Scaffolds each member with the Manifest-required files (ensure_required_files)
+#   4. Creates skeleton manifest.fleet.config.yaml + manifest.config.local.yaml
 #   5. Validates the configuration
-#
-# BEHAVIOR (without start file / --_autodiscover):
-#   1. Creates skeleton manifest.fleet.config.yaml
-#   2. Calls fleet_update --_from-init to auto-discover git repos
-#   3. Validates the configuration
 #
 # ARGUMENTS:
 #   --name, -n NAME              Fleet name (prompted if not provided)
 #   --template, -t               Use minimal template (no comments)
 #   --force, -f                  Overwrite existing manifest.fleet.config.yaml
-#   --_autodiscover              Skip start file, use auto-discovery (used by manifest first)
 #   --create-repo-private        After init, gh-create a private GitHub repo per dir
 #   --create-repo-public         After init, gh-create a public  GitHub repo per dir
 #
@@ -773,7 +769,6 @@ _fleet_init() {
     local fleet_name=""
     local minimal_template=false
     local force=false
-    local skip_start=false
     local create_repo_visibility=""
     local _fleet_init_status=0
 
@@ -788,7 +783,6 @@ _fleet_init() {
                 fleet_name="$2"; shift 2 ;;
             -t|--template) minimal_template=true; shift ;;
             -f|--force) force=true; shift ;;
-            --_autodiscover) skip_start=true; shift ;;
             --create-repo-private)
                 create_repo_visibility=$(_manifest_parse_create_repo_flag "$create_repo_visibility" "private") || return 1
                 shift ;;
@@ -798,17 +792,6 @@ _fleet_init() {
             *) shift ;;
         esac
     done
-
-    # Auto-discovery mode discovers existing git repos and writes the TSV; it
-    # does not loop through _fleet_init_directory, so --create-repo-* would
-    # silently no-op. Hard-error instead of paying the gh pre-flight then
-    # ignoring the flag.
-    if [[ "$skip_start" == "true" && -n "$create_repo_visibility" ]]; then
-        log_error "--create-repo-$create_repo_visibility is not supported with auto-discovery."
-        log_error "Auto-discovery registers existing repos; --create-repo-* is for fresh dirs."
-        log_error "Use 'manifest init fleet --create-repo-$create_repo_visibility' instead."
-        return 1
-    fi
 
     # Pre-flight gh ONCE before the per-row loop. _manifest_require_gh
     # memoizes the success result so subsequent calls inside
@@ -833,15 +816,14 @@ _fleet_init() {
         return 0
     fi
 
-    # Decide which path: start-file or auto-discovery
-    local use_start_file=false
-    if [[ "$skip_start" != "true" ]] && [[ -f "$start_file" ]]; then
-        use_start_file=true
-    elif [[ "$skip_start" != "true" ]] && [[ ! -f "$start_file" ]]; then
+    # Phase 2 requires the reviewed selection file. It is written by Phase 1
+    # (`manifest init fleet` with no TSV) or by `manifest first` on a fleet;
+    # there is no auto-discovery fallback here.
+    if [[ ! -f "$start_file" ]]; then
         log_warning "No selection file found."
         echo ""
-        echo "  Recommended:   manifest init fleet   (scan and select directories)"
-        echo "  Auto-discover: manifest first        (register existing git repos)"
+        echo "  Run first:  manifest init fleet   (scan and select directories)"
+        echo "  Or:         manifest first        (discover and register git repos)"
         return 1
     fi
 
@@ -851,12 +833,18 @@ _fleet_init() {
     echo "╚══════════════════════════════════════════════════════════════════════╝"
     echo ""
 
-    # Get fleet name if not provided
+    # Get fleet name if not provided. Prompt only when interactive; a
+    # non-interactive apply (-y in CI/automation, consent model C) must not
+    # block on or abort at the prompt — it falls back to the directory-derived
+    # default. (`read` on EOF returns non-zero, which would trip the CLI's
+    # set -e — hence the TTY guard rather than a bare `read`.)
     if [[ -z "$fleet_name" ]]; then
         local default_name
         default_name=$(basename "$target_dir" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
-        echo "Enter fleet name (default: $default_name):"
-        read -r fleet_name
+        if [[ -t 0 ]]; then
+            echo "Enter fleet name (default: $default_name):"
+            read -r fleet_name || true
+        fi
         fleet_name="${fleet_name:-$default_name}"
     fi
 
@@ -924,8 +912,8 @@ EOF
         _fleet_init_status=1
     fi
 
-    if [[ "$use_start_file" == "true" ]]; then
-        # --- Start-file path: bootstrap selected directories ---
+    # --- Bootstrap the reviewed selections (start_file guaranteed present) ---
+    if [[ -f "$start_file" ]]; then
         echo ""
         echo "Reading selections from: $start_file"
 
@@ -950,8 +938,10 @@ EOF
             [[ -z "$name" ]] && continue
             local abs_path="$target_dir/${path#./}"
 
+            local _init_rc
             _fleet_init_directory "$abs_path" "$has_git" "$create_repo_visibility"
-            case $? in
+            _init_rc=$?
+            case $_init_rc in
                 0)
                     init_count=$((init_count+1))
                     [[ -n "$create_repo_visibility" ]] && gh_ok_count=$((gh_ok_count+1))
@@ -967,6 +957,25 @@ EOF
                     missing_paths+=("$path")
                     ;;
             esac
+
+            # Make the member Manifest-trackable: scaffold the same required
+            # files `init repo` creates (VERSION/README/CHANGELOG/docs/.gitignore)
+            # via the shared primitive — no second scaffolder. Run only when the
+            # directory init succeeded (rc 0 = init ok, rc 2 = init ok but gh
+            # failed); skip rc 1 (init failed) and rc 3 (path missing) so we
+            # never cd into a broken/absent dir. No-clobber (existing member
+            # files are preserved) and NO commit (files land uncommitted, parity
+            # with `init repo`). Run in an isolated subshell with cwd+PROJECT_ROOT
+            # set to the member so the README's git-derived fields resolve
+            # against the member, not the fleet root (idiom: manifest-fleet-docs.sh).
+            if [[ ( "$_init_rc" -eq 0 || "$_init_rc" -eq 2 ) ]] \
+                && declare -F ensure_required_files >/dev/null 2>&1; then
+                (
+                    cd "$abs_path" || exit 0
+                    export PROJECT_ROOT="$abs_path"
+                    ensure_required_files "$abs_path" >/dev/null 2>&1
+                ) || true
+            fi
         done <<< "$selected"
 
         local missing_count=${#missing_paths[@]}
@@ -1045,32 +1054,6 @@ EOF
         done <<< "$selected"
         echo ""
         echo "✓ Fleet inventory: $service_count service(s) in manifest.fleet.tsv"
-    else
-        # --- Auto-discovery path: scan, populate TSV, register existing git repos ---
-        echo ""
-        echo "Auto-discovering repositories..."
-        local all_dirs _auto_depth
-        _auto_depth="$(manifest_fleet_resolve_depth auto "$target_dir")" || _auto_depth=5
-        all_dirs=$(discover_all_directories "$target_dir" "$_auto_depth")
-        local inventory
-        inventory=$(filter_start_inventory_git_repos "$all_dirs")
-
-        if [[ -n "$inventory" ]]; then
-            # Generate TSV with only existing git repos auto-selected.
-            generate_start_tsv "$inventory" "$target_dir" 5 > "$start_file"
-            echo "✓ Created: $start_file"
-
-            local service_count=0
-            while IFS= read -r line; do
-                local fields=()
-                _manifest_fleet_tsv_read_line "$line" fields
-                local name="${fields[0]:-}"
-                local has_git="${fields[7]:-}"
-                [[ -z "$name" ]] && continue
-                [[ "$has_git" == "true" ]] && service_count=$((service_count+1))
-            done <<< "$inventory"
-            echo "✓ Fleet inventory: $service_count service(s) in manifest.fleet.tsv"
-        fi
     fi
 
     # Validate the final configuration

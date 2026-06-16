@@ -881,14 +881,17 @@ manifest_init_fleet() {
                     "Phases" "  Phase 1 (no TSV yet):  Scan directories, ask repo depth per
                          top-level folder when interactive, then write
                          manifest.fleet.tsv for review.
-  Phase 2 (TSV exists):  Read selections, scaffold each repo, write
-                         manifest.fleet.config.yaml." \
+  Phase 2 (TSV exists):  Read selections, write manifest.fleet.config.yaml, and
+                         scaffold each selected member with the Manifest-required
+                         files (VERSION/README/CHANGELOG/docs/.gitignore) — no-clobber." \
                     "Options" "  --dry-run                  Explicit preview; no writes
   -y, --yes                  Apply the current fleet init phase
   --depth N|auto             Scan depth in Phase 1; auto deepens to the
                              shallowest level with repos, capped (default: auto)
   --all-folders              Write every scanned folder to the TSV
-  -f, --force                Overwrite existing files (re-runs Phase 1 + skips guard)
+  -f, --force                Overwrite fleet-root/config files (re-runs Phase 1 +
+                             skips guard); does NOT overwrite member content —
+                             VERSION/README/etc. stay no-clobber
   -n, --name                 Fleet name (prompted if not provided)
   --create-repo-private      In Phase 2, create a private GitHub repo for each scaffolded dir
   --create-repo-public       In Phase 2, create a public GitHub repo for each scaffolded dir" \

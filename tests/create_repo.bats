@@ -316,22 +316,6 @@ teardown() {
 }
 
 # -----------------------------------------------------------------------------
-# Auto-discovery hard-error: --create-repo-* is silently ignored on the
-# auto-discovery branch (--_autodiscover), which only writes the TSV (no
-# per-row bootstrap). This is the path `manifest first` (fleet) uses.
-# -----------------------------------------------------------------------------
-
-@test "_fleet_init --_autodiscover --create-repo-private: hard-errors instead of silently no-opping" {
-    source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet.sh"
-    cd "$SCRATCH"
-
-    run _fleet_init --_autodiscover --create-repo-private
-    [ "$status" -ne 0 ]
-    echo "$output" | grep -q "not supported with auto-discovery"
-    echo "$output" | grep -q "manifest init fleet --create-repo-private"
-}
-
-# -----------------------------------------------------------------------------
 # Strict exit code: _fleet_init bubbles a non-zero status on partial failure
 # so CI can act on success/failure without parsing English.
 # -----------------------------------------------------------------------------
@@ -384,6 +368,10 @@ teardown() {
 
     PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet -y
     [ "$status" -eq 0 ]
+    # §9.5: a cleanly-initialized member is also made Manifest-trackable.
+    # VERSION is the load-bearing file (created first, no external deps); the
+    # full set (README/CHANGELOG/docs) is asserted end-to-end in first.bats.
+    [ -f "$SCRATCH/svc_clean/VERSION" ]
 }
 
 @test "manifest init fleet --help: lists exit codes" {
