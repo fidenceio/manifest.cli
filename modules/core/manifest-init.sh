@@ -793,7 +793,7 @@ _manifest_init_fleet_dry_run_phase2() {
     if [[ -f "$config_file" && "$force" == "true" ]]; then
         echo "Would overwrite: $config_file"
     elif [[ -f "$config_file" ]]; then
-        echo "Exists:          $config_file"
+        echo "Would preserve:  $config_file (already initialized; --force regenerates from scratch)"
     else
         echo "Would create:    $config_file"
     fi
@@ -818,6 +818,7 @@ _manifest_init_fleet_dry_run_phase2() {
     echo "Fleet name:      $fleet_name"
     echo "Selected rows:   $selected_count ($existing_count existing, $missing_count missing)"
     echo "Would git init:  $needs_git_count selected director$( [[ "$needs_git_count" == "1" ]] && echo "y" || echo "ies" ) without git"
+    echo "Would scaffold:  Manifest files (VERSION/README/CHANGELOG/docs/.gitignore) in $existing_count member(s) — no-clobber, already-complete members unchanged"
     if [[ -n "$create_repo_visibility" ]]; then
         echo "Would create:    $create_repo_visibility GitHub repo per selected directory after local init"
     fi
@@ -883,7 +884,11 @@ manifest_init_fleet() {
                          manifest.fleet.tsv for review.
   Phase 2 (TSV exists):  Read selections, write manifest.fleet.config.yaml, and
                          scaffold each selected member with the Manifest-required
-                         files (VERSION/README/CHANGELOG/docs/.gitignore) — no-clobber." \
+                         files (VERSION/README/CHANGELOG/docs/.gitignore) — no-clobber.
+                         Re-running on an already-initialized fleet is safe and
+                         idempotent: it preserves the existing config and only
+                         backfills members still missing files (--force regenerates
+                         the config from scratch)." \
                     "Options" "  --dry-run                  Explicit preview; no writes
   -y, --yes                  Apply the current fleet init phase
   --depth N|auto             Scan depth in Phase 1; auto deepens to the

@@ -374,6 +374,67 @@ teardown() {
     [ -f "$SCRATCH/svc_clean/VERSION" ]
 }
 
+@test "_fleet_init: re-run on an initialized fleet preserves config and backfills members (no-clobber, no bail)" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
+    source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet.sh"
+    source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet-detect.sh"
+    cd "$SCRATCH"
+
+    # Two existing git members: one bare (needs backfill), one already carrying
+    # curated Manifest files (must survive byte-for-byte).
+    git init -q "$SCRATCH/svc_bare"
+    git init -q "$SCRATCH/svc_seeded"
+    printf '2.5.0\n' > "$SCRATCH/svc_seeded/VERSION"
+    printf '# Hand-written readme — do not touch\n' > "$SCRATCH/svc_seeded/README.md"
+    local seeded_version seeded_readme
+    seeded_version="$(cat "$SCRATCH/svc_seeded/VERSION")"
+    seeded_readme="$(cat "$SCRATCH/svc_seeded/README.md")"
+
+    # A curated, already-present fleet config (with a sentinel we can diff on).
+    {
+        printf 'fleet:\n'
+        printf '  name: "curated-fleet"   # SENTINEL-DO-NOT-REGEN\n'
+        printf '  versioning: "none"\n'
+        printf 'services:\n'
+        printf '  svc_bare:\n    path: "./svc_bare"\n    type: "service"\n    branch: "main"\n'
+        printf '  svc_seeded:\n    path: "./svc_seeded"\n    type: "service"\n    branch: "main"\n'
+    } > manifest.fleet.config.yaml
+    local config_before
+    config_before="$(cat manifest.fleet.config.yaml)"
+
+    {
+        printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
+        printf "true\tsvc_bare\t./svc_bare\tservice\ttrue\t\t\t\n"
+        printf "true\tsvc_seeded\t./svc_seeded\tservice\ttrue\t\t\t2.5.0\n"
+    } > manifest.fleet.tsv
+
+    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet -y
+
+    # Expected scenario: succeeds, does NOT take the old "already initialized" bail.
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"To reinitialize from scratch"* ]]
+    [[ "$output" == *"Preserved:"*"manifest.fleet.config.yaml"* ]]
+
+    # Curated config preserved byte-for-byte (no regeneration without --force).
+    [ "$(cat manifest.fleet.config.yaml)" = "$config_before" ]
+
+    # Bare member backfilled. VERSION/README/CHANGELOG have no external deps;
+    # the docs/ folder depends on MANIFEST_CLI_DOCS_FOLDER (set by full config
+    # init, not by direct module sourcing) so the docs/ backfill is asserted
+    # end-to-end in first.bats rather than here.
+    [ -f "$SCRATCH/svc_bare/VERSION" ]
+    [ -f "$SCRATCH/svc_bare/README.md" ]
+    [ -f "$SCRATCH/svc_bare/CHANGELOG.md" ]
+
+    # Seeded member untouched (no-clobber).
+    [ "$(cat "$SCRATCH/svc_seeded/VERSION")" = "$seeded_version" ]
+    [ "$(cat "$SCRATCH/svc_seeded/README.md")" = "$seeded_readme" ]
+
+    # Backfill writes files but never commits — they land uncommitted.
+    run git -C "$SCRATCH/svc_bare" status --porcelain
+    [[ "$output" == *"VERSION"* ]]
+}
+
 @test "manifest init fleet --help: lists exit codes" {
     source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
     run manifest_init_fleet --help

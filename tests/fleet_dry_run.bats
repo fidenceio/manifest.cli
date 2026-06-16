@@ -98,6 +98,38 @@ TSV
     [ ! -f "$SCRATCH/work/manifest.config.local.yaml" ]
 }
 
+@test "init fleet --dry-run phase 2 on an initialized fleet previews preserve + backfill, writes nothing" {
+    mkdir -p "$SCRATCH/work/svc"
+    write_selected_tsv
+    write_fleet_config
+    before="$(cat "$SCRATCH/work/manifest.fleet.config.yaml")"
+
+    run_manifest init fleet --dry-run --name test-fleet
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Dry run - manifest init fleet (Phase 2/2)"* ]]
+    # Curated config is preserved, not overwritten, and the preview says so.
+    [[ "$output" == *"Would preserve:"*"manifest.fleet.config.yaml"* ]]
+    [[ "$output" != *"Would overwrite:"* ]]
+    # Preview names the real apply work: no-clobber member scaffolding.
+    [[ "$output" == *"Would scaffold:"*"VERSION/README/CHANGELOG"* ]]
+    # Read-only: nothing changes on disk.
+    [ "$(cat "$SCRATCH/work/manifest.fleet.config.yaml")" = "$before" ]
+    [ ! -f "$SCRATCH/work/svc/VERSION" ]
+}
+
+@test "init fleet --dry-run phase 2 with --force previews config overwrite" {
+    mkdir -p "$SCRATCH/work/svc"
+    write_selected_tsv
+    write_fleet_config
+
+    run_manifest init fleet --dry-run --force --name test-fleet
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Would overwrite:"*"manifest.fleet.config.yaml"* ]]
+    [[ "$output" != *"Would preserve:"* ]]
+}
+
 @test "add fleet --dry-run previews YAML and leaves config unchanged" {
     mkdir -p "$SCRATCH/work/services/new-api"
     write_fleet_config

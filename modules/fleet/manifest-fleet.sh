@@ -806,14 +806,17 @@ _fleet_init() {
     local config_file="$target_dir/manifest.fleet.config.yaml"
     local start_file="$target_dir/manifest.fleet.tsv"
 
-    # If fleet already exists, tell the user clearly and suggest the right command
+    # Detect an already-initialized fleet. We deliberately do NOT bail here:
+    # re-running `init fleet` on an existing fleet is an expected, idempotent
+    # operation that backfills any members still missing their Manifest files
+    # (no-clobber, see the scaffold loop below) WITHOUT disturbing the curated
+    # config. When the config already exists and --force was not given we only
+    # PRESERVE it (skip the regeneration block below); --force remains the
+    # explicit "regenerate config from scratch" escape hatch.
+    local config_preexisting=false
     if [[ -f "$config_file" ]] && [[ "$force" != "true" ]]; then
-        log_warning "Fleet already initialized at: $config_file"
-        echo ""
-        echo "  To add newly discovered repos:  manifest refresh fleet"
-        echo "  To preview without changes:     manifest refresh fleet --dry-run"
-        echo "  To reinitialize from scratch:   manifest init fleet --force"
-        return 0
+        config_preexisting=true
+        log_info "Fleet already initialized — preserving config, backfilling members"
     fi
 
     # Phase 2 requires the reviewed selection file. It is written by Phase 1
@@ -841,7 +844,10 @@ _fleet_init() {
     if [[ -z "$fleet_name" ]]; then
         local default_name
         default_name=$(basename "$target_dir" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
-        if [[ -t 0 ]]; then
+        # Only prompt when we're actually (re)generating the config. On a
+        # preserve-run the name is cosmetic (config is untouched), so fall back
+        # to the default silently rather than asking for a value we won't write.
+        if [[ -t 0 ]] && [[ "$config_preexisting" != "true" ]]; then
             echo "Enter fleet name (default: $default_name):"
             read -r fleet_name || true
         fi
@@ -852,16 +858,23 @@ _fleet_init() {
     echo "Location: $target_dir"
     echo ""
 
-    # Generate skeleton manifest.fleet.config.yaml
-    echo "Creating manifest.fleet.config.yaml..."
-
-    if [[ "$minimal_template" == "true" ]]; then
-        _generate_minimal_manifest "$config_file" "$fleet_name"
+    # Generate skeleton manifest.fleet.config.yaml — but never clobber a curated
+    # config on a re-run. When it already exists and --force was not given,
+    # preserve it verbatim and fall through to the member backfill below.
+    if [[ "$config_preexisting" == "true" ]]; then
+        echo "Preserving existing manifest.fleet.config.yaml (use --force to regenerate)..."
+        echo "✓ Preserved: $config_file"
     else
-        _generate_full_manifest "$config_file" "$fleet_name"
-    fi
+        echo "Creating manifest.fleet.config.yaml..."
 
-    echo "✓ Created: $config_file"
+        if [[ "$minimal_template" == "true" ]]; then
+            _generate_minimal_manifest "$config_file" "$fleet_name"
+        else
+            _generate_full_manifest "$config_file" "$fleet_name"
+        fi
+
+        echo "✓ Created: $config_file"
+    fi
 
     # Create manifest.config.local.yaml if it doesn't exist
     local local_config="$target_dir/manifest.config.local.yaml"
