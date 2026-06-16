@@ -390,6 +390,12 @@ teardown() {
     seeded_version="$(cat "$SCRATCH/svc_seeded/VERSION")"
     seeded_readme="$(cat "$SCRATCH/svc_seeded/README.md")"
 
+    # A curated DEPTH-2 member: an adaptive (`auto`) rescan settles at the
+    # shallowest level with a repo (depth 1, svc_bare/svc_seeded) and would NOT
+    # re-find this one — the exact row the v55.0.1 refresh silently dropped.
+    mkdir -p "$SCRATCH/group"
+    git init -q "$SCRATCH/group/svc_deep"
+
     # A curated, already-present fleet config (with a sentinel we can diff on).
     {
         printf 'fleet:\n'
@@ -406,7 +412,10 @@ teardown() {
         printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
         printf "true\tsvc_bare\t./svc_bare\tservice\ttrue\t\t\t\n"
         printf "true\tsvc_seeded\t./svc_seeded\tservice\ttrue\t\t\t2.5.0\n"
+        printf "true\tsvc_deep\t./group/svc_deep\tservice\ttrue\t\t\t\n"
     } > manifest.fleet.tsv
+    local tsv_before
+    tsv_before="$(cat manifest.fleet.tsv)"
 
     PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet -y
 
@@ -417,6 +426,13 @@ teardown() {
 
     # Curated config preserved byte-for-byte (no regeneration without --force).
     [ "$(cat manifest.fleet.config.yaml)" = "$config_before" ]
+
+    # v55.0.1 regression guard: the curated TSV — including the depth-2 row a
+    # shallow auto-rescan would drop — is preserved byte-for-byte. Backfill mode
+    # never rescans the membership list (use `manifest update fleet` for that).
+    [ "$(cat manifest.fleet.tsv)" = "$tsv_before" ]
+    [[ "$(cat manifest.fleet.tsv)" == *"group/svc_deep"* ]]
+    [[ "$output" == *"Preserved:"*"manifest.fleet.tsv"* ]]
 
     # Bare member backfilled. VERSION/README/CHANGELOG have no external deps;
     # the docs/ folder depends on MANIFEST_CLI_DOCS_FOLDER (set by full config
@@ -433,6 +449,40 @@ teardown() {
     # Backfill writes files but never commits — they land uncommitted.
     run git -C "$SCRATCH/svc_bare" status --porcelain
     [[ "$output" == *"VERSION"* ]]
+}
+
+@test "_fleet_init: first-time Phase 2 refresh honors the TSV's recorded depth, not auto" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
+    source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet.sh"
+    source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet-detect.sh"
+    cd "$SCRATCH"
+
+    # A repo at depth 1 makes `auto` settle at depth 1; a second repo at depth 2
+    # is only seen by a depth>=2 scan. A first-time Phase 2 (no config yet) DOES
+    # refresh the TSV — and must rescan at the depth that PRODUCED it (recorded
+    # in the "# Depth:" header), not re-resolve `auto` and collapse to depth 1.
+    git init -q "$SCRATCH/svc_top"
+    mkdir -p "$SCRATCH/group"
+    git init -q "$SCRATCH/group/svc_deep"
+
+    {
+        printf "# MANIFEST FLEET — Directory Inventory\n"
+        printf "# Root: %s\n" "$SCRATCH"
+        printf "# Depth: 2\n"
+        printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
+        printf "true\tsvc_top\t./svc_top\tservice\ttrue\t\t\t\n"
+        printf "true\tsvc_deep\t./group/svc_deep\tservice\ttrue\t\t\t\n"
+    } > manifest.fleet.tsv
+
+    # No preexisting config -> first-time Phase 2 -> refresh path runs.
+    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet -y
+    [ "$status" -eq 0 ]
+
+    # The depth-2 member survived the refresh, and the rewritten header still
+    # records depth 2. A regressed `auto` rescan would write "# Depth: 1" and
+    # drop the deeper row.
+    [[ "$(cat manifest.fleet.tsv)" == *"group/svc_deep"* ]]
+    grep -q '^# Depth: 2' manifest.fleet.tsv
 }
 
 @test "manifest init fleet --help: lists exit codes" {

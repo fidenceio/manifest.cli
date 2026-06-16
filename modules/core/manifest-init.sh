@@ -790,6 +790,13 @@ _manifest_init_fleet_dry_run_phase2() {
     echo "Dry run - manifest init fleet (Phase 2/2): $root_dir"
     echo ""
     echo "Would read:      $start_file"
+    if [[ -f "$config_file" && "$force" != "true" ]]; then
+        # Backfill mode: the TSV is a curated membership list — preserved, not
+        # rescanned (mirrors the apply path in _fleet_init).
+        echo "Would preserve:  $start_file (curated membership — not rescanned; 'manifest update fleet' rescans)"
+    else
+        echo "Would refresh:   $start_file (rescan at its recorded depth to capture git metadata)"
+    fi
     if [[ -f "$config_file" && "$force" == "true" ]]; then
         echo "Would overwrite: $config_file"
     elif [[ -f "$config_file" ]]; then
