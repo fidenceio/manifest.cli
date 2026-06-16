@@ -1,5 +1,14 @@
 # Changelog
 
+## [55.0.2] - 2026-06-16
+
+**Release Type:** Patch
+
+### Changes
+
+- Fix init fleet -y clobbering a curated multi-depth TSV on re-run
+
+
 ## [55.0.1] - 2026-06-16
 
 **Release Type:** Patch
@@ -95,13 +104,3 @@
 - Feat(fleet): project repo-name slugs onto GitHub topics (§9.1)
 - Docs(tracker): §9.1 Phase 2 — roster from the full org list, not the topic-filtered query
 - Feat(fleet): §9.1 Phase 2 — read-only roster of unenrolled family repos
-
-
-## [53.2.0] - 2026-06-09
-
-**Release Type:** Minor
-
-### Changes
-
-- Feat: core auto-upgrade on invocation (brew-managed, bottle-only, detached)
-- Test(runner): add opt-in --progress milestone indicator
