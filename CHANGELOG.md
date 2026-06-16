@@ -1,5 +1,17 @@
 # Changelog
 
+## [54.2.0] - 2026-06-16
+
+**Release Type:** Minor
+
+### Changes
+
+- Update release copy and configuration examples
+- Wire first-class CLI commands to inspectable built-in recipe definitions
+- Update shell completions for new command options
+- Add regression coverage for the changed CLI workflow
+
+
 ## [54.1.1] - 2026-06-15
 
 **Release Type:** Patch
@@ -92,12 +104,3 @@
 ### Changes
 
 - Formula: make the bash-wrapper candidate list fully static (:all-bottle ready)
-
-
-## [53.0.4] - 2026-06-09
-
-**Release Type:** Patch
-
-### Changes
-
-- Ship: classify Homebrew host-toolchain gate as an environmental skip
