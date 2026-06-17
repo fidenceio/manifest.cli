@@ -1,5 +1,15 @@
 # Changelog
 
+## [55.0.4] - 2026-06-17
+
+**Release Type:** Patch
+
+### Changes
+
+- Update release copy and configuration examples
+- Add regression coverage for the changed CLI workflow
+
+
 ## [55.0.3] - 2026-06-17
 
 **Release Type:** Patch
@@ -91,14 +101,3 @@
 - Docs(tracker): §9.3 — mixed-owner fleets (pre-existing-remote escape hatch + TSV OWNER column cost)
 - Update release copy and configuration examples
 - Add regression coverage for the changed CLI workflow
-
-
-## [53.4.0] - 2026-06-12
-
-**Release Type:** Minor
-
-### Changes
-
-- Fix(ship): wait for the tap bottle so a canonical ship lands locally
-- Feat(fleet): §9.1 — topics command, quiet post-ship pass, host-local key
-- Fix(completions): drop ship flags the parsers reject
