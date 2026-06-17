@@ -2,7 +2,7 @@
 
 Use this index by task. The README is the entry point; this directory carries the detailed operating model and references.
 
-**Version:** 55.0.2 | **Updated:** 2026-06-16
+**Version:** 55.0.3 | **Updated:** 2026-06-17
 
 ## Start
 
