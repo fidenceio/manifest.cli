@@ -24,10 +24,26 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      pages_enabled: ${{ steps.pages_check.outputs.enabled }}
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/configure-pages@v6
+      - name: Detect GitHub Pages availability
+        id: pages_check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${{ github.repository }}/pages" >/dev/null 2>&1; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "GitHub Pages is enabled - building and deploying the docs site."
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GitHub Pages is not enabled for ${{ github.repository }} (e.g. a private repo on a plan tier without Pages). Skipping build/deploy; the site publishes automatically once Pages is enabled."
+          fi
+      - if: steps.pages_check.outputs.enabled == 'true'
+        uses: actions/configure-pages@v6
       - name: Prepare Manifest docs source
+        if: steps.pages_check.outputs.enabled == 'true'
         run: |
           rm -rf .manifest-pages-src
           mkdir -p .manifest-pages-src
@@ -38,12 +54,15 @@ jobs:
             mkdir -p .manifest-pages-src/docs
             cp -R docs/. .manifest-pages-src/docs/
           fi
-      - uses: actions/jekyll-build-pages@v1
+      - if: steps.pages_check.outputs.enabled == 'true'
+        uses: actions/jekyll-build-pages@v1
         with:
           source: ./.manifest-pages-src
           destination: ./_site
-      - uses: actions/upload-pages-artifact@v5
+      - if: steps.pages_check.outputs.enabled == 'true'
+        uses: actions/upload-pages-artifact@v5
   deploy:
+    if: needs.build.outputs.pages_enabled == 'true'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

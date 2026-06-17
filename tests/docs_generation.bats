@@ -105,6 +105,18 @@ prepare_docs_site_repo() {
     [ -f "$SCRATCH/repo/.github/workflows/manifest-docs-pages.yml" ]
     grep -q ".manifest-pages-src" "$SCRATCH/repo/.github/workflows/manifest-docs-pages.yml"
     grep -q "cp README.md" "$SCRATCH/repo/.github/workflows/manifest-docs-pages.yml"
+    # Pages-availability detection guard: build/deploy run only when Pages is enabled,
+    # so the workflow goes green-by-skipping on repos without Pages (e.g. private repos
+    # on a plan tier without Pages) and auto-activates once Pages is enabled.
+    grep -q "Detect GitHub Pages availability" "$SCRATCH/repo/.github/workflows/manifest-docs-pages.yml"
+    grep -q "needs.build.outputs.pages_enabled == 'true'" "$SCRATCH/repo/.github/workflows/manifest-docs-pages.yml"
+    # Current pinned action versions (kept in lockstep with the working public-repo copy).
+    grep -q "actions/configure-pages@v6" "$SCRATCH/repo/.github/workflows/manifest-docs-pages.yml"
+    grep -q "actions/deploy-pages@v5" "$SCRATCH/repo/.github/workflows/manifest-docs-pages.yml"
+    # Regression guard: the GitHub expression and $GITHUB_OUTPUT must survive the
+    # generator heredoc as literals, NOT be expanded to empty at generation time.
+    grep -qF 'repos/${{ github.repository }}/pages' "$SCRATCH/repo/.github/workflows/manifest-docs-pages.yml"
+    grep -qF '>> "$GITHUB_OUTPUT"' "$SCRATCH/repo/.github/workflows/manifest-docs-pages.yml"
     [ ! -d "$SCRATCH/repo/docs-site/_site" ]
     [ ! -d "$SCRATCH/repo/docs-site/.jekyll-cache" ]
     [ ! -d "$SCRATCH/repo/docs-site/.bundle" ]
