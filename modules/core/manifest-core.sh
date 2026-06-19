@@ -287,7 +287,7 @@ update_homebrew_formula() {
     if declare -F manifest_release_tag_name >/dev/null 2>&1; then
         tag="$(manifest_release_tag_name "$version")"
     else
-        tag="v${version}"
+        tag="v${version#v}"
     fi
     local tarball_url="https://github.com/fidenceio/manifest.cli/archive/refs/tags/${tag}.tar.gz"
     local formula_source_file="$PROJECT_ROOT/formula/manifest.rb"

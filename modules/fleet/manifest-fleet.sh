@@ -2085,7 +2085,7 @@ _fleet_service_has_release_changes() {
     if declare -F manifest_release_tag_name >/dev/null 2>&1; then
         tag="$(manifest_release_tag_name "$current")"
     else
-        tag="v$current"
+        tag="v${current#v}"
     fi
 
     if ! git -C "$path" rev-parse -q --verify "refs/tags/$tag^{commit}" >/dev/null 2>&1; then
@@ -2430,6 +2430,7 @@ _fleet_ship_plan() {
     local service path reason effect decision type branch display_name dirty version current next config_skip
     local offbranch_count=0
     local pr_gated_count=0
+    local emptyremote_count=0
     # Salient inputs for the fleet plan fingerprint: the increment type, the
     # local/remote mode, and each releaseable member's name + version transition.
     # Same shape -> same digest, so a preview and its apply can be compared.
@@ -2471,6 +2472,14 @@ _fleet_ship_plan() {
             # Actual current branch; a trailing "!" marks members apply will refuse.
             branch=$(_fleet_plan_branch_cell "$path" true)
             [[ "$branch" == *"!" ]] && offbranch_count=$((offbranch_count + 1))
+            # A release-enabled member with no origin remote can only ship
+            # local-only: the per-member ship will commit + tag but silently
+            # skip the push and GitHub Release, stranding the release on disk.
+            # Count it here so apply/preview can warn loudly (not silently).
+            if [[ "$local_only" != "true" ]] \
+                && ! git -C "$path" remote get-url origin >/dev/null 2>&1; then
+                emptyremote_count=$((emptyremote_count + 1))
+            fi
             # Per-member next version, computed against the member's own VERSION.
             next="$( (cd "$path" 2>/dev/null && get_next_version "$increment_type" 2>/dev/null) || echo "")"
             if [[ -n "$current" && -n "$next" ]]; then
@@ -2517,6 +2526,13 @@ _fleet_ship_plan() {
         echo "⚠️  ${offbranch_count} releaseable member(s) marked '!' have HEAD off the release branch ('${_rel_branch}')."
         echo "    Apply refuses these (manifest_assert_release_branch): the version commit and tag"
         echo "    would land off '${_rel_branch}'. Move the work onto '${_rel_branch}' before re-running with -y."
+    fi
+    if [[ $emptyremote_count -gt 0 ]]; then
+        echo ""
+        echo "⚠️  ${emptyremote_count} releaseable member(s) have no 'origin' remote configured."
+        echo "    A non-local ship of these will commit + tag locally but cannot push or cut a"
+        echo "    GitHub Release — the release strands on disk silently. Add a remote (git remote"
+        echo "    add origin <url>) before shipping, or run with --local to ship local-only on purpose."
     fi
     return 0
 }

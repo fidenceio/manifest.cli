@@ -591,6 +591,13 @@ manifest_release_tag_name() {
     local version="$1"
     local tag_prefix="${MANIFEST_CLI_GIT_TAG_PREFIX:-v}"
     local tag_suffix="${MANIFEST_CLI_GIT_TAG_SUFFIX:-}"
+    # Idempotent prefixing: a VERSION file may already be prefix-prefixed
+    # (e.g. v-prefixed CalVer like "v25.2.0"). Strip a single leading copy of
+    # the configured prefix before prepending so "v25.2.0" with prefix "v"
+    # yields "v25.2.0", never "vv25.2.0".
+    if [[ -n "$tag_prefix" && "$version" == "$tag_prefix"* ]]; then
+        version="${version#"$tag_prefix"}"
+    fi
     echo "${tag_prefix}${version}${tag_suffix}"
 }
 
