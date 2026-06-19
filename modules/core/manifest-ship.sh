@@ -249,7 +249,7 @@ manifest_ship_repo_plan_fingerprint() {
     if [[ "$next" != "unknown" ]] && declare -F manifest_release_tag_name >/dev/null 2>&1; then
         tag="$(manifest_release_tag_name "$next")"
     else
-        tag="v${next}"
+        tag="v${next#v}"
     fi
     manifest_plan_fingerprint "ship-repo" "$increment_type" "$local_only" "$current" "$next" "$tag"
 }
@@ -265,7 +265,7 @@ manifest_ship_preview_plan() {
     if [[ "$next_version" != "unknown" ]] && declare -F manifest_release_tag_name >/dev/null 2>&1; then
         tag_name="$(manifest_release_tag_name "$next_version")"
     elif [[ "$next_version" != "unknown" ]]; then
-        tag_name="v${next_version}"
+        tag_name="v${next_version#v}"
     else
         tag_name="unknown"
     fi
@@ -436,7 +436,7 @@ manifest_ship_repo() {
         if [[ "$_cur_version" != "unknown" ]] && declare -F manifest_release_tag_name >/dev/null 2>&1; then
             _cur_tag="$(manifest_release_tag_name "$_cur_version")"
         else
-            _cur_tag="v${_cur_version}"
+            _cur_tag="v${_cur_version#v}"
         fi
         if declare -F manifest_ship_followup_has_releasable_changes >/dev/null 2>&1 \
             && ! ( cd "$_repo_root" 2>/dev/null && manifest_ship_followup_has_releasable_changes "$_cur_tag" ); then

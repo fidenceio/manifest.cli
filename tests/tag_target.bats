@@ -61,6 +61,48 @@ teardown() {
     [ "$output" = "release-1.0.0-rc" ]
 }
 
+# Idempotent prefixing: a VERSION file may already carry the configured prefix
+# (e.g. v-prefixed CalVer like "v25.2.0"). The builder must strip one leading
+# copy of the prefix before re-prepending so the prefix is applied exactly once.
+# Regression: previously call sites built "v${version}" literally, turning an
+# already-prefixed "v25.2.0" into a malformed double-v tag "vv25.2.0".
+
+@test "manifest_release_tag_name: plain version gets the default prefix once" {
+    run manifest_release_tag_name "25.2.0"
+    [ "$status" -eq 0 ]
+    [ "$output" = "v25.2.0" ]
+}
+
+@test "manifest_release_tag_name: already v-prefixed version is not double-prefixed" {
+    run manifest_release_tag_name "v25.2.0"
+    [ "$status" -eq 0 ]
+    [ "$output" = "v25.2.0" ]
+    [ "$output" != "vv25.2.0" ]
+}
+
+@test "manifest_release_tag_name: custom prefix applied once to plain version" {
+    MANIFEST_CLI_GIT_TAG_PREFIX="release-" \
+        run manifest_release_tag_name "25.2.0"
+    [ "$status" -eq 0 ]
+    [ "$output" = "release-25.2.0" ]
+}
+
+@test "manifest_release_tag_name: already-prefixed version with custom prefix is not double-prefixed" {
+    MANIFEST_CLI_GIT_TAG_PREFIX="release-" \
+        run manifest_release_tag_name "release-25.2.0"
+    [ "$status" -eq 0 ]
+    [ "$output" = "release-25.2.0" ]
+    [ "$output" != "release-release-25.2.0" ]
+}
+
+@test "create_tag: already v-prefixed version produces single-v tag (no vv)" {
+    run create_tag "v1.0.0"
+    [ "$status" -eq 0 ]
+    [ "$(git rev-parse v1.0.0^{commit})" = "$SECOND_SHA" ]
+    run git rev-parse -q --verify "refs/tags/vv1.0.0"
+    [ "$status" -ne 0 ]
+}
+
 @test "push_changes: pushes the exact configured release tag" {
     local remote="$SCRATCH/remote.git"
     git init --bare -q "$remote"
