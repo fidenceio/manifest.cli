@@ -1,5 +1,15 @@
 # Changelog
 
+## [55.1.0] - 2026-06-19
+
+**Release Type:** Minor
+
+### Changes
+
+- Update release copy and configuration examples
+- Add regression coverage for the changed CLI workflow
+
+
 ## [55.0.4] - 2026-06-17
 
 **Release Type:** Patch
@@ -87,17 +97,3 @@
 
 - Fix(ship): reconcile tap checkout after the bottle-wait upgrade
 - Fix(upgrade): fast-forward the workspace tap checkout in the auto-upgrade worker
-
-
-## [54.0.0] - 2026-06-15
-
-**Release Type:** Major
-
-### Changes
-
-- Docs(tracker): §9.1 status — shipped in v53.4.0
-- Docs(tracker): file §9.2 — rate limiting for fleet gh loops (user directive: 150)
-- Docs(tracker): file §9.3 — GitHub owner/org targeting for repo creation
-- Docs(tracker): §9.3 — mixed-owner fleets (pre-existing-remote escape hatch + TSV OWNER column cost)
-- Update release copy and configuration examples
-- Add regression coverage for the changed CLI workflow
