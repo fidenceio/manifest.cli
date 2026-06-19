@@ -1225,30 +1225,97 @@ _fleet_tsv_header_depth() {
 }
 
 # -----------------------------------------------------------------------------
-# Function: merge_start_tsv
+# Function: merge_update_tsv
 # -----------------------------------------------------------------------------
-# Merges fresh scan results into an existing manifest.fleet.tsv,
-# preserving user-edited 'selected' values for known paths and adding
-# new directories as selected=false.
+# Reconciles a fresh scan into manifest.fleet.tsv. Two modes:
+#
+#   regenerate (default) — rebuild the TSV from the scan: write a fresh header,
+#     emit one row per discovered path (in scan order), preserve the user's
+#     SELECT toggle for paths already listed, default new paths by git status,
+#     and re-derive every other column from the scan. Paths absent from the
+#     scan are dropped. Used by `init fleet` after it git-inits selected dirs,
+#     so the just-created repos pick up fresh git metadata.
+#
+#   append — edit the existing TSV in place: preserve every line verbatim (all
+#     headers and data rows, in original order, byte-for-byte) and only APPEND
+#     discovered paths not already listed; the sole in-place edit is the
+#     "# Last scanned:" timestamp. Used by `update`/`refresh fleet` so an update
+#     never drops a curated row the (shallower or transiently-missing) scan
+#     fails to re-find, and never clobbers a manual edit to an existing row
+#     (e.g. a deliberately preserved REMOTE_URL). With no existing TSV there is
+#     nothing to edit in place, so append falls through to regenerate.
 #
 # ARGUMENTS:
 #   $1 - Output of discover_all_directories (multi-line, tab-separated)
-#   $2 - Path to existing manifest.fleet.tsv
-#   $3 - Root directory path (for header)
-#   $4 - Scan depth (for header)
+#   $2 - Path to manifest.fleet.tsv
+#   $3 - Root directory path (for the regenerate header)
+#   $4 - Scan depth (for the regenerate header)
+#   $5 - Mode: "regenerate" (default) | "append"
 #
 # OUTPUT:
 #   Updated TSV content written to stdout.
-#   Returns count of new entries via stderr as "NEW:<count>"
+#   Returns count of new/appended entries via stderr as "NEW:<count>"
 # -----------------------------------------------------------------------------
-merge_start_tsv() {
+merge_update_tsv() {
     local discovered="$1"
     local existing_tsv="$2"
     local root_dir="$3"
     local depth="$4"
+    local mode="${5:-regenerate}"
     local scan_date
     scan_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+    # --- append mode: edit the existing TSV in place (preserve + append) ------
+    if [[ "$mode" == "append" && -f "$existing_tsv" ]]; then
+        # Index paths already present so the append phase skips them.
+        declare -A existing_paths
+        local line
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            case "$line" in '#'*|'') continue ;; esac
+            local fields=()
+            _manifest_fleet_tsv_read_line "$line" fields
+            local key
+            key=$(_fleet_normalize_relative_path "${fields[2]:-}")
+            [[ -n "$key" ]] && existing_paths["$key"]="1"
+        done < "$existing_tsv"
+
+        # Emit the existing file verbatim, refreshing only the scan timestamp.
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            case "$line" in
+                "# Last scanned: "*) echo "# Last scanned: $scan_date" ;;
+                *) printf '%s\n' "$line" ;;
+            esac
+        done < "$existing_tsv"
+
+        # Append discovered paths not already listed.
+        local new_count=0
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            [[ -z "$line" ]] && continue
+            local fields=()
+            _manifest_fleet_tsv_read_line "$line" fields
+            local name="${fields[0]:-}"
+            local path="${fields[1]:-}"
+            local type="${fields[2]:-}"
+            local branch="${fields[3]:-}"
+            local url="${fields[5]:-}"
+            local has_git="${fields[7]:-}"
+            [[ -z "$name" ]] && continue
+            local key
+            key=$(_fleet_normalize_relative_path "$path")
+            [[ -n "${existing_paths[$key]+_}" ]] && continue
+            existing_paths["$key"]="1"
+            local selected
+            [[ "$has_git" == "true" ]] && selected="true" || selected="false"
+            printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+                "$selected" "$name" "$path" "$type" "$has_git" "$url" "${branch:-}"
+            ((new_count += 1))
+        done <<< "$discovered"
+
+        echo "NEW:$new_count" >&2
+        return 0
+    fi
+
+    # --- regenerate mode (default): rebuild the TSV from the scan -------------
     # Build lookup of existing selections keyed by path
     declare -A existing_selections
     declare -A existing_names existing_types existing_has_git existing_urls existing_branches
@@ -1640,7 +1707,7 @@ export -f filter_start_inventory_by_repo_depth
 export -f filter_start_inventory_git_repos
 export -f generate_start_tsv
 export -f parse_start_tsv
-export -f merge_start_tsv
+export -f merge_update_tsv
 export -f diff_discovered_repos
 export -f get_new_repos
 export -f get_missing_repos

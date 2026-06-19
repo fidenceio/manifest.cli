@@ -137,7 +137,7 @@ More detail: [docs/FLEET_DESIGN_SPEC.md](docs/FLEET_DESIGN_SPEC.md).
 | ---- | -------- |
 | Setup | `manifest first`, `manifest config`, `manifest init repo`, `manifest init fleet` |
 | Preparation | `manifest prep repo`, `manifest prep fleet` |
-| Refresh | `manifest refresh repo`, `manifest refresh fleet` |
+| Refresh | `manifest refresh repo`, `manifest update fleet` (was `refresh fleet`) |
 | Release | `manifest ship repo <type>`, `manifest ship fleet <type>` |
 | Diagnostics | `manifest status`, `manifest doctor`, `manifest security --check` |
 | Pull requests | `manifest pr create`, `manifest pr checks`, `manifest pr ready`, `manifest pr merge`, `manifest pr update` |

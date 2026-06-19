@@ -12,7 +12,7 @@
 #
 # COMMANDS:
 #   manifest refresh repo     Regenerate docs and metadata for single repo
-#   manifest refresh fleet    Re-scan fleet membership, regenerate docs across fleet
+#   manifest refresh fleet    DEPRECATED — use 'manifest update fleet' (+ 'docs fleet')
 #
 # DEPENDENCIES:
 #   - manifest-documentation.sh (manifest_docs_generate, update_repository_metadata)
@@ -213,7 +213,7 @@ manifest_refresh_fleet() {
             -h|--help)
                 _render_help \
                     "manifest refresh fleet [-y|--yes] [--dry-run] [--commit]" \
-                    "Re-scan fleet membership, regenerate docs, validate config." \
+                    "Deprecated. Prefer 'manifest update fleet' (regenerate docs with 'manifest docs fleet'). Re-scans fleet membership, regenerates docs, validates config." \
                     "Options" "  --dry-run    Explicit preview; no writes
   -y, --yes    Apply the refresh plan
   --commit     Stage and commit refreshed metadata across fleet root + services
@@ -232,6 +232,8 @@ manifest_refresh_fleet() {
                 ;;
         esac
     done
+
+    log_deprecated "manifest refresh fleet" "manifest update fleet" "regenerate docs with 'manifest docs fleet'"
 
     echo ""
     echo "Refreshing fleet..."
@@ -367,7 +369,7 @@ manifest_refresh_dispatch() {
                 "Regenerate docs, metadata, and fleet membership.
 No version change. No remote operations." \
                 "Scopes" "  repo    Regenerate docs and metadata for single repo
-  fleet   Re-scan fleet, regenerate docs, validate config" \
+  fleet   DEPRECATED — use 'manifest update fleet' (+ 'docs fleet')" \
                 "More" "  manifest refresh repo --help    Per-repo options
   manifest refresh fleet --help   Fleet-specific options"
             ;;

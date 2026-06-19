@@ -168,7 +168,7 @@ manifest reconcile fleet --do
 ```bash
 manifest status fleet
 manifest prep fleet
-manifest refresh fleet
+manifest update fleet          # re-scan membership (was 'refresh fleet'; docs: 'manifest docs fleet')
 manifest ship fleet patch
 manifest ship fleet patch -y
 manifest ship fleet patch --local -y

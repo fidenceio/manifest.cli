@@ -78,10 +78,14 @@ Prepares remotes and workspace state before release work.
 
 ```bash
 manifest refresh repo [--dry-run] [-y|--yes]
-manifest refresh fleet [--dry-run] [-y|--yes]
+manifest refresh fleet [--dry-run] [-y|--yes]   # DEPRECATED — use 'manifest update fleet'
 ```
 
 Refreshes generated metadata, docs, and fleet membership.
+
+`refresh fleet` is **deprecated**: it still runs (with a warning) but prefer
+`manifest update fleet` to re-scan membership and `manifest docs fleet` to
+regenerate documentation.
 
 ### `manifest ship`
 
