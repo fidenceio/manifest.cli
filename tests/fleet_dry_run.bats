@@ -247,7 +247,7 @@ YAML
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"MANIFEST FLEET UPDATE (dry-run)"* ]]
-    [[ "$output" == *"Would refresh manifest.fleet.tsv"* ]]
+    [[ "$output" == *"Would update manifest.fleet.tsv"* ]]
     [[ "$output" == *"Dry run complete"* ]]
     [ "$(cat "$SCRATCH/work/manifest.fleet.tsv")" = "$before" ]
     [ ! -f "$SCRATCH/work/manifest.fleet.tsv.tmp" ]
@@ -267,21 +267,27 @@ YAML
     [[ "$output" == *"MANIFEST FLEET UPDATE (dry-run)"* ]]
     [[ "$output" != *"Missing repositories"* ]]
     [[ "$output" == *"- Missing:   0"* ]]
-    [[ "$output" == *"Would refresh manifest.fleet.tsv"* ]]
+    [[ "$output" == *"Would update manifest.fleet.tsv"* ]]
     [ "$(cat "$SCRATCH/work/manifest.fleet.tsv")" = "$before" ]
 }
 
-@test "refresh fleet writes TSV from git repos, not every subdirectory" {
+@test "refresh fleet appends git repos to the TSV, not every subdirectory" {
     mkdir -p "$SCRATCH/work/svc/src"
     git -C "$SCRATCH/work" init -q
     git -C "$SCRATCH/work/svc" init -q
     write_root_fleet_config
-    write_root_selected_tsv
+    # Existing TSV lists only the root. svc is a git repo and must be APPENDED;
+    # svc/src is a plain subdir and must never be added.
+    cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
+true	rootworkspace	.	infrastructure	true
+TSV
 
     run_manifest refresh fleet -y
 
     [ "$status" -eq 0 ]
+    # Pre-existing root row is preserved verbatim.
     grep -q $'^true\trootworkspace\t.\tinfrastructure\ttrue' "$SCRATCH/work/manifest.fleet.tsv"
+    # svc (git repo) is appended; svc/src (plain subdir) is not.
     grep -q $'^true\tsvc\tsvc\tservice\ttrue' "$SCRATCH/work/manifest.fleet.tsv"
     ! grep -q $'\tsvc/src\t' "$SCRATCH/work/manifest.fleet.tsv"
 }

@@ -542,7 +542,7 @@ _manifest_status_fleet() {
     echo "Next actions"
     echo "  manifest status repo      Show status for this repo only"
     echo "  manifest status fleet     Show this fleet table explicitly"
-    echo "  manifest refresh fleet    Re-scan fleet membership"
+    echo "  manifest update fleet     Re-scan fleet membership"
     echo ""
 }
 

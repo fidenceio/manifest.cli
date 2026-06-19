@@ -36,8 +36,9 @@
 #   - enumeration uses the full org list (gh repo list --json name); a
 #     fleet-topic-filtered query could never find untagged new repos
 #   - candidates are reported with a clone-to-enroll hint, never written to
-#     the TSV (merge_start_tsv rebuilds the TSV from the local scan, so a
-#     remote-only row would be silently wiped on the next apply) and never
+#     the TSV (a regenerate — merge_update_tsv default mode, used by init —
+#     rebuilds the TSV from the local scan, so a remote-only row would be
+#     silently wiped) and never
 #     topic-stamped (writes to un-enrolled repos would break the consent
 #     boundary) — cloning into the fleet root IS the enrollment act
 #   - a failed org listing degrades to a per-owner notice, never a failure

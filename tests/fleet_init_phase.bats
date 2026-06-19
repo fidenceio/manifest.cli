@@ -135,25 +135,25 @@ run_manifest() {
     ! grep -q $'^# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION$' "$SCRATCH/manifest.fleet.tsv"
 }
 
-@test "merge_start_tsv preserves selected root workspace row" {
+@test "merge_update_tsv preserves selected root workspace row" {
     cat > "$SCRATCH/manifest.fleet.tsv" <<'TSV'
 true	rootworkspace	.	infrastructure	true	git@example.com:org/root.git	main
 TSV
     local discovered
     discovered="$(printf "svc\tservices/api\tservice\tmain\t1.0.0\tgit@example.com:org/api.git\tfalse\ttrue\ttrue\n")"
 
-    merge_start_tsv "$discovered" "$SCRATCH/manifest.fleet.tsv" "$SCRATCH" 5 > "$SCRATCH/merged.tsv" 2>/dev/null
+    merge_update_tsv "$discovered" "$SCRATCH/manifest.fleet.tsv" "$SCRATCH" 5 > "$SCRATCH/merged.tsv" 2>/dev/null
 
     grep -q $'^true\trootworkspace\t.\tinfrastructure\ttrue\tgit@example.com:org/root.git\tmain$' "$SCRATCH/merged.tsv"
     grep -q $'^true\tsvc\tservices/api\tservice\ttrue\tgit@example.com:org/api.git\tmain$' "$SCRATCH/merged.tsv"
 }
 
-@test "merge_start_tsv keeps empty TSV fields aligned" {
+@test "merge_update_tsv keeps empty TSV fields aligned" {
     : > "$SCRATCH/manifest.fleet.tsv"
     local discovered
     discovered="$(printf "plain\tservices/plain\tservice\t\t0.0.0\t\tfalse\tfalse\tfalse\n")"
 
-    merge_start_tsv "$discovered" "$SCRATCH/manifest.fleet.tsv" "$SCRATCH" 5 > "$SCRATCH/merged.tsv" 2>/dev/null
+    merge_update_tsv "$discovered" "$SCRATCH/manifest.fleet.tsv" "$SCRATCH" 5 > "$SCRATCH/merged.tsv" 2>/dev/null
 
     [ "$(awk -F '\t' '$2 == "plain" {print $5 "|" $6 "|" $7}' "$SCRATCH/merged.tsv")" = "false||" ]
 }

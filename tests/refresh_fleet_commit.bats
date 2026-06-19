@@ -70,6 +70,37 @@ mk_repo_clean() {
     [[ "$output" == *"--commit"* ]]
     [[ "$output" == *"Stage and commit refreshed metadata"* ]]
     [[ "$output" != *"not yet implemented"* ]]
+    # Help marks the command deprecated, but the runtime warning never fires on --help.
+    [[ "$output" == *"Deprecated"* ]]
+    [[ "$output" != *"is deprecated. Use"* ]]
+}
+
+# -----------------------------------------------------------------------------
+# Deprecation (refresh fleet -> update fleet)
+# -----------------------------------------------------------------------------
+
+@test "refresh fleet: emits a deprecation notice steering to update fleet" {
+    # Stub the orchestrated steps so the path runs without a real fleet.
+    fleet_update() { :; }
+    fleet_validate() { :; }
+    fleet_docs_dispatch() { :; }
+    export -f fleet_update fleet_validate fleet_docs_dispatch
+
+    run manifest_refresh_fleet --dry-run
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"'manifest refresh fleet' is deprecated"* ]]
+    [[ "$output" == *"manifest update fleet"* ]]
+}
+
+@test "refresh fleet: deprecation notice is silenceable" {
+    fleet_update() { :; }
+    fleet_validate() { :; }
+    fleet_docs_dispatch() { :; }
+    export -f fleet_update fleet_validate fleet_docs_dispatch
+
+    MANIFEST_CLI_QUIET_DEPRECATIONS=1 run manifest_refresh_fleet --dry-run
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"is deprecated"* ]]
 }
 
 # -----------------------------------------------------------------------------

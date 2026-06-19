@@ -36,12 +36,12 @@
 # COMMANDS (v42 entry points — preferred):
 #   manifest init fleet      - Scaffold a new fleet (calls _fleet_start / _fleet_init)
 #   manifest prep fleet      - Clone/pull all services (calls _fleet_sync)
-#   manifest refresh fleet   - Re-scan, regenerate docs (calls fleet_update + fleet_docs)
+#   manifest update fleet    - Re-scan and add new repos (--dry-run to preview)
 #   manifest ship fleet      - Coordinated release across services
 #
 # ADDITIONAL ACTION-FIRST COMMANDS:
 #   manifest status          - Show fleet status when in fleet mode
-#   manifest update fleet    - Re-scan and add new repos (--dry-run to preview)
+#   manifest refresh fleet   - DEPRECATED — use 'update fleet' (+ 'docs fleet')
 #   manifest discover fleet  - Alias for 'update fleet --dry-run'
 #   manifest add fleet       - Add a service to fleet
 #   manifest prep fleet      - Coordinated version bump (no commit/push)
@@ -374,8 +374,8 @@ fleet_status() {
 
     # Quick actions
     echo "Quick actions:"
-    echo "  manifest refresh fleet            - Re-scan, regenerate docs"
-    echo "  manifest refresh fleet --dry-run  - Preview new/missing repos"
+    echo "  manifest update fleet             - Re-scan and add new repos"
+    echo "  manifest update fleet --dry-run   - Preview new repos"
     echo "  manifest prep fleet               - Clone missing, pull existing"
     echo "  manifest ship fleet patch         - Coordinated release"
 }
@@ -1072,7 +1072,7 @@ EOF
             fi
             all_dirs=$(discover_all_directories "$target_dir" "$_refresh_depth")
             if [[ -n "$all_dirs" ]]; then
-                merge_start_tsv "$all_dirs" "$start_file" "$target_dir" "$_refresh_depth" > "${start_file}.tmp" 2>/dev/null
+                merge_update_tsv "$all_dirs" "$start_file" "$target_dir" "$_refresh_depth" > "${start_file}.tmp" 2>/dev/null
                 mv "${start_file}.tmp" "$start_file"
                 echo "✓ Updated: $start_file"
             fi
@@ -1584,6 +1584,7 @@ _fleet_sync_parallel() {
 # -----------------------------------------------------------------------------
 fleet_update() {
     local depth="auto"
+    local depth_explicit=false
     local skip_init_check=false
     local dry_run=true
     local json_output=false
@@ -1606,7 +1607,7 @@ fleet_update() {
                     log_error "--depth requires a numeric value"
                     return 1
                 fi
-                depth="$2"; shift 2 ;;
+                depth="$2"; depth_explicit=true; shift 2 ;;
             --_from-init) skip_init_check=true; shift ;;
             --json) json_output=true; dry_run=true; shift ;;
             -q|--quiet) quiet=true; dry_run=true; shift ;;
@@ -1626,6 +1627,18 @@ fleet_update() {
     done
 
     local root_dir="${MANIFEST_CLI_FLEET_ROOT:-$(pwd)}"
+    # When no explicit --depth was given, rescan at the depth that PRODUCED the
+    # existing TSV (its recorded "# Depth:" header) rather than re-resolving
+    # `auto`. On a mixed-depth workspace `auto` settles at the shallowest level
+    # with a repo; a regenerate re-emits only re-discovered paths, so a
+    # shallower rescan would silently drop the curated deeper rows of a TSV
+    # written at an explicit deeper --depth (§7.3). Mirrors the init Phase-2
+    # refresh (_fleet_init). Falls back to `auto` when no TSV/header is present.
+    if [[ "$depth_explicit" != "true" ]]; then
+        local _tsv_header_depth
+        _tsv_header_depth="$(_fleet_tsv_header_depth "$root_dir/manifest.fleet.tsv")"
+        [[ -n "$_tsv_header_depth" ]] && depth="$_tsv_header_depth"
+    fi
     # Resolve --depth (N|auto) to a concrete scan depth (§7.3). The JSON
     # fast-summary path below keeps its own intentionally shallow fixed probe.
     depth="$(manifest_fleet_resolve_depth "$depth" "$root_dir")" || return 1
@@ -1780,33 +1793,41 @@ EOF
         echo "  or remove them from manifest.fleet.config.yaml manually."
     fi
 
-    # Refresh manifest.fleet.tsv with current scan (preserves user selections)
+    # Edit manifest.fleet.tsv in place (merge_update_tsv append mode): preserve
+    # every existing row verbatim and APPEND only newly discovered repos. An
+    # update never overwrites, reorders, or drops curated rows. With no existing
+    # TSV, append falls through to regenerating one from the scan.
     local start_file="$root_dir/manifest.fleet.tsv"
+    local had_tsv=false
+    [[ -f "$start_file" ]] && had_tsv=true
     local all_dirs
     all_dirs=$(discover_all_directories "$root_dir" "$depth")
     local refresh_inventory
     refresh_inventory=$(filter_start_inventory_git_repos "$all_dirs")
 
-    if [[ -n "$refresh_inventory" && "$dry_run" == "true" ]]; then
-        echo ""
-        echo "Would refresh manifest.fleet.tsv from current scan"
-    elif [[ -n "$refresh_inventory" ]]; then
-        # merge_start_tsv writes TSV to stdout and "NEW:<count>" to stderr
-        local merge_stderr
-        merge_stderr=$(merge_start_tsv "$refresh_inventory" "$start_file" "$root_dir" "$depth" 2>&1 > "${start_file}.tmp")
-        mv "${start_file}.tmp" "$start_file"
-
-        local tsv_new_count=0
-        if [[ "$merge_stderr" =~ NEW:([0-9]+) ]]; then
-            tsv_new_count="${BASH_REMATCH[1]}"
-        fi
-
-        if [[ "$tsv_new_count" -gt 0 ]]; then
-            echo ""
-            echo "✓ Updated manifest.fleet.tsv ($tsv_new_count new directories added)"
+    if [[ -n "$refresh_inventory" ]]; then
+        local tsv_stderr tsv_new_count=0
+        # In dry-run, compute the append count by writing to a discarded stream
+        # so the preview is honest without touching the file.
+        if [[ "$dry_run" == "true" ]]; then
+            tsv_stderr=$(merge_update_tsv "$refresh_inventory" "$start_file" "$root_dir" "$depth" append 2>&1 >/dev/null)
         else
-            echo ""
-            echo "✓ Updated manifest.fleet.tsv"
+            tsv_stderr=$(merge_update_tsv "$refresh_inventory" "$start_file" "$root_dir" "$depth" append 2>&1 > "${start_file}.tmp")
+            mv "${start_file}.tmp" "$start_file"
+        fi
+        [[ "$tsv_stderr" =~ NEW:([0-9]+) ]] && tsv_new_count="${BASH_REMATCH[1]}"
+
+        echo ""
+        if [[ "$dry_run" == "true" ]]; then
+            if [[ "$had_tsv" == "true" ]]; then
+                echo "Would update manifest.fleet.tsv ($tsv_new_count new repo(s) appended; existing rows preserved)"
+            else
+                echo "Would create manifest.fleet.tsv from current scan ($tsv_new_count repo(s))"
+            fi
+        elif [[ "$tsv_new_count" -gt 0 ]]; then
+            echo "✓ Updated manifest.fleet.tsv ($tsv_new_count new repo(s) appended; existing rows preserved)"
+        else
+            echo "✓ manifest.fleet.tsv already current (no new repos; existing rows preserved)"
         fi
     fi
 
@@ -3675,7 +3696,7 @@ Use action-first commands:
   manifest prep fleet           Clone/pull
   manifest discover fleet       Preview fleet membership discovery
   manifest update fleet         Re-scan and add new repos
-  manifest refresh fleet        Re-scan + regenerate docs
+  manifest refresh fleet        DEPRECATED — use 'update fleet' (+ 'docs fleet')
   manifest validate fleet       Validate fleet configuration
   manifest add fleet <path>     Add a service to the fleet
   manifest docs fleet           Generate fleet documentation
@@ -3806,14 +3827,14 @@ EXAMPLES:
   # ... review manifest.fleet.tsv ...
   manifest init fleet                   # apply selections (Phase 2)
 
-  # Add newly discovered repos to an existing fleet
-  manifest refresh fleet                # also regenerates docs
+  # Add newly discovered repos to an existing fleet (edits the TSV in place)
+  manifest update fleet                 # 'manifest docs fleet' regenerates docs
 
   # Preview only (read-only)
   manifest plan fleet
   manifest reconcile fleet
   manifest init fleet --dry-run
-  manifest refresh fleet --dry-run
+  manifest update fleet --dry-run
   manifest docs fleet --dry-run
 
   # Check fleet status
