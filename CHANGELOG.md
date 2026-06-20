@@ -1,5 +1,17 @@
 # Changelog
 
+## [55.2.0] - 2026-06-20
+
+**Release Type:** Minor
+
+### Changes
+
+- Docs(fleet): add Fleet States And Vocabulary section
+- Docs(fleet): per-branch adaptive depth + derived depth profile/health
+- Feat(fleet): per-branch adaptive depth + observed-deepest header
+- Feat(status): derived fleet depth profile + mixed-depth health flag
+
+
 ## [55.1.1] - 2026-06-20
 
 **Release Type:** Patch
@@ -86,13 +98,3 @@
 ### Changes
 
 - Fix(ship): floor release-gate PATH + release ship lock on SIGHUP
-
-
-## [54.1.0] - 2026-06-15
-
-**Release Type:** Minor
-
-### Changes
-
-- Feat(ship): add --force-bump for repo + fleet; symmetric no-changes gate
-- Docs(tracker): fold §8.1h tap-sync resolution into a §8.1e disambiguation
