@@ -2,8 +2,8 @@
 #
 # `manifest update fleet` default behavior (two guarantees):
 #   1. DEPTH    — with no explicit --depth, rescan at the depth that PRODUCED
-#                 the existing TSV (its "# Depth:" header), not a fresh `auto`
-#                 resolve that settles at the shallowest level with a repo.
+#                 the existing TSV (its "# Depth:" header) for a reproducible
+#                 re-scan; a fresh `auto` resolve is used only when no TSV exists.
 #   2. EDIT     — the TSV is edited in place: existing rows are preserved
 #                 verbatim (order + content, including hand-edited columns) and
 #                 only newly discovered repos are appended. Never overwrite,
@@ -130,16 +130,17 @@ disc_row() {
     [[ "$output" == *"deepsvc"* ]]
 }
 
-@test "depth: without a TSV, default update falls back to auto (settles shallow)" {
+@test "depth: without a TSV, default update falls back to auto (reaches deepest)" {
     mkrepo "$WS/alpha"
     mkrepo "$WS/group/deepsvc"
-    # No manifest.fleet.tsv — nothing to read a depth from.
+    # No manifest.fleet.tsv — nothing to read a depth from; auto is per-branch
+    # adaptive and resolves to the deepest repo (depth 2), so deepsvc is found.
     export MANIFEST_CLI_FLEET_ROOT="$WS"
 
     run fleet_update -q
     [ "$status" -eq 0 ]
     [[ "$output" == *"alpha"* ]]
-    [[ "$output" != *"deepsvc"* ]]   # auto stops at depth 1
+    [[ "$output" == *"deepsvc"* ]]
 }
 
 @test "depth: an explicit --depth still overrides the recorded header" {

@@ -185,35 +185,38 @@ readonly MANIFEST_CLI_FLEET_DEFAULT_INCLUDE_SUBMODULES="true"
 # --depth through here, so "scan depth" means the same thing everywhere: a
 # guardrail on how deep DOWNWARD discovery walks, clamped to a single ceiling.
 #
-# `auto` is adaptive: deepen level by level and stop at the SHALLOWEST depth
-# that finds a git repo — so a workspace of direct-child repos settles at depth
-# 1 instead of scanning the full cap — bounded by the ceiling. A workspace with
-# no repos has nothing to adapt to, so `auto` falls back to the cap. Mixed-depth
-# layouts (repos at depth 1 AND deeper) settle at the shallow level; pass an
-# explicit --depth N to scan deeper. Callers report the resolved depth so the
-# choice is never silent.
+# `auto` is per-branch adaptive: a single pruned scan walks each branch to its
+# own first git repo (pruning makes that cheap even at the ceiling), and auto
+# resolves to the DEEPEST repo found — the tightest depth that still captures
+# every branch in a mixed-depth workspace (repos at depth 1 AND deeper are all
+# caught in one pass). A workspace of direct-child repos settles at depth 1; one
+# with no repos has nothing to adapt to and falls back to the cap. Callers
+# report the resolved depth so the choice is never silent.
 
 # The ceiling — the one source of truth for "how deep is too deep" downward.
 manifest_fleet_depth_cap() {
     echo "$MANIFEST_CLI_FLEET_MAX_DISCOVERY_DEPTH"
 }
 
-# Adaptive depth: the shallowest depth (>= MIN) at which a git repo appears,
-# clamped to the cap. Returns the cap when no repo is found by the ceiling.
-# Probes via discover_fleet_repos at increasing caps (stderr/log suppressed);
-# the common case — repos as direct children — resolves in a single depth-1 scan.
+# Adaptive depth: the DEEPEST depth (>= MIN) at which a git repo appears,
+# clamped to the cap — the tightest single scan depth that still captures every
+# branch's repo in a mixed-depth workspace. Returns the cap when no repo is
+# found by the ceiling. One pruned scan to the cap suffices: pruning stops each
+# branch at its first repo, so this stays cheap even on a large workspace.
 _manifest_fleet_adaptive_depth() {
     local root_dir="${1:-$(pwd)}"
-    local cap min d
+    local cap min deepest=0 depth
     cap="$(manifest_fleet_depth_cap)"
     min="$MANIFEST_CLI_FLEET_MIN_DISCOVERY_DEPTH"
-    for (( d = min; d <= cap; d++ )); do
-        if [[ -n "$(manifest_discovery_find_git_repos "$root_dir" "$d" "$MANIFEST_CLI_FLEET_DEFAULT_INCLUDE_SUBMODULES" "$MANIFEST_CLI_FLEET_MIN_DISCOVERY_DEPTH" fleet 2>/dev/null)" ]]; then
-            echo "$d"
-            return 0
-        fi
-    done
-    echo "$cap"
+    while IFS=$'\t' read -r _ _ depth _; do
+        [[ "$depth" =~ ^[0-9]+$ ]] || continue
+        (( depth > deepest )) && deepest="$depth"
+    done < <(manifest_discovery_find_git_repos "$root_dir" "$cap" "$MANIFEST_CLI_FLEET_DEFAULT_INCLUDE_SUBMODULES" "$min" fleet true 2>/dev/null)
+    if (( deepest >= min )); then
+        echo "$deepest"
+    else
+        echo "$cap"
+    fi
 }
 
 # Resolve a --depth spec ("auto" | "" | non-negative integer) to a concrete
@@ -1104,25 +1107,35 @@ generate_start_tsv() {
     # fingerprint it. The fingerprint lets `manifest init fleet` detect
     # whether the user has actually edited selections in Phase 2.
     local selects=""
+    local observed_depth=0
     local line
     while IFS= read -r line; do
         local fields=()
         _manifest_fleet_tsv_read_line "$line" fields
         local name="${fields[0]:-}"
+        local path="${fields[1]:-}"
         local has_git="${fields[7]:-}"
         [[ -z "$name" ]] && continue
         local selected
         selected=$(_fleet_start_selected_for_row "$has_git" "$select_mode")
         selects="${selects}${selected}\n"
+        if [[ "$has_git" == "true" ]]; then
+            local row_depth=$(( $(_fleet_repo_depth_for_path "$path") + 1 ))
+            (( row_depth > observed_depth )) && observed_depth="$row_depth"
+        fi
     done <<< "$discovered"
 
     local default_hash
     default_hash=$(printf "%b" "$selects" | _manifest_hash_short)
 
-    # Header
+    # Header. `# Depth:` is the observed deepest repo depth (derived from the
+    # rows), not the requested scan depth — a diagnostic of the fleet's actual
+    # reach. Falls back to the requested depth when no git repo was found.
+    local recorded_depth="$observed_depth"
+    (( recorded_depth > 0 )) || recorded_depth="$depth"
     echo "# MANIFEST FLEET — Directory Inventory"
     echo "# Root: $root_dir"
-    echo "# Depth: $depth"
+    echo "# Depth: $recorded_depth"
     echo "# Last scanned: $scan_date"
     echo "# Canonical config: manifest.fleet.config.yaml"
     echo "# Toggle the SELECT column (true/false), then run: manifest init fleet"

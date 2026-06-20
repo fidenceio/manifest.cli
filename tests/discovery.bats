@@ -42,3 +42,22 @@ teardown() {
     echo "$output" | grep -q "$SCRATCH/svc"
     echo "$output" | grep -q $'\t1\tfalse'
 }
+
+@test "discovery: git repo finder prunes at the first repo on a branch when asked" {
+    mkdir -p "$SCRATCH/outer"
+    git -C "$SCRATCH/outer" init -q
+    mkdir -p "$SCRATCH/outer/inner"
+    git -C "$SCRATCH/outer/inner" init -q
+
+    # Default (no prune): the nested repo is discovered too.
+    run manifest_discovery_find_git_repos "$SCRATCH" 5 true 1 fleet
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q $'^outer\t'
+    echo "$output" | grep -q "outer/inner"
+
+    # Pruned: discovery stops at the outer repo; the nested repo is not emitted.
+    run manifest_discovery_find_git_repos "$SCRATCH" 5 true 1 fleet true
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q $'^outer\t'
+    ! echo "$output" | grep -q "outer/inner"
+}

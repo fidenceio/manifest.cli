@@ -201,6 +201,7 @@ manifest_discovery_walk_directories() {
     local max_depth="${2:-$MANIFEST_CLI_DISCOVERY_DEFAULT_MAX_DEPTH}"
     local min_depth="${3:-0}"
     local profile="${4:-default}"
+    local prune_at_repos="${5:-false}"
 
     if [[ ! -d "$root_dir" ]]; then
         _manifest_discovery_log_error "Discovery root directory does not exist: $root_dir"
@@ -212,7 +213,7 @@ manifest_discovery_walk_directories() {
     [[ "$min_depth" =~ ^[0-9]+$ ]] || min_depth=0
 
     local discovered_paths=()
-    _manifest_discovery_walk_recursive "$root_dir" "$root_dir" 0 "$max_depth" "$min_depth" "$profile" discovered_paths
+    _manifest_discovery_walk_recursive "$root_dir" "$root_dir" 0 "$max_depth" "$min_depth" "$profile" discovered_paths "$prune_at_repos"
 }
 
 _manifest_discovery_walk_recursive() {
@@ -223,6 +224,7 @@ _manifest_discovery_walk_recursive() {
     local min_depth="$5"
     local profile="$6"
     local _arr_name="$7"
+    local prune_at_repos="${8:-false}"
     local -n _discovered_ref="$_arr_name"
 
     if (( current_depth > max_depth )); then
@@ -268,6 +270,14 @@ _manifest_discovery_walk_recursive() {
         fi
     fi
 
+    # Stop at the first repo on a branch when pruning is on: a fleet repo is a
+    # leaf for discovery (nested repos are not fleet members), so descending
+    # into it only wastes a full subtree walk.
+    if [[ "$prune_at_repos" == "true" ]] && (( current_depth > 0 )) \
+       && manifest_discovery_is_git_repository "$current_dir"; then
+        return 0
+    fi
+
     if (( current_depth >= max_depth )); then
         return 0
     fi
@@ -275,7 +285,7 @@ _manifest_discovery_walk_recursive() {
     local subdir
     while IFS= read -r -d '' subdir; do
         if [[ -d "$subdir" ]] && [[ ! -L "$subdir" ]]; then
-            _manifest_discovery_walk_recursive "$subdir" "$root_dir" "$((current_depth + 1))" "$max_depth" "$min_depth" "$profile" "$_arr_name"
+            _manifest_discovery_walk_recursive "$subdir" "$root_dir" "$((current_depth + 1))" "$max_depth" "$min_depth" "$profile" "$_arr_name" "$prune_at_repos"
         fi
     done < <(find "$current_dir" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
     return 0
@@ -289,6 +299,7 @@ manifest_discovery_find_git_repos() {
     local include_submodules="${3:-true}"
     local min_depth="${4:-1}"
     local profile="${5:-default}"
+    local prune_at_repos="${6:-false}"
 
     local depth rel_path abs_path dirname has_git is_submodule
     while IFS=$'\t' read -r depth rel_path abs_path dirname has_git is_submodule; do
@@ -298,7 +309,7 @@ manifest_discovery_find_git_repos() {
             continue
         fi
         printf "%s\t%s\t%s\t%s\n" "$rel_path" "$abs_path" "$depth" "$is_submodule"
-    done < <(manifest_discovery_walk_directories "$root_dir" "$max_depth" "$min_depth" "$profile")
+    done < <(manifest_discovery_walk_directories "$root_dir" "$max_depth" "$min_depth" "$profile" "$prune_at_repos")
 }
 
 # Emit matching files under ROOT as TSV:
