@@ -1,8 +1,9 @@
 #!/usr/bin/env bats
 #
 # §7.3: unified fleet --depth resolution — one flag, one meaning, one cap.
-# `auto` is adaptive (deepen to the shallowest depth that finds a git repo,
-# capped); an explicit integer is clamped to [MIN, cap]; bad specs are rejected.
+# `auto` is per-branch adaptive (one pruned scan; resolves to the DEEPEST depth
+# that finds a git repo, capped); an explicit integer is clamped to [MIN, cap];
+# bad specs are rejected.
 
 load 'helpers/setup'
 
@@ -43,9 +44,21 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
     [ "$(manifest_fleet_resolve_depth auto "$WS")" = "1" ]
 }
 
-@test "depth: auto deepens to the shallowest level where repos appear" {
+@test "depth: auto reaches a repo nested below the top level" {
     mkrepo "$WS/group/gamma"   # repo at depth 2; nothing at depth 1
     [ "$(manifest_fleet_resolve_depth auto "$WS")" = "2" ]
+}
+
+@test "depth: auto reaches the DEEPEST repo in a mixed-depth workspace" {
+    mkrepo "$WS/alpha"          # repo at depth 1
+    mkrepo "$WS/group/gamma"    # repo at depth 2
+    [ "$(manifest_fleet_resolve_depth auto "$WS")" = "2" ]
+}
+
+@test "depth: auto prunes nested repos (a repo inside a repo is not deeper)" {
+    mkrepo "$WS/outer"
+    mkrepo "$WS/outer/inner"    # nested repo — pruned, not a fleet member
+    [ "$(manifest_fleet_resolve_depth auto "$WS")" = "1" ]
 }
 
 @test "depth: auto falls back to the cap when no repos exist" {

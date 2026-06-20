@@ -699,9 +699,10 @@ _manifest_init_fleet_dry_run_phase1() {
     local create_repo_visibility="$5"
     local all_folders="${6:-false}"
 
-    # Resolve --depth (N|auto) to a concrete scan depth; auto adapts to the
-    # shallowest level with repos (§7.3). Keep the original spec ($depth) for the
-    # replay hint so the default ("auto") replays as a bare command.
+    # Resolve --depth (N|auto) to a concrete scan depth; auto resolves to the
+    # deepest level with repos via one pruned scan (§7.3, per-branch adaptive).
+    # Keep the original spec ($depth) for the replay hint so the default
+    # ("auto") replays as a bare command.
     local resolved_depth
     resolved_depth="$(manifest_fleet_resolve_depth "$depth" "$root_dir")" || return 1
 
