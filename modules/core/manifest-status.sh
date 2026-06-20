@@ -412,6 +412,71 @@ _status_version_surfaces_fleet_report() {
     fi
 }
 
+# Derived depth profile + health. For each top-level bucket, the shallowest and
+# deepest depth (root-relative) at which a git repo appears, computed from the
+# manifest.fleet.tsv PATHs on demand (see docs/FLEET_DESIGN_SPEC.md). A bucket
+# whose repos span more than one depth is flagged, since that usually means an
+# accidental nested repo or a broken layout convention.
+_status_fleet_depth_profile_report() {
+    local proj="$1"
+    local tsv="$proj/manifest.fleet.tsv"
+    [[ -f "$tsv" ]] || return 0
+
+    declare -A min_by_top=() max_by_top=() count_by_top=()
+    local tops=()
+    local global_min="" global_max=0
+    local select name path _type has_git _rest
+    while IFS=$'\t' read -r select name path _type has_git _rest; do
+        [[ "$select" == \#* ]] && continue
+        [[ -z "$name" ]] && continue
+        [[ "$has_git" == "true" ]] || continue
+        local top="${path%%/*}"
+        [[ -n "$top" ]] || continue
+
+        local depth=1 rest="$path"
+        while [[ "$rest" == */* ]]; do rest="${rest#*/}"; depth=$((depth + 1)); done
+
+        if [[ -z "${min_by_top[$top]+_}" ]]; then
+            tops+=("$top")
+            min_by_top[$top]=$depth
+            max_by_top[$top]=$depth
+            count_by_top[$top]=1
+        else
+            (( depth < min_by_top[$top] )) && min_by_top[$top]=$depth
+            (( depth > max_by_top[$top] )) && max_by_top[$top]=$depth
+            count_by_top[$top]=$(( count_by_top[$top] + 1 ))
+        fi
+        [[ -z "$global_min" ]] && global_min=$depth
+        (( depth < global_min )) && global_min=$depth
+        (( depth > global_max )) && global_max=$depth
+    done < "$tsv"
+
+    [[ "${#tops[@]}" -gt 0 ]] || return 0
+
+    local sorted_tops
+    mapfile -t sorted_tops < <(printf '%s\n' "${tops[@]}" | sort)
+
+    local mixed=() top
+    echo ""
+    echo "Depth profile (derived from manifest.fleet.tsv)"
+    printf "  %-28s %5s %5s %7s  %s\n" "Bucket" "min" "max" "repos" "note"
+    for top in "${sorted_tops[@]}"; do
+        local note="uniform"
+        if (( min_by_top[$top] != max_by_top[$top] )); then
+            note="MIXED"
+            mixed+=("$top")
+        fi
+        printf "  %-28s %5s %5s %7s  %s\n" \
+            "$top" "${min_by_top[$top]}" "${max_by_top[$top]}" "${count_by_top[$top]}" "$note"
+    done
+    echo "  global: shallowest ${global_min}, deepest ${global_max}"
+    if [[ "${#mixed[@]}" -gt 0 ]]; then
+        echo "  mixed-depth buckets: ${mixed[*]} (check for accidental nested repos)"
+    else
+        echo "  mixed-depth buckets: none"
+    fi
+}
+
 _manifest_status_fleet_json() {
     local proj="$1"
     local config_file
@@ -538,6 +603,7 @@ _manifest_status_fleet() {
         printf "%s\n" "$row"
     done
     _status_version_surfaces_fleet_report "$proj" "$config_file"
+    _status_fleet_depth_profile_report "$proj"
     echo ""
     echo "Next actions"
     echo "  manifest status repo      Show status for this repo only"
