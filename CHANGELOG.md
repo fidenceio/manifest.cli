@@ -1,5 +1,14 @@
 # Changelog
 
+## [55.1.1] - 2026-06-20
+
+**Release Type:** Patch
+
+### Changes
+
+- Fix(git): make release tag builder idempotent w.r.t. prefix; route ship/fleet tag construction through it + add test
+
+
 ## [55.1.0] - 2026-06-19
 
 **Release Type:** Minor
@@ -87,13 +96,3 @@
 
 - Feat(ship): add --force-bump for repo + fleet; symmetric no-changes gate
 - Docs(tracker): fold §8.1h tap-sync resolution into a §8.1e disambiguation
-
-
-## [54.0.1] - 2026-06-15
-
-**Release Type:** Patch
-
-### Changes
-
-- Fix(ship): reconcile tap checkout after the bottle-wait upgrade
-- Fix(upgrade): fast-forward the workspace tap checkout in the auto-upgrade worker
