@@ -18,6 +18,82 @@ Manifest Fleet coordinates independent Git repositories from one workspace. It d
 | `manifest.fleet.config.yaml` | Canonical fleet config used by commands |
 | `manifest.fleet.plan.yaml` | Adoption/reconciliation plan written by `manifest plan fleet --apply` |
 
+## Fleet States And Vocabulary
+
+The fleet model has exactly one universe and one selected subset; everything else is a label derived from observation, never a stored state.
+
+### Corpus, Members, Benched
+
+```text
+CORPUS  = git repositories discovered <= depth ceiling   (observed — the universe)
+MEMBER  = a corpus repo explicitly selected              (declared — the fleet)
+BENCHED = every other corpus repo, by default            (persisted — records triage)
+```
+
+Membership is a single binary — `member` or `benched`, default `benched`. Nothing auto-enrolls. Benched is **persisted** (the `SELECT` column), not recomputed, so a rescan does not re-triage the whole corpus on every run.
+
+### Three Orthogonal Axes
+
+| Axis | Values | Kind | TSV column |
+| ---- | ------ | ---- | ---------- |
+| Membership | `member` ↔ `benched` (default) | declared | `SELECT` |
+| Local | `absent` → `present` → `repo` (has `.git`) | observed (cheap) | `HAS_GIT` |
+| Remote | `undeclared` → `declared` → `verified` | declared URL, then observed | `REMOTE_URL` |
+
+`Remote` is a **secure tri-state**: a recorded URL is a *claim* (`declared`), not proof (`verified`). Outward actions gate on `verified` — see [Verification Is Cost-Bounded](#verification-is-cost-bounded).
+
+### Named States (Derived, Never Stored)
+
+Members, by Local × Remote:
+
+| State | Local | Remote | Safe operation |
+| ----- | ----- | ------ | -------------- |
+| Backed | repo | verified | ship |
+| Unverified | repo | declared | verify first |
+| Stranded | repo | undeclared | create remote (idempotent), then ship |
+| Uncloned | absent | verified | clone to restore |
+| Lost | absent | undeclared | unrecoverable — flag loudly |
+
+Benched repos are either **Candidate** (Local = repo; promotable to member) or **Scenery** (Local = non-repo: a grouping folder or a deliberate placeholder such as `_holding`).
+
+`missing` is not a primitive — it is `member` + Local `absent`. `unlisted` is an on-disk repo not yet in the TSV (benched-by-omission until a rescan records it).
+
+### Identity Is Path
+
+The operational identity of a fleet repo is its **workspace-relative path**, which is also the key the adoption/reconcile merge dedups on. The remote slug (the `REMOTE_URL` basename) is recorded only to flag two anomalies — *rehomed* (a path's remote changed) and *collision* (two paths claim one remote) — and is **not** identity. A remoteless/stranded repo is therefore still a first-class member. A move or rename reads as remove + add; a rescan reconciles it. See also [Repo Identity](#repo-identity) for command-target resolution.
+
+### Storage: Store Declared, Cache The Corpus, Derive Labels
+
+| In the TSV | Kind | Authority |
+| ---------- | ---- | --------- |
+| `SELECT` (membership) | **declared** | truth — never auto-changed |
+| corpus rows + `HAS_GIT` + `# Last scanned:` | **cached observation** | baseline, reconciled on rescan |
+| `REMOTE_URL` | **declared** (a claim) | the remote declaration |
+| remote-verified | **never persisted** | observed live, TTL-cached in `~/.manifest-cli/cache/` only |
+| any derived label | **never stored** | recomputed `f(declared ⋈ observed)` |
+
+The TSV is a freshness-stamped **hybrid** (declared membership + cached corpus). Drift is bounded to "what changed since `# Last scanned:`". `HAS_GIT`/`BRANCH` are deliberately cached observations, refreshed on rescan — not leaks of live state.
+
+### Verification Is Cost-Bounded
+
+Outward actions — push, GitHub Release, create-remote — gate on `verified`, never `declared`. The guarantee is kept cheap so it scales to a large fleet without exhausting GitHub rate limits:
+
+- **Scoped, not fleet-wide.** A fleet operation verifies only the members it is about to act on (the release/push set — usually a handful), never the whole corpus. A full-corpus sweep is its own explicit, opt-in command.
+- **Implicit in the action.** `git push` is atomic and locally safe: a push to a missing or unreachable remote fails with no side effects and downgrades the cached state, so the steady-state path does not probe-then-push. A mandatory *pre-flight* `verified` gate is reserved for the one **irreversible** action — `create-remote` (`gh repo create`), where acting on a wrong assumption is destructive.
+- **Git-protocol probe.** Existence/reachability uses `git ls-remote` (already used internally), which does **not** consume the REST/GraphQL rate-limit quota. `gh` is the fallback only when richer metadata is needed; batched sweeps alias ~100 repos per GraphQL query.
+- **TTL-cached.** `verify` is a pure, idempotent read, cached in `~/.manifest-cli/cache/` and never written to the TSV. Repeat operations inside the TTL window do **zero** network.
+
+### Verbs
+
+| Verb | Moves | Idempotent | Safety | Status |
+| ---- | ----- | ---------- | ------ | ------ |
+| select / unselect | membership flag (`SELECT`) | yes | default benched; reversible | realized (TSV toggle) |
+| clone | Local `absent` → `repo` | yes (skip if present) | read-only on remote | designed |
+| verify | Remote `declared` → `verified` | yes (pure read) | grants outward trust | primitive in use (`git ls-remote`); user-facing sweep designed |
+| create-remote | Remote → `verified` | yes (create-if-absent, never clobber) | irreversible — dry-run first | repo-scoped (`--create-repo-*`); fleet bootstrap is backlog |
+
+Release disposition (eligible / current / release-disabled / PR-gated) is an orthogonal axis — see [Release Model](#release-model).
+
 ## Initialization
 
 `manifest init fleet` is intentionally two-phase:
