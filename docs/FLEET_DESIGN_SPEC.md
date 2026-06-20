@@ -32,6 +32,16 @@ BENCHED = every other corpus repo, by default            (persisted — records 
 
 Membership is a single binary — `member` or `benched`, default `benched`. Nothing auto-enrolls. Benched is **persisted** (the `SELECT` column), not recomputed, so a rescan does not re-triage the whole corpus on every run.
 
+### Depth
+
+Discovery is bounded by a global depth **ceiling** (`MANIFEST_CLI_FLEET_MAX_DISCOVERY_DEPTH = 10`) — a deliberately high guardrail, not a target. The ceiling stays high; it is never lowered to fit a particular fleet.
+
+`--depth auto` is **per-branch adaptive**: each branch of the tree is walked down to *its own* first git repo — discovery prunes at a repo (nested repos are excluded by default) — or to the ceiling if that branch holds none. Because every branch resolves independently, a **mixed-depth** workspace is captured completely in one pass with no global under- or over-scan: shallow direct-child repos and deeper bucketed repos are both found, and a deep branch never drags a shallow one to its level (or vice-versa). An explicit `--depth N` still forces a fixed scan depth when wanted.
+
+The TSV's `# Depth:` header records the **observed deepest** repo depth — a derived diagnostic, not the ceiling. Per-branch resolution removes the older hazard where re-running `auto` could shrink a TSV that had been scanned deeper.
+
+**Depth profile + health (derived, not stored).** Per-subfolder depth facts — for each top-level bucket, the shallowest and deepest depth at which a repo appears — are **derived from the row `PATH`s on demand**, never persisted: the rows already encode them (see [Storage](#storage-store-declared-cache-the-corpus-derive-labels)). `status` reports this profile and flags any **mixed-depth bucket** — one where a bucket's shallowest and deepest repo depth differ — as a health signal, since that usually means an accidental nested repo or a broken layout convention. A clean fleet keeps every bucket internally uniform.
+
 ### Three Orthogonal Axes
 
 | Axis | Values | Kind | TSV column |
