@@ -259,7 +259,7 @@ get_fleet_services() {
     fi
 
     local names=""
-    while IFS=$'\t' read -r selected name path type has_git url branch version; do
+    while IFS=$'\t' read -r selected name path has_git url branch version; do
         [[ "$selected" =~ ^#.*$ ]] && continue
         [[ -z "$selected" ]] && continue
         [[ "$selected" != "true" ]] && continue
@@ -515,7 +515,7 @@ load_fleet_config() {
 # Function: _load_all_service_configs (internal)
 # -----------------------------------------------------------------------------
 # Loads configuration for all selected services from manifest.fleet.tsv.
-# Reads base properties (path, url, type, branch) from TSV, then applies
+# Reads base properties (path, url, branch) from TSV, then applies
 # optional per-service overrides from the YAML config (team, excluded, etc.).
 #
 # ARGUMENTS:
@@ -524,7 +524,6 @@ load_fleet_config() {
 # SIDE EFFECTS:
 #   Sets MANIFEST_CLI_FLEET_SERVICE_<NAME>_PATH
 #   Sets MANIFEST_CLI_FLEET_SERVICE_<NAME>_URL
-#   Sets MANIFEST_CLI_FLEET_SERVICE_<NAME>_TYPE
 #   Sets MANIFEST_CLI_FLEET_SERVICE_<NAME>_BRANCH
 #   Sets MANIFEST_CLI_FLEET_SERVICE_<NAME>_TEAM
 #   Sets MANIFEST_CLI_FLEET_SERVICE_<NAME>_EXCLUDED
@@ -541,7 +540,7 @@ _load_all_service_configs() {
         return 0
     fi
 
-    while IFS=$'\t' read -r selected name path type has_git url branch version; do
+    while IFS=$'\t' read -r selected name path has_git url branch version; do
         [[ "$selected" =~ ^#.*$ ]] && continue
         [[ -z "$selected" ]] && continue
         [[ "$selected" != "true" ]] && continue
@@ -559,7 +558,6 @@ _load_all_service_configs() {
         # Base properties from TSV (inventory)
         printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_PATH" '%s' "$abs_path"
         printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_URL" '%s' "$url"
-        printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_TYPE" '%s' "$type"
         printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_BRANCH" '%s' "${branch:-${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}}"
         printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_SUBMODULE" '%s' "false"
 
@@ -584,10 +582,8 @@ _load_all_service_configs() {
             release_strategy=$(get_yaml_value "$svc_config" ".release.strategy" "$release_strategy" 2>/dev/null) || true
 
             # Allow per-service overrides of TSV-sourced values
-            local svc_type svc_branch
-            svc_type=$(get_yaml_value "$svc_config" ".type" "" 2>/dev/null) || true
+            local svc_branch
             svc_branch=$(get_yaml_value "$svc_config" ".branch" "" 2>/dev/null) || true
-            [[ -n "$svc_type" ]] && printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_TYPE" '%s' "$svc_type"
             [[ -n "$svc_branch" ]] && printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_BRANCH" '%s' "$svc_branch"
         fi
 
@@ -597,7 +593,7 @@ _load_all_service_configs() {
         printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_RELEASE_ENABLED" '%s' "$release_enabled"
         printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_RELEASE_STRATEGY" '%s' "$release_strategy"
 
-        log_debug "Loaded service config: $name (path=$abs_path, type=$type)"
+        log_debug "Loaded service config: $name (path=$abs_path)"
     done < "$tsv_file"
 }
 
@@ -644,14 +640,14 @@ get_fleet_service_path() {
 #
 # ARGUMENTS:
 #   $1 - Service name
-#   $2 - Property name (path, url, type, branch, team, excluded, submodule)
+#   $2 - Property name (path, url, branch, team, excluded, submodule)
 #   $3 - Default value (optional)
 #
 # RETURNS:
 #   Echoes the property value or default
 #
 # EXAMPLE:
-#   service_type=$(get_fleet_service_property "user-service" "type" "service")
+#   service_branch=$(get_fleet_service_property "user-service" "branch" "main")
 # -----------------------------------------------------------------------------
 get_fleet_service_property() {
     local service="$1"
@@ -903,12 +899,11 @@ list_fleet_services() {
 
     echo "Services in fleet '$MANIFEST_CLI_FLEET_NAME':"
     echo ""
-    printf "%-20s %-10s %-10s %-30s\n" "SERVICE" "TYPE" "STATUS" "PATH"
-    printf "%-20s %-10s %-10s %-30s\n" "-------" "----" "------" "----"
+    printf "%-30s %-10s %-30s\n" "SERVICE" "STATUS" "PATH"
+    printf "%-30s %-10s %-30s\n" "-------" "------" "----"
 
     for service in $MANIFEST_CLI_FLEET_SERVICES; do
         local path=$(get_fleet_service_property "$service" "path")
-        local type=$(get_fleet_service_property "$service" "type" "service")
         local status="unknown"
 
         if [[ -d "$path" ]]; then
@@ -921,7 +916,7 @@ list_fleet_services() {
             status="missing"
         fi
 
-        printf "%-20s %-10s %-10s %-30s\n" "$service" "$type" "$status" "$path"
+        printf "%-30s %-10s %-30s\n" "$service" "$status" "$path"
     done
 }
 

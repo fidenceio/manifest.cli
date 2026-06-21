@@ -716,11 +716,11 @@ _manifest_init_fleet_dry_run_phase1() {
     fi
 
     local total=0 listed=0 git_count=0 plain_count=0
-    while IFS=$'\t' read -r name _path _type _branch _version _url _submodule has_git _has_remote; do
+    while IFS=$'\t' read -r name _path _branch _version _url _submodule has_git _has_remote; do
         [[ -z "$name" ]] && continue
         ((total += 1))
     done <<< "$discovered"
-    while IFS=$'\t' read -r name _path _type _branch _version _url _submodule has_git _has_remote; do
+    while IFS=$'\t' read -r name _path _branch _version _url _submodule has_git _has_remote; do
         [[ -z "$name" ]] && continue
         ((listed += 1))
         if [[ "$has_git" == "true" ]]; then
@@ -771,7 +771,7 @@ _manifest_init_fleet_dry_run_phase2() {
     selected=$(parse_start_tsv "$start_file")
 
     local selected_count=0 existing_count=0 missing_count=0 needs_git_count=0
-    while IFS=$'\t' read -r name path _type has_git _url _branch _version; do
+    while IFS=$'\t' read -r name path has_git _url _branch _version; do
         [[ -z "$name" ]] && continue
         ((selected_count += 1))
         local abs_path="$root_dir/${path#./}"

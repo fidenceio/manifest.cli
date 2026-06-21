@@ -292,8 +292,8 @@ manifest_fleet_topics_run() {
     local member_rows
     member_rows=$(parse_start_tsv "$tsv_file")
 
-    local name path _type has_git _url _branch
-    while IFS=$'\t' read -r name path _type has_git _url _branch; do
+    local name path has_git _url _branch
+    while IFS=$'\t' read -r name path has_git _url _branch; do
         [[ -z "$name" ]] && continue
         [[ "$has_git" != "true" ]] && continue
 

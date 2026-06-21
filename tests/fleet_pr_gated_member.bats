@@ -62,8 +62,8 @@ services:
       strategy: "pr"
 YAML
     cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
-true	direct-svc	./direct-svc	service	true
-true	gated-svc	./gated-svc	service	true
+true	direct-svc	./direct-svc	true
+true	gated-svc	./gated-svc	true
 TSV
     init_git_repo "$SCRATCH/work/direct-svc"
     init_git_repo "$SCRATCH/work/gated-svc"

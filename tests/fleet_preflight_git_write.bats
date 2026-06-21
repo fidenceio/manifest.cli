@@ -45,8 +45,8 @@ services:
 YAML
 
     cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
-true	svca	./svc-a	service	true
-true	svcb	./svc-b	service	true
+true	svca	./svc-a	true
+true	svcb	./svc-b	true
 TSV
 }
 

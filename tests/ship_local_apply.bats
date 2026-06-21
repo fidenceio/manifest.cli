@@ -174,7 +174,7 @@ services:
     release:
       enabled: true
 YAML
-    printf 'true\tsvc\t./svc\tservice\tfalse\t\tmain\t%s\n' "$version" \
+    printf 'true\tsvc\t./svc\tfalse\t\tmain\t%s\n' "$version" \
         > "$work/manifest.fleet.tsv"
 
     "$REAL_GIT" -C "$work/svc" init -q
@@ -210,8 +210,8 @@ services:
       enabled: true
 YAML
     {
-        printf 'true\tclean-svc\t./clean-svc\tservice\tfalse\t\tmain\t%s\n' "$version"
-        printf 'true\tdirty-svc\t./dirty-svc\tservice\tfalse\t\tmain\t%s\n' "$version"
+        printf 'true\tclean-svc\t./clean-svc\tfalse\t\tmain\t%s\n' "$version"
+        printf 'true\tdirty-svc\t./dirty-svc\tfalse\t\tmain\t%s\n' "$version"
     } > "$work/manifest.fleet.tsv"
 
     local repo

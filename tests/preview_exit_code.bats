@@ -177,7 +177,7 @@ services:
     branch: "main"
 YAML
     cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
-true	svc	./svc	service	false
+true	svc	./svc	false
 TSV
     run_manifest ship fleet patch
     [ "$status" -eq 0 ]

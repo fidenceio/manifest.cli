@@ -114,7 +114,7 @@ _fleet_ensure_gitignores() {
     local gitignore_failed=0
     local overwritten_repos=()
 
-    while IFS=$'\t' read -r name path _type _branch _version _url _submodule; do
+    while IFS=$'\t' read -r name path _branch _version _url _submodule; do
         [[ -z "$path" ]] && continue
         local repo_path="$root_dir/$path"
         [[ ! -d "$repo_path" ]] && continue
@@ -306,14 +306,13 @@ fleet_status() {
     echo ""
 
     # Service table header
-    printf "┌─────────────────────────┬──────────┬──────────┬──────────────┬─────────┐\n"
-    printf "│ %-23s │ %-8s │ %-8s │ %-12s │ %-7s │\n" "SERVICE" "TYPE" "VERSION" "BRANCH" "STATUS"
-    printf "├─────────────────────────┼──────────┼──────────┼──────────────┼─────────┤\n"
+    printf "┌─────────────────────────┬──────────┬──────────────┬─────────┐\n"
+    printf "│ %-23s │ %-8s │ %-12s │ %-7s │\n" "SERVICE" "VERSION" "BRANCH" "STATUS"
+    printf "├─────────────────────────┼──────────┼──────────────┼─────────┤\n"
 
     # Service details
     for service in $MANIFEST_CLI_FLEET_SERVICES; do
         local path=$(get_fleet_service_property "$service" "path")
-        local type=$(get_fleet_service_property "$service" "type" "service")
         local expected_branch=$(get_fleet_service_property "$service" "branch" "main")
         local excluded=$(get_fleet_service_property "$service" "excluded" "false")
 
@@ -347,12 +346,11 @@ fleet_status() {
 
         # Truncate long values for display
         local display_service="${service:0:23}"
-        local display_type="${type:0:8}"
         local display_version="${version:0:8}"
         local display_branch="${branch:0:12}"
 
-        printf "│ %-23s │ %-8s │ %-8s │ %-12s │ %-1s %-5s │\n" \
-            "$display_service" "$display_type" "$display_version" "$display_branch" "$status_icon" "$status"
+        printf "│ %-23s │ %-8s │ %-12s │ %-1s %-5s │\n" \
+            "$display_service" "$display_version" "$display_branch" "$status_icon" "$status"
 
         # Verbose output
         if [[ "$verbose" == "true" ]]; then
@@ -365,7 +363,7 @@ fleet_status() {
         fi
     done
 
-    printf "└─────────────────────────┴──────────┴──────────┴──────────────┴─────────┘\n"
+    printf "└─────────────────────────┴──────────┴──────────────┴─────────┘\n"
 
     # Legend
     echo ""
@@ -418,14 +416,13 @@ _fleet_status_json() {
         first=false
 
         local path=$(get_fleet_service_property "$service" "path")
-        local type=$(get_fleet_service_property "$service" "type" "service")
         local version=$(_get_repo_version "$path" 2>/dev/null || echo "unknown")
         local branch=$(git -C "$path" branch --show-current 2>/dev/null || echo "unknown")
         local status="missing"
         [[ -d "$path" ]] && status="present"
         [[ -d "$path/.git" ]] && status="ready"
 
-        echo -n "    {\"name\": \"$(_json_escape "$service")\", \"type\": \"$(_json_escape "$type")\", \"version\": \"$(_json_escape "$version")\", \"branch\": \"$(_json_escape "$branch")\", \"status\": \"$status\"}"
+        echo -n "    {\"name\": \"$(_json_escape "$service")\", \"version\": \"$(_json_escape "$version")\", \"branch\": \"$(_json_escape "$branch")\", \"status\": \"$status\"}"
     done
 
     echo ""
@@ -947,7 +944,7 @@ EOF
         echo ""
         echo "Initializing selected directories..."
 
-        while IFS=$'\t' read -r name path type has_git url branch version; do
+        while IFS=$'\t' read -r name path has_git url branch version; do
             [[ -z "$name" ]] && continue
             local abs_path="$target_dir/${path#./}"
 
@@ -1648,25 +1645,15 @@ fleet_update() {
         local discovered
         discovered=$(discover_fleet_repos "$root_dir" 3)  # Limited depth for speed
 
-        local total=0 services=0 libraries=0 infra=0 tools=0
-        while IFS=$'\t' read -r name path type rest; do
+        local total=0
+        while IFS=$'\t' read -r name path rest; do
             [[ -z "$name" ]] && continue
             total=$((total+1))
-            case "$type" in
-                "service") services=$((services+1)) ;;
-                "library") libraries=$((libraries+1)) ;;
-                "infrastructure") infra=$((infra+1)) ;;
-                "tool") tools=$((tools+1)) ;;
-            esac
         done <<< "$discovered"
 
         cat << EOF
 {
   "total": $total,
-  "services": $services,
-  "libraries": $libraries,
-  "infrastructure": $infra,
-  "tools": $tools,
   "root": "$root_dir"
 }
 EOF
@@ -1752,8 +1739,8 @@ EOF
             echo "Adding new repositories:"
         fi
         echo ""
-        echo "$diff_output" | grep "^+" | while IFS=$'\t' read -r status name path type branch version url is_sub; do
-            printf "  + %-25s %-12s %s\n" "$name" "($type)" "$path"
+        echo "$diff_output" | grep "^+" | while IFS=$'\t' read -r status name path branch version url is_sub; do
+            printf "  + %-25s %s\n" "$name" "$path"
         done
         echo ""
 
@@ -1767,7 +1754,11 @@ EOF
             local yaml_content
             yaml_content=$(generate_manifest_additions "$new_repos")
 
-            if append_services_to_manifest "$config_file" "$yaml_content"; then
+            if ! grep -q "^services:" "$config_file"; then
+                # TSV-based fleet: roster is manifest.fleet.tsv (reconciled below),
+                # not a config services: map — nothing to append to the config.
+                echo "✓ Fleet roster tracked in manifest.fleet.tsv (reconciled below)"
+            elif append_services_to_manifest "$config_file" "$yaml_content"; then
                 echo "✓ Added $new_count service(s) to $config_file"
             else
                 log_error "Failed to update $config_file"
@@ -1785,7 +1776,7 @@ EOF
     if [[ "$removed_count" -gt 0 ]]; then
         echo ""
         log_warning "Missing repositories (in manifest but not on disk):"
-        echo "$diff_output" | grep "^-" | while IFS=$'\t' read -r status name path type rest; do
+        echo "$diff_output" | grep "^-" | while IFS=$'\t' read -r status name path rest; do
             printf "  - %-25s %s\n" "$name" "$path"
         done
         echo ""
@@ -2424,10 +2415,10 @@ _fleet_ship_plan() {
     echo "Fleet ship plan ($increment_type)"
     echo ""
     echo "Included repositories"
-    printf '%-30s %-12s %-12s %-15s %-7s %-9s %-13s %s\n' "Service" "Type" "Branch" "Version" "Dirty" "Effect" "Decision" "Path / reason"
-    printf '%-30s %-12s %-12s %-15s %-7s %-9s %-13s %s\n' "-------" "----" "------" "-------" "-----" "------" "--------" "-------------"
+    printf '%-30s %-12s %-15s %-7s %-9s %-13s %s\n' "Service" "Branch" "Version" "Dirty" "Effect" "Decision" "Path / reason"
+    printf '%-30s %-12s %-15s %-7s %-9s %-13s %s\n' "-------" "------" "-------" "-----" "------" "--------" "-------------"
 
-    local service path reason effect decision type branch display_name dirty version current next config_skip
+    local service path reason effect decision branch display_name dirty version current next config_skip
     local offbranch_count=0
     local pr_gated_count=0
     local emptyremote_count=0
@@ -2439,7 +2430,6 @@ _fleet_ship_plan() {
     local surface_paths=()
     for service in $MANIFEST_CLI_FLEET_SERVICES; do
         path=$(get_fleet_service_property "$service" "path")
-        type=$(get_fleet_service_property "$service" "type" "service")
         display_name=$(_fleet_plan_service_display_name "$service" "$path")
         if config_skip=$(_fleet_service_config_skip_reason "$service"); then
             branch="—"
@@ -2449,10 +2439,10 @@ _fleet_ship_plan() {
                 # PR-gated members are listed separately from plain skips: apply will
                 # refuse them (fail-closed) and route their release through review.
                 pr_gated_count=$((pr_gated_count + 1))
-                printf '%-30s %-12s %-12s %-15s %-7s %-9s %-13s %s\n' "$display_name" "$type" "$branch" "$version" "$dirty" "pr-gate" "needs PR" "$path (release.strategy: pr)"
+                printf '%-30s %-12s %-15s %-7s %-9s %-13s %s\n' "$display_name" "$branch" "$version" "$dirty" "pr-gate" "needs PR" "$path (release.strategy: pr)"
             else
                 skipped_count=$((skipped_count + 1))
-                printf '%-30s %-12s %-12s %-15s %-7s %-9s %-13s %s\n' "$display_name" "$type" "$branch" "$version" "$dirty" "read" "skip" "$path ($config_skip)"
+                printf '%-30s %-12s %-15s %-7s %-9s %-13s %s\n' "$display_name" "$branch" "$version" "$dirty" "read" "skip" "$path ($config_skip)"
             fi
             continue
         fi
@@ -2489,7 +2479,7 @@ _fleet_ship_plan() {
             else
                 version="—"
             fi
-            printf '%-30s %-12s %-12s %-15s %-7s %-9s %-13s %s\n' "$display_name" "$type" "$branch" "$version" "$dirty" "$effect" "$decision" "$path"
+            printf '%-30s %-12s %-15s %-7s %-9s %-13s %s\n' "$display_name" "$branch" "$version" "$dirty" "$effect" "$decision" "$path"
             fp_parts+=("${display_name}:${version}")
             surface_labels+=("$display_name")
             surface_paths+=("$path")
@@ -2498,7 +2488,7 @@ _fleet_ship_plan() {
             # Skipped members never ship, so no off-branch marker is applied.
             branch=$(_fleet_plan_branch_cell "$path" false)
             version="${current:-—}"
-            printf '%-30s %-12s %-12s %-15s %-7s %-9s %-13s %s\n' "$display_name" "$type" "$branch" "$version" "$dirty" "read" "skip" "$path ($reason)"
+            printf '%-30s %-12s %-15s %-7s %-9s %-13s %s\n' "$display_name" "$branch" "$version" "$dirty" "read" "skip" "$path ($reason)"
         fi
     done
 
@@ -3473,7 +3463,6 @@ fleet_validate() {
 # ARGUMENTS:
 #   $1 - Path or URL to add
 #   --name NAME      Service name (auto-detected if not provided)
-#   --type TYPE      Service type (auto-detected if not provided)
 #
 # EXAMPLE:
 #   manifest add fleet ./new-service
@@ -3482,7 +3471,6 @@ fleet_validate() {
 fleet_add() {
     local path_or_url=""
     local service_name=""
-    local service_type=""
     local dry_run=true
     local execution_mode="preview"
     local _local_only=false
@@ -3503,15 +3491,9 @@ fleet_add() {
                     return 1
                 fi
                 service_name="$2"; shift 2 ;;
-            --type)
-                if [ -z "${2:-}" ] || [[ "${2:-}" == --* ]]; then
-                    log_error "--type requires a value"
-                    return 1
-                fi
-                service_type="$2"; shift 2 ;;
             -h|--help|help)
                 _render_help \
-                    "manifest add fleet <path-or-url> [-y|--yes] [--dry-run] [--name NAME] [--type TYPE]" \
+                    "manifest add fleet <path-or-url> [-y|--yes] [--dry-run] [--name NAME]" \
                     "Add a local path or remote URL to fleet membership."
                 return 0
                 ;;
@@ -3525,7 +3507,7 @@ fleet_add() {
     done
 
     if [[ -z "$path_or_url" ]]; then
-        log_error "Usage: manifest add fleet <path-or-url> [--name NAME] [--type TYPE]"
+        log_error "Usage: manifest add fleet <path-or-url> [--name NAME]"
         return 1
     fi
 
@@ -3559,21 +3541,14 @@ fleet_add() {
         echo "Type: Local path"
         echo "Path: $path_or_url"
 
-        # Auto-detect name and type
+        # Auto-detect name
         if [[ -z "$service_name" ]]; then
             service_name=$(_extract_service_name "$path_or_url" "$MANIFEST_CLI_FLEET_ROOT")
         fi
-
-        if [[ -z "$service_type" ]] && [[ -d "$path_or_url" ]]; then
-            service_type=$(_classify_repository "$path_or_url")
-        fi
     fi
-
-    service_type="${service_type:-service}"
 
     echo ""
     echo "Service name: $service_name"
-    echo "Service type: $service_type"
     echo ""
 
     # Sanitize service name for safe YAML key (alphanumeric + hyphens only)
@@ -3596,7 +3571,6 @@ fleet_add() {
         rel_path="${rel_path#./}"
         yaml_content+="    path: \"./${rel_path//\"/\\\"}\""$'\n'
     fi
-    yaml_content+="    type: \"${service_type//\"/\\\"}\""
 
     local config_file
     config_file=$(_fleet_resolve_config)
@@ -3777,7 +3751,6 @@ COMMAND DETAILS:
       -y, --yes          Apply fleet membership updates
       --dry-run          Preview YAML without modifying manifest.fleet.config.yaml
       --name NAME        Service name
-      --type TYPE        Service type (service|library|infrastructure|tool)
 
   manifest pr fleet [options]
     Preferred shorthand for: manifest pr fleet queue [options]

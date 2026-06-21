@@ -425,8 +425,8 @@ _status_fleet_depth_profile_report() {
     declare -A min_by_top=() max_by_top=() count_by_top=()
     local tops=()
     local global_min="" global_max=0
-    local select name path _type has_git _rest
-    while IFS=$'\t' read -r select name path _type has_git _rest; do
+    local select name path has_git _rest
+    while IFS=$'\t' read -r select name path has_git _rest; do
         [[ "$select" == \#* ]] && continue
         [[ -z "$name" ]] && continue
         [[ "$has_git" == "true" ]] || continue

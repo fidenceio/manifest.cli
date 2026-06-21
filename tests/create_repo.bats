@@ -200,8 +200,8 @@ teardown() {
     cd "$SCRATCH"
 
     {
-        printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
-        printf "true\tghost\t./ghost\trepo\tfalse\t\t\t0.0.0\n"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
+        printf "true\tghost\t./ghost\tfalse\t\t\t0.0.0\n"
     } > manifest.fleet.tsv
 
     PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet -y
@@ -239,8 +239,8 @@ teardown() {
 
     # Old-format TSV (no DEFAULT-SELECT-HASH) — never flagged stale.
     {
-        printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
-        printf "true\tsvc_a\t./svc_a\trepo\tfalse\t\t\t0.0.0\n"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
+        printf "true\tsvc_a\t./svc_a\tfalse\t\t\t0.0.0\n"
     } > manifest.fleet.tsv
 
     # Stub the leaf: capture exactly what arrived.
@@ -327,8 +327,8 @@ teardown() {
     cd "$SCRATCH"
 
     {
-        printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
-        printf "true\tghost\t./ghost\trepo\tfalse\t\t\t0.0.0\n"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
+        printf "true\tghost\t./ghost\tfalse\t\t\t0.0.0\n"
     } > manifest.fleet.tsv
 
     PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet -y
@@ -343,8 +343,8 @@ teardown() {
     mkdir -p svc_x
 
     {
-        printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
-        printf "true\tsvc_x\t./svc_x\trepo\tfalse\t\t\t0.0.0\n"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
+        printf "true\tsvc_x\t./svc_x\tfalse\t\t\t0.0.0\n"
     } > manifest.fleet.tsv
 
     _manifest_require_gh() { return 0; }
@@ -362,8 +362,8 @@ teardown() {
     mkdir -p svc_clean
 
     {
-        printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
-        printf "true\tsvc_clean\t./svc_clean\trepo\tfalse\t\t\t0.0.0\n"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
+        printf "true\tsvc_clean\t./svc_clean\tfalse\t\t\t0.0.0\n"
     } > manifest.fleet.tsv
 
     PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet -y
@@ -409,10 +409,10 @@ teardown() {
     config_before="$(cat manifest.fleet.config.yaml)"
 
     {
-        printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
-        printf "true\tsvc_bare\t./svc_bare\tservice\ttrue\t\t\t\n"
-        printf "true\tsvc_seeded\t./svc_seeded\tservice\ttrue\t\t\t2.5.0\n"
-        printf "true\tsvc_deep\t./group/svc_deep\tservice\ttrue\t\t\t\n"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
+        printf "true\tsvc_bare\t./svc_bare\ttrue\t\t\t\n"
+        printf "true\tsvc_seeded\t./svc_seeded\ttrue\t\t\t2.5.0\n"
+        printf "true\tsvc_deep\t./group/svc_deep\ttrue\t\t\t\n"
     } > manifest.fleet.tsv
     local tsv_before
     tsv_before="$(cat manifest.fleet.tsv)"
@@ -469,9 +469,9 @@ teardown() {
         printf "# MANIFEST FLEET — Directory Inventory\n"
         printf "# Root: %s\n" "$SCRATCH"
         printf "# Depth: 2\n"
-        printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
-        printf "true\tsvc_top\t./svc_top\tservice\ttrue\t\t\t\n"
-        printf "true\tsvc_deep\t./group/svc_deep\tservice\ttrue\t\t\t\n"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
+        printf "true\tsvc_top\t./svc_top\ttrue\t\t\t\n"
+        printf "true\tsvc_deep\t./group/svc_deep\ttrue\t\t\t\n"
     } > manifest.fleet.tsv
 
     # No preexisting config -> first-time Phase 2 -> refresh path runs.

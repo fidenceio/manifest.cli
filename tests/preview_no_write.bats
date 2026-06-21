@@ -72,7 +72,7 @@ services:
     branch: "main"
 YAML
     cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
-true	svc	./svc	service	false
+true	svc	./svc	false
 TSV
     echo "1.2.3" > "$SCRATCH/work/svc/VERSION"
 }
@@ -167,7 +167,7 @@ assert_preview_clean() {
 @test "init fleet phase 2: default preview makes no writes" {
     mkdir -p "$SCRATCH/work/svc"
     cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
-true	svc	./svc	service	false
+true	svc	./svc	false
 TSV
     assert_preview_clean init fleet --name test-fleet
 }
@@ -175,7 +175,7 @@ TSV
 @test "init fleet phase 2: --dry-run makes no writes" {
     mkdir -p "$SCRATCH/work/svc"
     cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
-true	svc	./svc	service	false
+true	svc	./svc	false
 TSV
     assert_preview_clean init fleet --dry-run --name test-fleet
 }
@@ -183,7 +183,7 @@ TSV
 @test "init fleet phase 2: AUTO_CONFIRM=1 default still previews and makes no writes" {
     mkdir -p "$SCRATCH/work/svc"
     cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
-true	svc	./svc	service	false
+true	svc	./svc	false
 TSV
     export MANIFEST_CLI_AUTO_CONFIRM=1
     assert_preview_clean init fleet --name test-fleet

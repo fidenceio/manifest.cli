@@ -57,16 +57,14 @@ _fleet_ensure_minimal_config() {
 _fleet_plan_service_yaml() {
     local name="$1"
     local path="$2"
-    local type="$3"
-    local branch="$4"
-    local url="$5"
-    local submodule="$6"
+    local branch="$3"
+    local url="$4"
+    local submodule="$5"
 
     echo ""
     echo "  $name:"
     echo "    path: \"./$path\""
     [[ -n "$url" ]] && echo "    url: \"$url\""
-    echo "    type: \"${type:-service}\""
     echo "    branch: \"${branch:-main}\""
     [[ "$submodule" == "true" ]] && echo "    submodule: true"
 }
@@ -77,10 +75,9 @@ _fleet_plan_track_service() {
     local fleet_name="$3"
     local name="$4"
     local target_path="$5"
-    local type="$6"
-    local branch="$7"
-    local url="$8"
-    local submodule="$9"
+    local branch="$6"
+    local url="$7"
+    local submodule="$8"
 
     _fleet_ensure_minimal_config "$config_file" "$fleet_name" || return 1
     if _fleet_config_service_exists "$config_file" "$name"; then
@@ -88,7 +85,7 @@ _fleet_plan_track_service() {
     fi
 
     local yaml_content
-    yaml_content=$(_fleet_plan_service_yaml "$name" "$target_path" "$type" "$branch" "$url" "$submodule")
+    yaml_content=$(_fleet_plan_service_yaml "$name" "$target_path" "$branch" "$url" "$submodule")
     append_services_to_manifest "$config_file" "$yaml_content"
 }
 
@@ -295,13 +292,12 @@ _fleet_apply_plan() {
 
     local i
     for ((i = 0; i < count; i++)); do
-        local name kind source_path target_path action type remote_url branch submodule parent_path submodule_name pinned_commit
+        local name kind source_path target_path action remote_url branch submodule parent_path submodule_name pinned_commit
         name=$(_fleet_plan_entry_value "$plan_file" "$i" "name")
         kind=$(_fleet_plan_entry_value "$plan_file" "$i" "kind")
         source_path=$(_fleet_plan_entry_value "$plan_file" "$i" "source_path")
         target_path=$(_fleet_plan_entry_value "$plan_file" "$i" "target_path")
         action=$(_fleet_plan_entry_value "$plan_file" "$i" "action")
-        type=$(_fleet_plan_entry_value "$plan_file" "$i" "type")
         remote_url=$(_fleet_plan_entry_value "$plan_file" "$i" "remote_url")
         branch=$(_fleet_plan_entry_value "$plan_file" "$i" "branch")
         submodule=$(_fleet_plan_entry_value "$plan_file" "$i" "submodule")
@@ -316,7 +312,7 @@ _fleet_apply_plan() {
 
         case "$action" in
             track)
-                _fleet_plan_track_service "$root_dir" "$config_file" "$fleet_name" "$name" "$target_path" "$type" "$branch" "$remote_url" "$submodule" || return 1
+                _fleet_plan_track_service "$root_dir" "$config_file" "$fleet_name" "$name" "$target_path" "$branch" "$remote_url" "$submodule" || return 1
                 ;;
             init)
                 if [[ "$source_path" != "$target_path" ]]; then
@@ -325,17 +321,17 @@ _fleet_apply_plan() {
                 fi
                 git -C "$target_abs" init -q || return 1
                 ensure_gitignore_smart "$target_abs" >/dev/null || return 1
-                _fleet_plan_track_service "$root_dir" "$config_file" "$fleet_name" "$name" "$target_path" "$type" "$branch" "$remote_url" "false" || return 1
+                _fleet_plan_track_service "$root_dir" "$config_file" "$fleet_name" "$name" "$target_path" "$branch" "$remote_url" "false" || return 1
                 ;;
             move)
                 mkdir -p "$(dirname "$target_abs")" || return 1
                 mv "$source_abs" "$target_abs" || return 1
-                _fleet_plan_track_service "$root_dir" "$config_file" "$fleet_name" "$name" "$target_path" "$type" "$branch" "$remote_url" "false" || return 1
+                _fleet_plan_track_service "$root_dir" "$config_file" "$fleet_name" "$name" "$target_path" "$branch" "$remote_url" "false" || return 1
                 ;;
             adopt_submodule)
                 [[ "$adopt_submodules" == "true" ]] || return 1
                 _fleet_apply_adopt_submodule "$root_dir" "$name" "$source_path" "$target_path" "$remote_url" "$parent_path" "$submodule_name" "$pinned_commit" || return 1
-                _fleet_plan_track_service "$root_dir" "$config_file" "$fleet_name" "$name" "$target_path" "$type" "$branch" "$remote_url" "false" || return 1
+                _fleet_plan_track_service "$root_dir" "$config_file" "$fleet_name" "$name" "$target_path" "$branch" "$remote_url" "false" || return 1
                 ;;
         esac
     done

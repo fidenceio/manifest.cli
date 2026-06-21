@@ -36,7 +36,7 @@ YAML
 
 write_selected_tsv() {
     cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
-true	svc	./svc	service	false		
+true	svc	./svc	false		
 TSV
 }
 
@@ -48,19 +48,17 @@ fleet:
 services:
   rootworkspace:
     path: "."
-    type: "infrastructure"
     branch: "main"
   svc:
     path: "./svc"
-    type: "service"
     branch: "main"
 YAML
 }
 
 write_root_selected_tsv() {
     cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
-true	rootworkspace	.	infrastructure	true		
-true	svc	./svc	service	true		
+true	rootworkspace	.	true		
+true	svc	./svc	true		
 TSV
 }
 
@@ -140,7 +138,7 @@ TSV
     write_fleet_config
     before="$(cat "$SCRATCH/work/manifest.fleet.config.yaml")"
 
-    run_manifest add fleet ./services/new-api --name new-api --type service --dry-run
+    run_manifest add fleet ./services/new-api --name new-api --dry-run
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"Dry run - manifest add fleet"* ]]
@@ -211,7 +209,6 @@ TSV
     cat >> "$SCRATCH/work/manifest.fleet.config.yaml" <<'YAML'
   svc:
     path: "./svc"
-    type: "service"
     branch: "main"
 YAML
 
@@ -228,8 +225,8 @@ YAML
     [[ "$output" == *"Services:"*"1"* ]]
     [[ "$output" == *"Fleet ship plan"* ]]
     [[ "$output" == *"Included repositories"* ]]
-    [[ "$output" == *"Service"*"Type"*"Branch"*"Effect"*"Decision"*"Path / reason"* ]]
-    [[ "$output" == *"svc"*"service"*"release"*"would ship"*"${SCRATCH}/work/svc"* ]]
+    [[ "$output" == *"Service"*"Branch"*"Effect"*"Decision"*"Path / reason"* ]]
+    [[ "$output" == *"svc"*"release"*"would ship"*"${SCRATCH}/work/svc"* ]]
     [[ "$output" == *"would ship"* ]]
     [[ "$output" != *"PR feature requires Manifest Cloud"* ]]
     [ "$(cat "$SCRATCH/work/svc/VERSION")" = "1.2.3" ]
@@ -279,16 +276,16 @@ YAML
     # Existing TSV lists only the root. svc is a git repo and must be APPENDED;
     # svc/src is a plain subdir and must never be added.
     cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
-true	rootworkspace	.	infrastructure	true
+true	rootworkspace	.	true
 TSV
 
     run_manifest refresh fleet -y
 
     [ "$status" -eq 0 ]
     # Pre-existing root row is preserved verbatim.
-    grep -q $'^true\trootworkspace\t.\tinfrastructure\ttrue' "$SCRATCH/work/manifest.fleet.tsv"
+    grep -q $'^true\trootworkspace\t.\ttrue' "$SCRATCH/work/manifest.fleet.tsv"
     # svc (git repo) is appended; svc/src (plain subdir) is not.
-    grep -q $'^true\tsvc\tsvc\tservice\ttrue' "$SCRATCH/work/manifest.fleet.tsv"
+    grep -q $'^true\tsvc\tsvc\ttrue' "$SCRATCH/work/manifest.fleet.tsv"
     ! grep -q $'\tsvc/src\t' "$SCRATCH/work/manifest.fleet.tsv"
 }
 
@@ -305,21 +302,18 @@ fleet:
 services:
   rootworkspace:
     path: "."
-    type: "infrastructure"
     branch: "main"
   fidenceiomanifestcli:
     path: "./fidenceio.manifest.cli"
-    type: "tool"
     branch: "main"
   fidenceiohomebrewtap:
     path: "./fidenceio.homebrew.tap"
-    type: "infrastructure"
     branch: "main"
 YAML
     cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
-true	rootworkspace	.	infrastructure	true
-true	fidenceiomanifestcli	./fidenceio.manifest.cli	tool	true
-true	fidenceiohomebrewtap	./fidenceio.homebrew.tap	infrastructure	true
+true	rootworkspace	.	true
+true	fidenceiomanifestcli	./fidenceio.manifest.cli	true
+true	fidenceiohomebrewtap	./fidenceio.homebrew.tap	true
 TSV
 
     run_manifest ship fleet patch
@@ -338,7 +332,7 @@ TSV
     [[ "$output" != *"fidenceiohomebrewtap"* ]]
 }
 
-@test "refresh fleet --dry-run classifies dotted CLI and Homebrew tap repo names" {
+@test "refresh fleet --dry-run reports no drift for configured dotted-name members" {
     mkdir -p "$SCRATCH/work/fidenceio.manifest.cli" "$SCRATCH/work/fidenceio.homebrew.tap/Formula"
     git -C "$SCRATCH/work" init -q
     git -C "$SCRATCH/work/fidenceio.manifest.cli" init -q
@@ -350,16 +344,14 @@ fleet:
 services:
   fidenceiomanifestcli:
     path: "./fidenceio.manifest.cli"
-    type: "tool"
     branch: "main"
   fidenceiohomebrewtap:
     path: "./fidenceio.homebrew.tap"
-    type: "infrastructure"
     branch: "main"
 YAML
     cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
-true	fidenceiomanifestcli	./fidenceio.manifest.cli	tool	true		
-true	fidenceiohomebrewtap	./fidenceio.homebrew.tap	infrastructure	true		
+true	fidenceiomanifestcli	./fidenceio.manifest.cli	true		
+true	fidenceiohomebrewtap	./fidenceio.homebrew.tap	true		
 TSV
     before="$(cat "$SCRATCH/work/manifest.fleet.tsv")"
 

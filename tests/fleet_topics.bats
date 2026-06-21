@@ -168,7 +168,7 @@ accounting" ]
     gh_stub_install "$SCRATCH/.gh-stub"
     write_config ""
     make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
-    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
 
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "true"
     [ "$status" -eq 0 ]
@@ -183,7 +183,7 @@ accounting" ]
     write_config 'topics:
   from_name: inner'
     make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
-    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
 
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "true"
     [ "$status" -eq 0 ]
@@ -203,7 +203,7 @@ accounting" ]
     write_config 'topics:
   from_name: inner'
     make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
-    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
 
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false"
     [ "$status" -eq 0 ]
@@ -219,7 +219,7 @@ accounting" ]
     write_config 'topics:
   from_name: inner'
     make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
-    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
 
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false"
     [ "$status" -eq 0 ]
@@ -232,7 +232,7 @@ accounting" ]
     write_config 'topics:
   from_name: inner'
     make_member "fidence.service.accounting.avalara" "git@gitlab.com:acme/fidence.service.accounting.avalara.git"
-    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@gitlab.com:acme/fidence.service.accounting.avalara.git\tmain'
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\ttrue\tgit@gitlab.com:acme/fidence.service.accounting.avalara.git\tmain'
 
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false"
     [ "$status" -eq 0 ]
@@ -245,7 +245,7 @@ accounting" ]
 @test "run: gh missing yields a skip notice, rc 0" {
     mkdir -p "$SCRATCH/no-gh"
     write_config ""
-    write_tsv $'true\tsvc\t./svc\tservice\ttrue\t\tmain'
+    write_tsv $'true\tsvc\t./svc\ttrue\t\tmain'
 
     MANIFEST_CLI_FLEET_TOPICS_FROM_NAME=inner PATH="$SCRATCH/no-gh" \
         run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false"
@@ -259,7 +259,7 @@ accounting" ]
     write_config 'topics:
   from_name: inner'
     make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
-    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
 
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false"
     [ "$status" -eq 0 ]
@@ -272,7 +272,7 @@ accounting" ]
 @test "update fleet: invalid topics.from_name fails loud before any work" {
     write_config 'topics:
   from_name: midle'
-    write_tsv $'true\tsvc\t./svc\tservice\tfalse\t\tmain'
+    write_tsv $'true\tsvc\t./svc\tfalse\t\tmain'
 
     run_manifest update fleet
     [ "$status" -eq 1 ]
@@ -284,7 +284,7 @@ accounting" ]
     write_config 'topics:
   from_name: inner'
     make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
-    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
 
     run_manifest update fleet
     [ "$status" -eq 0 ]
@@ -319,7 +319,7 @@ acme/Fidence.Tools.cli" ]
     write_config 'topics:
   from_name: inner'
     make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
-    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
 
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "true"
     [ "$status" -eq 0 ]
@@ -336,7 +336,7 @@ acme/Fidence.Tools.cli" ]
     write_config 'topics:
   from_name: inner'
     make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
-    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
 
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "true"
     [ "$status" -eq 0 ]
@@ -350,7 +350,7 @@ acme/Fidence.Tools.cli" ]
     write_config 'topics:
   from_name: inner'
     make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
-    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
 
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "true"
     [ "$status" -eq 0 ]
@@ -361,7 +361,7 @@ acme/Fidence.Tools.cli" ]
     gh_router_install
     write_config 'topics:
   from_name: inner'
-    write_tsv $'true\tsvc\t./svc\tservice\tfalse\t\tmain'
+    write_tsv $'true\tsvc\t./svc\tfalse\t\tmain'
 
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "true"
     [ "$status" -eq 0 ]
@@ -374,7 +374,7 @@ acme/Fidence.Tools.cli" ]
 @test "update fleet: no topics config means no topics output at all" {
     gh_stub_install "$SCRATCH/.gh-stub"
     write_config ""
-    write_tsv $'true\tsvc\t./svc\tservice\tfalse\t\tmain'
+    write_tsv $'true\tsvc\t./svc\tfalse\t\tmain'
 
     run_manifest update fleet
     [ "$status" -eq 0 ]
@@ -388,7 +388,7 @@ acme/Fidence.Tools.cli" ]
     write_config 'topics:
   from_name: inner'
     make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
-    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
 
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false" "true"
     [ "$status" -eq 0 ]
@@ -402,7 +402,7 @@ acme/Fidence.Tools.cli" ]
     write_config 'topics:
   from_name: inner'
     make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
-    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
 
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false" "true"
     [ "$status" -eq 0 ]
@@ -414,7 +414,7 @@ acme/Fidence.Tools.cli" ]
     # the config read — same shape as the non-quiet gh-missing test above.
     mkdir -p "$SCRATCH/no-gh"
     write_config ""
-    write_tsv $'true\tsvc\t./svc\tservice\ttrue\t\tmain'
+    write_tsv $'true\tsvc\t./svc\ttrue\t\tmain'
 
     MANIFEST_CLI_FLEET_TOPICS_FROM_NAME=inner PATH="$SCRATCH/no-gh" \
         run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false" "true"
@@ -428,7 +428,7 @@ acme/Fidence.Tools.cli" ]
     write_config 'topics:
   from_name: inner'
     make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
-    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
 
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false" "true"
     [ "$status" -eq 0 ]
@@ -442,7 +442,7 @@ acme/Fidence.Tools.cli" ]
     write_config 'topics:
   from_name: inner'
     make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
-    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
 
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false" "true"
     [ "$status" -eq 0 ]
@@ -457,7 +457,7 @@ acme/Fidence.Tools.cli" ]
     write_config 'topics:
   from_name: inner'
     make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
-    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
 
     run_manifest topics fleet
     [ "$status" -eq 0 ]
@@ -472,7 +472,7 @@ acme/Fidence.Tools.cli" ]
     write_config 'topics:
   from_name: inner'
     make_member "fidence.service.accounting.avalara" "git@github.com:acme/fidence.service.accounting.avalara.git"
-    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\tservice\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
+    write_tsv $'true\tavalara\t./fidence.service.accounting.avalara\ttrue\tgit@github.com:acme/fidence.service.accounting.avalara.git\tmain'
 
     run_manifest topics fleet -y
     [ "$status" -eq 0 ]
@@ -483,7 +483,7 @@ acme/Fidence.Tools.cli" ]
 @test "topics fleet: off prints an enable hint and makes zero gh calls" {
     gh_stub_install "$SCRATCH/.gh-stub"
     write_config ""
-    write_tsv $'true\tsvc\t./svc\tservice\tfalse\t\tmain'
+    write_tsv $'true\tsvc\t./svc\tfalse\t\tmain'
 
     run_manifest topics fleet
     [ "$status" -eq 0 ]
@@ -495,7 +495,7 @@ acme/Fidence.Tools.cli" ]
 @test "topics fleet: invalid topics.from_name fails loud" {
     write_config 'topics:
   from_name: midle'
-    write_tsv $'true\tsvc\t./svc\tservice\tfalse\t\tmain'
+    write_tsv $'true\tsvc\t./svc\tfalse\t\tmain'
 
     run_manifest topics fleet
     [ "$status" -eq 1 ]

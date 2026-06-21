@@ -139,8 +139,8 @@ services:
     release_enabled: true
 YAML
     cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
-true	clean-svc	./clean-svc	service	false
-true	dirty-svc	./dirty-svc	service	false
+true	clean-svc	./clean-svc	false
+true	dirty-svc	./dirty-svc	false
 TSV
     init_git_repo "$SCRATCH/work/clean-svc"
     init_git_repo "$SCRATCH/work/dirty-svc"
@@ -157,7 +157,7 @@ TSV
     run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
     [ "$status" -eq 0 ]
     # Header row must list "Dirty" between "Branch" and "Effect".
-    echo "$output" | grep -E "Service.*Type.*Branch.*Dirty.*Effect.*Decision.*Path" >/dev/null
+    echo "$output" | grep -E "Service.*Branch.*Dirty.*Effect.*Decision.*Path" >/dev/null
 }
 
 @test "fleet ship preview: clean member shows no dirty marker, dirty member shows 1m+1u" {
@@ -220,7 +220,7 @@ TSV
     run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
     [ "$status" -eq 0 ]
     # Header must list a Version column between Branch and Dirty.
-    echo "$output" | grep -E "Service.*Type.*Branch.*Version.*Dirty.*Effect" >/dev/null
+    echo "$output" | grep -E "Service.*Branch.*Version.*Dirty.*Effect" >/dev/null
     # Releaseable member with a VERSION renders current→next (e.g. 4.5.6→4.5.7).
     echo "$output" | grep -E "dirty-svc[[:space:]].*4\.5\.6->" >/dev/null
     # Unchanged tagged members show the current version without a bump arrow.
@@ -255,7 +255,7 @@ services:
       enabled: false
 YAML
     cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
-true	formula-only	./formula-only	infrastructure	false
+true	formula-only	./formula-only	false
 TSV
     init_git_repo "$SCRATCH/work/formula-only"
     rm -f "$SCRATCH/work/formula-only/VERSION"
@@ -288,7 +288,7 @@ services:
       enabled: false
 YAML
     cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
-true	formula-only	./formula-only	infrastructure	false
+true	formula-only	./formula-only	false
 TSV
     init_git_repo "$SCRATCH/work/formula-only"
     rm -f "$SCRATCH/work/formula-only/VERSION"
@@ -320,7 +320,7 @@ services:
       enabled: false
 YAML
     cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
-true	formula-only	./formula-only	infrastructure	false
+true	formula-only	./formula-only	false
 TSV
 
     cd "$SCRATCH/work"
@@ -354,8 +354,8 @@ services:
     release_enabled: true
 YAML
     cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
-true	on-main	./on-main	service	false
-true	off-main	./off-main	service	false
+true	on-main	./on-main	false
+true	off-main	./off-main	false
 TSV
     init_git_repo "$SCRATCH/work/on-main"
     git -C "$SCRATCH/work/on-main" branch -M main
