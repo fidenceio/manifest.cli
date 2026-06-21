@@ -247,10 +247,10 @@ SCRIPT
 @test "depth profile: uniform buckets report no mixed-depth health issue" {
     {
         echo "# Depth: 2"
-        printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
-        printf "true\tws\tworkspaces\trepo\ttrue\tx\tmain\n"
-        printf "true\tfe\tfrontend/fe\tservice\ttrue\tx\tmain\n"
-        printf "true\tdbx\tdb/dbx\tservice\ttrue\tx\tmain\n"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
+        printf "true\tws\tworkspaces\ttrue\tx\tmain\n"
+        printf "true\tfe\tfrontend/fe\ttrue\tx\tmain\n"
+        printf "true\tdbx\tdb/dbx\ttrue\tx\tmain\n"
     } > "$SCRATCH/manifest.fleet.tsv"
 
     run _status_fleet_depth_profile_report "$SCRATCH"
@@ -263,9 +263,9 @@ SCRIPT
 @test "depth profile: a bucket spanning two depths is flagged MIXED" {
     {
         echo "# Depth: 3"
-        printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
-        printf "true\ta\tapps/a\tservice\ttrue\tx\tmain\n"
-        printf "true\tb\tapps/b/nested\tservice\ttrue\tx\tmain\n"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
+        printf "true\ta\tapps/a\ttrue\tx\tmain\n"
+        printf "true\tb\tapps/b/nested\ttrue\tx\tmain\n"
     } > "$SCRATCH/manifest.fleet.tsv"
 
     run _status_fleet_depth_profile_report "$SCRATCH"
@@ -277,9 +277,9 @@ SCRIPT
 @test "depth profile: only git rows count; non-git scenery is excluded" {
     {
         echo "# Depth: 2"
-        printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
-        printf "true\tfe\tfrontend/fe\tservice\ttrue\tx\tmain\n"
-        printf "false\tholding\tsecure/_holding\tscenery\tfalse\t\t\n"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
+        printf "true\tfe\tfrontend/fe\ttrue\tx\tmain\n"
+        printf "false\tholding\tsecure/_holding\tfalse\t\t\n"
     } > "$SCRATCH/manifest.fleet.tsv"
 
     run _status_fleet_depth_profile_report "$SCRATCH"

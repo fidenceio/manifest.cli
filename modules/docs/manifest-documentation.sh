@@ -1219,14 +1219,13 @@ _manifest_docs_fleet_index() {
 
 ## Services
 
-| Service | Version | Type | Docs |
-|---------|---------|------|------|
+| Service | Version | Docs |
+|---------|---------|------|
 EOF
 
     for service in $MANIFEST_CLI_FLEET_SERVICES; do
-        local path type excluded version rel_path
+        local path excluded version rel_path
         path=$(get_fleet_service_property "$service" "path")
-        type=$(get_fleet_service_property "$service" "type" "service")
         excluded=$(get_fleet_service_property "$service" "excluded" "false")
 
         [[ "$excluded" == "true" ]] && continue
@@ -1244,7 +1243,7 @@ EOF
             rel_path="$path/$per_service_folder"
         fi
 
-        echo "| ${service} | v${version} | ${type} | [docs](${rel_path}/) |" >> "$index_file"
+        echo "| ${service} | v${version} | [docs](${rel_path}/) |" >> "$index_file"
     done
 
     cat >> "$index_file" << EOF

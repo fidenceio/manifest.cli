@@ -41,17 +41,17 @@ write_curated_tsv() {
         echo "# Last scanned: 2026-01-01T00:00:00Z"
         echo "# Canonical config: manifest.fleet.config.yaml"
         echo "# Toggle the SELECT column (true/false), then run: manifest init fleet"
-        printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
-        printf "true\talpha\tapps/alpha\tservice\ttrue\tgit@github.com:org/keep-this-url.git\tmain\n"
-        printf "true\tbeta\tdb/beta\tservice\ttrue\t\tmain\n"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
+        printf "true\talpha\tapps/alpha\ttrue\tgit@github.com:org/keep-this-url.git\tmain\n"
+        printf "true\tbeta\tdb/beta\ttrue\t\tmain\n"
     } > "$WS/manifest.fleet.tsv"
 }
 
-# Discovered-inventory rows in the 9-field layout produced by
+# Discovered-inventory rows in the 8-field layout produced by
 # discover_all_directories | filter_start_inventory_git_repos:
-#   name  path  type  branch  version  url  is_submodule  has_git  has_remote
+#   name  path  branch  version  url  is_submodule  has_git  has_remote
 disc_row() {
-    printf "%s\t%s\tservice\tmain\t\t%s\tfalse\ttrue\ttrue\n" "$1" "$2" "${3:-}"
+    printf "%s\t%s\tmain\t\t%s\tfalse\ttrue\ttrue\n" "$1" "$2" "${3:-}"
 }
 
 # =============================================================================
@@ -70,14 +70,14 @@ disc_row() {
     err="$(merge_update_tsv "$discovered" "$WS/manifest.fleet.tsv" "$WS" 2 append 2>&1 > "$WS/out.tsv")"
 
     # The hand-edited URL on alpha survives — scan metadata must NOT clobber it.
-    grep -q $'\talpha\tapps/alpha\tservice\ttrue\tgit@github.com:org/keep-this-url.git\tmain' "$WS/out.tsv"
+    grep -q $'\talpha\tapps/alpha\ttrue\tgit@github.com:org/keep-this-url.git\tmain' "$WS/out.tsv"
     ! grep -q "SCANNED-OTHER" "$WS/out.tsv"
 
     # beta was NOT in the discovered set but must be preserved (not dropped).
     grep -q $'\tbeta\tdb/beta\t' "$WS/out.tsv"
 
     # gamma is appended as a new row.
-    grep -q $'\tgamma\tdb/gamma\tservice\ttrue\tgit@github.com:org/gamma.git\tmain' "$WS/out.tsv"
+    grep -q $'\tgamma\tdb/gamma\ttrue\tgit@github.com:org/gamma.git\tmain' "$WS/out.tsv"
 
     # alpha appears exactly once (no duplicate from the re-discovery).
     [ "$(grep -c $'\talpha\tapps/alpha\t' "$WS/out.tsv")" -eq 1 ]

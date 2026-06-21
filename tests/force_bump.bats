@@ -179,8 +179,8 @@ services:
       enabled: true
 YAML
     {
-        printf 'true\tsvc-a\t./svc-a\tservice\tfalse\t\tmain\t%s\n' "$version"
-        printf 'true\tsvc-b\t./svc-b\tservice\tfalse\t\tmain\t%s\n' "$version"
+        printf 'true\tsvc-a\t./svc-a\tfalse\t\tmain\t%s\n' "$version"
+        printf 'true\tsvc-b\t./svc-b\tfalse\t\tmain\t%s\n' "$version"
     } > "$work/manifest.fleet.tsv"
     _mk_member "$work/svc-a" "$version"
     _mk_member "$work/svc-b" "$version"
@@ -211,8 +211,8 @@ services:
       enabled: false
 YAML
     {
-        printf 'true\tsvc-on\t./svc-on\tservice\tfalse\t\tmain\t%s\n' "$version"
-        printf 'true\tsvc-off\t./svc-off\tservice\tfalse\t\tmain\t%s\n' "$version"
+        printf 'true\tsvc-on\t./svc-on\tfalse\t\tmain\t%s\n' "$version"
+        printf 'true\tsvc-off\t./svc-off\tfalse\t\tmain\t%s\n' "$version"
     } > "$work/manifest.fleet.tsv"
     _mk_member "$work/svc-on" "$version"
     _mk_member "$work/svc-off" "$version"

@@ -112,16 +112,14 @@ _fleet_plan_split_discovery_line() {
     local line="$1"
     local _name_var="$2"
     local _path_var="$3"
-    local _type_var="$4"
-    local _branch_var="$5"
-    local _version_var="$6"
-    local _url_var="$7"
-    local _submodule_var="$8"
-    local _has_git_var="$9"
-    local _has_remote_var="${10}"
+    local _branch_var="$4"
+    local _version_var="$5"
+    local _url_var="$6"
+    local _submodule_var="$7"
+    local _has_git_var="$8"
+    local _has_remote_var="$9"
     local -n _name_ref="$_name_var"
     local -n _path_ref="$_path_var"
-    local -n _type_ref="$_type_var"
     local -n _branch_ref="$_branch_var"
     local -n _version_ref="$_version_var"
     local -n _url_ref="$_url_var"
@@ -129,14 +127,13 @@ _fleet_plan_split_discovery_line() {
     local -n _has_git_ref="$_has_git_var"
     local -n _has_remote_ref="$_has_remote_var"
     local sep=$'\x1f'
-    local parsed_name parsed_path parsed_type parsed_branch parsed_version parsed_url parsed_submodule parsed_has_git parsed_has_remote
+    local parsed_name parsed_path parsed_branch parsed_version parsed_url parsed_submodule parsed_has_git parsed_has_remote
 
     line="${line//$'\t'/$sep}"
-    IFS="$sep" read -r parsed_name parsed_path parsed_type parsed_branch parsed_version parsed_url parsed_submodule parsed_has_git parsed_has_remote <<< "$line"
+    IFS="$sep" read -r parsed_name parsed_path parsed_branch parsed_version parsed_url parsed_submodule parsed_has_git parsed_has_remote <<< "$line"
 
     _name_ref="$parsed_name"
     _path_ref="$parsed_path"
-    _type_ref="$parsed_type"
     _branch_ref="$parsed_branch"
     _version_ref="$parsed_version"
     _url_ref="$parsed_url"
@@ -145,28 +142,27 @@ _fleet_plan_split_discovery_line() {
     _has_remote_ref="$parsed_has_remote"
 }
 
+
 _fleet_plan_emit_entry() {
     local name="$1"
     local kind="$2"
     local source_path="$3"
     local target_path="$4"
     local action="$5"
-    local type="$6"
-    local has_git="$7"
-    local remote_url="$8"
-    local branch="$9"
-    local version="${10}"
-    local submodule="${11}"
-    local parent_path="${12:-}"
-    local pinned_commit="${13:-}"
-    local submodule_name="${14:-}"
+    local has_git="$6"
+    local remote_url="$7"
+    local branch="$8"
+    local version="$9"
+    local submodule="${10}"
+    local parent_path="${11:-}"
+    local pinned_commit="${12:-}"
+    local submodule_name="${13:-}"
 
     echo "  - name: $(_fleet_plan_yaml_quote "$name")"
     echo "    kind: $(_fleet_plan_yaml_quote "$kind")"
     echo "    source_path: $(_fleet_plan_yaml_quote "$source_path")"
     echo "    target_path: $(_fleet_plan_yaml_quote "$target_path")"
     echo "    action: $(_fleet_plan_yaml_quote "$action")"
-    echo "    type: $(_fleet_plan_yaml_quote "${type:-service}")"
     echo "    has_git: $(_fleet_plan_bool "$has_git")"
     echo "    remote_url: $(_fleet_plan_yaml_quote "$remote_url")"
     echo "    branch: $(_fleet_plan_yaml_quote "${branch:-main}")"
@@ -219,7 +215,7 @@ _fleet_plan_emit_submodules() {
 
             _fleet_plan_emit_entry \
                 "$name" "submodule" "$source_path" "$source_path" "adopt_submodule" \
-                "service" "true" "$url" "${branch:-main}" "0.0.0" "true" \
+                "true" "$url" "${branch:-main}" "0.0.0" "true" \
                 "$parent_rel" "$commit" "$name"
             _emitted_ref+=("$source_path")
         done < <(git -C "$parent_abs" config -f .gitmodules --name-only --get-regexp '^submodule\..*\.path$' 2>/dev/null | sed 's/\.path$//')
@@ -282,13 +278,13 @@ generate_fleet_plan_yaml() {
     if [[ -n "$discovered" ]]; then
         local line
         while IFS= read -r line; do
-            local name path type branch version url submodule has_git _has_remote
-            _fleet_plan_split_discovery_line "$line" name path type branch version url submodule has_git _has_remote
+            local name path branch version url submodule has_git _has_remote
+            _fleet_plan_split_discovery_line "$line" name path branch version url submodule has_git _has_remote
             [[ -z "$name" ]] && continue
             local kind action
             kind=$(_fleet_plan_kind_for_entry "$has_git" "$submodule")
             action=$(_fleet_plan_default_action_for_entry "$kind")
-            _fleet_plan_emit_entry "$name" "$kind" "$path" "$path" "$action" "$type" "$has_git" "$url" "$branch" "$version" "$submodule"
+            _fleet_plan_emit_entry "$name" "$kind" "$path" "$path" "$action" "$has_git" "$url" "$branch" "$version" "$submodule"
             [[ "$kind" != "plain_dir" ]] && emitted_paths+=("$path")
         done <<< "$discovered"
     fi

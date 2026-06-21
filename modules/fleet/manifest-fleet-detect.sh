@@ -12,7 +12,6 @@
 # KEY FEATURES:
 #   - Recursive git repository discovery
 #   - Submodule detection and handling
-#   - Repository classification (service, library, infrastructure)
 #   - Smart filtering (ignore node_modules, vendor, etc.)
 #   - Diff detection against existing manifest.fleet.config.yaml
 #
@@ -439,81 +438,6 @@ _get_repo_version() {
 }
 
 # -----------------------------------------------------------------------------
-# Function: _classify_repository
-# -----------------------------------------------------------------------------
-# Attempts to classify a repository by type (service, library, infrastructure).
-#
-# ARGUMENTS:
-#   $1 - Repository directory path
-#
-# RETURNS:
-#   Echoes one of: "service" | "library" | "infrastructure" | "tool" | "unknown"
-#
-# CLASSIFICATION HEURISTICS:
-#   - Has Dockerfile/docker-compose.yaml → service
-#   - Directory named "lib*" or contains only index.* → library
-#   - Has terraform/*.tf files → infrastructure
-#   - Has Makefile + cmd/ directory → tool
-#   - Default → service
-# -----------------------------------------------------------------------------
-_classify_repository() {
-    local repo_dir="$1"
-    local dirname
-    dirname=$(basename "$repo_dir")
-    local normalized_name
-    normalized_name=$(echo "$dirname" | tr '[:upper:]' '[:lower:]' | tr '._ ' '---' | sed 's/--*/-/g; s/^-//; s/-$//')
-
-    # Infrastructure indicators
-    if [[ -d "$repo_dir/terraform" ]] || \
-       [[ -f "$repo_dir/main.tf" ]] || \
-       [[ -d "$repo_dir/ansible" ]] || \
-       [[ -f "$repo_dir/Pulumi.yaml" ]] || \
-       [[ -d "$repo_dir/cloudformation" ]] || \
-       [[ "$normalized_name" == *homebrew-tap* ]]; then
-        echo "infrastructure"
-        return
-    fi
-
-    # Library indicators
-    if [[ "$dirname" == lib* ]] || \
-       [[ "$dirname" == *-lib ]] || \
-       [[ "$dirname" == shared* ]] || \
-       [[ "$dirname" == common* ]] || \
-       [[ "$dirname" == *-sdk ]] || \
-       [[ "$dirname" == *-client ]]; then
-        echo "library"
-        return
-    fi
-
-    # Tool indicators (CLI tools, scripts)
-    if [[ -d "$repo_dir/cmd" ]] || \
-       [[ "$dirname" == *-cli ]] || \
-       [[ "$normalized_name" == *-cli ]] || \
-       [[ "$dirname" == *-tool ]] || \
-       [[ "$normalized_name" == *-tool ]] || \
-       [[ "$dirname" == *-script* ]]; then
-        echo "tool"
-        return
-    fi
-
-    # Service indicators (most common for microservices)
-    if [[ -f "$repo_dir/Dockerfile" ]] || \
-       [[ -f "$repo_dir/docker-compose.yaml" ]] || \
-       [[ -f "$repo_dir/docker-compose.yml" ]] || \
-       [[ -d "$repo_dir/src" ]] || \
-       [[ -d "$repo_dir/api" ]] || \
-       [[ "$dirname" == *-service ]] || \
-       [[ "$dirname" == *-api ]] || \
-       [[ "$dirname" == *-server ]]; then
-        echo "service"
-        return
-    fi
-
-    # Default classification
-    echo "service"
-}
-
-# -----------------------------------------------------------------------------
 # Function: _extract_service_name
 # -----------------------------------------------------------------------------
 # Generates a service name from a repository path.
@@ -584,7 +508,7 @@ _extract_service_name() {
 #
 # OUTPUT FORMAT:
 #   Outputs one line per discovered repository with tab-separated fields:
-#   NAME<tab>PATH<tab>TYPE<tab>BRANCH<tab>VERSION<tab>URL<tab>IS_SUBMODULE
+#   NAME<tab>PATH<tab>BRANCH<tab>VERSION<tab>URL<tab>IS_SUBMODULE
 #
 # RETURNS:
 #   0 on success (even if no repos found)
@@ -592,8 +516,8 @@ _extract_service_name() {
 #
 # EXAMPLE:
 #   repos=$(discover_fleet_repos "/path/to/workspace")
-#   while IFS=$'\t' read -r name path type branch version url is_sub; do
-#       echo "Found: $name at $path (type: $type)"
+#   while IFS=$'\t' read -r name path branch version url is_sub; do
+#       echo "Found: $name at $path"
 #   done <<< "$repos"
 # -----------------------------------------------------------------------------
 discover_fleet_repos() {
@@ -619,9 +543,6 @@ discover_fleet_repos() {
         local name
         name=$(_extract_service_name "$abs_path" "$root_dir")
 
-        local type
-        type=$(_classify_repository "$abs_path")
-
         local branch
         branch=$(_get_repo_default_branch "$abs_path")
 
@@ -631,119 +552,11 @@ discover_fleet_repos() {
         local url
         url=$(_get_repo_remote_url "$abs_path")
 
-        printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
-            "$name" "$rel_path" "$type" "$branch" "$version" "$url" "$is_submodule"
+        printf "%s\t%s\t%s\t%s\t%s\t%s\n" \
+            "$name" "$rel_path" "$branch" "$version" "$url" "$is_submodule"
 
-        log_debug "Discovered: $name ($type) at $rel_path"
+        log_debug "Discovered: $name at $rel_path"
     done < <(manifest_discovery_find_git_repos "$root_dir" "$max_depth" "$include_submodules" "$MANIFEST_CLI_FLEET_MIN_DISCOVERY_DEPTH" fleet)
-    return 0
-}
-
-# -----------------------------------------------------------------------------
-# Function: _discover_repos_recursive (internal)
-# -----------------------------------------------------------------------------
-# Internal recursive function for repository discovery.
-#
-# ARGUMENTS:
-#   $1 - Current directory to scan
-#   $2 - Root directory (for relative path calculation)
-#   $3 - Current depth
-#   $4 - Maximum depth
-#   $5 - Include submodules flag
-#   $6 - Name of array to store discovered paths (for dedup)
-# -----------------------------------------------------------------------------
-_discover_repos_recursive() {
-    local current_dir="$1"
-    local root_dir="$2"
-    local current_depth="$3"
-    local max_depth="$4"
-    local include_submodules="$5"
-    local _arr_name="$6"
-    local -n _discovered_ref="$_arr_name"  # nameref for dedup array
-
-    # Check depth limit
-    if [[ $current_depth -gt $max_depth ]]; then
-        return 0
-    fi
-
-    # Skip if current directory should be ignored
-    local dirname
-    dirname=$(basename "$current_dir")
-    if _should_ignore_directory "$dirname"; then
-        log_debug "Skipping ignored directory: $current_dir"
-        return 0
-    fi
-
-    # Check if current directory is a git repository
-    local is_repo=false
-    local is_submodule=false
-
-    if _is_git_repository "$current_dir"; then
-        is_repo=true
-
-        # Check if it's a submodule
-        if _is_git_submodule "$current_dir"; then
-            is_submodule=true
-            if [[ "$include_submodules" != "true" ]]; then
-                log_debug "Skipping submodule (disabled): $current_dir"
-                # Still recurse into submodule's contents if nested repos allowed
-            fi
-        fi
-    fi
-
-    # Output repository info if found (and not at root level)
-    if [[ "$is_repo" == "true" ]] && [[ $current_depth -ge $MANIFEST_CLI_FLEET_MIN_DISCOVERY_DEPTH ]]; then
-        # Skip if we've already discovered this path
-        local rel_path="${current_dir#"$root_dir"/}"
-        local already_found=false
-        for found_path in "${_discovered_ref[@]}"; do
-            if [[ "$found_path" == "$rel_path" ]]; then
-                already_found=true
-                break
-            fi
-        done
-
-        if [[ "$already_found" == "false" ]]; then
-            # Gather repository metadata
-            local name
-            name=$(_extract_service_name "$current_dir" "$root_dir")
-
-            local type
-            type=$(_classify_repository "$current_dir")
-
-            local branch
-            branch=$(_get_repo_default_branch "$current_dir")
-
-            local version
-            version=$(_get_repo_version "$current_dir")
-
-            local url
-            url=$(_get_repo_remote_url "$current_dir")
-
-            local submodule_flag="false"
-            if [[ "$is_submodule" == "true" ]]; then
-                submodule_flag="true"
-            fi
-
-            # Output in tab-separated format
-            printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
-                "$name" "$rel_path" "$type" "$branch" "$version" "$url" "$submodule_flag"
-
-            # Track discovered path
-            _discovered_ref+=("$rel_path")
-
-            log_debug "Discovered: $name ($type) at $rel_path"
-        fi
-    fi
-
-    # Recurse into subdirectories
-    # Use a while loop with find to handle directories with spaces
-    while IFS= read -r -d '' subdir; do
-        # Only recurse if it's a directory (not a file or symlink to file)
-        if [[ -d "$subdir" ]] && [[ ! -L "$subdir" ]]; then
-            _discover_repos_recursive "$subdir" "$root_dir" $((current_depth + 1)) "$max_depth" "$include_submodules" "$_arr_name"
-        fi
-    done < <(find "$current_dir" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
     return 0
 }
 
@@ -763,7 +576,7 @@ _discover_repos_recursive() {
 #   $2 - Maximum depth (default: MANIFEST_CLI_FLEET_DEFAULT_DISCOVERY_DEPTH)
 #
 # OUTPUT FORMAT (per line, tab-separated):
-#   NAME  PATH  TYPE  BRANCH  VERSION  URL  IS_SUBMODULE  HAS_GIT  HAS_REMOTE
+#   NAME  PATH  BRANCH  VERSION  URL  IS_SUBMODULE  HAS_GIT  HAS_REMOTE
 # -----------------------------------------------------------------------------
 discover_all_directories() {
     local root_dir="${1:-$(pwd)}"
@@ -785,9 +598,6 @@ discover_all_directories() {
         local name
         name=$(_extract_service_name "$abs_path" "$root_dir")
 
-        local type
-        type=$(_classify_repository "$abs_path")
-
         local has_remote="false"
         local branch="" version="0.0.0" url=""
 
@@ -798,88 +608,11 @@ discover_all_directories() {
             [[ -n "$url" ]] && has_remote="true"
         fi
 
-        printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
-            "$name" "$rel_path" "$type" "$branch" "$version" "$url" "$is_submodule" "$has_git" "$has_remote"
+        printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+            "$name" "$rel_path" "$branch" "$version" "$url" "$is_submodule" "$has_git" "$has_remote"
 
         log_debug "Found directory: $name (has_git=$has_git) at $rel_path"
     done < <(manifest_discovery_walk_directories "$root_dir" "$max_depth" "$MANIFEST_CLI_FLEET_MIN_DISCOVERY_DEPTH" fleet)
-    return 0
-}
-
-# -----------------------------------------------------------------------------
-# Function: _discover_dirs_recursive (internal)
-# -----------------------------------------------------------------------------
-# Recursive scanner that emits ALL directories, not just git repos.
-# Fork of _discover_repos_recursive with the git gate removed.
-# -----------------------------------------------------------------------------
-_discover_dirs_recursive() {
-    local current_dir="$1"
-    local root_dir="$2"
-    local current_depth="$3"
-    local max_depth="$4"
-    local _arr_name="$5"
-    local -n _discovered_ref="$_arr_name"
-
-    if [[ $current_depth -gt $max_depth ]]; then
-        return 0
-    fi
-
-    local dirname
-    dirname=$(basename "$current_dir")
-    if _should_ignore_directory "$dirname"; then
-        log_debug "Skipping ignored directory: $current_dir"
-        return 0
-    fi
-
-    # Emit directory info at valid depth (skip the root itself)
-    if [[ $current_depth -ge $MANIFEST_CLI_FLEET_MIN_DISCOVERY_DEPTH ]]; then
-        local rel_path="${current_dir#"$root_dir"/}"
-
-        # Dedup check
-        local already_found=false
-        for found_path in "${_discovered_ref[@]}"; do
-            if [[ "$found_path" == "$rel_path" ]]; then
-                already_found=true
-                break
-            fi
-        done
-
-        if [[ "$already_found" == "false" ]]; then
-            local name
-            name=$(_extract_service_name "$current_dir" "$root_dir")
-
-            local type
-            type=$(_classify_repository "$current_dir")
-
-            local has_git="false"
-            local has_remote="false"
-            local branch="" version="0.0.0" url="" submodule_flag="false"
-
-            if _is_git_repository "$current_dir"; then
-                has_git="true"
-                branch=$(_get_repo_default_branch "$current_dir")
-                version=$(_get_repo_version "$current_dir")
-                url=$(_get_repo_remote_url "$current_dir")
-                [[ -n "$url" ]] && has_remote="true"
-                if _is_git_submodule "$current_dir"; then
-                    submodule_flag="true"
-                fi
-            fi
-
-            printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
-                "$name" "$rel_path" "$type" "$branch" "$version" "$url" "$submodule_flag" "$has_git" "$has_remote"
-
-            _discovered_ref+=("$rel_path")
-            log_debug "Found directory: $name (has_git=$has_git) at $rel_path"
-        fi
-    fi
-
-    # Recurse into subdirectories
-    while IFS= read -r -d '' subdir; do
-        if [[ -d "$subdir" ]] && [[ ! -L "$subdir" ]]; then
-            _discover_dirs_recursive "$subdir" "$root_dir" $((current_depth + 1)) "$max_depth" "$_arr_name"
-        fi
-    done < <(find "$current_dir" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
     return 0
 }
 
@@ -947,7 +680,7 @@ _fleet_default_repo_depth_rules() {
     declare -A max_depth_by_top=()
     local tops=()
 
-    while IFS=$'\t' read -r name path _type _branch _version _url _submodule _has_git _has_remote; do
+    while IFS=$'\t' read -r name path _branch _version _url _submodule _has_git _has_remote; do
         [[ -z "$name" ]] && continue
         local top depth
         top=$(_fleet_top_level_for_path "$path")
@@ -1035,18 +768,17 @@ filter_start_inventory_by_repo_depth() {
         _manifest_fleet_tsv_read_line "$line" fields
         local name="${fields[0]:-}"
         local path="${fields[1]:-}"
-        local type="${fields[2]:-}"
-        local branch="${fields[3]:-}"
-        local version="${fields[4]:-}"
-        local url="${fields[5]:-}"
-        local submodule="${fields[6]:-}"
-        local has_git="${fields[7]:-}"
-        local has_remote="${fields[8]:-}"
+        local branch="${fields[2]:-}"
+        local version="${fields[3]:-}"
+        local url="${fields[4]:-}"
+        local submodule="${fields[5]:-}"
+        local has_git="${fields[6]:-}"
+        local has_remote="${fields[7]:-}"
         [[ -z "$name" ]] && continue
 
         if [[ "$has_git" == "true" ]]; then
-            printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
-                "$name" "$path" "$type" "$branch" "$version" "$url" "$submodule" "$has_git" "$has_remote"
+            printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+                "$name" "$path" "$branch" "$version" "$url" "$submodule" "$has_git" "$has_remote"
             continue
         fi
 
@@ -1064,8 +796,8 @@ filter_start_inventory_by_repo_depth() {
             continue
         fi
 
-        printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
-            "$name" "$path" "$type" "$branch" "$version" "$url" "$submodule" "$has_git" "$has_remote"
+        printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+            "$name" "$path" "$branch" "$version" "$url" "$submodule" "$has_git" "$has_remote"
     done <<< "$discovered"
     return 0
 }
@@ -1079,17 +811,16 @@ filter_start_inventory_git_repos() {
         _manifest_fleet_tsv_read_line "$line" fields
         local name="${fields[0]:-}"
         local path="${fields[1]:-}"
-        local type="${fields[2]:-}"
-        local branch="${fields[3]:-}"
-        local version="${fields[4]:-}"
-        local url="${fields[5]:-}"
-        local submodule="${fields[6]:-}"
-        local has_git="${fields[7]:-}"
-        local has_remote="${fields[8]:-}"
+        local branch="${fields[2]:-}"
+        local version="${fields[3]:-}"
+        local url="${fields[4]:-}"
+        local submodule="${fields[5]:-}"
+        local has_git="${fields[6]:-}"
+        local has_remote="${fields[7]:-}"
         [[ -z "$name" ]] && continue
         [[ "$has_git" == "true" ]] || continue
-        printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
-            "$name" "$path" "$type" "$branch" "$version" "$url" "$submodule" "$has_git" "$has_remote"
+        printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+            "$name" "$path" "$branch" "$version" "$url" "$submodule" "$has_git" "$has_remote"
     done <<< "$discovered"
     return 0
 }
@@ -1114,7 +845,7 @@ generate_start_tsv() {
         _manifest_fleet_tsv_read_line "$line" fields
         local name="${fields[0]:-}"
         local path="${fields[1]:-}"
-        local has_git="${fields[7]:-}"
+        local has_git="${fields[6]:-}"
         [[ -z "$name" ]] && continue
         local selected
         selected=$(_fleet_start_selected_for_row "$has_git" "$select_mode")
@@ -1142,7 +873,7 @@ generate_start_tsv() {
     if [[ "$fingerprint_mode" != "trusted" ]]; then
         echo "# DEFAULT-SELECT-HASH: ${default_hash}"
     fi
-    printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
+    printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
 
     # Data rows
     while IFS= read -r line; do
@@ -1150,18 +881,17 @@ generate_start_tsv() {
         _manifest_fleet_tsv_read_line "$line" fields
         local name="${fields[0]:-}"
         local path="${fields[1]:-}"
-        local type="${fields[2]:-}"
-        local branch="${fields[3]:-}"
-        local url="${fields[5]:-}"
-        local has_git="${fields[7]:-}"
+        local branch="${fields[2]:-}"
+        local url="${fields[4]:-}"
+        local has_git="${fields[6]:-}"
         [[ -z "$name" ]] && continue
 
         # Default selection: true for git repos, false for non-git dirs
         local selected
         selected=$(_fleet_start_selected_for_row "$has_git" "$select_mode")
 
-        printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
-            "$selected" "$name" "$path" "$type" "$has_git" "$url" "${branch:-}"
+        printf "%s\t%s\t%s\t%s\t%s\t%s\n" \
+            "$selected" "$name" "$path" "$has_git" "$url" "${branch:-}"
     done <<< "$discovered"
     return 0
 }
@@ -1176,7 +906,7 @@ generate_start_tsv() {
 #   $1 - Path to manifest.fleet.tsv
 #
 # OUTPUT FORMAT (per line, tab-separated):
-#   NAME  PATH  TYPE  HAS_GIT  REMOTE_URL  BRANCH
+#   NAME  PATH  HAS_GIT  REMOTE_URL  BRANCH
 # -----------------------------------------------------------------------------
 parse_start_tsv() {
     local tsv_file="$1"
@@ -1193,10 +923,9 @@ parse_start_tsv() {
         local selected="${fields[0]:-}"
         local name="${fields[1]:-}"
         local path="${fields[2]:-}"
-        local type="${fields[3]:-}"
-        local has_git="${fields[4]:-}"
-        local url="${fields[5]:-}"
-        local branch="${fields[6]:-}"
+        local has_git="${fields[3]:-}"
+        local url="${fields[4]:-}"
+        local branch="${fields[5]:-}"
         # Skip comments and blank lines
         [[ "$selected" =~ ^#.*$ ]] && continue
         [[ -z "$selected" ]] && continue
@@ -1205,7 +934,7 @@ parse_start_tsv() {
         # trailing VERSION column for backward compatibility, but the TSV no
         # longer treats per-repo versions as inventory truth.
         if [[ "$selected" == "true" ]]; then
-            printf "%s\t%s\t%s\t%s\t%s\t%s\n" "$name" "$path" "$type" "$has_git" "$url" "${branch:-}"
+            printf "%s\t%s\t%s\t%s\t%s\n" "$name" "$path" "$has_git" "$url" "${branch:-}"
         fi
     done < "$tsv_file"
 }
@@ -1308,10 +1037,9 @@ merge_update_tsv() {
             _manifest_fleet_tsv_read_line "$line" fields
             local name="${fields[0]:-}"
             local path="${fields[1]:-}"
-            local type="${fields[2]:-}"
-            local branch="${fields[3]:-}"
-            local url="${fields[5]:-}"
-            local has_git="${fields[7]:-}"
+            local branch="${fields[2]:-}"
+            local url="${fields[4]:-}"
+            local has_git="${fields[6]:-}"
             [[ -z "$name" ]] && continue
             local key
             key=$(_fleet_normalize_relative_path "$path")
@@ -1319,8 +1047,8 @@ merge_update_tsv() {
             existing_paths["$key"]="1"
             local selected
             [[ "$has_git" == "true" ]] && selected="true" || selected="false"
-            printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
-                "$selected" "$name" "$path" "$type" "$has_git" "$url" "${branch:-}"
+            printf "%s\t%s\t%s\t%s\t%s\t%s\n" \
+                "$selected" "$name" "$path" "$has_git" "$url" "${branch:-}"
             ((new_count += 1))
         done <<< "$discovered"
 
@@ -1331,7 +1059,7 @@ merge_update_tsv() {
     # --- regenerate mode (default): rebuild the TSV from the scan -------------
     # Build lookup of existing selections keyed by path
     declare -A existing_selections
-    declare -A existing_names existing_types existing_has_git existing_urls existing_branches
+    declare -A existing_names existing_has_git existing_urls existing_branches
     if [[ -f "$existing_tsv" ]]; then
         local line
         while IFS= read -r line; do
@@ -1340,17 +1068,15 @@ merge_update_tsv() {
             local selected="${fields[0]:-}"
             local name="${fields[1]:-}"
             local path="${fields[2]:-}"
-            local type="${fields[3]:-}"
-            local has_git="${fields[4]:-}"
-            local url="${fields[5]:-}"
-            local branch="${fields[6]:-}"
+            local has_git="${fields[3]:-}"
+            local url="${fields[4]:-}"
+            local branch="${fields[5]:-}"
             [[ "$selected" =~ ^#.*$ ]] && continue
             [[ -z "$selected" ]] && continue
             local key
             key=$(_fleet_normalize_relative_path "$path")
             existing_selections["$key"]="$selected"
             existing_names["$key"]="$name"
-            existing_types["$key"]="$type"
             existing_has_git["$key"]="$has_git"
             existing_urls["$key"]="$url"
             existing_branches["$key"]="$branch"
@@ -1364,17 +1090,16 @@ merge_update_tsv() {
     echo "# Last scanned: $scan_date"
     echo "# Canonical config: manifest.fleet.config.yaml"
     echo "# Toggle the SELECT column (true/false), then run: manifest init fleet"
-    printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
+    printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
 
     # Write data rows, preserving existing selections
     local new_count=0
     declare -A emitted_paths
     if [[ -n "${existing_selections[.]+_}" ]]; then
-        printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+        printf "%s\t%s\t%s\t%s\t%s\t%s\n" \
             "${existing_selections[.]}" \
             "${existing_names[.]}" \
             "." \
-            "${existing_types[.]:-infrastructure}" \
             "${existing_has_git[.]:-true}" \
             "${existing_urls[.]}" \
             "${existing_branches[.]:-${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}}"
@@ -1387,10 +1112,9 @@ merge_update_tsv() {
         _manifest_fleet_tsv_read_line "$line" fields
         local name="${fields[0]:-}"
         local path="${fields[1]:-}"
-        local type="${fields[2]:-}"
-        local branch="${fields[3]:-}"
-        local url="${fields[5]:-}"
-        local has_git="${fields[7]:-}"
+        local branch="${fields[2]:-}"
+        local url="${fields[4]:-}"
+        local has_git="${fields[6]:-}"
         [[ -z "$name" ]] && continue
         local key
         key=$(_fleet_normalize_relative_path "$path")
@@ -1406,8 +1130,8 @@ merge_update_tsv() {
             ((new_count += 1))
         fi
 
-        printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
-            "$selected" "$name" "$path" "$type" "$has_git" "$url" "${branch:-}"
+        printf "%s\t%s\t%s\t%s\t%s\t%s\n" \
+            "$selected" "$name" "$path" "$has_git" "$url" "${branch:-}"
         emitted_paths["$key"]="true"
     done <<< "$discovered"
 
@@ -1454,7 +1178,6 @@ diff_discovered_repos() {
     # to have been called first — which isn't guaranteed in all code paths (e.g.
     # update fleet --dry-run, update fleet --quiet).
     declare -A manifest_paths
-    declare -A manifest_types
     for service in $manifest_services; do
         local path
         path=$(get_yaml_value "$manifest_file" ".services.$service.path" "")
@@ -1465,7 +1188,6 @@ diff_discovered_repos() {
             path="${path#./}"
             manifest_paths["$path"]="$service"
         fi
-        manifest_types["$service"]=$(get_yaml_value "$manifest_file" ".services.$service.type" "service")
     done
 
     # Process discovered repos
@@ -1473,15 +1195,14 @@ diff_discovered_repos() {
     local root_dir="${MANIFEST_CLI_FLEET_ROOT:-$(dirname "$manifest_file")}"
     if [[ -n "${manifest_paths[.]:-}" ]] && _is_git_repository "$root_dir"; then
         local root_service="${manifest_paths[.]}"
-        local root_type="${manifest_types[$root_service]:-service}"
         local root_branch root_version root_url
         root_branch=$(_get_repo_default_branch "$root_dir")
         root_version=$(_get_repo_version "$root_dir")
         root_url=$(_get_repo_remote_url "$root_dir")
         discovered_paths+=(".")
-        echo "=	$root_service	.	$root_type	$root_branch	$root_version	$root_url	false"
+        echo "=	$root_service	.	$root_branch	$root_version	$root_url	false"
     fi
-    while IFS=$'\t' read -r name path type branch version url is_sub; do
+    while IFS=$'\t' read -r name path branch version url is_sub; do
         [[ -z "$name" ]] && continue
 
         discovered_paths+=("$path")
@@ -1489,16 +1210,15 @@ diff_discovered_repos() {
         if [[ -n "${manifest_paths[$path]:-}" ]]; then
             # Found in manifest - check for differences
             local manifest_name="${manifest_paths[$path]}"
-            local manifest_type="${manifest_types[$manifest_name]:-service}"
 
-            if [[ "$name" != "$manifest_name" ]] || [[ "$type" != "$manifest_type" ]]; then
-                echo "~	$name	$path	$type	$branch	$version	$url	$is_sub"
+            if [[ "$name" != "$manifest_name" ]]; then
+                echo "~	$name	$path	$branch	$version	$url	$is_sub"
             else
-                echo "=	$name	$path	$type	$branch	$version	$url	$is_sub"
+                echo "=	$name	$path	$branch	$version	$url	$is_sub"
             fi
         else
             # New repository not in manifest
-            echo "+	$name	$path	$type	$branch	$version	$url	$is_sub"
+            echo "+	$name	$path	$branch	$version	$url	$is_sub"
         fi
     done <<< "$discovered"
 
@@ -1514,7 +1234,7 @@ diff_discovered_repos() {
 
         if [[ "$found" == "false" ]]; then
             local service="${manifest_paths[$path]}"
-            echo "-	$service	$path	unknown	unknown	unknown		false"
+            echo "-	$service	$path	unknown	unknown		false"
         fi
     done
 }
@@ -1563,11 +1283,10 @@ get_missing_repos() {
 # ARGUMENTS:
 #   $1 - Service name
 #   $2 - Service path (relative to fleet root)
-#   $3 - Service type
-#   $4 - Default branch
-#   $5 - Current version
-#   $6 - Remote URL (optional)
-#   $7 - Is submodule flag
+#   $3 - Default branch
+#   $4 - Current version
+#   $5 - Remote URL (optional)
+#   $6 - Is submodule flag
 #
 # OUTPUT:
 #   YAML snippet suitable for inserting into manifest.fleet.config.yaml
@@ -1575,11 +1294,10 @@ get_missing_repos() {
 generate_service_yaml() {
     local name="$1"
     local path="$2"
-    local type="$3"
-    local branch="$4"
-    local version="$5"
-    local url="$6"
-    local is_submodule="$7"
+    local branch="$3"
+    local version="$4"
+    local url="$5"
+    local is_submodule="$6"
 
     echo "  $name:"
     echo "    path: \"./$path\""
@@ -1588,7 +1306,6 @@ generate_service_yaml() {
         echo "    url: \"$url\""
     fi
 
-    echo "    type: \"$type\""
     echo "    branch: \"$branch\""
 
     if [[ "$is_submodule" == "true" ]]; then
@@ -1625,10 +1342,10 @@ generate_manifest_additions() {
     echo "  # Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
     echo "  # ==========================================="
 
-    while IFS=$'\t' read -r name path type branch version url is_sub; do
+    while IFS=$'\t' read -r name path branch version url is_sub; do
         [[ -z "$name" ]] && continue
         echo ""
-        generate_service_yaml "$name" "$path" "$type" "$branch" "$version" "$url" "$is_sub"
+        generate_service_yaml "$name" "$path" "$branch" "$version" "$url" "$is_sub"
     done <<< "$new_repos"
 }
 
@@ -1671,8 +1388,11 @@ append_services_to_manifest() {
     services_line=$(grep -nm 1 "^services:" "$config_file" | cut -d: -f1)
 
     if [[ -z "$services_line" ]] || ! [[ "$services_line" =~ ^[0-9]+$ ]]; then
-        log_error "No 'services:' section found in $config_file"
-        return 1
+        # TSV-based fleet: the roster lives in manifest.fleet.tsv, not a config
+        # services: map. There is nothing to append here — the caller reconciles
+        # the roster into the TSV. Skip gracefully rather than failing the update.
+        log_info "No services: map in $config_file (TSV-based fleet); skipping config append"
+        return 0
     fi
 
     # Find the next top-level key after services:

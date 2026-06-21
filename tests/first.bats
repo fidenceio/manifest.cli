@@ -88,8 +88,8 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
     mkdir -p "$SCRATCH/ws"
     mkrepo "$SCRATCH/ws/alpha"
     {
-        printf "# SELECT\tNAME\tPATH\tTYPE\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
-        printf "true\talpha\t./alpha\trepo\ttrue\t\t\t0.0.0\n"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\tVERSION\n"
+        printf "true\talpha\t./alpha\ttrue\t\t\t0.0.0\n"
     } > "$SCRATCH/ws/manifest.fleet.tsv"
 
     # Preview names the next command.

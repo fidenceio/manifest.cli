@@ -148,7 +148,6 @@ Each fleet service has a release policy:
 services:
   example:
     path: "./example"
-    type: "service"
     branch: "main"
     release:
       enabled: true

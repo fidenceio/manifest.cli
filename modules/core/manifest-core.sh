@@ -870,12 +870,11 @@ EOF
                     shift || true
                     if _manifest_cli_has_help_token "$@"; then
                         _render_help \
-                            "manifest add fleet <path-or-url> [-y|--yes] [--dry-run] [--name NAME] [--type TYPE]" \
+                            "manifest add fleet <path-or-url> [-y|--yes] [--dry-run] [--name NAME]" \
                             "Add a local path or remote URL to fleet membership." \
                             "Options" "  --dry-run      Explicit preview; do not modify manifest.fleet.config.yaml
   -y, --yes      Apply fleet membership updates
-  --name NAME    Service name
-  --type TYPE    Service type"
+  --name NAME    Service name"
                         return 0
                     fi
                     fleet_add "$@"
