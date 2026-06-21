@@ -23,7 +23,7 @@ jobs:
             set -euo pipefail
             # All first-party shell sources. Reads .shellcheckrc automatically.
             find modules scripts -name "*.sh" -type f -print0 > files.zero
-            printf "%s\0%s\0" install-cli.sh uninstall-cli.sh >> files.zero
+            printf "%s\0%s\0%s\0" install-cli.sh uninstall-cli.sh bootstrap.sh >> files.zero
             echo "scripts: $(tr -dc "\0" < files.zero | wc -c)"
             xargs -0 shellcheck --severity=error < files.zero
           '
@@ -34,7 +34,7 @@ jobs:
           set -uo pipefail
           docker run --rm -v "$PWD:/work" -w /work koalaman/shellcheck-alpine:v0.10.0 sh -lc '
             find modules scripts -name "*.sh" -type f -print0 > files.zero
-            printf "%s\0%s\0" install-cli.sh uninstall-cli.sh >> files.zero
+            printf "%s\0%s\0%s\0" install-cli.sh uninstall-cli.sh bootstrap.sh >> files.zero
             xargs -0 shellcheck --severity=warning < files.zero
           '
 
