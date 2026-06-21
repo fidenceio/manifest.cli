@@ -80,6 +80,83 @@ _status_fleet_config_file() {
     fi
 }
 
+# The declared roster lives in manifest.fleet.tsv (see docs/FLEET_DESIGN_SPEC.md:
+# "store declared, cache the corpus, derive labels"). The fleet config YAML is a
+# derived projection that can lag or be empty while the TSV is current, so status
+# and identity treat the TSV as the source of truth for membership and fall back
+# to the YAML only when no TSV exists.
+_status_fleet_tsv_file() {
+    local proj="$1"
+    [[ -f "$proj/manifest.fleet.tsv" ]] && echo "$proj/manifest.fleet.tsv"
+}
+
+# Split a tab-separated line into a named array, preserving empty fields. A bare
+# `IFS=$'\t' read` collapses runs of tabs and drops leading/empty fields because
+# tab is whitespace — so an empty REMOTE_URL column would shift BRANCH left. The
+# same x1f swap the fleet TSV reader uses (manifest-fleet-detect.sh) makes the
+# delimiter non-whitespace so empty columns survive.
+_status_tsv_split() {
+    local line="$1"
+    local _arr="$2"
+    local -n _ref="$_arr"
+    local sep=$'\x1f'
+    line="${line//$'\t'/$sep}"
+    IFS="$sep" read -r -a _ref <<< "$line"
+}
+
+# Emit the selected fleet roster as tab-separated rows: NAME PATH HAS_GIT
+# REMOTE_URL BRANCH. Prefers the TSV (declared roster); each emitted name is the
+# member identity used by every status/identity reader. parse_start_tsv is the
+# canonical TSV reader (modules/fleet/manifest-fleet-detect.sh); a self-contained
+# parser keeps this readable when the fleet module is not loaded (e.g. unit tests
+# sourcing manifest-status.sh alone). Falls back to the YAML `.services` map when
+# no TSV exists.
+_status_fleet_roster_rows() {
+    local proj="$1"
+    local tsv config
+    tsv="$(_status_fleet_tsv_file "$proj")"
+
+    if [[ -n "$tsv" ]]; then
+        if declare -F parse_start_tsv >/dev/null 2>&1; then
+            parse_start_tsv "$tsv"
+            return 0
+        fi
+        local line fields
+        while IFS= read -r line; do
+            local fields=()
+            _status_tsv_split "$line" fields
+            local select="${fields[0]:-}"
+            [[ "$select" == \#* ]] && continue
+            [[ -z "$select" ]] && continue
+            [[ "$select" == "true" ]] || continue
+            printf '%s\t%s\t%s\t%s\t%s\n' \
+                "${fields[1]:-}" "${fields[2]:-}" "${fields[3]:-}" "${fields[4]:-}" "${fields[5]:-}"
+        done < "$tsv"
+        return 0
+    fi
+
+    config="$(_status_fleet_config_file "$proj")"
+    [[ -n "$config" ]] || return 0
+    command -v yq >/dev/null 2>&1 || return 0
+    local service raw_path branch
+    while IFS= read -r service; do
+        [[ -z "$service" ]] && continue
+        raw_path="$(SERVICE="$service" yq e '.services[strenv(SERVICE)].path // ""' "$config" 2>/dev/null)"
+        branch="$(SERVICE="$service" yq e '.services[strenv(SERVICE)].branch // ""' "$config" 2>/dev/null)"
+        printf '%s\t%s\t%s\t%s\t%s\n' "$service" "$raw_path" "" "" "${branch:-}"
+    done < <(yq e '.services | keys | .[]' "$config" 2>/dev/null)
+}
+
+# Count of declared members, sourced from the same roster the tables render.
+_status_fleet_roster_count() {
+    local proj="$1"
+    local count=0 line
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && count=$((count + 1))
+    done < <(_status_fleet_roster_rows "$proj")
+    echo "$count"
+}
+
 _manifest_repo_identity_collect() {
     local proj="${1:-$PROJECT_ROOT}"
     _MANIFEST_REPO_ID_GIT_ROOT="$(git -C "$proj" rev-parse --show-toplevel 2>/dev/null || echo "$proj")"
@@ -112,18 +189,25 @@ _manifest_repo_identity_collect() {
     fleet_config="$(_status_fleet_config_file "$_MANIFEST_REPO_ID_FLEET_ROOT")"
     if [[ -n "$fleet_config" && -f "$fleet_config" && "$(command -v yq 2>/dev/null)" ]]; then
         _MANIFEST_REPO_ID_FLEET_NAME="$(yq e '.fleet.name // "fleet"' "$fleet_config" 2>/dev/null)"
-        local service raw_path service_path service_root
-        while IFS= read -r service; do
-            [[ -z "$service" ]] && continue
-            raw_path="$(SERVICE="$service" yq e '.services[strenv(SERVICE)].path // ""' "$fleet_config" 2>/dev/null)"
-            service_path="$(_status_resolve_member_path "$_MANIFEST_REPO_ID_FLEET_ROOT" "$raw_path")"
-            service_root="$(git -C "$service_path" rev-parse --show-toplevel 2>/dev/null || echo "$service_path")"
-            if [[ "$service_root" == "$_MANIFEST_REPO_ID_GIT_ROOT" ]]; then
-                _MANIFEST_REPO_ID_FLEET_MEMBER="$service"
-                break
-            fi
-        done < <(yq e '.services | keys | .[]' "$fleet_config" 2>/dev/null)
     fi
+    # Membership is resolved from the declared roster (TSV-first), not the config
+    # `.services` map, so identity is correct even when the YAML projection is
+    # stale or empty.
+    local roster_line service raw_path service_path service_root
+    while IFS= read -r roster_line; do
+        local fields=()
+        _status_tsv_split "$roster_line" fields
+        service="${fields[0]:-}"
+        raw_path="${fields[1]:-}"
+        [[ -z "$service" ]] && continue
+        service_path="$(_status_resolve_member_path "$_MANIFEST_REPO_ID_FLEET_ROOT" "$raw_path")"
+        [[ -n "$service_path" ]] || continue
+        service_root="$(git -C "$service_path" rev-parse --show-toplevel 2>/dev/null || echo "$service_path")"
+        if [[ "$service_root" == "$_MANIFEST_REPO_ID_GIT_ROOT" ]]; then
+            _MANIFEST_REPO_ID_FLEET_MEMBER="$service"
+            break
+        fi
+    done < <(_status_fleet_roster_rows "$_MANIFEST_REPO_ID_FLEET_ROOT")
 
     _MANIFEST_REPO_ID_FLEET_NAME="${_MANIFEST_REPO_ID_FLEET_NAME:-${MANIFEST_CLI_FLEET_NAME:-fleet}}"
     if [[ -n "${MANIFEST_CLI_FLEET_MEMBER:-}" && -n "$_MANIFEST_REPO_ID_FLEET_MEMBER" && "${MANIFEST_CLI_FLEET_MEMBER}" != "$_MANIFEST_REPO_ID_FLEET_MEMBER" ]]; then
@@ -479,26 +563,30 @@ _status_fleet_depth_profile_report() {
 
 _manifest_status_fleet_json() {
     local proj="$1"
-    local config_file
+    local config_file tsv_file
     config_file="$(_status_fleet_config_file "$proj")"
-    if [[ -z "$config_file" ]]; then
+    tsv_file="$(_status_fleet_tsv_file "$proj")"
+    if [[ -z "$config_file" && -z "$tsv_file" ]]; then
         printf '{"fleet":null,"repositories":[]}\n'
         return 0
     fi
-    if ! command -v yq >/dev/null 2>&1; then
-        log_error "manifest status fleet requires yq"
-        return 1
-    fi
 
-    local fleet_name
-    fleet_name="$(yq e '.fleet.name // "fleet"' "$config_file" 2>/dev/null)"
-    local repos_json="" service first=true
-    while IFS= read -r service; do
+    local fleet_name="fleet"
+    if [[ -n "$config_file" ]] && command -v yq >/dev/null 2>&1; then
+        fleet_name="$(yq e '.fleet.name // "fleet"' "$config_file" 2>/dev/null)"
+    fi
+    local repos_json="" first=true
+    local roster_line service raw_path remote_url expected_branch
+    while IFS= read -r roster_line; do
+        local fields=()
+        _status_tsv_split "$roster_line" fields
+        service="${fields[0]:-}"
+        raw_path="${fields[1]:-}"
+        remote_url="${fields[3]:-}"
+        expected_branch="${fields[4]:-}"
         [[ -z "$service" ]] && continue
-        local raw_path path branch state version commit commit_timestamp expected_branch surfaces_json
-        raw_path="$(SERVICE="$service" yq e '.services[strenv(SERVICE)].path // ""' "$config_file" 2>/dev/null)"
+        local path branch state version commit commit_timestamp surfaces_json
         path="$(_status_resolve_member_path "$proj" "$raw_path")"
-        expected_branch="$(SERVICE="$service" yq e '.services[strenv(SERVICE)].branch // ""' "$config_file" 2>/dev/null)"
         if [[ -d "$path" ]] && git -C "$path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
             branch="$(_status_repo_branch "$path")"
         else
@@ -510,14 +598,14 @@ _manifest_status_fleet_json() {
         commit_timestamp="$(_status_repo_latest_commit_timestamp "$path")"
         surfaces_json="$(_status_version_surfaces_json "$path")"
         local item
-        item="{$(_json_kv_str "name" "$service"),$(_json_kv_str "path" "$path"),$(_json_kv_str "branch" "$branch"),$(_json_kv_str "state" "$state"),$(_json_kv_str "version" "$version"),$(_json_kv_str "latest_commit_timestamp" "$commit_timestamp"),$(_json_kv_str "latest_commit" "$commit"),$(_json_kv_raw "version_surfaces" "$surfaces_json")}"
+        item="{$(_json_kv_str "name" "$service"),$(_json_kv_str "path" "$path"),$(_json_kv_str "remote_url" "$remote_url"),$(_json_kv_str "branch" "$branch"),$(_json_kv_str "state" "$state"),$(_json_kv_str "version" "$version"),$(_json_kv_str "latest_commit_timestamp" "$commit_timestamp"),$(_json_kv_str "latest_commit" "$commit"),$(_json_kv_raw "version_surfaces" "$surfaces_json")}"
         if [[ "$first" == "true" ]]; then
             repos_json="$item"
             first=false
         else
             repos_json="$repos_json,$item"
         fi
-    done < <(yq e '.services | keys | .[]' "$config_file" 2>/dev/null)
+    done < <(_status_fleet_roster_rows "$proj")
 
     printf '{"fleet":{%s,%s},"repositories":[%s]}\n' \
         "$(_json_kv_str "name" "$fleet_name")" \
@@ -528,10 +616,12 @@ _manifest_status_fleet_json() {
 _manifest_status_fleet() {
     local proj="$1"
     local emit_json="${2:-false}"
-    local config_file
+    local bootstrap_mode="${3:-off}"
+    local config_file tsv_file
     config_file="$(_status_fleet_config_file "$proj")"
+    tsv_file="$(_status_fleet_tsv_file "$proj")"
 
-    if [[ -z "$config_file" ]]; then
+    if [[ -z "$config_file" && -z "$tsv_file" ]]; then
         if [[ "$emit_json" == "true" ]]; then
             printf '{"fleet":null,"repositories":[]}\n'
         else
@@ -551,21 +641,27 @@ _manifest_status_fleet() {
         return $?
     fi
 
-    if ! command -v yq >/dev/null 2>&1; then
-        log_error "manifest status fleet requires yq"
-        return 1
+    local fleet_name="fleet"
+    if [[ -n "$config_file" ]] && command -v yq >/dev/null 2>&1; then
+        fleet_name="$(yq e '.fleet.name // "fleet"' "$config_file" 2>/dev/null)"
     fi
 
-    local fleet_name total=0 clean=0 dirty=0 other=0
-    fleet_name="$(yq e '.fleet.name // "fleet"' "$config_file" 2>/dev/null)"
-
+    local total=0 clean=0 dirty=0 other=0
     local rows=()
-    local service
-    while IFS= read -r service; do
+    # Members with a declared remote that are absent locally — the bootstrap set.
+    local bootstrap_names=() bootstrap_urls=() bootstrap_paths=()
+    # Members absent locally with no remote to clone from — unrecoverable; flag.
+    local lost_names=()
+    local roster_line service raw_path remote_url expected_branch
+    while IFS= read -r roster_line; do
+        local fields=()
+        _status_tsv_split "$roster_line" fields
+        service="${fields[0]:-}"
+        raw_path="${fields[1]:-}"
+        remote_url="${fields[3]:-}"
+        expected_branch="${fields[4]:-}"
         [[ -z "$service" ]] && continue
-        local raw_path path expected_branch branch state version commit commit_timestamp
-        raw_path="$(SERVICE="$service" yq e '.services[strenv(SERVICE)].path // ""' "$config_file" 2>/dev/null)"
-        expected_branch="$(SERVICE="$service" yq e '.services[strenv(SERVICE)].branch // ""' "$config_file" 2>/dev/null)"
+        local path branch state version commit commit_timestamp
         path="$(_status_resolve_member_path "$proj" "$raw_path")"
         if [[ -d "$path" ]] && git -C "$path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
             branch="$(_status_repo_branch "$path")"
@@ -583,7 +679,18 @@ _manifest_status_fleet() {
             dirty) dirty=$((dirty + 1)) ;;
             *) other=$((other + 1)) ;;
         esac
-    done < <(yq e '.services | keys | .[]' "$config_file" 2>/dev/null)
+        # A declared member absent on disk is Uncloned (has a remote, restorable)
+        # or Lost (no remote) per FLEET_DESIGN_SPEC.md.
+        if [[ "$state" == "missing" ]]; then
+            if [[ -n "$remote_url" && "$remote_url" != "null" ]]; then
+                bootstrap_names+=("$service")
+                bootstrap_urls+=("$remote_url")
+                bootstrap_paths+=("$path")
+            else
+                lost_names+=("$service")
+            fi
+        fi
+    done < <(_status_fleet_roster_rows "$proj")
 
     echo ""
     echo "Manifest status"
@@ -591,7 +698,14 @@ _manifest_status_fleet() {
     echo ""
     _status_line "Fleet:" "$fleet_name"
     _status_line "Root:" "$proj"
-    _status_line "Config:" "$config_file"
+    # The roster (membership) is sourced from the TSV when present, else the
+    # config YAML. Show whichever was the truth source for this table.
+    if [[ -n "$tsv_file" ]]; then
+        _status_line "Roster:" "$tsv_file"
+        [[ -n "$config_file" ]] && _status_line "Config:" "$config_file"
+    else
+        _status_line "Config:" "$config_file"
+    fi
     _status_line "Scope:" "fleet"
     _status_line "Repos:" "$total total, $clean clean, $dirty dirty, $other other"
     echo ""
@@ -602,14 +716,85 @@ _manifest_status_fleet() {
     for row in "${rows[@]}"; do
         printf "%s\n" "$row"
     done
-    _status_version_surfaces_fleet_report "$proj" "$config_file"
+    if [[ -n "$config_file" ]]; then
+        _status_version_surfaces_fleet_report "$proj" "$config_file"
+    fi
     _status_fleet_depth_profile_report "$proj"
+
+    _status_fleet_bootstrap_report \
+        "$proj" "$bootstrap_mode" \
+        bootstrap_names bootstrap_urls bootstrap_paths lost_names
+
     echo ""
     echo "Next actions"
-    echo "  manifest status repo      Show status for this repo only"
-    echo "  manifest status fleet     Show this fleet table explicitly"
-    echo "  manifest update fleet     Re-scan fleet membership"
+    echo "  manifest status repo            Show status for this repo only"
+    echo "  manifest status fleet           Show this fleet table explicitly"
+    if [[ "${#bootstrap_names[@]}" -gt 0 && "$bootstrap_mode" == "off" ]]; then
+        echo "  manifest status fleet --bootstrap   Preview cloning absent members"
+    fi
+    echo "  manifest update fleet           Re-scan fleet membership"
     echo ""
+}
+
+# Bootstrap report for declared members that are absent locally. Uses the
+# observed Local x declared Remote axes from FLEET_DESIGN_SPEC.md: a member with
+# a remote is Uncloned (restorable by clone); one without is Lost (flagged).
+#
+# Modes:
+#   off       Only surface a one-line hint that absent members exist.
+#   preview   List exactly what WOULD be cloned, write nothing (default opt-in).
+#   apply     Reserved for an explicit live clone; gated, never reached here.
+#
+# Args: $1 fleet root, $2 mode, then four array names by reference:
+#   $3 member names, $4 remote URLs, $5 target paths (all index-aligned),
+#   $6 names of Lost members (absent, no remote).
+_status_fleet_bootstrap_report() {
+    local proj="$1"
+    local mode="$2"
+    local -n _names_ref="$3"
+    local -n _urls_ref="$4"
+    local -n _paths_ref="$5"
+    local -n _lost_ref="$6"
+
+    local pending="${#_names_ref[@]}"
+    local lost="${#_lost_ref[@]}"
+
+    if [[ "$mode" == "off" ]]; then
+        if [[ "$pending" -gt 0 || "$lost" -gt 0 ]]; then
+            echo ""
+            local note="${pending} member(s) declared but absent locally"
+            [[ "$lost" -gt 0 ]] && note="${note}; ${lost} unrecoverable (no remote)"
+            _status_line "Bootstrap:" "$note — run 'manifest status fleet --bootstrap' to preview"
+        fi
+        return 0
+    fi
+
+    echo ""
+    echo "Bootstrap preview"
+    echo "-----------------"
+    if [[ "$pending" -eq 0 && "$lost" -eq 0 ]]; then
+        echo "  All declared members are present locally — nothing to clone."
+        return 0
+    fi
+
+    local i
+    for ((i = 0; i < pending; i++)); do
+        printf "  %-36s would clone from %s -> %s\n" \
+            "${_names_ref[$i]}" "${_urls_ref[$i]}" "${_paths_ref[$i]}"
+    done
+    local name
+    for name in "${_lost_ref[@]}"; do
+        printf "  %-36s LOST — absent and no remote declared (unrecoverable)\n" "$name"
+    done
+
+    echo ""
+    echo "Plan: ${pending} clone, ${lost} unrecoverable"
+    if [[ "$pending" -gt 0 ]]; then
+        echo ""
+        echo "No changes written. To restore the absent members, clone each remote"
+        echo "into its declared path, or run the fleet sync apply path:"
+        echo "  manifest prep fleet --clone-only -y"
+    fi
 }
 
 # JSON sibling of manifest_status — same data, machine-readable.
@@ -648,9 +833,14 @@ _manifest_status_json() {
         major_v="$(_status_preview_bump "$current_version" "major")"
     fi
 
-    local fleet_config
+    local fleet_config fleet_tsv
     fleet_config="$(_status_fleet_config_file "$proj")"
-    if [[ -n "$fleet_config" ]]; then
+    fleet_tsv="$(_status_fleet_tsv_file "$proj")"
+    if [[ -n "$fleet_tsv" ]]; then
+        # TSV present (with or without a config): the declared roster is truth.
+        fleet_mode="fleet"
+        fleet_count="$(_status_fleet_roster_count "$proj")"
+    elif [[ -n "$fleet_config" ]]; then
         fleet_mode="fleet"
         if command -v yq >/dev/null 2>&1; then
             fleet_count="$(yq e '.services | length' "$fleet_config" 2>/dev/null || echo "")"
@@ -781,13 +971,15 @@ _manifest_status_repo() {
     # -- Single-repo vs fleet ----------------------------------------------
     local fleet_mode="single-repo"
     local fleet_count=""
-    local fleet_config
+    local fleet_config fleet_tsv
     fleet_config="$(_status_fleet_config_file "$proj")"
-    if [[ -n "$fleet_config" ]]; then
+    fleet_tsv="$(_status_fleet_tsv_file "$proj")"
+    if [[ -n "$fleet_tsv" ]]; then
+        fleet_mode="fleet"
+        fleet_count="$(_status_fleet_roster_count "$proj")"
+    elif [[ -n "$fleet_config" ]]; then
         fleet_mode="fleet"
         fleet_count="$(_status_fleet_member_count "$fleet_config")"
-    elif [[ -f "$proj/manifest.fleet.tsv" ]]; then
-        fleet_mode="fleet (init phase 1 — TSV pending review)"
     fi
     if [[ -n "$fleet_count" && "$fleet_count" != "0" && "$fleet_count" != "?" ]]; then
         _status_line "Mode:" "$fleet_mode  ($fleet_count members)"
@@ -811,6 +1003,7 @@ manifest_status() {
     local emit_json=false
     local scope="auto"
     local explicit_repo_scope=false
+    local bootstrap_mode="off"
     while [[ $# -gt 0 ]]; do
         case "$1" in
             repo)
@@ -820,24 +1013,32 @@ manifest_status() {
                 ;;
             fleet) scope="$1"; shift ;;
             --json) emit_json=true; shift ;;
+            --bootstrap)
+                scope="fleet"
+                bootstrap_mode="preview"
+                shift
+                ;;
             -v|--verbose)
                 scope="fleet"
                 shift
                 ;;
             -h|--help)
                 _render_help \
-                    "manifest status [repo|fleet] [--json]" \
+                    "manifest status [repo|fleet] [--json] [--bootstrap]" \
                     "Read-only snapshot of repo or fleet state." \
                     "Scopes" "  repo     Force current-repo status
   fleet    Force fleet repository table" \
-                    "Options" "  --json   Emit machine-readable JSON instead of the human view" \
+                    "Options" "  --json        Emit machine-readable JSON instead of the human view
+  --bootstrap   Preview which declared-but-absent fleet members would be
+                cloned (read-only; clones nothing)" \
                     "Examples" "  manifest status
   manifest status repo
-  manifest status fleet"
+  manifest status fleet
+  manifest status fleet --bootstrap"
                 return 0
                 ;;
             *)
-                _render_help_error "Unknown option: $1" "manifest status [repo|fleet] [--json]"
+                _render_help_error "Unknown option: $1" "manifest status [repo|fleet] [--json] [--bootstrap]"
                 return 1
                 ;;
         esac
@@ -853,7 +1054,9 @@ manifest_status() {
     fi
 
     if [[ "$scope" == "auto" ]]; then
-        if [[ -n "$(_status_fleet_config_file "$proj")" ]]; then
+        # A fleet root is recognized by its config YAML or its declared roster
+        # TSV — either alone is enough to render the fleet table.
+        if [[ -n "$(_status_fleet_config_file "$proj")" || -n "$(_status_fleet_tsv_file "$proj")" ]]; then
             scope="fleet"
         else
             scope="repo"
@@ -862,7 +1065,7 @@ manifest_status() {
 
     case "$scope" in
         repo) _manifest_status_repo "$proj" "$emit_json" ;;
-        fleet) _manifest_status_fleet "$proj" "$emit_json" ;;
+        fleet) _manifest_status_fleet "$proj" "$emit_json" "$bootstrap_mode" ;;
     esac
 }
 

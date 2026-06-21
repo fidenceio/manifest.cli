@@ -293,3 +293,170 @@ SCRIPT
     [ "$status" -eq 0 ]
     [ -z "$output" ]
 }
+
+# -- Roster sourced from the TSV (bug: status read empty config .services) ----
+
+# Build a fleet workspace whose declared roster lives only in manifest.fleet.tsv
+# and whose config .services map is EMPTY — the exact shape that made
+# `manifest status fleet` report 0 repos.
+_mk_tsv_only_fleet() {
+    local root="$1"
+    local present_count="${2:-3}"
+    {
+        echo "# MANIFEST FLEET — Directory Inventory"
+        echo "# Root: $root"
+        echo "# Depth: 2"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
+        local i
+        for ((i = 1; i <= present_count; i++)); do
+            mkdir -p "$root/svc/m$i"
+            git -C "$root/svc/m$i" init -q
+            git -C "$root/svc/m$i" config user.email t@e.com
+            git -C "$root/svc/m$i" config user.name t
+            echo "1.0.$i" > "$root/svc/m$i/VERSION"
+            git -C "$root/svc/m$i" add VERSION
+            git -C "$root/svc/m$i" commit -qm "init m$i"
+            printf "true\tm%s\tsvc/m%s\ttrue\tgit@github.com:acme/m%s.git\tmain\n" "$i" "$i" "$i"
+        done
+    } > "$root/manifest.fleet.tsv"
+    # Config exists but declares no services (the buggy state).
+    cat > "$root/manifest.fleet.config.yaml" <<'YAML'
+fleet:
+  name: tsv-fleet
+services: {}
+YAML
+}
+
+@test "status fleet: counts the TSV roster, not the empty config .services" {
+    if ! command -v yq >/dev/null 2>&1; then
+        skip "yq not installed"
+    fi
+    _mk_tsv_only_fleet "$SCRATCH" 3
+
+    cd "$SCRATCH"
+    run _manifest_status_fleet "$SCRATCH" "false" "off"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Fleet:.*tsv-fleet"
+    echo "$output" | grep -q "Roster:.*manifest.fleet.tsv"
+    echo "$output" | grep -q "Repos:.*3 total"
+    echo "$output" | grep -q "m1"
+    echo "$output" | grep -q "m3"
+    # Proof of the bug fix: the count must not be 0 just because .services is {}.
+    ! echo "$output" | grep -q "Repos:.*0 total"
+}
+
+@test "status fleet --json: repositories array reflects the TSV roster" {
+    if ! command -v yq >/dev/null 2>&1; then
+        skip "yq not installed"
+    fi
+    _mk_tsv_only_fleet "$SCRATCH" 2
+
+    run _manifest_status_fleet "$SCRATCH" "true" "off"
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | yq e '.repositories | length' -)" = "2" ]
+    [ "$(echo "$output" | yq e '.repositories[0].name' -)" = "m1" ]
+    [ "$(echo "$output" | yq e '.repositories[0].remote_url' -)" = "git@github.com:acme/m1.git" ]
+}
+
+@test "status fleet: roster is read via parse_start_tsv when fleet module loaded" {
+    if ! command -v yq >/dev/null 2>&1; then
+        skip "yq not installed"
+    fi
+    # Load the fleet detect module so parse_start_tsv is the active reader; this
+    # asserts the canonical TSV reader and the inline fallback agree.
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet-config.sh"
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet-detect.sh"
+    declare -F parse_start_tsv >/dev/null
+
+    _mk_tsv_only_fleet "$SCRATCH" 3
+    run _status_fleet_roster_count "$SCRATCH"
+    [ "$status" -eq 0 ]
+    [ "$output" = "3" ]
+}
+
+@test "identity: enclosing member resolved from the TSV roster, not config" {
+    if ! command -v yq >/dev/null 2>&1; then
+        skip "yq not installed"
+    fi
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet-config.sh"
+    _mk_tsv_only_fleet "$SCRATCH" 2
+
+    cd "$SCRATCH/svc/m2"
+    run manifest_status repo
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Repo identity"
+    echo "$output" | grep -q "Fleet context:.*tsv-fleet"
+    # The member name comes from the TSV row even though config .services is {}.
+    echo "$output" | grep -q "Fleet member:.*m2"
+}
+
+# -- Bootstrap preview (declared-but-absent members) --------------------------
+
+@test "status fleet --bootstrap: lists absent members WITHOUT cloning" {
+    if ! command -v yq >/dev/null 2>&1; then
+        skip "yq not installed"
+    fi
+    _mk_tsv_only_fleet "$SCRATCH" 2
+    # Declare a third member that exists in the roster but is absent on disk,
+    # plus a fourth that is absent with no remote (Lost).
+    printf "true\tghost\tsvc/ghost\ttrue\tgit@github.com:acme/ghost.git\tmain\n" >> "$SCRATCH/manifest.fleet.tsv"
+    printf "true\tlostone\tsvc/lostone\ttrue\t\tmain\n" >> "$SCRATCH/manifest.fleet.tsv"
+
+    [ ! -d "$SCRATCH/svc/ghost" ]
+
+    run _manifest_status_fleet "$SCRATCH" "false" "preview"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Bootstrap preview"
+    echo "$output" | grep -q "ghost.*would clone from git@github.com:acme/ghost.git"
+    echo "$output" | grep -q "Plan: 1 clone, 1 unrecoverable"
+    echo "$output" | grep -q "lostone.*LOST"
+    echo "$output" | grep -q "No changes written"
+
+    # Hard proof nothing was cloned: the target path must still be absent.
+    [ ! -d "$SCRATCH/svc/ghost" ]
+    [ ! -e "$SCRATCH/svc/ghost/.git" ]
+}
+
+@test "status fleet (no --bootstrap): only hints that absent members exist" {
+    if ! command -v yq >/dev/null 2>&1; then
+        skip "yq not installed"
+    fi
+    _mk_tsv_only_fleet "$SCRATCH" 1
+    printf "true\tghost\tsvc/ghost\ttrue\tgit@github.com:acme/ghost.git\tmain\n" >> "$SCRATCH/manifest.fleet.tsv"
+
+    run _manifest_status_fleet "$SCRATCH" "false" "off"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Bootstrap:.*1 member(s) declared but absent"
+    echo "$output" | grep -q "manifest status fleet --bootstrap"
+    ! echo "$output" | grep -q "Bootstrap preview"
+    [ ! -d "$SCRATCH/svc/ghost" ]
+}
+
+@test "status fleet --bootstrap: all members present says nothing to clone" {
+    if ! command -v yq >/dev/null 2>&1; then
+        skip "yq not installed"
+    fi
+    _mk_tsv_only_fleet "$SCRATCH" 2
+
+    run _manifest_status_fleet "$SCRATCH" "false" "preview"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Bootstrap preview"
+    echo "$output" | grep -q "nothing to clone"
+}
+
+@test "status: --bootstrap flag routes to fleet scope and preview mode" {
+    if ! command -v yq >/dev/null 2>&1; then
+        skip "yq not installed"
+    fi
+    _mk_tsv_only_fleet "$SCRATCH" 1
+    printf "true\tghost\tsvc/ghost\ttrue\tgit@github.com:acme/ghost.git\tmain\n" >> "$SCRATCH/manifest.fleet.tsv"
+
+    PROJECT_ROOT="$SCRATCH" run manifest_status --bootstrap
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Bootstrap preview"
+    echo "$output" | grep -q "ghost.*would clone"
+    [ ! -d "$SCRATCH/svc/ghost" ]
+}
