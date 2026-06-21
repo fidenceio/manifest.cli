@@ -264,6 +264,58 @@ EOF
     return "$push_status"
 }
 
+# Extract the sha256 digest embedded in a generated Homebrew formula file. Reads
+# the value actually written to the file (not a variable held in memory), so a
+# caller can verify the file against an independent source.
+manifest_formula_extract_sha256() {
+    local formula_file="$1"
+    sed -n -E 's/^[[:space:]]*sha256 "([a-f0-9]+)".*/\1/p' "$formula_file" | head -n1
+}
+
+# Independently verify a formula's embedded sha256 against the real artifact.
+# Re-downloads the pinned tarball URL and recomputes its digest with the same
+# sha tool the generator used, then compares. This is NOT a self-comparison: the
+# expected value comes from the formula, the actual value from a fresh hash of
+# the tarball, so a mismatch (wrong sha, tampered tarball, swapped URL) FAILS.
+#   $1 expected_sha  digest embedded in the generated formula
+#   $2 tarball_url    the pinned release tarball URL the formula points at
+#   $3 sha_cmd        "shasum -a 256" | "sha256sum" (already resolved by caller)
+# Bounded retry mirrors the generator's, since GitHub's tag tarball can briefly
+# lag. Returns 0 only on a confirmed match. The verification can be skipped only
+# by an explicit, named opt-out (hermetic test offline) — never silently.
+manifest_formula_verify_sha256_against_tarball() {
+    local expected_sha="$1" tarball_url="$2" sha_cmd="$3"
+
+    if is_truthy "${MANIFEST_CLI_SKIP_FORMULA_SHA_VERIFY:-false}"; then
+        log_warning "Formula sha256 independent verification skipped (MANIFEST_CLI_SKIP_FORMULA_SHA_VERIFY)."
+        return 0
+    fi
+
+    local retries="${MANIFEST_CLI_TARBALL_SHA_RETRIES:-5}"
+    local delay="${MANIFEST_CLI_TARBALL_SHA_RETRY_DELAY:-3}"
+    local attempt=1 actual_sha=""
+    echo "   Independently verifying formula sha256 against ${tarball_url}..."
+    while :; do
+        if actual_sha="$(curl -fsSL "$tarball_url" | $sha_cmd | cut -d' ' -f1)" && [ -n "$actual_sha" ]; then
+            break
+        fi
+        actual_sha=""
+        if [ "$attempt" -ge "$retries" ]; then
+            log_error "Could not re-fetch the tarball to verify its sha256 after ${retries} attempt(s) (${tarball_url})."
+            return 1
+        fi
+        echo "   ⚠️  Verification fetch failed (attempt ${attempt}/${retries}); retrying in ${delay}s..."
+        [ "$delay" -gt 0 ] && sleep "$delay"
+        attempt=$((attempt + 1))
+    done
+
+    if [ "$actual_sha" != "$expected_sha" ]; then
+        log_error "sha256 mismatch: formula declares ${expected_sha} but the tarball hashes to ${actual_sha}."
+        return 1
+    fi
+    return 0
+}
+
 # Generate the Homebrew tap formula from the tracked CLI copy and publish it to the
 # tap repo. The tracked CLI copy is a source template; release-time formula
 # writes must not dirty or commit the CLI repo after its release tag is pushed.
@@ -353,14 +405,35 @@ update_homebrew_formula() {
         log_error "Failed to generate Homebrew tap formula from ${formula_source_file}"
         return 1
     fi
-    if ! grep -F "url \"${tarball_url}\"" "$formula_file" >/dev/null 2>&1 || \
-       ! grep -F "sha256 \"${sha256}\"" "$formula_file" >/dev/null 2>&1; then
+    # Structural check: confirm the URL was substituted and the formula carries a
+    # well-formed 64-hex digest. This is a layout guard, NOT the integrity proof —
+    # comparing the file against the value sed just wrote would be tautological.
+    if ! grep -F "url \"${tarball_url}\"" "$formula_file" >/dev/null 2>&1; then
         rm -f "$formula_file"
-        log_error "Generated Homebrew tap formula did not include expected URL and SHA256."
-        log_error "Check formula/manifest.rb for a changed url/sha256 layout."
+        log_error "Generated Homebrew tap formula did not include the expected tarball URL."
+        log_error "Check formula/manifest.rb for a changed url layout."
         return 1
     fi
-    echo "   ✅ Generated tap formula from ${formula_source_file}"
+    local embedded_sha=""
+    embedded_sha="$(manifest_formula_extract_sha256 "$formula_file")"
+    if ! [[ "$embedded_sha" =~ ^[a-f0-9]{64}$ ]]; then
+        rm -f "$formula_file"
+        log_error "Generated Homebrew tap formula did not include a well-formed sha256 (got: '${embedded_sha}')."
+        log_error "Check formula/manifest.rb for a changed sha256 layout."
+        return 1
+    fi
+
+    # Integrity proof (non-tautological): re-derive the checksum INDEPENDENTLY by
+    # downloading the pinned tarball URL again and hashing it, then compare that
+    # against the digest embedded in the generated formula. A formula whose sha256
+    # does not match the artifact a user would actually download is refused — the
+    # check can fail (unlike a self-comparison), which is the whole point.
+    if ! manifest_formula_verify_sha256_against_tarball "$embedded_sha" "$tarball_url" "$sha_cmd"; then
+        rm -f "$formula_file"
+        log_error "Refusing to publish: formula sha256 does not independently verify against ${tarball_url}."
+        return 1
+    fi
+    echo "   ✅ Generated tap formula from ${formula_source_file} (sha256 independently verified)"
 
     # Sync to the Homebrew tap repo
     local tap_dir

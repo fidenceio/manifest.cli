@@ -247,35 +247,57 @@ manifest_release_gate_tier() {
     esac
 }
 
-# Resolve the command run for the local-tests phase. Configured command wins;
-# otherwise auto-detect ./scripts/run-tests.sh and pass the gate tier through to
-# it (arg 1, already normalized to smoke|full). Returns 1 if none resolvable.
-# The command is executed directly as the gate action — never interpolated into
-# another command (no eval). It carries the same trust as the repo's own test
-# tooling, which a release already runs. A configured command owns its own
-# tiering, so the tier is appended only on the auto-detect path.
+# Resolve the command run for the local-tests phase into an ARGV array (not a
+# string). Configured command wins; otherwise auto-detect ./scripts/run-tests.sh
+# and pass the gate tier through to it (arg, already normalized to smoke|full).
+# Returns 1 if none resolvable.
+#
+# The resolved argv is executed DIRECTLY — never spliced into `bash -c` and never
+# `eval`'d. release.gate_command is config, and config is attacker-reachable: a
+# committed manifest.config.yaml in any repo a ship visits (notably a fleet
+# member cloned from elsewhere) can set it. Splicing such a value into a shell
+# string is config-to-RCE on the shipping host. Resolving an argv and exec'ing it
+# directly is the same trust model the repo's own test tooling already carries,
+# with no shell to interpret metacharacters. This mirrors how
+# MANIFEST_CLI_RELEASE_NOTES_COMMAND / MANIFEST_CLI_DOC_REVIEW_COMMAND are run.
+#
+# A configured command is tokenized on whitespace into argv (token[0] = program,
+# rest = literal args). It owns its own tiering, so the tier is appended only on
+# the auto-detect path. Tokenization is deliberate: it supports `my-runner --all`
+# without admitting a shell, and a value that needs shell features (pipes,
+# substitutions) is exactly what must not run unparsed in a release gate.
 #
 # The gate runs --jobs 1 (serial): it executes on whatever host the user ships
 # from, and GNU parallel (run-tests.sh's parallel dependency) is provisioned
 # only in the environments we control — the test container and CI. Keeping the
 # gate serial means shipping never requires parallel on a developer's machine.
 # Local-ship speed comes from the tier (smoke), not parallelism.
+#
+# Result is placed in the caller-visible array MANIFEST_CLI_RELEASE_GATE_ARGV
+# (bash functions cannot return arrays). Callers must read it immediately.
 _manifest_release_gate_test_command() {
     local tier="${1:-full}"
     local configured="${MANIFEST_CLI_RELEASE_GATE_COMMAND:-}"
+    MANIFEST_CLI_RELEASE_GATE_ARGV=()
     if [[ -n "${configured//[[:space:]]/}" ]]; then
-        printf '%s' "$configured"
+        # Tokenize on whitespace into argv. No eval, no quote/metachar parsing.
+        read -r -a MANIFEST_CLI_RELEASE_GATE_ARGV <<<"$configured"
         return 0
     fi
     if [[ -x "${PROJECT_ROOT:-$PWD}/scripts/run-tests.sh" ]]; then
         # --no-cache: the release gate always executes the suite. The TTL'd
         # green-run cache (§5.10) accelerates dev/CI loops, but nothing releases
         # on a cached result — the gate must observe the tests passing here, now.
-        printf '%s' "./scripts/run-tests.sh --tier ${tier} --jobs 1 --no-cache"
+        MANIFEST_CLI_RELEASE_GATE_ARGV=(./scripts/run-tests.sh --tier "$tier" --jobs 1 --no-cache)
         return 0
     fi
     return 1
 }
+
+# Argv of the resolved release-gate command. Populated by
+# _manifest_release_gate_test_command; read by manifest_release_gate_run. Declared
+# here so it is always defined under `set -u`.
+MANIFEST_CLI_RELEASE_GATE_ARGV=()
 
 # Durable gate disposition, mirroring _MANIFEST_SHIP_LAST_HOMEBREW_STATUS. The
 # final ship status-file emit (which truncates and rewrites) reads these so the
@@ -317,8 +339,19 @@ _manifest_gate_path_floor() {
     fi
 }
 
+# Execute a release-gate command as an ARGV array inside the clean room.
+#   $1       gate_root (cwd for the command)
+#   $2..$N   the program and its literal arguments
+#
+# The bash wrapper script is a FIXED CONSTANT: it cd's into the directory passed
+# as $1, shifts it off, and exec's the remaining positional args verbatim. No
+# part of the gate command is ever interpolated into the script text, so a
+# config-supplied value (release.gate_command) cannot inject shell — it can only
+# ever be argv. cd failure is fail-closed (exit 1), so a bad gate_root can never
+# silently run the command in the wrong tree.
 _manifest_release_gate_exec() {
-    local gate_root="$1" cmd="$2"
+    local gate_root="$1"
+    shift
     env -i \
         PATH="$(_manifest_gate_path_floor "${PATH-}")" \
         HOME="${HOME-}" \
@@ -331,7 +364,7 @@ _manifest_release_gate_exec() {
         LC_ALL="${LC_ALL-}" \
         LC_CTYPE="${LC_CTYPE-}" \
         TZ="${TZ-}" \
-        bash -c "cd \"\$1\" && $cmd" _ "$gate_root"
+        bash -c 'cd "$1" || exit 1; shift; exec "$@"' _ "$gate_root" "$@"
 }
 
 manifest_release_gate_run() {
@@ -350,28 +383,31 @@ manifest_release_gate_run() {
                 local-tests|all)
                     local tier
                     tier="$(manifest_release_gate_tier)" || return 1
-                    local cmd
-                    if ! cmd="$(_manifest_release_gate_test_command "$tier")"; then
-                        # Nothing to run: a repo without a discoverable test
-                        # command can't be gated by local-tests. Warn and
-                        # proceed rather than block — teams that need hard
-                        # enforcement set release_gate_command or use remote-ci.
-                        log_warning "Release gate (local-tests): no test command found; proceeding without test verification."
-                        log_warning "Set release_gate_command (MANIFEST_CLI_RELEASE_GATE_COMMAND) or add ./scripts/run-tests.sh to enforce."
-                        _MANIFEST_CLI_SHIP_LAST_GATE_STATUS="unverified"
-                        return 0
+                    if ! _manifest_release_gate_test_command "$tier"; then
+                        # Nothing to run. A local-tests/all gate that can't find a
+                        # test command must FAIL CLOSED — a gate that silently
+                        # proceeds on "no tests" is not a gate, it is a bypass that
+                        # any repo lacking a test command takes by default. The
+                        # only sanctioned way past verification is the explicit,
+                        # loud, audited release_gate=none.
+                        log_error "Release gate (${policy}): no test command found — refusing to release unverified."
+                        log_error "Set release_gate_command (MANIFEST_CLI_RELEASE_GATE_COMMAND) or add ./scripts/run-tests.sh,"
+                        log_error "or set release_gate=none to take the audited, unverified bypass deliberately."
+                        _MANIFEST_CLI_SHIP_LAST_GATE_STATUS="blocked-no-command"
+                        return 1
                     fi
                     local gate_root="${PROJECT_ROOT:-$PWD}"
                     if [[ ! -d "$gate_root" ]]; then
                         log_error "Release gate: PROJECT_ROOT '$gate_root' is not a directory."
                         return 1
                     fi
-                    echo "🧪 Release gate: running tests before release (${cmd})..."
-                    if ( _manifest_release_gate_exec "$gate_root" "$cmd" ); then
+                    local cmd_display="${MANIFEST_CLI_RELEASE_GATE_ARGV[*]}"
+                    echo "🧪 Release gate: running tests before release (${cmd_display})..."
+                    if ( _manifest_release_gate_exec "$gate_root" "${MANIFEST_CLI_RELEASE_GATE_ARGV[@]}" ); then
                         echo "✅ Release gate: tests passed."
                         _MANIFEST_CLI_SHIP_LAST_GATE_STATUS="verified-local"
                     else
-                        log_error "Release gate failed: '${cmd}' returned non-zero. No version changes were made."
+                        log_error "Release gate failed: '${cmd_display}' returned non-zero. No version changes were made."
                         return 1
                     fi
                     ;;

@@ -41,13 +41,32 @@ brew trust fidenceio/tap
 
 ### Install Script
 
-Use the install script when Homebrew is not the desired distribution path:
+Use the install script when Homebrew is not the desired distribution path. Do
+not pipe a remote script straight into a shell — that executes unverified code
+before you have seen it. Instead, use the verifying bootstrap, which downloads a
+pinned release tarball, checks its sha256 against the published checksum, and
+only then runs the installer from the verified tree:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fidenceio/manifest.cli/main/install-cli.sh | bash
+curl -fsSLO https://raw.githubusercontent.com/fidenceio/manifest.cli/main/bootstrap.sh
+# inspect bootstrap.sh, then run it:
+bash bootstrap.sh                               # latest published tag
+MANIFEST_CLI_INSTALL_VERSION=v55.2.1 bash bootstrap.sh      # pin an exact version
 ```
 
-The script validates runtime requirements before installing and writes Manifest runtime state under `~/.manifest-cli/`.
+For the strongest guarantee, pin the expected digest as well — the install then
+aborts on any mismatch:
+
+```bash
+MANIFEST_CLI_INSTALL_VERSION=v55.2.1 \
+MANIFEST_CLI_INSTALL_SHA256=<sha256-of-the-source-tarball> \
+  bash bootstrap.sh
+```
+
+The published per-release sha256 is the `sha256` value in the tap formula at
+`fidenceio/homebrew-tap` (`Formula/manifest.rb`). The installer validates runtime
+requirements before installing and writes Manifest runtime state under
+`~/.manifest-cli/`.
 
 ## Verify Product Install
 
