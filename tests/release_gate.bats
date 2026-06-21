@@ -399,7 +399,11 @@ _audit_file() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
     mkdir -p "$SCRATCH/gate"
     run _manifest_release_gate_exec "$SCRATCH/gate" pwd
     [ "$status" -eq 0 ]
-    [ "$output" = "$SCRATCH/gate" ]
+    # Compare by inode, not string: a TMPDIR with a trailing slash makes mktemp
+    # emit a double slash that `cd`+`pwd` normalizes away, and symlinked temp
+    # roots (/var -> /private/var) diverge too. -ef asserts "same directory"
+    # regardless of path spelling.
+    [ "$output" -ef "$SCRATCH/gate" ]
 
     run _manifest_release_gate_exec "$SCRATCH/gate" bash -c 'exit 7'
     [ "$status" -eq 7 ]
