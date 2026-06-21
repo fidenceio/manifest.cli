@@ -131,6 +131,85 @@ teardown() {
     [ "$status" -ne 0 ]
 }
 
+# --- tag signing (release.tag_signing / MANIFEST_CLI_RELEASE_TAG_SIGNING) -----
+
+@test "tag signing: default policy is auto" {
+    unset MANIFEST_CLI_RELEASE_TAG_SIGNING
+    run manifest_release_tag_signing_policy
+    [ "$status" -eq 0 ]
+    [ "$output" = "auto" ]
+}
+
+@test "tag signing: policy tolerates whitespace and case" {
+    MANIFEST_CLI_RELEASE_TAG_SIGNING=" Required " run manifest_release_tag_signing_policy
+    [ "$status" -eq 0 ]
+    [ "$output" = "required" ]
+}
+
+@test "tag signing: unknown policy is rejected, never silently weakened" {
+    MANIFEST_CLI_RELEASE_TAG_SIGNING="maybe" run manifest_release_tag_signing_policy
+    [ "$status" -eq 2 ]
+    echo "$output" | grep -q "Invalid release_tag_signing"
+}
+
+@test "tag signing: required FAILS CLOSED when no signing key is configured" {
+    # The repo from setup() has no user.signingkey, so required must refuse.
+    export MANIFEST_CLI_RELEASE_TAG_SIGNING="required"
+    run create_tag "1.0.0"
+    [ "$status" -ne 0 ]
+    echo "$output" | grep -q "signing is required"
+    # No tag was created.
+    run git rev-parse v1.0.0
+    [ "$status" -ne 0 ]
+}
+
+@test "tag signing: auto with no key creates an (unsigned) tag and does not block" {
+    export MANIFEST_CLI_RELEASE_TAG_SIGNING="auto"
+    run create_tag "1.0.0"
+    [ "$status" -eq 0 ]
+    [ "$(git rev-parse v1.0.0^{commit})" = "$SECOND_SHA" ]
+    # Lightweight (unsigned) tag: no tag object, so cat-file type is 'commit'.
+    [ "$(git cat-file -t v1.0.0)" = "commit" ]
+}
+
+@test "tag signing: off never signs even when a key is configured" {
+    git config gpg.format ssh
+    ssh-keygen -t ed25519 -N '' -f "$SCRATCH/sign_key" -q
+    git config user.signingkey "$SCRATCH/sign_key.pub"
+    export MANIFEST_CLI_RELEASE_TAG_SIGNING="off"
+    run create_tag "1.0.0"
+    [ "$status" -eq 0 ]
+    [ "$(git cat-file -t v1.0.0)" = "commit" ]
+}
+
+@test "tag signing: SSH key configured produces a SIGNED annotated tag" {
+    git config gpg.format ssh
+    ssh-keygen -t ed25519 -N '' -f "$SCRATCH/sign_key" -q
+    git config user.signingkey "$SCRATCH/sign_key.pub"
+    export MANIFEST_CLI_RELEASE_TAG_SIGNING="required"   # required is satisfied: a key exists
+    run create_tag "1.0.0"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Signing: SSH"
+    # Annotated tag object now exists.
+    [ "$(git cat-file -t v1.0.0)" = "tag" ]
+    # The tag object carries an SSH signature block.
+    git cat-file tag v1.0.0 | grep -q "BEGIN SSH SIGNATURE"
+}
+
+@test "tag signing method: reports ssh:<key> when gpg.format=ssh and a key is set" {
+    git config gpg.format ssh
+    git config user.signingkey "/path/to/key.pub"
+    run manifest_git_tag_signing_method "$PROJECT_ROOT"
+    [ "$status" -eq 0 ]
+    [ "$output" = "ssh:/path/to/key.pub" ]
+}
+
+@test "tag signing method: reports none when nothing is configured" {
+    run manifest_git_tag_signing_method "$PROJECT_ROOT"
+    [ "$status" -eq 0 ]
+    [ "$output" = "none" ]
+}
+
 @test "tag target dispatch: defaults to version_commit sha" {
     unset MANIFEST_CLI_RELEASE_TAG_TARGET
     run resolve_tag_target_sha "abc123"

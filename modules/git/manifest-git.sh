@@ -601,6 +601,58 @@ manifest_release_tag_name() {
     echo "${tag_prefix}${version}${tag_suffix}"
 }
 
+# Echo the normalized tag-signing policy (release.tag_signing /
+# MANIFEST_CLI_RELEASE_TAG_SIGNING). Rejects unknown values (return 2) so a typo
+# can never silently weaken signing.
+#   required  sign the tag; FAIL CLOSED if no signing key is configured
+#   auto      sign when a key is configured, annotated-unsigned otherwise (default)
+#   off       never sign (explicit escape hatch, like release_gate=none)
+manifest_release_tag_signing_policy() {
+    local norm
+    norm="$(normalize_enum_value "${MANIFEST_CLI_RELEASE_TAG_SIGNING:-auto}")"
+    case "$norm" in
+        required|auto|off) printf '%s' "$norm" ;;
+        *)
+            log_error "Invalid release_tag_signing '${MANIFEST_CLI_RELEASE_TAG_SIGNING}'. Expected: required, auto, off."
+            return 2
+            ;;
+    esac
+}
+
+# Resolve how a tag should be signed in the current repo, echoing one of:
+#   ssh:<key>   sign with SSH; <key> is the resolved user.signingkey
+#   gpg         sign with GPG (git's default format); a key is configured
+#   none        no signing material is configured
+#
+# Honors gpg.format (ssh|openpgp). For SSH, user.signingkey must be present (it
+# is the literal key or a path to one). For GPG, signing works off the configured
+# user.signingkey OR the default secret key bound to user.email, so the presence
+# check is necessarily best-effort: an explicit user.signingkey is treated as
+# configured, otherwise we report none and let the policy decide.
+manifest_git_tag_signing_method() {
+    local repo="${1:-$PROJECT_ROOT}"
+    local fmt signingkey
+    fmt="$(git -C "$repo" config --get gpg.format 2>/dev/null || echo "openpgp")"
+    signingkey="$(git -C "$repo" config --get user.signingkey 2>/dev/null || echo "")"
+
+    case "$fmt" in
+        ssh)
+            if [[ -n "$signingkey" ]]; then
+                printf 'ssh:%s' "$signingkey"
+            else
+                printf 'none'
+            fi
+            ;;
+        *)
+            if [[ -n "$signingkey" ]]; then
+                printf 'gpg'
+            else
+                printf 'none'
+            fi
+            ;;
+    esac
+}
+
 create_tag() {
     local version="$1"
     local target_sha="${2:-}"
@@ -619,8 +671,49 @@ create_tag() {
         return 1
     }
 
+    local signing_policy
+    signing_policy="$(manifest_release_tag_signing_policy)" || return 1
+
+    # Decide signing arguments. A signed tag is annotated, so it always carries a
+    # message; an unsigned tag stays lightweight to preserve prior behavior.
+    local -a sign_args=()
+    local annotate=false
+    if [[ "$signing_policy" != "off" ]]; then
+        local method
+        method="$(manifest_git_tag_signing_method "$PROJECT_ROOT")"
+        case "$method" in
+            ssh:*)
+                sign_args=(-c gpg.format=ssh -c "user.signingkey=${method#ssh:}")
+                annotate=true
+                echo "   Signing: SSH"
+                ;;
+            gpg)
+                annotate=true
+                echo "   Signing: GPG"
+                ;;
+            none)
+                if [[ "$signing_policy" == "required" ]]; then
+                    log_error "Tag signing is required (release_tag_signing=required) but no signing key is configured."
+                    log_error "Configure SSH signing (git config gpg.format ssh; git config user.signingkey <key>)"
+                    log_error "or GPG signing (git config user.signingkey <key>), or set release_tag_signing=off to opt out."
+                    return 1
+                fi
+                echo "   Signing: none (no signing key configured; creating an unsigned tag)"
+                ;;
+        esac
+    fi
+
     local tag_status=0
-    if [[ -n "$target_sha" ]]; then
+    if [[ "$annotate" == "true" ]]; then
+        local tag_message="${tag_name}"
+        if [[ -n "$target_sha" ]]; then
+            git "${sign_args[@]}" tag -s -m "$tag_message" "$tag_name" "$target_sha"
+            tag_status=$?
+        else
+            git "${sign_args[@]}" tag -s -m "$tag_message" "$tag_name"
+            tag_status=$?
+        fi
+    elif [[ -n "$target_sha" ]]; then
         git tag "$tag_name" "$target_sha"
         tag_status=$?
     else
@@ -632,6 +725,9 @@ create_tag() {
         echo "✅ Tag $tag_name created"
         return 0
     else
+        if [[ "$annotate" == "true" ]]; then
+            log_error "Signed tag creation failed; the signing key may be unavailable or rejected."
+        fi
         echo "❌ Tag creation failed"
         return 1
     fi
