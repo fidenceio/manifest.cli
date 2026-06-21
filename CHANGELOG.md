@@ -1,5 +1,14 @@
 # Changelog
 
+## [55.2.1] - 2026-06-21
+
+**Release Type:** Patch
+
+### Changes
+
+- Feat(fleet): 6-col TSV (drop TYPE) + graceful ^services: skip for TSV-based fleets
+
+
 ## [55.2.0] - 2026-06-20
 
 **Release Type:** Minor
@@ -89,12 +98,3 @@
 - Wire first-class CLI commands to inspectable built-in recipe definitions
 - Update shell completions for new command options
 - Add regression coverage for the changed CLI workflow
-
-
-## [54.1.1] - 2026-06-15
-
-**Release Type:** Patch
-
-### Changes
-
-- Fix(ship): floor release-gate PATH + release ship lock on SIGHUP
