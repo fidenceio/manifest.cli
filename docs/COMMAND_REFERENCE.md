@@ -109,7 +109,7 @@ Version-file behavior:
 ## Fleet Operations
 
 ```bash
-manifest status fleet
+manifest status fleet [--bootstrap]
 manifest discover fleet [--depth N] [--all-folders]
 manifest add fleet <path> --name <name> [--dry-run] [-y|--yes]
 manifest update fleet [--dry-run] [-y|--yes]
@@ -133,7 +133,7 @@ end of a completed `manifest ship fleet -y`.
 ## Diagnostics
 
 ```bash
-manifest status [repo|fleet]
+manifest status [repo|fleet] [--json] [--bootstrap]
 manifest doctor
 manifest security --check
 manifest recipe list
