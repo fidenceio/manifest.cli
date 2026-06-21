@@ -71,7 +71,7 @@ teardown() {
 
 @test "release_gate: local-tests passes when the test command succeeds" {
     export MANIFEST_CLI_RELEASE_GATE="local-tests"
-    export MANIFEST_CLI_RELEASE_GATE_COMMAND="exit 0"
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND="true"
     run manifest_release_gate_run "pre-bump"
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "tests passed"
@@ -79,7 +79,7 @@ teardown() {
 
 @test "release_gate: local-tests fails fast when the test command fails" {
     export MANIFEST_CLI_RELEASE_GATE="local-tests"
-    export MANIFEST_CLI_RELEASE_GATE_COMMAND="exit 1"
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND="false"
     run manifest_release_gate_run "pre-bump"
     [ "$status" -eq 1 ]
     echo "$output" | grep -q "Release gate failed"
@@ -117,7 +117,7 @@ teardown() {
 }
 
 @test "release_gate: clean room resolves core tools (tr/date/git) via the floor" {
-    run _manifest_release_gate_exec "$PROJECT_ROOT" 'command -v tr && command -v date && command -v git'
+    run _manifest_release_gate_exec "$PROJECT_ROOT" bash -c 'command -v tr && command -v date && command -v git'
     [ "$status" -eq 0 ]
     [[ "$output" == *"tr"* ]]
     [[ "$output" == *"date"* ]]
@@ -138,13 +138,30 @@ EOF
     [ -e "$PROJECT_ROOT/autodetect.marker" ]
 }
 
-@test "release_gate: local-tests with no resolvable command warns and proceeds" {
+@test "release_gate: local-tests with no resolvable command FAILS CLOSED (no silent bypass)" {
     export MANIFEST_CLI_RELEASE_GATE="local-tests"
-    # No gate_command, no scripts/run-tests.sh in PROJECT_ROOT.
-    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
-    [ "$?" -eq 0 ]
-    grep -q "no test command found" "$SCRATCH/out"
-    [ "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS" = "unverified" ]
+    # No gate_command, no scripts/run-tests.sh in PROJECT_ROOT. A gate that
+    # silently proceeds on "no tests" is a bypass; the gate must block instead.
+    run manifest_release_gate_run "pre-bump"
+    [ "$status" -eq 1 ]
+    echo "$output" | grep -q "no test command found"
+    echo "$output" | grep -q "refusing to release unverified"
+}
+
+@test "release_gate: 'all' with no resolvable command also fails closed" {
+    export MANIFEST_CLI_RELEASE_GATE="all"
+    run manifest_release_gate_run "pre-bump"
+    [ "$status" -eq 1 ]
+    echo "$output" | grep -q "refusing to release unverified"
+}
+
+@test "release_gate: the only sanctioned no-verify path is the audited none bypass" {
+    # With no test command, local-tests blocks (above) but none still proceeds —
+    # proving the bypass is deliberate and loud, not a default fall-through.
+    export MANIFEST_CLI_RELEASE_GATE="none"
+    run manifest_release_gate_run "pre-bump"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Release gate disabled"
 }
 
 # --- pre-bump: gate tier (release.gate_tier) --------------------------------
@@ -212,9 +229,27 @@ EOF
 
 @test "release_gate: a configured gate_command owns its tiering (no --tier appended)" {
     export MANIFEST_CLI_RELEASE_GATE_COMMAND="my-runner --everything"
-    run _manifest_release_gate_test_command "smoke"
-    [ "$status" -eq 0 ]
-    [ "$output" = "my-runner --everything" ]
+    MANIFEST_CLI_RELEASE_GATE_ARGV=()
+    _manifest_release_gate_test_command "smoke"
+    [ "${#MANIFEST_CLI_RELEASE_GATE_ARGV[@]}" -eq 2 ]
+    [ "${MANIFEST_CLI_RELEASE_GATE_ARGV[0]}" = "my-runner" ]
+    [ "${MANIFEST_CLI_RELEASE_GATE_ARGV[1]}" = "--everything" ]
+}
+
+@test "release_gate: a configured gate_command is tokenized to argv, NOT shell-evaluated" {
+    # The classic config-to-RCE: a committed manifest.config.yaml sets
+    # release.gate_command to a value that, under `bash -c`, would run arbitrary
+    # commands. Resolved as argv, whitespace-delimited tokens are literal — there
+    # is no shell to interpret `;`, `&&`, `$()`, etc. token[0] becomes the program
+    # name verbatim (here 'true;' with the semicolon attached), which is not a
+    # real executable, so the gate fails closed rather than running two commands.
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND='true; touch pwned'
+    MANIFEST_CLI_RELEASE_GATE_ARGV=()
+    _manifest_release_gate_test_command "full"
+    [ "${#MANIFEST_CLI_RELEASE_GATE_ARGV[@]}" -eq 3 ]
+    [ "${MANIFEST_CLI_RELEASE_GATE_ARGV[0]}" = "true;" ]
+    [ "${MANIFEST_CLI_RELEASE_GATE_ARGV[1]}" = "touch" ]
+    [ "${MANIFEST_CLI_RELEASE_GATE_ARGV[2]}" = "pwned" ]
 }
 
 # --- pre-bump: none (loud + audited) ----------------------------------------
@@ -246,23 +281,25 @@ _audit_file() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
     [[ "$(cat "$audit")" == *'"event":"completed"'* ]]
 }
 
-@test "release_gate: an unverified (no test command) ship appends gate_status=unverified to the durable log (§8.3b)" {
+@test "release_gate: a blocked (no test command) ship records gate_status=blocked-no-command and does NOT release" {
     export MANIFEST_CLI_RELEASE_GATE="local-tests"
-    # No gate_command and no scripts/run-tests.sh -> the gate fails open with the
-    # 'unverified' disposition. The whole point of §8.3b is that this fail-open
-    # is observable in the durable record.
-    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
-    [ "$?" -eq 0 ]
-    [ "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS" = "unverified" ]
+    # No gate_command and no scripts/run-tests.sh -> the gate fails CLOSED. The
+    # blocking disposition must be observable in the durable record so a refused
+    # release is auditable, not silent.
+    run manifest_release_gate_run "pre-bump"
+    [ "$status" -eq 1 ]
+    # Re-run directly to capture the disposition var (run executes in a subshell).
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1 || true
+    [ "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS" = "blocked-no-command" ]
 
     manifest_audit_apply_event "cli" "manifest ship repo patch -y" "$PROJECT_ROOT" \
-        "h" "0" "completed" "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS"
-    [[ "$(cat "$(_audit_file)")" == *'"gate_status":"unverified"'* ]]
+        "h" "1" "failed" "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS"
+    [[ "$(cat "$(_audit_file)")" == *'"gate_status":"blocked-no-command"'* ]]
 }
 
 @test "release_gate: a passing local-tests run records verified-local" {
     export MANIFEST_CLI_RELEASE_GATE="local-tests"
-    export MANIFEST_CLI_RELEASE_GATE_COMMAND="exit 0"
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND="true"
     manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
     [ "$?" -eq 0 ]
     [ "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS" = "verified-local" ]
@@ -281,7 +318,7 @@ _audit_file() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
 
 @test "release_gate: remote-ci is a no-op in the pre-bump phase" {
     export MANIFEST_CLI_RELEASE_GATE="remote-ci"
-    export MANIFEST_CLI_RELEASE_GATE_COMMAND="exit 1"  # must NOT run pre-bump
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND="false"  # must NOT run pre-bump
     run manifest_release_gate_run "pre-bump"
     [ "$status" -eq 0 ]
 }
@@ -341,7 +378,7 @@ _audit_file() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
     # invokes it per member (each with its own config) gates members
     # independently. Prove the same function yields different verdicts when
     # the policy differs between calls.
-    export MANIFEST_CLI_RELEASE_GATE_COMMAND="exit 1"
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND="false"
 
     MANIFEST_CLI_RELEASE_GATE="none" run manifest_release_gate_run "pre-bump"
     [ "$status" -eq 0 ]   # member A: bypassed
@@ -355,22 +392,43 @@ _audit_file() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
 # By the time the gate runs, the ship process has exported its config vars,
 # ~160 manifest_* functions, PROJECT_ROOT, etc. The gate command must run in a
 # fresh environment or hermetic tests inherit that state and fail spuriously.
-# These guard the env -i clean room.
+# These guard the env -i clean room. The command is now passed as ARGV — a shell
+# snippet is run by spelling out `bash -c` as explicit argv (no implicit shell).
 
 @test "gate exec: command runs in gate_root, exit code propagates" {
     mkdir -p "$SCRATCH/gate"
-    run _manifest_release_gate_exec "$SCRATCH/gate" 'pwd'
+    run _manifest_release_gate_exec "$SCRATCH/gate" pwd
     [ "$status" -eq 0 ]
     [ "$output" = "$SCRATCH/gate" ]
 
-    run _manifest_release_gate_exec "$SCRATCH/gate" 'exit 7'
+    run _manifest_release_gate_exec "$SCRATCH/gate" bash -c 'exit 7'
     [ "$status" -eq 7 ]
+}
+
+@test "gate exec: a bad gate_root fails closed (does not run the command in the wrong tree)" {
+    run _manifest_release_gate_exec "$SCRATCH/does-not-exist" bash -c 'echo SHOULD_NOT_RUN'
+    [ "$status" -ne 0 ]
+    [[ "$output" != *"SHOULD_NOT_RUN"* ]]
+}
+
+@test "gate exec: the command is exec'd as argv, never interpreted by a shell" {
+    # The directory token is consumed by the fixed wrapper; the remaining argv is
+    # exec'd verbatim. A program name containing shell metacharacters is looked up
+    # literally (status 127, command-not-found), proving no shell parses it — so
+    # the `;` never separates commands and the side effect never happens.
+    # Called directly (not via `run`) so an expected 127 is not surfaced as a
+    # bats BW01 advisory.
+    local rc=0
+    _manifest_release_gate_exec "$SCRATCH" 'true; touch pwned' 2>/dev/null || rc=$?
+    [ "$rc" -ne 0 ]
+    [ ! -e "$SCRATCH/pwned" ]
+    [ ! -e "pwned" ]
 }
 
 @test "gate exec: MANIFEST_CLI_* vars do not leak into the command" {
     export MANIFEST_CLI_AUTO_CONFIRM=1
     export MANIFEST_CLI_SOME_LEAK="leaked-value"
-    run _manifest_release_gate_exec "$SCRATCH" 'echo "AC=[${MANIFEST_CLI_AUTO_CONFIRM:-unset}] LEAK=[${MANIFEST_CLI_SOME_LEAK:-unset}]"'
+    run _manifest_release_gate_exec "$SCRATCH" bash -c 'echo "AC=[${MANIFEST_CLI_AUTO_CONFIRM:-unset}] LEAK=[${MANIFEST_CLI_SOME_LEAK:-unset}]"'
     [ "$status" -eq 0 ]
     [ "$output" = "AC=[unset] LEAK=[unset]" ]
 }
@@ -378,21 +436,31 @@ _audit_file() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
 @test "gate exec: exported manifest functions do not leak into the command" {
     manifest_repo_identity_block() { return 127; }
     export -f manifest_repo_identity_block
-    run _manifest_release_gate_exec "$SCRATCH" 'type -t manifest_repo_identity_block || echo ABSENT'
+    run _manifest_release_gate_exec "$SCRATCH" bash -c 'type -t manifest_repo_identity_block || echo ABSENT'
     [ "$status" -eq 0 ]
     [ "$output" = "ABSENT" ]
 }
 
 @test "gate exec: leaked PROJECT_ROOT does not reach the command" {
     export PROJECT_ROOT="$SCRATCH/proj"
-    run _manifest_release_gate_exec "$SCRATCH" 'echo "PR=[${PROJECT_ROOT:-unset}]"'
+    run _manifest_release_gate_exec "$SCRATCH" bash -c 'echo "PR=[${PROJECT_ROOT:-unset}]"'
     [ "$status" -eq 0 ]
     [ "$output" = "PR=[unset]" ]
 }
 
 @test "gate exec: PATH and HOME are preserved so tools and sandboxing work" {
-    run _manifest_release_gate_exec "$SCRATCH" 'echo "HOME=[$HOME]"; command -v bash >/dev/null && echo BASH_FOUND'
+    run _manifest_release_gate_exec "$SCRATCH" bash -c 'echo "HOME=[$HOME]"; command -v bash >/dev/null && echo BASH_FOUND'
     [ "$status" -eq 0 ]
     [[ "$output" == *"HOME=[$HOME]"* ]]
     [[ "$output" == *"BASH_FOUND"* ]]
+}
+
+@test "gate exec: a configured gate_command runs end-to-end via run as argv (no shell injection)" {
+    # End-to-end: gate_command resolved by the run path and exec'd as argv. A
+    # value crafted as a shell injection must NOT touch the marker file.
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND="true; touch injected"
+    run manifest_release_gate_run "pre-bump"
+    [ ! -e "$PROJECT_ROOT/injected" ]
+    [ ! -e "injected" ]
 }

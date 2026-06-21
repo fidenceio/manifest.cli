@@ -49,11 +49,18 @@ brew tap fidenceio/tap
 brew install manifest
 ```
 
-Install script alternative:
+Install script alternative (download, verify, then run — no piping remote code into a shell):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fidenceio/manifest.cli/main/install-cli.sh | bash
+curl -fsSLO https://raw.githubusercontent.com/fidenceio/manifest.cli/main/bootstrap.sh
+# inspect bootstrap.sh, then run it:
+bash bootstrap.sh                               # latest published tag
+MANIFEST_CLI_INSTALL_VERSION=v55.2.1 bash bootstrap.sh      # pin an exact version
 ```
+
+`bootstrap.sh` downloads the pinned release tarball, verifies its sha256 against
+the published checksum (or `MANIFEST_CLI_INSTALL_SHA256` if you pin one), and only then runs
+the installer from the verified tree.
 
 For repository development and validation, do not install dependencies on the host. Use the containerized test runner:
 
