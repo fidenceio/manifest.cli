@@ -1,5 +1,18 @@
 # Changelog
 
+## [55.3.0] - 2026-06-22
+
+**Release Type:** Minor
+
+### Changes
+
+- Fix(status): source fleet roster from TSV; add bootstrap preview
+- Fix(security): harden release-chain integrity (audit C3)
+- Merge fix/release-chain-c3: harden release-chain integrity (audit C3)
+- Merge fix/status-tsv-bootstrap: source fleet roster from TSV + bootstrap preview
+- Fix(test): compare gate-exec cwd by inode, not string
+
+
 ## [55.2.1] - 2026-06-21
 
 **Release Type:** Patch
@@ -85,16 +98,4 @@
 ### Changes
 
 - Update release copy and configuration examples
-- Add regression coverage for the changed CLI workflow
-
-
-## [54.2.0] - 2026-06-16
-
-**Release Type:** Minor
-
-### Changes
-
-- Update release copy and configuration examples
-- Wire first-class CLI commands to inspectable built-in recipe definitions
-- Update shell completions for new command options
 - Add regression coverage for the changed CLI workflow
