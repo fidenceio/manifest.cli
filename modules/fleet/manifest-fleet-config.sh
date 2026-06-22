@@ -79,7 +79,8 @@ readonly MANIFEST_CLI_FLEET_DEFAULT_CONFIG_FILENAME="manifest.fleet.config.yaml"
 # Fleet-level versioning strategy
 # Options: "none" | "date" | "semver" | "increment"
 #   - "none"      : No fleet version, services versioned independently
-#   - "date"      : Date-based versioning (YYYY.MM.DD)
+#   - "date"      : Trusted-timestamp versioning (UTC YYYY.MM.DD.HHMMSS, sourced
+#                   from Manifest's NTP/HTTPS time service, not the local clock)
 #   - "semver"    : Semantic versioning (X.Y.Z)
 #   - "increment" : Simple incrementing integer (1, 2, 3...)
 readonly MANIFEST_CLI_FLEET_DEFAULT_VERSIONING="date"

@@ -16,6 +16,16 @@ setup() {
     source "$TEST_REPO_ROOT/modules/core/manifest-discovery.sh"
     # shellcheck disable=SC1091
     source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet.sh"
+    # Real cross-platform formatter (manifest-os.sh) + time API (manifest-time.sh).
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/system/manifest-os.sh"
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/system/manifest-time.sh"
+
+    # Stub the trusted-time service with a fixed epoch so the date scheme is
+    # hermetic (no NTP/HTTPS network call) and deterministic. Defined AFTER the
+    # source above so it overrides the real fetch; `format_timestamp` stays real.
+    get_time_timestamp() { MANIFEST_CLI_TIME_TIMESTAMP=1700000000; return 0; }
 
     SCRATCH="$(mk_scratch)"
     HOME="$SCRATCH-home"; mkdir -p "$HOME"
@@ -45,11 +55,16 @@ YAML
     export MANIFEST_CLI_FLEET_VERSION="$current"
 }
 
-@test "_fleet_next_version date: empty -> today; today -> .1; .1 -> .2" {
-    local today; today="$(date -u +%Y.%m.%d)"
-    [ "$(_fleet_next_version date "")" = "$today" ]
-    [ "$(_fleet_next_version date "$today")" = "$today.1" ]
-    [ "$(_fleet_next_version date "$today.1")" = "$today.2" ]
+@test "_fleet_next_version date: emits a full trusted-time UTC timestamp; ignores current" {
+    local expected; expected="$(format_timestamp 1700000000 '+%Y.%m.%d.%H%M%S')"
+    [ "$(_fleet_next_version date "")" = "$expected" ]
+    # `current` is ignored — each bump is a fresh stamp, not derived from the prior value.
+    [ "$(_fleet_next_version date "2026.06.21")" = "$expected" ]
+    [ "$(_fleet_next_version date "2020.01.01.000000")" = "$expected" ]
+    # Shape: YYYY.MM.DD.HHMMSS — tag-safe (digits and dots only).
+    [[ "$expected" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}\.[0-9]{6}$ ]]
+    # A fresh timestamp still sorts lexically above a legacy date-only FLEET_VERSION.
+    [[ "2026.06.22.000000" > "2026.06.21" ]]
 }
 
 @test "_fleet_next_version semver: patch/minor/major/empty" {
@@ -74,8 +89,8 @@ YAML
     run _fleet_root_release patch apply false 1
     [ "$status" -eq 0 ]
 
-    local today; today="$(date -u +%Y.%m.%d)"
-    [ "$(cat "$SCRATCH/FLEET_VERSION")" = "$today" ]
+    local expected; expected="$(format_timestamp 1700000000 '+%Y.%m.%d.%H%M%S')"
+    [ "$(cat "$SCRATCH/FLEET_VERSION")" = "$expected" ]
 
     run git -C "$SCRATCH" ls-tree -r --name-only HEAD
     [[ "$output" == *"FLEET_VERSION"* ]]

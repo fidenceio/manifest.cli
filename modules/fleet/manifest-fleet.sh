@@ -2861,19 +2861,22 @@ _fleet_next_version() {
             return 0
             ;;
         date)
-            local today
-            today="$(date -u +%Y.%m.%d)"
-            if [[ "$current" == "$today" ]]; then
-                echo "${today}.1"
-            elif [[ "$current" == "$today".* ]]; then
-                local counter="${current##*.}"
-                if [[ "$counter" =~ ^[0-9]+$ ]]; then
-                    echo "${today}.$((counter + 1))"
-                else
-                    echo "${today}.1"
-                fi
+            # Full authoritative UTC timestamp: date + time to the second,
+            # sourced from Manifest's trusted NTP/HTTPS time service (not the
+            # local clock) so the fleet version is tamper-evident and ordered by
+            # real wall-clock. The seconds component makes every ship unique, so
+            # no same-day counter is needed. `current` is intentionally ignored —
+            # each bump is a fresh stamp; the YYYY.MM.DD.HHMMSS shape is lexically
+            # sortable (newer > older, including across the legacy date-only value)
+            # and tag-safe (digits and dots only). Falls back to the local clock
+            # only if the time service is unavailable.
+            local fmt='+%Y.%m.%d.%H%M%S'
+            if declare -F get_time_timestamp >/dev/null 2>&1; then
+                get_time_timestamp >/dev/null 2>&1
+                format_timestamp "${MANIFEST_CLI_TIME_TIMESTAMP:-$(date -u +%s)}" "$fmt" \
+                    2>/dev/null || date -u "$fmt"
             else
-                echo "$today"
+                date -u "$fmt"
             fi
             ;;
         increment)
