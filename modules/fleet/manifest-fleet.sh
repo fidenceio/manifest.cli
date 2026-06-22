@@ -2265,6 +2265,69 @@ _fleet_preflight_on_default_branch() {
     return 1
 }
 
+# Gate (apply-only, non-local) for releaseable members with no pushable 'origin'.
+# A non-local ship of such a member commits + tags locally but silently skips the
+# push and GitHub Release, stranding the release on disk — what stranded the
+# D-IDENT-17 members. For each offender we first try to REPAIR it from the fleet
+# TSV: the declared REMOTE_URL is the structure-of-record, so when it holds a
+# well-formed git URL we wire it up with `git remote add origin <url>` (a local
+# config write, no network). Only a member that still has no usable remote after
+# that — no local origin AND no adoptable TSV URL — is an offender, and any
+# offender refuses the whole apply before the release mutations run. Mirrors the
+# fail-closed shape of _fleet_preflight_on_default_branch. Not called for --local
+# ships, which never push and so can never strand.
+_fleet_preflight_no_empty_remote() {
+    local force_bump="${1:-false}"
+    local offenders=()
+    local repaired=()
+    local service path url reason
+    for service in $MANIFEST_CLI_FLEET_SERVICES; do
+        path=$(get_fleet_service_property "$service" "path")
+        if ! reason=$(_fleet_service_release_reason "$service" "$path" "$force_bump"); then
+            continue
+        fi
+        # Already has a usable origin → nothing to do.
+        if git -C "$path" remote get-url origin >/dev/null 2>&1; then
+            continue
+        fi
+        url=$(get_fleet_service_property "$service" "url")
+        # Adopt the TSV URL only when it actually parses as a git remote. This
+        # guards against a blank or (via a tab-collapsed row) garbled REMOTE_URL
+        # column — a stray branch name like "main" never matches and is refused
+        # rather than wired up as a bogus remote.
+        if [[ "$url" =~ ^(git@|https://|ssh://|file://) ]] \
+            && git -C "$path" remote add origin "$url" 2>/dev/null; then
+            repaired+=("$(_fleet_plan_service_display_name "$service" "$path") → $url")
+            continue
+        fi
+        offenders+=("$(_fleet_plan_service_display_name "$service" "$path") ($path)")
+    done
+
+    if [[ ${#repaired[@]} -gt 0 ]]; then
+        echo ""
+        echo "Wired up 'origin' for ${#repaired[@]} member(s) from the fleet TSV (local only, no push yet):"
+        local r
+        for r in "${repaired[@]}"; do
+            echo "  - $r"
+        done
+    fi
+
+    [[ ${#offenders[@]} -eq 0 ]] && return 0
+
+    log_error "Pre-flight: ${#offenders[@]} releaseable fleet member(s) have no 'origin' remote and no usable REMOTE_URL in the fleet TSV:"
+    local entry
+    for entry in "${offenders[@]}"; do
+        echo "  - $entry"
+    done
+    echo ""
+    echo "Reason:      a non-local ship would commit + tag locally but cannot push or cut a"
+    echo "             GitHub Release — the release would strand on disk."
+    echo "Fix:         add a remote ('git remote add origin <url>'), set the member's REMOTE_URL"
+    echo "             in manifest.fleet.tsv, or run with --local to ship local-only on purpose."
+    echo "Pre-flight refused before the release mutations; no fleet member was shipped."
+    return 1
+}
+
 # Fail-closed gate: `manifest ship fleet` must never directly ship a PR-gated
 # member (release.strategy: pr) — its release has to land through a reviewed
 # pull request. If any selected member is PR-gated, apply refuses before any
@@ -3038,6 +3101,13 @@ EOF
     fi
 
     if ! _fleet_preflight_on_default_branch "$force_bump"; then
+        return 1
+    fi
+
+    # Non-local ships must have a pushable origin for every releaseable member,
+    # or the release strands on disk. Repair from the TSV where possible, else
+    # refuse. Skipped for --local (never pushes).
+    if [[ "$local_only" != "true" ]] && ! _fleet_preflight_no_empty_remote "$force_bump"; then
         return 1
     fi
 
