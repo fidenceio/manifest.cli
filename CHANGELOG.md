@@ -1,5 +1,14 @@
 # Changelog
 
+## [55.4.1] - 2026-06-22
+
+**Release Type:** Patch
+
+### Changes
+
+- Add regression coverage for the changed CLI workflow
+
+
 ## [55.4.0] - 2026-06-22
 
 **Release Type:** Minor
@@ -89,12 +98,3 @@
 ### Changes
 
 - Fix init fleet -y clobbering a curated multi-depth TSV on re-run
-
-
-## [55.0.1] - 2026-06-16
-
-**Release Type:** Patch
-
-### Changes
-
-- Fleet: make `init fleet` re-run idempotent — preserve config, backfill members
