@@ -1,5 +1,14 @@
 # Changelog
 
+## [55.4.0] - 2026-06-22
+
+**Release Type:** Minor
+
+### Changes
+
+- Add regression coverage for the changed CLI workflow
+
+
 ## [55.3.0] - 2026-06-22
 
 **Release Type:** Minor
@@ -89,13 +98,3 @@
 ### Changes
 
 - Fleet: make `init fleet` re-run idempotent — preserve config, backfill members
-
-
-## [55.0.0] - 2026-06-16
-
-**Release Type:** Major
-
-### Changes
-
-- Update release copy and configuration examples
-- Add regression coverage for the changed CLI workflow
