@@ -869,7 +869,7 @@ generate_start_tsv() {
     echo "# Depth: $recorded_depth"
     echo "# Last scanned: $scan_date"
     echo "# Canonical config: manifest.fleet.config.yaml"
-    echo "# Toggle the SELECT column (true/false), then run: manifest init fleet"
+    echo "# Toggle the SELECT column (true/false) — update/ship/status honor it directly. (manifest init fleet is the first-time scaffold step only.)"
     if [[ "$fingerprint_mode" != "trusted" ]]; then
         echo "# DEFAULT-SELECT-HASH: ${default_hash}"
     fi
@@ -1089,7 +1089,7 @@ merge_update_tsv() {
     echo "# Depth: $depth"
     echo "# Last scanned: $scan_date"
     echo "# Canonical config: manifest.fleet.config.yaml"
-    echo "# Toggle the SELECT column (true/false), then run: manifest init fleet"
+    echo "# Toggle the SELECT column (true/false) — update/ship/status honor it directly. (manifest init fleet is the first-time scaffold step only.)"
     printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
 
     # Write data rows, preserving existing selections

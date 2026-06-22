@@ -34,7 +34,7 @@ make_tsv() {
         echo "# Depth: 2"
         echo "# Last scanned: 2026-04-25T00:00:00Z"
         echo "# Canonical config: manifest.fleet.config.yaml"
-        echo "# Toggle the SELECT column (true/false), then run: manifest init fleet"
+        echo "# Toggle the SELECT column (true/false) — update/ship/status honor it directly. (manifest init fleet is the first-time scaffold step only.)"
         echo "# DEFAULT-SELECT-HASH: $hash"
         printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
         local row

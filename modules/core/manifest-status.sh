@@ -88,6 +88,11 @@ _status_fleet_config_file() {
 _status_fleet_tsv_file() {
     local proj="$1"
     [[ -f "$proj/manifest.fleet.tsv" ]] && echo "$proj/manifest.fleet.tsv"
+    # Explicit success: when no TSV exists the `&&` above is the function's last
+    # command and returns 1, which (via `fleet_tsv="$(_status_fleet_tsv_file …)"`)
+    # would trip the entry script's `set -e` and abort `manifest status` in any
+    # non-fleet repo. The empty stdout already signals "no TSV" to the caller.
+    return 0
 }
 
 # Split a tab-separated line into a named array, preserving empty fields. A bare

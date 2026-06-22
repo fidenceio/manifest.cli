@@ -40,7 +40,7 @@ write_curated_tsv() {
         echo "# Depth: 2"
         echo "# Last scanned: 2026-01-01T00:00:00Z"
         echo "# Canonical config: manifest.fleet.config.yaml"
-        echo "# Toggle the SELECT column (true/false), then run: manifest init fleet"
+        echo "# Toggle the SELECT column (true/false) — update/ship/status honor it directly. (manifest init fleet is the first-time scaffold step only.)"
         printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
         printf "true\talpha\tapps/alpha\ttrue\tgit@github.com:org/keep-this-url.git\tmain\n"
         printf "true\tbeta\tdb/beta\ttrue\t\tmain\n"

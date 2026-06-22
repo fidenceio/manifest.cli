@@ -55,6 +55,24 @@ teardown() {
     echo "$output" | grep -q "major → 4.0.0"
 }
 
+# Fidelity guard for the `set -e` abort class. The tests above call
+# manifest_status as a sourced function, so they never run under the entry
+# script's `set -eo pipefail`. A helper whose last command returns nonzero —
+# e.g. _status_fleet_tsv_file in a repo with no manifest.fleet.tsv — aborts the
+# REAL CLI (captured via `fleet_tsv="$(…)"`) while these function-level tests
+# stay green. Exercise the actual entry-script path so that class can't regress.
+@test "status: exits 0 through the entry script (set -e) in a non-fleet git repo" {
+    cd "$SCRATCH"
+    git init -q
+    git config user.email t@e.com
+    git config user.name t
+    echo "1.2.3" > VERSION
+    git add -A && git commit -qm init
+    run bash "$TEST_REPO_ROOT/scripts/manifest-cli.sh" status
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Version:.*1.2.3"
+}
+
 @test "status: reports noncanonical version surfaces without mutating them" {
     cd "$SCRATCH"
     git init -q

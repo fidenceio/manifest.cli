@@ -173,6 +173,7 @@ teardown() {
 }
 
 @test "tag signing: off never signs even when a key is configured" {
+    command -v ssh-keygen >/dev/null || skip "ssh-keygen not available (host-optional; covered on the macOS leg)"
     git config gpg.format ssh
     ssh-keygen -t ed25519 -N '' -f "$SCRATCH/sign_key" -q
     git config user.signingkey "$SCRATCH/sign_key.pub"
@@ -183,6 +184,7 @@ teardown() {
 }
 
 @test "tag signing: SSH key configured produces a SIGNED annotated tag" {
+    command -v ssh-keygen >/dev/null || skip "ssh-keygen not available (host-optional; covered on the macOS leg)"
     git config gpg.format ssh
     ssh-keygen -t ed25519 -N '' -f "$SCRATCH/sign_key" -q
     git config user.signingkey "$SCRATCH/sign_key.pub"
