@@ -1,5 +1,14 @@
 # Changelog
 
+## [55.4.2] - 2026-06-23
+
+**Release Type:** Patch
+
+### Changes
+
+- Fix(release-gate): force-bump skips the gate for clean, at-tag version stamps
+
+
 ## [55.4.1] - 2026-06-22
 
 **Release Type:** Patch
@@ -89,12 +98,3 @@
 
 - Docs(tracker): reconcile §9.5 to SHIPPED (v55.0.0–v55.0.2)
 - Update release copy and configuration examples
-
-
-## [55.0.2] - 2026-06-16
-
-**Release Type:** Patch
-
-### Changes
-
-- Fix init fleet -y clobbering a curated multi-depth TSV on re-run
