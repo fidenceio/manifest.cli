@@ -306,6 +306,13 @@ MANIFEST_CLI_RELEASE_GATE_ARGV=()
 _MANIFEST_CLI_SHIP_LAST_GATE_STATUS="not-run"
 _MANIFEST_CLI_SHIP_LAST_GATE_POLICY=""
 
+# Set by manifest_ship_repo from the --force-bump flag (and carried into each
+# fleet member's per-member ship). The pre-bump gate reads it to recognize a
+# pure version stamp — a clean tree already at the current release tag, with no
+# code delta to verify. :- so module source order can never clobber a value the
+# ship path already set.
+_MANIFEST_CLI_SHIP_FORCE_BUMP="${_MANIFEST_CLI_SHIP_FORCE_BUMP:-false}"
+
 # Run a release-gate verification command in a clean room.
 #
 # By the time the gate fires, the ship process has sourced every module
@@ -367,6 +374,30 @@ _manifest_release_gate_exec() {
         bash -c 'cd "$1" || exit 1; shift; exec "$@"' _ "$gate_root" "$@"
 }
 
+# True when the current ship is a --force-bump of a tree with NO code delta: a
+# clean working tree whose HEAD is already at the current release tag. Such a
+# ship re-stamps a byte-identical, already-released tree onto a new version —
+# there is no new code for the release gate to verify, so the gate has nothing
+# to gate. A dirty tree or any commit since the tag is a real delta:
+# manifest_ship_followup_has_releasable_changes reports releasable changes, this
+# returns non-zero, and the gate runs normally (fail-closed when no test command
+# exists). Fail-safe by construction: force-bump off, an unreadable VERSION, an
+# unresolved tag, or a repo it cannot enter all return non-zero so the gate runs.
+_manifest_gate_stamp_only_force_bump() {
+    [[ "${_MANIFEST_CLI_SHIP_FORCE_BUMP:-false}" == "true" ]] || return 1
+    local repo_root cur_version cur_tag
+    repo_root="${PROJECT_ROOT:-$PWD}"
+    cur_version="$(tr -d '[:space:]' < "$repo_root/VERSION" 2>/dev/null || echo "")"
+    [[ -n "$cur_version" ]] || return 1
+    if declare -F manifest_release_tag_name >/dev/null 2>&1; then
+        cur_tag="$(manifest_release_tag_name "$cur_version")"
+    else
+        cur_tag="v${cur_version#v}"
+    fi
+    declare -F manifest_ship_followup_has_releasable_changes >/dev/null 2>&1 || return 1
+    ( cd "$repo_root" 2>/dev/null && ! manifest_ship_followup_has_releasable_changes "$cur_tag" )
+}
+
 manifest_release_gate_run() {
     local phase="$1"
     local policy
@@ -381,6 +412,18 @@ manifest_release_gate_run() {
                     _MANIFEST_CLI_SHIP_LAST_GATE_STATUS="bypassed"
                     ;;
                 local-tests|all)
+                    # A --force-bump version stamp on a clean, at-tag tree has no
+                    # code delta to verify: it re-releases a byte-identical tree
+                    # that already passed the gate when first released. Pass the
+                    # gate (audited as skipped-stamp-only) without requiring a test
+                    # command. This never fires for an ordinary ship or for a
+                    # force-bump carrying real changes (dirty/ahead), so
+                    # fail-closed verification of actual code is unchanged.
+                    if _manifest_gate_stamp_only_force_bump; then
+                        log_warning "Release gate (${policy}): force-bump version stamp on an unchanged, already-released tree (clean, HEAD at tag) — no code delta to verify. Skipping tests."
+                        _MANIFEST_CLI_SHIP_LAST_GATE_STATUS="skipped-stamp-only"
+                        return 0
+                    fi
                     local tier
                     tier="$(manifest_release_gate_tier)" || return 1
                     if ! _manifest_release_gate_test_command "$tier"; then

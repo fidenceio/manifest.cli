@@ -314,6 +314,91 @@ _audit_file() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
     [ ! -e "$PROJECT_ROOT/should-not-run.marker" ]
 }
 
+# --- pre-bump: force-bump version-stamp skip (clean + at-tag, no code delta) -
+#
+# A --force-bump that re-stamps a byte-identical, already-released tree carries
+# no new code, so the pre-bump gate passes it without a test command (audited
+# skipped-stamp-only). The skip is tightly bounded — it requires force-bump AND
+# a clean tree AND HEAD exactly at the current release tag. The matrix below
+# pins the boundary: a no-delta force-bump skips; a force-bump with ANY real
+# delta (dirty or ahead-of-tag) and an ORDINARY ship both still fail closed, so
+# C3 verification of actual code changes is unchanged.
+
+# Build PROJECT_ROOT as a git repo: VERSION $1, one commit, tag v$1 at HEAD,
+# clean tree — the exact shape the stamp-only gate path recognizes.
+_mk_tagged_clean_repo() {
+    local ver="${1:-1.0.0}"
+    git -C "$PROJECT_ROOT" init -q
+    git -C "$PROJECT_ROOT" config user.email t@e.co
+    git -C "$PROJECT_ROOT" config user.name t
+    printf '%s\n' "$ver" > "$PROJECT_ROOT/VERSION"
+    ( cd "$PROJECT_ROOT" \
+        && echo base > f \
+        && git add VERSION f \
+        && git commit -q -m "release $ver" \
+        && git tag "v$ver" )
+}
+
+@test "release_gate: force-bump on a clean, at-tag tree SKIPS the gate (stamp-only; no test command needed)" {
+    _mk_tagged_clean_repo 1.0.0
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"   # the strict default policy
+    _MANIFEST_CLI_SHIP_FORCE_BUMP=true
+    # Call directly (not via `run`) so the disposition var is observable here.
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
+    local rc=$?
+    [ "$rc" -eq 0 ]
+    grep -q "version stamp on an unchanged" "$SCRATCH/out"
+    grep -q "Skipping tests" "$SCRATCH/out"
+    [ "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS" = "skipped-stamp-only" ]
+}
+
+@test "release_gate: a no-delta force-bump skips even when a test command EXISTS (and never runs it)" {
+    _mk_tagged_clean_repo 1.0.0
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"
+    # Intentional: a clean, at-tag tree is byte-identical to one already gated,
+    # so even a present (and here, side-effecting) command is not re-run. The
+    # marker proves the command never executed.
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND="touch $PROJECT_ROOT/should-not-run.marker"
+    _MANIFEST_CLI_SHIP_FORCE_BUMP=true
+    run manifest_release_gate_run "pre-bump"
+    [ "$status" -eq 0 ]
+    [ ! -e "$PROJECT_ROOT/should-not-run.marker" ]
+    echo "$output" | grep -q "no code delta to verify"
+}
+
+@test "release_gate: force-bump with a DIRTY tree STILL fails closed (a real delta is not a stamp)" {
+    _mk_tagged_clean_repo 1.0.0
+    ( cd "$PROJECT_ROOT" && echo changed >> f )   # uncommitted change = real delta
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"
+    _MANIFEST_CLI_SHIP_FORCE_BUMP=true
+    run manifest_release_gate_run "pre-bump"
+    [ "$status" -eq 1 ]
+    echo "$output" | grep -q "no test command found"
+    echo "$output" | grep -q "refusing to release unverified"
+}
+
+@test "release_gate: force-bump AHEAD of the last tag STILL fails closed (commits since the tag are a real delta)" {
+    _mk_tagged_clean_repo 1.0.0
+    # New commit after the tag: clean working tree, but HEAD is ahead of v1.0.0.
+    ( cd "$PROJECT_ROOT" && echo more > g && git add g && git commit -q -m "post-tag commit" )
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"
+    _MANIFEST_CLI_SHIP_FORCE_BUMP=true
+    run manifest_release_gate_run "pre-bump"
+    [ "$status" -eq 1 ]
+    echo "$output" | grep -q "refusing to release unverified"
+}
+
+@test "release_gate: an ORDINARY ship (no force-bump) of a clean, at-tag tree STILL fails closed (C3 intact)" {
+    _mk_tagged_clean_repo 1.0.0
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"
+    # _MANIFEST_CLI_SHIP_FORCE_BUMP is "false" (set at module source). The skip
+    # is gated on force-bump, so an ordinary ship still demands verification.
+    run manifest_release_gate_run "pre-bump"
+    [ "$status" -eq 1 ]
+    echo "$output" | grep -q "no test command found"
+    echo "$output" | grep -q "refusing to release unverified"
+}
+
 # --- remote-ci phase boundaries ---------------------------------------------
 
 @test "release_gate: remote-ci is a no-op in the pre-bump phase" {

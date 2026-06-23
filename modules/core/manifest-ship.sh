@@ -447,6 +447,13 @@ manifest_ship_repo() {
         fi
     fi
 
+    # Hand the force-bump intent to the pre-bump release gate (same process for a
+    # direct ship; the same subshell for a fleet member). Set on every ship —
+    # true or false — so a prior run's value can never leak into this one. The
+    # gate pairs it with a clean+at-tag check to recognize a no-delta version
+    # stamp it need not verify.
+    _MANIFEST_CLI_SHIP_FORCE_BUMP="$force_bump"
+
     if [[ "$execution_mode" == "preview" ]]; then
         manifest_ship_repo_identity_notice "${PROJECT_ROOT:-$PWD}"
         manifest_ship_preview_plan "$increment_type" "$local_only"
