@@ -1,5 +1,18 @@
 # Changelog
 
+## [55.5.0] - 2026-06-24
+
+**Release Type:** Minor
+
+### Changes
+
+- Add GitHub Release publishing support
+- Add smart ship preview summaries
+- Update release copy and configuration examples
+- Wire first-class CLI commands to inspectable built-in recipe definitions
+- Add regression coverage for the changed CLI workflow
+
+
 ## [55.4.2] - 2026-06-23
 
 **Release Type:** Patch
@@ -88,13 +101,3 @@
 
 - Update release copy and configuration examples
 - Add regression coverage for the changed CLI workflow
-
-
-## [55.0.3] - 2026-06-17
-
-**Release Type:** Patch
-
-### Changes
-
-- Docs(tracker): reconcile §9.5 to SHIPPED (v55.0.0–v55.0.2)
-- Update release copy and configuration examples
