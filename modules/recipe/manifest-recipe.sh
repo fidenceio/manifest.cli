@@ -17,7 +17,7 @@ _manifest_recipe_builtin_dir() {
 }
 
 _manifest_recipe_project_dir() {
-    echo "${PROJECT_ROOT:-$PWD}/.manifest/recipes"
+    echo "${MANIFEST_CLI_PROJECT_ROOT:-$PWD}/.manifest/recipes"
 }
 
 _manifest_recipe_files() {

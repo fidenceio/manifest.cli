@@ -5,7 +5,7 @@ load 'helpers/setup'
 setup() {
     load_modules "git/manifest-git.sh" "git/manifest-git-changes.sh"
     SCRATCH="$(mk_scratch)"
-    export PROJECT_ROOT="$SCRATCH"
+    export MANIFEST_CLI_PROJECT_ROOT="$SCRATCH"
     cd "$SCRATCH"
 
     git init -q .

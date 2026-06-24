@@ -75,7 +75,7 @@ manifest_doctor() {
 
     local _doctor_errs=0
     local _doctor_warns=0
-    local proj="${PROJECT_ROOT:-$(pwd)}"
+    local proj="${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}"
 
     echo ""
     echo "Manifest doctor"

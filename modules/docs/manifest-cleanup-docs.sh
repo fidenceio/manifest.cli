@@ -3,11 +3,11 @@
 # Manifest Cleanup Docs Module
 # Handles moving old documentation to zArchive and general repository cleanup
 
-# Cleanup-docs module - uses PROJECT_ROOT from core module
+# Cleanup-docs module - uses MANIFEST_CLI_PROJECT_ROOT from core module
 
 # Get configurable documentation paths
 get_zarchive_dir() {
-    get_docs_archive_folder "$PROJECT_ROOT"
+    get_docs_archive_folder "$MANIFEST_CLI_PROJECT_ROOT"
 }
 
 # Ensure zArchive directory exists
@@ -44,7 +44,7 @@ cleanup_temp_files() {
                 rm -f "$file"
                 cleaned_count=$((cleaned_count + 1))
             fi
-        done < <(find "$PROJECT_ROOT" -name "$pattern" -type f 2>/dev/null || true)
+        done < <(find "$MANIFEST_CLI_PROJECT_ROOT" -name "$pattern" -type f 2>/dev/null || true)
     done
     
     if [[ $cleaned_count -gt 0 ]]; then
@@ -62,12 +62,12 @@ cleanup_empty_dirs() {
     
     # Find and remove empty directories (except important ones)
     while IFS= read -r dir; do
-        if [[ -d "$dir" && "$dir" != "$PROJECT_ROOT" && "$dir" != "$PROJECT_ROOT/.git" ]]; then
+        if [[ -d "$dir" && "$dir" != "$MANIFEST_CLI_PROJECT_ROOT" && "$dir" != "$MANIFEST_CLI_PROJECT_ROOT/.git" ]]; then
             if [[ -z "$(ls -A "$dir" 2>/dev/null)" ]]; then
                 rmdir "$dir" 2>/dev/null && cleaned_count=$((cleaned_count + 1))
             fi
         fi
-    done < <(find "$PROJECT_ROOT" -type d -empty 2>/dev/null || true)
+    done < <(find "$MANIFEST_CLI_PROJECT_ROOT" -type d -empty 2>/dev/null || true)
     
     if [[ $cleaned_count -gt 0 ]]; then
         log_success "Removed $cleaned_count empty directories"
@@ -189,7 +189,7 @@ main_cleanup() {
     log_info "Version: $version"
     log_info "Timestamp: $timestamp"
 
-    cd "$PROJECT_ROOT"
+    cd "$MANIFEST_CLI_PROJECT_ROOT"
 
     local zarchive_dir
     zarchive_dir="$(get_zarchive_dir)"
@@ -230,11 +230,11 @@ main_cleanup() {
             if mv "$f" "$dest" 2>/dev/null; then
                 log_success "Moved: ${filename} → zArchive/"
                 moved_count=$((moved_count + 1))
-                move_entries+=("${f#"$PROJECT_ROOT"/}|${dest#"$PROJECT_ROOT"/}")
+                move_entries+=("${f#"$MANIFEST_CLI_PROJECT_ROOT"/}|${dest#"$MANIFEST_CLI_PROJECT_ROOT"/}")
             else
                 log_warning "Failed to move: $filename"
             fi
-        done < <(find "$(get_docs_folder "$PROJECT_ROOT")" -maxdepth 1 -type f -name "*.md")
+        done < <(find "$(get_docs_folder "$MANIFEST_CLI_PROJECT_ROOT")" -maxdepth 1 -type f -name "*.md")
 
         log_success "Archived $moved_count files, skipped $skipped_count files"
     fi
@@ -258,8 +258,8 @@ main() {
         "clean")
             # For clean command, archive all old documentation files
             local latest_version=""
-            if [ -f "$PROJECT_ROOT/VERSION" ]; then
-                latest_version=$(cat "$PROJECT_ROOT/VERSION" 2>/dev/null || echo "")
+            if [ -f "$MANIFEST_CLI_PROJECT_ROOT/VERSION" ]; then
+                latest_version=$(cat "$MANIFEST_CLI_PROJECT_ROOT/VERSION" 2>/dev/null || echo "")
             fi
             # Get trusted timestamp for cleanup
             get_time_timestamp >/dev/null

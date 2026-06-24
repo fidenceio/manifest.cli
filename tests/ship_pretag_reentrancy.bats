@@ -26,7 +26,7 @@ setup() {
     REPO="$SCRATCH/repo"
     mk_repo_at_version "$REPO" "1.2.3"
     cd "$REPO"
-    export PROJECT_ROOT="$REPO"
+    export MANIFEST_CLI_PROJECT_ROOT="$REPO"
 }
 
 teardown() {

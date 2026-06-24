@@ -50,7 +50,7 @@ _MANIFEST_SHIP_LOADED=1
 # `.`, an absolute path, and a symlinked path all resolve to one lock.
 _manifest_repo_lock_dir_path() {
     local repo_root git_root hash
-    repo_root="${PROJECT_ROOT:-$PWD}"
+    repo_root="${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
     git_root="$(git -C "$repo_root" rev-parse --show-toplevel 2>/dev/null)" || git_root="$repo_root"
     git_root="$(cd "$git_root" 2>/dev/null && pwd -P)" || git_root="$repo_root"
     hash="$(printf '%s' "$git_root" | _manifest_hash_short)"
@@ -61,7 +61,7 @@ _manifest_repo_lock_dir_path() {
 # the MANIFEST_CLI_REPO_LOCK_HELD marker). Echoes the path.
 _manifest_repo_lock_git_root() {
     local repo_root git_root
-    repo_root="${PROJECT_ROOT:-$PWD}"
+    repo_root="${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
     git_root="$(git -C "$repo_root" rev-parse --show-toplevel 2>/dev/null)" || git_root="$repo_root"
     git_root="$(cd "$git_root" 2>/dev/null && pwd -P)" || git_root="$repo_root"
     printf '%s' "$git_root"
@@ -124,7 +124,7 @@ _manifest_ship_repo_lock_acquire() {
 
 manifest_ship_preview_next_version() {
     local increment_type="$1"
-    local repo_root="${PROJECT_ROOT:-$PWD}"
+    local repo_root="${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
 
     if [[ -f "$repo_root/VERSION" ]] && declare -F get_next_version >/dev/null 2>&1; then
         (cd "$repo_root" && get_next_version "$increment_type" 2>/dev/null) || echo "unknown"
@@ -134,7 +134,7 @@ manifest_ship_preview_next_version() {
 }
 
 manifest_ship_preview_dirty_files() {
-    local repo_root="${1:-${PROJECT_ROOT:-$PWD}}"
+    local repo_root="${1:-${MANIFEST_CLI_PROJECT_ROOT:-$PWD}}"
     local porcelain total shown line
     porcelain="$(git -C "$repo_root" status --porcelain -uall 2>/dev/null || true)"
 
@@ -179,7 +179,7 @@ manifest_ship_preview_join_items() {
 }
 
 manifest_ship_preview_summary() {
-    local repo_root="${1:-${PROJECT_ROOT:-$PWD}}"
+    local repo_root="${1:-${MANIFEST_CLI_PROJECT_ROOT:-$PWD}}"
     local files bullets
     files="$(git -C "$repo_root" status --porcelain -uall 2>/dev/null | sed 's/^...//' || true)"
 
@@ -242,7 +242,7 @@ manifest_ship_preview_summary_from_bullets() {
 manifest_ship_repo_plan_fingerprint() {
     local increment_type="$1"
     local local_only="$2"
-    local repo_root="${PROJECT_ROOT:-$PWD}"
+    local repo_root="${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
     local current next tag
     current="$(tr -d '[:space:]' < "$repo_root/VERSION" 2>/dev/null || echo "unknown")"
     next="$(manifest_ship_preview_next_version "$increment_type")"
@@ -257,7 +257,7 @@ manifest_ship_repo_plan_fingerprint() {
 manifest_ship_preview_plan() {
     local increment_type="$1"
     local local_only="$2"
-    local repo_root="${PROJECT_ROOT:-$PWD}"
+    local repo_root="${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
     local current_version next_version tag_name
 
     current_version="$(tr -d '[:space:]' < "$repo_root/VERSION" 2>/dev/null || echo "unknown")"
@@ -309,7 +309,7 @@ manifest_ship_preview_plan() {
 }
 
 manifest_ship_repo_identity_notice() {
-    local repo_root="${1:-${PROJECT_ROOT:-$PWD}}"
+    local repo_root="${1:-${MANIFEST_CLI_PROJECT_ROOT:-$PWD}}"
 
     if declare -F manifest_repo_identity_block >/dev/null 2>&1; then
         manifest_repo_identity_block "$repo_root"
@@ -430,7 +430,7 @@ manifest_ship_repo() {
     if [[ "$force_bump" == "true" ]]; then
         echo "force-bump: cutting a release regardless of changes since the last tag (forward-only — new commit + tag, no history rewrite)."
     else
-        local _repo_root="${PROJECT_ROOT:-$PWD}"
+        local _repo_root="${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
         local _cur_version _cur_tag
         _cur_version="$(tr -d '[:space:]' < "$_repo_root/VERSION" 2>/dev/null || echo "unknown")"
         if [[ "$_cur_version" != "unknown" ]] && declare -F manifest_release_tag_name >/dev/null 2>&1; then
@@ -455,7 +455,7 @@ manifest_ship_repo() {
     _MANIFEST_CLI_SHIP_FORCE_BUMP="$force_bump"
 
     if [[ "$execution_mode" == "preview" ]]; then
-        manifest_ship_repo_identity_notice "${PROJECT_ROOT:-$PWD}"
+        manifest_ship_repo_identity_notice "${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
         manifest_ship_preview_plan "$increment_type" "$local_only"
         manifest_execution_footer "$(manifest_execution_replay_hint "$replay_command")"
         manifest_ship_repo_preview_preflight_notice
@@ -479,9 +479,9 @@ manifest_ship_repo() {
     plan_fingerprint="$(manifest_ship_repo_plan_fingerprint "$increment_type" "$local_only")"
 
     # Warn (never block) if the plan drifted since the preview the user read.
-    manifest_plan_fingerprint_warn_on_drift "ship-repo" "$plan_fingerprint" "${PROJECT_ROOT:-$PWD}"
+    manifest_plan_fingerprint_warn_on_drift "ship-repo" "$plan_fingerprint" "${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
 
-    if ! manifest_execution_require_apply "$execution_mode" "${PROJECT_ROOT:-$PWD}" "$(manifest_execution_replay_hint "$replay_command")" "$plan_fingerprint"; then
+    if ! manifest_execution_require_apply "$execution_mode" "${MANIFEST_CLI_PROJECT_ROOT:-$PWD}" "$(manifest_execution_replay_hint "$replay_command")" "$plan_fingerprint"; then
         return 1
     fi
 
@@ -531,7 +531,7 @@ manifest_ship_repo() {
     # fleet child invokes this same function in a subshell, per fleet member.
     if declare -F manifest_audit_apply_event >/dev/null 2>&1; then
         local _ship_git_root
-        _ship_git_root="$(git -C "${PROJECT_ROOT:-$PWD}" rev-parse --show-toplevel 2>/dev/null || echo "${PROJECT_ROOT:-$PWD}")"
+        _ship_git_root="$(git -C "${MANIFEST_CLI_PROJECT_ROOT:-$PWD}" rev-parse --show-toplevel 2>/dev/null || echo "${MANIFEST_CLI_PROJECT_ROOT:-$PWD}")"
         manifest_audit_apply_event \
             "${MANIFEST_CLI_AUDIT_SOURCE:-cli}" \
             "$(manifest_execution_replay_hint "$replay_command")" \

@@ -51,21 +51,21 @@ set_origin() {
 @test "canonical repo gate: returns 0 for canonical repo (default allowlist)" {
     set_origin "git@github.com:fidenceio/fidenceio.manifest.cli.git"
     unset MANIFEST_CLI_CANONICAL_REPO_SLUGS
-    PROJECT_ROOT="$SCRATCH" run manifest_is_canonical_repo
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_is_canonical_repo
     [ "$status" -eq 0 ]
 }
 
 @test "canonical repo gate: returns non-zero for non-canonical repo" {
     set_origin "git@github.com:other-org/other-repo.git"
     unset MANIFEST_CLI_CANONICAL_REPO_SLUGS
-    PROJECT_ROOT="$SCRATCH" run manifest_is_canonical_repo
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_is_canonical_repo
     [ "$status" -ne 0 ]
 }
 
 @test "canonical repo gate: respects MANIFEST_CLI_CANONICAL_REPO_SLUGS override" {
     set_origin "git@github.com:custom-org/custom-repo.git"
     export MANIFEST_CLI_CANONICAL_REPO_SLUGS="custom-org/custom-repo"
-    PROJECT_ROOT="$SCRATCH" run manifest_is_canonical_repo
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_is_canonical_repo
     [ "$status" -eq 0 ]
 }
 
@@ -76,6 +76,6 @@ set_origin() {
     # bootstrap (which would pull in unrelated heavy modules).
     eval "$(declare -f should_update_homebrew_for_repo)"
     should_update_homebrew_for_repo() { manifest_is_canonical_repo "$@"; }
-    PROJECT_ROOT="$SCRATCH" run should_update_homebrew_for_repo
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run should_update_homebrew_for_repo
     [ "$status" -eq 0 ]
 }

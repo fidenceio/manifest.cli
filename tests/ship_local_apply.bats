@@ -252,7 +252,7 @@ assert_no_remote_dispatch() {
     before="$("$REAL_GIT" -C "$repo" rev-parse HEAD)"
 
     cd "$repo"
-    PROJECT_ROOT="$repo" run manifest_ship_repo minor --local -y
+    MANIFEST_CLI_PROJECT_ROOT="$repo" run manifest_ship_repo minor --local -y
     [ "$status" -eq 0 ]
 
     # Local writes DID happen.
@@ -270,7 +270,7 @@ assert_no_remote_dispatch() {
     repo="$(mk_repo 1.2.3)"
 
     cd "$repo"
-    PROJECT_ROOT="$repo" run manifest_ship_repo patch --local -y
+    MANIFEST_CLI_PROJECT_ROOT="$repo" run manifest_ship_repo patch --local -y
     [ "$status" -eq 0 ]
     [[ "$output" == *"no remote operations"* ]]
     [[ "$output" == *"skipped tag/push/Homebrew tap publish steps"* ]]
@@ -295,7 +295,7 @@ AUDIT_FILE() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
     audit="$(AUDIT_FILE)"
 
     cd "$repo"
-    PROJECT_ROOT="$repo" run manifest_ship_repo minor --local -y
+    MANIFEST_CLI_PROJECT_ROOT="$repo" run manifest_ship_repo minor --local -y
     [ "$status" -eq 0 ]
 
     [ -f "$audit" ]
@@ -321,7 +321,7 @@ AUDIT_FILE() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
     manifest_ship_workflow() { return 37; }
 
     cd "$repo"
-    PROJECT_ROOT="$repo" run manifest_ship_repo minor --local -y
+    MANIFEST_CLI_PROJECT_ROOT="$repo" run manifest_ship_repo minor --local -y
     [ "$status" -eq 37 ]
 
     [ -f "$audit" ]
@@ -342,7 +342,7 @@ AUDIT_FILE() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
     # release_gate=none is set in setup; assert the durable record shows it so a
     # force-bypass is observable after the fact (not only in the ephemeral var).
     cd "$repo"
-    PROJECT_ROOT="$repo" run manifest_ship_repo patch --local -y
+    MANIFEST_CLI_PROJECT_ROOT="$repo" run manifest_ship_repo patch --local -y
     [ "$status" -eq 0 ]
 
     run grep '"event":"completed"' "$audit"
@@ -384,10 +384,10 @@ AUDIT_FILE() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
     local repo
     repo="$(mk_repo 2.5.4)"
     # Local marker proves the regen step ran in-tree.
-    manifest_docs_generate() { echo regenerated > "$PROJECT_ROOT/.refresh-marker"; return 0; }
+    manifest_docs_generate() { echo regenerated > "$MANIFEST_CLI_PROJECT_ROOT/.refresh-marker"; return 0; }
 
     cd "$repo"
-    PROJECT_ROOT="$repo" run manifest_refresh_repo --local -y
+    MANIFEST_CLI_PROJECT_ROOT="$repo" run manifest_refresh_repo --local -y
     [ "$status" -eq 0 ]
     [[ "$output" == *"Refresh complete."* ]]
 

@@ -39,14 +39,14 @@ _cloud_plugin_path() {
     local plugin
     plugin="$(_cloud_plugin_path)" || skip "Cloud plugin not reachable"
 
-    # The non-brew upgrade branch must invoke install-cli.sh from PROJECT_ROOT.
-    grep -qF 'bash "$PROJECT_ROOT/install-cli.sh"' "$plugin"
+    # The non-brew upgrade branch must invoke install-cli.sh from MANIFEST_CLI_PROJECT_ROOT.
+    grep -qF 'bash "$MANIFEST_CLI_PROJECT_ROOT/install-cli.sh"' "$plugin"
     # And must NOT call the deleted helpers.
     ! grep -qE '(^|[^a-zA-Z_])install_cli[[:space:]]+"' "$plugin"
 }
 
 @test "manifest-core.sh reinstall non-brew path delegates to install-cli.sh" {
-    grep -qF 'bash "$PROJECT_ROOT/install-cli.sh"' "$TEST_REPO_ROOT/modules/core/manifest-core.sh"
+    grep -qF 'bash "$MANIFEST_CLI_PROJECT_ROOT/install-cli.sh"' "$TEST_REPO_ROOT/modules/core/manifest-core.sh"
     # The dropped plugin-based reinstall pattern must be gone.
     ! grep -qE 'manifest_load_plugin "workflow/manifest-auto-upgrade.sh".*install_cli' \
         "$TEST_REPO_ROOT/modules/core/manifest-core.sh"

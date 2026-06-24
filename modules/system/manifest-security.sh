@@ -59,8 +59,8 @@ manifest_security() {
         shift || true
     done
 
-    # Use the validated PROJECT_ROOT from the main command dispatcher
-    local project_root="$PROJECT_ROOT"
+    # Use the validated MANIFEST_CLI_PROJECT_ROOT from the main command dispatcher
+    local project_root="$MANIFEST_CLI_PROJECT_ROOT"
     
     # Validate that we have a valid project root
     if [[ -z "$project_root" || ! -d "$project_root" ]]; then

@@ -332,10 +332,10 @@ YAML
     run env \
         -u MANIFEST_CLI_CLOUD_API_KEY_ENV -u MANIFEST_CLI_CLOUD_API_KEY \
         HOME="$SCRATCH/home" \
-        PROJECT_ROOT="$SCRATCH/project" \
+        MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/project" \
         MANIFEST_CLI_INTERACTIVE_MODE=true \
         TEST_MANIFEST_CLOUD_KEY=secret-from-env \
-        bash -c 'source "$1/tests/helpers/setup.bash"; load_modules "core/manifest-config.sh"; load_configuration "$PROJECT_ROOT" "false" >/dev/null; printf "%s|%s|%s" "$MANIFEST_CLI_INTERACTIVE_MODE" "$MANIFEST_CLI_CLOUD_API_KEY_ENV" "$MANIFEST_CLI_CLOUD_API_KEY"' _ "$TEST_REPO_ROOT"
+        bash -c 'source "$1/tests/helpers/setup.bash"; load_modules "core/manifest-config.sh"; load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "false" >/dev/null; printf "%s|%s|%s" "$MANIFEST_CLI_INTERACTIVE_MODE" "$MANIFEST_CLI_CLOUD_API_KEY_ENV" "$MANIFEST_CLI_CLOUD_API_KEY"' _ "$TEST_REPO_ROOT"
 
     [ "$status" -eq 0 ]
     [ "$output" = "true|TEST_MANIFEST_CLOUD_KEY|secret-from-env" ]
@@ -350,9 +350,9 @@ YAML
 
     run env \
         HOME="$SCRATCH/home" \
-        PROJECT_ROOT="$SCRATCH/project" \
+        MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/project" \
         MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES=".env-secret, manifest.config.local.yaml" \
-        bash -c 'source "$1/tests/helpers/setup.bash"; load_modules "core/manifest-config.sh" "system/manifest-security.sh"; load_configuration "$PROJECT_ROOT" "false" >/dev/null; _manifest_security_private_env_files' _ "$TEST_REPO_ROOT"
+        bash -c 'source "$1/tests/helpers/setup.bash"; load_modules "core/manifest-config.sh" "system/manifest-security.sh"; load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "false" >/dev/null; _manifest_security_private_env_files' _ "$TEST_REPO_ROOT"
 
     [ "$status" -eq 0 ]
     [ "$output" = $'.env-secret\nmanifest.config.local.yaml' ]

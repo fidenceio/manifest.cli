@@ -189,7 +189,7 @@ manifest_first() {
         esac
     done
 
-    local root="${PROJECT_ROOT:-$(pwd)}"
+    local root="${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}"
     local context
     context="$(_manifest_first_context "$root")"
 

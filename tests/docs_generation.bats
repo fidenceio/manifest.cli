@@ -90,7 +90,7 @@ prepare_docs_site_repo() {
 @test "docs site generation writes managed Jekyll source without build artifacts" {
     prepare_docs_site_repo
 
-    PROJECT_ROOT="$SCRATCH/repo" \
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" \
     MANIFEST_CLI_DOCS_GENERATE_SITE=true \
     MANIFEST_CLI_DOCS_GENERATE_SITE_WORKFLOW=true \
     MANIFEST_CLI_DOCS_SITE_SOURCE_DIR="docs-site" \
@@ -127,7 +127,7 @@ prepare_docs_site_repo() {
     mkdir -p "$SCRATCH/repo/docs-site"
     printf 'user-owned\n' > "$SCRATCH/repo/docs-site/index.md"
 
-    PROJECT_ROOT="$SCRATCH/repo" \
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" \
     MANIFEST_CLI_DOCS_GENERATE_SITE=true \
     run _manifest_docs_generate_site "99.5.0" "2026-05-18 12:00:00 UTC" "repo" "$SCRATCH/repo" "$SCRATCH/repo/docs"
 
@@ -142,7 +142,7 @@ prepare_docs_site_repo() {
     git -C "$SCRATCH/repo" remote add origin git@github.com:example/docs-site-test.git
     gh_stub_install "$SCRATCH/gh"
 
-    PROJECT_ROOT="$SCRATCH/repo" \
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" \
     MANIFEST_CLI_DOCS_GENERATE_SITE=true \
     MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES=true \
     run _manifest_docs_generate_site "99.6.0" "2026-05-18 12:00:00 UTC" "repo" "$SCRATCH/repo" "$SCRATCH/repo/docs"
@@ -157,7 +157,7 @@ prepare_docs_site_repo() {
     git -C "$SCRATCH/repo" remote add origin git@github.com:example/private-docs-test.git
     gh_stub_install "$SCRATCH/gh"
 
-    PROJECT_ROOT="$SCRATCH/repo" \
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" \
     MANIFEST_CLI_DOCS_GENERATE_SITE=true \
     MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES=true \
     MANIFEST_CLI_GH_STUB_EXIT=1 \

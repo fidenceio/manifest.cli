@@ -65,7 +65,7 @@ mk_stranded_member() {
     local repo="$SCRATCH/work/svca"
     mk_stranded_member "$repo" 1.2.3
 
-    run bash -c "cd '$repo' && PROJECT_ROOT='$repo' && \
+    run bash -c "cd '$repo' && MANIFEST_CLI_PROJECT_ROOT='$repo' && \
         source '$TEST_REPO_ROOT/modules/workflow/manifest-orchestrator.sh' && \
         source '$TEST_REPO_ROOT/modules/git/manifest-git.sh' && \
         manifest_ship_repo_resume_eligible"
@@ -85,7 +85,7 @@ mk_stranded_member() {
     git -C "$repo" add stub.txt
     git -C "$repo" commit -qm "initial"
 
-    run bash -c "cd '$repo' && PROJECT_ROOT='$repo' && \
+    run bash -c "cd '$repo' && MANIFEST_CLI_PROJECT_ROOT='$repo' && \
         source '$TEST_REPO_ROOT/modules/workflow/manifest-orchestrator.sh' && \
         source '$TEST_REPO_ROOT/modules/git/manifest-git.sh' && \
         manifest_ship_repo_resume_eligible"
@@ -99,7 +99,7 @@ mk_stranded_member() {
     mk_member_repo "$repo" 1.2.3
     # No tag created.
 
-    run bash -c "cd '$repo' && PROJECT_ROOT='$repo' && \
+    run bash -c "cd '$repo' && MANIFEST_CLI_PROJECT_ROOT='$repo' && \
         source '$TEST_REPO_ROOT/modules/workflow/manifest-orchestrator.sh' && \
         source '$TEST_REPO_ROOT/modules/git/manifest-git.sh' && \
         manifest_ship_repo_resume_eligible"
@@ -113,7 +113,7 @@ mk_stranded_member() {
     mk_stranded_member "$repo" 1.2.3
     echo "unrelated change" > "$repo/runtime.txt"
 
-    run bash -c "cd '$repo' && PROJECT_ROOT='$repo' && \
+    run bash -c "cd '$repo' && MANIFEST_CLI_PROJECT_ROOT='$repo' && \
         source '$TEST_REPO_ROOT/modules/workflow/manifest-orchestrator.sh' && \
         source '$TEST_REPO_ROOT/modules/git/manifest-git.sh' && \
         manifest_ship_repo_resume_eligible"
@@ -133,7 +133,7 @@ mk_stranded_member() {
     git -C "$repo" tag v1.2.3
     git -C "$repo" reset --hard HEAD~1 >/dev/null 2>&1
 
-    run bash -c "cd '$repo' && PROJECT_ROOT='$repo' && \
+    run bash -c "cd '$repo' && MANIFEST_CLI_PROJECT_ROOT='$repo' && \
         source '$TEST_REPO_ROOT/modules/workflow/manifest-orchestrator.sh' && \
         source '$TEST_REPO_ROOT/modules/git/manifest-git.sh' && \
         manifest_ship_repo_resume_eligible"
@@ -148,7 +148,7 @@ mk_stranded_member() {
     # Detach HEAD off main; tag still points at HEAD's commit, just no branch.
     git -C "$repo" checkout --detach HEAD >/dev/null 2>&1
 
-    run bash -c "cd '$repo' && PROJECT_ROOT='$repo' && \
+    run bash -c "cd '$repo' && MANIFEST_CLI_PROJECT_ROOT='$repo' && \
         source '$TEST_REPO_ROOT/modules/workflow/manifest-orchestrator.sh' && \
         source '$TEST_REPO_ROOT/modules/git/manifest-git.sh' && \
         manifest_ship_repo_resume_eligible"
@@ -162,7 +162,7 @@ mk_stranded_member() {
     mk_stranded_member "$repo" 1.2.3
     # Formula already dirty from mk_stranded_member, no other changes.
 
-    run bash -c "cd '$repo' && PROJECT_ROOT='$repo' && \
+    run bash -c "cd '$repo' && MANIFEST_CLI_PROJECT_ROOT='$repo' && \
         source '$TEST_REPO_ROOT/modules/workflow/manifest-orchestrator.sh' && \
         source '$TEST_REPO_ROOT/modules/git/manifest-git.sh' && \
         manifest_ship_repo_resume_eligible"

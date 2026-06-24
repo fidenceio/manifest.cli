@@ -229,7 +229,7 @@ YAML
     before="$("$REAL_GIT" -C "$repo" rev-parse HEAD)"
 
     cd "$repo"
-    PROJECT_ROOT="$repo" run manifest_ship_repo patch -y
+    MANIFEST_CLI_PROJECT_ROOT="$repo" run manifest_ship_repo patch -y
     [ "$status" -eq 0 ]
     [[ "$output" == *"Nothing to release"* ]]
     [[ "$output" == *"--force-bump"* ]]
@@ -247,7 +247,7 @@ YAML
     repo="$(mk_tagged_repo 1.2.3)"
 
     cd "$repo"
-    PROJECT_ROOT="$repo" run manifest_ship_repo patch
+    MANIFEST_CLI_PROJECT_ROOT="$repo" run manifest_ship_repo patch
     [ "$status" -eq 0 ]
     [[ "$output" == *"Nothing to release"* ]]
     # Preview wrote nothing.
@@ -260,7 +260,7 @@ YAML
     before="$("$REAL_GIT" -C "$repo" rev-parse HEAD)"
 
     cd "$repo"
-    PROJECT_ROOT="$repo" run manifest_ship_repo patch --force-bump --local -y
+    MANIFEST_CLI_PROJECT_ROOT="$repo" run manifest_ship_repo patch --force-bump --local -y
     [ "$status" -eq 0 ]
     [[ "$output" == *"force-bump"* ]]
     [[ "$output" != *"Nothing to release"* ]]
@@ -277,7 +277,7 @@ YAML
     repo="$(mk_repo 1.2.3)"
 
     cd "$repo"
-    PROJECT_ROOT="$repo" run manifest_ship_repo patch --local -y
+    MANIFEST_CLI_PROJECT_ROOT="$repo" run manifest_ship_repo patch --local -y
     [ "$status" -eq 0 ]
     [[ "$output" != *"Nothing to release"* ]]
     [ "$(cat "$repo/VERSION")" = "1.2.4" ]
@@ -291,7 +291,7 @@ YAML
     echo "pending work" > "$repo/feature.txt"
 
     cd "$repo"
-    PROJECT_ROOT="$repo" run manifest_ship_repo patch --local -y
+    MANIFEST_CLI_PROJECT_ROOT="$repo" run manifest_ship_repo patch --local -y
     [ "$status" -eq 0 ]
     [[ "$output" != *"Nothing to release"* ]]
     [ "$(cat "$repo/VERSION")" = "1.2.4" ]

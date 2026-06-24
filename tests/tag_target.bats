@@ -7,7 +7,7 @@ load 'helpers/setup'
 setup() {
     load_modules "git/manifest-git.sh"
     SCRATCH="$(mk_scratch)"
-    export PROJECT_ROOT="$SCRATCH"
+    export MANIFEST_CLI_PROJECT_ROOT="$SCRATCH"
     cd "$SCRATCH"
 
     git init -q .
@@ -201,13 +201,13 @@ teardown() {
 @test "tag signing method: reports ssh:<key> when gpg.format=ssh and a key is set" {
     git config gpg.format ssh
     git config user.signingkey "/path/to/key.pub"
-    run manifest_git_tag_signing_method "$PROJECT_ROOT"
+    run manifest_git_tag_signing_method "$MANIFEST_CLI_PROJECT_ROOT"
     [ "$status" -eq 0 ]
     [ "$output" = "ssh:/path/to/key.pub" ]
 }
 
 @test "tag signing method: reports none when nothing is configured" {
-    run manifest_git_tag_signing_method "$PROJECT_ROOT"
+    run manifest_git_tag_signing_method "$MANIFEST_CLI_PROJECT_ROOT"
     [ "$status" -eq 0 ]
     [ "$output" = "none" ]
 }

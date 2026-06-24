@@ -22,7 +22,7 @@ teardown() {
     source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
     cd "$SCRATCH"
 
-    PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Dry run"
     echo "$output" | grep -q "would create:.*VERSION"
@@ -40,7 +40,7 @@ teardown() {
     source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
     cd "$SCRATCH"
 
-    PROJECT_ROOT="$SCRATCH" run manifest_init_repo
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_repo
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Dry run"
     echo "$output" | grep -q "No changes written. Re-run with -y to apply this plan:"
@@ -53,7 +53,7 @@ teardown() {
     source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
     cd "$SCRATCH"
 
-    PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run -y
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run -y
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "Cannot combine --dry-run with -y"
     [ ! -f "$SCRATCH/VERSION" ]
@@ -65,7 +65,7 @@ teardown() {
     git init -q
     echo "1.0.0" > VERSION
 
-    PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "exists:.*VERSION"
     # And the .git dir is not marked for creation.
@@ -78,7 +78,7 @@ teardown() {
     git init -q
     echo "1.0.0" > VERSION
 
-    PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run --force
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run --force
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "would overwrite:.*VERSION"
     # Nothing actually mutated.
@@ -95,7 +95,7 @@ teardown() {
     git init -q
     git remote add origin https://example.invalid/example.git
 
-    PROJECT_ROOT="$SCRATCH" run manifest_prep_repo --dry-run
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_prep_repo --dry-run
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Dry run"
     echo "$output" | grep -q "Remotes that would be pulled"
@@ -111,7 +111,7 @@ teardown() {
     git init -q
     git remote add origin https://example.invalid/example.git
 
-    PROJECT_ROOT="$SCRATCH" run manifest_prep_repo
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_prep_repo
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Dry run"
     echo "$output" | grep -q "Remotes that would be pulled"
@@ -124,7 +124,7 @@ teardown() {
 
     # Run with stdin closed so a real prompt would hang or fail; dry-run must
     # short-circuit before that point.
-    PROJECT_ROOT="$SCRATCH" run manifest_prep_repo --dry-run < /dev/null
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_prep_repo --dry-run < /dev/null
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "no remotes configured"
 }
@@ -148,7 +148,7 @@ teardown() {
     echo "release docs" > docs/COMMAND_REFERENCE.md
     echo "coverage" > tests/dry_run.bats
 
-    PROJECT_ROOT="$SCRATCH" run manifest_ship_repo minor
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_ship_repo minor
 
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Ship repo preview"
@@ -185,7 +185,7 @@ teardown() {
     git init -q
     echo "2.5.4" > VERSION
 
-    PROJECT_ROOT="$SCRATCH" run manifest_refresh_repo --dry-run
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_refresh_repo --dry-run
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Dry run"
     echo "$output" | grep -q "Version: 2.5.4 (unchanged)"
@@ -201,7 +201,7 @@ teardown() {
     git init -q
     echo "2.5.4" > VERSION
 
-    PROJECT_ROOT="$SCRATCH" run manifest_refresh_repo
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_refresh_repo
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Dry run"
     echo "$output" | grep -q "No changes written. Re-run with -y to apply this plan:"
@@ -214,7 +214,7 @@ teardown() {
     git init -q
     echo "0.1.0" > VERSION
 
-    PROJECT_ROOT="$SCRATCH" run manifest_refresh_repo --dry-run --commit
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_refresh_repo --dry-run --commit
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Commit refreshed files"
 }

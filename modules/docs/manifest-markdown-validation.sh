@@ -3,7 +3,7 @@
 # Manifest Markdown Validation Module
 # Provides comprehensive markdown validation and cleaning
 
-# Markdown validation module - uses PROJECT_ROOT from core module
+# Markdown validation module - uses MANIFEST_CLI_PROJECT_ROOT from core module
 
 # Markdown validation helper
 validate_markdown_syntax() {
@@ -129,8 +129,8 @@ validate_project() {
     local clean="${1:-false}"
     local errors=0
     
-    # Use PROJECT_ROOT (which should be validated repository root)
-    local project_root="$PROJECT_ROOT"
+    # Use MANIFEST_CLI_PROJECT_ROOT (which should be validated repository root)
+    local project_root="$MANIFEST_CLI_PROJECT_ROOT"
     
     log_info "Validating project documentation..."
     

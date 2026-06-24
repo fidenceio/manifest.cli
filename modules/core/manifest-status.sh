@@ -163,7 +163,7 @@ _status_fleet_roster_count() {
 }
 
 _manifest_repo_identity_collect() {
-    local proj="${1:-$PROJECT_ROOT}"
+    local proj="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
     _MANIFEST_REPO_ID_GIT_ROOT="$(git -C "$proj" rev-parse --show-toplevel 2>/dev/null || echo "$proj")"
     _MANIFEST_REPO_ID_ORIGIN="$(manifest_origin_repo_slug "$_MANIFEST_REPO_ID_GIT_ROOT" 2>/dev/null || echo "")"
     [[ -n "$_MANIFEST_REPO_ID_ORIGIN" ]] || _MANIFEST_REPO_ID_ORIGIN="(no origin remote)"
@@ -233,7 +233,7 @@ _manifest_repo_identity_collect() {
 }
 
 manifest_repo_identity_block() {
-    local proj="${1:-$PROJECT_ROOT}"
+    local proj="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
     _manifest_repo_identity_collect "$proj"
     local current_repo="$_MANIFEST_REPO_ID_ORIGIN"
     if [[ "$current_repo" == "(no origin remote)" ]]; then
@@ -1049,7 +1049,7 @@ manifest_status() {
         esac
     done
 
-    local proj="${PROJECT_ROOT:-$(pwd)}"
+    local proj="${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}"
     cd "$proj" 2>/dev/null || { echo "❌ Cannot enter $proj"; return 1; }
 
     if [[ "$explicit_repo_scope" == "true" ]]; then

@@ -124,7 +124,7 @@ STUB
     export PATH
 
     unset MANIFEST_CLI_CANONICAL_REPO_SLUGS
-    PROJECT_ROOT="$SCRATCH" run update_homebrew_formula
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run update_homebrew_formula
     [ "$status" -eq 0 ]
     [[ "$output" == *"Skipping Homebrew tap formula publish for repository"* ]]
     [[ "$output" == *"other-org/other-repo"* ]]

@@ -975,14 +975,14 @@ EOF
             # failed); skip rc 1 (init failed) and rc 3 (path missing) so we
             # never cd into a broken/absent dir. No-clobber (existing member
             # files are preserved) and NO commit (files land uncommitted, parity
-            # with `init repo`). Run in an isolated subshell with cwd+PROJECT_ROOT
+            # with `init repo`). Run in an isolated subshell with cwd+MANIFEST_CLI_PROJECT_ROOT
             # set to the member so the README's git-derived fields resolve
             # against the member, not the fleet root (idiom: manifest-fleet-docs.sh).
             if [[ ( "$_init_rc" -eq 0 || "$_init_rc" -eq 2 ) ]] \
                 && declare -F ensure_required_files >/dev/null 2>&1; then
                 (
                     cd "$abs_path" || exit 0
-                    export PROJECT_ROOT="$abs_path"
+                    export MANIFEST_CLI_PROJECT_ROOT="$abs_path"
                     ensure_required_files "$abs_path" >/dev/null 2>&1
                 ) || true
             fi
@@ -3190,8 +3190,8 @@ EOF
         # parsing the child's stdout.
         (
             cd "$path" || exit 1
-            PROJECT_ROOT="$PWD"
-            export PROJECT_ROOT
+            MANIFEST_CLI_PROJECT_ROOT="$PWD"
+            export MANIFEST_CLI_PROJECT_ROOT
             MANIFEST_CLI_AUTO_CONFIRM=1
             export MANIFEST_CLI_AUTO_CONFIRM
             MANIFEST_CLI_SHIP_STATUS_FILE="$status_file"
@@ -3307,8 +3307,8 @@ _fleet_resume_classify() {
         # source of truth — rc just mirrors eligible-vs-not.
         probe=$(
             cd "$path" 2>/dev/null || exit 1
-            PROJECT_ROOT="$PWD"
-            export PROJECT_ROOT
+            MANIFEST_CLI_PROJECT_ROOT="$PWD"
+            export MANIFEST_CLI_PROJECT_ROOT
             manifest_ship_repo_resume_eligible
         ) || true
         IFS='|' read -r code version tag_name detail <<<"$probe"
@@ -3455,8 +3455,8 @@ EOF
         echo "  - $svc: resuming v${sver}"
         (
             cd "$spath" || exit 1
-            PROJECT_ROOT="$PWD"
-            export PROJECT_ROOT
+            MANIFEST_CLI_PROJECT_ROOT="$PWD"
+            export MANIFEST_CLI_PROJECT_ROOT
             MANIFEST_CLI_AUTO_CONFIRM=1
             export MANIFEST_CLI_AUTO_CONFIRM
             manifest_ship_repo_resume

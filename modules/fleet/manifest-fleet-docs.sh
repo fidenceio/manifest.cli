@@ -227,10 +227,10 @@ fleet_docs_run_per_service() {
             continue
         fi
 
-        # Generate docs in a subshell to isolate PROJECT_ROOT changes
+        # Generate docs in a subshell to isolate MANIFEST_CLI_PROJECT_ROOT changes
         (
             cd "$path" || exit 1
-            export PROJECT_ROOT="$path"
+            export MANIFEST_CLI_PROJECT_ROOT="$path"
             export MANIFEST_CLI_DOCS_FOLDER="$per_service_folder"
             fleet_docs_export_generation_config
 

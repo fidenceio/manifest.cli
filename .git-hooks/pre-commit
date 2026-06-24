@@ -14,7 +14,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Find the project root (where .git directory is)
-PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+MANIFEST_CLI_PROJECT_ROOT="$(git rev-parse --show-toplevel)"
 
 # Security check configuration
 MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES=(".env" ".env.local" ".env.manifest.local" ".env.development" ".env.test" ".env.production" ".env.staging")
@@ -72,7 +72,7 @@ if [ -n "$STAGED_FILES" ]; then
 
     for pattern in "${SENSITIVE_PATTERNS[@]}"; do
         while IFS= read -r file; do
-            if [ -f "$PROJECT_ROOT/$file" ]; then
+            if [ -f "$MANIFEST_CLI_PROJECT_ROOT/$file" ]; then
                 # Check staged content (not working directory)
                 if git diff --cached "$file" | grep -E "$pattern" | grep -v "^-" | grep "^\+" > /dev/null 2>&1; then
                     if [ $FOUND_SENSITIVE -eq 0 ]; then
@@ -102,7 +102,7 @@ echo -e "${BLUE}[3/5] Verifying .gitignore configuration...${NC}"
 GITIGNORE_ISSUES=0
 
 # Check if .gitignore exists
-if [ ! -f "$PROJECT_ROOT/.gitignore" ]; then
+if [ ! -f "$MANIFEST_CLI_PROJECT_ROOT/.gitignore" ]; then
     echo -e "${RED}   ❌ WARNING: .gitignore file not found${NC}"
     WARNINGS=$((WARNINGS + 1))
     GITIGNORE_ISSUES=$((GITIGNORE_ISSUES + 1))
@@ -111,7 +111,7 @@ else
     REQUIRED_PATTERNS=(".env" ".env.local" ".env.*.local" "manifest.config")
 
     for pattern in "${REQUIRED_PATTERNS[@]}"; do
-        if ! grep -q "^${pattern}$" "$PROJECT_ROOT/.gitignore" 2>/dev/null; then
+        if ! grep -q "^${pattern}$" "$MANIFEST_CLI_PROJECT_ROOT/.gitignore" 2>/dev/null; then
             if [ $GITIGNORE_ISSUES -eq 0 ]; then
                 echo -e "${YELLOW}   ⚠️  WARNING: Missing patterns in .gitignore:${NC}"
             fi
@@ -136,8 +136,8 @@ LARGE_FILES=0
 
 if [ -n "$STAGED_FILES" ]; then
     while IFS= read -r file; do
-        if [ -f "$PROJECT_ROOT/$file" ]; then
-            FILE_SIZE=$(stat -f%z "$PROJECT_ROOT/$file" 2>/dev/null || stat -c%s "$PROJECT_ROOT/$file" 2>/dev/null || echo 0)
+        if [ -f "$MANIFEST_CLI_PROJECT_ROOT/$file" ]; then
+            FILE_SIZE=$(stat -f%z "$MANIFEST_CLI_PROJECT_ROOT/$file" 2>/dev/null || stat -c%s "$MANIFEST_CLI_PROJECT_ROOT/$file" 2>/dev/null || echo 0)
             if [ "$FILE_SIZE" -gt "$MAX_FILE_SIZE" ]; then
                 if [ $LARGE_FILES -eq 0 ]; then
                     echo -e "${YELLOW}   ⚠️  WARNING: Large files detected (>10MB):${NC}"
@@ -165,8 +165,8 @@ echo -e "${BLUE}[5/5] Running Manifest CLI security module (if available)...${NC
 # Prefer this repo's working-tree CLI when the hook is running inside the
 # Manifest CLI repo; otherwise use the installed command.
 SECURITY_CMD=()
-if [ -x "$PROJECT_ROOT/scripts/manifest-cli.sh" ] && [ -f "$PROJECT_ROOT/modules/core/manifest-core.sh" ]; then
-    SECURITY_CMD=(env -u MANIFEST_CLI_BASH_REEXEC "$PROJECT_ROOT/scripts/manifest-cli.sh" security --check)
+if [ -x "$MANIFEST_CLI_PROJECT_ROOT/scripts/manifest-cli.sh" ] && [ -f "$MANIFEST_CLI_PROJECT_ROOT/modules/core/manifest-core.sh" ]; then
+    SECURITY_CMD=(env -u MANIFEST_CLI_BASH_REEXEC "$MANIFEST_CLI_PROJECT_ROOT/scripts/manifest-cli.sh" security --check)
 elif command -v manifest >/dev/null 2>&1; then
     SECURITY_CMD=(env -u MANIFEST_CLI_BASH_REEXEC manifest security --check)
 fi

@@ -472,7 +472,7 @@ YAML
     _mk_tsv_only_fleet "$SCRATCH" 1
     printf "true\tghost\tsvc/ghost\ttrue\tgit@github.com:acme/ghost.git\tmain\n" >> "$SCRATCH/manifest.fleet.tsv"
 
-    PROJECT_ROOT="$SCRATCH" run manifest_status --bootstrap
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_status --bootstrap
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Bootstrap preview"
     echo "$output" | grep -q "ghost.*would clone"

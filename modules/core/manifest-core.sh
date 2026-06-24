@@ -15,21 +15,21 @@ MANIFEST_CLI_CORE_MODULES_DIR="$(dirname "$MANIFEST_CLI_CORE_SCRIPT_DIR")"
 # Get the binary location (where the CLI binary is installed)
 MANIFEST_CLI_CORE_BINARY_LOCATION="${MANIFEST_CLI_BIN_DIR:-$HOME/.local/bin}"
 
-# PROJECT_ROOT = where the user is working (always PWD, never the install location).
+# MANIFEST_CLI_PROJECT_ROOT = where the user is working (always PWD, never the install location).
 # main() re-sets this after validating the command, but modules sourced at
 # load time may read it, so give it a sane default now.
-PROJECT_ROOT="$PWD"
+MANIFEST_CLI_PROJECT_ROOT="$PWD"
 
-# INSTALL_LOCATION = where the CLI files live (separate concern from PROJECT_ROOT)
-INSTALL_LOCATION="${MANIFEST_CLI_INSTALL_DIR:-$HOME/.manifest-cli}"
+# MANIFEST_CLI_INSTALL_LOCATION = where the CLI files live (separate concern from MANIFEST_CLI_PROJECT_ROOT)
+MANIFEST_CLI_INSTALL_LOCATION="${MANIFEST_CLI_INSTALL_DIR:-$HOME/.manifest-cli}"
 
-# Note: PROJECT_ROOT will be validated and corrected in the main() function
+# Note: MANIFEST_CLI_PROJECT_ROOT will be validated and corrected in the main() function
 # to ensure we're always working from the repository root
 
 # Export variables so they're available to sourced modules
-export INSTALL_LOCATION
+export MANIFEST_CLI_INSTALL_LOCATION
 export MANIFEST_CLI_CORE_BINARY_LOCATION
-export PROJECT_ROOT
+export MANIFEST_CLI_PROJECT_ROOT
 
 # Source shared utilities first
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-requirements.sh"
@@ -95,8 +95,8 @@ source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-first.sh"
 # Function to get the CLI installation directory dynamically
 get_cli_dir() {
     # If we're in a development environment, use the current project root
-    if [ -f "$PROJECT_ROOT/$MANIFEST_CLI_VERSION_FILE" ] && [ -f "$PROJECT_ROOT/scripts/manifest-cli-wrapper.sh" ]; then
-        echo "$PROJECT_ROOT"
+    if [ -f "$MANIFEST_CLI_PROJECT_ROOT/$MANIFEST_CLI_VERSION_FILE" ] && [ -f "$MANIFEST_CLI_PROJECT_ROOT/scripts/manifest-cli-wrapper.sh" ]; then
+        echo "$MANIFEST_CLI_PROJECT_ROOT"
         return 0
     fi
     
@@ -113,7 +113,7 @@ get_cli_dir() {
     done
     
     # Fallback to project root if nothing else works
-    echo "$PROJECT_ROOT"
+    echo "$MANIFEST_CLI_PROJECT_ROOT"
 }
 
 # Set the CLI directory
@@ -134,7 +134,7 @@ should_update_homebrew_for_repo() {
 manifest_homebrew_tap_checkout_candidates() {
     local primary_tap_dir="${1:-}"
     local workspace_parent=""
-    workspace_parent="$(dirname "$PROJECT_ROOT" 2>/dev/null || echo "")"
+    workspace_parent="$(dirname "$MANIFEST_CLI_PROJECT_ROOT" 2>/dev/null || echo "")"
 
     local candidates=""
     if [[ -n "${MANIFEST_CLI_HOMEBREW_TAP_CHECKOUT:-}" ]]; then
@@ -329,7 +329,7 @@ update_homebrew_formula() {
     fi
 
     local version
-    version=$(cat "$PROJECT_ROOT/VERSION" 2>/dev/null)
+    version=$(cat "$MANIFEST_CLI_PROJECT_ROOT/VERSION" 2>/dev/null)
     if [ -z "$version" ]; then
         log_error "Could not read VERSION file"
         return 1
@@ -342,7 +342,7 @@ update_homebrew_formula() {
         tag="v${version#v}"
     fi
     local tarball_url="https://github.com/fidenceio/manifest.cli/archive/refs/tags/${tag}.tar.gz"
-    local formula_source_file="$PROJECT_ROOT/formula/manifest.rb"
+    local formula_source_file="$MANIFEST_CLI_PROJECT_ROOT/formula/manifest.rb"
 
     echo "🍺 Publishing Homebrew tap formula for ${tag}..."
 
@@ -642,14 +642,14 @@ manifest_prep() {
 }
 
 main() {
-    # Set INSTALL_LOCATION early for security checks
-    INSTALL_LOCATION="${MANIFEST_CLI_INSTALL_DIR:-$HOME/.manifest-cli}"
-    export INSTALL_LOCATION
+    # Set MANIFEST_CLI_INSTALL_LOCATION early for security checks
+    MANIFEST_CLI_INSTALL_LOCATION="${MANIFEST_CLI_INSTALL_DIR:-$HOME/.manifest-cli}"
+    export MANIFEST_CLI_INSTALL_LOCATION
 
     # SECURITY: Early check to prevent running from installation directory
     if is_installation_directory "$(pwd)"; then
         log_error "SECURITY ERROR: Cannot run Manifest CLI from installation directory"
-        log_error "   Installation directory: ${INSTALL_LOCATION:-$HOME/.manifest-cli}"
+        log_error "   Installation directory: ${MANIFEST_CLI_INSTALL_LOCATION:-$HOME/.manifest-cli}"
         log_error "   Current directory: $(pwd)"
         log_error ""
         log_error "Please run Manifest CLI from your project directory instead:"
@@ -669,9 +669,9 @@ main() {
         "help"|"-help"|"--help"|"-h"|"version"|"-version"|"--version"|"-v"|"-V"|"uninstall"|"reinstall"|"add"|"discover"|"fleet"|"update"|"upgrade"|"validate"|"config")
             case "$command" in
                 "config")
-                    PROJECT_ROOT="$(pwd)"
-                    export PROJECT_ROOT
-                    load_configuration "$PROJECT_ROOT" "false"
+                    MANIFEST_CLI_PROJECT_ROOT="$(pwd)"
+                    export MANIFEST_CLI_PROJECT_ROOT
+                    load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "false"
                     ;;
             esac
             ;;
@@ -680,24 +680,24 @@ main() {
             ;;
         # init may create a git repo, so don't require one
         "init")
-            PROJECT_ROOT="$(pwd)"
-            export PROJECT_ROOT
-            load_configuration "$PROJECT_ROOT" "false"
+            MANIFEST_CLI_PROJECT_ROOT="$(pwd)"
+            export MANIFEST_CLI_PROJECT_ROOT
+            load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "false"
             ;;
         # status is read-only; it handles non-git directories itself
         "status"|"doctor")
-            PROJECT_ROOT="$(pwd)"
-            export PROJECT_ROOT
-            load_configuration "$PROJECT_ROOT" "false"
+            MANIFEST_CLI_PROJECT_ROOT="$(pwd)"
+            export MANIFEST_CLI_PROJECT_ROOT
+            load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "false"
             ;;
         # first onboards single repos AND fleet roots (which need not be git
         # repos), so don't require one. The inspection must not touch disk: load
         # config with the read-only guard so no incidental migration or marker
         # writes happen. The -y apply path uses the audited writers.
         "first")
-            PROJECT_ROOT="$(pwd)"
-            export PROJECT_ROOT
-            MANIFEST_CLI_CONFIG_SKIP_WRITES=1 load_configuration "$PROJECT_ROOT" "false"
+            MANIFEST_CLI_PROJECT_ROOT="$(pwd)"
+            export MANIFEST_CLI_PROJECT_ROOT
+            MANIFEST_CLI_CONFIG_SKIP_WRITES=1 load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "false"
             ;;
         "recipe")
             if [[ "${1:-}" == "run" ]] && ! _manifest_cli_is_help_request "$command" "$@"; then
@@ -706,38 +706,38 @@ main() {
                     return 1
                 fi
 
-                PROJECT_ROOT="$(pwd)"
-                export PROJECT_ROOT
-                load_configuration "$PROJECT_ROOT"
+                MANIFEST_CLI_PROJECT_ROOT="$(pwd)"
+                export MANIFEST_CLI_PROJECT_ROOT
+                load_configuration "$MANIFEST_CLI_PROJECT_ROOT"
                 check_auto_upgrade
             else
-                PROJECT_ROOT="$(pwd)"
-                export PROJECT_ROOT
-                load_configuration "$PROJECT_ROOT" "false"
+                MANIFEST_CLI_PROJECT_ROOT="$(pwd)"
+                export MANIFEST_CLI_PROJECT_ROOT
+                load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "false"
             fi
             ;;
         "docs"|"pr"|"plan"|"reconcile"|"discover"|"add"|"update"|"validate"|"topics")
             if [[ "${1:-}" == "fleet" ]] || _manifest_cli_is_help_request "$command" "$@"; then
-                PROJECT_ROOT="$(pwd)"
-                export PROJECT_ROOT
-                load_configuration "$PROJECT_ROOT" "false"
+                MANIFEST_CLI_PROJECT_ROOT="$(pwd)"
+                export MANIFEST_CLI_PROJECT_ROOT
+                load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "false"
             else
                 if ! ensure_repository_root; then
                     log_error "Repository root validation failed"
                     return 1
                 fi
 
-                PROJECT_ROOT="$(pwd)"
-                export PROJECT_ROOT
-                load_configuration "$PROJECT_ROOT"
+                MANIFEST_CLI_PROJECT_ROOT="$(pwd)"
+                export MANIFEST_CLI_PROJECT_ROOT
+                load_configuration "$MANIFEST_CLI_PROJECT_ROOT"
                 check_auto_upgrade
             fi
             ;;
         *)
             if _manifest_cli_is_help_request "$command" "$@" || { [[ "$command" == "ship" ]] && _manifest_cli_has_explain_flag "$@"; }; then
-                PROJECT_ROOT="$(pwd)"
-                export PROJECT_ROOT
-                load_configuration "$PROJECT_ROOT" "false"
+                MANIFEST_CLI_PROJECT_ROOT="$(pwd)"
+                export MANIFEST_CLI_PROJECT_ROOT
+                load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "false"
             else
                 # All other commands require a Git repository
                 if _manifest_cli_is_existing_repo_scope_request "$command" "$@"; then
@@ -750,9 +750,9 @@ main() {
                     return 1
                 fi
 
-                PROJECT_ROOT="$(pwd)"
-                export PROJECT_ROOT
-                load_configuration "$PROJECT_ROOT"
+                MANIFEST_CLI_PROJECT_ROOT="$(pwd)"
+                export MANIFEST_CLI_PROJECT_ROOT
+                load_configuration "$MANIFEST_CLI_PROJECT_ROOT"
                 check_auto_upgrade
             fi
             ;;
@@ -1315,9 +1315,9 @@ EOF
                 # Manual reinstall: delegate to the canonical install-cli.sh.
                 # Requires the user to be in the Manifest CLI source repo (or
                 # in a checkout that still has install-cli.sh + modules/).
-                if [ -f "$PROJECT_ROOT/install-cli.sh" ] && [ -d "$PROJECT_ROOT/modules" ]; then
-                    echo "Reinstalling via manual install (running install-cli.sh from $PROJECT_ROOT)..."
-                    bash "$PROJECT_ROOT/install-cli.sh"
+                if [ -f "$MANIFEST_CLI_PROJECT_ROOT/install-cli.sh" ] && [ -d "$MANIFEST_CLI_PROJECT_ROOT/modules" ]; then
+                    echo "Reinstalling via manual install (running install-cli.sh from $MANIFEST_CLI_PROJECT_ROOT)..."
+                    bash "$MANIFEST_CLI_PROJECT_ROOT/install-cli.sh"
                 else
                     log_error "Manual reinstall requires install-cli.sh from the Manifest CLI source repo."
                     log_error "  cd /path/to/manifest.cli && ./install-cli.sh"

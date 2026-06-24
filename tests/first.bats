@@ -29,7 +29,7 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
 
 @test "first: empty dir reports nothing to onboard and writes nothing" {
     mkdir -p "$SCRATCH/plain"
-    PROJECT_ROOT="$SCRATCH/plain" run manifest_first
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/plain" run manifest_first
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "no git repo or child repos found"
     echo "$output" | grep -q "No git repository or child repos found here."
@@ -40,7 +40,7 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
 
 @test "first: uninitialized repo previews the init plan and writes nothing" {
     mkrepo "$SCRATCH/repo"
-    PROJECT_ROOT="$SCRATCH/repo" run manifest_first
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run manifest_first
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "single repo (not yet initialized)"
     echo "$output" | grep -q "Initialize this repository:"
@@ -54,7 +54,7 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
 @test "first: initialized repo reports already-set-up with version" {
     mkrepo "$SCRATCH/repo"
     echo "1.2.3" > "$SCRATCH/repo/VERSION"
-    PROJECT_ROOT="$SCRATCH/repo" run manifest_first
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run manifest_first
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "single repo (initialized)"
     echo "$output" | grep -q "Version:"
@@ -66,7 +66,7 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
     mkdir -p "$SCRATCH/ws"
     mkrepo "$SCRATCH/ws/alpha"
     mkrepo "$SCRATCH/ws/beta"
-    PROJECT_ROOT="$SCRATCH/ws" run manifest_first
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/ws" run manifest_first
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "fleet candidate"
     echo "$output" | grep -q "Set up a fleet across 2 discovered repo"
@@ -93,12 +93,12 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
     } > "$SCRATCH/ws/manifest.fleet.tsv"
 
     # Preview names the next command.
-    PROJECT_ROOT="$SCRATCH/ws" run manifest_first
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/ws" run manifest_first
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "manifest init fleet -y"
 
     # Apply does NOT proceed to Phase 2 — no config, no member scaffolding.
-    PROJECT_ROOT="$SCRATCH/ws" run manifest_first -y
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/ws" run manifest_first -y
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "ready for review"
     echo "$output" | grep -q "manifest init fleet -y"
@@ -110,7 +110,7 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
 
 @test "first: -h prints usage and writes nothing" {
     mkdir -p "$SCRATCH/plain"
-    PROJECT_ROOT="$SCRATCH/plain" run manifest_first -h
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/plain" run manifest_first -h
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "manifest first"
     echo "$output" | grep -q "Guided onboarding"
@@ -119,7 +119,7 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
 
 @test "first: rejects contradictory --dry-run and -y" {
     mkrepo "$SCRATCH/repo"
-    PROJECT_ROOT="$SCRATCH/repo" run manifest_first --dry-run -y
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run manifest_first --dry-run -y
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "Cannot combine --dry-run with -y"
     [ ! -f "$SCRATCH/repo/VERSION" ]
@@ -130,7 +130,7 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
 @test "first: -y on an already-initialized repo applies nothing and writes no config" {
     mkrepo "$SCRATCH/repo"
     echo "1.0.0" > "$SCRATCH/repo/VERSION"
-    PROJECT_ROOT="$SCRATCH/repo" run manifest_first -y
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run manifest_first -y
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Already set up"
     [ ! -f "$SCRATCH/repo/manifest.config.local.yaml" ]
@@ -143,7 +143,7 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
     # alone in this non-interactive context (consent model C).
     mkrepo "$SCRATCH/repo"
     cd "$SCRATCH/repo"
-    PROJECT_ROOT="$SCRATCH/repo" run manifest_first -y
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run manifest_first -y
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Auto-confirmed unambiguous target (non-interactive apply via -y)"
     [ -f "$SCRATCH/repo/VERSION" ]
@@ -157,7 +157,7 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
     # apply-event is still recorded exactly once.
     mkrepo "$SCRATCH/repo"
     cd "$SCRATCH/repo"
-    PROJECT_ROOT="$SCRATCH/repo" run manifest_first -y
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run manifest_first -y
     [ "$status" -eq 0 ]
     local audit="$HOME/.manifest-cli/audit/apply-events.ndjson"
     [ -f "$audit" ]
@@ -175,7 +175,7 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
     git -C "$SCRATCH/repo" add seed
     git -C "$SCRATCH/repo" commit -q -m seed
     git -C "$SCRATCH/repo" checkout -q --detach HEAD
-    PROJECT_ROOT="$SCRATCH/repo" run manifest_first -y
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run manifest_first -y
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "Ambiguous apply target in a non-interactive context"
     [ ! -f "$SCRATCH/repo/VERSION" ]
@@ -186,7 +186,7 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
 
 @test "first: unknown flag errors non-zero with a usage line" {
     mkrepo "$SCRATCH/repo"
-    PROJECT_ROOT="$SCRATCH/repo" run manifest_first --bogus
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run manifest_first --bogus
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "Unknown option: --bogus"
     echo "$output" | grep -q "Usage: manifest first"
@@ -194,28 +194,28 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
 
 @test "first: --name with a missing value errors" {
     mkrepo "$SCRATCH/repo"
-    PROJECT_ROOT="$SCRATCH/repo" run manifest_first --name
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run manifest_first --name
     [ "$status" -ne 0 ]
     echo "$output" | grep -q -- "--name requires a value"
 }
 
 @test "first: --name followed by a flag errors (consumes no flag)" {
     mkrepo "$SCRATCH/repo"
-    PROJECT_ROOT="$SCRATCH/repo" run manifest_first --name -f
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run manifest_first --name -f
     [ "$status" -ne 0 ]
     echo "$output" | grep -q -- "--name requires a value"
 }
 
 @test "first: --depth with a missing value errors" {
     mkrepo "$SCRATCH/repo"
-    PROJECT_ROOT="$SCRATCH/repo" run manifest_first --depth
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run manifest_first --depth
     [ "$status" -ne 0 ]
     echo "$output" | grep -q -- "--depth requires a value"
 }
 
 @test "first: --help usage line lists -f|--force" {
     mkdir -p "$SCRATCH/plain"
-    PROJECT_ROOT="$SCRATCH/plain" run manifest_first --help
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/plain" run manifest_first --help
     [ "$status" -eq 0 ]
     echo "$output" | grep -q -- "-f|--force"
 }

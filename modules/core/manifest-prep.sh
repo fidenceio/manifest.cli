@@ -76,7 +76,7 @@ manifest_prep_repo() {
         esac
     done
 
-    local project_root="${PROJECT_ROOT:-$(pwd)}"
+    local project_root="${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}"
     local replay_command="manifest prep repo"
     [[ -n "$create_repo_visibility" ]] && replay_command="$replay_command --create-repo-$create_repo_visibility"
 

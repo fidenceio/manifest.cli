@@ -3,7 +3,7 @@
 # Manifest Git Module
 # Handles Git operations, versioning, and workflow automation
 
-# Git module - uses PROJECT_ROOT from core module
+# Git module - uses MANIFEST_CLI_PROJECT_ROOT from core module
 MANIFEST_CLI_GIT_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$MANIFEST_CLI_GIT_SCRIPT_DIR/manifest-doc-review.sh"
 
@@ -150,8 +150,8 @@ bump_version() {
     local new_version=""
     
     # Change to project root directory
-    cd "$PROJECT_ROOT" || {
-        echo "❌ Failed to change to project root: $PROJECT_ROOT"
+    cd "$MANIFEST_CLI_PROJECT_ROOT" || {
+        echo "❌ Failed to change to project root: $MANIFEST_CLI_PROJECT_ROOT"
         return 1
     }
     
@@ -526,8 +526,8 @@ commit_changes() {
     echo "💾 Committing changes..."
     
     # Change to project root directory
-    cd "$PROJECT_ROOT" || {
-        echo "❌ Failed to change to project root: $PROJECT_ROOT"
+    cd "$MANIFEST_CLI_PROJECT_ROOT" || {
+        echo "❌ Failed to change to project root: $MANIFEST_CLI_PROJECT_ROOT"
         return 1
     }
 
@@ -630,7 +630,7 @@ manifest_release_tag_signing_policy() {
 # check is necessarily best-effort: an explicit user.signingkey is treated as
 # configured, otherwise we report none and let the policy decide.
 manifest_git_tag_signing_method() {
-    local repo="${1:-$PROJECT_ROOT}"
+    local repo="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
     local fmt signingkey
     fmt="$(git -C "$repo" config --get gpg.format 2>/dev/null || echo "openpgp")"
     signingkey="$(git -C "$repo" config --get user.signingkey 2>/dev/null || echo "")"
@@ -666,8 +666,8 @@ create_tag() {
     fi
 
     # Change to project root directory
-    cd "$PROJECT_ROOT" || {
-        echo "❌ Failed to change to project root: $PROJECT_ROOT"
+    cd "$MANIFEST_CLI_PROJECT_ROOT" || {
+        echo "❌ Failed to change to project root: $MANIFEST_CLI_PROJECT_ROOT"
         return 1
     }
 
@@ -680,7 +680,7 @@ create_tag() {
     local annotate=false
     if [[ "$signing_policy" != "off" ]]; then
         local method
-        method="$(manifest_git_tag_signing_method "$PROJECT_ROOT")"
+        method="$(manifest_git_tag_signing_method "$MANIFEST_CLI_PROJECT_ROOT")"
         case "$method" in
             ssh:*)
                 sign_args=(-c gpg.format=ssh -c "user.signingkey=${method#ssh:}")
@@ -782,8 +782,8 @@ push_changes() {
     echo "🚀 Pushing to all remotes..."
     
     # Change to project root directory
-    cd "$PROJECT_ROOT" || {
-        echo "❌ Failed to change to project root: $PROJECT_ROOT"
+    cd "$MANIFEST_CLI_PROJECT_ROOT" || {
+        echo "❌ Failed to change to project root: $MANIFEST_CLI_PROJECT_ROOT"
         return 1
     }
     
@@ -809,8 +809,8 @@ sync_repository() {
     local default_branch="${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}"
     
     # Change to project root directory
-    cd "$PROJECT_ROOT" || {
-        echo "❌ Failed to change to project root: $PROJECT_ROOT"
+    cd "$MANIFEST_CLI_PROJECT_ROOT" || {
+        echo "❌ Failed to change to project root: $MANIFEST_CLI_PROJECT_ROOT"
         return 1
     }
     

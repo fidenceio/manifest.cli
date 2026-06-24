@@ -26,7 +26,7 @@ teardown() {
     source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
     cd "$SCRATCH"
 
-    PROJECT_ROOT="$SCRATCH" run manifest_init_repo --create-repo-private --create-repo-public --dry-run
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_repo --create-repo-private --create-repo-public --dry-run
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "mutually exclusive"
 }
@@ -36,7 +36,7 @@ teardown() {
     cd "$SCRATCH"
     git init -q
 
-    PROJECT_ROOT="$SCRATCH" run manifest_prep_repo --create-repo-private --create-repo-public --dry-run
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_prep_repo --create-repo-private --create-repo-public --dry-run
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "mutually exclusive"
 }
@@ -49,7 +49,7 @@ teardown() {
     source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
     cd "$SCRATCH"
 
-    PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run --create-repo-private
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run --create-repo-private
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "would gh repo create:.*private"
     echo "$output" | grep -q "No changes written"
@@ -61,7 +61,7 @@ teardown() {
     source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
     cd "$SCRATCH"
 
-    PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run --create-repo-public
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run --create-repo-public
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "would gh repo create:.*public"
 }
@@ -72,7 +72,7 @@ teardown() {
     git init -q
     git remote add origin https://example.invalid/example.git
 
-    PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run --create-repo-private
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run --create-repo-private
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "exists:.*origin remote"
     ! echo "$output" | grep -q "would gh repo create"
@@ -87,7 +87,7 @@ teardown() {
     cd "$SCRATCH"
     git init -q
 
-    PROJECT_ROOT="$SCRATCH" run manifest_prep_repo --dry-run --create-repo-private < /dev/null
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_prep_repo --dry-run --create-repo-private < /dev/null
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "would gh repo create:.*private"
     ! echo "$output" | grep -q "would prompt for an origin URL"
@@ -98,7 +98,7 @@ teardown() {
     cd "$SCRATCH"
     git init -q
 
-    PROJECT_ROOT="$SCRATCH" run manifest_prep_repo --dry-run --create-repo-public < /dev/null
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_prep_repo --dry-run --create-repo-public < /dev/null
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "would gh repo create:.*public"
 }
@@ -204,7 +204,7 @@ teardown() {
         printf "true\tghost\t./ghost\tfalse\t\t\t0.0.0\n"
     } > manifest.fleet.tsv
 
-    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet -y
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet -y
     echo "$output" | grep -q "Missing: 1"
     echo "$output" | grep -q "Issues to resolve:"
     echo "$output" | grep -q "Missing paths"
@@ -222,7 +222,7 @@ teardown() {
     source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet-detect.sh"
     cd "$SCRATCH"
 
-    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet --create-repo-private -y
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_fleet --create-repo-private -y
     echo "$output" | grep -q "applies in Phase 2"
     echo "$output" | grep -q "after editing manifest.fleet.tsv"
 }
@@ -251,7 +251,7 @@ teardown() {
     # Don't actually contact gh.
     _manifest_require_gh() { return 0; }
 
-    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet --create-repo-private -n test-fleet -y
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_fleet --create-repo-private -n test-fleet -y
     [ -f "$SCRATCH/calls.log" ]
     grep -q "stub:.*svc_a:false:private" "$SCRATCH/calls.log"
 }
@@ -331,7 +331,7 @@ teardown() {
         printf "true\tghost\t./ghost\tfalse\t\t\t0.0.0\n"
     } > manifest.fleet.tsv
 
-    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet -y
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet -y
     [ "$status" -eq 2 ]
 }
 
@@ -350,7 +350,7 @@ teardown() {
     _manifest_require_gh() { return 0; }
     _manifest_gh_repo_create() { return 1; }
 
-    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet --create-repo-private -n test-fleet -y
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_fleet --create-repo-private -n test-fleet -y
     [ "$status" -eq 1 ]
 }
 
@@ -366,7 +366,7 @@ teardown() {
         printf "true\tsvc_clean\t./svc_clean\tfalse\t\t\t0.0.0\n"
     } > manifest.fleet.tsv
 
-    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet -y
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet -y
     [ "$status" -eq 0 ]
     # §9.5: a cleanly-initialized member is also made Manifest-trackable.
     # VERSION is the load-bearing file (created first, no external deps); the
@@ -417,7 +417,7 @@ teardown() {
     local tsv_before
     tsv_before="$(cat manifest.fleet.tsv)"
 
-    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet -y
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet -y
 
     # Expected scenario: succeeds, does NOT take the old "already initialized" bail.
     [ "$status" -eq 0 ]
@@ -475,7 +475,7 @@ teardown() {
     } > manifest.fleet.tsv
 
     # No preexisting config -> first-time Phase 2 -> refresh path runs.
-    PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet -y
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_fleet -n test-fleet -y
     [ "$status" -eq 0 ]
 
     # The depth-2 member survived the refresh, and the rewritten header still
