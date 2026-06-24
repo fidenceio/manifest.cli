@@ -1046,7 +1046,7 @@ configure_interactive() {
         return 1
     fi
 
-    local config_file="$PROJECT_ROOT/manifest.config.local.yaml"
+    local config_file="$MANIFEST_CLI_PROJECT_ROOT/manifest.config.local.yaml"
     local inferred_repo_name inferred_org inferred_default_branch
     inferred_repo_name=$(_manifest_config_git_infer_repo_name)
     inferred_org=$(_manifest_config_git_infer_org)
@@ -1244,8 +1244,8 @@ show_configuration() {
     
     echo "📍 Installation Configuration:"
     echo "   Binary Location: ${BINARY_LOCATION:-Not set}"
-    echo "   Install Location: ${INSTALL_LOCATION:-Not set}"
-    echo "   Project Root: ${PROJECT_ROOT:-Not set}"
+    echo "   Install Location: ${MANIFEST_CLI_INSTALL_LOCATION:-Not set}"
+    echo "   Project Root: ${MANIFEST_CLI_PROJECT_ROOT:-Not set}"
     echo ""
     
     echo "⚙️  Advanced Configuration:"
@@ -1283,7 +1283,7 @@ show_configuration() {
 get_docs_folder() {
     local project_root="$1"
     if [ -z "$project_root" ]; then
-        project_root="$PROJECT_ROOT"
+        project_root="$MANIFEST_CLI_PROJECT_ROOT"
     fi
     
     if [ -z "$project_root" ]; then
@@ -1297,7 +1297,7 @@ get_docs_folder() {
 get_docs_archive_folder() {
     local project_root="$1"
     if [ -z "$project_root" ]; then
-        project_root="$PROJECT_ROOT"
+        project_root="$MANIFEST_CLI_PROJECT_ROOT"
     fi
     
     if [ -z "$project_root" ]; then

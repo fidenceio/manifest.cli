@@ -267,9 +267,9 @@ manifest_plan_render_fingerprint_line() {
 # -----------------------------------------------------------------------------
 # Run/status dir for a repo's persisted preview state. Lives under the same
 # TTL-swept cache root as other scratch, keyed by the repo's git root so two
-# checkouts never collide. $1 = repo root (defaults to PROJECT_ROOT/PWD).
+# checkouts never collide. $1 = repo root (defaults to MANIFEST_CLI_PROJECT_ROOT/PWD).
 manifest_plan_run_dir() {
-    local repo_root="${1:-${PROJECT_ROOT:-$PWD}}"
+    local repo_root="${1:-${MANIFEST_CLI_PROJECT_ROOT:-$PWD}}"
     local git_root key root
     git_root="$(git -C "$repo_root" rev-parse --show-toplevel 2>/dev/null || echo "$repo_root")"
     key="$(printf '%s' "$git_root" | _manifest_hash_short)"
@@ -281,7 +281,7 @@ manifest_plan_run_dir() {
 # Persist the previewed fingerprint for a named plan kind (e.g. "ship-repo").
 # $1 = plan kind, $2 = fingerprint, $3 = repo root (optional). Best-effort.
 manifest_plan_fingerprint_persist() {
-    local kind="$1" fingerprint="$2" repo_root="${3:-${PROJECT_ROOT:-$PWD}}"
+    local kind="$1" fingerprint="$2" repo_root="${3:-${MANIFEST_CLI_PROJECT_ROOT:-$PWD}}"
     [[ -n "$kind" && -n "$fingerprint" ]] || return 0
     local dir
     dir="$(manifest_plan_run_dir "$repo_root")" || return 0
@@ -294,7 +294,7 @@ manifest_plan_fingerprint_persist() {
 # Warns to stderr when they differ; silent when no preview was persisted or the
 # fingerprints match. Always returns 0 — this is advisory, not a gate.
 manifest_plan_fingerprint_warn_on_drift() {
-    local kind="$1" current="$2" repo_root="${3:-${PROJECT_ROOT:-$PWD}}"
+    local kind="$1" current="$2" repo_root="${3:-${MANIFEST_CLI_PROJECT_ROOT:-$PWD}}"
     [[ -n "$kind" && -n "$current" ]] || return 0
     local dir file previewed
     dir="$(manifest_plan_run_dir "$repo_root")" || return 0
@@ -728,7 +728,7 @@ get_project_root() {
 # Check if we're running from the installation directory
 is_installation_directory() {
     local current_dir="$1"
-    local install_location="${INSTALL_LOCATION:-$HOME/.manifest-cli}"
+    local install_location="${MANIFEST_CLI_INSTALL_LOCATION:-$HOME/.manifest-cli}"
 
     if [ -z "$current_dir" ]; then
         current_dir="$(pwd)"
@@ -761,7 +761,7 @@ validate_repository_root() {
     # SECURITY: Prevent running from installation directory
     if is_installation_directory "$current_dir"; then
         log_error "❌ SECURITY ERROR: Cannot run Manifest CLI from installation directory"
-        log_error "   Installation directory: ${INSTALL_LOCATION:-$HOME/.manifest-cli}"
+        log_error "   Installation directory: ${MANIFEST_CLI_INSTALL_LOCATION:-$HOME/.manifest-cli}"
         log_error "   Current directory: $current_dir"
         log_error ""
         log_error "💡 Please run Manifest CLI from your project directory instead:"
@@ -865,7 +865,7 @@ manifest_repo_scope_require_git() {
 }
 
 manifest_git_preflight_write_access() {
-    local project_root="${1:-${PROJECT_ROOT:-$(pwd)}}"
+    local project_root="${1:-${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}}"
     local operation="${2:-manifest apply}"
     local index_lock probe_dir probe_file
 
@@ -955,7 +955,7 @@ manifest_repo_scope_target_unambiguous() {
 }
 
 manifest_repo_scope_confirm_apply() {
-    local project_root="${1:-${PROJECT_ROOT:-$(pwd)}}"
+    local project_root="${1:-${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}}"
     local replay_command="${2:-manifest command -y}"
     local origin_required="${3:-true}"
     local git_root branch origin answer

@@ -40,8 +40,8 @@ setup() {
     mkdir -p "$REPO"
     git -C "$REPO" init -q . >/dev/null 2>&1
     export REPO
-    PROJECT_ROOT="$REPO"
-    export PROJECT_ROOT
+    MANIFEST_CLI_PROJECT_ROOT="$REPO"
+    export MANIFEST_CLI_PROJECT_ROOT
     # Clear any inherited exemption/marker env so each test starts clean.
     unset MANIFEST_CLI_AUDIT_SOURCE
     unset MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE
@@ -67,7 +67,7 @@ teardown() {
     local a b
     a="$(_manifest_repo_lock_dir_path)"
     mkdir -p "$SCRATCH/elsewhere"
-    b="$(cd "$SCRATCH/elsewhere" && PROJECT_ROOT="$REPO" _manifest_repo_lock_dir_path)"
+    b="$(cd "$SCRATCH/elsewhere" && MANIFEST_CLI_PROJECT_ROOT="$REPO" _manifest_repo_lock_dir_path)"
     [ "$a" = "$b" ]
 }
 
@@ -76,7 +76,7 @@ teardown() {
     a="$(_manifest_repo_lock_dir_path)"
     mkdir -p "$SCRATCH/other"
     git -C "$SCRATCH/other" init -q . >/dev/null 2>&1
-    b="$(PROJECT_ROOT="$SCRATCH/other" _manifest_repo_lock_dir_path)"
+    b="$(MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/other" _manifest_repo_lock_dir_path)"
     [ "$a" != "$b" ]
 }
 
@@ -155,14 +155,14 @@ teardown() {
     mkdir -p "$SCRATCH/other"
     git -C "$SCRATCH/other" init -q . >/dev/null 2>&1
     # Subshell = distinct $$; clear the inherited same-process marker so the
-    # defense-in-depth guard doesn't short-circuit, and re-point PROJECT_ROOT.
+    # defense-in-depth guard doesn't short-circuit, and re-point MANIFEST_CLI_PROJECT_ROOT.
     run bash -c '
         unset MANIFEST_CLI_REPO_LOCK_HELD
         source "$1/modules/system/manifest-install-paths.sh"
         source "$1/modules/git/manifest-git.sh"
         source "$1/modules/fleet/manifest-fleet.sh"
         source "$1/modules/core/manifest-ship.sh"
-        PROJECT_ROOT="$2"
+        MANIFEST_CLI_PROJECT_ROOT="$2"
         _manifest_ship_repo_lock_acquire
         [ -d "$_MANIFEST_CLI_SHIP_REPO_LOCK_DIR" ] || exit 1
         _fleet_lock_release "$_MANIFEST_CLI_SHIP_REPO_LOCK_DIR"

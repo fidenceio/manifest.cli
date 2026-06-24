@@ -16,7 +16,7 @@ setup() {
     HOME="$SCRATCH/home"
     mkdir -p "$HOME" "$SCRATCH/proj"
     export HOME
-    export PROJECT_ROOT="$SCRATCH/proj"
+    export MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/proj"
 
     # Minimal module stack for the gate functions.
     export MANIFEST_CLI_CORE_MODULES_DIR="$TEST_REPO_ROOT/modules"
@@ -63,7 +63,7 @@ teardown() {
 @test "release_gate: injection-shaped value is rejected and not executed" {
     MANIFEST_CLI_RELEASE_GATE='none; touch pwned' run manifest_release_gate_run "pre-bump"
     [ "$status" -ne 0 ]
-    [ ! -e "$PROJECT_ROOT/pwned" ]
+    [ ! -e "$MANIFEST_CLI_PROJECT_ROOT/pwned" ]
     [ ! -e "pwned" ]
 }
 
@@ -86,12 +86,12 @@ teardown() {
     echo "$output" | grep -q "No version changes were made"
 }
 
-@test "release_gate: local-tests runs the command in PROJECT_ROOT" {
+@test "release_gate: local-tests runs the command in MANIFEST_CLI_PROJECT_ROOT" {
     export MANIFEST_CLI_RELEASE_GATE="local-tests"
     export MANIFEST_CLI_RELEASE_GATE_COMMAND="touch ran.marker"
     run manifest_release_gate_run "pre-bump"
     [ "$status" -eq 0 ]
-    [ -e "$PROJECT_ROOT/ran.marker" ]
+    [ -e "$MANIFEST_CLI_PROJECT_ROOT/ran.marker" ]
 }
 
 # --- clean-room PATH floor: never strand the gate without core tools ---------
@@ -117,7 +117,7 @@ teardown() {
 }
 
 @test "release_gate: clean room resolves core tools (tr/date/git) via the floor" {
-    run _manifest_release_gate_exec "$PROJECT_ROOT" bash -c 'command -v tr && command -v date && command -v git'
+    run _manifest_release_gate_exec "$MANIFEST_CLI_PROJECT_ROOT" bash -c 'command -v tr && command -v date && command -v git'
     [ "$status" -eq 0 ]
     [[ "$output" == *"tr"* ]]
     [[ "$output" == *"date"* ]]
@@ -125,22 +125,22 @@ teardown() {
 }
 
 @test "release_gate: local-tests auto-detects ./scripts/run-tests.sh" {
-    mkdir -p "$PROJECT_ROOT/scripts"
-    cat > "$PROJECT_ROOT/scripts/run-tests.sh" <<'EOF'
+    mkdir -p "$MANIFEST_CLI_PROJECT_ROOT/scripts"
+    cat > "$MANIFEST_CLI_PROJECT_ROOT/scripts/run-tests.sh" <<'EOF'
 #!/usr/bin/env bash
 touch "$PWD/autodetect.marker"
 exit 0
 EOF
-    chmod +x "$PROJECT_ROOT/scripts/run-tests.sh"
+    chmod +x "$MANIFEST_CLI_PROJECT_ROOT/scripts/run-tests.sh"
     export MANIFEST_CLI_RELEASE_GATE="local-tests"
     run manifest_release_gate_run "pre-bump"
     [ "$status" -eq 0 ]
-    [ -e "$PROJECT_ROOT/autodetect.marker" ]
+    [ -e "$MANIFEST_CLI_PROJECT_ROOT/autodetect.marker" ]
 }
 
 @test "release_gate: local-tests with no resolvable command FAILS CLOSED (no silent bypass)" {
     export MANIFEST_CLI_RELEASE_GATE="local-tests"
-    # No gate_command, no scripts/run-tests.sh in PROJECT_ROOT. A gate that
+    # No gate_command, no scripts/run-tests.sh in MANIFEST_CLI_PROJECT_ROOT. A gate that
     # silently proceeds on "no tests" is a bypass; the gate must block instead.
     run manifest_release_gate_run "pre-bump"
     [ "$status" -eq 1 ]
@@ -190,19 +190,19 @@ EOF
     export MANIFEST_CLI_RELEASE_GATE_TIER="quick"
     run manifest_release_gate_run "pre-bump"
     [ "$status" -eq 1 ]
-    [ ! -e "$PROJECT_ROOT/should-not-run.marker" ]
+    [ ! -e "$MANIFEST_CLI_PROJECT_ROOT/should-not-run.marker" ]
 }
 
 # A stub run-tests.sh records the args it was invoked with so we can assert the
 # tier was threaded through to the auto-detected entrypoint.
 _install_recording_runtests() {
-    mkdir -p "$PROJECT_ROOT/scripts"
-    cat > "$PROJECT_ROOT/scripts/run-tests.sh" <<'EOF'
+    mkdir -p "$MANIFEST_CLI_PROJECT_ROOT/scripts"
+    cat > "$MANIFEST_CLI_PROJECT_ROOT/scripts/run-tests.sh" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" > "$PWD/runtests.args"
 exit 0
 EOF
-    chmod +x "$PROJECT_ROOT/scripts/run-tests.sh"
+    chmod +x "$MANIFEST_CLI_PROJECT_ROOT/scripts/run-tests.sh"
 }
 
 @test "release_gate: auto-detected run-tests.sh runs the full tier, serial by default" {
@@ -215,7 +215,7 @@ EOF
     # in the container and CI). See _manifest_release_gate_test_command.
     # --no-cache: the gate never honors the §5.10 green-run cache — a release
     # must observe the suite passing here, not trust a prior cached run.
-    [ "$(cat "$PROJECT_ROOT/runtests.args")" = "--tier full --jobs 1 --no-cache" ]
+    [ "$(cat "$MANIFEST_CLI_PROJECT_ROOT/runtests.args")" = "--tier full --jobs 1 --no-cache" ]
 }
 
 @test "release_gate: gate_tier=smoke threads --tier smoke to run-tests.sh (still serial)" {
@@ -224,7 +224,7 @@ EOF
     export MANIFEST_CLI_RELEASE_GATE_TIER="smoke"
     run manifest_release_gate_run "pre-bump"
     [ "$status" -eq 0 ]
-    [ "$(cat "$PROJECT_ROOT/runtests.args")" = "--tier smoke --jobs 1 --no-cache" ]
+    [ "$(cat "$MANIFEST_CLI_PROJECT_ROOT/runtests.args")" = "--tier smoke --jobs 1 --no-cache" ]
 }
 
 @test "release_gate: a configured gate_command owns its tiering (no --tier appended)" {
@@ -273,7 +273,7 @@ _audit_file() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
     # The completion event (what manifest_ship_repo emits) must carry the
     # bypass so an auditor can see a force-bypassed release after the fact —
     # the in-memory var alone was NOT audited.
-    manifest_audit_apply_event "cli" "manifest ship repo patch -y" "$PROJECT_ROOT" \
+    manifest_audit_apply_event "cli" "manifest ship repo patch -y" "$MANIFEST_CLI_PROJECT_ROOT" \
         "h" "0" "completed" "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS"
     local audit; audit="$(_audit_file)"
     [ -f "$audit" ]
@@ -292,7 +292,7 @@ _audit_file() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
     manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1 || true
     [ "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS" = "blocked-no-command" ]
 
-    manifest_audit_apply_event "cli" "manifest ship repo patch -y" "$PROJECT_ROOT" \
+    manifest_audit_apply_event "cli" "manifest ship repo patch -y" "$MANIFEST_CLI_PROJECT_ROOT" \
         "h" "1" "failed" "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS"
     [[ "$(cat "$(_audit_file)")" == *'"gate_status":"blocked-no-command"'* ]]
 }
@@ -311,7 +311,7 @@ _audit_file() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
     export MANIFEST_CLI_RELEASE_GATE_COMMAND="touch should-not-run.marker"
     run manifest_release_gate_run "pre-bump"
     [ "$status" -eq 0 ]
-    [ ! -e "$PROJECT_ROOT/should-not-run.marker" ]
+    [ ! -e "$MANIFEST_CLI_PROJECT_ROOT/should-not-run.marker" ]
 }
 
 # --- pre-bump: force-bump version-stamp skip (clean + at-tag, no code delta) -
@@ -324,15 +324,15 @@ _audit_file() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
 # delta (dirty or ahead-of-tag) and an ORDINARY ship both still fail closed, so
 # C3 verification of actual code changes is unchanged.
 
-# Build PROJECT_ROOT as a git repo: VERSION $1, one commit, tag v$1 at HEAD,
+# Build MANIFEST_CLI_PROJECT_ROOT as a git repo: VERSION $1, one commit, tag v$1 at HEAD,
 # clean tree — the exact shape the stamp-only gate path recognizes.
 _mk_tagged_clean_repo() {
     local ver="${1:-1.0.0}"
-    git -C "$PROJECT_ROOT" init -q
-    git -C "$PROJECT_ROOT" config user.email t@e.co
-    git -C "$PROJECT_ROOT" config user.name t
-    printf '%s\n' "$ver" > "$PROJECT_ROOT/VERSION"
-    ( cd "$PROJECT_ROOT" \
+    git -C "$MANIFEST_CLI_PROJECT_ROOT" init -q
+    git -C "$MANIFEST_CLI_PROJECT_ROOT" config user.email t@e.co
+    git -C "$MANIFEST_CLI_PROJECT_ROOT" config user.name t
+    printf '%s\n' "$ver" > "$MANIFEST_CLI_PROJECT_ROOT/VERSION"
+    ( cd "$MANIFEST_CLI_PROJECT_ROOT" \
         && echo base > f \
         && git add VERSION f \
         && git commit -q -m "release $ver" \
@@ -358,17 +358,17 @@ _mk_tagged_clean_repo() {
     # Intentional: a clean, at-tag tree is byte-identical to one already gated,
     # so even a present (and here, side-effecting) command is not re-run. The
     # marker proves the command never executed.
-    export MANIFEST_CLI_RELEASE_GATE_COMMAND="touch $PROJECT_ROOT/should-not-run.marker"
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND="touch $MANIFEST_CLI_PROJECT_ROOT/should-not-run.marker"
     _MANIFEST_CLI_SHIP_FORCE_BUMP=true
     run manifest_release_gate_run "pre-bump"
     [ "$status" -eq 0 ]
-    [ ! -e "$PROJECT_ROOT/should-not-run.marker" ]
+    [ ! -e "$MANIFEST_CLI_PROJECT_ROOT/should-not-run.marker" ]
     echo "$output" | grep -q "no code delta to verify"
 }
 
 @test "release_gate: force-bump with a DIRTY tree STILL fails closed (a real delta is not a stamp)" {
     _mk_tagged_clean_repo 1.0.0
-    ( cd "$PROJECT_ROOT" && echo changed >> f )   # uncommitted change = real delta
+    ( cd "$MANIFEST_CLI_PROJECT_ROOT" && echo changed >> f )   # uncommitted change = real delta
     export MANIFEST_CLI_RELEASE_GATE="local-tests"
     _MANIFEST_CLI_SHIP_FORCE_BUMP=true
     run manifest_release_gate_run "pre-bump"
@@ -380,7 +380,7 @@ _mk_tagged_clean_repo() {
 @test "release_gate: force-bump AHEAD of the last tag STILL fails closed (commits since the tag are a real delta)" {
     _mk_tagged_clean_repo 1.0.0
     # New commit after the tag: clean working tree, but HEAD is ahead of v1.0.0.
-    ( cd "$PROJECT_ROOT" && echo more > g && git add g && git commit -q -m "post-tag commit" )
+    ( cd "$MANIFEST_CLI_PROJECT_ROOT" && echo more > g && git add g && git commit -q -m "post-tag commit" )
     export MANIFEST_CLI_RELEASE_GATE="local-tests"
     _MANIFEST_CLI_SHIP_FORCE_BUMP=true
     run manifest_release_gate_run "pre-bump"
@@ -416,10 +416,10 @@ _mk_tagged_clean_repo() {
 
 @test "release_gate: post-push remote-ci passes when CI run is green" {
     gh_stub_install
-    git -C "$PROJECT_ROOT" init -q
-    git -C "$PROJECT_ROOT" config user.email t@e.co
-    git -C "$PROJECT_ROOT" config user.name t
-    ( cd "$PROJECT_ROOT" && echo x > f && git add f && git commit -q -m c )
+    git -C "$MANIFEST_CLI_PROJECT_ROOT" init -q
+    git -C "$MANIFEST_CLI_PROJECT_ROOT" config user.email t@e.co
+    git -C "$MANIFEST_CLI_PROJECT_ROOT" config user.name t
+    ( cd "$MANIFEST_CLI_PROJECT_ROOT" && echo x > f && git add f && git commit -q -m c )
     export MANIFEST_CLI_GH_STUB_STDOUT="99999"   # gh run list returns a run id
     export MANIFEST_CLI_GH_STUB_EXIT=0           # gh run watch exits green
     export MANIFEST_CLI_RELEASE_GATE="remote-ci"
@@ -430,10 +430,10 @@ _mk_tagged_clean_repo() {
 
 @test "release_gate: post-push remote-ci fails when CI run is red" {
     gh_stub_install
-    git -C "$PROJECT_ROOT" init -q
-    git -C "$PROJECT_ROOT" config user.email t@e.co
-    git -C "$PROJECT_ROOT" config user.name t
-    ( cd "$PROJECT_ROOT" && echo x > f && git add f && git commit -q -m c )
+    git -C "$MANIFEST_CLI_PROJECT_ROOT" init -q
+    git -C "$MANIFEST_CLI_PROJECT_ROOT" config user.email t@e.co
+    git -C "$MANIFEST_CLI_PROJECT_ROOT" config user.name t
+    ( cd "$MANIFEST_CLI_PROJECT_ROOT" && echo x > f && git add f && git commit -q -m c )
     export MANIFEST_CLI_GH_STUB_STDOUT="99999"   # run id present
     export MANIFEST_CLI_GH_STUB_EXIT=1           # gh run watch exits non-zero (red)
     export MANIFEST_CLI_GH_STUB_AUTH_EXIT=0      # but auth is fine
@@ -445,10 +445,10 @@ _mk_tagged_clean_repo() {
 
 @test "release_gate: post-push remote-ci hard-stops when CI cannot be confirmed" {
     gh_stub_install
-    git -C "$PROJECT_ROOT" init -q
-    git -C "$PROJECT_ROOT" config user.email t@e.co
-    git -C "$PROJECT_ROOT" config user.name t
-    ( cd "$PROJECT_ROOT" && echo x > f && git add f && git commit -q -m c )
+    git -C "$MANIFEST_CLI_PROJECT_ROOT" init -q
+    git -C "$MANIFEST_CLI_PROJECT_ROOT" config user.email t@e.co
+    git -C "$MANIFEST_CLI_PROJECT_ROOT" config user.name t
+    ( cd "$MANIFEST_CLI_PROJECT_ROOT" && echo x > f && git add f && git commit -q -m c )
     export MANIFEST_CLI_GH_STUB_AUTH_EXIT=1      # gh installed but not authenticated -> rc2 path
     export MANIFEST_CLI_RELEASE_GATE="remote-ci"
     run manifest_release_gate_run "post-push"
@@ -475,7 +475,7 @@ _mk_tagged_clean_repo() {
 # --- clean-room isolation of the gate command (_manifest_release_gate_exec) ---
 #
 # By the time the gate runs, the ship process has exported its config vars,
-# ~160 manifest_* functions, PROJECT_ROOT, etc. The gate command must run in a
+# ~160 manifest_* functions, MANIFEST_CLI_PROJECT_ROOT, etc. The gate command must run in a
 # fresh environment or hermetic tests inherit that state and fail spuriously.
 # These guard the env -i clean room. The command is now passed as ARGV — a shell
 # snippet is run by spelling out `bash -c` as explicit argv (no implicit shell).
@@ -530,9 +530,9 @@ _mk_tagged_clean_repo() {
     [ "$output" = "ABSENT" ]
 }
 
-@test "gate exec: leaked PROJECT_ROOT does not reach the command" {
-    export PROJECT_ROOT="$SCRATCH/proj"
-    run _manifest_release_gate_exec "$SCRATCH" bash -c 'echo "PR=[${PROJECT_ROOT:-unset}]"'
+@test "gate exec: leaked MANIFEST_CLI_PROJECT_ROOT does not reach the command" {
+    export MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/proj"
+    run _manifest_release_gate_exec "$SCRATCH" bash -c 'echo "PR=[${MANIFEST_CLI_PROJECT_ROOT:-unset}]"'
     [ "$status" -eq 0 ]
     [ "$output" = "PR=[unset]" ]
 }
@@ -550,6 +550,6 @@ _mk_tagged_clean_repo() {
     export MANIFEST_CLI_RELEASE_GATE="local-tests"
     export MANIFEST_CLI_RELEASE_GATE_COMMAND="true; touch injected"
     run manifest_release_gate_run "pre-bump"
-    [ ! -e "$PROJECT_ROOT/injected" ]
+    [ ! -e "$MANIFEST_CLI_PROJECT_ROOT/injected" ]
     [ ! -e "injected" ]
 }

@@ -8,7 +8,7 @@ load 'helpers/setup'
 
 setup() {
     load_modules
-    # manifest-config.sh sources cleanly without a real PROJECT_ROOT/git context
+    # manifest-config.sh sources cleanly without a real MANIFEST_CLI_PROJECT_ROOT/git context
     # because we only exercise _confirm_global_config_write here.
     # shellcheck disable=SC1091
     source "$TEST_REPO_ROOT/modules/core/manifest-config.sh"

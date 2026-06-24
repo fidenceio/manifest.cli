@@ -39,7 +39,7 @@ _MANIFEST_INIT_LOADED=1
 
 # Check for required files and create them if missing
 ensure_required_files() {
-    local project_root="${1:-$PROJECT_ROOT}"
+    local project_root="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
     local created_files=()
 
     log_info "Checking for required files in: $project_root"
@@ -564,7 +564,7 @@ Idempotent — safe to re-run. Optionally creates a GitHub repo via 'gh repo cre
         esac
     done
 
-    local project_root="${PROJECT_ROOT:-$(pwd)}"
+    local project_root="${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}"
 
     if [[ "$dry_run" == "true" ]]; then
         echo ""

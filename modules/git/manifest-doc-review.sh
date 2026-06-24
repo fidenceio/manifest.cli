@@ -28,7 +28,7 @@ _manifest_doc_review_output_enabled() {
 }
 
 _manifest_doc_review_state_dir() {
-    local project_root="${1:-$PROJECT_ROOT}"
+    local project_root="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
     local git_dir
     git_dir="$(git -C "$project_root" rev-parse --git-dir 2>/dev/null)" || return 1
     [[ "$git_dir" != /* ]] && git_dir="$project_root/$git_dir"
@@ -37,7 +37,7 @@ _manifest_doc_review_state_dir() {
 }
 
 _manifest_doc_review_report_path() {
-    local project_root="${1:-$PROJECT_ROOT}"
+    local project_root="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
     local stamp="${2:-$(date -u +"%Y%m%dT%H%M%SZ")}"
     local report_dir="${MANIFEST_CLI_DOC_REVIEW_REPORT_DIR:-}"
 
@@ -57,7 +57,7 @@ _manifest_doc_review_report_path() {
 }
 
 _manifest_doc_review_changed_files() {
-    local project_root="${1:-$PROJECT_ROOT}"
+    local project_root="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
     {
         git -C "$project_root" diff --name-only 2>/dev/null || true
         git -C "$project_root" diff --cached --name-only 2>/dev/null || true
@@ -120,7 +120,7 @@ _manifest_doc_review_run_provider() {
 
 manifest_smart_documentation_review() {
     local commit_message="${1:-}"
-    local project_root="${PROJECT_ROOT:-$(pwd)}"
+    local project_root="${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}"
 
     MANIFEST_CLI_DOC_REVIEW_REPORT_FILE=""
     MANIFEST_CLI_DOC_REVIEW_COMMIT_BODY=""
@@ -274,7 +274,7 @@ manifest_smart_documentation_review() {
 
 manifest_doc_review_release_notes_since() {
     local range="${1:-}"
-    local project_root="${PROJECT_ROOT:-$(pwd)}"
+    local project_root="${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}"
     local report_paths path note
 
     _manifest_doc_review_output_enabled "release_notes" || return 0

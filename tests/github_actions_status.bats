@@ -97,8 +97,8 @@ teardown() {
     cd "$SCRATCH/repo"
     git init -q
     git remote add origin https://github.com/example/project.git
-    PROJECT_ROOT="$SCRATCH/repo"
-    export PROJECT_ROOT
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo"
+    export MANIFEST_CLI_PROJECT_ROOT
     MANIFEST_CLI_GH_TEST_LOG="$SCRATCH/gh-release-existing.log"
     export MANIFEST_CLI_GH_TEST_LOG
     gh() {
@@ -136,8 +136,8 @@ teardown() {
 
 ## [1.2.2] - 2026-05-07
 EOF
-    PROJECT_ROOT="$SCRATCH/repo"
-    export PROJECT_ROOT
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo"
+    export MANIFEST_CLI_PROJECT_ROOT
     MANIFEST_CLI_GH_TEST_LOG="$SCRATCH/gh-release-create.log"
     export MANIFEST_CLI_GH_TEST_LOG
     gh() {

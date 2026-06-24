@@ -11,9 +11,9 @@ load 'helpers/setup'
 setup() {
     load_modules "core/manifest-core.sh"
     SCRATCH="$(mk_scratch)"
-    export PROJECT_ROOT="$SCRATCH/repo"
-    mkdir -p "$PROJECT_ROOT/formula"
-    cd "$PROJECT_ROOT"
+    export MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo"
+    mkdir -p "$MANIFEST_CLI_PROJECT_ROOT/formula"
+    cd "$MANIFEST_CLI_PROJECT_ROOT"
     git init -q .
     git config user.email "test@example.com"
     git config user.name "Test"

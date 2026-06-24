@@ -79,7 +79,7 @@ manifest_refresh_repo() {
         esac
     done
 
-    local project_root="${PROJECT_ROOT:-$(pwd)}"
+    local project_root="${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}"
     local replay_command="manifest refresh repo"
     [[ "$do_commit" == "true" ]] && replay_command="$replay_command --commit"
 

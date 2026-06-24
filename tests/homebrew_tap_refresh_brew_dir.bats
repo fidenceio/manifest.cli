@@ -29,10 +29,10 @@ setup() {
     mkdir -p "$HOME"
     git config --global init.defaultBranch main >/dev/null 2>&1 || true
 
-    # PROJECT_ROOT points at a bare scratch dir with no workspace siblings so
+    # MANIFEST_CLI_PROJECT_ROOT points at a bare scratch dir with no workspace siblings so
     # the only candidates are the ones this file seeds deliberately.
-    export PROJECT_ROOT="$SCRATCH/proj"
-    mkdir -p "$PROJECT_ROOT"
+    export MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/proj"
+    mkdir -p "$MANIFEST_CLI_PROJECT_ROOT"
 
     # Slug check is exercised by its own test below; the fast-forward/skip tests
     # bypass it the same way tests/homebrew_tap_refresh.bats does, so the seeded

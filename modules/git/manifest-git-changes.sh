@@ -3,7 +3,7 @@
 # Manifest Git Changes Module
 # Handles git change analysis and categorization
 
-# Git changes module - uses PROJECT_ROOT from core module
+# Git changes module - uses MANIFEST_CLI_PROJECT_ROOT from core module
 MANIFEST_CLI_GIT_CHANGES_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$MANIFEST_CLI_GIT_CHANGES_SCRIPT_DIR/manifest-doc-review.sh"
 

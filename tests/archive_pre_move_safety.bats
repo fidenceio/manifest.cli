@@ -13,8 +13,8 @@ setup() {
     mkdir -p docs/zArchive
     echo "46.12.2" > VERSION
     git add VERSION && git commit -q -m "init repo"
-    PROJECT_ROOT="$SCRATCH"
-    export PROJECT_ROOT
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH"
+    export MANIFEST_CLI_PROJECT_ROOT
 }
 
 teardown() {

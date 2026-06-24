@@ -169,7 +169,7 @@ docs:
                             # Set to a working-tree path (e.g., "docs/documentation-reviews")
                             # to opt in to committed reports.
     provider: "local"       # local | command
-    command: ""             # Called as: command REPORT_FILE PROJECT_ROOT
+    command: ""             # Called as: command REPORT_FILE MANIFEST_CLI_PROJECT_ROOT
     required: false         # Fail commit if provider fails
   release_notes:
     # Per-ship release-notes synthesis. Manifest builds a request file

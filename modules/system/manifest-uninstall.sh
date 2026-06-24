@@ -3,7 +3,7 @@
 # Manifest Uninstall Module
 # Handles complete removal of Manifest CLI installation
 
-# Uninstall module - uses PROJECT_ROOT from core module
+# Uninstall module - uses MANIFEST_CLI_PROJECT_ROOT from core module
 
 # Source the install-paths module so this module never hardcodes filesystem
 # locations. Required dependency — the module must be present alongside this

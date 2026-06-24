@@ -168,7 +168,7 @@ YAML
 @test "config list --json: empty layer returns []" {
     source "$TEST_REPO_ROOT/modules/core/manifest-config-crud.sh"
     cd "$SCRATCH"
-    PROJECT_ROOT="$SCRATCH" run manifest_config_list --layer project --json
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_config_list --layer project --json
     [ "$status" -eq 0 ]
     [ "$output" = "[]" ]
 }
@@ -182,7 +182,7 @@ git:
 project:
   name: demo
 EOF
-    PROJECT_ROOT="$SCRATCH" run manifest_config_list --layer project --json
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_config_list --layer project --json
     [ "$status" -eq 0 ]
     echo "$output" | grep -q '"key":"git.default_branch"'
     echo "$output" | grep -q '"key":"project.name"'

@@ -9,8 +9,8 @@
 
 # Get current version from VERSION file
 get_current_version() {
-    if [ -f "$PROJECT_ROOT/VERSION" ]; then
-        cat "$PROJECT_ROOT/VERSION" 2>/dev/null || echo "unknown"
+    if [ -f "$MANIFEST_CLI_PROJECT_ROOT/VERSION" ]; then
+        cat "$MANIFEST_CLI_PROJECT_ROOT/VERSION" 2>/dev/null || echo "unknown"
     else
         echo "unknown"
     fi
@@ -114,7 +114,7 @@ get_latest_version() {
 
 manifest_origin_repo_slug() {
     local repo_url=""
-    repo_url="$(git -C "${1:-$PROJECT_ROOT}" remote get-url origin 2>/dev/null || echo "")"
+    repo_url="$(git -C "${1:-$MANIFEST_CLI_PROJECT_ROOT}" remote get-url origin 2>/dev/null || echo "")"
 
     if [[ "$repo_url" =~ ^git@[^:]+:([^/]+)/([^/]+)\.git$ ]]; then
         echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
@@ -132,7 +132,7 @@ manifest_origin_repo_slug() {
 }
 
 manifest_is_canonical_repo() {
-    local project_root="${1:-$PROJECT_ROOT}"
+    local project_root="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
     local origin_slug=""
     origin_slug="$(manifest_origin_repo_slug "$project_root" || echo "")"
 
@@ -158,7 +158,7 @@ manifest_is_canonical_repo() {
 }
 
 manifest_repo_display_name() {
-    local project_root="${1:-$PROJECT_ROOT}"
+    local project_root="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
     if manifest_is_canonical_repo "$project_root"; then
         echo "${MANIFEST_CLI_PROJECT_NAME:-Manifest CLI}"
         return 0
@@ -504,8 +504,8 @@ validate_file_path() {
         return 1
     fi
     
-    # Check for absolute paths outside project (if PROJECT_ROOT is set)
-    if [[ "$file_path" =~ ^/ ]] && [[ -n "${PROJECT_ROOT:-}" ]] && [[ ! "$file_path" =~ ^$PROJECT_ROOT ]]; then
+    # Check for absolute paths outside project (if MANIFEST_CLI_PROJECT_ROOT is set)
+    if [[ "$file_path" =~ ^/ ]] && [[ -n "${MANIFEST_CLI_PROJECT_ROOT:-}" ]] && [[ ! "$file_path" =~ ^$MANIFEST_CLI_PROJECT_ROOT ]]; then
         return 1
     fi
     
@@ -572,7 +572,7 @@ safe_write_file() {
 set_config_value() {
     local key="$1"
     local value="$2"
-    local config_file="${3:-$PROJECT_ROOT/.env}"
+    local config_file="${3:-$MANIFEST_CLI_PROJECT_ROOT/.env}"
 
     # Ensure config directory exists
     local config_dir=$(dirname "$config_file")

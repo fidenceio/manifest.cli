@@ -9,9 +9,9 @@ setup() {
         "git/manifest-git.sh" \
         "workflow/manifest-orchestrator.sh"
     SCRATCH="$(mk_scratch)"
-    export PROJECT_ROOT="$SCRATCH/repo"
-    mkdir -p "$PROJECT_ROOT/formula"
-    cd "$PROJECT_ROOT"
+    export MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo"
+    mkdir -p "$MANIFEST_CLI_PROJECT_ROOT/formula"
+    cd "$MANIFEST_CLI_PROJECT_ROOT"
     git init -q .
     git checkout -q -b main
     git config user.email "test@example.com"
@@ -158,7 +158,7 @@ teardown() {
     # Force the homebrew block to self-skip → workflow_homebrew_status stays "skipped".
     # The local upgrade gate must then prevent any upgrade output, even with a
     # fully functional brew on PATH.
-    rm -f "$PROJECT_ROOT/formula/manifest.rb"
+    rm -f "$MANIFEST_CLI_PROJECT_ROOT/formula/manifest.rb"
     git add -A
     git commit -qm "drop formula"
 

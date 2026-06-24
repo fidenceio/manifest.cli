@@ -50,14 +50,14 @@ gh_stub_install() {
     : > "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
-# Run a function with a fully-isolated PROJECT_ROOT and HOME so config/git
+# Run a function with a fully-isolated MANIFEST_CLI_PROJECT_ROOT and HOME so config/git
 # writes never touch the developer's real environment.
 in_sandbox() {
     local sandbox
     sandbox="$(mk_scratch)"
-    HOME="$sandbox/home" PROJECT_ROOT="$sandbox/proj" bash -c "
-        mkdir -p \"\$HOME\" \"\$PROJECT_ROOT\"
-        cd \"\$PROJECT_ROOT\"
+    HOME="$sandbox/home" MANIFEST_CLI_PROJECT_ROOT="$sandbox/proj" bash -c "
+        mkdir -p \"\$HOME\" \"\$MANIFEST_CLI_PROJECT_ROOT\"
+        cd \"\$MANIFEST_CLI_PROJECT_ROOT\"
         $*
     "
 }

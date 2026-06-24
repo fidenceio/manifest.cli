@@ -11,7 +11,7 @@ load 'helpers/setup'
 setup() {
     load_modules "git/manifest-git.sh"
     SCRATCH="$(mk_scratch)"
-    export PROJECT_ROOT="$SCRATCH"
+    export MANIFEST_CLI_PROJECT_ROOT="$SCRATCH"
     cd "$SCRATCH"
 }
 

@@ -3,11 +3,11 @@
 # Manifest Documentation Module
 # Orchestrates document generation using atomized modules
 
-# Documentation module - uses PROJECT_ROOT from core module
+# Documentation module - uses MANIFEST_CLI_PROJECT_ROOT from core module
 
 # Get configurable documentation directory
 get_docs_dir() {
-    get_docs_folder "$PROJECT_ROOT"
+    get_docs_folder "$MANIFEST_CLI_PROJECT_ROOT"
 }
 
 # Import required modules
@@ -116,7 +116,7 @@ write_external_docs_index() {
     local index_file="$1"
     local version="$2"
     local repo_name
-    repo_name="$(manifest_repo_display_name "$PROJECT_ROOT")"
+    repo_name="$(manifest_repo_display_name "$MANIFEST_CLI_PROJECT_ROOT")"
     local metadata_file current_release_file
     metadata_file=$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")
     current_release_file=$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")
@@ -173,7 +173,7 @@ _manifest_docs_write_managed_file() {
 }
 
 _manifest_docs_repo_title() {
-    local project_root="${1:-$PROJECT_ROOT}"
+    local project_root="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
     local configured="${MANIFEST_CLI_DOCS_SITE_TITLE:-}"
     if [[ -n "$configured" ]]; then
         printf '%s\n' "$configured"
@@ -247,7 +247,7 @@ _manifest_docs_generate_site() {
     local version="$1"
     local timestamp="$2"
     local scope="${3:-repo}"
-    local project_root="${4:-$PROJECT_ROOT}"
+    local project_root="${4:-$MANIFEST_CLI_PROJECT_ROOT}"
     local docs_dir="${5:-$(get_docs_dir)}"
     local source_dir="${MANIFEST_CLI_DOCS_SITE_SOURCE_DIR:-docs-site}"
     local site_root="$project_root/$source_dir"
@@ -453,7 +453,7 @@ _manifest_docs_enable_pages_if_requested() {
 
     local slug=""
     if declare -F manifest_origin_repo_slug >/dev/null 2>&1; then
-        slug="$(PROJECT_ROOT="$project_root" manifest_origin_repo_slug 2>/dev/null || true)"
+        slug="$(MANIFEST_CLI_PROJECT_ROOT="$project_root" manifest_origin_repo_slug 2>/dev/null || true)"
     fi
 
     if [[ -z "$slug" ]] || ! command -v gh >/dev/null 2>&1; then
@@ -504,14 +504,14 @@ update_readme_version() {
 
     log_info "Updating README version information..."
 
-    local readme_file="$PROJECT_ROOT/README.md"
+    local readme_file="$MANIFEST_CLI_PROJECT_ROOT/README.md"
 
     if [[ ! -f "$readme_file" ]]; then
         log_warning "README.md not found, skipping version update"
         return 0
     fi
 
-    if manifest_is_canonical_repo "$PROJECT_ROOT"; then
+    if manifest_is_canonical_repo "$MANIFEST_CLI_PROJECT_ROOT"; then
         local temp_file
         temp_file=$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")
 
@@ -546,7 +546,7 @@ update_readme_version() {
         else
             rm -f "$temp_file"
             local old_version=""
-            if [[ -f "$PROJECT_ROOT/VERSION" ]]; then
+            if [[ -f "$MANIFEST_CLI_PROJECT_ROOT/VERSION" ]]; then
                 old_version=$(grep -oE '`[0-9]+\.[0-9]+\.[0-9]+`' "$readme_file" | head -1 | tr -d '`')
             fi
             if [[ -n "$old_version" ]] && [[ "$old_version" != "$version" ]]; then
@@ -590,7 +590,7 @@ generate_docs_index() {
 
     local index_file="$(get_docs_dir)/INDEX.md"
 
-    if manifest_is_canonical_repo "$PROJECT_ROOT"; then
+    if manifest_is_canonical_repo "$MANIFEST_CLI_PROJECT_ROOT"; then
         if [[ -f "$index_file" ]]; then
             local old_version=""
             old_version=$(grep -oE '`[0-9]+\.[0-9]+\.[0-9]+`' "$index_file" | head -1 | tr -d '`')
@@ -1057,7 +1057,7 @@ _manifest_release_notes_run_provider() {
     local release_type="$2"
     local timestamp="$3"
     local changes_file="$4"
-    local project_root="${PROJECT_ROOT:-$(pwd)}"
+    local project_root="${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}"
     local provider="${MANIFEST_CLI_RELEASE_NOTES_PROVIDER:-local}"
 
     case "$provider" in
@@ -1195,7 +1195,7 @@ ${changes}
 
     if [[ "$gen_readme_version" == "true" ]] && [[ -f "$MANIFEST_CLI_FLEET_ROOT/README.md" ]]; then
         (
-            PROJECT_ROOT="$MANIFEST_CLI_FLEET_ROOT"
+            MANIFEST_CLI_PROJECT_ROOT="$MANIFEST_CLI_FLEET_ROOT"
             update_readme_version "$fleet_version" "$timestamp" 2>/dev/null || true
         )
     fi
@@ -1283,7 +1283,7 @@ _manifest_docs_generate_fleet_root() {
     fi
 
     if _manifest_docs_site_enabled; then
-        PROJECT_ROOT="$MANIFEST_CLI_FLEET_ROOT" _manifest_docs_generate_site \
+        MANIFEST_CLI_PROJECT_ROOT="$MANIFEST_CLI_FLEET_ROOT" _manifest_docs_generate_site \
             "$fleet_version" "$timestamp" "fleet-root" "$MANIFEST_CLI_FLEET_ROOT" "$fleet_docs_dir"
     fi
 
@@ -1332,7 +1332,7 @@ manifest_docs_generate() {
 
     # Prepend a Keep-a-Changelog entry to root CHANGELOG.md for this version.
     if _manifest_docs_config_bool "${MANIFEST_CLI_DOCS_GENERATE_CHANGELOG:-true}" "true"; then
-        if ! prepend_root_changelog_entry "$PROJECT_ROOT" "$version" "$timestamp" "$release_type" "$changes_file"; then
+        if ! prepend_root_changelog_entry "$MANIFEST_CLI_PROJECT_ROOT" "$version" "$timestamp" "$release_type" "$changes_file"; then
             log_warning "Root CHANGELOG.md update failed, but continuing..."
         fi
     fi
@@ -1348,7 +1348,7 @@ manifest_docs_generate() {
     fi
 
     if _manifest_docs_site_enabled; then
-        if ! _manifest_docs_generate_site "$version" "$timestamp" "$scope" "$PROJECT_ROOT" "$(get_docs_dir)"; then
+        if ! _manifest_docs_generate_site "$version" "$timestamp" "$scope" "$MANIFEST_CLI_PROJECT_ROOT" "$(get_docs_dir)"; then
             rm -f "$changes_file"
             return 1
         fi

@@ -11,9 +11,9 @@ load 'helpers/setup'
 setup() {
     load_modules "core/manifest-core.sh"
     SCRATCH="$(mk_scratch)"
-    export PROJECT_ROOT="$SCRATCH/repo"
-    mkdir -p "$PROJECT_ROOT/formula"
-    cd "$PROJECT_ROOT"
+    export MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo"
+    mkdir -p "$MANIFEST_CLI_PROJECT_ROOT/formula"
+    cd "$MANIFEST_CLI_PROJECT_ROOT"
     git init -q .
     git config user.email "test@example.com"
     git config user.name "Test"
@@ -100,8 +100,8 @@ teardown() {
     fi
     grep -q "sha256 \"${expected}\"" "$PUSHED_FORMULA"
     grep -q "url \"https://github.com/fidenceio/manifest.cli/archive/refs/tags/v1.2.3.tar.gz\"" "$PUSHED_FORMULA"
-    grep -q 'sha256 "0000000000000000000000000000000000000000000000000000000000000000"' "$PROJECT_ROOT/formula/manifest.rb"
-    grep -q 'url "https://github.com/fidenceio/manifest.cli/archive/refs/tags/v0.0.0.tar.gz"' "$PROJECT_ROOT/formula/manifest.rb"
+    grep -q 'sha256 "0000000000000000000000000000000000000000000000000000000000000000"' "$MANIFEST_CLI_PROJECT_ROOT/formula/manifest.rb"
+    grep -q 'url "https://github.com/fidenceio/manifest.cli/archive/refs/tags/v0.0.0.tar.gz"' "$MANIFEST_CLI_PROJECT_ROOT/formula/manifest.rb"
 }
 
 @test "SHA256 fetch fails loud after exhausting retries and writes no bad sha" {
@@ -116,8 +116,8 @@ teardown() {
 
     # The source formula must be untouched: still the all-zero placeholder, never
     # an empty or partial sha.
-    grep -q 'sha256 "0000000000000000000000000000000000000000000000000000000000000000"' "$PROJECT_ROOT/formula/manifest.rb"
-    ! grep -q 'sha256 ""' "$PROJECT_ROOT/formula/manifest.rb"
+    grep -q 'sha256 "0000000000000000000000000000000000000000000000000000000000000000"' "$MANIFEST_CLI_PROJECT_ROOT/formula/manifest.rb"
+    ! grep -q 'sha256 ""' "$MANIFEST_CLI_PROJECT_ROOT/formula/manifest.rb"
     [ ! -f "$PUSHED_FORMULA" ]
 }
 

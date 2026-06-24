@@ -5,8 +5,8 @@ load 'helpers/setup'
 setup() {
     load_modules "core/manifest-core.sh"
     SCRATCH="$(mk_scratch)"
-    export PROJECT_ROOT="$SCRATCH/workspace/fidenceio.manifest.cli"
-    mkdir -p "$PROJECT_ROOT"
+    export MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/workspace/fidenceio.manifest.cli"
+    mkdir -p "$MANIFEST_CLI_PROJECT_ROOT"
     git config --global init.defaultBranch main >/dev/null 2>&1 || true
 
     # Without this stub, manifest_homebrew_tap_checkout_candidates also walks

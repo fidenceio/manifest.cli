@@ -3,16 +3,16 @@
 # Manifest Markdown Templates Module
 # Provides consistent, well-formatted markdown generation and templates
 
-# Markdown templates module - uses PROJECT_ROOT from core module
+# Markdown templates module - uses MANIFEST_CLI_PROJECT_ROOT from core module
 
 # Template for README version update
 generate_readme_version_section() {
     local version="$1"
     local timestamp="$2"
     local docs_dir_name
-    docs_dir_name="$(basename "$(get_docs_folder "$PROJECT_ROOT")")"
+    docs_dir_name="$(basename "$(get_docs_folder "$MANIFEST_CLI_PROJECT_ROOT")")"
 
-    if manifest_is_canonical_repo "$PROJECT_ROOT"; then
+    if manifest_is_canonical_repo "$MANIFEST_CLI_PROJECT_ROOT"; then
     cat << EOF
 ## 📋 Version Information
 

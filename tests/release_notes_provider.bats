@@ -7,8 +7,8 @@ setup() {
     set_default_configuration
     SCRATCH="$(mk_scratch)"
     cd "$SCRATCH"
-    PROJECT_ROOT="$SCRATCH"
-    export PROJECT_ROOT
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH"
+    export MANIFEST_CLI_PROJECT_ROOT
 
     git init -q .
     git config user.email "test@example.com"

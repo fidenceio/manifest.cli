@@ -3,7 +3,7 @@
 # Manifest Orchestrator Module
 # Coordinates the complete manifest workflow using atomized modules
 
-# Orchestrator module - uses PROJECT_ROOT from core module
+# Orchestrator module - uses MANIFEST_CLI_PROJECT_ROOT from core module
 
 # Orchestrator module - modules are already sourced by manifest-core.sh
 
@@ -284,7 +284,7 @@ _manifest_release_gate_test_command() {
         read -r -a MANIFEST_CLI_RELEASE_GATE_ARGV <<<"$configured"
         return 0
     fi
-    if [[ -x "${PROJECT_ROOT:-$PWD}/scripts/run-tests.sh" ]]; then
+    if [[ -x "${MANIFEST_CLI_PROJECT_ROOT:-$PWD}/scripts/run-tests.sh" ]]; then
         # --no-cache: the release gate always executes the suite. The TTL'd
         # green-run cache (§5.10) accelerates dev/CI loops, but nothing releases
         # on a cached result — the gate must observe the tests passing here, now.
@@ -317,11 +317,11 @@ _MANIFEST_CLI_SHIP_FORCE_BUMP="${_MANIFEST_CLI_SHIP_FORCE_BUMP:-false}"
 #
 # By the time the gate fires, the ship process has sourced every module
 # (exporting ~160 manifest_* shell functions) and loaded config (exporting
-# ~130 MANIFEST_CLI_* vars, plus PROJECT_ROOT, GIT_*, MANIFEST_CLI_AUTO_CONFIRM,
+# ~130 MANIFEST_CLI_* vars, plus MANIFEST_CLI_PROJECT_ROOT, GIT_*, MANIFEST_CLI_AUTO_CONFIRM,
 # …). A child that inherits any of it sees the releaser's internal state, not a
 # fresh shell, and hermetic tests fail spuriously: an exported manifest_*
 # function resolved against a half-initialized child (status 127), AUTO_CONFIRM=1
-# suppressing a confirmation under test, or a leaked PROJECT_ROOT redirecting a
+# suppressing a confirmation under test, or a leaked MANIFEST_CLI_PROJECT_ROOT redirecting a
 # test's sandboxed git/status checks at the real repo.
 #
 # Prefix-scrubbing one variable family at a time is whack-a-mole, so run the
@@ -386,7 +386,7 @@ _manifest_release_gate_exec() {
 _manifest_gate_stamp_only_force_bump() {
     [[ "${_MANIFEST_CLI_SHIP_FORCE_BUMP:-false}" == "true" ]] || return 1
     local repo_root cur_version cur_tag
-    repo_root="${PROJECT_ROOT:-$PWD}"
+    repo_root="${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
     cur_version="$(tr -d '[:space:]' < "$repo_root/VERSION" 2>/dev/null || echo "")"
     [[ -n "$cur_version" ]] || return 1
     if declare -F manifest_release_tag_name >/dev/null 2>&1; then
@@ -439,9 +439,9 @@ manifest_release_gate_run() {
                         _MANIFEST_CLI_SHIP_LAST_GATE_STATUS="blocked-no-command"
                         return 1
                     fi
-                    local gate_root="${PROJECT_ROOT:-$PWD}"
+                    local gate_root="${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
                     if [[ ! -d "$gate_root" ]]; then
-                        log_error "Release gate: PROJECT_ROOT '$gate_root' is not a directory."
+                        log_error "Release gate: MANIFEST_CLI_PROJECT_ROOT '$gate_root' is not a directory."
                         return 1
                     fi
                     local cmd_display="${MANIFEST_CLI_RELEASE_GATE_ARGV[*]}"
@@ -494,7 +494,7 @@ manifest_should_create_github_release() {
 
 manifest_github_release_notes_for_version() {
     local version="$1"
-    local changelog="${PROJECT_ROOT:-$PWD}/CHANGELOG.md"
+    local changelog="${MANIFEST_CLI_PROJECT_ROOT:-$PWD}/CHANGELOG.md"
     local notes=""
 
     if [[ -f "$changelog" ]]; then
@@ -514,7 +514,7 @@ manifest_github_release_notes_for_version() {
 
 manifest_github_origin_repo_slug() {
     local repo_url=""
-    repo_url="$(git -C "${PROJECT_ROOT:-$PWD}" remote get-url origin 2>/dev/null || echo "")"
+    repo_url="$(git -C "${MANIFEST_CLI_PROJECT_ROOT:-$PWD}" remote get-url origin 2>/dev/null || echo "")"
 
     if [[ "$repo_url" =~ ^git@github\.com:([^/]+)/([^/]+)\.git$ ]]; then
         echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
@@ -652,7 +652,7 @@ manifest_ship_post_push_steps() {
     # The CLI repo's formula/manifest.rb is a source template. The publisher must
     # generate a tap formula without committing a post-tag formula change here;
     # otherwise main can drift one generated commit ahead of the release tag.
-    if [ -f "$PROJECT_ROOT/formula/manifest.rb" ] && should_update_homebrew_for_repo; then
+    if [ -f "$MANIFEST_CLI_PROJECT_ROOT/formula/manifest.rb" ] && should_update_homebrew_for_repo; then
         workflow_homebrew_status="attempted"
         echo "🍺 Publishing Homebrew tap formula..."
         local formula_status_before=""
@@ -676,7 +676,7 @@ manifest_ship_post_push_steps() {
             return 1
         fi
         echo ""
-    elif [ -f "$PROJECT_ROOT/formula/manifest.rb" ]; then
+    elif [ -f "$MANIFEST_CLI_PROJECT_ROOT/formula/manifest.rb" ]; then
         workflow_homebrew_status="skipped_non_canonical_repo"
         local origin_slug=""
         origin_slug="$(manifest_origin_repo_slug || echo "unknown")"
@@ -873,8 +873,8 @@ manifest_ship_run_followup_patch() {
 }
 
 # Probes whether the current repo is in a resume-eligible state. Pure function:
-# no log_error, no side effects, no PROJECT_ROOT mutation. Caller is responsible
-# for cd'ing into the repo first; uses PROJECT_ROOT if set, else pwd.
+# no log_error, no side effects, no MANIFEST_CLI_PROJECT_ROOT mutation. Caller is responsible
+# for cd'ing into the repo first; uses MANIFEST_CLI_PROJECT_ROOT if set, else pwd.
 #
 # Echoes a single pipe-separated line: <code>|<version>|<tag>|<detail>
 # Codes:
@@ -887,7 +887,7 @@ manifest_ship_run_followup_patch() {
 #
 # Returns 0 for "eligible", 1 for any non-eligible code.
 manifest_ship_repo_resume_eligible() {
-    local project_root="${PROJECT_ROOT:-$(pwd)}"
+    local project_root="${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}"
     local version="" tag_name tag_commit branch dirty_files non_formula_count
 
     if [[ -r "$project_root/VERSION" ]]; then
@@ -943,7 +943,7 @@ manifest_ship_repo_resume_eligible() {
 # behavior (auto-commit + bump) is preserved.
 manifest_ship_repo_pretag_state() {
     local increment_type="$1"
-    local project_root="${PROJECT_ROOT:-$(pwd)}"
+    local project_root="${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}"
     local working committed expected tag_name tmp
 
     [[ -r "$project_root/VERSION" ]] || { echo "fresh||no VERSION"; return 0; }
@@ -982,8 +982,8 @@ manifest_ship_repo_resume() {
         log_error "Repository root validation failed"
         return 1
     fi
-    PROJECT_ROOT="$(pwd)"
-    export PROJECT_ROOT
+    MANIFEST_CLI_PROJECT_ROOT="$(pwd)"
+    export MANIFEST_CLI_PROJECT_ROOT
 
     # Resume is a mutating apply (push, post-push steps, metadata) and reaches
     # the same shared per-repo state as a normal ship, so it must hold the
@@ -1133,16 +1133,16 @@ manifest_ship_workflow() {
         return 1
     fi
     
-    # Update PROJECT_ROOT to the actual current directory (in case we changed)
-    PROJECT_ROOT="$(pwd)"
-    export PROJECT_ROOT
+    # Update MANIFEST_CLI_PROJECT_ROOT to the actual current directory (in case we changed)
+    MANIFEST_CLI_PROJECT_ROOT="$(pwd)"
+    export MANIFEST_CLI_PROJECT_ROOT
     workflow_start_sha="$(git rev-parse HEAD 2>/dev/null || echo "")"
 
     # Earliest clean halt point: a publish pushes the default-branch ref, so
     # refuse before any mutation if HEAD is on a different branch (see
     # manifest_assert_release_branch). Local/prep mode never pushes, so it's exempt.
     if [ "$publish_release" = "true" ]; then
-        if ! manifest_assert_release_branch "$PROJECT_ROOT"; then
+        if ! manifest_assert_release_branch "$MANIFEST_CLI_PROJECT_ROOT"; then
             log_error "Aborting ship: HEAD is not on the release branch."
             return 1
         fi
@@ -1164,15 +1164,15 @@ manifest_ship_workflow() {
     echo "   git repo:          $(git remote get-url origin 2>/dev/null || echo 'none')"
     echo "   git branch (remote): $(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || echo 'none')"
     echo "   git branch (local):  $(git branch --show-current 2>/dev/null || echo 'unknown')"
-    echo "   working folder:    $PROJECT_ROOT"
-    echo "   docs folder:       $(get_docs_folder "$PROJECT_ROOT")"
+    echo "   working folder:    $MANIFEST_CLI_PROJECT_ROOT"
+    echo "   docs folder:       $(get_docs_folder "$MANIFEST_CLI_PROJECT_ROOT")"
     echo "   archive folder:    $(get_zarchive_dir)"
-    echo "   previous version:  $(cat "$PROJECT_ROOT/VERSION" 2>/dev/null || echo 'unknown')"
+    echo "   previous version:  $(cat "$MANIFEST_CLI_PROJECT_ROOT/VERSION" 2>/dev/null || echo 'unknown')"
     echo ""
 
     # Ensure required files exist before proceeding
     echo "🔍 Checking for required files..."
-    if ! ensure_required_files "$PROJECT_ROOT"; then
+    if ! ensure_required_files "$MANIFEST_CLI_PROJECT_ROOT"; then
         log_error "Failed to ensure required files are present"
         return 1
     fi
@@ -1298,7 +1298,7 @@ manifest_ship_workflow() {
     # syncing the remote, or any version mutation, so a failing gate leaves the
     # repo genuinely untouched. Also emits the bypass notice for `none`.
     if ! _manifest_ship_step "release_gate" manifest_release_gate_run "pre-bump"; then
-        emit_ship_failure_report "release_gate" "$workflow_start_sha" "$(cat "${PROJECT_ROOT:-$PWD}/VERSION" 2>/dev/null || echo unknown)" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+        emit_ship_failure_report "release_gate" "$workflow_start_sha" "$(cat "${MANIFEST_CLI_PROJECT_ROOT:-$PWD}/VERSION" 2>/dev/null || echo unknown)" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
         return 1
     fi
     echo ""
@@ -1320,7 +1320,7 @@ manifest_ship_workflow() {
         elif [ "$_ac_count" -gt 1 ]; then
             _ac_hint=" ($_ac_count files: $_ac_first, ...)"
         fi
-        echo "⚠️  Auto-committing $_ac_count pending file(s) into this release from $PROJECT_ROOT."
+        echo "⚠️  Auto-committing $_ac_count pending file(s) into this release from $MANIFEST_CLI_PROJECT_ROOT."
         commit_changes "Auto-commit before Manifest process$_ac_hint" "$timestamp"
         echo ""
     fi
@@ -1535,15 +1535,15 @@ manifest_test_dry_run() {
     echo "   git repo:          $(git remote get-url origin 2>/dev/null || echo 'none')"
     echo "   git branch (remote): $(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || echo 'none')"
     echo "   git branch (local):  $(git branch --show-current 2>/dev/null || echo 'unknown')"
-    echo "   working folder:    $PROJECT_ROOT"
-    echo "   docs folder:       $(get_docs_folder "$PROJECT_ROOT")"
+    echo "   working folder:    $MANIFEST_CLI_PROJECT_ROOT"
+    echo "   docs folder:       $(get_docs_folder "$MANIFEST_CLI_PROJECT_ROOT")"
     echo "   archive folder:    $(get_zarchive_dir)"
-    echo "   previous version:  $(cat "$PROJECT_ROOT/VERSION" 2>/dev/null || echo 'unknown')"
+    echo "   previous version:  $(cat "$MANIFEST_CLI_PROJECT_ROOT/VERSION" 2>/dev/null || echo 'unknown')"
     echo ""
 
     # Test file requirements
     echo "📁 File Requirements Testing:"
-    if ensure_required_files "$PROJECT_ROOT"; then
+    if ensure_required_files "$MANIFEST_CLI_PROJECT_ROOT"; then
         echo "   ✅ All required files are present or created"
     else
         echo "   ❌ Failed to ensure required files"

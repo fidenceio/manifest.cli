@@ -56,7 +56,7 @@ init_repo_fixture() {
 @test "ship repo preview shows identity and does not prompt" {
     init_repo_fixture
 
-    PROJECT_ROOT="$SCRATCH" run manifest_ship_repo patch < /dev/null
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_ship_repo patch < /dev/null
 
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Repo identity"
@@ -80,7 +80,7 @@ init_repo_fixture() {
     git -C "$SCRATCH" symbolic-ref --short -q HEAD
     [ -z "${MANIFEST_CLI_AUTO_CONFIRM:-}" ]
 
-    PROJECT_ROOT="$SCRATCH" run manifest_repo_scope_confirm_apply "$SCRATCH" "manifest ship repo patch -y" < /dev/null
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_repo_scope_confirm_apply "$SCRATCH" "manifest ship repo patch -y" < /dev/null
 
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Apply target repository"
@@ -92,7 +92,7 @@ init_repo_fixture() {
     init_repo_fixture
     git -C "$SCRATCH" remote remove origin
 
-    PROJECT_ROOT="$SCRATCH" run manifest_repo_scope_confirm_apply "$SCRATCH" "manifest ship repo patch -y" < /dev/null
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_repo_scope_confirm_apply "$SCRATCH" "manifest ship repo patch -y" < /dev/null
 
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "Apply target repository"
@@ -106,7 +106,7 @@ init_repo_fixture() {
     git -C "$SCRATCH" commit -q -m "seed"
     git -C "$SCRATCH" checkout -q --detach HEAD
 
-    PROJECT_ROOT="$SCRATCH" run manifest_repo_scope_confirm_apply "$SCRATCH" "manifest ship repo patch -y" < /dev/null
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_repo_scope_confirm_apply "$SCRATCH" "manifest ship repo patch -y" < /dev/null
 
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "Ambiguous apply target in a non-interactive context"
@@ -116,7 +116,7 @@ init_repo_fixture() {
     init_repo_fixture
     git -C "$SCRATCH" remote remove origin
 
-    MANIFEST_CLI_AUTO_CONFIRM=1 PROJECT_ROOT="$SCRATCH" \
+    MANIFEST_CLI_AUTO_CONFIRM=1 MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" \
         run manifest_repo_scope_confirm_apply "$SCRATCH" "manifest ship repo patch -y" < /dev/null
 
     [ "$status" -eq 0 ]
@@ -127,7 +127,7 @@ init_repo_fixture() {
     init_repo_fixture
     git -C "$SCRATCH" remote remove origin
 
-    PROJECT_ROOT="$SCRATCH" run manifest_repo_scope_confirm_apply "$SCRATCH" "manifest first -y" "false" < /dev/null
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_repo_scope_confirm_apply "$SCRATCH" "manifest first -y" "false" < /dev/null
 
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Auto-confirmed unambiguous target (non-interactive apply via -y)"
@@ -161,7 +161,7 @@ init_repo_fixture() {
     init_repo_fixture
     touch "$SCRATCH/.git/index.lock"
 
-    MANIFEST_CLI_AUTO_CONFIRM=1 PROJECT_ROOT="$SCRATCH" run manifest_ship_repo patch -y
+    MANIFEST_CLI_AUTO_CONFIRM=1 MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_ship_repo patch -y
 
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "Git index lock already exists"
@@ -176,7 +176,7 @@ init_repo_fixture() {
     init_repo_fixture
     chmod u-w "$SCRATCH/.git"
 
-    MANIFEST_CLI_AUTO_CONFIRM=1 PROJECT_ROOT="$SCRATCH" run manifest_ship_repo patch -y
+    MANIFEST_CLI_AUTO_CONFIRM=1 MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_ship_repo patch -y
     rc="$status"
     out="$output"
 
@@ -215,7 +215,7 @@ set -e
 source "$TEST_REPO_ROOT/modules/core/manifest-requirements.sh"
 source "$TEST_REPO_ROOT/modules/core/manifest-shared-utils.sh"
 cd "$SCRATCH"
-PROJECT_ROOT="$SCRATCH"
+MANIFEST_CLI_PROJECT_ROOT="$SCRATCH"
 manifest_repo_scope_confirm_apply "$SCRATCH" "manifest ship repo patch -y"
 SH
     chmod +x "$SCRATCH/confirm-repo.sh"

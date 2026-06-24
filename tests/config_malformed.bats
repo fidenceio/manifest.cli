@@ -100,8 +100,8 @@ YAML
 
     run env \
         HOME="$SCRATCH/home" \
-        PROJECT_ROOT="$SCRATCH/project" \
-        bash -c 'source "$1/tests/helpers/setup.bash"; load_modules "core/manifest-config.sh"; load_configuration "$PROJECT_ROOT" "false"' _ "$TEST_REPO_ROOT"
+        MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/project" \
+        bash -c 'source "$1/tests/helpers/setup.bash"; load_modules "core/manifest-config.sh"; load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "false"' _ "$TEST_REPO_ROOT"
 
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "could not be parsed"
@@ -113,8 +113,8 @@ YAML
     run env \
         HOME="$SCRATCH/home" \
         MANIFEST_CLI_GLOBAL_CONFIG="$SCRATCH/home/cfg.yaml" \
-        PROJECT_ROOT="$SCRATCH/project" \
-        bash -c 'source "$1/tests/helpers/setup.bash"; load_modules "core/manifest-config.sh"; load_configuration "$PROJECT_ROOT" "false"' _ "$TEST_REPO_ROOT"
+        MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/project" \
+        bash -c 'source "$1/tests/helpers/setup.bash"; load_modules "core/manifest-config.sh"; load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "false"' _ "$TEST_REPO_ROOT"
 
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "could not be parsed"
@@ -125,8 +125,8 @@ YAML
     # must succeed exactly as before §8.4a. (HOME has no .manifest-cli config.)
     run env \
         HOME="$SCRATCH/home" \
-        PROJECT_ROOT="$SCRATCH/project" \
-        bash -c 'source "$1/tests/helpers/setup.bash"; load_modules "core/manifest-config.sh"; load_configuration "$PROJECT_ROOT" "false" >/dev/null 2>&1; printf "%s" "$MANIFEST_CLI_GIT_TAG_PREFIX"' _ "$TEST_REPO_ROOT"
+        MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/project" \
+        bash -c 'source "$1/tests/helpers/setup.bash"; load_modules "core/manifest-config.sh"; load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "false" >/dev/null 2>&1; printf "%s" "$MANIFEST_CLI_GIT_TAG_PREFIX"' _ "$TEST_REPO_ROOT"
 
     [ "$status" -eq 0 ]
     [ "$output" = "v" ]
@@ -143,8 +143,8 @@ YAML
     # `run` merges stderr+stdout, so suppress stderr to assert the loaded VALUE.
     run env \
         HOME="$SCRATCH/home" \
-        PROJECT_ROOT="$SCRATCH/project" \
-        bash -c 'source "$1/tests/helpers/setup.bash"; load_modules "core/manifest-config.sh"; load_configuration "$PROJECT_ROOT" "false" >/dev/null 2>&1; printf "%s" "$MANIFEST_CLI_GIT_TAG_PREFIX"' _ "$TEST_REPO_ROOT"
+        MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/project" \
+        bash -c 'source "$1/tests/helpers/setup.bash"; load_modules "core/manifest-config.sh"; load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "false" >/dev/null 2>&1; printf "%s" "$MANIFEST_CLI_GIT_TAG_PREFIX"' _ "$TEST_REPO_ROOT"
 
     [ "$status" -eq 0 ]
     [ "$output" = "release-" ]

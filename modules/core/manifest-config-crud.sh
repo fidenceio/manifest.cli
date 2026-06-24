@@ -29,8 +29,8 @@ _cfg_layer_path() {
     local layer="$1"
     case "$layer" in
         global)  echo "${MANIFEST_CLI_GLOBAL_CONFIG:-$HOME/.manifest-cli/manifest.config.global.yaml}" ;;
-        project) echo "${PROJECT_ROOT:-$(pwd)}/manifest.config.yaml" ;;
-        local)   echo "${PROJECT_ROOT:-$(pwd)}/manifest.config.local.yaml" ;;
+        project) echo "${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}/manifest.config.yaml" ;;
+        local)   echo "${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}/manifest.config.local.yaml" ;;
         *)       echo "" ;;
     esac
 }

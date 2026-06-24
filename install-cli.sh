@@ -1198,10 +1198,10 @@ verify_installation() {
         fi
 
         # Determine project root (always use current working directory)
-        PROJECT_ROOT="$PWD"
+        MANIFEST_CLI_PROJECT_ROOT="$PWD"
 
         print_status "📍 Location: $(which "$MANIFEST_CLI_NAME")"
-        print_status "🏠 Project directory: $PROJECT_ROOT"
+        print_status "🏠 Project directory: $MANIFEST_CLI_PROJECT_ROOT"
 
         # Test basic functionality
         print_status "🧪 Testing basic functionality..."
