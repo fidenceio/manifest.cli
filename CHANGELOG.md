@@ -1,5 +1,14 @@
 # Changelog
 
+## [56.0.0] - 2026-06-25
+
+**Release Type:** Major
+
+### Changes
+
+- Feat(release+status): gate staleness re-test window (#7 Part 2) + vocab-aware fleet status
+
+
 ## [55.5.0] - 2026-06-24
 
 **Release Type:** Minor
@@ -86,16 +95,6 @@
 ## [55.1.0] - 2026-06-19
 
 **Release Type:** Minor
-
-### Changes
-
-- Update release copy and configuration examples
-- Add regression coverage for the changed CLI workflow
-
-
-## [55.0.4] - 2026-06-17
-
-**Release Type:** Patch
 
 ### Changes
 
