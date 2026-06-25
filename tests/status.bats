@@ -478,3 +478,182 @@ YAML
     echo "$output" | grep -q "ghost.*would clone"
     [ ! -d "$SCRATCH/svc/ghost" ]
 }
+
+# -- Fleet vocabulary classification (FLEET_DESIGN_SPEC.md "Fleet States") -----
+
+# Build one fleet covering every offline-derivable member state plus a benched
+# candidate (git, promotable) and benched scenery (non-repo placeholder). No
+# remote is reachable — these stay at the offline tier (Remote declared/undecl).
+_mk_vocab_fleet() {
+    local root="$1"
+    # repo + no remote  -> stranded
+    mkdir -p "$root/svc/stranded"
+    git -C "$root/svc/stranded" init -q
+    git -C "$root/svc/stranded" config user.email t@e.com
+    git -C "$root/svc/stranded" config user.name t
+    echo "1.0.0" > "$root/svc/stranded/VERSION"
+    git -C "$root/svc/stranded" add VERSION
+    git -C "$root/svc/stranded" commit -qm init
+    # repo + declared remote (unverified offline) -> unverified
+    mkdir -p "$root/svc/declared"
+    git -C "$root/svc/declared" init -q
+    git -C "$root/svc/declared" config user.email t@e.com
+    git -C "$root/svc/declared" config user.name t
+    echo "2.0.0" > "$root/svc/declared/VERSION"
+    git -C "$root/svc/declared" add VERSION
+    git -C "$root/svc/declared" commit -qm init
+    # present dir, not a git repo, with a remote -> unverified
+    mkdir -p "$root/svc/present-norepo"
+    {
+        echo "# Depth: 2"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
+        printf "true\tstranded\tsvc/stranded\ttrue\t\tmain\n"
+        printf "true\tdeclared\tsvc/declared\ttrue\tgit@github.com:acme/declared.git\tmain\n"
+        printf "true\tpresentnorepo\tsvc/present-norepo\tfalse\tgit@github.com:acme/p.git\tmain\n"
+        printf "true\tuncloned\tsvc/uncloned\ttrue\tgit@github.com:acme/uncloned.git\tmain\n"
+        printf "true\tlost\tsvc/lost\ttrue\t\tmain\n"
+        printf "false\tcand\tbench/cand\ttrue\t\tmain\n"
+        printf "false\tholding\tsecure/_holding\tfalse\t\t\n"
+    } > "$root/manifest.fleet.tsv"
+    cat > "$root/manifest.fleet.config.yaml" <<'YAML'
+fleet:
+  name: vocab-fleet
+services: {}
+YAML
+}
+
+@test "status fleet: classifies members into the offline vocabulary states" {
+    if ! command -v yq >/dev/null 2>&1; then
+        skip "yq not installed"
+    fi
+    _mk_vocab_fleet "$SCRATCH"
+
+    run _manifest_status_fleet "$SCRATCH" "false" "off" "false"
+    [ "$status" -eq 0 ]
+    # Local axis is fully derivable with no network:
+    echo "$output" | grep -q "stranded .* stranded "        # repo + no remote
+    echo "$output" | grep -q "declared .* unverified "      # repo + declared remote
+    echo "$output" | grep -q "presentnorepo .* unverified " # present (non-repo) + remote
+    echo "$output" | grep -q "uncloned .* uncloned "        # absent + remote
+    echo "$output" | grep -q "lost .* lost "                # absent + no remote
+    # Offline disclaimer is shown; backed is never reached without a probe.
+    echo "$output" | grep -q "offline — Remote shown as declared/undeclared"
+    echo "$output" | grep -q "Fleet" # vocabulary column header present
+}
+
+@test "status fleet: prints a by-state tally and benched candidate/scenery split" {
+    if ! command -v yq >/dev/null 2>&1; then
+        skip "yq not installed"
+    fi
+    _mk_vocab_fleet "$SCRATCH"
+
+    run _manifest_status_fleet "$SCRATCH" "false" "off" "false"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "States:.*backed 0, unverified 2, stranded 1, uncloned 1, lost 1"
+    echo "$output" | grep -q "Benched:.*1 candidate, 1 scenery"
+}
+
+@test "status fleet --json: carries fleet_state, axes, tally, and benched split" {
+    if ! command -v yq >/dev/null 2>&1; then
+        skip "yq not installed"
+    fi
+    _mk_vocab_fleet "$SCRATCH"
+
+    run _manifest_status_fleet "$SCRATCH" "true" "off" "false"
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | yq e '.fleet.verified' -)" = "false" ]
+    [ "$(echo "$output" | yq e '.fleet.tally.unverified' -)" = "2" ]
+    [ "$(echo "$output" | yq e '.fleet.tally.stranded' -)" = "1" ]
+    [ "$(echo "$output" | yq e '.fleet.tally.lost' -)" = "1" ]
+    [ "$(echo "$output" | yq e '.fleet.benched.candidate' -)" = "1" ]
+    [ "$(echo "$output" | yq e '.fleet.benched.scenery' -)" = "1" ]
+    # Per-member state + axes, keyed by name (order-independent).
+    [ "$(echo "$output" | yq e '.repositories[] | select(.name == "stranded") | .fleet_state' -)" = "stranded" ]
+    [ "$(echo "$output" | yq e '.repositories[] | select(.name == "stranded") | .remote' -)" = "undeclared" ]
+    [ "$(echo "$output" | yq e '.repositories[] | select(.name == "declared") | .fleet_state' -)" = "unverified" ]
+    [ "$(echo "$output" | yq e '.repositories[] | select(.name == "declared") | .remote' -)" = "declared" ]
+    [ "$(echo "$output" | yq e '.repositories[] | select(.name == "lost") | .local' -)" = "absent" ]
+    # The pre-existing git worktree `state` field is preserved alongside it.
+    [ "$(echo "$output" | yq e '.repositories[] | select(.name == "stranded") | .state' -)" = "clean" ]
+}
+
+@test "status fleet --verify: reachable file:// remote promotes declared -> backed" {
+    if ! command -v yq >/dev/null 2>&1; then
+        skip "yq not installed"
+    fi
+    # A real bare repo on the local filesystem is a hermetic, reachable remote:
+    # git ls-remote file://… succeeds with zero network. An unreachable file://
+    # path fast-fails, exercising the declared->undeclared downgrade.
+    git init -q --bare "$SCRATCH/origin-backed.git"
+    mkdir -p "$SCRATCH/svc/backed"
+    git -C "$SCRATCH/svc/backed" init -q
+    git -C "$SCRATCH/svc/backed" config user.email t@e.com
+    git -C "$SCRATCH/svc/backed" config user.name t
+    echo "1.0.0" > "$SCRATCH/svc/backed/VERSION"
+    git -C "$SCRATCH/svc/backed" add VERSION
+    git -C "$SCRATCH/svc/backed" commit -qm init
+    git -C "$SCRATCH/svc/backed" push -q "file://$SCRATCH/origin-backed.git" HEAD:refs/heads/main
+
+    {
+        echo "# Depth: 2"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
+        printf "true\tbacked\tsvc/backed\ttrue\tfile://%s/origin-backed.git\tmain\n" "$SCRATCH"
+        printf "true\tunreachable\tsvc/backed\ttrue\tfile://%s/missing.git\tmain\n" "$SCRATCH"
+    } > "$SCRATCH/manifest.fleet.tsv"
+    cat > "$SCRATCH/manifest.fleet.config.yaml" <<'YAML'
+fleet:
+  name: verify-fleet
+services: {}
+YAML
+
+    run _manifest_status_fleet "$SCRATCH" "true" "off" "true"
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | yq e '.fleet.verified' -)" = "true" ]
+    # Reachable remote -> verified -> backed.
+    [ "$(echo "$output" | yq e '.repositories[] | select(.name == "backed") | .remote' -)" = "verified" ]
+    [ "$(echo "$output" | yq e '.repositories[] | select(.name == "backed") | .fleet_state' -)" = "backed" ]
+    # Unreachable remote -> probe fails -> declared downgrades to undeclared.
+    [ "$(echo "$output" | yq e '.repositories[] | select(.name == "unreachable") | .remote' -)" = "undeclared" ]
+    [ "$(echo "$output" | yq e '.fleet.tally.backed' -)" = "1" ]
+}
+
+@test "status fleet --verify: writes nothing — TSV is byte-for-byte unchanged" {
+    if ! command -v yq >/dev/null 2>&1; then
+        skip "yq not installed"
+    fi
+    git init -q --bare "$SCRATCH/origin-backed.git"
+    mkdir -p "$SCRATCH/svc/backed"
+    git -C "$SCRATCH/svc/backed" init -q
+    git -C "$SCRATCH/svc/backed" config user.email t@e.com
+    git -C "$SCRATCH/svc/backed" config user.name t
+    echo "1.0.0" > "$SCRATCH/svc/backed/VERSION"
+    git -C "$SCRATCH/svc/backed" add VERSION
+    git -C "$SCRATCH/svc/backed" commit -qm init
+    git -C "$SCRATCH/svc/backed" push -q "file://$SCRATCH/origin-backed.git" HEAD:refs/heads/main
+
+    {
+        echo "# Depth: 2"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
+        printf "true\tbacked\tsvc/backed\ttrue\tfile://%s/origin-backed.git\tmain\n" "$SCRATCH"
+    } > "$SCRATCH/manifest.fleet.tsv"
+
+    local before after
+    before="$(shasum "$SCRATCH/manifest.fleet.tsv" | awk '{print $1}')"
+    run _manifest_status_fleet "$SCRATCH" "false" "off" "true"
+    [ "$status" -eq 0 ]
+    after="$(shasum "$SCRATCH/manifest.fleet.tsv" | awk '{print $1}')"
+    [ "$before" = "$after" ]
+    # No verification cache file was written to the fleet root either.
+    [ ! -e "$SCRATCH/.manifest-cli" ]
+}
+
+@test "status: --verify flag routes to fleet scope and sets the probe path" {
+    if ! command -v yq >/dev/null 2>&1; then
+        skip "yq not installed"
+    fi
+    _mk_vocab_fleet "$SCRATCH"
+
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_status fleet --verify
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Remote probed (declared → verified)"
+}

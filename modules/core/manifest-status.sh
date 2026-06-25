@@ -286,6 +286,116 @@ _status_resolve_member_path() {
     fi
 }
 
+# -- Fleet vocabulary classification (FLEET_DESIGN_SPEC.md "Fleet States") -----
+#
+# A member is classified on three orthogonal axes, every label DERIVED — none is
+# read back from the TSV or any state file:
+#   Local  : absent → present → repo   (observed, no network)
+#   Remote : undeclared → declared → verified
+#   State  : Local × Remote, named per the spec's table.
+#
+# The Local axis is fully offline: `repo` when <path>/.git exists, `present` when
+# the directory exists but is not a git checkout, `absent` otherwise. The Remote
+# axis tops out at `declared` offline (a recorded URL is a claim); `verified` is
+# reachable only via the opt-in --verify probe, and is NEVER persisted.
+
+# Echo the Local axis value for a resolved member path. No network.
+_status_fleet_local_axis() {
+    local path="$1"
+    if [[ -n "$path" && -e "$path/.git" ]]; then
+        echo "repo"
+    elif [[ -n "$path" && -d "$path" ]]; then
+        echo "present"
+    else
+        echo "absent"
+    fi
+}
+
+# Echo the Remote axis value. With no probe ($3 unset/empty) a non-empty URL is
+# `declared`, never `verified`. A probe result of `true`/`false` promotes a
+# declared URL to `verified` or downgrades it to `undeclared` (unreachable —
+# the claim did not hold).
+_status_fleet_remote_axis() {
+    local remote_url="$1"
+    local probe="${2:-}"
+    if [[ -z "$remote_url" || "$remote_url" == "null" ]]; then
+        echo "undeclared"
+        return 0
+    fi
+    case "$probe" in
+        true) echo "verified" ;;
+        false) echo "undeclared" ;;
+        *) echo "declared" ;;
+    esac
+}
+
+# Map Local × Remote to the named member state. `present` is treated as `repo`
+# for naming (the checkout is here, not lost); the carried Remote axis preserves
+# whether the remote was confirmed.
+_status_fleet_member_state() {
+    local local_axis="$1"
+    local remote_axis="$2"
+    case "$local_axis" in
+        repo|present)
+            case "$remote_axis" in
+                verified) echo "backed" ;;
+                declared) echo "unverified" ;;
+                *) echo "stranded" ;;
+            esac
+            ;;
+        absent)
+            case "$remote_axis" in
+                verified|declared) echo "uncloned" ;;
+                *) echo "lost" ;;
+            esac
+            ;;
+    esac
+}
+
+# Bounded, read-only existence probe for one remote URL. Promotes Remote
+# `declared` → `verified`. Echoes `true` (reachable) or `false` (unreachable).
+# Persists NOTHING — the result is point-in-time and lives only on stdout.
+# Hardened against hangs and credential prompts: bounded wall clock, no SSH
+# password/host-key interaction, no terminal prompt.
+_status_fleet_verify_remote() {
+    local url="$1"
+    [[ -n "$url" && "$url" != "null" ]] || { echo "false"; return 0; }
+    if GIT_TERMINAL_PROMPT=0 \
+        GIT_SSH_COMMAND='ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new' \
+        timeout 15 git ls-remote --exit-code "$url" HEAD >/dev/null 2>&1; then
+        echo "true"
+    else
+        echo "false"
+    fi
+}
+
+# Count benched corpus rows broken out as candidate (Local = repo; promotable)
+# vs scenery (non-repo grouping folder / placeholder such as _holding). Reads
+# the raw TSV directly because the roster reader emits only members. Echoes
+# "<candidate> <scenery>"; emits "0 0" when there is no TSV.
+_status_fleet_benched_counts() {
+    local proj="$1"
+    local tsv
+    tsv="$(_status_fleet_tsv_file "$proj")"
+    local candidate=0 scenery=0
+    [[ -n "$tsv" ]] || { echo "0 0"; return 0; }
+    local line
+    while IFS= read -r line; do
+        local fields=()
+        _status_tsv_split "$line" fields
+        local select="${fields[0]:-}"
+        [[ "$select" == \#* ]] && continue
+        [[ -z "$select" ]] && continue
+        [[ "$select" == "false" ]] || continue
+        if [[ "${fields[3]:-}" == "true" ]]; then
+            candidate=$((candidate + 1))
+        else
+            scenery=$((scenery + 1))
+        fi
+    done < "$tsv"
+    echo "$candidate $scenery"
+}
+
 _status_repo_version() {
     local path="$1"
     if [[ -f "$path/VERSION" ]]; then
@@ -568,6 +678,7 @@ _status_fleet_depth_profile_report() {
 
 _manifest_status_fleet_json() {
     local proj="$1"
+    local verify="${2:-false}"
     local config_file tsv_file
     config_file="$(_status_fleet_config_file "$proj")"
     tsv_file="$(_status_fleet_tsv_file "$proj")"
@@ -581,6 +692,8 @@ _manifest_status_fleet_json() {
         fleet_name="$(yq e '.fleet.name // "fleet"' "$config_file" 2>/dev/null)"
     fi
     local repos_json="" first=true
+    # Vocabulary tally, derived per member; benched broken out separately.
+    declare -A tally=([backed]=0 [unverified]=0 [stranded]=0 [uncloned]=0 [lost]=0)
     local roster_line service raw_path remote_url expected_branch
     while IFS= read -r roster_line; do
         local fields=()
@@ -591,6 +704,7 @@ _manifest_status_fleet_json() {
         expected_branch="${fields[4]:-}"
         [[ -z "$service" ]] && continue
         local path branch state version commit commit_timestamp surfaces_json
+        local local_axis remote_axis fleet_state probe=""
         path="$(_status_resolve_member_path "$proj" "$raw_path")"
         if [[ -d "$path" ]] && git -C "$path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
             branch="$(_status_repo_branch "$path")"
@@ -602,8 +716,13 @@ _manifest_status_fleet_json() {
         commit="$(_status_repo_latest_commit "$path")"
         commit_timestamp="$(_status_repo_latest_commit_timestamp "$path")"
         surfaces_json="$(_status_version_surfaces_json "$path")"
+        local_axis="$(_status_fleet_local_axis "$path")"
+        [[ "$verify" == "true" ]] && probe="$(_status_fleet_verify_remote "$remote_url")"
+        remote_axis="$(_status_fleet_remote_axis "$remote_url" "$probe")"
+        fleet_state="$(_status_fleet_member_state "$local_axis" "$remote_axis")"
+        tally[$fleet_state]=$(( tally[$fleet_state] + 1 ))
         local item
-        item="{$(_json_kv_str "name" "$service"),$(_json_kv_str "path" "$path"),$(_json_kv_str "remote_url" "$remote_url"),$(_json_kv_str "branch" "$branch"),$(_json_kv_str "state" "$state"),$(_json_kv_str "version" "$version"),$(_json_kv_str "latest_commit_timestamp" "$commit_timestamp"),$(_json_kv_str "latest_commit" "$commit"),$(_json_kv_raw "version_surfaces" "$surfaces_json")}"
+        item="{$(_json_kv_str "name" "$service"),$(_json_kv_str "path" "$path"),$(_json_kv_str "remote_url" "$remote_url"),$(_json_kv_str "branch" "$branch"),$(_json_kv_str "state" "$state"),$(_json_kv_str "fleet_state" "$fleet_state"),$(_json_kv_str "local" "$local_axis"),$(_json_kv_str "remote" "$remote_axis"),$(_json_kv_str "version" "$version"),$(_json_kv_str "latest_commit_timestamp" "$commit_timestamp"),$(_json_kv_str "latest_commit" "$commit"),$(_json_kv_raw "version_surfaces" "$surfaces_json")}"
         if [[ "$first" == "true" ]]; then
             repos_json="$item"
             first=false
@@ -612,9 +731,18 @@ _manifest_status_fleet_json() {
         fi
     done < <(_status_fleet_roster_rows "$proj")
 
-    printf '{"fleet":{%s,%s},"repositories":[%s]}\n' \
+    local benched_candidate benched_scenery
+    read -r benched_candidate benched_scenery < <(_status_fleet_benched_counts "$proj")
+    local tally_json benched_json
+    tally_json="{$(_json_kv_raw "backed" "${tally[backed]}"),$(_json_kv_raw "unverified" "${tally[unverified]}"),$(_json_kv_raw "stranded" "${tally[stranded]}"),$(_json_kv_raw "uncloned" "${tally[uncloned]}"),$(_json_kv_raw "lost" "${tally[lost]}")}"
+    benched_json="{$(_json_kv_raw "candidate" "$benched_candidate"),$(_json_kv_raw "scenery" "$benched_scenery")}"
+
+    printf '{"fleet":{%s,%s,%s,%s,%s},"repositories":[%s]}\n' \
         "$(_json_kv_str "name" "$fleet_name")" \
         "$(_json_kv_str "root" "$proj")" \
+        "$(_json_kv_raw "verified" "$verify")" \
+        "$(_json_kv_raw "tally" "$tally_json")" \
+        "$(_json_kv_raw "benched" "$benched_json")" \
         "$repos_json"
 }
 
@@ -622,6 +750,7 @@ _manifest_status_fleet() {
     local proj="$1"
     local emit_json="${2:-false}"
     local bootstrap_mode="${3:-off}"
+    local verify="${4:-false}"
     local config_file tsv_file
     config_file="$(_status_fleet_config_file "$proj")"
     tsv_file="$(_status_fleet_tsv_file "$proj")"
@@ -642,7 +771,7 @@ _manifest_status_fleet() {
     fi
 
     if [[ "$emit_json" == "true" ]]; then
-        _manifest_status_fleet_json "$proj"
+        _manifest_status_fleet_json "$proj" "$verify"
         return $?
     fi
 
@@ -653,6 +782,8 @@ _manifest_status_fleet() {
 
     local total=0 clean=0 dirty=0 other=0
     local rows=()
+    # Vocabulary tally (FLEET_DESIGN_SPEC.md "Fleet States"), derived per member.
+    declare -A tally=([backed]=0 [unverified]=0 [stranded]=0 [uncloned]=0 [lost]=0)
     # Members with a declared remote that are absent locally — the bootstrap set.
     local bootstrap_names=() bootstrap_urls=() bootstrap_paths=()
     # Members absent locally with no remote to clone from — unrecoverable; flag.
@@ -667,6 +798,7 @@ _manifest_status_fleet() {
         expected_branch="${fields[4]:-}"
         [[ -z "$service" ]] && continue
         local path branch state version commit commit_timestamp
+        local local_axis remote_axis fleet_state probe=""
         path="$(_status_resolve_member_path "$proj" "$raw_path")"
         if [[ -d "$path" ]] && git -C "$path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
             branch="$(_status_repo_branch "$path")"
@@ -677,7 +809,12 @@ _manifest_status_fleet() {
         version="$(_status_repo_version "$path")"
         commit="$(_status_repo_latest_commit "$path")"
         commit_timestamp="$(_status_repo_latest_commit_timestamp "$path")"
-        rows+=("$(printf "%-36s  %-12s  %-8s  %-9s  %-25s  %-40s  %s" "$service" "$branch" "$state" "$version" "$commit_timestamp" "$path" "$commit")")
+        local_axis="$(_status_fleet_local_axis "$path")"
+        [[ "$verify" == "true" ]] && probe="$(_status_fleet_verify_remote "$remote_url")"
+        remote_axis="$(_status_fleet_remote_axis "$remote_url" "$probe")"
+        fleet_state="$(_status_fleet_member_state "$local_axis" "$remote_axis")"
+        tally[$fleet_state]=$(( tally[$fleet_state] + 1 ))
+        rows+=("$(printf "%-36s  %-10s  %-12s  %-8s  %-9s  %-25s  %-40s  %s" "$service" "$fleet_state" "$branch" "$state" "$version" "$commit_timestamp" "$path" "$commit")")
         total=$((total + 1))
         case "$state" in
             clean) clean=$((clean + 1)) ;;
@@ -697,6 +834,9 @@ _manifest_status_fleet() {
         fi
     done < <(_status_fleet_roster_rows "$proj")
 
+    local benched_candidate benched_scenery
+    read -r benched_candidate benched_scenery < <(_status_fleet_benched_counts "$proj")
+
     echo ""
     echo "Manifest status"
     echo "==============="
@@ -713,10 +853,18 @@ _manifest_status_fleet() {
     fi
     _status_line "Scope:" "fleet"
     _status_line "Repos:" "$total total, $clean clean, $dirty dirty, $other other"
+    # Fleet vocabulary tally — the derived Local x Remote member states, plus the
+    # benched corpus broken out as candidate (git, promotable) vs scenery
+    # (non-repo). Offline, Remote tops out at `declared`, so `backed` is reachable
+    # only with --verify; without it, repo+declared members read as `unverified`.
+    local verify_note="offline — Remote shown as declared/undeclared"
+    [[ "$verify" == "true" ]] && verify_note="--verify — Remote probed (declared → verified)"
+    _status_line "States:" "backed ${tally[backed]}, unverified ${tally[unverified]}, stranded ${tally[stranded]}, uncloned ${tally[uncloned]}, lost ${tally[lost]}  (${verify_note})"
+    _status_line "Benched:" "${benched_candidate} candidate, ${benched_scenery} scenery"
     echo ""
     echo "Included repositories"
-    printf "%-36s  %-12s  %-8s  %-9s  %-25s  %-40s  %s\n" "Repo" "Branch" "State" "Version" "Timestamp" "Path" "Latest commit"
-    printf "%-36s  %-12s  %-8s  %-9s  %-25s  %-40s  %s\n" "------------------------------------" "------------" "--------" "---------" "-------------------------" "----------------------------------------" "----------------------------------------"
+    printf "%-36s  %-10s  %-12s  %-8s  %-9s  %-25s  %-40s  %s\n" "Repo" "Fleet" "Branch" "State" "Version" "Timestamp" "Path" "Latest commit"
+    printf "%-36s  %-10s  %-12s  %-8s  %-9s  %-25s  %-40s  %s\n" "------------------------------------" "----------" "------------" "--------" "---------" "-------------------------" "----------------------------------------" "----------------------------------------"
     local row
     for row in "${rows[@]}"; do
         printf "%s\n" "$row"
@@ -1009,6 +1157,7 @@ manifest_status() {
     local scope="auto"
     local explicit_repo_scope=false
     local bootstrap_mode="off"
+    local verify=false
     while [[ $# -gt 0 ]]; do
         case "$1" in
             repo)
@@ -1023,27 +1172,38 @@ manifest_status() {
                 bootstrap_mode="preview"
                 shift
                 ;;
+            --verify)
+                # Opt-in, bounded, read-only remote probe that promotes a member's
+                # Remote axis declared → verified. Nothing is persisted.
+                scope="fleet"
+                verify=true
+                shift
+                ;;
             -v|--verbose)
                 scope="fleet"
                 shift
                 ;;
             -h|--help)
                 _render_help \
-                    "manifest status [repo|fleet] [--json] [--bootstrap]" \
+                    "manifest status [repo|fleet] [--json] [--bootstrap] [--verify]" \
                     "Read-only snapshot of repo or fleet state." \
                     "Scopes" "  repo     Force current-repo status
   fleet    Force fleet repository table" \
                     "Options" "  --json        Emit machine-readable JSON instead of the human view
   --bootstrap   Preview which declared-but-absent fleet members would be
-                cloned (read-only; clones nothing)" \
+                cloned (read-only; clones nothing)
+  --verify      Probe each member's remote (read-only 'git ls-remote') to
+                promote its Remote axis declared → verified. Spends network;
+                nothing is persisted." \
                     "Examples" "  manifest status
   manifest status repo
   manifest status fleet
-  manifest status fleet --bootstrap"
+  manifest status fleet --bootstrap
+  manifest status fleet --verify"
                 return 0
                 ;;
             *)
-                _render_help_error "Unknown option: $1" "manifest status [repo|fleet] [--json] [--bootstrap]"
+                _render_help_error "Unknown option: $1" "manifest status [repo|fleet] [--json] [--bootstrap] [--verify]"
                 return 1
                 ;;
         esac
@@ -1070,7 +1230,7 @@ manifest_status() {
 
     case "$scope" in
         repo) _manifest_status_repo "$proj" "$emit_json" ;;
-        fleet) _manifest_status_fleet "$proj" "$emit_json" "$bootstrap_mode" ;;
+        fleet) _manifest_status_fleet "$proj" "$emit_json" "$bootstrap_mode" "$verify" ;;
     esac
 }
 

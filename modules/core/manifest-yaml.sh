@@ -88,6 +88,7 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     ["release.gate"]="MANIFEST_CLI_RELEASE_GATE"
     ["release.gate_command"]="MANIFEST_CLI_RELEASE_GATE_COMMAND"
     ["release.gate_tier"]="MANIFEST_CLI_RELEASE_GATE_TIER"
+    ["release.gate_freshness_days"]="MANIFEST_CLI_RELEASE_GATE_FRESHNESS_DAYS"
     ["release.tag_signing"]="MANIFEST_CLI_RELEASE_TAG_SIGNING"
     ["test.skip_unchanged_within"]="MANIFEST_CLI_TEST_SKIP_UNCHANGED_WITHIN"
     ["github.release.enabled"]="MANIFEST_CLI_GITHUB_RELEASE_ENABLED"
