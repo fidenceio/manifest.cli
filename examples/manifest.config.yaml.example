@@ -84,6 +84,15 @@ release:
   # "pytest -q", "go test ./...", "npm test", "make test".
   gate_command: ""
 
+  # gate_freshness_days — how long a recorded gate PASS stays fresh before a
+  # no-delta --force-bump version stamp must re-run the gate. A --force-bump of
+  # a clean tree already at the current release tag has no code to verify, so it
+  # skips the gate (skipped-stamp-only). But if the last verified pass is older
+  # than this window the gate RUNS anyway, so a tree never re-releases forever on
+  # stale verification. Whole days; 0 = always re-run (never skip on age).
+  # The clock advances only on a real pass — a stamp-only skip never bumps it.
+  gate_freshness_days: 30
+
 # -----------------------------------------------------------------------------
 # Ship
 # -----------------------------------------------------------------------------

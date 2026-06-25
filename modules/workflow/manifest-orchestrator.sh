@@ -398,6 +398,67 @@ _manifest_gate_stamp_only_force_bump() {
     ( cd "$repo_root" 2>/dev/null && ! manifest_ship_followup_has_releasable_changes "$cur_tag" )
 }
 
+# Per-repo ledger of the last VERIFIED gate pass, stored as a Unix epoch in
+# $repo_root/.manifest-cli/release-gate-pass.epoch. The freshness anchor is a
+# recorded gate PASS — never a tag date: a stamp-only skip writes a new tag
+# WITHOUT testing, so anchoring on the tag would let a stamp every <window days
+# keep the clock green forever and never re-test. This file is written ONLY when
+# the gate actually ran tests and passed (_manifest_gate_record_pass), so a
+# Part-1 skip never advances it. It is per-repo (lives in the repo, like the
+# gate runs per-repo) and never committed — .manifest-cli/ is gitignored by the
+# Manifest .gitignore template.
+_manifest_gate_pass_ledger_file() {
+    local repo_root="${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
+    echo "$repo_root/.manifest-cli/release-gate-pass.epoch"
+}
+
+# "Now" as a Unix epoch using trusted (NTP/HTTPS) time when available, falling
+# back to the system clock. Mirrors how manifest-fleet-docs.sh anchors its
+# timestamps: populate MANIFEST_CLI_TIME_TIMESTAMP via get_time_timestamp, then
+# read it, with date -u +%s as the graceful fallback. Best-effort and quiet —
+# the freshness check must never block on a time-service outage.
+_manifest_gate_now_epoch() {
+    local now
+    if declare -F get_time_timestamp >/dev/null 2>&1; then
+        get_time_timestamp >/dev/null 2>&1 || true
+        now="${MANIFEST_CLI_TIME_TIMESTAMP:-}"
+    fi
+    [[ "$now" =~ ^[0-9]+$ ]] || now="$(date -u +%s)"
+    printf '%s' "$now"
+}
+
+# Record a verified gate pass: stamp the current trusted-time epoch into the
+# per-repo ledger. Called only on the verified-local path, so the freshness
+# clock advances exclusively on a real test run. Best-effort: a failed write
+# never fails the ship — it only makes the next stamp-only ship re-run the gate.
+_manifest_gate_record_pass() {
+    local ledger
+    ledger="$(_manifest_gate_pass_ledger_file)"
+    mkdir -p "${ledger%/*}" 2>/dev/null || return 0
+    _manifest_gate_now_epoch > "$ledger" 2>/dev/null || true
+}
+
+# True when a recorded gate pass exists AND is within the freshness window
+# (release_gate_freshness_days). A missing/unreadable/garbage ledger, a window
+# of 0, or an elapsed time beyond the window all return non-zero so the gate
+# RUNS — fail-safe toward more verification. Whole days; non-numeric config is
+# rejected (non-zero) rather than silently widening the window.
+_manifest_gate_pass_is_fresh() {
+    local days="${MANIFEST_CLI_RELEASE_GATE_FRESHNESS_DAYS:-30}"
+    [[ "$days" =~ ^[0-9]+$ ]] || return 1
+    [ "$days" -gt 0 ] || return 1
+    local ledger last now
+    ledger="$(_manifest_gate_pass_ledger_file)"
+    [ -f "$ledger" ] || return 1
+    last="$(tr -d '[:space:]' < "$ledger" 2>/dev/null || echo "")"
+    [[ "$last" =~ ^[0-9]+$ ]] || return 1
+    now="$(_manifest_gate_now_epoch)"
+    [[ "$now" =~ ^[0-9]+$ ]] || return 1
+    local elapsed=$((now - last))
+    [ "$elapsed" -lt 0 ] && return 1
+    [ "$elapsed" -le $((days * 86400)) ]
+}
+
 manifest_release_gate_run() {
     local phase="$1"
     local policy
@@ -419,10 +480,21 @@ manifest_release_gate_run() {
                     # command. This never fires for an ordinary ship or for a
                     # force-bump carrying real changes (dirty/ahead), so
                     # fail-closed verification of actual code is unchanged.
+                    #
+                    # The skip is also time-bounded: it requires the last VERIFIED
+                    # gate pass to be within release_gate_freshness_days. A stamp
+                    # never advances that clock (only a real pass does), so
+                    # repeated stamps cannot keep a tree releasing indefinitely on
+                    # stale verification — once the window lapses the gate RUNS,
+                    # re-establishing the pass. This only ADDS gate runs; it never
+                    # removes one, so C3 fail-closed is unchanged.
                     if _manifest_gate_stamp_only_force_bump; then
-                        log_warning "Release gate (${policy}): force-bump version stamp on an unchanged, already-released tree (clean, HEAD at tag) — no code delta to verify. Skipping tests."
-                        _MANIFEST_CLI_SHIP_LAST_GATE_STATUS="skipped-stamp-only"
-                        return 0
+                        if _manifest_gate_pass_is_fresh; then
+                            log_warning "Release gate (${policy}): force-bump version stamp on an unchanged, already-released tree (clean, HEAD at tag) — no code delta to verify. Skipping tests."
+                            _MANIFEST_CLI_SHIP_LAST_GATE_STATUS="skipped-stamp-only"
+                            return 0
+                        fi
+                        log_warning "Release gate (${policy}): force-bump version stamp on an unchanged tree, but the last verified gate pass is older than ${MANIFEST_CLI_RELEASE_GATE_FRESHNESS_DAYS:-30}d (release_gate_freshness_days) — re-running the gate."
                     fi
                     local tier
                     tier="$(manifest_release_gate_tier)" || return 1
@@ -449,6 +521,10 @@ manifest_release_gate_run() {
                     if ( _manifest_release_gate_exec "$gate_root" "${MANIFEST_CLI_RELEASE_GATE_ARGV[@]}" ); then
                         echo "✅ Release gate: tests passed."
                         _MANIFEST_CLI_SHIP_LAST_GATE_STATUS="verified-local"
+                        # Advance the freshness clock — only here, on a real pass —
+                        # so a later no-delta stamp-only ship may skip until the
+                        # window lapses (_manifest_gate_pass_is_fresh).
+                        _manifest_gate_record_pass
                     else
                         log_error "Release gate failed: '${cmd_display}' returned non-zero. No version changes were made."
                         return 1

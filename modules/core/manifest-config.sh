@@ -748,6 +748,14 @@ set_default_configuration() {
     #   smoke  the safety-contract subset (faster local ship; CI still enforces full on main)
     # Ignored when release_gate_command is set — a custom command owns its own tiering.
     export MANIFEST_CLI_RELEASE_GATE_TIER="${MANIFEST_CLI_RELEASE_GATE_TIER:-full}"
+    # How long a recorded gate PASS stays fresh before a no-delta --force-bump
+    # version stamp must re-run the gate. A clean, at-tag force-bump has no code
+    # to verify (skipped-stamp-only), but if the last verified pass is older than
+    # this window the gate RUNS anyway, so a tree never re-releases indefinitely
+    # on stale verification. Whole days; 0 = always re-run (never skip on age).
+    # The freshness clock advances only on a real PASS — a stamp-only skip never
+    # bumps it, so repeated stamps can never keep the window green without tests.
+    export MANIFEST_CLI_RELEASE_GATE_FRESHNESS_DAYS="${MANIFEST_CLI_RELEASE_GATE_FRESHNESS_DAYS:-30}"
     # How long a green test run stays reusable before run-tests.sh re-runs it
     # (§5.10 TTL'd cache). English-reading duration: 4h / 30m / 90s / 2d, or
     # 'off' to always run. Accelerates dev/CI loops only — the release gate
@@ -1208,6 +1216,8 @@ show_configuration() {
     echo "   Tag Prefix: ${MANIFEST_CLI_GIT_TAG_PREFIX}"
     echo "   Tag Suffix: ${MANIFEST_CLI_GIT_TAG_SUFFIX}"
     echo "   Release Tag Target: ${MANIFEST_CLI_RELEASE_TAG_TARGET}"
+    echo "   Release Gate: ${MANIFEST_CLI_RELEASE_GATE}"
+    echo "   Release Gate Freshness: ${MANIFEST_CLI_RELEASE_GATE_FRESHNESS_DAYS} days"
     echo "   GitHub Release: ${MANIFEST_CLI_GITHUB_RELEASE_ENABLED}"
     echo "   Push Strategy: ${MANIFEST_CLI_GIT_PUSH_STRATEGY}"
     echo "   Pull Strategy: ${MANIFEST_CLI_GIT_PULL_STRATEGY}"

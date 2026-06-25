@@ -332,15 +332,33 @@ _mk_tagged_clean_repo() {
     git -C "$MANIFEST_CLI_PROJECT_ROOT" config user.email t@e.co
     git -C "$MANIFEST_CLI_PROJECT_ROOT" config user.name t
     printf '%s\n' "$ver" > "$MANIFEST_CLI_PROJECT_ROOT/VERSION"
+    # Gitignore the per-repo state dir exactly as the Manifest .gitignore template
+    # does in production, so a seeded gate-pass ledger never dirties the tree (an
+    # untracked file would make this look like a real delta, defeating the
+    # stamp-only shape this helper exists to build).
+    printf '%s\n' ".manifest-cli/" > "$MANIFEST_CLI_PROJECT_ROOT/.gitignore"
     ( cd "$MANIFEST_CLI_PROJECT_ROOT" \
         && echo base > f \
-        && git add VERSION f \
+        && git add VERSION f .gitignore \
         && git commit -q -m "release $ver" \
         && git tag "v$ver" )
 }
 
-@test "release_gate: force-bump on a clean, at-tag tree SKIPS the gate (stamp-only; no test command needed)" {
+# Seed the per-repo gate-pass ledger so the freshness window says "fresh": write
+# a recorded PASS epoch $1 seconds in the PAST (default 0 = right now). The
+# stamp-only skip requires BOTH no-delta AND a fresh recorded pass.
+_seed_gate_pass_ledger() {
+    local age_seconds="${1:-0}"
+    local ledger="$MANIFEST_CLI_PROJECT_ROOT/.manifest-cli/release-gate-pass.epoch"
+    mkdir -p "${ledger%/*}"
+    printf '%s\n' "$(( $(date -u +%s) - age_seconds ))" > "$ledger"
+}
+
+_gate_pass_ledger_file() { echo "$MANIFEST_CLI_PROJECT_ROOT/.manifest-cli/release-gate-pass.epoch"; }
+
+@test "release_gate: force-bump on a clean, at-tag tree with a FRESH gate pass SKIPS the gate (stamp-only; no test command needed)" {
     _mk_tagged_clean_repo 1.0.0
+    _seed_gate_pass_ledger 0   # a verified pass recorded just now -> within window
     export MANIFEST_CLI_RELEASE_GATE="local-tests"   # the strict default policy
     _MANIFEST_CLI_SHIP_FORCE_BUMP=true
     # Call directly (not via `run`) so the disposition var is observable here.
@@ -352,8 +370,9 @@ _mk_tagged_clean_repo() {
     [ "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS" = "skipped-stamp-only" ]
 }
 
-@test "release_gate: a no-delta force-bump skips even when a test command EXISTS (and never runs it)" {
+@test "release_gate: a no-delta force-bump with a FRESH pass skips even when a test command EXISTS (and never runs it)" {
     _mk_tagged_clean_repo 1.0.0
+    _seed_gate_pass_ledger 0
     export MANIFEST_CLI_RELEASE_GATE="local-tests"
     # Intentional: a clean, at-tag tree is byte-identical to one already gated,
     # so even a present (and here, side-effecting) command is not re-run. The
@@ -366,8 +385,9 @@ _mk_tagged_clean_repo() {
     echo "$output" | grep -q "no code delta to verify"
 }
 
-@test "release_gate: force-bump with a DIRTY tree STILL fails closed (a real delta is not a stamp)" {
+@test "release_gate: force-bump with a DIRTY tree STILL fails closed regardless of freshness (a real delta is not a stamp)" {
     _mk_tagged_clean_repo 1.0.0
+    _seed_gate_pass_ledger 0   # even a fresh pass must NOT rescue a real delta
     ( cd "$MANIFEST_CLI_PROJECT_ROOT" && echo changed >> f )   # uncommitted change = real delta
     export MANIFEST_CLI_RELEASE_GATE="local-tests"
     _MANIFEST_CLI_SHIP_FORCE_BUMP=true
@@ -388,8 +408,9 @@ _mk_tagged_clean_repo() {
     echo "$output" | grep -q "refusing to release unverified"
 }
 
-@test "release_gate: an ORDINARY ship (no force-bump) of a clean, at-tag tree STILL fails closed (C3 intact)" {
+@test "release_gate: an ORDINARY ship (no force-bump) of a clean, at-tag tree STILL fails closed regardless of freshness (C3 intact)" {
     _mk_tagged_clean_repo 1.0.0
+    _seed_gate_pass_ledger 0   # a fresh pass must NOT let a non-force ship skip
     export MANIFEST_CLI_RELEASE_GATE="local-tests"
     # _MANIFEST_CLI_SHIP_FORCE_BUMP is "false" (set at module source). The skip
     # is gated on force-bump, so an ordinary ship still demands verification.
@@ -397,6 +418,121 @@ _mk_tagged_clean_repo() {
     [ "$status" -eq 1 ]
     echo "$output" | grep -q "no test command found"
     echo "$output" | grep -q "refusing to release unverified"
+}
+
+# --- pre-bump: force-bump freshness window (release_gate_freshness_days) ------
+#
+# Part 2 of the stamp-only skip: the skip is time-bounded. A stamp-only ship
+# skips ONLY when the last VERIFIED gate pass is within the freshness window.
+# The freshness anchor is the recorded gate-PASS time, NEVER the tag date — a
+# stamp writes a new tag without testing, so anchoring on the tag would let a
+# stamp every <window days keep the clock green forever. These pin that:
+# stale/missing pass -> the gate RUNS; a real pass advances the clock; a skip
+# does NOT.
+
+@test "release_gate: a no-delta force-bump with NO recorded gate pass RUNS the gate (clock starts cold)" {
+    _mk_tagged_clean_repo 1.0.0
+    # No ledger seeded: nothing has ever verified this tree, so a stamp must not
+    # ride a non-existent pass — the gate runs (and here fails closed: no command).
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"
+    _MANIFEST_CLI_SHIP_FORCE_BUMP=true
+    run manifest_release_gate_run "pre-bump"
+    [ "$status" -eq 1 ]
+    echo "$output" | grep -q "refusing to release unverified"
+}
+
+@test "release_gate: a no-delta force-bump with a STALE gate pass RUNS the gate (window lapsed)" {
+    _mk_tagged_clean_repo 1.0.0
+    export MANIFEST_CLI_RELEASE_GATE_FRESHNESS_DAYS=30
+    _seed_gate_pass_ledger $(( 31 * 86400 ))   # last pass 31 days ago > 30d window
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"
+    _MANIFEST_CLI_SHIP_FORCE_BUMP=true
+    # With a command present, the STALE path re-runs it; assert it actually runs.
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND="touch $MANIFEST_CLI_PROJECT_ROOT/gate-reran.marker"
+    # Call directly (not via `run`) so the disposition var is observable here.
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
+    [ "$?" -eq 0 ]
+    [ -e "$MANIFEST_CLI_PROJECT_ROOT/gate-reran.marker" ]
+    grep -q "older than" "$SCRATCH/out"
+    [ "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS" = "verified-local" ]
+}
+
+@test "release_gate: freshness_days=0 always RUNS the gate (never skips on age)" {
+    _mk_tagged_clean_repo 1.0.0
+    export MANIFEST_CLI_RELEASE_GATE_FRESHNESS_DAYS=0
+    _seed_gate_pass_ledger 0   # a pass recorded right now is still not "fresh" at 0
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"
+    _MANIFEST_CLI_SHIP_FORCE_BUMP=true
+    run manifest_release_gate_run "pre-bump"
+    [ "$status" -eq 1 ]
+    echo "$output" | grep -q "refusing to release unverified"
+}
+
+@test "release_gate: a STALE stamp-only ship that re-runs the gate ADVANCES the freshness clock" {
+    _mk_tagged_clean_repo 1.0.0
+    export MANIFEST_CLI_RELEASE_GATE_FRESHNESS_DAYS=30
+    _seed_gate_pass_ledger $(( 31 * 86400 ))
+    local before; before="$(cat "$(_gate_pass_ledger_file)")"
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND="true"
+    _MANIFEST_CLI_SHIP_FORCE_BUMP=true
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
+    [ "$?" -eq 0 ]
+    local after; after="$(cat "$(_gate_pass_ledger_file)")"
+    # The real pass re-stamped the ledger to ~now, far newer than 31 days ago.
+    [ "$after" -gt "$before" ]
+}
+
+@test "release_gate: a stamp-only SKIP does NOT advance the freshness clock (anchor is pass time, not tag date)" {
+    # This is the design trap the freshness window must avoid: a skip writes a
+    # new tag WITHOUT testing, so it must NOT touch the gate-pass ledger. If it
+    # did, repeated <window stamps would keep the clock green forever and the
+    # gate would never re-run. Seed a fresh pass, take a stamp-only SKIP, and
+    # prove the ledger is byte-for-byte unchanged.
+    _mk_tagged_clean_repo 1.0.0
+    _seed_gate_pass_ledger 100   # a verified pass 100s ago -> within window -> skip
+    local before; before="$(cat "$(_gate_pass_ledger_file)")"
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"
+    _MANIFEST_CLI_SHIP_FORCE_BUMP=true
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
+    [ "$?" -eq 0 ]
+    grep -q "Skipping tests" "$SCRATCH/out"
+    [ "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS" = "skipped-stamp-only" ]
+    local after; after="$(cat "$(_gate_pass_ledger_file)")"
+    [ "$after" = "$before" ]   # skip left the clock untouched
+}
+
+# --- gate-pass ledger / freshness predicate units ----------------------------
+
+@test "release_gate: _manifest_gate_pass_is_fresh false when no ledger exists" {
+    export MANIFEST_CLI_RELEASE_GATE_FRESHNESS_DAYS=30
+    run _manifest_gate_pass_is_fresh
+    [ "$status" -ne 0 ]
+}
+
+@test "release_gate: _manifest_gate_pass_is_fresh true within window, false past it" {
+    export MANIFEST_CLI_RELEASE_GATE_FRESHNESS_DAYS=30
+    _seed_gate_pass_ledger $(( 5 * 86400 ))    # 5 days ago
+    run _manifest_gate_pass_is_fresh
+    [ "$status" -eq 0 ]
+    _seed_gate_pass_ledger $(( 40 * 86400 ))   # 40 days ago
+    run _manifest_gate_pass_is_fresh
+    [ "$status" -ne 0 ]
+}
+
+@test "release_gate: _manifest_gate_pass_is_fresh false for a non-numeric freshness value (no silent widen)" {
+    export MANIFEST_CLI_RELEASE_GATE_FRESHNESS_DAYS="lots"
+    _seed_gate_pass_ledger 0
+    run _manifest_gate_pass_is_fresh
+    [ "$status" -ne 0 ]
+}
+
+@test "release_gate: _manifest_gate_record_pass writes a numeric epoch to the per-repo ledger" {
+    export MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/proj"
+    run _manifest_gate_record_pass
+    [ "$status" -eq 0 ]
+    local recorded; recorded="$(cat "$(_gate_pass_ledger_file)")"
+    [[ "$recorded" =~ ^[0-9]+$ ]]
 }
 
 # --- remote-ci phase boundaries ---------------------------------------------
