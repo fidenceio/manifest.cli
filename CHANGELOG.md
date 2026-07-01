@@ -1,5 +1,15 @@
 # Changelog
 
+## [56.1.0] - 2026-07-01
+
+**Release Type:** Minor
+
+### Changes
+
+- Feat(fleet): root-only fleet release + honest preview count
+- Update 1 file before release
+
+
 ## [56.0.0] - 2026-06-25
 
 **Release Type:** Major
@@ -90,13 +100,3 @@
 ### Changes
 
 - Fix(git): make release tag builder idempotent w.r.t. prefix; route ship/fleet tag construction through it + add test
-
-
-## [55.1.0] - 2026-06-19
-
-**Release Type:** Minor
-
-### Changes
-
-- Update release copy and configuration examples
-- Add regression coverage for the changed CLI workflow
