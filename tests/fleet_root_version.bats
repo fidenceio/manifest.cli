@@ -151,3 +151,62 @@ YAML
     run git -C "$SCRATCH-remote.git" rev-list --count --all
     [ "$output" = "0" ]                 # remote received nothing
 }
+
+@test "_fleet_root_has_unpushed_commits: false without upstream / in sync, true when ahead" {
+    mk_fleet_root date ""
+    git -C "$SCRATCH" commit -q --allow-empty -m "c1"
+    run _fleet_root_has_unpushed_commits "$SCRATCH"
+    [ "$status" -ne 0 ]                 # no upstream -> false (never bump speculatively)
+
+    git init -q --bare "$SCRATCH-remote.git"
+    git -C "$SCRATCH" remote add origin "$SCRATCH-remote.git"
+    git -C "$SCRATCH" push -q -u origin main
+    run _fleet_root_has_unpushed_commits "$SCRATCH"
+    [ "$status" -ne 0 ]                 # in sync -> false
+
+    git -C "$SCRATCH" commit -q --allow-empty -m "c2"
+    run _fleet_root_has_unpushed_commits "$SCRATCH"
+    [ "$status" -eq 0 ]                 # ahead of upstream -> true
+}
+
+@test "_fleet_root_release fires a root-only release when the root has unpushed commits (completed=0)" {
+    mk_fleet_root date ""
+    git init -q --bare "$SCRATCH-remote.git"
+    git -C "$SCRATCH" remote add origin "$SCRATCH-remote.git"
+    git -C "$SCRATCH" commit -q --allow-empty -m "base"
+    git -C "$SCRATCH" push -q -u origin main                       # upstream set, in sync
+    git -C "$SCRATCH" commit -q --allow-empty -m "root-only change"  # now ahead 1
+
+    run _fleet_root_release patch apply false 0                    # NO member shipped
+    [ "$status" -eq 0 ]
+
+    local expected; expected="$(format_timestamp 1700000000 '+%Y.%m.%d.%H%M%S')"
+    [ "$(cat "$SCRATCH/FLEET_VERSION")" = "$expected" ]            # version stamped
+    run git -C "$SCRATCH" log -1 --pretty=%s
+    [[ "$output" == *"Bump fleet version"* ]]                      # bump commit made
+    # the previously-unpushed root commit AND the bump both reached the remote
+    # (compare the pushed branch ref; the bare repo's symbolic HEAD is unrelated)
+    [ "$(git -C "$SCRATCH" rev-parse HEAD)" = "$(git -C "$SCRATCH-remote.git" rev-parse refs/heads/main)" ]
+}
+
+@test "_fleet_root_release preview is a no-op when nothing to release (completed=0, no unpushed commits)" {
+    mk_fleet_root date ""
+    run _fleet_root_release patch preview false 0
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"would bump fleet version"* ]]               # honest: apply would do nothing
+    [ ! -f "$SCRATCH/FLEET_VERSION" ]
+}
+
+@test "_fleet_root_release preview shows a root-only bump when the root has unpushed commits (completed=0)" {
+    mk_fleet_root date ""
+    git init -q --bare "$SCRATCH-remote.git"
+    git -C "$SCRATCH" remote add origin "$SCRATCH-remote.git"
+    git -C "$SCRATCH" commit -q --allow-empty -m "base"
+    git -C "$SCRATCH" push -q -u origin main
+    git -C "$SCRATCH" commit -q --allow-empty -m "root-only change"
+
+    run _fleet_root_release patch preview false 0
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"would bump fleet version"* ]]
+    [ ! -f "$SCRATCH/FLEET_VERSION" ]                             # preview still writes nothing
+}
