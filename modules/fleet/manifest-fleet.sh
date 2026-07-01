@@ -2565,6 +2565,9 @@ _fleet_ship_plan() {
     # it reads identically to the single-repo preview. Exported for the caller to
     # persist (preview) and re-compare (apply) — CLI tracker §2.2.
     MANIFEST_CLI_FLEET_PLAN_FINGERPRINT="$(manifest_plan_fingerprint "${fp_parts[@]}")"
+    # Exported so the caller's preview-mode _fleet_root_release reflects the real
+    # plan (honest dry-run) instead of assuming a release will happen.
+    MANIFEST_CLI_FLEET_PLAN_RELEASEABLE_COUNT="$releaseable_count"
     manifest_plan_render_fingerprint_line "$MANIFEST_CLI_FLEET_PLAN_FINGERPRINT"
     if [[ $pr_gated_count -gt 0 ]]; then
         echo ""
@@ -2906,18 +2909,37 @@ _fleet_next_version() {
 }
 
 # -----------------------------------------------------------------------------
+# Function: _fleet_root_has_unpushed_commits (internal)
+# -----------------------------------------------------------------------------
+# True when the coordination root's current branch is ahead of its configured
+# upstream — i.e. it carries committed-but-unpushed work. Read-only (safe in
+# preview). False (non-zero) when no upstream is configured, so the caller falls
+# back to the member-shipped trigger and never bumps speculatively.
+# -----------------------------------------------------------------------------
+_fleet_root_has_unpushed_commits() {
+    local root="$1" upstream ahead
+    upstream="$(git -C "$root" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null)" || return 1
+    [[ -n "$upstream" ]] || return 1
+    ahead="$(git -C "$root" rev-list --count "${upstream}..HEAD" 2>/dev/null || echo 0)"
+    [[ "${ahead:-0}" -gt 0 ]]
+}
+
+# -----------------------------------------------------------------------------
 # Function: _fleet_root_release (internal)
 # -----------------------------------------------------------------------------
-# After a successful fleet ship, bump + commit the fleet-level version file at
-# the coordination root. SECURITY: stages ONLY coordination files (by name) and
+# After a fleet ship, bump + commit the fleet-level version file at the
+# coordination root. SECURITY: stages ONLY coordination files (by name) and
 # verifies the staged set before committing — never `git add .`/-A — so a dirty
 # root can never sweep member repos, source, or secrets into the commit.
 #
 #   $1 increment_type   $2 execution_mode (preview|apply)
 #   $3 local_only (true|false)   $4 completed_count (members that shipped)
-# Idempotent: no-op when scheme=none, no member shipped, or the version is
-# unchanged. Returns non-zero on real failure (caller treats it as a warning —
-# members have already shipped).
+# Fires when a member shipped OR the coordination root itself carries unpushed
+# commits (a root-only release: coordination docs/config that landed without any
+# member bump — the version stamp marks the fleet state and the branch push
+# lands the pending root commits). Idempotent: no-op when scheme=none, neither
+# trigger holds, or the version is unchanged. Returns non-zero on real failure
+# (caller treats it as a warning — members have already shipped).
 # -----------------------------------------------------------------------------
 _fleet_root_release() {
     local increment_type="$1" execution_mode="$2" local_only="$3" completed_count="${4:-0}"
@@ -2925,7 +2947,11 @@ _fleet_root_release() {
     local root="${MANIFEST_CLI_FLEET_ROOT:-$PWD}"
 
     [[ "$scheme" != "none" ]] || return 0
-    [[ "${completed_count:-0}" -gt 0 ]] || return 0
+    # Release trigger: a member shipped, or the root has its own unpushed commits.
+    # Without either there is nothing to release — stay a no-op (no speculative bump).
+    if [[ "${completed_count:-0}" -le 0 ]] && ! _fleet_root_has_unpushed_commits "$root"; then
+        return 0
+    fi
 
     local version_name version_file current next
     version_name="$(get_yaml_value "${MANIFEST_CLI_FLEET_CONFIG_FILE:-$root/manifest.fleet.config.yaml}" ".fleet.version_file" "${MANIFEST_CLI_FLEET_DEFAULT_VERSION_FILE:-FLEET_VERSION}")"
@@ -3076,7 +3102,7 @@ EOF
     if [[ "$execution_mode" == "preview" ]]; then
         _fleet_scope_block
         _fleet_ship_plan "$increment_type" "$local_only" "$force_bump"
-        _fleet_root_release "$increment_type" "preview" "$local_only" 1
+        _fleet_root_release "$increment_type" "preview" "$local_only" "${MANIFEST_CLI_FLEET_PLAN_RELEASEABLE_COUNT:-0}"
         # Stash the fingerprint the user is reading so a later apply can warn if
         # the fleet plan drifted between this preview and that apply.
         manifest_plan_fingerprint_persist "ship-fleet" "${MANIFEST_CLI_FLEET_PLAN_FINGERPRINT:-}" "${MANIFEST_CLI_FLEET_ROOT:-$PWD}"
