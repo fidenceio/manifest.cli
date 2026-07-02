@@ -1,5 +1,15 @@
 # Changelog
 
+## [56.2.0] - 2026-07-02
+
+**Release Type:** Minor
+
+### Changes
+
+- Feat(init): scaffold the release-gate run-tests.sh at repo/fleet init
+- Update 1 file before release
+
+
 ## [56.1.0] - 2026-07-01
 
 **Release Type:** Minor
@@ -91,12 +101,3 @@
 - Docs(fleet): per-branch adaptive depth + derived depth profile/health
 - Feat(fleet): per-branch adaptive depth + observed-deepest header
 - Feat(status): derived fleet depth profile + mixed-depth health flag
-
-
-## [55.1.1] - 2026-06-20
-
-**Release Type:** Patch
-
-### Changes
-
-- Fix(git): make release tag builder idempotent w.r.t. prefix; route ship/fleet tag construction through it + add test
