@@ -105,6 +105,199 @@ ensure_required_files() {
     return 0
 }
 
+# Scaffold the release gate script `manifest ship` auto-detects
+# (scripts/run-tests.sh). Since v56.0.0 the release gate is fail-closed: a
+# releaseable repo with no test command refuses to release, and inside
+# `ship fleet` that refusal aborts the whole sweep. Repos born via
+# `manifest init` therefore get a gate on day one, so a fleet's FIRST
+# `ship fleet` never dies on a gate-less member.
+#
+# No-clobber: an existing scripts/run-tests.sh is never touched (it is the
+# repo's own gate). Deliberately NOT called from the orchestrator's ship-time
+# repair paths — materializing an executable mid-ship that the gate would then
+# immediately run is a surprise; gates appear at init time only.
+ensure_release_gate_script() {
+    local project_root="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
+    local gate_file="$project_root/scripts/run-tests.sh"
+
+    if [[ -f "$gate_file" ]]; then
+        return 0
+    fi
+
+    log_info "Creating release gate script..."
+    if ! mkdir -p "$project_root/scripts"; then
+        log_warning "Could not create scripts/ — release gate not scaffolded."
+        return 1
+    fi
+    if ! create_default_run_tests "$gate_file"; then
+        log_warning "Could not write scripts/run-tests.sh — release gate not scaffolded."
+        return 1
+    fi
+    chmod +x "$gate_file"
+    log_success "Created scripts/run-tests.sh (release gate — 'manifest ship' runs it before releasing)"
+    return 0
+}
+
+# Generate the default scripts/run-tests.sh release gate.
+#
+# The PROJECT CHECKS section is detected once, here at scaffold time, from the
+# repo layout — the generated script contains plain reviewable commands, not
+# runtime magic. A Dockerfile with a `test` build stage wins outright (the
+# container is assumed to run the real suite); otherwise one block per detected
+# toolchain is emitted. When nothing is detectable the gate still runs the
+# baseline checks (VERSION shape, shell syntax, JSON parse) — real, if thin,
+# verification rather than a bare `exit 0` that would defeat the fail-closed
+# gate's purpose. The header tells the repo owner the section is theirs to
+# extend.
+create_default_run_tests() {
+    local gate_file="$1"
+    local project_root
+    project_root="$(dirname "$(dirname "$gate_file")")"
+
+    # --- Detect project checks (scaffold-time, best-effort) -----------------
+    local checks=""
+    if [[ -f "$project_root/Dockerfile" ]] \
+        && grep -qiE '^[[:space:]]*FROM[[:space:]].+[[:space:]]AS[[:space:]]+test([[:space:]]|$)' "$project_root/Dockerfile"; then
+        checks+='    # Dockerfile has a `test` stage — the container runs the suite.'$'\n'
+        checks+='    run_check docker build --target test .'$'\n'
+    else
+        if [[ -f "$project_root/Cargo.toml" ]]; then
+            checks+='    run_check cargo test'$'\n'
+        fi
+        if [[ -f "$project_root/package.json" ]]; then
+            local pm="npm" s
+            [[ -f "$project_root/pnpm-lock.yaml" ]] && pm="pnpm"
+            [[ -f "$project_root/yarn.lock" ]] && pm="yarn"
+            for s in lint typecheck type-check build test; do
+                grep -qE "\"$s\"[[:space:]]*:" "$project_root/package.json" || continue
+                # Skip npm's scaffold placeholder ("Error: no test specified").
+                if [[ "$s" == "test" ]] && grep -q 'Error: no test specified' "$project_root/package.json"; then
+                    continue
+                fi
+                checks+="    run_check $pm run --silent $s"$'\n'
+            done
+        fi
+        if [[ -f "$project_root/go.mod" ]]; then
+            checks+='    run_check go test ./...'$'\n'
+        fi
+        if [[ -f "$project_root/pyproject.toml" ]] && { [[ -d "$project_root/tests" ]] || [[ -d "$project_root/test" ]]; }; then
+            checks+='    run_check python3 -m pytest -q'$'\n'
+        fi
+    fi
+    if [[ -z "$checks" ]]; then
+        checks='    # No toolchain detected at scaffold time. Add this repo'"'"'s real test'$'\n'
+        checks+='    # commands here, one per line:  run_check <command> [args...]'$'\n'
+        checks+='    note "no project checks defined yet - baseline checks only"'$'\n'
+    fi
+
+    # --- Static head (quoted heredoc: nothing expands) -----------------------
+    cat > "$gate_file" << 'MANIFEST_CLI_GATE_HEAD'
+#!/usr/bin/env bash
+# Release gate — scaffolded by Manifest CLI (manifest init).
+#
+# `manifest ship` refuses to release a repo without a verification gate
+# (release_gate=local-tests, fail-closed) and auto-detects this script:
+#   ./scripts/run-tests.sh --tier <smoke|full> --jobs N --no-cache
+#
+#   --tier smoke        baseline checks only (fast preflight)
+#   --tier full         baseline + project checks (the release default)
+#   --jobs, --no-cache  accepted for the ship contract; unused here
+#
+# The BASELINE section proves structural sanity (VERSION shape, shell syntax,
+# JSON parse). It is NOT a substitute for real tests — extend the PROJECT
+# CHECKS section with this repo's actual suite as it grows.
+
+set -uo pipefail
+
+TIER="full"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --tier)   shift; TIER="${1:-full}" ;;
+        --tier=*) TIER="${1#--tier=}" ;;
+        --jobs)   shift ;;
+    esac
+    [ $# -gt 0 ] && shift
+done
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT" || exit 2
+
+FAILED=0
+note() { printf '  %s\n' "$*"; }
+ok()   { printf 'ok    %s\n' "$*"; }
+bad()  { printf 'FAIL  %s\n' "$*"; FAILED=1; }
+run_check() {
+    printf 'run   %s\n' "$*"
+    if "$@"; then ok "$*"; else bad "$*"; fi
+}
+
+# Tracked files by pattern — git's view when available, pruned find otherwise.
+list_files() {
+    if git rev-parse --git-dir >/dev/null 2>&1; then
+        git ls-files -- "$1" 2>/dev/null
+    else
+        find . -type d \( -name .git -o -name node_modules -o -name target \
+            -o -name dist -o -name build -o -name .next -o -name vendor \) -prune \
+            -o -type f -name "$1" -print | sed 's|^\./||'
+    fi
+}
+
+# ------------------------------------------------------------------ BASELINE
+
+if [ -f VERSION ]; then
+    v="$(tr -d '[:space:]' < VERSION)"
+    if printf '%s' "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.+-]*)?$'; then
+        ok "VERSION ($v)"
+    else
+        bad "VERSION is not semver-shaped: '$v'"
+    fi
+else
+    bad "VERSION file missing"
+fi
+
+sh_total=0 sh_bad=0
+while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    sh_total=$((sh_total+1))
+    bash -n "$f" 2>/dev/null || { bad "shell syntax: $f"; sh_bad=$((sh_bad+1)); }
+done < <(list_files '*.sh')
+[ "$sh_bad" -eq 0 ] && ok "shell syntax ($sh_total file(s) checked)"
+
+if command -v jq >/dev/null 2>&1; then
+    json_total=0 json_bad=0
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        json_total=$((json_total+1))
+        jq -e . "$f" >/dev/null 2>&1 || { bad "invalid JSON: $f"; json_bad=$((json_bad+1)); }
+    done < <(list_files '*.json')
+    [ "$json_bad" -eq 0 ] && ok "JSON parse ($json_total file(s) checked)"
+else
+    note "jq not installed - skipping JSON parse check"
+fi
+
+# ------------------------------------------------------------- PROJECT CHECKS
+# Detected at scaffold time from the repo layout. This section is yours:
+# replace or extend it with the repo's real test suite.
+
+if [ "$TIER" = "full" ]; then
+MANIFEST_CLI_GATE_HEAD
+
+    # --- Detected project checks (expanded now, on purpose) ------------------
+    printf '%s' "$checks" >> "$gate_file"
+
+    # --- Static tail ----------------------------------------------------------
+    cat >> "$gate_file" << 'MANIFEST_CLI_GATE_TAIL'
+fi
+
+echo ""
+if [ "$FAILED" -ne 0 ]; then
+    echo "run-tests: FAIL (tier: $TIER)"
+    exit 1
+fi
+echo "run-tests: PASS (tier: $TIER)"
+MANIFEST_CLI_GATE_TAIL
+}
+
 # Create default README.md content
 create_default_readme() {
     local readme_file="$1"
@@ -543,7 +736,8 @@ manifest_init_repo() {
             -h|--help)
                 _render_help \
                     "manifest init repo [-y|--yes] [--dry-run] [--force] [--create-repo-private|--create-repo-public]" \
-                    "Scaffold a single repository: VERSION, CHANGELOG.md, README.md, docs/, .gitignore.
+                    "Scaffold a single repository: VERSION, CHANGELOG.md, README.md, docs/, .gitignore,
+scripts/run-tests.sh (the release gate 'manifest ship' auto-detects — fail-closed since v56).
 Idempotent — safe to re-run. Optionally creates a GitHub repo via 'gh repo create'." \
                     "Options" "  --dry-run                  Explicit preview; no writes
   -y, --yes                  Apply the scaffold plan
@@ -592,6 +786,11 @@ Idempotent — safe to re-run. Optionally creates a GitHub repo via 'gh repo cre
         else
             echo "  would create:    docs/"
         fi
+        if [[ -f "$project_root/scripts/run-tests.sh" ]]; then
+            echo "  exists:          scripts/run-tests.sh"
+        else
+            echo "  would create:    scripts/run-tests.sh   (release gate — 'manifest ship' runs it)"
+        fi
         if [[ -f "$project_root/manifest.config.local.yaml" && "$force" != "true" ]]; then
             echo "  exists:          manifest.config.local.yaml"
         else
@@ -634,6 +833,11 @@ Idempotent — safe to re-run. Optionally creates a GitHub repo via 'gh repo cre
         log_error "Failed to create required files"
         return 1
     fi
+
+    # Release gate (scripts/run-tests.sh) — v56's fail-closed gate needs a test
+    # command, so every repo is born with one. Best-effort: a scaffold hiccup
+    # warns (inside the helper) but does not fail init.
+    ensure_release_gate_script "$project_root" || true
 
     # Create manifest.config.local.yaml if it doesn't exist
     local local_config="$project_root/manifest.config.local.yaml"
@@ -826,7 +1030,7 @@ _manifest_init_fleet_dry_run_phase2() {
     echo "Fleet name:      $fleet_name"
     echo "Selected rows:   $selected_count ($existing_count existing, $missing_count missing)"
     echo "Would git init:  $needs_git_count selected director$( [[ "$needs_git_count" == "1" ]] && echo "y" || echo "ies" ) without git"
-    echo "Would scaffold:  Manifest files (VERSION/README/CHANGELOG/docs/.gitignore) in $existing_count member(s) — no-clobber, already-complete members unchanged"
+    echo "Would scaffold:  Manifest files (VERSION/README/CHANGELOG/docs/.gitignore/scripts/run-tests.sh) in $existing_count member(s) — no-clobber, already-complete members unchanged"
     if [[ -n "$create_repo_visibility" ]]; then
         echo "Would create:    $create_repo_visibility GitHub repo per selected directory after local init"
     fi
@@ -1095,3 +1299,4 @@ export -f manifest_init_dispatch
 # Scaffolding helpers (used by orchestrator, documentation, fleet)
 export -f ensure_required_files create_default_readme create_default_changelog
 export -f create_default_gitignore ensure_gitignore_smart
+export -f ensure_release_gate_script create_default_run_tests
