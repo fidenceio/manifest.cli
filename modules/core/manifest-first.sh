@@ -308,7 +308,7 @@ manifest_first() {
     case "$context" in
         repo-uninitialized)
             echo "Initialize this repository:"
-            echo "  would create:    VERSION, README.md, CHANGELOG.md, docs/, .gitignore"
+            echo "  would create:    VERSION, README.md, CHANGELOG.md, docs/, .gitignore, scripts/run-tests.sh"
             echo "  would create:    manifest.config.local.yaml"
             ;;
         fleet-candidate)
@@ -318,7 +318,7 @@ manifest_first() {
             echo "          (one row per repo; the SELECT column controls membership)"
             echo "  Step 2  edit SELECT, then 'manifest init fleet -y'"
             echo "          writes config + scaffolds each selected member"
-            echo "          (VERSION, README.md, CHANGELOG.md, docs/)"
+            echo "          (VERSION, README.md, CHANGELOG.md, docs/, scripts/run-tests.sh)"
             manifest_plan_render_field "Fleet name" "$fleet_name"
             [[ -n "$resolved_depth" ]] && manifest_plan_render_field "Scan depth" "$resolved_depth"
             ;;

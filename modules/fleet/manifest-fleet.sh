@@ -746,7 +746,8 @@ create_fleet_gitignore() {
 # BEHAVIOR:
 #   1. Reads selected directories from manifest.fleet.tsv
 #   2. Bootstraps each directory (git init, .gitignore, optional gh repo)
-#   3. Scaffolds each member with the Manifest-required files (ensure_required_files)
+#   3. Scaffolds each member with the Manifest-required files (ensure_required_files
+#      + ensure_release_gate_script — the run-tests.sh gate ship fleet needs)
 #   4. Creates skeleton manifest.fleet.config.yaml + manifest.config.local.yaml
 #   5. Validates the configuration
 #
@@ -969,11 +970,14 @@ EOF
             esac
 
             # Make the member Manifest-trackable: scaffold the same required
-            # files `init repo` creates (VERSION/README/CHANGELOG/docs/.gitignore)
-            # via the shared primitive — no second scaffolder. Run only when the
-            # directory init succeeded (rc 0 = init ok, rc 2 = init ok but gh
-            # failed); skip rc 1 (init failed) and rc 3 (path missing) so we
-            # never cd into a broken/absent dir. No-clobber (existing member
+            # files `init repo` creates (VERSION/README/CHANGELOG/docs/.gitignore
+            # plus the scripts/run-tests.sh release gate) via the shared
+            # primitives — no second scaffolder. The gate matters at fleet scale:
+            # v56's fail-closed release gate aborts `ship fleet` at the first
+            # gate-less member, so every member must be born with one. Run only
+            # when the directory init succeeded (rc 0 = init ok, rc 2 = init ok
+            # but gh failed); skip rc 1 (init failed) and rc 3 (path missing) so
+            # we never cd into a broken/absent dir. No-clobber (existing member
             # files are preserved) and NO commit (files land uncommitted, parity
             # with `init repo`). Run in an isolated subshell with cwd+MANIFEST_CLI_PROJECT_ROOT
             # set to the member so the README's git-derived fields resolve
@@ -984,6 +988,8 @@ EOF
                     cd "$abs_path" || exit 0
                     export MANIFEST_CLI_PROJECT_ROOT="$abs_path"
                     ensure_required_files "$abs_path" >/dev/null 2>&1
+                    declare -F ensure_release_gate_script >/dev/null 2>&1 \
+                        && ensure_release_gate_script "$abs_path" >/dev/null 2>&1
                 ) || true
             fi
         done <<< "$selected"
