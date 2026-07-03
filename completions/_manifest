@@ -34,6 +34,7 @@ _manifest() {
         'pr:Pull-request operations (gh wrapper)'
         'doctor:Health check'
         'security:Security audit'
+        'env:Env schema artifacts (ENV-001)'
         'upgrade:Update Manifest CLI'
         'uninstall:Remove Manifest CLI'
         'version:Show CLI version'
@@ -71,6 +72,9 @@ _manifest() {
                     ;;
                 recipe)
                     _values 'recipe subcommand' "${recipe_subs[@]}"
+                    ;;
+                env)
+                    _values 'env subcommand' generate validate help
                     ;;
                 pr)
                     _values 'pr subcommand' "${pr_subs[@]}"

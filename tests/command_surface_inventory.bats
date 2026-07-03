@@ -37,6 +37,7 @@ update fleet --help
 config doctor --help
 config set --help
 config unset --help
+env generate --help
 pr create --help
 pr ready --help
 pr merge --help

@@ -176,6 +176,29 @@ manifest docs fleet --dry-run
 
 Docs-site publishing is controlled by `docs.generate.site`, `docs.site.enabled`, and related config keys. See [DOCS_SITE.md](DOCS_SITE.md).
 
+## Env Schema
+
+```bash
+manifest env generate [--check] [--dry-run] [-y|--yes]
+manifest env validate
+```
+
+ENV-001 (STANDARD.md §2.7): the component spec's `env:` block is the source of
+truth for a repo's environment schema. `env generate` renders the bridge
+artifacts from it — `.env.example` (always), `k8s/env/configmap.yaml` +
+`k8s/env/external-secret.yaml` (when `k8s/` exists), and the Dockerfile
+ARG→ENV marker block for build-time publics. Preview is the default; `-y`
+writes; `--check` is the drift gate for release-gate stanzas (exit 1 when any
+generated artifact is stale). `env validate` is read-only: naming law +
+generated-artifact drift + `.env` gitignore hygiene.
+
+Naming enforcement is config-driven: `env.naming_enforcement` (`warn` default;
+`strict` makes violations critical in `manifest security`) and
+`env.naming_allow` (extra allowlist entries, comma-separated; trailing `_`
+means prefix). The `MANIFEST_CLI_*` namespace is permanently exempt.
+`manifest init repo` and `manifest prep repo` scaffold a missing
+`.env.example` (no-clobber; spec-driven when an `env:` block exists).
+
 ## Maintenance
 
 ```bash
@@ -209,5 +232,7 @@ Common environment variables:
 | `MANIFEST_CLI_DOCS_GENERATE_SITE` | Enable docs-site generation |
 | `MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES` | Request Pages enablement through `gh api` |
 | `MANIFEST_CLI_GITHUB_ACTIONS_WAIT` | Wait for GitHub Actions in release paths |
+| `MANIFEST_CLI_ENV_NAMING_ENFORCEMENT` | ENV-001 naming law: `warn` (default) or `strict` |
+| `MANIFEST_CLI_ENV_NAMING_ALLOW` | Extra naming allowlist entries (comma-separated; trailing `_` = prefix) |
 
 Use `manifest config describe <key>` for the authoritative YAML-to-env mapping.

@@ -10,7 +10,7 @@ _manifest_complete() {
     words=("${COMP_WORDS[@]}")
 
     # Top-level commands shown in `manifest --help`
-    local top_cmds="first config init plan reconcile status recipe discover update add validate prep refresh docs topics ship pr doctor security upgrade uninstall version help"
+    local top_cmds="first config init plan reconcile status recipe discover update add validate prep refresh docs topics ship pr doctor security env upgrade uninstall version help"
     local scopes="repo fleet"
     local bumps="patch minor major revision"
     local config_subs="show list get set unset describe doctor setup time"
@@ -34,6 +34,10 @@ _manifest_complete() {
                     ;;
                 recipe)
                     COMPREPLY=( $(compgen -W "list show explain help" -- "$cur") )
+                    return 0
+                    ;;
+                env)
+                    COMPREPLY=( $(compgen -W "generate validate help" -- "$cur") )
                     return 0
                     ;;
                 config)
@@ -70,6 +74,10 @@ _manifest_complete() {
                     ;;
                 "topics fleet")
                     COMPREPLY=( $(compgen -W "-y --yes --dry-run --help" -- "$cur") )
+                    return 0
+                    ;;
+                "env generate")
+                    COMPREPLY=( $(compgen -W "-y --yes --dry-run --check --help" -- "$cur") )
                     return 0
                     ;;
                 "plan fleet")

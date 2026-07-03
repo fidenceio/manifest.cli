@@ -3,6 +3,10 @@
 # Manifest CLI Security Module
 # Provides security auditing and privacy protection
 
+# ENV-001 naming law lives in its own module; the audit depends on it.
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/manifest-env-naming.sh"
+
 # Security configuration
 MANIFEST_CLI_SECURITY_CONFIG_FILE="manifest.config"
 MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES=(".env" ".env.development" ".env.test" ".env.production" ".env.staging" "manifest.config.local.yaml")
@@ -106,7 +110,19 @@ manifest_security() {
         echo "   ❌ CRITICAL: Environment files not properly secured!"
         critical_issues=$((critical_issues + 1))
     fi
-    
+
+    # ENV-001 naming law (STANDARD.md §2.7) — warn by default; strict is the
+    # 57.0.0 flip (env.naming_enforcement: strict).
+    if check_env_naming "$project_root"; then
+        echo "   ✅ Env naming conforms to the FIDENCE_ law"
+    elif [[ "${MANIFEST_CLI_ENV_NAMING_ENFORCEMENT:-warn}" == "strict" ]]; then
+        echo "   ❌ CRITICAL: Env naming violations (enforcement: strict)"
+        critical_issues=$((critical_issues + 1))
+    else
+        echo "   ⚠️  WARNING: Env naming violations (enforcement: warn — strict at 57.0.0)"
+        warnings=$((warnings + 1))
+    fi
+
     echo ""
     
     # Generate security report unless the caller explicitly requested read-only checks.

@@ -6,6 +6,11 @@
 TEST_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 export TEST_REPO_ROOT
 
+# Hermetic consent: non-interactive ships run with MANIFEST_CLI_AUTO_CONFIRM=1
+# exported, and an inherited blanket grant flips every declined-consent
+# assertion in the suite. Tests that need a grant export it themselves.
+unset MANIFEST_CLI_AUTO_CONFIRM
+
 # Per-test scratch dir under bats's BATS_TMPDIR.
 mk_scratch() {
     local d

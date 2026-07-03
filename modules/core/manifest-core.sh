@@ -53,6 +53,7 @@ source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-os.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-time.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-runtime-cleanup.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/git/manifest-git.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-env-naming.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-security.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/docs/manifest-documentation.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-uninstall.sh"
@@ -84,6 +85,7 @@ source "$MANIFEST_CLI_CORE_MODULES_DIR/fleet/manifest-fleet.sh"
 # Source v42 journey modules (init, prep, refresh, ship dispatchers)
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-init.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-prep.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-env.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-refresh.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/recipe/manifest-recipe.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-ship.sh"
@@ -1189,6 +1191,10 @@ EOF
             manifest_security "$@"
             ;;
 
+        "env")
+            manifest_env_dispatch "$@"
+            ;;
+
         "test")
             if _manifest_cli_has_help_token "$@"; then
                 _render_help \
@@ -1608,6 +1614,7 @@ Usage: manifest <command> [scope] [options]
     upgrade                             Update Manifest CLI  [Cloud]
     uninstall                           Remove Manifest CLI
     security                            Run security audit
+    env generate|validate               Env schema artifacts (ENV-001)
     test                                Run diagnostic tests [Cloud]
 
   Cloud:                                       [Cloud]
