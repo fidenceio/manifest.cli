@@ -6,11 +6,11 @@
 
 ### Changes
 
-- Add GitHub Release publishing support
-- Update release copy and configuration examples
-- Wire first-class CLI commands to inspectable built-in recipe definitions
-- Update shell completions for new command options
-- Add regression coverage for the changed CLI workflow
+- Add `manifest env generate|validate` (ENV-001): spec `env:`-driven `.env.example`, k8s configmap/external-secret env bridges, Dockerfile public-vars bridge block, `--check` drift gate
+- Scaffold `.env.example` at `manifest init`/`manifest prep` (no-clobber; seeds a starter spec `env:` block when absent)
+- Add env naming-law audit to `manifest security`: `FIDENCE_*` law with framework-name allowlist (mirrors `env_framework_names.json`; `MANIFEST_CLI_*` permanently exempt); `env.naming_enforcement` warn (default) / strict, extra entries via `env.naming_allow`
+- Update shell completions and command reference for `manifest env`
+- Test hermeticity: the bats helper strips ambient `MANIFEST_CLI_AUTO_CONFIRM`, so declined-consent tests hold even under non-interactive ship runs
 
 
 ## [56.2.0] - 2026-07-02
