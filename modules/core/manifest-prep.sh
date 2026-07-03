@@ -96,6 +96,17 @@ manifest_prep_repo() {
     fi
     echo ""
 
+    # Env schema template (.env.example) — ENV-001, STANDARD.md §2.7. Prep is a
+    # retrofit surface: existing repos gain the scaffold here (no-clobber).
+    if [[ "$dry_run" == "true" ]]; then
+        if [[ ! -f "$project_root/.env.example" ]]; then
+            echo "  would create: .env.example   (env schema template — ENV-001)"
+            echo ""
+        fi
+    else
+        ensure_env_files "$project_root" || true
+    fi
+
     # Check if remote exists; if not, prompt for one
     local remotes
     remotes=$(git -C "$project_root" remote 2>/dev/null)

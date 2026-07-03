@@ -59,6 +59,7 @@ complete -c manifest -n '__manifest_token_count 1' -a ship        -d 'Publish a 
 complete -c manifest -n '__manifest_token_count 1' -a pr          -d 'Pull-request operations (gh wrapper)'
 complete -c manifest -n '__manifest_token_count 1' -a doctor      -d 'Health check'
 complete -c manifest -n '__manifest_token_count 1' -a security    -d 'Security audit'
+complete -c manifest -n '__manifest_token_count 1' -a env         -d 'Env schema artifacts (ENV-001)'
 complete -c manifest -n '__manifest_token_count 1' -a upgrade     -d 'Update Manifest CLI'
 complete -c manifest -n '__manifest_token_count 1' -a uninstall   -d 'Remove Manifest CLI'
 complete -c manifest -n '__manifest_token_count 1' -a version     -d 'Show CLI version'
@@ -78,6 +79,7 @@ complete -c manifest -n '__manifest_token_count 2; and __manifest_path topics' -
 
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path config' -a 'show list get set unset describe doctor setup time'
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path recipe' -a 'list show explain help'
+complete -c manifest -n '__manifest_token_count 2; and __manifest_path env'    -a 'generate validate help'
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path pr'     -a 'create status checks ready merge update queue policy fleet help'
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path uninstall' -a '-y --yes --dry-run --force --help'
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path reinstall' -a '-y --yes --dry-run --help'

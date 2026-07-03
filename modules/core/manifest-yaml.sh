@@ -258,6 +258,12 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     # security — local audit policy
     # -------------------------------------------------------------------------
     ["security.private_files"]="MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES"
+
+    # -------------------------------------------------------------------------
+    # env — ENV-001 naming law (STANDARD.md §2.7)
+    # -------------------------------------------------------------------------
+    ["env.naming_allow"]="MANIFEST_CLI_ENV_NAMING_ALLOW"
+    ["env.naming_enforcement"]="MANIFEST_CLI_ENV_NAMING_ENFORCEMENT"
 )
 
 # Build the reverse map (ENV var -> YAML path) programmatically
