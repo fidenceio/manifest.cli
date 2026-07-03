@@ -1,5 +1,18 @@
 # Changelog
 
+## [56.3.0] - 2026-07-03
+
+**Release Type:** Minor
+
+### Changes
+
+- Add GitHub Release publishing support
+- Update release copy and configuration examples
+- Wire first-class CLI commands to inspectable built-in recipe definitions
+- Update shell completions for new command options
+- Add regression coverage for the changed CLI workflow
+
+
 ## [56.2.0] - 2026-07-02
 
 **Release Type:** Minor
@@ -89,15 +102,3 @@
 ### Changes
 
 - Feat(fleet): 6-col TSV (drop TYPE) + graceful ^services: skip for TSV-based fleets
-
-
-## [55.2.0] - 2026-06-20
-
-**Release Type:** Minor
-
-### Changes
-
-- Docs(fleet): add Fleet States And Vocabulary section
-- Docs(fleet): per-branch adaptive depth + derived depth profile/health
-- Feat(fleet): per-branch adaptive depth + observed-deepest header
-- Feat(status): derived fleet depth profile + mixed-depth health flag
