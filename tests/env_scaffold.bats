@@ -1,16 +1,21 @@
 #!/usr/bin/env bats
 
 # Coverage for .env.example scaffolding at init/prep time (ensure_env_files /
-# _manifest_env_prefix_for_repo — ENV-001, STANDARD.md §2.7). Pins: prefix
-# derivation from the repo directory name, the three scaffold paths (spec with
-# env:, spec without env: → seeded starter block, no spec → law-comment
-# starter), secret entries never emitted as live assignments, and no-clobber.
+# _manifest_env_prefix_for_repo). Pins: prefix derivation from the repo
+# directory name under a configured env.prefix (and the neutral empty default),
+# the three scaffold paths (spec with env:, spec without env: → seeded starter
+# block, no spec → starter), secret entries never emitted as live assignments,
+# and no-clobber.
 
 load 'helpers/setup'
 
 setup() {
     load_modules
     SCRATCH="$(mk_scratch)"
+    # Default policy: no explicit env.prefix, so the prefix is DERIVED from the
+    # project name. Cases that need an explicit value or the disabled state set
+    # MANIFEST_CLI_ENV_PREFIX themselves.
+    unset MANIFEST_CLI_ENV_PREFIX
     # shellcheck disable=SC1091
     source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
 }
@@ -18,6 +23,7 @@ setup() {
 teardown() {
     cd /tmp
     rm -rf "$SCRATCH"
+    unset MANIFEST_CLI_ENV_PREFIX
 }
 
 mk_proj() {
@@ -40,22 +46,46 @@ mk_proj() {
     [ "$output" = "FIDENCE_SERVICE_RISK_FCRA_MICROBILT_TRANSUNION_" ]
 }
 
-@test "env prefix: non-fidence directory still gets a lawful prefix" {
+@test "env prefix: derived default is vendor-neutral (my-tool → MY_TOOL_)" {
     mk_proj "my-tool"
     run _manifest_env_prefix_for_repo "$PROJ"
-    [ "$output" = "FIDENCE_MY_TOOL_" ]
+    [ "$output" = "MY_TOOL_" ]
+}
+
+@test "env prefix: an explicit prefix overrides the derived default" {
+    export MANIFEST_CLI_ENV_PREFIX="ACME_"
+    mk_proj "acme.web"
+    run _manifest_env_prefix_for_repo "$PROJ"
+    [ "$output" = "ACME_WEB_" ]
+}
+
+@test "env prefix: env.prefix off → empty (policy disabled)" {
+    export MANIFEST_CLI_ENV_PREFIX="off"
+    mk_proj "fidence.app.demo"
+    run _manifest_env_prefix_for_repo "$PROJ"
+    [ "$output" = "" ]
 }
 
 # --- scaffold: no spec -----------------------------------------------------------
 
-@test "env scaffold: no spec → law-comment starter with the derived prefix" {
+@test "env scaffold: no spec → starter carries the derived prefix (policy on)" {
     mk_proj "fidence.app.demo"
     run ensure_env_files "$PROJ"
     [ "$status" -eq 0 ]
     [ -f "$PROJ/.env.example" ]
-    grep -q "FIDENCE_{REPO_BODY}_{SUFFIX}" "$PROJ/.env.example"
-    grep -q "FIDENCE_APP_DEMO_" "$PROJ/.env.example"
-    grep -q "STANDARD.md §2.7" "$PROJ/.env.example"
+    grep -q "scaffolded by Manifest CLI" "$PROJ/.env.example"
+    grep -q "Env prefix policy is on" "$PROJ/.env.example"
+    grep -q "FIDENCE_APP_DEMO_LOG_LEVEL=info" "$PROJ/.env.example"
+}
+
+@test "env scaffold: env.prefix off → neutral starter, no organization prefix" {
+    export MANIFEST_CLI_ENV_PREFIX="off"
+    mk_proj "my-tool"
+    run ensure_env_files "$PROJ"
+    [ "$status" -eq 0 ]
+    grep -q "Env prefix policy is off" "$PROJ/.env.example"
+    grep -qE "^# LOG_LEVEL=info$" "$PROJ/.env.example"
+    ! grep -q "FIDENCE_" "$PROJ/.env.example"
 }
 
 @test "env scaffold: no-clobber — an existing .env.example is never touched" {

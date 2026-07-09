@@ -1,16 +1,20 @@
 #!/bin/bash
 
-# Manifest CLI Env Naming Module — ENV-001 naming law (STANDARD.md §2.7)
+# Manifest CLI Env Naming Module — env prefix policy (on by default)
 #
-# Every Fidence-owned STORED env name matches ^FIDENCE_[A-Z0-9_]+$. Framework
-# names (what a third-party tool reads) are bridged at injection boundaries,
-# never stored — so they are allowed where they legitimately appear, via the
-# allowlist below. The built-in allowlist mirrors the fleet registry-as-data
-# at docs/contracts/schemas/v1/env_framework_names.json.
+# The prefix policy is ON by default and encourages good env-var hygiene: a
+# STORED env name must either start with the repo's prefix (an owned var) or be
+# a recognized framework name that is bridged at injection boundaries rather
+# than stored. The prefix defaults to one DERIVED from the project directory
+# name (vendor-neutral: `fidence.app.demo` → `FIDENCE_APP_DEMO_`); set env.prefix
+# to an explicit value to override, or to `off`/`none` to disable the policy.
+# The built-in framework allowlist below mirrors the registry-as-data at
+# docs/contracts/schemas/v1/env_framework_names.json. The MANIFEST_CLI_
+# namespace (the CLI's own variables) is always allowed, regardless of policy.
 #
-# Enforcement is config-driven (env.naming_enforcement): `warn` (56.x default)
-# surfaces violations as audit warnings; `strict` (57.0.0 default) makes them
-# critical. Extra allow entries come from env.naming_allow (comma-separated;
+# Enforcement level is config-driven (env.naming_enforcement): `strict` (the
+# default) makes violations block the audit (fail-closed); `warn` makes them
+# advisory. Extra allow entries come from env.naming_allow (comma-separated;
 # entries ending in `_` are prefixes, otherwise exact names).
 
 # Guard against multiple sourcing
@@ -36,11 +40,37 @@ MANIFEST_CLI_ENV_NAMING_PREFIXES_DEFAULT=(
     MANIFEST_CLI_
 )
 
-# Is a single stored env name legal under the law?
+# Resolve the prefix the policy enforces for a repo. Empty output means the
+# policy is OFF (explicit opt-out via env.prefix: off|none). Precedence:
+#   env.prefix: off|none   → "" (disabled)
+#   env.prefix: <value>    → that literal value (e.g. ACME_)
+#   env.prefix unset/empty → DERIVED from the project directory name
+#                            (vendor-neutral: fidence.app.demo → FIDENCE_APP_DEMO_)
+_manifest_env_effective_prefix() {
+    local project_root="${1:-.}"
+    local raw="${MANIFEST_CLI_ENV_PREFIX:-}"
+    local lowered
+    lowered="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')"
+    case "$lowered" in
+        off|none|disabled|false|0) printf ''; return 0 ;;
+    esac
+    if [[ -n "$raw" ]]; then
+        printf '%s' "$raw"
+        return 0
+    fi
+    local body
+    body="$(basename "$project_root" | tr '.-' '__' | tr '[:lower:]' '[:upper:]' | tr -cd 'A-Z0-9_')"
+    [[ -n "$body" ]] && printf '%s_' "$body"
+}
+
+# Is a single stored env name allowed under an active prefix policy?
+# Arg 2 is the effective prefix; empty means the policy is off (accept all).
 _manifest_env_name_allowed() {
     local name="$1"
+    local policy_prefix="${2-}"
 
-    if [[ "$name" =~ ^FIDENCE_[A-Z0-9_]+$ ]]; then
+    # Owned var: starts with the effective prefix.
+    if [[ -n "$policy_prefix" && "$name" == "$policy_prefix"* ]]; then
         return 0
     fi
 
@@ -70,6 +100,9 @@ _manifest_env_name_allowed() {
         done
     fi
 
+    # No prefix configured → nothing to enforce; accept any otherwise-unknown name.
+    [[ -z "$policy_prefix" ]] && return 0
+
     return 1
 }
 
@@ -96,6 +129,12 @@ check_env_naming() {
     local violations=0
     local file name
 
+    # Resolve the enforced prefix once. Empty = policy disabled (opt-out) →
+    # nothing to enforce.
+    local policy_prefix
+    policy_prefix="$(_manifest_env_effective_prefix "$project_root")"
+    [[ -n "$policy_prefix" ]] || return 0
+
     local in_git=false
     if git -C "$project_root" rev-parse --git-dir >/dev/null 2>&1; then
         in_git=true
@@ -116,8 +155,8 @@ check_env_naming() {
     for file in "${tracked_env_files[@]}"; do
         while IFS= read -r name; do
             [[ -n "$name" ]] || continue
-            if ! _manifest_env_name_allowed "$name"; then
-                echo "      ❌ $file: $name (not FIDENCE_-prefixed or allowlisted)"
+            if ! _manifest_env_name_allowed "$name" "$policy_prefix"; then
+                echo "      ❌ $file: $name (not ${policy_prefix}-prefixed or allowlisted)"
                 violations=$((violations + 1))
             fi
         done < <(_manifest_env_names_from_dotenv "$project_root/$file")
@@ -130,8 +169,8 @@ check_env_naming() {
         command -v yq >/dev/null 2>&1 || continue
         while IFS= read -r name; do
             [[ -n "$name" && "$name" != "null" ]] || continue
-            if ! _manifest_env_name_allowed "$name"; then
-                echo "      ❌ $spec: env[].name $name (not FIDENCE_-prefixed or allowlisted)"
+            if ! _manifest_env_name_allowed "$name" "$policy_prefix"; then
+                echo "      ❌ $spec: env[].name $name (not ${policy_prefix}-prefixed or allowlisted)"
                 violations=$((violations + 1))
             fi
         done < <(yq e '.env[].name // ""' "$project_root/$spec" 2>/dev/null)
@@ -152,8 +191,8 @@ check_env_naming() {
     for file in "${compose_files[@]}"; do
         while IFS= read -r name; do
             [[ -n "$name" ]] || continue
-            if ! _manifest_env_name_allowed "$name"; then
-                echo "      ❌ $file: \${$name} (compose RHS must reference a FIDENCE_ stored name)"
+            if ! _manifest_env_name_allowed "$name" "$policy_prefix"; then
+                echo "      ❌ $file: \${$name} (compose RHS must reference a prefixed or allowlisted stored name)"
                 violations=$((violations + 1))
             fi
         done < <(_manifest_env_names_from_compose "$project_root/$file")
@@ -166,7 +205,7 @@ check_env_naming() {
             local advisory_names=""
             while IFS= read -r name; do
                 [[ -n "$name" ]] || continue
-                _manifest_env_name_allowed "$name" || advisory_names+="$name "
+                _manifest_env_name_allowed "$name" "$policy_prefix" || advisory_names+="$name "
             done < <(_manifest_env_names_from_dotenv "$project_root/$file")
             if [[ -n "$advisory_names" ]]; then
                 echo "      ℹ️  $file (untracked, advisory): ${advisory_names% }"

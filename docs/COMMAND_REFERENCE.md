@@ -183,21 +183,28 @@ manifest env generate [--check] [--dry-run] [-y|--yes]
 manifest env validate
 ```
 
-ENV-001 (STANDARD.md §2.7): the component spec's `env:` block is the source of
-truth for a repo's environment schema. `env generate` renders the bridge
-artifacts from it — `.env.example` (always), `k8s/env/configmap.yaml` +
+The component spec's `env:` block is the source of truth for a repo's
+environment schema. `env generate` renders the bridge artifacts from it —
+`.env.example` (always), `k8s/env/configmap.yaml` +
 `k8s/env/external-secret.yaml` (when `k8s/` exists), and the Dockerfile
 ARG→ENV marker block for build-time publics. Preview is the default; `-y`
 writes; `--check` is the drift gate for release-gate stanzas (exit 1 when any
-generated artifact is stale). `env validate` is read-only: naming law +
+generated artifact is stale). `env validate` is read-only: env prefix policy +
 generated-artifact drift + `.env` gitignore hygiene.
 
-Naming enforcement is config-driven: `env.naming_enforcement` (`warn` default;
-`strict` makes violations critical in `manifest security`) and
-`env.naming_allow` (extra allowlist entries, comma-separated; trailing `_`
-means prefix). The `MANIFEST_CLI_*` namespace is permanently exempt.
-`manifest init repo` and `manifest prep repo` scaffold a missing
-`.env.example` (no-clobber; spec-driven when an `env:` block exists).
+The env prefix policy is ON by default to encourage good env-var hygiene:
+custom application env-var names must start with this repo's prefix; recognized
+framework names (`DATABASE_URL`, `NEXT_PUBLIC_*`, …) and the `MANIFEST_CLI_*`
+namespace are always allowed. With no `env.prefix` configured, the prefix is
+DERIVED from the project name and stays vendor-neutral (`fidence.app.kanizsa` →
+`FIDENCE_APP_KANIZSA_`, `my-tool` → `MY_TOOL_`). Set `env.prefix` to an explicit
+value (e.g. `ACME_`) to require that instead, or `env.prefix: off` to disable
+the policy entirely. Enforcement level is config-driven: `env.naming_enforcement`
+(`strict` default — violations block the audit; `warn` makes them advisory) and
+`env.naming_allow` (extra allowlist entries, comma-separated; trailing `_` means
+prefix). `manifest init repo` and `manifest prep repo` scaffold a missing
+`.env.example` (no-clobber; spec-driven when an
+`env:` block exists), honoring the configured prefix.
 
 ## Maintenance
 
@@ -232,7 +239,8 @@ Common environment variables:
 | `MANIFEST_CLI_DOCS_GENERATE_SITE` | Enable docs-site generation |
 | `MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES` | Request Pages enablement through `gh api` |
 | `MANIFEST_CLI_GITHUB_ACTIONS_WAIT` | Wait for GitHub Actions in release paths |
-| `MANIFEST_CLI_ENV_NAMING_ENFORCEMENT` | ENV-001 naming law: `warn` (default) or `strict` |
+| `MANIFEST_CLI_ENV_PREFIX` | Env prefix policy: empty = derived from project name (default, on); explicit value overrides; `off` disables |
+| `MANIFEST_CLI_ENV_NAMING_ENFORCEMENT` | Prefix-policy enforcement: `strict` (default, blocks) or `warn` (advisory) |
 | `MANIFEST_CLI_ENV_NAMING_ALLOW` | Extra naming allowlist entries (comma-separated; trailing `_` = prefix) |
 
 Use `manifest config describe <key>` for the authoritative YAML-to-env mapping.

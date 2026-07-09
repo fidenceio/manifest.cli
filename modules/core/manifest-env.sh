@@ -11,7 +11,7 @@
 #   Dockerfile marker block         build-time publics ARG→ENV bridge
 #
 # `env generate` previews by default, applies with -y, and gates drift with
-# --check (the run-tests.sh stanza). `env validate` = naming law + drift +
+# --check (the run-tests.sh stanza). `env validate` = env prefix policy + drift +
 # gitignore hygiene, read-only.
 
 # Guard against multiple sourcing
@@ -328,13 +328,13 @@ manifest_env_generate() {
     return 0
 }
 
-# manifest env validate — read-only: naming law + drift + gitignore hygiene.
+# manifest env validate — read-only: env prefix policy + drift + gitignore hygiene.
 manifest_env_validate() {
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || "${1:-}" == "help" ]]; then
         _render_help \
             "manifest env validate" \
-            "Validate env hygiene: naming law, generated-artifact drift, gitignore." \
-            "Checks" "  naming     stored names are FIDENCE_-prefixed or allowlisted (§2.7.1)
+            "Validate env hygiene: prefix policy, generated-artifact drift, gitignore." \
+            "Checks" "  prefix     stored names carry the repo prefix (derived unless env.prefix set; off to disable)
   drift      .env.example and k8s/env/* match the spec env: block
   gitignore  .env value files are ignored; only example/template tracked"
         return 0
@@ -347,15 +347,22 @@ manifest_env_validate() {
     echo "Env validation — $project_root"
     echo ""
 
-    echo "  naming law (ENV-001, enforcement: ${MANIFEST_CLI_ENV_NAMING_ENFORCEMENT:-warn}):"
-    if check_env_naming "$project_root"; then
-        echo "      ✅ stored names conform"
+    local _policy_prefix
+    _policy_prefix="$(_manifest_env_effective_prefix "$project_root")"
+    if [[ -z "$_policy_prefix" ]]; then
+        echo "  env prefix policy:"
+        echo "      ℹ️  disabled (env.prefix: off) — no owned-var prefix is required"
     else
-        if [[ "${MANIFEST_CLI_ENV_NAMING_ENFORCEMENT:-warn}" == "strict" ]]; then
-            failures=$((failures + 1))
-            echo "      ❌ violations (strict)"
+        echo "  env prefix policy (prefix: ${_policy_prefix}, enforcement: ${MANIFEST_CLI_ENV_NAMING_ENFORCEMENT:-strict}):"
+        if check_env_naming "$project_root"; then
+            echo "      ✅ stored names conform"
         else
-            echo "      ⚠️  violations (warn — strict at 57.0.0)"
+            if [[ "${MANIFEST_CLI_ENV_NAMING_ENFORCEMENT:-strict}" == "strict" ]]; then
+                failures=$((failures + 1))
+                echo "      ❌ violations (strict)"
+            else
+                echo "      ⚠️  violations (warn)"
+            fi
         fi
     fi
 
@@ -408,7 +415,7 @@ manifest_env_dispatch() {
                 "manifest env <generate|validate>" \
                 "Manage env schema artifacts (ENV-001, STANDARD.md §2.7)." \
                 "Subcommands" "  generate   Generate .env.example + k8s/Dockerfile bridges from the spec env: block
-  validate   Naming law + drift + gitignore hygiene (read-only)"
+  validate   Env prefix policy + drift + gitignore hygiene (read-only)"
             [[ -z "${1:-}" ]] && return 1
             return 0
             ;;
