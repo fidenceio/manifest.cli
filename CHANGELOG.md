@@ -1,5 +1,17 @@
 # Changelog
 
+## [56.4.0] - 2026-07-09
+
+**Release Type:** Minor
+
+### Changes
+
+- Docs(changelog): correct 56.3.0 entry — release adds 'manifest env' + env scaffolding + naming audit, not the auto-generated copy
+- Add GitHub Release publishing support
+- Update release copy and configuration examples
+- Add regression coverage for the changed CLI workflow
+
+
 ## [56.3.0] - 2026-07-03
 
 **Release Type:** Minor
@@ -93,12 +105,3 @@
 - Merge fix/release-chain-c3: harden release-chain integrity (audit C3)
 - Merge fix/status-tsv-bootstrap: source fleet roster from TSV + bootstrap preview
 - Fix(test): compare gate-exec cwd by inode, not string
-
-
-## [55.2.1] - 2026-06-21
-
-**Release Type:** Patch
-
-### Changes
-
-- Feat(fleet): 6-col TSV (drop TYPE) + graceful ^services: skip for TSV-based fleets
