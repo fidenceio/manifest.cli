@@ -141,53 +141,111 @@ ensure_release_gate_script() {
 # Generate the default scripts/run-tests.sh release gate.
 #
 # The PROJECT CHECKS section is detected once, here at scaffold time, from the
-# repo layout — the generated script contains plain reviewable commands, not
-# runtime magic. A Dockerfile with a `test` build stage wins outright (the
-# container is assumed to run the real suite); otherwise one block per detected
-# toolchain is emitted. When nothing is detectable the gate still runs the
-# baseline checks (VERSION shape, shell syntax, JSON parse) — real, if thin,
-# verification rather than a bare `exit 0` that would defeat the fail-closed
-# gate's purpose. The header tells the repo owner the section is theirs to
-# extend.
+# repo's OWN declared verification (package.json scripts, Cargo, .NET .sln/.csproj,
+# go, pyproject/tox, a Makefile target, or a compose file) — the generated
+# script contains plain reviewable commands run with the developer's host
+# toolchain, not runtime magic and no imposed container. A Docker-only repo
+# (a Dockerfile with no recognizable source manifest) is left to the loud path
+# rather than force a container build by default. When the repo declares no
+# build or test, the full-tier gate refuses (fail-closed) rather than reporting
+# a green "verified" it never earned; the emitted message tells the owner how to
+# fix it (add a check, set release_gate_command, or take the audited
+# release_gate=none bypass). The cheap BASELINE floor (VERSION shape, shell
+# syntax, JSON parse) always runs.
 create_default_run_tests() {
     local gate_file="$1"
     local project_root
     project_root="$(dirname "$(dirname "$gate_file")")"
 
-    # --- Detect project checks (scaffold-time, best-effort) -----------------
+    # --- Detect the repo's OWN declared verification (scaffold-time) ---------
+    # Wire the gate to the developer's existing toolchain, host-native. Only
+    # what the project actually declares is emitted — no invented commands, no
+    # imposed toolchain (containerization is opt-in via release_gate_command,
+    # never baked in here).
     local checks=""
-    if [[ -f "$project_root/Dockerfile" ]] \
-        && grep -qiE '^[[:space:]]*FROM[[:space:]].+[[:space:]]AS[[:space:]]+test([[:space:]]|$)' "$project_root/Dockerfile"; then
-        checks+='    # Dockerfile has a `test` stage — the container runs the suite.'$'\n'
-        checks+='    run_check docker build --target test .'$'\n'
-    else
-        if [[ -f "$project_root/Cargo.toml" ]]; then
-            checks+='    run_check cargo test'$'\n'
-        fi
-        if [[ -f "$project_root/package.json" ]]; then
-            local pm="npm" s
-            [[ -f "$project_root/pnpm-lock.yaml" ]] && pm="pnpm"
-            [[ -f "$project_root/yarn.lock" ]] && pm="yarn"
-            for s in lint typecheck type-check build test; do
-                grep -qE "\"$s\"[[:space:]]*:" "$project_root/package.json" || continue
-                # Skip npm's scaffold placeholder ("Error: no test specified").
-                if [[ "$s" == "test" ]] && grep -q 'Error: no test specified' "$project_root/package.json"; then
-                    continue
-                fi
-                checks+="    run_check $pm run --silent $s"$'\n'
-            done
-        fi
-        if [[ -f "$project_root/go.mod" ]]; then
-            checks+='    run_check go test ./...'$'\n'
-        fi
-        if [[ -f "$project_root/pyproject.toml" ]] && { [[ -d "$project_root/tests" ]] || [[ -d "$project_root/test" ]]; }; then
-            checks+='    run_check python3 -m pytest -q'$'\n'
+
+    if [[ -f "$project_root/Cargo.toml" ]]; then
+        checks+='    run_check cargo test'$'\n'
+    fi
+
+    if [[ -f "$project_root/package.json" ]]; then
+        local pm s
+        # Corepack's declared package manager wins; otherwise infer from lockfile.
+        pm="$(sed -n 's/.*"packageManager"[[:space:]]*:[[:space:]]*"\([a-z]*\)@.*/\1/p' "$project_root/package.json" 2>/dev/null | head -1)"
+        case "$pm" in
+            npm|pnpm|yarn|bun) ;;
+            *)
+                if [[ -f "$project_root/pnpm-lock.yaml" ]]; then pm="pnpm"
+                elif [[ -f "$project_root/yarn.lock" ]]; then pm="yarn"
+                elif [[ -f "$project_root/bun.lockb" || -f "$project_root/bun.lock" ]]; then pm="bun"
+                else pm="npm"; fi
+                ;;
+        esac
+        for s in lint typecheck type-check build test; do
+            grep -qE "\"$s\"[[:space:]]*:" "$project_root/package.json" || continue
+            # Skip npm's scaffold placeholder ("Error: no test specified").
+            if [[ "$s" == "test" ]] && grep -q 'Error: no test specified' "$project_root/package.json"; then
+                continue
+            fi
+            # `<pm> run <script>` runs the package.json script across every
+            # manager (bun's bare `bun test` would bypass it, so `run` is used).
+            checks+="    run_check $pm run $s"$'\n'
+        done
+    fi
+
+    # .NET: a solution or project file (often nested under src/), no manifest of
+    # its own on the JS/Rust side.
+    if [[ -n "$(find "$project_root" -maxdepth 3 \( -name '*.sln' -o -name '*.csproj' \) -print 2>/dev/null | head -1)" ]]; then
+        checks+='    run_check dotnet build'$'\n'
+        checks+='    run_check dotnet test'$'\n'
+    fi
+
+    if [[ -f "$project_root/go.mod" ]]; then
+        checks+='    run_check go build ./...'$'\n'
+        checks+='    run_check go test ./...'$'\n'
+    fi
+
+    if [[ -f "$project_root/pyproject.toml" ]] && { [[ -d "$project_root/tests" ]] || [[ -d "$project_root/test" ]]; }; then
+        checks+='    run_check python3 -m pytest -q'$'\n'
+    fi
+    if [[ -f "$project_root/tox.ini" ]]; then
+        checks+='    run_check tox'$'\n'
+    fi
+
+    # Make is a fallback: only when no more specific toolchain declared a check,
+    # since a Makefile's targets usually just wrap one of the above.
+    if [[ -z "$checks" ]]; then
+        local mk m
+        for m in Makefile makefile GNUmakefile; do
+            [[ -f "$project_root/$m" ]] && { mk="$project_root/$m"; break; }
+        done
+        if [[ -n "${mk:-}" ]]; then
+            grep -qE '^build:' "$mk" && checks+='    run_check make build'$'\n'
+            grep -qE '^test:'  "$mk" && checks+='    run_check make test'$'\n'
         fi
     fi
+
+    # Compose/config repo: a compose file and no app source above. Validating the
+    # compose file is the honest check (compose is its own toolchain here).
     if [[ -z "$checks" ]]; then
-        checks='    # No toolchain detected at scaffold time. Add this repo'"'"'s real test'$'\n'
-        checks+='    # commands here, one per line:  run_check <command> [args...]'$'\n'
-        checks+='    note "no project checks defined yet - baseline checks only"'$'\n'
+        local cf
+        for cf in "$project_root"/docker-compose*.yml "$project_root"/docker-compose*.yaml \
+                  "$project_root"/compose*.yml "$project_root"/compose*.yaml; do
+            [[ -e "$cf" ]] || continue
+            checks+='    run_check docker compose config -q'$'\n'
+            break
+        done
+    fi
+
+    # Nothing real declared. A gate that passed here would report "verified"
+    # without verifying anything, so it refuses on the release (full) tier and
+    # says exactly how to fix it. release_gate=none is the audited escape hatch.
+    if [[ -z "$checks" ]]; then
+        checks='    bad "no build or test verification is declared by this repo — the release gate cannot certify it"'$'\n'
+        checks+='    note "A passing gate here would claim \"verified\" without verifying anything. Do ONE of:"'$'\n'
+        checks+='    note "  1. add your real check above:  run_check <build/test command>"'$'\n'
+        checks+='    note "  2. point the gate elsewhere:   set release_gate_command (MANIFEST_CLI_RELEASE_GATE_COMMAND)"'$'\n'
+        checks+='    note "  3. bypass deliberately:         set release_gate=none (audited, unverified)"'$'\n'
     fi
 
     # --- Static head (quoted heredoc: nothing expands) -----------------------
@@ -298,17 +356,39 @@ echo "run-tests: PASS (tier: $TIER)"
 MANIFEST_CLI_GATE_TAIL
 }
 
-# Derive this repo's mandatory env-var prefix from its directory name
-# (ENV-001 naming law, STANDARD.md §2.7.1): `fidence.app.kanizsa` →
-# `FIDENCE_APP_KANIZSA_`. Non-`fidence.*` directories still get a lawful
-# prefix from their full name (`my-tool` → `FIDENCE_MY_TOOL_`).
+# Derive this repo's owned-var env prefix under the env.prefix policy.
+#   env.prefix: off|none       → empty (policy disabled; starter vars carry none)
+#   env.prefix: <value>        → that value, namespaced by the repo dir body
+#                                without repeating a matching leading segment
+#                                (`ACME_` + `acme.web` → `ACME_WEB_`)
+#   env.prefix unset (default) → DERIVED from the full project name, vendor-neutral
+#                                (`fidence.app.kanizsa` → `FIDENCE_APP_KANIZSA_`,
+#                                 `my-tool` → `MY_TOOL_`)
 _manifest_env_prefix_for_repo() {
     local project_root="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
+    local raw="${MANIFEST_CLI_ENV_PREFIX:-}"
+    local lowered
+    lowered="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')"
+    case "$lowered" in
+        off|none|disabled|false|0) printf ''; return 0 ;;
+    esac
+
     local body
-    body="$(basename "$project_root")"
-    body="${body#fidence.}"
-    body="$(printf '%s' "$body" | tr '.-' '__' | tr '[:lower:]' '[:upper:]' | tr -cd 'A-Z0-9_')"
-    printf 'FIDENCE_%s_' "$body"
+    if [[ -n "$raw" ]]; then
+        local first core
+        body="$(basename "$project_root")"
+        first="${body%%.*}"
+        core="${raw%_}"
+        if [[ "$(printf '%s' "$first" | tr '[:lower:]' '[:upper:]' | tr -cd 'A-Z0-9')" == "$core" ]]; then
+            body="${body#*.}"
+        fi
+        body="$(printf '%s' "$body" | tr '.-' '__' | tr '[:lower:]' '[:upper:]' | tr -cd 'A-Z0-9_')"
+        printf '%s%s_' "$raw" "$body"
+        return 0
+    fi
+
+    body="$(basename "$project_root" | tr '.-' '__' | tr '[:lower:]' '[:upper:]' | tr -cd 'A-Z0-9_')"
+    [[ -n "$body" ]] && printf '%s_' "$body"
 }
 
 # Locate the component spec file whose `env:` block is the single source of
@@ -334,9 +414,9 @@ _manifest_env_render_example() {
     local repo_dir
     repo_dir="$(basename "$project_root")"
 
-    printf '# .env.example — generated by Manifest CLI from %s `env:` (ENV-001).\n' "$(basename "$spec_file")"
-    printf '# Law: Fidence-owned vars are FIDENCE_-prefixed; framework names are bridged,\n'
-    printf '# never stored (STANDARD.md §2.7). Edit the spec, then: manifest env generate -y\n'
+    printf '# .env.example — generated by Manifest CLI from %s `env:`.\n' "$(basename "$spec_file")"
+    printf '# Framework names (DATABASE_URL, NEXT_PUBLIC_*, …) are bridged at injection\n'
+    printf '# boundaries, not stored here. Edit the spec, then: manifest env generate -y\n'
 
     local count
     count="$(yq e '.env | length' "$spec_file" 2>/dev/null)"
@@ -374,10 +454,10 @@ _manifest_env_render_example() {
     done
 }
 
-# Scaffold .env.example (ENV-001, D-ENV-2). Three paths:
+# Scaffold .env.example. Three paths:
 #   spec with `env:`      generate .env.example from it
 #   spec without `env:`   seed a starter `env:` block first, then generate
-#   no spec               law-comment starter .env.example with the derived prefix
+#   no spec               starter .env.example (honoring the configured prefix)
 # No-clobber: an existing .env.example is never touched (explicit regeneration
 # is `manifest env generate -y`).
 ensure_env_files() {
@@ -419,11 +499,17 @@ ensure_env_files() {
             return 1
         fi
     else
+        local prefix_note
+        if [[ -n "$prefix" ]]; then
+            prefix_note="# Env prefix policy is on: owned vars start with ${prefix} (framework names are exempt)."
+        else
+            prefix_note="# Env prefix policy is off (default). Set env.prefix to require an owned-var prefix."
+        fi
         cat > "$example_file" << MANIFEST_CLI_ENV_STARTER
-# .env.example — scaffolded by Manifest CLI (ENV-001; STANDARD.md §2.7).
-# Naming law: FIDENCE_{REPO_BODY}_{SUFFIX} — this repo's prefix: ${prefix}
-# Only FIDENCE names are stored; framework names (DATABASE_URL, NEXT_PUBLIC_*, …)
-# are bridged at injection boundaries, never stored.
+# .env.example — scaffolded by Manifest CLI.
+${prefix_note}
+# Framework names (DATABASE_URL, NEXT_PUBLIC_*, …) are bridged at injection
+# boundaries, not stored here.
 # Declare vars in service.spec.yaml/app.spec.yaml \`env:\`, then:
 #   manifest env generate -y
 #
@@ -697,12 +783,29 @@ $RECYCLE.BIN/
 nbproject/
 
 # =============================================================================
-# Environment and secrets
+# Environment, secrets, and local/generated config
 # =============================================================================
 .env
 .env.*
+*.local.yaml
+*.local.yml
+*.local.json
+*.local.toml
+*.secret.yaml
+*.secret.yml
+*.secret.json
+*.secret.*
+# Keep authoring templates trackable — example/template variants stay in git.
 !.env.example
 !.env.template
+!*.example.yaml
+!*.example.yml
+!*.example.json
+!*.example.toml
+!*.template.yaml
+!*.template.yml
+!*.template.json
+!*.template.toml
 
 # =============================================================================
 # Logs and runtime data
@@ -931,7 +1034,7 @@ Idempotent — safe to re-run. Optionally creates a GitHub repo via 'gh repo cre
         if [[ -f "$project_root/.env.example" ]]; then
             echo "  exists:          .env.example"
         else
-            echo "  would create:    .env.example   (env schema template — ENV-001)"
+            echo "  would create:    .env.example   (env schema template)"
         fi
         if [[ -f "$project_root/manifest.config.local.yaml" && "$force" != "true" ]]; then
             echo "  exists:          manifest.config.local.yaml"

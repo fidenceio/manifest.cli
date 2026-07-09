@@ -3,7 +3,7 @@
 # Manifest CLI Security Module
 # Provides security auditing and privacy protection
 
-# ENV-001 naming law lives in its own module; the audit depends on it.
+# The env prefix policy lives in its own module; the audit depends on it.
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/manifest-env-naming.sh"
 
@@ -111,15 +111,19 @@ manifest_security() {
         critical_issues=$((critical_issues + 1))
     fi
 
-    # ENV-001 naming law (STANDARD.md §2.7) — warn by default; strict is the
-    # 57.0.0 flip (env.naming_enforcement: strict).
-    if check_env_naming "$project_root"; then
-        echo "   ✅ Env naming conforms to the FIDENCE_ law"
-    elif [[ "${MANIFEST_CLI_ENV_NAMING_ENFORCEMENT:-warn}" == "strict" ]]; then
+    # Env prefix policy — on by default (derived prefix); disabled only via
+    # env.prefix: off. Enforcement level via env.naming_enforcement (strict default).
+    local _sec_prefix
+    _sec_prefix="$(_manifest_env_effective_prefix "$project_root")"
+    if [[ -z "$_sec_prefix" ]]; then
+        :
+    elif check_env_naming "$project_root"; then
+        echo "   ✅ Env naming conforms to the ${_sec_prefix} prefix policy"
+    elif [[ "${MANIFEST_CLI_ENV_NAMING_ENFORCEMENT:-strict}" == "strict" ]]; then
         echo "   ❌ CRITICAL: Env naming violations (enforcement: strict)"
         critical_issues=$((critical_issues + 1))
     else
-        echo "   ⚠️  WARNING: Env naming violations (enforcement: warn — strict at 57.0.0)"
+        echo "   ⚠️  WARNING: Env naming violations (enforcement: warn)"
         warnings=$((warnings + 1))
     fi
 

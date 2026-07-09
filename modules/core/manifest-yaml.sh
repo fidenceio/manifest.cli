@@ -260,8 +260,9 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     ["security.private_files"]="MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES"
 
     # -------------------------------------------------------------------------
-    # env — ENV-001 naming law (STANDARD.md §2.7)
+    # env — env prefix policy (on by default; derived owned-var prefix)
     # -------------------------------------------------------------------------
+    ["env.prefix"]="MANIFEST_CLI_ENV_PREFIX"
     ["env.naming_allow"]="MANIFEST_CLI_ENV_NAMING_ALLOW"
     ["env.naming_enforcement"]="MANIFEST_CLI_ENV_NAMING_ENFORCEMENT"
 )

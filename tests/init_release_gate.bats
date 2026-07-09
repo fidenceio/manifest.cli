@@ -49,15 +49,16 @@ teardown() {
 
 # --- the ship argv contract ----------------------------------------------------
 
-@test "gate scaffold: baseline-only repo passes under the exact ship argv" {
+@test "gate scaffold: the exact full-tier ship argv is accepted and runs to a verdict" {
     echo "1.0.0" > "$PROJ/VERSION"
     ensure_release_gate_script "$PROJ"
     cd "$PROJ"
 
-    # Exactly what _manifest_release_gate_test_command resolves to.
+    # Exactly what _manifest_release_gate_test_command resolves to. No toolchain
+    # is declared here, so the full tier reaches its fail-closed verdict — the
+    # point is that --tier/--jobs/--no-cache all parse and the full path runs.
     run ./scripts/run-tests.sh --tier full --jobs 1 --no-cache
-    [ "$status" -eq 0 ]
-    echo "$output" | grep -q "run-tests: PASS"
+    echo "$output" | grep -q "run-tests: FAIL (tier: full)"
 }
 
 @test "gate scaffold: --tier smoke runs baseline only and passes" {
@@ -110,7 +111,7 @@ teardown() {
     grep -q 'run_check cargo test' "$PROJ/scripts/run-tests.sh"
 }
 
-@test "gate scaffold: package.json scripts become npm run checks; placeholder test skipped" {
+@test "gate scaffold: package.json scripts become host-native pm run checks; placeholder test skipped" {
     cat > "$PROJ/package.json" << 'EOF'
 {
   "name": "x",
@@ -122,27 +123,138 @@ teardown() {
 }
 EOF
     ensure_release_gate_script "$PROJ"
-    grep -q 'run_check npm run --silent lint' "$PROJ/scripts/run-tests.sh"
-    grep -q 'run_check npm run --silent build' "$PROJ/scripts/run-tests.sh"
-    ! grep -q 'run --silent test' "$PROJ/scripts/run-tests.sh"
+    grep -q 'run_check npm run lint' "$PROJ/scripts/run-tests.sh"
+    grep -q 'run_check npm run build' "$PROJ/scripts/run-tests.sh"
+    ! grep -qE 'run_check npm run test' "$PROJ/scripts/run-tests.sh"
+    # Host-native only: the neutral default never imposes a container.
+    ! grep -q 'docker' "$PROJ/scripts/run-tests.sh"
 }
 
-@test "gate scaffold: Dockerfile test stage wins over other toolchains" {
-    touch "$PROJ/Cargo.toml"
-    printf 'FROM rust:1 AS build\nFROM build AS test\n' > "$PROJ/Dockerfile"
+@test "gate scaffold: node repo with build+test gets both via the detected pm" {
+    cat > "$PROJ/package.json" << 'EOF'
+{
+  "name": "x",
+  "scripts": { "build": "vite build", "test": "vitest run" }
+}
+EOF
     ensure_release_gate_script "$PROJ"
-    grep -q 'run_check docker build --target test .' "$PROJ/scripts/run-tests.sh"
-    ! grep -q 'run_check cargo test' "$PROJ/scripts/run-tests.sh"
+    grep -q 'run_check npm run build' "$PROJ/scripts/run-tests.sh"
+    grep -q 'run_check npm run test' "$PROJ/scripts/run-tests.sh"
 }
 
-@test "gate scaffold: no toolchain detected — gate still real, notes baseline-only" {
+@test "gate scaffold: package-manager detection — pnpm lockfile" {
+    printf '{"scripts":{"build":"x","test":"y"}}\n' > "$PROJ/package.json"
+    touch "$PROJ/pnpm-lock.yaml"
+    ensure_release_gate_script "$PROJ"
+    grep -q 'run_check pnpm run build' "$PROJ/scripts/run-tests.sh"
+    ! grep -q 'run_check npm run' "$PROJ/scripts/run-tests.sh"
+}
+
+@test "gate scaffold: package-manager detection — yarn lockfile" {
+    printf '{"scripts":{"test":"y"}}\n' > "$PROJ/package.json"
+    touch "$PROJ/yarn.lock"
+    ensure_release_gate_script "$PROJ"
+    grep -q 'run_check yarn run test' "$PROJ/scripts/run-tests.sh"
+}
+
+@test "gate scaffold: package-manager detection — bun lockfile" {
+    printf '{"scripts":{"build":"b"}}\n' > "$PROJ/package.json"
+    touch "$PROJ/bun.lockb"
+    ensure_release_gate_script "$PROJ"
+    grep -q 'run_check bun run build' "$PROJ/scripts/run-tests.sh"
+}
+
+@test "gate scaffold: package-manager detection — packageManager field wins over lockfile" {
+    cat > "$PROJ/package.json" << 'EOF'
+{ "packageManager": "pnpm@9.1.0", "scripts": { "build": "b" } }
+EOF
+    touch "$PROJ/yarn.lock"
+    ensure_release_gate_script "$PROJ"
+    grep -q 'run_check pnpm run build' "$PROJ/scripts/run-tests.sh"
+    ! grep -q 'run_check yarn run' "$PROJ/scripts/run-tests.sh"
+}
+
+@test "gate scaffold: Go repo gets host-native go build + go test" {
+    printf 'module x\n\ngo 1.23\n' > "$PROJ/go.mod"
+    ensure_release_gate_script "$PROJ"
+    grep -q 'run_check go build ./\.\.\.' "$PROJ/scripts/run-tests.sh"
+    grep -q 'run_check go test ./\.\.\.' "$PROJ/scripts/run-tests.sh"
+    ! grep -q 'docker' "$PROJ/scripts/run-tests.sh"
+}
+
+@test "gate scaffold: Makefile test target is a fallback when nothing more specific is declared" {
+    printf 'build:\n\techo build\ntest:\n\techo test\n' > "$PROJ/Makefile"
+    ensure_release_gate_script "$PROJ"
+    grep -q 'run_check make build' "$PROJ/scripts/run-tests.sh"
+    grep -q 'run_check make test' "$PROJ/scripts/run-tests.sh"
+}
+
+@test "gate scaffold: a declared toolchain suppresses the Makefile fallback" {
+    touch "$PROJ/Cargo.toml"
+    printf 'test:\n\techo test\n' > "$PROJ/Makefile"
+    ensure_release_gate_script "$PROJ"
+    grep -q 'run_check cargo test' "$PROJ/scripts/run-tests.sh"
+    ! grep -q 'run_check make test' "$PROJ/scripts/run-tests.sh"
+}
+
+@test "gate scaffold: .NET repo (.csproj, no package.json) gets a dotnet gate, not 'other'" {
+    mkdir -p "$PROJ/src/Api"
+    printf '<Project Sdk="Microsoft.NET.Sdk"></Project>\n' > "$PROJ/src/Api/Api.csproj"
+    ensure_release_gate_script "$PROJ"
+    grep -q 'run_check dotnet build' "$PROJ/scripts/run-tests.sh"
+    grep -q 'run_check dotnet test' "$PROJ/scripts/run-tests.sh"
+    ! grep -q 'cannot certify' "$PROJ/scripts/run-tests.sh"
+    ! grep -q 'docker' "$PROJ/scripts/run-tests.sh"
+}
+
+@test "gate scaffold: .NET solution at repo root is detected" {
+    printf 'Microsoft Visual Studio Solution File\n' > "$PROJ/App.sln"
+    ensure_release_gate_script "$PROJ"
+    grep -q 'run_check dotnet build' "$PROJ/scripts/run-tests.sh"
+}
+
+@test "gate scaffold: compose/config repo (no app source) gets docker compose config -q" {
+    printf 'services:\n  x:\n    image: nginx\n' > "$PROJ/docker-compose.yml"
+    ensure_release_gate_script "$PROJ"
+    grep -q 'run_check docker compose config -q' "$PROJ/scripts/run-tests.sh"
+}
+
+@test "gate scaffold: compose is a fallback — app source wins over compose" {
+    touch "$PROJ/go.mod"
+    printf 'services:\n  x:\n    image: nginx\n' > "$PROJ/docker-compose.yml"
+    ensure_release_gate_script "$PROJ"
+    grep -q 'run_check go build' "$PROJ/scripts/run-tests.sh"
+    ! grep -q 'docker compose config' "$PROJ/scripts/run-tests.sh"
+}
+
+@test "gate scaffold: Docker-only repo is NOT auto-containerized — falls to the loud path" {
+    echo "1.0.0" > "$PROJ/VERSION"
+    printf 'FROM alpine:3.20\nCMD ["true"]\n' > "$PROJ/Dockerfile"
+    ensure_release_gate_script "$PROJ"
+    ! grep -q 'docker build' "$PROJ/scripts/run-tests.sh"
+    grep -q 'cannot certify' "$PROJ/scripts/run-tests.sh"
+}
+
+@test "gate scaffold: no verification declared — full tier is LOUD and BLOCKS, not a silent pass" {
     echo "1.0.0" > "$PROJ/VERSION"
     ensure_release_gate_script "$PROJ"
     cd "$PROJ"
 
     run ./scripts/run-tests.sh --tier full
+    [ "$status" -ne 0 ]
+    echo "$output" | grep -q "cannot certify"
+    echo "$output" | grep -q "release_gate=none"
+    ! echo "$output" | grep -q "run-tests: PASS"
+}
+
+@test "gate scaffold: no verification declared — smoke tier stays a fast baseline preflight" {
+    echo "1.0.0" > "$PROJ/VERSION"
+    ensure_release_gate_script "$PROJ"
+    cd "$PROJ"
+
+    run ./scripts/run-tests.sh --tier smoke
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "no project checks defined yet"
+    echo "$output" | grep -q "run-tests: PASS (tier: smoke)"
 }
 
 # --- wiring: init repo + gate auto-detect --------------------------------------

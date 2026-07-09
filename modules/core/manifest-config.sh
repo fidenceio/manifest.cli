@@ -761,10 +761,17 @@ set_default_configuration() {
     # 'off' to always run. Accelerates dev/CI loops only — the release gate
     # passes --no-cache, so nothing ever releases on a cached result.
     export MANIFEST_CLI_TEST_SKIP_UNCHANGED_WITHIN="${MANIFEST_CLI_TEST_SKIP_UNCHANGED_WITHIN:-4h}"
-    # ENV-001 naming law (STANDARD.md §2.7). warn = audit warning (56.x
-    # default); strict = critical (the 57.0.0 flip). naming_allow adds extra
+    # Env prefix policy. ON by default: custom app env-var names must start with
+    # this repo's prefix; framework names and the MANIFEST_CLI_ namespace are
+    # always allowed. Empty (the default) = the prefix is DERIVED from the
+    # project name (vendor-neutral: `fidence.app.kanizsa` → `FIDENCE_APP_KANIZSA_`,
+    # `my-tool` → `MY_TOOL_`). Set an explicit value (e.g. `ACME_`) to require
+    # that instead. Set `off` (or `none`) to disable the policy entirely.
+    export MANIFEST_CLI_ENV_PREFIX="${MANIFEST_CLI_ENV_PREFIX:-}"
+    # Prefix-policy enforcement level. strict (default) = violations block the
+    # naming audit (fail-closed); warn = advisory only. naming_allow adds extra
     # allowlist entries, comma-separated (trailing `_` = prefix, else exact).
-    export MANIFEST_CLI_ENV_NAMING_ENFORCEMENT="${MANIFEST_CLI_ENV_NAMING_ENFORCEMENT:-warn}"
+    export MANIFEST_CLI_ENV_NAMING_ENFORCEMENT="${MANIFEST_CLI_ENV_NAMING_ENFORCEMENT:-strict}"
     export MANIFEST_CLI_ENV_NAMING_ALLOW="${MANIFEST_CLI_ENV_NAMING_ALLOW:-}"
     export MANIFEST_CLI_GITHUB_RELEASE_ENABLED="${MANIFEST_CLI_GITHUB_RELEASE_ENABLED:-true}"
     export MANIFEST_CLI_GITHUB_RELEASE_REQUIRED="${MANIFEST_CLI_GITHUB_RELEASE_REQUIRED:-false}"
