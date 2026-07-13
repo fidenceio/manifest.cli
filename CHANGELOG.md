@@ -1,5 +1,15 @@
 # Changelog
 
+## [56.4.1] - 2026-07-13
+
+**Release Type:** Patch
+
+### Changes
+
+- Fix fleet init Git ownership and GitHub targets
+- Update 1 file before release
+
+
 ## [56.4.0] - 2026-07-09
 
 **Release Type:** Minor
@@ -92,16 +102,3 @@
 ### Changes
 
 - Add regression coverage for the changed CLI workflow
-
-
-## [55.3.0] - 2026-06-22
-
-**Release Type:** Minor
-
-### Changes
-
-- Fix(status): source fleet roster from TSV; add bootstrap preview
-- Fix(security): harden release-chain integrity (audit C3)
-- Merge fix/release-chain-c3: harden release-chain integrity (audit C3)
-- Merge fix/status-tsv-bootstrap: source fleet roster from TSV + bootstrap preview
-- Fix(test): compare gate-exec cwd by inode, not string
