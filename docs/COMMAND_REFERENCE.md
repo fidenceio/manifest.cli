@@ -59,11 +59,11 @@ Reads and writes layered YAML config. Global writes and destructive fixes are co
 ### `manifest init`
 
 ```bash
-manifest init repo [--dry-run] [-y|--yes]
-manifest init fleet [--dry-run] [-y|--yes] [--depth N] [--all-folders] [--name NAME] [--force]
+manifest init repo [--dry-run] [-y|--yes] [--create-repo-private|--create-repo-public]
+manifest init fleet [--dry-run] [-y|--yes] [--depth N] [--all-folders] [--name NAME] [--force] [--create-repo-private|--create-repo-public]
 ```
 
-`init repo` scaffolds required repo files. `init fleet` is a two-phase fleet discovery and config creation workflow.
+`init repo` scaffolds required repo files. `init fleet` is a two-phase fleet discovery and config creation workflow. GitHub repository creation is an explicit remote side effect: add exactly one `--create-repo-private|--create-repo-public` flag. Set `github.owner` to a GitHub user or organization to make the preview and apply target `<owner>/<repo>`; when unset, `gh` uses its authenticated user. Fleet Phase 2 re-checks each selected directory's own `.git` state from disk, so stale `HAS_GIT` inventory cannot make a member inherit the fleet root's repository or origin.
 
 ### `manifest prep`
 

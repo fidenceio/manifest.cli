@@ -103,6 +103,10 @@ ship:
 # GitHub
 # -----------------------------------------------------------------------------
 github:
+  # Optional default namespace for `manifest init|prep ... --create-repo-*`.
+  # Empty = the user authenticated in gh; set an organization explicitly to
+  # prevent fleet members from landing in a personal account.
+  owner: ""
   release:
     enabled: true       # Create a matching GitHub Release after tag push.
     required: false     # If true, a GitHub Release failure fails the ship run.

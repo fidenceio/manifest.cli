@@ -98,6 +98,8 @@ Or drive each step yourself:
 ```bash
 manifest init repo              # preview required files
 manifest init repo -y           # write VERSION, CHANGELOG.md, docs/, ignores
+manifest init repo --create-repo-private       # preview local + GitHub target
+manifest init repo --create-repo-private -y    # apply; github.owner selects org/user
 
 manifest prep repo              # preview remote/config prep
 manifest prep repo -y           # apply prep
@@ -120,6 +122,7 @@ A fleet is a workspace of independent Git repositories described by `manifest.fl
 
 ```bash
 manifest init fleet             # scan or consume fleet TSV
+manifest init fleet --create-repo-private      # preview missing private remotes
 manifest status fleet           # inspect selected repos
 manifest ship fleet patch       # preview services with release changes
 manifest ship fleet patch -y    # apply services with release changes

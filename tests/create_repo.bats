@@ -16,6 +16,7 @@ teardown() {
     # similarly leak across tests if any test forgot to clean up.
     unset _MANIFEST_GH_VALIDATED_AT MANIFEST_CLI_GH_VALIDATION_TTL
     unset MANIFEST_CLI_GH_STUB_LOG MANIFEST_CLI_GH_STUB_EXIT MANIFEST_CLI_GH_STUB_AUTH_EXIT MANIFEST_CLI_GH_STUB_STDOUT MANIFEST_CLI_GH_STUB_STDERR
+    unset MANIFEST_CLI_GH_STUB_ADD_REMOTE MANIFEST_CLI_GITHUB_OWNER
 }
 
 # -----------------------------------------------------------------------------
@@ -188,6 +189,31 @@ teardown() {
     run _fleet_init_directory "$SCRATCH/does-not-exist" "false"
     [ "$status" -eq 3 ]
     echo "$output" | grep -q "Directory not found"
+}
+
+@test "_manifest_dir_is_own_git_repository: rejects an ordinary directory nested in a parent repo" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-shared-functions.sh"
+    git init -q "$SCRATCH"
+    mkdir -p "$SCRATCH/child"
+
+    run _manifest_dir_is_own_git_repository "$SCRATCH/child"
+    [ "$status" -ne 0 ]
+
+    git init -q "$SCRATCH/child"
+    run _manifest_dir_is_own_git_repository "$SCRATCH/child"
+    [ "$status" -eq 0 ]
+}
+
+@test "manifest_init_repo: creates an own repo when the target is nested in a parent repo" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
+    git init -q "$SCRATCH"
+    mkdir -p "$SCRATCH/child"
+
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/child" run manifest_init_repo -y
+    [ "$status" -eq 0 ]
+    [ -d "$SCRATCH/child/.git" ]
+    run git -C "$SCRATCH/child" rev-parse --show-toplevel
+    [ "$output" = "$SCRATCH/child" ]
 }
 
 @test "manifest_init_fleet: summary names missing paths and shows how to fix" {
@@ -374,6 +400,45 @@ teardown() {
     [ -f "$SCRATCH/svc_clean/VERSION" ]
 }
 
+@test "_fleet_init: repairs stale HAS_GIT inside a parent repo and creates the configured-owner remote" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
+    source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet.sh"
+    source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet-detect.sh"
+    cd "$SCRATCH"
+
+    git init -q .
+    git remote add origin git@github.com:example/fleet-root.git
+    mkdir -p service.greenlane
+    printf 'existing content\n' > service.greenlane/app.txt
+
+    {
+        printf 'fleet:\n  name: "test-fleet"\n  versioning: "none"\n'
+        printf 'services:\n  servicegreenlane:\n    path: "./service.greenlane"\n    type: "service"\n    branch: "main"\n'
+    } > manifest.fleet.config.yaml
+    {
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
+        printf "true\tservicegreenlane\t./service.greenlane\ttrue\tgit@github.com:example/service.greenlane.git\t\n"
+    } > manifest.fleet.tsv
+
+    export MANIFEST_CLI_GITHUB_OWNER=fidenceio
+    gh_stub_install
+    export MANIFEST_CLI_GH_STUB_ADD_REMOTE=true
+
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_fleet --create-repo-private -n test-fleet
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Would git init:  1 selected directory without git"* ]]
+    [[ "$output" == *"would gh repo create: fidenceio/service.greenlane (private)"* ]]
+
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_fleet --create-repo-private -n test-fleet -y
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Stale fleet inventory says HAS_GIT=true"* ]]
+    [[ "$output" == *"GitHub (private): 1 ready, 0 failed"* ]]
+    [ -d "$SCRATCH/service.greenlane/.git" ]
+    run git -C "$SCRATCH/service.greenlane" remote get-url origin
+    [ "$output" = "git@github.com:fidenceio/service.greenlane.git" ]
+    grep -q $'repo\tcreate\tfidenceio/service.greenlane\t--private' "$MANIFEST_CLI_GH_STUB_LOG"
+}
+
 @test "_fleet_init: re-run on an initialized fleet preserves config and backfills members (no-clobber, no bail)" {
     source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
     source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet.sh"
@@ -503,11 +568,36 @@ teardown() {
 
     git init -q "$SCRATCH/myrepo"
     gh_stub_install
+    export MANIFEST_CLI_GH_STUB_ADD_REMOTE=true
 
     run _manifest_gh_repo_create "$SCRATCH/myrepo" "private"
     [ "$status" -eq 0 ]
     grep -q $'repo\tcreate\tmyrepo\t--private' "$MANIFEST_CLI_GH_STUB_LOG"
     grep -q -- "--remote=origin" "$MANIFEST_CLI_GH_STUB_LOG"
+}
+
+@test "_manifest_gh_repo_create (live): uses github.owner and rejects inherited parent origins" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-shared-functions.sh"
+
+    git init -q "$SCRATCH"
+    git -C "$SCRATCH" remote add origin git@github.com:example/parent.git
+    mkdir -p "$SCRATCH/childrepo"
+    export MANIFEST_CLI_GITHUB_OWNER=fidenceio
+    gh_stub_install
+
+    run _manifest_gh_repo_create "$SCRATCH/childrepo" "private"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"not its own Git repository"* ]]
+    ! grep -q $'repo\tcreate' "$MANIFEST_CLI_GH_STUB_LOG"
+}
+
+@test "_manifest_github_repo_target: rejects an invalid configured owner" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-shared-functions.sh"
+    export MANIFEST_CLI_GITHUB_OWNER='bad/owner'
+
+    run _manifest_github_repo_target "$SCRATCH/myrepo"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Invalid github.owner"* ]]
 }
 
 @test "_manifest_gh_repo_create (live): returns 1 when gh repo create fails" {

@@ -91,6 +91,7 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     ["release.gate_freshness_days"]="MANIFEST_CLI_RELEASE_GATE_FRESHNESS_DAYS"
     ["release.tag_signing"]="MANIFEST_CLI_RELEASE_TAG_SIGNING"
     ["test.skip_unchanged_within"]="MANIFEST_CLI_TEST_SKIP_UNCHANGED_WITHIN"
+    ["github.owner"]="MANIFEST_CLI_GITHUB_OWNER"
     ["github.release.enabled"]="MANIFEST_CLI_GITHUB_RELEASE_ENABLED"
     ["github.release.required"]="MANIFEST_CLI_GITHUB_RELEASE_REQUIRED"
     ["github.release.draft"]="MANIFEST_CLI_GITHUB_RELEASE_DRAFT"

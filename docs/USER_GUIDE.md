@@ -150,7 +150,18 @@ Useful variants:
 manifest init fleet --depth 3
 manifest init fleet --all-folders
 manifest init fleet --name platform-services
+manifest init fleet --create-repo-private   # preview local init + remote targets
+manifest init fleet --create-repo-private -y
 ```
+
+Remote creation remains explicit even with `-y`. Configure the destination namespace once when repositories belong to an organization:
+
+```yaml
+github:
+  owner: fidenceio
+```
+
+The preview prints every repository that would be created as `<owner>/<name>`. With `github.owner` unset, the displayed owner is `<authenticated-user>` and `gh` creates under its authenticated account. Existing member origins win; directories without their own `.git` are initialized from live disk state even if the preserved TSV still says `HAS_GIT=true`.
 
 ### Adopt An Existing Workspace
 
