@@ -77,6 +77,9 @@ manifest_prep_repo() {
     done
 
     local project_root="${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}"
+    if [[ -n "$create_repo_visibility" ]]; then
+        _manifest_github_repo_target "$project_root" >/dev/null || return 1
+    fi
     local replay_command="manifest prep repo"
     [[ -n "$create_repo_visibility" ]] && replay_command="$replay_command --create-repo-$create_repo_visibility"
 
@@ -114,9 +117,9 @@ manifest_prep_repo() {
     if [[ -z "$remotes" ]]; then
         if [[ "$dry_run" == "true" ]]; then
             if [[ -n "$create_repo_visibility" ]]; then
-                local repo_name
-                repo_name="$(basename "$project_root")"
-                echo "  no remotes configured — would gh repo create: $repo_name ($create_repo_visibility) and add as origin"
+                local repo_target
+                repo_target="$(_manifest_github_repo_display_target "$project_root")" || return 1
+                echo "  no remotes configured — would gh repo create: $repo_target ($create_repo_visibility) and add as origin"
             else
                 echo "  no remotes configured — would prompt for an origin URL"
             fi

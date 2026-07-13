@@ -286,6 +286,62 @@ _manifest_require_gh() {
 }
 
 # -----------------------------------------------------------------------------
+# Function: _manifest_dir_is_own_git_repository
+# -----------------------------------------------------------------------------
+# Returns success only when DIR owns Git metadata itself. A plain `git -C DIR`
+# probe is not sufficient: Git walks upward and will happily report a parent
+# repository for an ordinary child directory.
+# -----------------------------------------------------------------------------
+_manifest_dir_is_own_git_repository() {
+    local dir="$1"
+    [[ -d "$dir" ]] || return 1
+
+    # Normal repositories and linked worktrees/submodules respectively.
+    [[ -d "$dir/.git" ]] && return 0
+    [[ -f "$dir/.git" ]] && return 0
+
+    # Bare repository support (kept aligned with manifest-discovery.sh).
+    [[ -f "$dir/HEAD" && -d "$dir/objects" && -d "$dir/refs" ]]
+}
+
+# -----------------------------------------------------------------------------
+# Function: _manifest_github_repo_target
+# -----------------------------------------------------------------------------
+# Resolves the target passed to `gh repo create`. github.owner is optional;
+# unset preserves gh's authenticated-user default. The configured owner is
+# intentionally one fleet/repo-wide value, not a per-member override map.
+# -----------------------------------------------------------------------------
+_manifest_github_repo_target() {
+    local project_root="$1"
+    local name owner
+    name="$(basename "$project_root")"
+    owner="${MANIFEST_CLI_GITHUB_OWNER:-}"
+
+    if [[ -z "$owner" ]]; then
+        printf '%s\n' "$name"
+        return 0
+    fi
+
+    if [[ ! "$owner" =~ ^[A-Za-z0-9][A-Za-z0-9-]{0,38}$ || "$owner" == *- ]]; then
+        log_error "Invalid github.owner: '$owner' (expected a GitHub user or organization name)"
+        return 1
+    fi
+
+    printf '%s/%s\n' "$owner" "$name"
+}
+
+_manifest_github_repo_display_target() {
+    local project_root="$1"
+    local target
+    target="$(_manifest_github_repo_target "$project_root")" || return 1
+    if [[ "$target" == */* ]]; then
+        printf '%s\n' "$target"
+    else
+        printf '<authenticated-user>/%s\n' "$target"
+    fi
+}
+
+# -----------------------------------------------------------------------------
 # Function: _manifest_parse_create_repo_flag
 # -----------------------------------------------------------------------------
 # Resolves --create-repo-private and --create-repo-public into a single
@@ -317,8 +373,14 @@ _manifest_parse_create_repo_flag() {
 _manifest_gh_repo_create() {
     local project_root="$1"
     local visibility="$2"
-    local name
-    name="$(basename "$project_root")"
+    local target
+
+    if ! _manifest_dir_is_own_git_repository "$project_root"; then
+        log_error "Cannot create a GitHub repo: target is not its own Git repository: $project_root"
+        return 1
+    fi
+
+    target="$(_manifest_github_repo_target "$project_root")" || return 1
 
     _manifest_require_gh || return 1
 
@@ -335,22 +397,26 @@ _manifest_gh_repo_create() {
         return 0
     fi
 
-    echo "  Creating GitHub repo: $name ($visibility)..."
+    echo "  Creating GitHub repo: $target ($visibility)..."
     local create_out
-    if ! create_out=$(gh repo create "$name" "$vis_flag" \
+    if ! create_out=$(gh repo create "$target" "$vis_flag" \
             --source="$project_root" --remote=origin 2>&1); then
-        log_error "gh repo create failed for: $name"
+        log_error "gh repo create failed for: $target"
         local last_lines
         last_lines=$(printf '%s' "$create_out" | tail -3 | tr '\n' ' ')
         echo "  $last_lines"
         echo "  Common causes: name already exists, no permission for org, auth issue."
-        echo "  Manual fallback: gh repo create $name $vis_flag --source=\"$project_root\" --remote=origin"
+        echo "  Manual fallback: gh repo create $target $vis_flag --source=\"$project_root\" --remote=origin"
         return 1
     fi
-    echo "  ✓ Created GitHub repo: $name"
     local url
     url="$(git -C "$project_root" remote get-url origin 2>/dev/null || echo "")"
-    [[ -n "$url" ]] && echo "  Origin: $url"
+    if [[ -z "$url" ]]; then
+        log_error "gh repo create returned success but did not configure origin: $project_root"
+        return 1
+    fi
+    echo "  ✓ Created GitHub repo: $target"
+    echo "  Origin: $url"
     return 0
 }
 
@@ -645,7 +711,9 @@ safe_json_write() {
 # Export all shared functions
 export -f get_current_version get_next_version get_latest_version
 export -f manifest_origin_repo_slug manifest_is_canonical_repo manifest_repo_display_name
-export -f _manifest_require_gh _manifest_parse_create_repo_flag _manifest_gh_repo_create
+export -f _manifest_require_gh _manifest_dir_is_own_git_repository
+export -f _manifest_github_repo_target _manifest_github_repo_display_target
+export -f _manifest_parse_create_repo_flag _manifest_gh_repo_create
 export -f secure_curl_request check_network_connectivity check_required_tools
 export -f generate_session_id log_operation
 export -f is_git_repository

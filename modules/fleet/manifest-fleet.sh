@@ -608,13 +608,25 @@ _fleet_init_directory() {
         return 3
     fi
 
-    if [[ "$has_git" != "true" ]]; then
+    # HAS_GIT in manifest.fleet.tsv is a cached observation, not apply-time
+    # authority. Re-check the directory itself so a preserved/stale TSV cannot
+    # make an ordinary child of the fleet-root repo inherit the parent's Git
+    # identity and skip initialization.
+    if ! _fleet_dir_is_own_git_repo "$dir_path"; then
+        if [[ "$has_git" == "true" ]]; then
+            log_warning "Stale fleet inventory says HAS_GIT=true; initializing the directory's own repository: $dir_path"
+        fi
         if git init "$dir_path" >/dev/null; then
             echo "  ✓ git init: $(basename "$dir_path")"
         else
             log_error "git init failed: $dir_path"
             return 1
         fi
+    fi
+
+    if ! _fleet_dir_is_own_git_repo "$dir_path"; then
+        log_error "Directory still does not own a Git repository after initialization: $dir_path"
+        return 1
     fi
 
     # Ensure .gitignore exists
@@ -687,7 +699,9 @@ EOF
 # sourcing order.
 _fleet_dir_is_own_git_repo() {
     local dir="$1"
-    if declare -F manifest_discovery_is_git_repository >/dev/null 2>&1; then
+    if declare -F _manifest_dir_is_own_git_repository >/dev/null 2>&1; then
+        _manifest_dir_is_own_git_repository "$dir"
+    elif declare -F manifest_discovery_is_git_repository >/dev/null 2>&1; then
         manifest_discovery_is_git_repository "$dir"
     else
         [[ -d "$dir/.git" ]] || [[ -f "$dir/.git" ]]
@@ -795,6 +809,7 @@ _fleet_init() {
     # memoizes the success result so subsequent calls inside
     # _fleet_init_directory are no-ops (TTL bounds staleness).
     if [[ -n "$create_repo_visibility" ]]; then
+        _manifest_github_repo_target "$(pwd)/manifest-owner-probe" >/dev/null || return 1
         if ! _manifest_require_gh; then
             return 1
         fi

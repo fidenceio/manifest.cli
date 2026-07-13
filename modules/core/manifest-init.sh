@@ -999,12 +999,15 @@ Idempotent — safe to re-run. Optionally creates a GitHub repo via 'gh repo cre
     done
 
     local project_root="${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}"
+    if [[ -n "$create_repo_visibility" ]]; then
+        _manifest_github_repo_target "$project_root" >/dev/null || return 1
+    fi
 
     if [[ "$dry_run" == "true" ]]; then
         echo ""
         echo "Dry run — manifest init repo: $project_root"
         echo ""
-        if ! git -C "$project_root" rev-parse --git-dir >/dev/null 2>&1; then
+        if ! _manifest_dir_is_own_git_repository "$project_root"; then
             echo "  would create: .git/   (git init)"
         else
             echo "  exists:       .git/"
@@ -1042,12 +1045,13 @@ Idempotent — safe to re-run. Optionally creates a GitHub repo via 'gh repo cre
             echo "  would create:    manifest.config.local.yaml"
         fi
         if [[ -n "$create_repo_visibility" ]]; then
-            local repo_name
-            repo_name="$(basename "$project_root")"
-            if git -C "$project_root" remote get-url origin >/dev/null 2>&1; then
+            local repo_target
+            repo_target="$(_manifest_github_repo_display_target "$project_root")" || return 1
+            if _manifest_dir_is_own_git_repository "$project_root" \
+                && git -C "$project_root" remote get-url origin >/dev/null 2>&1; then
                 echo "  exists:          origin remote (gh repo create skipped)"
             else
-                echo "  would gh repo create: $repo_name ($create_repo_visibility) and add as origin"
+                echo "  would gh repo create: $repo_target ($create_repo_visibility) and add as origin"
             fi
         fi
         echo ""
@@ -1062,7 +1066,7 @@ Idempotent — safe to re-run. Optionally creates a GitHub repo via 'gh repo cre
     echo ""
 
     # Ensure we're in a git repo (or create one)
-    if ! git -C "$project_root" rev-parse --git-dir >/dev/null 2>&1; then
+    if ! _manifest_dir_is_own_git_repository "$project_root"; then
         echo "No git repository found. Initializing..."
         if git init "$project_root" >/dev/null; then
             echo "  Created: .git/"
@@ -1223,16 +1227,31 @@ _manifest_init_fleet_dry_run_phase2() {
     selected=$(parse_start_tsv "$start_file")
 
     local selected_count=0 existing_count=0 missing_count=0 needs_git_count=0
+    local create_targets=()
     while IFS=$'\t' read -r name path has_git _url _branch _version; do
         [[ -z "$name" ]] && continue
         ((selected_count += 1))
         local abs_path="$root_dir/${path#./}"
         if [[ -d "$abs_path" ]]; then
             ((existing_count += 1))
+            local owns_git=false
+            if _manifest_dir_is_own_git_repository "$abs_path"; then
+                owns_git=true
+            else
+                ((needs_git_count += 1))
+            fi
+
+            if [[ -n "$create_repo_visibility" ]]; then
+                if [[ "$owns_git" != "true" ]] \
+                    || ! git -C "$abs_path" remote get-url origin >/dev/null 2>&1; then
+                    local display_target
+                    display_target="$(_manifest_github_repo_display_target "$abs_path")" || return 1
+                    create_targets+=("$display_target")
+                fi
+            fi
         else
             ((missing_count += 1))
         fi
-        [[ "$has_git" != "true" ]] && ((needs_git_count += 1))
     done <<< "$selected"
 
     if [[ -z "$fleet_name" ]]; then
@@ -1280,7 +1299,11 @@ _manifest_init_fleet_dry_run_phase2() {
     echo "Would git init:  $needs_git_count selected director$( [[ "$needs_git_count" == "1" ]] && echo "y" || echo "ies" ) without git"
     echo "Would scaffold:  Manifest files (VERSION/README/CHANGELOG/docs/.gitignore/scripts/run-tests.sh) in $existing_count member(s) — no-clobber, already-complete members unchanged"
     if [[ -n "$create_repo_visibility" ]]; then
-        echo "Would create:    $create_repo_visibility GitHub repo per selected directory after local init"
+        echo "Would create:    ${#create_targets[@]} $create_repo_visibility GitHub repo(s) after local init"
+        local target
+        for target in "${create_targets[@]}"; do
+            echo "  would gh repo create: $target ($create_repo_visibility)"
+        done
     fi
     if [[ "$stale" == "true" ]]; then
         echo ""
@@ -1380,6 +1403,9 @@ manifest_init_fleet() {
     done
 
     local root_dir="$(pwd)"
+    if [[ -n "$create_repo_visibility" ]]; then
+        _manifest_github_repo_target "$root_dir/manifest-owner-probe" >/dev/null || return 1
+    fi
     local start_file="$root_dir/manifest.fleet.tsv"
     local config_file="$root_dir/manifest.fleet.config.yaml"
 

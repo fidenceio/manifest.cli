@@ -100,7 +100,7 @@ Outward actions — push, GitHub Release, create-remote — gate on `verified`, 
 | select / unselect | membership flag (`SELECT`) | yes | default benched; reversible | realized (TSV toggle) |
 | clone | Local `absent` → `repo` | yes (skip if present) | read-only on remote | designed |
 | verify | Remote `declared` → `verified` | yes (pure read) | grants outward trust | primitive in use (`git ls-remote`); user-facing sweep designed |
-| create-remote | Remote → `verified` | yes (create-if-absent, never clobber) | irreversible — dry-run first | repo-scoped (`--create-repo-*`); fleet bootstrap is backlog |
+| create-remote | Remote → `verified` | yes (create-if-absent, never clobber) | irreversible — dry-run first | realized for repo and fleet init (`--create-repo-*`) |
 
 Release disposition (eligible / current / release-disabled / PR-gated) is an orthogonal axis — see [Release Model](#release-model).
 

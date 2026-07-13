@@ -82,6 +82,10 @@ EOF
 }
 
 @test "yaml: maps GitHub release policy" {
+    run yaml_path_to_env_var "github.owner"
+    [ "$status" -eq 0 ]
+    [ "$output" = "MANIFEST_CLI_GITHUB_OWNER" ]
+
     run yaml_path_to_env_var "github.release.enabled"
     [ "$status" -eq 0 ]
     [ "$output" = "MANIFEST_CLI_GITHUB_RELEASE_ENABLED" ]
@@ -201,18 +205,20 @@ EOF
     set_yaml_value "$YAML" "git.default_branch" "trunk"
     set_yaml_value "$YAML" "release.tag_target" "release_head"
     set_yaml_value "$YAML" "github.release.enabled" "false"
+    set_yaml_value "$YAML" "github.owner" "fidenceio"
     set_yaml_value "$YAML" "docs.review.outputs" "commit_body,report"
     set_yaml_value "$YAML" "docs.review.report_dir" "docs/reviews"
     set_yaml_value "$YAML" "docs.generate.enabled" "false"
     set_yaml_value "$YAML" "docs.site.source_dir" "site-docs"
     set_yaml_value "$YAML" "docs.site.theme" "minimal"
-    unset MANIFEST_CLI_GIT_TAG_PREFIX MANIFEST_CLI_GIT_DEFAULT_BRANCH MANIFEST_CLI_RELEASE_TAG_TARGET MANIFEST_CLI_GITHUB_RELEASE_ENABLED MANIFEST_CLI_DOC_REVIEW_OUTPUTS MANIFEST_CLI_DOC_REVIEW_REPORT_DIR
+    unset MANIFEST_CLI_GIT_TAG_PREFIX MANIFEST_CLI_GIT_DEFAULT_BRANCH MANIFEST_CLI_RELEASE_TAG_TARGET MANIFEST_CLI_GITHUB_RELEASE_ENABLED MANIFEST_CLI_GITHUB_OWNER MANIFEST_CLI_DOC_REVIEW_OUTPUTS MANIFEST_CLI_DOC_REVIEW_REPORT_DIR
     unset MANIFEST_CLI_DOCS_GENERATE_ENABLED MANIFEST_CLI_DOCS_SITE_SOURCE_DIR MANIFEST_CLI_DOCS_SITE_THEME
     load_yaml_to_env "$YAML"
     [ "$MANIFEST_CLI_GIT_TAG_PREFIX" = "release-" ]
     [ "$MANIFEST_CLI_GIT_DEFAULT_BRANCH" = "trunk" ]
     [ "$MANIFEST_CLI_RELEASE_TAG_TARGET" = "release_head" ]
     [ "$MANIFEST_CLI_GITHUB_RELEASE_ENABLED" = "false" ]
+    [ "$MANIFEST_CLI_GITHUB_OWNER" = "fidenceio" ]
     [ "$MANIFEST_CLI_DOC_REVIEW_OUTPUTS" = "commit_body,report" ]
     [ "$MANIFEST_CLI_DOC_REVIEW_REPORT_DIR" = "docs/reviews" ]
     [ "$MANIFEST_CLI_DOCS_GENERATE_ENABLED" = "false" ]
