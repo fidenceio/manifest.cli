@@ -103,3 +103,76 @@ YAML
     echo "$output" | grep -q "scan_depth 'too-deep' is invalid"
     echo "$output" | grep -q "notification_mode 'chatty' is invalid"
 }
+
+@test "version surfaces: policy JSON reflects the built-in defaults" {
+    unset MANIFEST_CLI_VERSION_SURFACES_ENABLED MANIFEST_CLI_VERSION_SURFACE_SCAN_DEPTH \
+          MANIFEST_CLI_VERSION_SURFACE_NOTIFICATION_MODE MANIFEST_CLI_VERSION_SURFACE_NOTIFY \
+          MANIFEST_CLI_VERSION_HANDLER_CATALOG
+
+    run manifest_version_surface_policy_json
+    [ "$status" -eq 0 ]
+    echo "$output" | jq -e '.enabled == true' >/dev/null
+    echo "$output" | jq -e '.notification_mode == "summary"' >/dev/null
+    echo "$output" | jq -e '.depth == 5' >/dev/null
+    echo "$output" | jq -e '.catalog | endswith("modules/catalog/version-handlers.tsv")' >/dev/null
+}
+
+@test "version surfaces: policy JSON reflects configured overrides" {
+    export MANIFEST_CLI_VERSION_SURFACES_ENABLED="false"
+    export MANIFEST_CLI_VERSION_SURFACE_SCAN_DEPTH="3"
+    export MANIFEST_CLI_VERSION_SURFACE_NOTIFICATION_MODE="off"
+    export MANIFEST_CLI_VERSION_HANDLER_CATALOG="$SCRATCH/handlers.tsv"
+
+    run manifest_version_surface_policy_json
+    [ "$status" -eq 0 ]
+    echo "$output" | jq -e '.enabled == false' >/dev/null
+    echo "$output" | jq -e '.notification_mode == "off"' >/dev/null
+    echo "$output" | jq -e '.depth == 3' >/dev/null
+    echo "$output" | jq -e --arg c "$SCRATCH/handlers.tsv" '.catalog == $c' >/dev/null
+}
+
+@test "version surfaces: catalog entries read the built-in catalog as well-formed TSV" {
+    unset MANIFEST_CLI_VERSION_HANDLER_CATALOG
+    run manifest_version_catalog_entries
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q $'^manifest-version-file\tVERSION\tcanonical\ttext'
+    echo "$output" | grep -q $'^npm-package\tpackage.json\tpackage-manifest\tjson'
+    # Every emitted row has >= 4 tab-separated columns and no comment rows.
+    local bad
+    bad=$(manifest_version_catalog_entries | awk -F'\t' 'NF < 4 || $1 ~ /^#/ { c++ } END { print c+0 }')
+    [ "$bad" = "0" ]
+}
+
+@test "version surfaces: catalog entries skip comments and rows with too few columns" {
+    cat > "$SCRATCH/handlers.tsv" <<'TSV'
+# comment row
+good-json	widget.json	package-manifest	json
+short-row	only-three.txt	text
+TSV
+    export MANIFEST_CLI_VERSION_HANDLER_CATALOG="$SCRATCH/handlers.tsv"
+
+    run manifest_version_catalog_entries
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [ "${lines[0]}" = $'good-json\twidget.json\tpackage-manifest\tjson' ]
+}
+
+@test "version surfaces: scan silently ignores malformed catalog rows" {
+    cat > "$SCRATCH/handlers.tsv" <<'TSV'
+good-yaml	app.yaml	package-manifest	yaml
+bad-row	orphan.txt	text
+TSV
+    export MANIFEST_CLI_VERSION_HANDLER_CATALOG="$SCRATCH/handlers.tsv"
+    echo "1.0.0" > "$SCRATCH/VERSION"
+    printf 'version: "4.5.6"\n' > "$SCRATCH/app.yaml"
+    echo "9.9.9" > "$SCRATCH/orphan.txt"
+
+    run manifest_version_surface_scan "$SCRATCH" 1
+    [ "$status" -eq 0 ]
+    # Well-formed row is detected; canonical VERSION is still reported.
+    echo "$output" | grep -q $'good-yaml\tpackage-manifest\tyaml\tnoncanonical\tapp.yaml\t4.5.6'
+    echo "$output" | grep -q $'custom-version-file\tcanonical\ttext\tcanonical\tVERSION\t1.0.0'
+    # The malformed (3-column) row is dropped without warning or error, so its
+    # file never becomes a scanned surface.
+    ! echo "$output" | grep -q "orphan.txt"
+}

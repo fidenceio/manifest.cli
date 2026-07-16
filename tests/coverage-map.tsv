@@ -20,12 +20,12 @@
 # an unmapped change runs them via the full fallback.
 
 modules/docs/*.sh	archive_move_log.bats archive_pre_move_safety.bats docs_generation.bats release_notes_provider.bats root_changelog.bats
-modules/fleet/*.sh	create_repo.bats discovery.bats doc_review.bats fleet_action_syntax.bats fleet_apply_lock.bats fleet_config_validation_knobs.bats fleet_dry_run.bats fleet_init_phase.bats fleet_partial_failure_recovery.bats fleet_plan_reconcile.bats fleet_preflight_git_write.bats fleet_private_routes.bats fleet_resume.bats fleet_ship_plan_dirty_column.bats ship_local_apply.bats status.bats
-modules/git/*.sh	doc_review.bats docs_generation.bats dry_run.bats fleet_apply_lock.bats fleet_resume.bats fleet_ship_plan_dirty_column.bats install_requirements.bats ship_local_apply.bats ship_pretag_reentrancy.bats ship_release_branch_guard.bats ship_resume.bats tag_target.bats version.bats
+modules/fleet/*.sh	create_repo.bats discovery.bats doc_review.bats fleet_action_syntax.bats fleet_add_apply.bats fleet_apply_lock.bats fleet_config_inheritance.bats fleet_config_validation_knobs.bats fleet_docs_apply.bats fleet_dry_run.bats fleet_empty_remote_repair_e2e.bats fleet_init_phase.bats fleet_prep_apply.bats fleet_partial_failure_recovery.bats fleet_plan_reconcile.bats fleet_preflight_git_write.bats fleet_private_routes.bats fleet_resume.bats fleet_ship_plan_dirty_column.bats ship_local_apply.bats status.bats
+modules/git/*.sh	doc_review.bats docs_generation.bats dry_run.bats fleet_apply_lock.bats fleet_resume.bats fleet_ship_plan_dirty_column.bats install_requirements.bats prep_apply.bats ship_local_apply.bats ship_pretag_reentrancy.bats ship_release_branch_guard.bats ship_resume.bats tag_target.bats version.bats
 modules/catalog/*.tsv	version_surfaces.bats
 modules/pr/*.sh	pr_native_safe_by_default.bats
 modules/recipe/*.sh	doc_review.bats recipe.bats
 modules/stubs/*.sh	cloud_contract.bats
-modules/system/*.sh	apply_audit_log.bats env_generate.bats env_naming_validate.bats fleet_apply_lock.bats install_cli_e2e.bats install_paths_centralized.bats install_paths_plugin_data_dirs.bats install_requirements.bats os_detection_preamble.bats runtime_cleanup.bats security_check.bats status.bats time.bats uninstall_sandbox_tripwire.bats
+modules/system/*.sh	apply_audit_log.bats env_dispatch.bats env_generate.bats env_naming_validate.bats fleet_apply_lock.bats install_cli_branches.bats install_cli_e2e.bats install_cli_homebrew_channel.bats install_paths_centralized.bats install_paths_manual_install.bats install_paths_plugin_data_dirs.bats install_requirements.bats os_detection_preamble.bats os_helpers.bats runtime_cleanup.bats security_check.bats status.bats time.bats uninstall_brew_channel.bats uninstall_sandbox_tripwire.bats
 modules/workflow/*.sh	doc_review.bats fleet_apply_lock.bats fleet_partial_failure_recovery.bats fleet_resume.bats fleet_ship_plan_dirty_column.bats github_actions_status.bats release_gate.bats ship_local_apply.bats ship_pretag_reentrancy.bats ship_release_branch_guard.bats ship_resume.bats
 completions/*	completions.bats
