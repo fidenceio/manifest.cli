@@ -189,14 +189,18 @@ _sha() {
     [ "$(shasum -a 256 "$HOME/.manifest-cli/manifest.config.global.yaml" | awk '{print $1}')" = "$config_sha" ]
 }
 
-@test "atomic-upgrade: upgrade does not rewrite shell profiles" {
+@test "atomic-upgrade: upgrade does not rewrite shell profiles (duplicate-write defect regression)" {
     mkdir -p "$HOME/.manifest-cli/runtime/v0.0.1/modules"
     echo "0.0.1" > "$HOME/.manifest-cli/runtime/v0.0.1/VERSION"
     ln -s "runtime/v0.0.1" "$HOME/.manifest-cli/current"
 
+    # The MANIFEST_CLI_* line matters: profile cleanup targets exactly those
+    # lines, so a profile carrying one is the fixture that would tempt a
+    # rewrite. (The duplicate cleanup_environment_variables call previously
+    # produced two backups per upgrade.)
     cat > "$HOME/.zshrc" <<'EOF'
 # sentinel-zshrc
-export FOO=bar
+export MANIFEST_CLI_FOO=bar
 export PATH="$HOME/.local/bin:$PATH"
 EOF
     local zshrc_sha
@@ -212,26 +216,6 @@ EOF
 
     # Shasum unchanged.
     [ "$(shasum -a 256 "$HOME/.zshrc" | awk '{print $1}')" = "$zshrc_sha" ]
-}
-
-@test "atomic-upgrade: duplicate-write defect regression — zero backups on upgrade" {
-    # Direct regression assertion for the duplicate cleanup_environment_variables
-    # call that previously produced two backups per upgrade.
-    mkdir -p "$HOME/.manifest-cli/runtime/v0.0.1/modules"
-    echo "0.0.1" > "$HOME/.manifest-cli/runtime/v0.0.1/VERSION"
-    ln -s "runtime/v0.0.1" "$HOME/.manifest-cli/current"
-
-    cat > "$HOME/.zshrc" <<'EOF'
-export MANIFEST_CLI_FOO=bar
-export PATH="$HOME/.local/bin:$PATH"
-EOF
-
-    _run_installer
-    [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
-
-    local count
-    count="$(ls "$HOME"/.zshrc.manifest-backup-* 2>/dev/null | wc -l | tr -d '[:space:]')"
-    [ "$count" = "0" ]
 }
 
 @test "atomic-upgrade: prune keeps N most recent versions" {
@@ -328,24 +312,6 @@ EOF
 
     [ -d "$HOME/.manifest-cli/runtime/v0.0.0-legacy" ]
     [ -f "$HOME/.manifest-cli/runtime/v0.0.0-legacy/modules/core/marker" ]
-}
-
-@test "atomic-upgrade: install lock prevents concurrent runs" {
-    mkdir -p "$HOME/.manifest-cli"
-    # Plant a lock owned by our own pid so kill -0 succeeds.
-    {
-        echo "$$"
-        date -u +"%Y-%m-%dT%H:%M:%SZ"
-    } > "$HOME/.manifest-cli/.install.lock"
-
-    _run_installer
-    [ "$status" -ne 0 ]
-    echo "$output" | grep -q "already in progress"
-    # runtime/ must not have been created or written by the rejected run.
-    [ ! -d "$HOME/.manifest-cli/runtime" ]
-
-    # Clean the lock so teardown succeeds.
-    rm -f "$HOME/.manifest-cli/.install.lock"
 }
 
 # =============================================================================

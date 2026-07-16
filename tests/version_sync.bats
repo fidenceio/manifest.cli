@@ -92,12 +92,14 @@ JSON
     [ "$(jq -r '.bundledDep.version' package.json)" = "9.9.9" ]
 }
 
-@test "version-sync: a missing target is skipped, not created (fail-closed)" {
+@test "version-sync: missing targets are skipped, not created (fail-closed, all types)" {
     write_version "1.0.0"
-    export MANIFEST_CLI_VERSION_SYNC="package.json"
+    export MANIFEST_CLI_VERSION_SYNC="package.json, package.toml, package.yaml"
     run bump_version "patch"
     [ "$status" -eq 0 ]
     [ ! -f package.json ]
+    [ ! -f package.toml ]
+    [ ! -f package.yaml ]
 }
 
 @test "version-sync: a JSON file with no version field is left untouched (fail-closed)" {
@@ -168,15 +170,6 @@ YAML
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "no top-level"
     [ "$(cat package.yml)" = $'package:\n  version: 1.0.0' ]
-}
-
-@test "version-sync: missing TOML/YAML targets are skipped, not created (fail-closed)" {
-    write_version "1.0.0"
-    export MANIFEST_CLI_VERSION_SYNC="package.toml, package.yaml"
-    run bump_version "patch"
-    [ "$status" -eq 0 ]
-    [ ! -f package.toml ]
-    [ ! -f package.yaml ]
 }
 
 @test "version-sync: TOML/YAML files with no version field are left untouched (fail-closed)" {
