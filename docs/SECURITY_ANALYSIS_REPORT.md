@@ -28,8 +28,9 @@ during release automation:
 ### Safe-by-default execution
 
 - Mutating commands preview unless `-y` / `--yes`; `--dry-run` is the explicit
-  preview spelling. `MANIFEST_CLI_AUTO_CONFIRM` only answers prompts after apply
-  is selected — it does not authorize apply.
+  preview spelling. `-y` applies with no confirmation prompt; an ambiguous apply
+  target (detached HEAD / no origin) is refused unless `MANIFEST_CLI_AUTO_CONFIRM`
+  authorizes it. `MANIFEST_CLI_AUTO_CONFIRM` does not authorize apply.
 - Global configuration writes require confirmation, with stricter confirmation
   for destructive global-config changes.
 - Destructive operations (removal, global `brew uninstall`) are gated and

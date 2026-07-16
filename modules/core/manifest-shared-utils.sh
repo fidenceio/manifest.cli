@@ -958,7 +958,7 @@ manifest_repo_scope_confirm_apply() {
     local project_root="${1:-${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}}"
     local replay_command="${2:-manifest command -y}"
     local origin_required="${3:-true}"
-    local git_root branch origin answer
+    local git_root branch origin
 
     if ! manifest_repo_scope_require_git "$replay_command"; then
         return 1
@@ -982,42 +982,29 @@ manifest_repo_scope_confirm_apply() {
     echo "  Command:  $replay_command"
     echo ""
 
-    # Explicit override: authorize even an ambiguous target. Stays the escape
-    # hatch for detached HEAD / no-origin non-interactive applies.
+    # Explicit override: authorize even an ambiguous target. The escape hatch
+    # for a detached HEAD / no-origin apply.
     if [[ "${MANIFEST_CLI_AUTO_CONFIRM:-0}" == "1" ]]; then
         echo "Auto-confirmed repository target (MANIFEST_CLI_AUTO_CONFIRM=1): $git_root"
         manifest_git_preflight_write_access "$git_root" "$replay_command"
         return $?
     fi
 
-    # Non-interactive (no TTY to answer the target prompt). Under model C an
-    # unambiguous target (named branch + origin when required) is auto-confirmed
-    # on the strength of -y alone; an ambiguous one still refuses.
-    if [[ ! -t 0 ]]; then
-        if manifest_repo_scope_target_unambiguous "$git_root" "$origin_required"; then
-            echo "Auto-confirmed unambiguous target (non-interactive apply via -y): $git_root"
-            manifest_git_preflight_write_access "$git_root" "$replay_command"
-            return $?
-        fi
-        log_error "Ambiguous apply target in a non-interactive context (no origin remote, or detached HEAD)."
-        log_error "Run interactively to confirm, run from the intended repo, or set MANIFEST_CLI_AUTO_CONFIRM=1 to authorize explicitly."
-        log_error "  Target: $git_root"
-        return 1
+    # -y is full apply authorization — the target is never confirmed by a
+    # prompt, whether or not a TTY is attached. An unambiguous target (named
+    # branch + origin when required) applies on the strength of -y alone; an
+    # ambiguous one is refused (not prompted) — fix the repo, or set
+    # MANIFEST_CLI_AUTO_CONFIRM=1 to authorize it explicitly.
+    if manifest_repo_scope_target_unambiguous "$git_root" "$origin_required"; then
+        echo "Auto-confirmed unambiguous target (apply via -y): $git_root"
+        manifest_git_preflight_write_access "$git_root" "$replay_command"
+        return $?
     fi
 
-    printf "Apply to this repository? [y/N] "
-    read -r answer || return 1
-    case "$answer" in
-        y|Y|yes|YES|Yes)
-            echo "Confirmed repository target: $git_root"
-            manifest_git_preflight_write_access "$git_root" "$replay_command"
-            return $?
-            ;;
-        *)
-            log_error "Repository target was not confirmed; no changes written."
-            return 1
-            ;;
-    esac
+    log_error "Ambiguous apply target (detached HEAD, or no origin remote when one is required); no changes written."
+    log_error "Fix the repo (named branch + an origin remote), or set MANIFEST_CLI_AUTO_CONFIRM=1 to authorize explicitly."
+    log_error "  Target: $git_root"
+    return 1
 }
 
 get_modules_dir() {

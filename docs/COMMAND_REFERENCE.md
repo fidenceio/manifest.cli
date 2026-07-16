@@ -233,7 +233,7 @@ Common environment variables:
 
 | Variable | Purpose |
 | -------- | ------- |
-| `MANIFEST_CLI_AUTO_CONFIRM` | Answer prompts after explicit apply selection |
+| `MANIFEST_CLI_AUTO_CONFIRM` | Authorize an ambiguous apply target (detached HEAD / no origin) after `-y`; not needed for an ordinary apply |
 | `MANIFEST_CLI_PREVIEW_EXIT_CODE` | `zero` (default) or `distinct` — exit code for a preview-without-consent (see Exit Codes) |
 | `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH` | Control canonical follow-up patch behavior |
 | `MANIFEST_CLI_DOCS_GENERATE_SITE` | Enable docs-site generation |

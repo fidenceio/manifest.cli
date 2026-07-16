@@ -680,6 +680,18 @@ _gate_pass_ledger_file() { echo "$MANIFEST_CLI_PROJECT_ROOT/.manifest-cli/releas
     [[ "$output" == *"BASH_FOUND"* ]]
 }
 
+@test "gate exec: stdin is closed so a gate never blocks on terminal input" {
+    # A release gate is non-interactive: the exec'd command must see EOF on
+    # stdin, never inherit the caller's stdin/terminal. Piping data in proves
+    # the </dev/null redirect wins — without it a gate test that reaches an
+    # interactive `read` would consume this line (and, from a TTY, block
+    # `manifest ship` waiting on a keypress).
+    local out
+    out="$(printf 'SHOULD_NOT_BE_READ\n' | _manifest_release_gate_exec "$SCRATCH" \
+        bash -c 'if IFS= read -r line; then echo "READ:[$line]"; else echo "EOF"; fi')"
+    [ "$out" = "EOF" ]
+}
+
 @test "gate exec: a configured gate_command runs end-to-end via run as argv (no shell injection)" {
     # End-to-end: gate_command resolved by the run path and exec'd as argv. A
     # value crafted as a shell injection must NOT touch the marker file.

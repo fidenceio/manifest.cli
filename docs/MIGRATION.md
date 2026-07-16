@@ -25,17 +25,24 @@ manifest ship repo patch -y     # apply — performs the release
 You cannot combine `--dry-run` with `-y`; preview is already the default, so the
 combination is rejected rather than silently guessed.
 
+### `-y` applies without a confirmation prompt
+
+`-y` is full apply authorization: it applies with **no** interactive
+confirmation prompt, whether or not a terminal is attached. On a normal repo (a
+named branch + an `origin` remote) `-y` alone applies. An **ambiguous** target —
+detached HEAD, or no `origin` when one is required — is *refused* (never
+prompted); fix the repo, or set `MANIFEST_CLI_AUTO_CONFIRM=1` to authorize it.
+
 ### `MANIFEST_CLI_AUTO_CONFIRM` is not an apply switch
 
-`MANIFEST_CLI_AUTO_CONFIRM=1` only answers interactive confirmation prompts
+`MANIFEST_CLI_AUTO_CONFIRM=1` only authorizes an *ambiguous* apply target
 **after** apply mode has already been selected with `-y`. It does **not**
-authorize apply on its own. A command without `-y` still previews even when
-`MANIFEST_CLI_AUTO_CONFIRM=1` is set.
-
-For a fully non-interactive single-repo apply (e.g. CI), combine both:
+authorize apply on its own — a command without `-y` still previews even when it
+is set — and it is not needed for an ordinary (unambiguous) apply.
 
 ```bash
-MANIFEST_CLI_AUTO_CONFIRM=1 manifest ship repo patch -y
+manifest ship repo patch -y                              # normal repo: applies, no prompt
+MANIFEST_CLI_AUTO_CONFIRM=1 manifest ship repo patch -y  # also authorizes an ambiguous target
 ```
 
 Fleet apply (`manifest ship fleet <type> -y`) treats its own `-y` as consent for
