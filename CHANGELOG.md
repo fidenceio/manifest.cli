@@ -1,5 +1,15 @@
 # Changelog
 
+## [56.5.0] - 2026-07-16
+
+**Release Type:** Minor
+
+### Changes
+
+- Canonicalize the test scratch dir so macOS path assertions hold
+- Update 1 file before release
+
+
 ## [56.4.2] - 2026-07-16
 
 **Release Type:** Patch
@@ -94,12 +104,3 @@
 ### Changes
 
 - Fix(release-gate): force-bump skips the gate for clean, at-tag version stamps
-
-
-## [55.4.1] - 2026-06-22
-
-**Release Type:** Patch
-
-### Changes
-
-- Add regression coverage for the changed CLI workflow
