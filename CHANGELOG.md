@@ -1,5 +1,15 @@
 # Changelog
 
+## [56.4.2] - 2026-07-16
+
+**Release Type:** Patch
+
+### Changes
+
+- Fix fleet update diff to read the TSV roster, not the YAML services map
+- Update 1 file before release
+
+
 ## [56.4.1] - 2026-07-13
 
 **Release Type:** Patch
@@ -89,15 +99,6 @@
 ## [55.4.1] - 2026-06-22
 
 **Release Type:** Patch
-
-### Changes
-
-- Add regression coverage for the changed CLI workflow
-
-
-## [55.4.0] - 2026-06-22
-
-**Release Type:** Minor
 
 ### Changes
 
