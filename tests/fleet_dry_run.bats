@@ -332,6 +332,73 @@ TSV
     [[ "$output" != *"fidenceiohomebrewtap"* ]]
 }
 
+# A TSV-based fleet: the config carries NO `services:` map, so the roster of
+# record is manifest.fleet.tsv (mirrors the real fidence coordination repo).
+write_tsv_only_config() {
+    cat > "$SCRATCH/work/manifest.fleet.config.yaml" <<'YAML'
+fleet:
+  name: "test-fleet"
+  versioning: "none"
+YAML
+}
+
+@test "update fleet --dry-run on a TSV-based fleet reads members as unchanged, not new" {
+    # Regression: diff_discovered_repos used to diff against the config
+    # `services:` map only. With no such map (TSV-based fleet), every discovered
+    # repo was misreported as "new" and none as "unchanged" — which would tempt
+    # a membership rewrite that resets curated SELECT=false rows.
+    mkdir -p "$SCRATCH/work/svc-a" "$SCRATCH/work/svc-b" "$SCRATCH/work/svc-c"
+    git -C "$SCRATCH/work/svc-a" init -q
+    git -C "$SCRATCH/work/svc-b" init -q
+    git -C "$SCRATCH/work/svc-c" init -q
+    write_tsv_only_config
+    # svc-c is deselected (SELECT=false) but still tracked and present on disk.
+    cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
+true	svc-a	./svc-a	true
+true	svc-b	./svc-b	true
+false	svc-c	./svc-c	true
+TSV
+    before="$(cat "$SCRATCH/work/manifest.fleet.tsv")"
+
+    run_manifest update fleet --dry-run
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"MANIFEST FLEET UPDATE (dry-run)"* ]]
+    # All three roster rows — including the deselected one — are recognized.
+    [[ "$output" == *"+ New:       0"* ]]
+    [[ "$output" == *"~ Changed:   0"* ]]
+    [[ "$output" == *"= Unchanged: 3"* ]]
+    [[ "$output" == *"- Missing:   0"* ]]
+    # The deselected member must not surface in the "new repositories" preview.
+    [[ "$output" != *"New repositories"* ]]
+    [[ "$output" == *"✓ No new repositories found."* ]]
+    # Dry-run is read-only: the curated TSV (SELECT column included) is untouched.
+    [ "$(cat "$SCRATCH/work/manifest.fleet.tsv")" = "$before" ]
+}
+
+@test "update fleet --dry-run on a TSV-based fleet flags genuinely new and missing members" {
+    # svc-a is tracked + present (=), svc-new is present but untracked (+),
+    # gone is tracked in the TSV but absent from disk (-).
+    mkdir -p "$SCRATCH/work/svc-a" "$SCRATCH/work/svc-new"
+    git -C "$SCRATCH/work/svc-a" init -q
+    git -C "$SCRATCH/work/svc-new" init -q
+    write_tsv_only_config
+    cat > "$SCRATCH/work/manifest.fleet.tsv" <<'TSV'
+true	svc-a	./svc-a	true
+true	gone	./gone	true
+TSV
+
+    run_manifest update fleet --dry-run
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"+ New:       1"* ]]
+    [[ "$output" == *"= Unchanged: 1"* ]]
+    [[ "$output" == *"- Missing:   1"* ]]
+    [[ "$output" == *"svc-new"* ]]
+    [[ "$output" == *"Missing repositories"* ]]
+    [[ "$output" == *"gone"* ]]
+}
+
 @test "refresh fleet --dry-run reports no drift for configured dotted-name members" {
     mkdir -p "$SCRATCH/work/fidenceio.manifest.cli" "$SCRATCH/work/fidenceio.homebrew.tap/Formula"
     git -C "$SCRATCH/work" init -q

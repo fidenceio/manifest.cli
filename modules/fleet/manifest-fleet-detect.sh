@@ -1166,29 +1166,53 @@ diff_discovered_repos() {
     local discovered="$1"
     local manifest_file="${2:-$MANIFEST_CLI_FLEET_CONFIG_FILE}"
 
-    # Get services from manifest
-    local manifest_services=""
-    if [[ -f "$manifest_file" ]]; then
-        manifest_services=$(get_yaml_services "$manifest_file")
-    fi
-
-    # Build a lookup of manifest service paths
-    # NOTE: We read directly from the YAML file (via get_yaml_value) rather than
-    # using get_fleet_service_property, because the latter requires load_fleet_config
-    # to have been called first — which isn't guaranteed in all code paths (e.g.
-    # update fleet --dry-run, update fleet --quiet).
+    # Build a lookup of roster paths -> member name. Keys are normalized (leading
+    # "./" and trailing "/" stripped) so they compare cleanly against discovery
+    # output regardless of how the roster spells the path.
+    #
+    # The roster of record is manifest.fleet.tsv — the same source load_fleet_config,
+    # ship, and status read. Diff against EVERY TSV row, both SELECT=true and
+    # SELECT=false, so deselected-but-tracked members (e.g. design/) read as
+    # "unchanged" rather than being misreported as "new"; SELECT scopes which
+    # members ship/update act on, it does not define roster membership.
+    #
+    # This must read the TSV directly rather than via get_yaml_services /
+    # get_fleet_service_property: get_yaml_services returns only the SELECT=true
+    # NAMES (and cannot supply paths for a TSV-based fleet, whose config has no
+    # `services:` map to resolve them against), and get_fleet_service_property
+    # requires load_fleet_config to have run — not guaranteed in every code path
+    # (e.g. update fleet --dry-run / --quiet). Reading the TSV here keeps the diff
+    # self-contained and correct for both selected and deselected rows.
     declare -A manifest_paths
-    for service in $manifest_services; do
-        local path
-        path=$(get_yaml_value "$manifest_file" ".services.$service.path" "")
-        if [[ -n "$path" ]]; then
-            # Make relative if absolute
-            path="${path#"$MANIFEST_CLI_FLEET_ROOT"/}"
-            # Strip leading ./ so paths match discovery output format
-            path="${path#./}"
-            manifest_paths["$path"]="$service"
-        fi
-    done
+    local roster_root roster_tsv
+    roster_root="${MANIFEST_CLI_FLEET_ROOT:-$(dirname "$manifest_file")}"
+    roster_tsv="$roster_root/manifest.fleet.tsv"
+    if [[ -f "$roster_tsv" ]]; then
+        local tsv_line
+        while IFS= read -r tsv_line || [[ -n "$tsv_line" ]]; do
+            case "$tsv_line" in '#'*|'') continue ;; esac
+            local tsv_fields=()
+            _manifest_fleet_tsv_read_line "$tsv_line" tsv_fields
+            local tsv_name="${tsv_fields[1]:-}"
+            local tsv_path="${tsv_fields[2]:-}"
+            [[ -z "$tsv_path" ]] && continue
+            tsv_path=$(_fleet_normalize_relative_path "$tsv_path")
+            manifest_paths["$tsv_path"]="$tsv_name"
+        done < "$roster_tsv"
+    elif [[ -f "$manifest_file" ]]; then
+        # Legacy fallback: no roster TSV present. Resolve members from the config
+        # `services:` map so pre-TSV fleets still diff.
+        local service
+        for service in $(get_yaml_services "$manifest_file" 2>/dev/null); do
+            local path
+            path=$(get_yaml_value "$manifest_file" ".services.$service.path" "")
+            if [[ -n "$path" ]]; then
+                path="${path#"$MANIFEST_CLI_FLEET_ROOT"/}"
+                path=$(_fleet_normalize_relative_path "$path")
+                manifest_paths["$path"]="$service"
+            fi
+        done
+    fi
 
     # Process discovered repos
     local discovered_paths=()
@@ -1205,11 +1229,14 @@ diff_discovered_repos() {
     while IFS=$'\t' read -r name path branch version url is_sub; do
         [[ -z "$name" ]] && continue
 
-        discovered_paths+=("$path")
+        # Normalize so the lookup matches the roster keys built above.
+        local key
+        key=$(_fleet_normalize_relative_path "$path")
+        discovered_paths+=("$key")
 
-        if [[ -n "${manifest_paths[$path]:-}" ]]; then
-            # Found in manifest - check for differences
-            local manifest_name="${manifest_paths[$path]}"
+        if [[ -n "${manifest_paths[$key]:-}" ]]; then
+            # Found in roster - check for a name difference
+            local manifest_name="${manifest_paths[$key]}"
 
             if [[ "$name" != "$manifest_name" ]]; then
                 echo "~	$name	$path	$branch	$version	$url	$is_sub"
@@ -1217,7 +1244,7 @@ diff_discovered_repos() {
                 echo "=	$name	$path	$branch	$version	$url	$is_sub"
             fi
         else
-            # New repository not in manifest
+            # New repository not in the roster
             echo "+	$name	$path	$branch	$version	$url	$is_sub"
         fi
     done <<< "$discovered"
