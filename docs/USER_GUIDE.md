@@ -44,7 +44,7 @@ Fleet commands print the fleet root, config path, selected services, release dec
 | `-y` / `--yes` | Apply |
 | `--local -y` | Apply local writes only; skip remote side effects |
 
-`MANIFEST_CLI_AUTO_CONFIRM=1` may answer prompts after apply mode is selected. It is not an apply selector.
+`-y` applies with no confirmation prompt. `MANIFEST_CLI_AUTO_CONFIRM=1` only authorizes an *ambiguous* apply target (detached HEAD, or no `origin`) after `-y`; it is not an apply selector and is not needed for an ordinary apply.
 
 ## First-Time Setup
 

@@ -359,6 +359,13 @@ _manifest_gate_path_floor() {
 _manifest_release_gate_exec() {
     local gate_root="$1"
     shift
+    # Stdin is closed (</dev/null): a release gate is non-interactive
+    # verification and must never block on terminal input. Without this, a gate
+    # command run from a TTY (e.g. `manifest ship` in a terminal) inherits that
+    # TTY, so any test that reaches an interactive read — a bare stdin prompt,
+    # or a `< /dev/tty` prompt whose `-t 0` guard is now true — hangs the ship
+    # waiting on a keypress. Closing stdin makes every such guard fall to its
+    # non-interactive path.
     env -i \
         PATH="$(_manifest_gate_path_floor "${PATH-}")" \
         HOME="${HOME-}" \
@@ -371,7 +378,7 @@ _manifest_release_gate_exec() {
         LC_ALL="${LC_ALL-}" \
         LC_CTYPE="${LC_CTYPE-}" \
         TZ="${TZ-}" \
-        bash -c 'cd "$1" || exit 1; shift; exec "$@"' _ "$gate_root" "$@"
+        bash -c 'cd "$1" || exit 1; shift; exec "$@"' _ "$gate_root" "$@" </dev/null
 }
 
 # True when the current ship is a --force-bump of a tree with NO code delta: a

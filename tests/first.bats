@@ -138,14 +138,14 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
 
 @test "first: -y on uninitialized repo delegates to init and scaffolds" {
     # mkrepo gives a named branch (fresh `git init`) but no origin. The
-    # repo-uninitialized apply now routes through the shared gate with
+    # repo-uninitialized apply routes through the shared gate with
     # origin_required=false, so this unambiguous target auto-confirms on -y
-    # alone in this non-interactive context (consent model C).
+    # alone — no confirmation prompt.
     mkrepo "$SCRATCH/repo"
     cd "$SCRATCH/repo"
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run manifest_first -y
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Auto-confirmed unambiguous target (non-interactive apply via -y)"
+    echo "$output" | grep -q "Auto-confirmed unambiguous target (apply via -y)"
     [ -f "$SCRATCH/repo/VERSION" ]
     [ -f "$SCRATCH/repo/manifest.config.local.yaml" ]
 }
@@ -177,7 +177,7 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
     git -C "$SCRATCH/repo" checkout -q --detach HEAD
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run manifest_first -y
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Ambiguous apply target in a non-interactive context"
+    echo "$output" | grep -q "Ambiguous apply target"
     [ ! -f "$SCRATCH/repo/VERSION" ]
     [ ! -f "$SCRATCH/repo/manifest.config.local.yaml" ]
 }

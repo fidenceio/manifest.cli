@@ -11,7 +11,7 @@ Give developers a safe way to ship fast agent-assisted changes without losing co
 - The command grammar is `manifest <verb> <scope>`.
 - Mutating commands preview by default.
 - Apply requires `-y` / `--yes`.
-- `MANIFEST_CLI_AUTO_CONFIRM=1` is prompt automation, not apply intent.
+- `-y` applies with no confirmation prompt; `MANIFEST_CLI_AUTO_CONFIRM=1` only authorizes an ambiguous target, not apply intent.
 - Repo scope resolves from the current Git checkout.
 - Fleet scope resolves from reviewed fleet config.
 - Cloud is optional.

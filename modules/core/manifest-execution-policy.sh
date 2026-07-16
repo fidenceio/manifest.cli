@@ -10,19 +10,17 @@
 #   -y, --yes     -> apply
 #   --local -y    -> apply local effects only
 #
-# Consent model C: -y is the apply intent. The apply-target gate
-# (manifest_repo_scope_confirm_apply) then resolves the target:
-#   * interactive TTY                  -> prompt to confirm the target
-#   * non-interactive, UNAMBIGUOUS     -> auto-confirm on -y alone (a named
-#                                         branch + an origin remote when one is
-#                                         required) — no extra env var needed
-#   * non-interactive, AMBIGUOUS       -> refuse (detached HEAD, or no origin
-#                                         when origin is required)
+# Consent model: -y is full apply authorization. The apply-target gate
+# (manifest_repo_scope_confirm_apply) then resolves the target with NO
+# interactive confirmation prompt — the same way whether or not a TTY is
+# attached:
+#   * UNAMBIGUOUS  -> apply on -y alone (a named branch + an origin remote when
+#                     one is required) — no extra env var, no confirmation
+#   * AMBIGUOUS    -> refuse (detached HEAD, or no origin when origin is
+#                     required); fix the repo or set MANIFEST_CLI_AUTO_CONFIRM=1
 #
-# MANIFEST_CLI_AUTO_CONFIRM intentionally does not imply apply. It only answers
-# the target prompt, and is now needed solely to override an *ambiguous*
-# non-interactive target — not every scripted apply. Apply must still be
-# authorized via -y.
+# MANIFEST_CLI_AUTO_CONFIRM does not imply apply. Its sole remaining job is to
+# authorize an *ambiguous* target; apply must still be requested via -y.
 # =============================================================================
 
 if [[ -n "${_MANIFEST_EXECUTION_POLICY_LOADED:-}" ]]; then
