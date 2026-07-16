@@ -12,10 +12,17 @@ export TEST_REPO_ROOT
 unset MANIFEST_CLI_AUTO_CONFIRM
 
 # Per-test scratch dir under bats's BATS_TMPDIR.
+#
+# The path is canonicalized (pwd -P) before it is handed out. On macOS $TMPDIR
+# lives under /var, a symlink to /private/var, so an unresolved scratch path
+# never string-compares equal to tool output that IS canonicalized — git
+# rev-parse --show-toplevel, pwd -P, realpath. Resolving once here keeps every
+# test's path assertions correct on both platforms; it is a no-op on Linux,
+# where the scratch root carries no symlink.
 mk_scratch() {
     local d
     d="$(mktemp -d "${BATS_TEST_TMPDIR:-${BATS_TMPDIR:-/tmp}}/manifest-test.XXXXXX")"
-    echo "$d"
+    ( cd "$d" && pwd -P ) || echo "$d"
 }
 
 # Source one or more module files in dependency order.
