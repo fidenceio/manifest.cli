@@ -636,6 +636,27 @@ config_doctor() {
     fi
 }
 
+# Walk up from a starting directory to the nearest fleet root — the closest
+# ancestor (the directory itself included) that holds the fleet config file.
+# Echoes the canonical path and returns 0 when found; returns 1 otherwise.
+# Terminates at the filesystem root, so it can never loop. Kept local to the
+# config loader rather than reusing the fleet module's find_fleet_root, so core
+# carries no dependency on the fleet layer.
+_manifest_config_find_fleet_root() {
+    local start="$1"
+    local config_filename="${MANIFEST_CLI_FLEET_CONFIG_FILENAME:-manifest.fleet.config.yaml}"
+    local dir
+    dir="$(cd "$start" 2>/dev/null && pwd -P)" || return 1
+    while :; do
+        if [ -f "$dir/$config_filename" ]; then
+            printf '%s\n' "$dir"
+            return 0
+        fi
+        [ "$dir" = "/" ] && return 1
+        dir="$(dirname "$dir")"
+    done
+}
+
 # Load configuration from YAML files
 load_configuration() {
     local project_root="$1"
@@ -664,6 +685,40 @@ load_configuration() {
         if ! load_yaml_to_env "$MANIFEST_CLI_GLOBAL_CONFIG"; then
             log_error "Refusing to continue: user global configuration is present but could not be parsed: $MANIFEST_CLI_GLOBAL_CONFIG"
             return 1
+        fi
+    fi
+
+    # Layer 1.5: Inherited fleet configuration.
+    # A repo nested inside a fleet inherits the fleet root's configuration as a
+    # baseline — e.g. github.owner — so a fleet-wide setting applies to every
+    # member without being copied into each repo. The member's own config
+    # (Layers 2-3) and the environment still override it. This is the fleet's
+    # environment, not a per-repo override, so it loads independently of
+    # include_project_overrides (which governs only the CURRENT repo's local
+    # file — `manifest init repo`, for one, passes false yet must still create
+    # the repo under the fleet's org). load_yaml_to_env maps only known keys, so
+    # an inherited file can set recognized MANIFEST_CLI_* config and nothing
+    # else. Skipped when the project IS the fleet root (Layers 2-3 already load
+    # those files) and when the repo is not inside any fleet.
+    local canonical_project_root fleet_root
+    canonical_project_root="$(cd "$project_root" 2>/dev/null && pwd -P)" || canonical_project_root="$project_root"
+    if fleet_root="$(_manifest_config_find_fleet_root "$project_root")" \
+       && [ -n "$fleet_root" ] && [ "$fleet_root" != "$canonical_project_root" ]; then
+        local fleet_shared="$fleet_root/manifest.config.yaml"
+        if [ -f "$fleet_shared" ]; then
+            echo "🔧 Inheriting fleet configuration from: manifest.config.yaml (Fleet: $fleet_root)"
+            if ! load_yaml_to_env "$fleet_shared"; then
+                log_error "Refusing to continue: fleet configuration is present but could not be parsed: $fleet_shared"
+                return 1
+            fi
+        fi
+        local fleet_local="$fleet_root/manifest.config.local.yaml"
+        if [ -f "$fleet_local" ]; then
+            echo "🔧 Inheriting fleet local configuration from: manifest.config.local.yaml (Fleet: $fleet_root)"
+            if ! load_yaml_to_env "$fleet_local"; then
+                log_error "Refusing to continue: fleet local configuration is present but could not be parsed: $fleet_local"
+                return 1
+            fi
         fi
     fi
 
