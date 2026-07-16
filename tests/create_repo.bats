@@ -213,7 +213,11 @@ teardown() {
     [ "$status" -eq 0 ]
     [ -d "$SCRATCH/child/.git" ]
     run git -C "$SCRATCH/child" rev-parse --show-toplevel
-    [ "$output" = "$SCRATCH/child" ]
+    # git canonicalizes the toplevel; on macOS $TMPDIR resolves through
+    # /var -> /private/var, so compare "same directory" (device+inode) rather
+    # than the raw string (mirrors release_gate.bats). mk_scratch intentionally
+    # keeps the unresolved path for the sandbox-predicate prefix contract.
+    [ "$output" -ef "$SCRATCH/child" ]
 }
 
 @test "manifest_init_fleet: summary names missing paths and shows how to fix" {
