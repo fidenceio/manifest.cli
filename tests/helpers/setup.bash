@@ -11,6 +11,13 @@ export TEST_REPO_ROOT
 # assertion in the suite. Tests that need a grant export it themselves.
 unset MANIFEST_CLI_AUTO_CONFIRM
 
+# Hermetic gate: no test may trigger a real release gate — under the default
+# local-tests policy a gate reaching a project root that carries
+# scripts/run-tests.sh would exec it and re-run the suite inside itself
+# (suite-within-a-suite). Tests that assert gate behavior set their own policy;
+# release_gate.bats unsets this in its setup() so the default stays covered.
+export MANIFEST_CLI_RELEASE_GATE=none
+
 # Per-test scratch dir under bats's BATS_TMPDIR.
 #
 # The path is returned VERBATIM (not canonicalized). On macOS $TMPDIR lives under

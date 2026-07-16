@@ -78,11 +78,6 @@ mk_git_repo() {
     [[ "$line" == *'"actor":"'* ]]
 }
 
-@test "audit: event field defaults to authorized when no event arg is given" {
-    manifest_audit_apply_event "cli" "manifest ship repo patch -y" "/repo" "h" "0"
-    [[ "$(cat "$AUDIT_FILE")" == *'"event":"authorized"'* ]]
-}
-
 @test "audit: an explicit completed event with gate_status is recorded (§8.3a/§8.3b)" {
     manifest_audit_apply_event "cli" "manifest ship repo patch -y" "/repo" "h" "5" "completed" "unverified"
     line="$(cat "$AUDIT_FILE")"

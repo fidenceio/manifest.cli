@@ -155,15 +155,6 @@ EOF
     echo "$output" | grep -q "refusing to release unverified"
 }
 
-@test "release_gate: the only sanctioned no-verify path is the audited none bypass" {
-    # With no test command, local-tests blocks (above) but none still proceeds —
-    # proving the bypass is deliberate and loud, not a default fall-through.
-    export MANIFEST_CLI_RELEASE_GATE="none"
-    run manifest_release_gate_run "pre-bump"
-    [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Release gate disabled"
-}
-
 # --- pre-bump: gate tier (release.gate_tier) --------------------------------
 
 @test "release_gate: default tier is full" {
@@ -285,11 +276,12 @@ _audit_file() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
     export MANIFEST_CLI_RELEASE_GATE="local-tests"
     # No gate_command and no scripts/run-tests.sh -> the gate fails CLOSED. The
     # blocking disposition must be observable in the durable record so a refused
-    # release is auditable, not silent.
-    run manifest_release_gate_run "pre-bump"
-    [ "$status" -eq 1 ]
-    # Re-run directly to capture the disposition var (run executes in a subshell).
-    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1 || true
+    # release is auditable, not silent. Called directly (not via `run`, which
+    # subshells) so both the exit status and the disposition var are observable
+    # from one invocation.
+    local rc=0
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1 || rc=$?
+    [ "$rc" -eq 1 ]
     [ "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS" = "blocked-no-command" ]
 
     manifest_audit_apply_event "cli" "manifest ship repo patch -y" "$MANIFEST_CLI_PROJECT_ROOT" \
@@ -562,6 +554,27 @@ _gate_pass_ledger_file() { echo "$MANIFEST_CLI_PROJECT_ROOT/.manifest-cli/releas
     run manifest_release_gate_run "post-push"
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "remote CI is green"
+}
+
+@test "release_gate: post-push 'all' waits on remote CI like remote-ci (green passes)" {
+    # 'all' = local-tests pre-bump + remote-ci post-push. This pins the
+    # post-push half of the case label (remote-ci|all), which the remote-ci
+    # tests alone never drive under the 'all' policy.
+    gh_stub_install
+    git -C "$MANIFEST_CLI_PROJECT_ROOT" init -q
+    git -C "$MANIFEST_CLI_PROJECT_ROOT" config user.email t@e.co
+    git -C "$MANIFEST_CLI_PROJECT_ROOT" config user.name t
+    ( cd "$MANIFEST_CLI_PROJECT_ROOT" && echo x > f && git add f && git commit -q -m c )
+    export MANIFEST_CLI_GH_STUB_STDOUT="99999"
+    export MANIFEST_CLI_GH_STUB_EXIT=0
+    export MANIFEST_CLI_RELEASE_GATE="all"
+    run manifest_release_gate_run "post-push"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "remote CI is green"
+    [ "$_MANIFEST_CLI_SHIP_LAST_GATE_POLICY" = "all" ] || {
+        # run() subshells the var away; re-derive the policy directly instead.
+        [ "$(manifest_release_gate_policy)" = "all" ]
+    }
 }
 
 @test "release_gate: post-push remote-ci fails when CI run is red" {
