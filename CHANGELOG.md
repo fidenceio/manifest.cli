@@ -1,5 +1,19 @@
 # Changelog
 
+## [56.6.0] - 2026-07-17
+
+**Release Type:** Minor
+
+### Changes
+
+- Fix(tests): revert mk_scratch canonicalization; assert canonical paths with -ef
+- Feat(consent): -y applies without a confirmation prompt; close release-gate stdin
+- Test: dedup suite (-5), hermetic release gate, ship-path coverage (+10)
+- Feat(config): nested repos inherit fleet-root config (github.owner et al.)
+- Test: fill coverage backlog — apply paths, installer branches, helpers (+113); kcov target
+- Add regression coverage for the changed CLI workflow
+
+
 ## [56.5.0] - 2026-07-16
 
 **Release Type:** Minor
@@ -95,12 +109,3 @@
 - Update release copy and configuration examples
 - Wire first-class CLI commands to inspectable built-in recipe definitions
 - Add regression coverage for the changed CLI workflow
-
-
-## [55.4.2] - 2026-06-23
-
-**Release Type:** Patch
-
-### Changes
-
-- Fix(release-gate): force-bump skips the gate for clean, at-tag version stamps
