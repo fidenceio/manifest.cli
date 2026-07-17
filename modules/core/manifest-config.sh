@@ -787,6 +787,10 @@ set_default_configuration() {
     # Git Configuration
     export MANIFEST_CLI_GIT_TAG_PREFIX="${MANIFEST_CLI_GIT_TAG_PREFIX:-v}"
     export MANIFEST_CLI_GIT_TAG_SUFFIX="${MANIFEST_CLI_GIT_TAG_SUFFIX:-}"
+    # Bulk-add gitlink policy — false unstages NEWLY captured bare gitlinks
+    # (nested repo, no .gitmodules entry) after `git add .`; declared submodules
+    # and gitlinks already tracked in HEAD are never touched.
+    export MANIFEST_CLI_GIT_ALLOW_NEW_GITLINKS="${MANIFEST_CLI_GIT_ALLOW_NEW_GITLINKS:-false}"
 
     # Release Policy
     export MANIFEST_CLI_RELEASE_TAG_TARGET="${MANIFEST_CLI_RELEASE_TAG_TARGET:-version_commit}"

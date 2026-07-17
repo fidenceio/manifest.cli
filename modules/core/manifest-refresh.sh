@@ -168,8 +168,13 @@ manifest_refresh_repo() {
             echo "Committing refreshed files..."
             manifest_notice_new_untracked_files
             git add .
-            git commit -m "Refresh docs and metadata for v$current_version"
-            echo "  Committed"
+            manifest_unstage_accidental_gitlinks
+            if [[ "${MANIFEST_CLI_GITLINKS_SKIPPED_COUNT:-0}" -gt 0 ]] && git diff --cached --quiet 2>/dev/null; then
+                echo "  Nothing to commit (only skipped nested git repos)"
+            else
+                git commit -m "Refresh docs and metadata for v$current_version"
+                echo "  Committed"
+            fi
         else
             echo "  No changes to commit"
         fi

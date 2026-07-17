@@ -115,6 +115,10 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     ["git.release_prefix"]="MANIFEST_CLI_GIT_RELEASE_BRANCH_PREFIX"
     ["git.bugfix_prefix"]="MANIFEST_CLI_GIT_BUGFIX_BRANCH_PREFIX"
     ["git.commit_template"]="MANIFEST_CLI_GIT_COMMIT_TEMPLATE"
+    # Bulk-add gitlink policy: false (default) unstages any NEWLY captured bare
+    # gitlink (nested repo with its own .git, no .gitmodules entry) after
+    # `git add .`; true records the pointer. See manifest_unstage_accidental_gitlinks.
+    ["git.allow_new_gitlinks"]="MANIFEST_CLI_GIT_ALLOW_NEW_GITLINKS"
     ["git.push_strategy"]="MANIFEST_CLI_GIT_PUSH_STRATEGY"
     ["git.pull_strategy"]="MANIFEST_CLI_GIT_PULL_STRATEGY"
     ["git.timeout"]="MANIFEST_CLI_GIT_TIMEOUT"

@@ -104,6 +104,8 @@ manifest ship repo minor --local -y
 
 Repo ship can bump `VERSION`, update `CHANGELOG.md`, refresh docs, commit, tag, push, create a GitHub Release, and publish the Homebrew tap formula when the repo is the canonical CLI repo. The tap formula publish does not create a post-tag commit in the CLI repo, and ship refuses to report success if completion leaves the source tree dirty or advances `HEAD` after the pushed release head.
 
+Ship's auto-commit stages the whole tree, then unstages any nested git repository it would have captured as a bare gitlink (a directory with its own `.git` and no `.gitmodules` entry) and prints a notice with the remediation options. Declared submodules and gitlinks already tracked in `HEAD` are left alone. To record bare gitlinks intentionally, set `git.allow_new_gitlinks: true` (`MANIFEST_CLI_GIT_ALLOW_NEW_GITLINKS`).
+
 ## Version Ownership
 
 Manifest has one canonical release-writer file today: `VERSION`.
