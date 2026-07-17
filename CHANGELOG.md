@@ -1,5 +1,16 @@
 # Changelog
 
+## [56.7.0] - 2026-07-17
+
+**Release Type:** Minor
+
+### Changes
+
+- Add GitHub Release publishing support
+- Update release copy and configuration examples
+- Add regression coverage for the changed CLI workflow
+
+
 ## [56.6.0] - 2026-07-17
 
 **Release Type:** Minor
@@ -96,16 +107,3 @@
 ### Changes
 
 - Feat(release+status): gate staleness re-test window (#7 Part 2) + vocab-aware fleet status
-
-
-## [55.5.0] - 2026-06-24
-
-**Release Type:** Minor
-
-### Changes
-
-- Add GitHub Release publishing support
-- Add smart ship preview summaries
-- Update release copy and configuration examples
-- Wire first-class CLI commands to inspectable built-in recipe definitions
-- Add regression coverage for the changed CLI workflow
