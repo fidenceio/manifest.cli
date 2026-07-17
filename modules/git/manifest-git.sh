@@ -511,6 +511,84 @@ manifest_notice_new_untracked_files() {
 }
 export -f manifest_notice_new_untracked_files
 
+# Guard (runs right after a bulk `git add .`): unstage any NEWLY captured bare
+# gitlink. A nested directory carrying its own `.git` but no .gitmodules entry
+# gets recorded by a bulk add as a mode-160000 pointer to a foreign repo's
+# commit — almost always an accident (separate repos nested under a tracked
+# parent path), and from then on the parent reports phantom "modified" status
+# every time the inner repo advances. Disposition per staged gitlink:
+#   - declared submodule (.gitmodules lists the path)  → untouched, silent
+#   - already tracked in HEAD                          → left staged (pointer
+#     bumps keep today's behavior), notice recommends untrack + ignore
+#   - new capture                                      → unstaged + notice
+# Opt out with git.allow_new_gitlinks=true (MANIFEST_CLI_GIT_ALLOW_NEW_GITLINKS)
+# to record bare gitlinks intentionally. Never blocks; skip-and-notice,
+# consistent with the notice-not-prompt consent model. Sets
+# MANIFEST_CLI_GITLINKS_SKIPPED_COUNT so callers can tell "index emptied by the
+# guard" apart from "caller staged nothing".
+#
+# ARGUMENTS:
+#   $1 - repo path (default ".") so callers using `git -C <path>` match.
+#   $2 - line prefix (default "   ") for alignment / per-repo labeling.
+manifest_unstage_accidental_gitlinks() {
+    local repo="${1:-.}"
+    local prefix="${2:-   }"
+    export MANIFEST_CLI_GITLINKS_SKIPPED_COUNT=0
+    if is_truthy "${MANIFEST_CLI_GIT_ALLOW_NEW_GITLINKS:-false}"; then
+        return 0
+    fi
+
+    # Staged gitlinks: `ls-files --stage` lines are "mode sha stage<TAB>path".
+    local _gl_entries=() _line _path _mode _sha _stage
+    while IFS= read -r _line; do
+        [[ "$_line" == 160000\ * ]] || continue
+        _path="${_line#*$'\t'}"
+        read -r _mode _sha _stage <<< "${_line%%$'\t'*}"
+        [[ -n "$_path" && -n "$_sha" ]] && _gl_entries+=("${_sha}"$'\t'"${_path}")
+    done < <(git -C "$repo" ls-files --stage 2>/dev/null)
+    [[ ${#_gl_entries[@]} -gt 0 ]] || return 0
+
+    # Declared submodule paths are legitimate gitlinks; never touch them.
+    local _submodule_paths=$'\n' _key _val
+    if [[ -f "$repo/.gitmodules" ]]; then
+        while read -r _key _val; do
+            [[ -n "$_val" ]] && _submodule_paths+="${_val}"$'\n'
+        done < <(git -C "$repo" config --file .gitmodules --get-regexp '^submodule\..*\.path$' 2>/dev/null)
+    fi
+
+    local _has_head=false
+    git -C "$repo" rev-parse -q --verify HEAD >/dev/null 2>&1 && _has_head=true
+
+    local _entry _head_entry _head_mode _head_type _head_sha
+    for _entry in "${_gl_entries[@]}"; do
+        _sha="${_entry%%$'\t'*}"
+        _path="${_entry#*$'\t'}"
+        [[ "$_submodule_paths" == *$'\n'"$_path"$'\n'* ]] && continue
+        if [[ "$_has_head" == "true" ]]; then
+            _head_entry="$(git -C "$repo" ls-tree HEAD -- "$_path" 2>/dev/null)"
+            if [[ "$_head_entry" == 160000\ * ]]; then
+                # Tracked bare gitlink: pointer bumps keep today's behavior but
+                # get a notice; an unchanged pointer commits nothing — silent.
+                read -r _head_mode _head_type _head_sha <<< "${_head_entry%%$'\t'*}"
+                if [[ "$_head_sha" != "$_sha" ]]; then
+                    echo "${prefix}⚠️  Bare gitlink already tracked: $_path — this commit moves its pinned commit; to stop tracking it: git rm --cached $_path + a .gitignore rule"
+                fi
+                continue
+            fi
+            git -C "$repo" reset -q HEAD -- "$_path" 2>/dev/null
+        else
+            # Unborn HEAD: rm --cached needs -f (no HEAD to verify against);
+            # it only drops the index entry, the working dir is untouched.
+            git -C "$repo" rm --cached -q -f -- "$_path" 2>/dev/null
+        fi
+        MANIFEST_CLI_GITLINKS_SKIPPED_COUNT=$((MANIFEST_CLI_GITLINKS_SKIPPED_COUNT + 1))
+        echo "${prefix}⚠️  Skipped nested git repo: $_path (own .git, no .gitmodules entry — a bulk add would commit it as a bare gitlink)"
+        echo "${prefix}   Keep it a separate repo (.gitignore rule: /$_path/), declare a real submodule, or set git.allow_new_gitlinks=true to record the pointer."
+    done
+    return 0
+}
+export -f manifest_unstage_accidental_gitlinks
+
 commit_changes() {
     local message="$1"
     local timestamp="$2"
@@ -546,6 +624,12 @@ commit_changes() {
     manifest_notice_new_untracked_files
 
     git add .
+    # Drop accidental bare-gitlink captures before they enter the commit.
+    manifest_unstage_accidental_gitlinks
+    if [[ "${MANIFEST_CLI_GITLINKS_SKIPPED_COUNT:-0}" -gt 0 ]] && git diff --cached --quiet 2>/dev/null; then
+        echo "✅ Nothing to commit (only skipped nested git repos)"
+        return 0
+    fi
     local commit_ok=false
     if [[ -n "${MANIFEST_CLI_DOC_REVIEW_COMMIT_BODY:-}" ]]; then
         git commit -m "$message" -m "$MANIFEST_CLI_DOC_REVIEW_COMMIT_BODY" && commit_ok=true
