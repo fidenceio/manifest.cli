@@ -15,7 +15,7 @@ setup() {
     HOME="$SCRATCH/home"
     mkdir -p "$HOME" "$SCRATCH/work"
     export HOME
-    load_modules
+    load_modules core/manifest-config.sh
     # shellcheck disable=SC1091
     source "$TEST_REPO_ROOT/modules/workflow/manifest-orchestrator.sh"
     # shellcheck disable=SC1091
@@ -367,6 +367,19 @@ TSV
     mk_stranded_member "$SCRATCH/work/svc-b" 1.2.3
     mk_stranded_member "$SCRATCH/work/svc-c" 1.2.3
 
+    local repo gate
+    for repo in svc-a svc-b svc-c; do
+        case "$repo" in
+            svc-a) gate="none" ;;
+            svc-b) gate="remote-ci" ;;
+            *)     gate="all" ;;
+        esac
+        printf 'release:\n  gate: "%s"\n' "$gate" \
+            > "$SCRATCH/work/$repo/manifest.config.yaml"
+        git -C "$SCRATCH/work/$repo" add manifest.config.yaml
+        git -C "$SCRATCH/work/$repo" commit -qm "Configure $gate release gate"
+    done
+
     export MANIFEST_CLI_FLEET_SERVICES="svca svcb svcc"
     get_fleet_service_property() {
         local svc="$1" prop="$2" default="${3:-}"
@@ -390,11 +403,15 @@ TSV
     manifest_ship_repo_resume() {
         local repo
         repo=$(basename "$PWD")
-        echo "$repo" >> "$SCRATCH/resume-calls.log"
+        echo "$repo:$MANIFEST_CLI_RELEASE_GATE" >> "$SCRATCH/resume-calls.log"
         [[ "$repo" == "svc-b" ]] && return 1
         return 0
     }
     export -f manifest_ship_repo_resume
+
+    # Member YAML gate resolution is the behavior under test; the per-repo
+    # workflow is stubbed, so dropping the harness gate override stays hermetic.
+    clear_release_gate_env_override
 
     run fleet_resume -y
 
@@ -405,9 +422,12 @@ TSV
     # svcb was attempted and failed
     [[ "$output" == *"svcb: resuming v1.2.3"* ]]
     [[ "$output" == *"❌ svcb → v1.2.3"* ]]
+    # Each delegated resume observed that member's own YAML policy.
+    grep -q '^svc-a:none$' "$SCRATCH/resume-calls.log"
+    grep -q '^svc-b:remote-ci$' "$SCRATCH/resume-calls.log"
     # svcc must never have been attempted (fail-fast)
     [[ "$output" != *"svcc: resuming"* ]]
-    ! grep -q '^svc-c$' "$SCRATCH/resume-calls.log"
+    ! grep -q '^svc-c:' "$SCRATCH/resume-calls.log"
     # Aborts with structured error
     [[ "$output" == *"Fleet resume aborted at svcb"* ]]
 }

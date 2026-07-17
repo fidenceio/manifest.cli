@@ -18,6 +18,23 @@ unset MANIFEST_CLI_AUTO_CONFIRM
 # release_gate.bats unsets this in its setup() so the default stays covered.
 export MANIFEST_CLI_RELEASE_GATE=none
 
+# The hermetic-gate export above is present when a test's setup() sources
+# manifest-config.sh, so the module's source-time snapshot records it as a
+# process-start env override — the same highest-precedence layer a real
+# user-supplied MANIFEST_CLI_RELEASE_GATE occupies — and load_configuration
+# re-applies it on top of every YAML layer. Tests that assert per-repo YAML
+# gate resolution (e.g. fleet members overriding the fleet baseline) must
+# drop the simulated override first or it shadows the very config under test.
+# Each such test remains gate-hermetic by its own fixture: stubbed per-repo
+# workflows or explicit member gate_command values that never auto-detect
+# scripts/run-tests.sh.
+clear_release_gate_env_override() {
+    unset MANIFEST_CLI_RELEASE_GATE MANIFEST_CLI_RELEASE_GATE_COMMAND
+    unset '_MANIFEST_CONFIG_PROCESS_ENV_OVERRIDES[MANIFEST_CLI_RELEASE_GATE]' \
+          '_MANIFEST_CONFIG_PROCESS_ENV_OVERRIDES[MANIFEST_CLI_RELEASE_GATE_COMMAND]' \
+          2>/dev/null || true
+}
+
 # Per-test scratch dir under bats's BATS_TMPDIR.
 #
 # The path is returned VERBATIM (not canonicalized). On macOS $TMPDIR lives under
