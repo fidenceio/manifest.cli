@@ -231,6 +231,61 @@ YAML
     echo "$work"
 }
 
+# A two-member fleet whose repos deliberately disagree on release policy.
+# The first member bypasses verification; the second runs a failing gate. This
+# proves fleet delegation reloads each repo's config and that the first member's
+# policy cannot leak through the per-member subshell into the next member.
+mk_two_member_config_fleet() {
+    local work="$SCRATCH/work" version="${1:-1.2.3}"
+    mkdir -p "$work/bypass-svc" "$work/gated-svc"
+    cat > "$work/manifest.fleet.config.yaml" <<'YAML'
+fleet:
+  name: "test-fleet"
+  versioning: "none"
+services:
+  bypass-svc:
+    path: "./bypass-svc"
+    type: "service"
+    branch: "main"
+    release:
+      enabled: true
+  gated-svc:
+    path: "./gated-svc"
+    type: "service"
+    branch: "main"
+    release:
+      enabled: true
+YAML
+    {
+        printf 'true\tbypass-svc\t./bypass-svc\tfalse\t\tmain\t%s\n' "$version"
+        printf 'true\tgated-svc\t./gated-svc\tfalse\t\tmain\t%s\n' "$version"
+    } > "$work/manifest.fleet.tsv"
+
+    local repo
+    for repo in bypass-svc gated-svc; do
+        "$REAL_GIT" -C "$work/$repo" init -q
+        "$REAL_GIT" -C "$work/$repo" symbolic-ref HEAD refs/heads/main
+        "$REAL_GIT" -C "$work/$repo" config user.email test@example.com
+        "$REAL_GIT" -C "$work/$repo" config user.name test
+        echo "$version" > "$work/$repo/VERSION"
+        "$REAL_GIT" -C "$work/$repo" add VERSION
+        "$REAL_GIT" -C "$work/$repo" commit -qm "init $version"
+        "$REAL_GIT" -C "$work/$repo" remote add origin "https://example.invalid/$repo.git"
+    done
+
+    cat > "$work/bypass-svc/manifest.config.yaml" <<'YAML'
+release:
+  gate: "none"
+  gate_command: "false"
+YAML
+    cat > "$work/gated-svc/manifest.config.yaml" <<'YAML'
+release:
+  gate: "local-tests"
+  gate_command: "false"
+YAML
+    echo "$work"
+}
+
 # Shared offline-boundary assertions: no push attempted, no gh, no brew.
 assert_no_remote_dispatch() {
     # The git shim logs every network subcommand it refused; none may be push.
@@ -426,6 +481,54 @@ AUDIT_FILE() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
     # ... with no release tag pushed or created.
     [ -z "$("$REAL_GIT" -C "$work/svc" tag)" ]
 
+    assert_no_remote_dispatch
+}
+
+@test "ship fleet --local -y: each member resolves its own release gate without cross-member leakage" {
+    local work
+    work="$(mk_two_member_config_fleet 1.2.3)"
+
+    # Parent/fleet policy is none (setup). Member configuration must override it:
+    # bypass-svc succeeds with none; gated-svc must run its own failing command.
+    export MANIFEST_CLI_FLEET_ROOT="$work"
+    cd "$work"
+    load_fleet_config "$work" >/dev/null 2>&1 || true
+
+    # Member YAML gate resolution is the behavior under test; both members set
+    # explicit gate policy ('none' / gate_command 'false'), so dropping the
+    # harness gate override never reaches an auto-detected real gate.
+    clear_release_gate_env_override
+
+    run fleet_ship patch --local -y
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"bypass-svc: shipping patch"* ]]
+    [[ "$output" == *"Release gate disabled (release_gate=none)"* ]]
+    [[ "$output" == *"gated-svc: shipping patch"* ]]
+    [[ "$output" == *"Release gate failed: 'false' returned non-zero"* ]]
+
+    # The first member completed under its own bypass. The second member kept
+    # its old VERSION because its own local-tests policy blocked the bump.
+    [ "$(cat "$work/bypass-svc/VERSION")" = "1.2.4" ]
+    [ "$(cat "$work/gated-svc/VERSION")" = "1.2.3" ]
+    assert_no_remote_dispatch
+}
+
+@test "ship fleet --local -y: malformed member config fails before that member's version changes" {
+    local work before
+    work="$(mk_fleet 1.2.3)"
+    before="$("$REAL_GIT" -C "$work/svc" rev-parse HEAD)"
+    printf 'release:\n\tgate: none\n' > "$work/svc/manifest.config.yaml"
+
+    export MANIFEST_CLI_FLEET_ROOT="$work"
+    cd "$work"
+    load_fleet_config "$work" >/dev/null 2>&1 || true
+
+    run fleet_ship patch --local -y
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Could not load configuration for fleet member: svc"* ]]
+    [[ "$output" == *"category: local-only"* ]]
+    [ "$(cat "$work/svc/VERSION")" = "1.2.3" ]
+    [ "$("$REAL_GIT" -C "$work/svc" rev-parse HEAD)" = "$before" ]
     assert_no_remote_dispatch
 }
 

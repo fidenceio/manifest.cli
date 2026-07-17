@@ -39,7 +39,7 @@ _build_tool_dir() {
 
 # PATH with a recording `brew` stub and NO docker anywhere, for the
 # ensure_docker_installed cask-offer branch. The stub's exit code is
-# controlled via MANIFEST_STUB_BREW_EXIT (default 0).
+# controlled via MANIFEST_CLI_STUB_BREW_EXIT (default 0).
 _docker_missing_env() {
     BREW_LOG="$SCRATCH/brew-calls.log"
     : > "$BREW_LOG"
@@ -49,7 +49,7 @@ _docker_missing_env() {
     cat > "$stub/brew" <<EOF
 #!/bin/bash
 echo "\$*" >> "$BREW_LOG"
-exit "\${MANIFEST_STUB_BREW_EXIT:-0}"
+exit "\${MANIFEST_CLI_STUB_BREW_EXIT:-0}"
 EOF
     chmod +x "$stub/brew"
     export PATH="$stub:/usr/bin:/bin"
@@ -132,7 +132,7 @@ EOF
     # shellcheck disable=SC1090
     source "$TEST_REPO_ROOT/install-cli.sh"
     _docker_missing_env
-    export MANIFEST_STUB_BREW_EXIT=1
+    export MANIFEST_CLI_STUB_BREW_EXIT=1
     run ensure_docker_installed <<< "y"
     [ "$status" -eq 1 ]
     echo "$output" | grep -q "Docker Desktop installation failed"

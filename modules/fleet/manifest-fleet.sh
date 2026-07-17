@@ -3237,16 +3237,36 @@ EOF
         # parsing the child's stdout.
         (
             cd "$path" || exit 1
-            MANIFEST_CLI_PROJECT_ROOT="$PWD"
-            export MANIFEST_CLI_PROJECT_ROOT
-            MANIFEST_CLI_AUTO_CONFIRM=1
-            export MANIFEST_CLI_AUTO_CONFIRM
-            MANIFEST_CLI_SHIP_STATUS_FILE="$status_file"
-            export MANIFEST_CLI_SHIP_STATUS_FILE
+            export MANIFEST_CLI_PROJECT_ROOT="$PWD"
+            export MANIFEST_CLI_SHIP_STATUS_FILE="$status_file"
             # Tag this member's apply-event audit record (§5.8) as fleet-sourced
             # so per-member applies are distinguishable from a direct ship repo.
-            MANIFEST_CLI_AUDIT_SOURCE="cli-fleet"
-            export MANIFEST_CLI_AUDIT_SOURCE
+            export MANIFEST_CLI_AUDIT_SOURCE="cli-fleet"
+
+            # The fleet command loaded configuration at the coordination root.
+            # Resolve the member's own layered config before delegating so its
+            # release gate and other repo-scoped policy override that baseline.
+            # This runs inside the per-member subshell, so one member's values
+            # cannot leak into the next. Genuine process-start env overrides are
+            # re-applied by load_configuration as the highest-precedence layer.
+            if ! load_configuration "$MANIFEST_CLI_PROJECT_ROOT"; then
+                log_error "Could not load configuration for fleet member: $service ($path)"
+                if declare -F _emit_ship_status_file >/dev/null 2>&1; then
+                    _emit_ship_status_file \
+                        result failed \
+                        failure_step config_load \
+                        push_status not_attempted \
+                        homebrew_status not_applicable \
+                        version "$(tr -d '[:space:]' < VERSION 2>/dev/null || echo unknown)" \
+                        tag none
+                fi
+                exit 1
+            fi
+
+            # Fleet -y is the consent authority for this delegated apply. Set it
+            # after config resolution so member config cannot revoke that consent,
+            # and fleet consent cannot authorize incidental config migration.
+            export MANIFEST_CLI_AUTO_CONFIRM=1
             # Forced members must carry --force-bump into the per-member ship, or
             # the repo-level gate (Commit 1) would re-skip a clean, at-tag member.
             member_ship_args=("$increment_type" "-y")
@@ -3502,10 +3522,12 @@ EOF
         echo "  - $svc: resuming v${sver}"
         (
             cd "$spath" || exit 1
-            MANIFEST_CLI_PROJECT_ROOT="$PWD"
-            export MANIFEST_CLI_PROJECT_ROOT
-            MANIFEST_CLI_AUTO_CONFIRM=1
-            export MANIFEST_CLI_AUTO_CONFIRM
+            export MANIFEST_CLI_PROJECT_ROOT="$PWD"
+            if ! load_configuration "$MANIFEST_CLI_PROJECT_ROOT"; then
+                log_error "Could not load configuration for fleet member: $svc ($spath)"
+                exit 1
+            fi
+            export MANIFEST_CLI_AUTO_CONFIRM=1
             manifest_ship_repo_resume
         )
         rc=$?
