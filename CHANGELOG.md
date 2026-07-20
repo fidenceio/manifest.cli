@@ -1,5 +1,14 @@
 # Changelog
 
+## [56.8.0] - 2026-07-20
+
+**Release Type:** Minor
+
+### Changes
+
+- Add regression coverage for the changed CLI workflow
+
+
 ## [56.7.0] - 2026-07-17
 
 **Release Type:** Minor
@@ -98,12 +107,3 @@
 
 - Feat(fleet): root-only fleet release + honest preview count
 - Update 1 file before release
-
-
-## [56.0.0] - 2026-06-25
-
-**Release Type:** Major
-
-### Changes
-
-- Feat(release+status): gate staleness re-test window (#7 Part 2) + vocab-aware fleet status
