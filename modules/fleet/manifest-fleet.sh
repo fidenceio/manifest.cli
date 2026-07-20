@@ -726,7 +726,11 @@ create_fleet_gitignore() {
     fi
 
     local entry_count
-    entry_count=$(grep -cvE '^\s*$|^\s*#' "$gitignore_file" 2>/dev/null || echo "0")
+    entry_count=$(grep -cvE '^\s*$|^\s*#' "$gitignore_file" 2>/dev/null || true)
+    entry_count="${entry_count:-0}"
+    entry_count="${entry_count//$'\n'/}"
+    entry_count="${entry_count//[[:space:]]/}"
+    [[ "$entry_count" =~ ^[0-9]+$ ]] || entry_count=0
     if [[ "$entry_count" -eq 0 ]]; then
         _fleet_write_allowlist_gitignore "$gitignore_file" || return 1
         echo ".gitignore:empty-overwrite"; return 0
@@ -737,6 +741,10 @@ create_fleet_gitignore() {
         echo ".gitignore.manifest"; return 0
     fi
 
+    # Both exist — refresh the sidecar with the latest allowlist; never touch
+    # the curated real .gitignore.
+    _fleet_write_allowlist_gitignore "$manifest_ref" || return 1
+    echo ".gitignore.manifest"
     return 0
 }
 
@@ -760,8 +768,9 @@ create_fleet_gitignore() {
 # BEHAVIOR:
 #   1. Reads selected directories from manifest.fleet.tsv
 #   2. Bootstraps each directory (git init, .gitignore, optional gh repo)
-#   3. Scaffolds each member with the Manifest-required files (ensure_required_files
-#      + ensure_release_gate_script — the run-tests.sh gate ship fleet needs)
+#   3. Scaffolds each incomplete member via ensure_repo_scaffold (same shared
+#      path as `init repo` — required files + crawl privacy + release gate +
+#      .env.example). Members that already have the full init set are skipped.
 #   4. Creates skeleton manifest.fleet.config.yaml + manifest.config.local.yaml
 #   5. Validates the configuration
 #
@@ -955,7 +964,7 @@ EOF
         # Bootstrap each selected directory (git init, .gitignore, optional gh).
         # Per-row outcomes accumulate into arrays so the fix-it block can name
         # the offending paths instead of just counting them.
-        local init_count=0 gh_ok_count=0
+        local init_count=0 gh_ok_count=0 scaffold_count=0 skipped_complete_count=0
         local missing_paths=() init_failed_paths=() gh_failed_paths=()
         echo ""
         echo "Initializing selected directories..."
@@ -984,28 +993,27 @@ EOF
                     ;;
             esac
 
-            # Make the member Manifest-trackable: scaffold the same required
-            # files `init repo` creates (VERSION/README/CHANGELOG/docs/.gitignore
-            # plus the scripts/run-tests.sh release gate) via the shared
-            # primitives — no second scaffolder. The gate matters at fleet scale:
-            # v56's fail-closed release gate aborts `ship fleet` at the first
-            # gate-less member, so every member must be born with one. Run only
-            # when the directory init succeeded (rc 0 = init ok, rc 2 = init ok
-            # but gh failed); skip rc 1 (init failed) and rc 3 (path missing) so
-            # we never cd into a broken/absent dir. No-clobber (existing member
-            # files are preserved) and NO commit (files land uncommitted, parity
-            # with `init repo`). Run in an isolated subshell with cwd+MANIFEST_CLI_PROJECT_ROOT
-            # set to the member so the README's git-derived fields resolve
-            # against the member, not the fleet root (idiom: manifest-fleet-docs.sh).
+            # Make the member Manifest-trackable via the SAME shared scaffold
+            # `init repo` uses (ensure_repo_scaffold). Pass over members that
+            # already have the full init set — re-running fleet init must not
+            # sprinkle .manifest sidecars onto complete repos. Incomplete
+            # members still get no-clobber backfill of whatever is missing.
+            # Run only when directory init succeeded (rc 0 / 2); skip rc 1/3.
+            # NO commit (files land uncommitted, parity with `init repo`).
             if [[ ( "$_init_rc" -eq 0 || "$_init_rc" -eq 2 ) ]] \
-                && declare -F ensure_required_files >/dev/null 2>&1; then
-                (
-                    cd "$abs_path" || exit 0
-                    export MANIFEST_CLI_PROJECT_ROOT="$abs_path"
-                    ensure_required_files "$abs_path" >/dev/null 2>&1
-                    declare -F ensure_release_gate_script >/dev/null 2>&1 \
-                        && ensure_release_gate_script "$abs_path" >/dev/null 2>&1
-                ) || true
+                && declare -F ensure_repo_scaffold >/dev/null 2>&1; then
+                if declare -F manifest_repo_scaffold_is_complete >/dev/null 2>&1 \
+                    && manifest_repo_scaffold_is_complete "$abs_path"; then
+                    echo "  skip scaffold: $path (already initialized)"
+                    skipped_complete_count=$((skipped_complete_count + 1))
+                else
+                    (
+                        cd "$abs_path" || exit 0
+                        export MANIFEST_CLI_PROJECT_ROOT="$abs_path"
+                        ensure_repo_scaffold "$abs_path" >/dev/null 2>&1
+                    ) || true
+                    scaffold_count=$((scaffold_count + 1))
+                fi
             fi
         done <<< "$selected"
 
@@ -1019,6 +1027,7 @@ EOF
         else
             echo "Initialized: $init_count"
         fi
+        echo "Scaffolded:  $scaffold_count incomplete member(s); skipped $skipped_complete_count already-initialized"
         if [[ -n "$create_repo_visibility" ]]; then
             echo "GitHub ($create_repo_visibility): $gh_ok_count ready, $gh_failed_count failed"
         fi
