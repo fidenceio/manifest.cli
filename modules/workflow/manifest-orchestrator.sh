@@ -674,23 +674,165 @@ manifest_create_github_release_for_tag() {
     return 2
 }
 
-# A host that can't source-build (Xcode/CLT toolchain gate) can still take the
-# upgrade the moment tap CI publishes the :all bottle — that lands minutes after
-# the formula push this ship just made. Poll with --force-bottle (pour-or-fail-
-# fast, never a source build) until the installed keg matches the shipped
-# version. Sleep first: a toolchain-gate failure on the plain upgrade proves no
-# bottle existed seconds ago (brew prefers bottles), so an immediate retry is
-# pointless. Returns 0 once the keg matches, 1 when the window closes.
-# Window via MANIFEST_CLI_SHIP_BOTTLE_WAIT_MINUTES (default 10; 0 = don't wait).
+# GitHub slug for the Homebrew tap that owns the bottle workflow
+# (default fidenceio/homebrew-tap; override via MANIFEST_CLI_HOMEBREW_TAP_SLUG).
+manifest_ship_homebrew_tap_slug() {
+    echo "${MANIFEST_CLI_HOMEBREW_TAP_SLUG:-fidenceio/homebrew-tap}"
+}
+
+# True when the local tap formula already declares an :all bottle (CI skip
+# condition / idempotent pour path). Silent; returns 0/1.
+manifest_ship_tap_formula_declares_all_bottle() {
+    local tap_dir formula
+    tap_dir="$(manifest_install_paths_homebrew_tap_dir 2>/dev/null || true)"
+    [ -n "$tap_dir" ] || return 1
+    formula="$tap_dir/Formula/manifest.rb"
+    [ -f "$formula" ] || return 1
+    grep -Eq 'sha256 cellar:.*[[:space:]]all:' "$formula"
+}
+
+# Refresh _MANIFEST_CLI_SHIP_BOTTLE_CI_{STATUS,URL,CONCLUSION} from the latest
+# bottle.yml run on the tap. STATUS is one of:
+#   none | queued | in_progress | success | failure | cancelled | unknown
+# Best-effort: missing gh / API errors → unknown (does not abort ship).
+manifest_ship_bottle_ci_refresh_status() {
+    _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="unknown"
+    _MANIFEST_CLI_SHIP_BOTTLE_CI_URL=""
+    _MANIFEST_CLI_SHIP_BOTTLE_CI_CONCLUSION=""
+
+    if ! command -v gh >/dev/null 2>&1; then
+        _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="none"
+        return 0
+    fi
+
+    local slug row status conclusion url
+    slug="$(manifest_ship_homebrew_tap_slug)"
+    # One API call; TSV keeps parsing free of jq dependency beyond gh's --jq.
+    row="$(gh run list --repo "$slug" --workflow bottle.yml --branch main --limit 1 \
+        --json status,conclusion,url \
+        --jq 'if length == 0 then empty else "\(.[0].status)\t\(.[0].conclusion // "")\t\(.[0].url // "")" end' \
+        2>/dev/null || true)"
+    if [[ -z "$row" ]]; then
+        _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="none"
+        return 0
+    fi
+    IFS=$'\t' read -r status conclusion url <<<"$row"
+
+    _MANIFEST_CLI_SHIP_BOTTLE_CI_URL="$url"
+    _MANIFEST_CLI_SHIP_BOTTLE_CI_CONCLUSION="$conclusion"
+
+    case "$status" in
+        queued) _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="queued" ;;
+        in_progress|waiting|requested|pending)
+            _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="in_progress" ;;
+        completed)
+            case "$conclusion" in
+                success) _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="success" ;;
+                failure|timed_out|startup_failure)
+                    _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="failure" ;;
+                cancelled|skipped)
+                    _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="cancelled" ;;
+                *) _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="unknown" ;;
+            esac
+            ;;
+        *)
+            _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="unknown" ;;
+    esac
+    return 0
+}
+
+# Ensure tap bottle CI is building (or has built) the :all bottle. If the
+# formula already declares one, short-circuit. If the latest run is missing /
+# failed / cancelled, dispatch bottle.yml with dry_run=false. Best-effort.
+manifest_ship_ensure_bottle_ci() {
+    _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="${_MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS:-}"
+    if manifest_ship_tap_formula_declares_all_bottle; then
+        _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="already_bottled"
+        echo "   Tap formula already declares an :all bottle — skipping bottle CI dispatch"
+        return 0
+    fi
+
+    if ! command -v gh >/dev/null 2>&1; then
+        echo "   ⚠️  gh not available — cannot drive tap bottle CI; will poll brew only"
+        _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="none"
+        return 0
+    fi
+
+    local slug
+    slug="$(manifest_ship_homebrew_tap_slug)"
+    manifest_ship_bottle_ci_refresh_status
+
+    case "${_MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS}" in
+        queued|in_progress|success|already_bottled)
+            echo "   Bottle CI: ${_MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS}${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL:+ (${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL})}"
+            return 0
+            ;;
+    esac
+
+    echo "   Bottle CI: ${_MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS:-none} — dispatching bottle.yml (dry_run=false)..."
+    if gh workflow run bottle.yml --repo "$slug" -f dry_run=false >/dev/null 2>&1; then
+        # Give Actions a moment to register the run before the wait loop polls.
+        sleep 2
+        manifest_ship_bottle_ci_refresh_status
+        echo "   Bottle CI: ${_MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS}${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL:+ (${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL})}"
+    else
+        echo "   ⚠️  Could not dispatch bottle.yml on ${slug} — will keep polling brew"
+        _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="unknown"
+    fi
+    return 0
+}
+
+# A host that can't source-build (Xcode/CLT toolchain gate) takes the upgrade
+# once tap CI publishes the :all bottle. Ship drives that workflow (ensure /
+# re-dispatch on failure), then polls with --force-bottle until the keg matches.
+# Sleep first: a toolchain-gate on the plain upgrade proves no bottle existed
+# seconds ago, so an immediate retry is pointless.
+#
+# Returns:
+#   0 — keg matches new_version (poured)
+#   1 — window closed while CI is still pending / unknown (soft-defer)
+#   2 — bottle CI concluded failure/cancelled (hard fail for local upgrade)
+# Window via MANIFEST_CLI_SHIP_BOTTLE_WAIT_MINUTES (default 30; 0 = don't wait).
 manifest_ship_wait_for_bottle_upgrade() {
     local new_version="$1" wait_minutes="$2" formula poll_seconds attempts i
-    case "$wait_minutes" in ''|*[!0-9]*) wait_minutes=10 ;; esac
+    case "$wait_minutes" in ''|*[!0-9]*) wait_minutes=30 ;; esac
     [ "$wait_minutes" -eq 0 ] && return 1
+
     formula="$(manifest_install_paths_homebrew_formula)"
     poll_seconds=20
     attempts=$(( wait_minutes * 60 / poll_seconds ))
+    [ "$attempts" -lt 1 ] && attempts=1
+
+    manifest_ship_ensure_bottle_ci
+
     for (( i = 1; i <= attempts; i++ )); do
         sleep "$poll_seconds"
+
+        # Re-check CI each poll so a late failure surfaces before the window ends.
+        if command -v gh >/dev/null 2>&1; then
+            manifest_ship_bottle_ci_refresh_status
+            case "${_MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS}" in
+                failure|cancelled)
+                    echo "   Bottle CI ${_MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS}${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL:+ — ${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL}}"
+                    return 2
+                    ;;
+                queued|in_progress)
+                    # Progress breadcrumb about once a minute (every 3rd 20s poll).
+                    if (( i % 3 == 1 )); then
+                        echo "   Bottle CI: ${_MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS}${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL:+ (${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL})}"
+                    fi
+                    ;;
+                success|already_bottled)
+                    : # fall through to pour attempt
+                    ;;
+            esac
+        fi
+
+        # If the formula writeback already landed locally, prefer pouring now.
+        if manifest_ship_tap_formula_declares_all_bottle; then
+            _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="already_bottled"
+        fi
+
         brew update &>/dev/null || true
         brew upgrade --force-bottle "$formula" &>/dev/null \
             || brew upgrade --force-bottle manifest &>/dev/null || true
@@ -698,7 +840,24 @@ manifest_ship_wait_for_bottle_upgrade() {
             return 0
         fi
     done
-    return 1
+
+    # Window closed — classify by last known CI state.
+    if command -v gh >/dev/null 2>&1; then
+        manifest_ship_bottle_ci_refresh_status
+    fi
+    case "${_MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS}" in
+        failure|cancelled)
+            echo "   Bottle CI ${_MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS}${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL:+ — ${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL}}"
+            return 2
+            ;;
+        queued|in_progress)
+            echo "   Bottle CI still ${_MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS} after ${wait_minutes}m${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL:+ — ${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL}}"
+            return 1
+            ;;
+        *)
+            return 1
+            ;;
+    esac
 }
 
 manifest_ship_post_push_steps() {
@@ -803,9 +962,9 @@ manifest_ship_post_push_steps() {
                     manifest_ship_restore_tap_ssh_origin
                     manifest_install_paths_auto_upgrade_mark_checked
                 elif manifest_install_paths_brew_error_is_toolchain_gate "$brew_upgrade_out"; then
-                    local bottle_wait_minutes
-                    bottle_wait_minutes="${MANIFEST_CLI_SHIP_BOTTLE_WAIT_MINUTES:-10}"
-                    case "$bottle_wait_minutes" in ''|*[!0-9]*) bottle_wait_minutes=10 ;; esac
+                    local bottle_wait_minutes bottle_wait_rc=0
+                    bottle_wait_minutes="${MANIFEST_CLI_SHIP_BOTTLE_WAIT_MINUTES:-30}"
+                    case "$bottle_wait_minutes" in ''|*[!0-9]*) bottle_wait_minutes=30 ;; esac
                     echo "ℹ️  Homebrew can't source-build here: the host Xcode / Command Line Tools"
                     echo "    are older than Homebrew's minimum for this macOS."
                     if manifest_os_macos_is_prerelease; then
@@ -829,12 +988,22 @@ manifest_ship_post_push_steps() {
                         manifest_refresh_homebrew_tap_checkouts
                         manifest_install_paths_auto_upgrade_mark_checked
                     else
-                        echo "⚠️  The :all bottle for v$new_version is not published yet. v$new_version shipped"
-                        echo "    fine — the auto-upgrade cooldown has been cleared, so the next manifest"
-                        echo "    command on this machine pours the bottle as soon as tap CI publishes it."
-                        echo "    Or pour it manually: brew upgrade $(manifest_install_paths_homebrew_formula)"
-                        _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="deferred_bottle_pending"
-                        manifest_install_paths_auto_upgrade_clear_cooldown
+                        bottle_wait_rc=$?
+                        if [ "$bottle_wait_rc" -eq 2 ]; then
+                            echo "⚠️  Tap bottle CI failed — local upgrade did not complete."
+                            [ -n "${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL:-}" ] && echo "   ${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL}"
+                            echo "   Re-run: gh workflow run bottle.yml --repo $(manifest_ship_homebrew_tap_slug) -f dry_run=false"
+                            _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="failed"
+                            manifest_install_paths_auto_upgrade_clear_cooldown
+                        else
+                            echo "⚠️  The :all bottle for v$new_version is not published yet. v$new_version shipped"
+                            echo "    fine — the auto-upgrade cooldown has been cleared, so the next manifest"
+                            echo "    command on this machine pours the bottle as soon as tap CI publishes it."
+                            [ -n "${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL:-}" ] && echo "    Bottle CI: ${_MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS:-unknown} — ${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL}"
+                            echo "    Or pour it manually: brew upgrade $(manifest_install_paths_homebrew_formula)"
+                            _MANIFEST_SHIP_LAST_LOCAL_UPGRADE_STATUS="deferred_bottle_pending"
+                            manifest_install_paths_auto_upgrade_clear_cooldown
+                        fi
                     fi
                 else
                     echo "⚠️  Homebrew upgrade did not complete — try 'brew update && brew upgrade manifest' manually"
