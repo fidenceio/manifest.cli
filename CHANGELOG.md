@@ -1,5 +1,15 @@
 # Changelog
 
+## [56.8.1] - 2026-07-20
+
+**Release Type:** Patch
+
+### Changes
+
+- Add GitHub Release publishing support
+- Add regression coverage for the changed CLI workflow
+
+
 ## [56.8.0] - 2026-07-20
 
 **Release Type:** Minor
@@ -96,14 +106,4 @@
 ### Changes
 
 - Feat(init): scaffold the release-gate run-tests.sh at repo/fleet init
-- Update 1 file before release
-
-
-## [56.1.0] - 2026-07-01
-
-**Release Type:** Minor
-
-### Changes
-
-- Feat(fleet): root-only fleet release + honest preview count
 - Update 1 file before release
