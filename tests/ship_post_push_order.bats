@@ -48,6 +48,13 @@ setup() {
     # No brew on PATH by default → the (C) upgrade block self-skips to the
     # `manifest upgrade` arm, which we stub to a no-op success.
     manifest() { return 0; }
+    # This host may have a real brew + toolchain gate; keep the default arm on
+    # the stubbed `manifest upgrade` path unless a test opts into brew-managed.
+    manifest_install_paths_is_brew_managed() { return 1; }
+    # Bottle-wait polls sleep(20); never block the suite if a test does hit it.
+    export MANIFEST_CLI_SHIP_BOTTLE_WAIT_MINUTES=0
+    sleep() { :; }
+    manifest_ship_ensure_bottle_ci() { return 0; }
 }
 
 teardown() {

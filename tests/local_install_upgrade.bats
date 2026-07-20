@@ -252,6 +252,17 @@ teardown() {
     export MANIFEST_CLI_SHIP_BOTTLE_WAIT_MINUTES=1
     local sentinel="$SCRATCH/ssh-restore-fired"
     manifest_ship_restore_tap_ssh_origin() { touch "$sentinel"; }
+    # Offline: CI helpers are stubbed; pour path is what this test asserts.
+    manifest_ship_ensure_bottle_ci() {
+        _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="in_progress"
+        _MANIFEST_CLI_SHIP_BOTTLE_CI_URL="https://example.test/bottle/run/1"
+        return 0
+    }
+    manifest_ship_bottle_ci_refresh_status() {
+        _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="success"
+        _MANIFEST_CLI_SHIP_BOTTLE_CI_URL="https://example.test/bottle/run/1"
+        return 0
+    }
     brew() {
         case "$1 ${2:-} ${3:-}" in
             "list --versions manifest")
@@ -284,12 +295,23 @@ teardown() {
     # origin (that only follows a real upgrade), and must clear the cooldown
     # stamp so the very next invocation pours the bottle instead of waiting out
     # the window — the cooldown paces ambient checks, not a post-ship catch-up.
+    # CI still queued → soft-defer (not hard fail).
     manifest_os_macos_is_prerelease() { return 1; }   # deterministic: suppress beta line
     export MANIFEST_CLI_SHIP_BOTTLE_WAIT_MINUTES=1
     local sentinel="$SCRATCH/ssh-restore-fired"
     manifest_ship_restore_tap_ssh_origin() { touch "$sentinel"; }
     mkdir -p "$SCRATCH/state"
     date +%s > "$SCRATCH/state/.auto_upgrade_last_check"
+    manifest_ship_ensure_bottle_ci() {
+        _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="queued"
+        _MANIFEST_CLI_SHIP_BOTTLE_CI_URL="https://example.test/bottle/run/queued"
+        return 0
+    }
+    manifest_ship_bottle_ci_refresh_status() {
+        _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="queued"
+        _MANIFEST_CLI_SHIP_BOTTLE_CI_URL="https://example.test/bottle/run/queued"
+        return 0
+    }
     brew() {
         case "$1 ${2:-} ${3:-}" in
             "list --versions manifest") echo "manifest 1.2.2"; return 0 ;;
@@ -310,6 +332,7 @@ teardown() {
     echo "$output" | grep -q "is not published yet"
     echo "$output" | grep -q "shipped"
     echo "$output" | grep -q "cooldown has been cleared"
+    ! echo "$output" | grep -q "Tap bottle CI failed"
     ! echo "$output" | grep -q "Homebrew upgrade did not complete"
     ! echo "$output" | grep -q "Local installation upgraded"
     [ ! -f "$sentinel" ]
@@ -319,7 +342,7 @@ teardown() {
 @test "local upgrade: bottle wait window of 0 defers immediately without polling" {
     export MANIFEST_CLI_SHIP_BOTTLE_WAIT_MINUTES=0
     manifest_os_macos_is_prerelease() { return 1; }
-    local brewlog="$SCRATCH/brewcmds"
+    local brewlog="$SCRATCH/brewcmds" ensure_log="$SCRATCH/ensure"
     brew() {
         case "$1 ${2:-} ${3:-}" in
             "list "*) return 0 ;;
@@ -331,6 +354,7 @@ teardown() {
             *) return 0 ;;
         esac
     }
+    manifest_ship_ensure_bottle_ci() { touch "$ensure_log"; return 0; }
 
     run manifest_ship_post_push_steps "1.2.3" "$(git rev-parse HEAD)" "v1.2.3" "success"
 
@@ -338,6 +362,7 @@ teardown() {
     ! echo "$output" | grep -q "Waiting for tap CI"
     echo "$output" | grep -q "is not published yet"
     [ ! -f "$brewlog" ]
+    [ ! -f "$ensure_log" ]   # wait=0 returns before ensure/dispatch
 }
 
 @test "local upgrade: toolchain-gate message gains a pre-release note on a macOS beta" {
@@ -359,6 +384,137 @@ teardown() {
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "can't source-build"
     echo "$output" | grep -q "macOS pre-release"
+}
+
+@test "bottle CI ensure: no run dispatches bottle.yml then pours after success" {
+    export MANIFEST_CLI_SHIP_BOTTLE_WAIT_MINUTES=1
+    manifest_os_macos_is_prerelease() { return 1; }
+    local ghlog="$SCRATCH/ghlog"
+    : > "$ghlog"
+    # First refresh → none; after dispatch → success.
+    _bottle_refresh_n=0
+    manifest_ship_tap_formula_declares_all_bottle() { return 1; }
+    manifest_ship_bottle_ci_refresh_status() {
+        _bottle_refresh_n=$((_bottle_refresh_n + 1))
+        if [ "$_bottle_refresh_n" -eq 1 ]; then
+            _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="none"
+            _MANIFEST_CLI_SHIP_BOTTLE_CI_URL=""
+        else
+            _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="success"
+            _MANIFEST_CLI_SHIP_BOTTLE_CI_URL="https://example.test/bottle/run/dispatched"
+        fi
+        return 0
+    }
+    gh() {
+        echo "$*" >> "$ghlog"
+        case "$*" in
+            "workflow run bottle.yml"*) return 0 ;;
+            *) return 0 ;;
+        esac
+    }
+    brew() {
+        case "$1 ${2:-} ${3:-}" in
+            "list --versions manifest")
+                if [ -f "$SCRATCH/bottle-poured" ]; then echo "manifest 1.2.3"; else echo "manifest 1.2.2"; fi
+                return 0 ;;
+            "list "*) return 0 ;;
+            "update "*|"update") return 0 ;;
+            "upgrade --force-bottle"*) touch "$SCRATCH/bottle-poured"; return 0 ;;
+            "upgrade manifest"*)
+                echo "Error: Your Xcode (26.5) is too outdated."
+                return 1 ;;
+            *) return 0 ;;
+        esac
+    }
+
+    run manifest_ship_post_push_steps "1.2.3" "$(git rev-parse HEAD)" "v1.2.3" "success"
+
+    [ "$status" -eq 0 ]
+    grep -q "workflow run bottle.yml" "$ghlog"
+    grep -q "dry_run=false" "$ghlog"
+    echo "$output" | grep -q "dispatching bottle.yml"
+    echo "$output" | grep -q "Local installation upgraded to v1.2.3 via Homebrew bottle"
+}
+
+@test "local upgrade: bottle CI failure marks upgrade failed with run URL" {
+    export MANIFEST_CLI_SHIP_BOTTLE_WAIT_MINUTES=1
+    manifest_os_macos_is_prerelease() { return 1; }
+    mkdir -p "$SCRATCH/state"
+    date +%s > "$SCRATCH/state/.auto_upgrade_last_check"
+    manifest_ship_ensure_bottle_ci() {
+        _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="in_progress"
+        _MANIFEST_CLI_SHIP_BOTTLE_CI_URL="https://example.test/bottle/run/fail"
+        return 0
+    }
+    manifest_ship_bottle_ci_refresh_status() {
+        _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="failure"
+        _MANIFEST_CLI_SHIP_BOTTLE_CI_URL="https://example.test/bottle/run/fail"
+        return 0
+    }
+    brew() {
+        case "$1 ${2:-} ${3:-}" in
+            "list --versions manifest") echo "manifest 1.2.2"; return 0 ;;
+            "list "*) return 0 ;;
+            "update "*|"update") return 0 ;;
+            "upgrade --force-bottle"*) return 1 ;;
+            "upgrade manifest"*)
+                echo "Error: Your Xcode (26.5) is too outdated."
+                return 1 ;;
+            *) return 0 ;;
+        esac
+    }
+
+    run manifest_ship_post_push_steps "1.2.3" "$(git rev-parse HEAD)" "v1.2.3" "success"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Tap bottle CI failed"
+    echo "$output" | grep -q "https://example.test/bottle/run/fail"
+    echo "$output" | grep -q "gh workflow run bottle.yml"
+    ! echo "$output" | grep -q "is not published yet"
+    ! echo "$output" | grep -q "Local installation upgraded"
+    [ ! -f "$SCRATCH/state/.auto_upgrade_last_check" ]
+}
+
+@test "bottle CI ensure: formula already bottled skips dispatch and pours" {
+    export MANIFEST_CLI_SHIP_BOTTLE_WAIT_MINUTES=1
+    manifest_os_macos_is_prerelease() { return 1; }
+    local ghlog="$SCRATCH/ghlog"
+    : > "$ghlog"
+    # Real ensure path: formula declares :all → already_bottled, no gh dispatch.
+    mkdir -p "$SCRATCH/tap/Formula"
+    cat > "$SCRATCH/tap/Formula/manifest.rb" <<'RB'
+class Manifest < Formula
+  url "https://example.test/v1.2.3.tar.gz"
+  head "https://example.test/manifest.git", branch: "main"
+  bottle do
+    root_url "https://example.test/bottles"
+    sha256 cellar: :any, all: "abc123"
+  end
+end
+RB
+    manifest_install_paths_homebrew_tap_dir() { echo "$SCRATCH/tap"; }
+    gh() { echo "$*" >> "$ghlog"; return 0; }
+    brew() {
+        case "$1 ${2:-} ${3:-}" in
+            "list --versions manifest")
+                if [ -f "$SCRATCH/bottle-poured" ]; then echo "manifest 1.2.3"; else echo "manifest 1.2.2"; fi
+                return 0 ;;
+            "list "*) return 0 ;;
+            "update "*|"update") return 0 ;;
+            "upgrade --force-bottle"*) touch "$SCRATCH/bottle-poured"; return 0 ;;
+            "upgrade manifest"*)
+                echo "Error: Your Xcode (26.5) is too outdated."
+                return 1 ;;
+            *) return 0 ;;
+        esac
+    }
+
+    run manifest_ship_post_push_steps "1.2.3" "$(git rev-parse HEAD)" "v1.2.3" "success"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "already declares an :all bottle"
+    ! grep -q "workflow run" "$ghlog"
+    echo "$output" | grep -q "Local installation upgraded to v1.2.3 via Homebrew bottle"
 }
 
 @test "auto-upgrade: opt-out via MANIFEST_CLI_AUTO_UPDATE=false does nothing" {
