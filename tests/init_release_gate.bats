@@ -37,7 +37,7 @@ teardown() {
     bash -n "$PROJ/scripts/run-tests.sh"
 }
 
-@test "gate scaffold: no-clobber — an existing gate is never touched" {
+@test "gate scaffold: no-clobber — an existing gate is never overwritten" {
     mkdir -p "$PROJ/scripts"
     printf '#!/bin/sh\necho mine\n' > "$PROJ/scripts/run-tests.sh"
 
@@ -45,6 +45,21 @@ teardown() {
     [ "$status" -eq 0 ]
     grep -q 'echo mine' "$PROJ/scripts/run-tests.sh"
     ! grep -q 'scaffolded by Manifest CLI' "$PROJ/scripts/run-tests.sh"
+    # Sidecar merge reference is written instead of clobbering.
+    [ -f "$PROJ/scripts/run-tests.sh.manifest" ]
+    grep -q 'scaffolded by Manifest CLI' "$PROJ/scripts/run-tests.sh.manifest"
+}
+
+@test "gate scaffold: no-clobber — existing gate + sidecar refreshes only the sidecar" {
+    mkdir -p "$PROJ/scripts"
+    printf '#!/bin/sh\necho mine\n' > "$PROJ/scripts/run-tests.sh"
+    printf '#!/bin/sh\necho stale\n' > "$PROJ/scripts/run-tests.sh.manifest"
+
+    run ensure_release_gate_script "$PROJ"
+    [ "$status" -eq 0 ]
+    grep -q 'echo mine' "$PROJ/scripts/run-tests.sh"
+    ! grep -q 'echo stale' "$PROJ/scripts/run-tests.sh.manifest"
+    grep -q 'scaffolded by Manifest CLI' "$PROJ/scripts/run-tests.sh.manifest"
 }
 
 # --- the ship argv contract ----------------------------------------------------

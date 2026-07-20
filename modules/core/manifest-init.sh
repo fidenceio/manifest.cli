@@ -25,6 +25,15 @@
 #   by manifest-orchestrator.sh, manifest-documentation.sh, manifest-fleet.sh.
 #   They live in this module because init owns the scaffolding semantics; other
 #   callers borrow them for repair/idempotency on existing repos.
+#
+# NO-CLOBBER CONTRACT (scaffold writers):
+#   Never overwrite an existing real file. When Manifest wants to provide a
+#   default and the real file is already present, write "<name>.manifest" as a
+#   merge reference instead. When both the real file and the sidecar already
+#   exist, refresh the sidecar with the latest Manifest-advised content — still
+#   never touch the real file. Sole exception: an empty .gitignore
+#   (comments/blanks only) is treated as "no content yet" and may be filled
+#   once — see ensure_gitignore_smart.
 # =============================================================================
 
 # Guard against multiple sourcing
@@ -36,6 +45,54 @@ _MANIFEST_INIT_LOADED=1
 # =============================================================================
 # FILE CREATION AND VALIDATION FUNCTIONS
 # =============================================================================
+
+# Write scaffold content without clobbering the real file.
+#
+#   $1 - destination path (absolute or relative)
+#   $2 - writer function name: writer <path>  (must write only to that path)
+#
+# Outcomes (printed to stdout, one of):
+#   <basename>              — created the real file (it was missing)
+#   <basename>.manifest     — real file existed; created or refreshed the
+#                             sidecar with the latest Manifest defaults
+#
+# Never overwrites the real file. The sidecar is always kept current with the
+# CLI's advised content when the real file is present. Returns 0 on success,
+# 1 if the writer fails.
+write_scaffold_no_clobber() {
+    local dest="$1"
+    local writer="$2"
+    local base sidecar_dest
+
+    if [[ -z "$dest" || -z "$writer" ]]; then
+        log_error "write_scaffold_no_clobber: dest and writer are required"
+        return 1
+    fi
+    if ! declare -F "$writer" >/dev/null 2>&1; then
+        log_error "write_scaffold_no_clobber: writer '$writer' is not a function"
+        return 1
+    fi
+
+    base="$(basename "$dest")"
+    sidecar_dest="${dest}.manifest"
+
+    if [[ ! -e "$dest" ]]; then
+        if ! "$writer" "$dest"; then
+            return 1
+        fi
+        printf '%s\n' "$base"
+        return 0
+    fi
+
+    # Real file exists — never clobber it. Create or refresh the sidecar with
+    # the latest Manifest-advised content so operators always have a current
+    # merge reference.
+    if ! "$writer" "$sidecar_dest"; then
+        return 1
+    fi
+    printf '%s\n' "${base}.manifest"
+    return 0
+}
 
 # Check for required files and create them if missing
 ensure_required_files() {
@@ -89,6 +146,14 @@ ensure_required_files() {
             ;;
     esac
 
+    # Crawl-privacy defaults (private/safe by default for deployed surfaces)
+    local privacy_result
+    privacy_result=$(ensure_crawl_privacy_files "$project_root") || true
+    if [[ -n "$privacy_result" ]]; then
+        # shellcheck disable=SC2206
+        created_files+=($privacy_result)
+    fi
+
     # Report results
     if [ ${#created_files[@]} -gt 0 ]; then
         log_success "Created ${#created_files[@]} missing file(s): ${created_files[*]}"
@@ -105,6 +170,45 @@ ensure_required_files() {
     return 0
 }
 
+# True when a directory already has the full Manifest init scaffold set.
+# Used by fleet init to pass over members that were previously initialized
+# (avoids writing .manifest sidecars on every fleet re-run). Repo init still
+# calls ensure_repo_scaffold for idempotent backfill of any missing pieces.
+manifest_repo_scaffold_is_complete() {
+    local project_root="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
+    [[ -n "$project_root" ]] || return 1
+    [[ -f "$project_root/VERSION" ]] \
+        && [[ -f "$project_root/README.md" ]] \
+        && [[ -f "$project_root/CHANGELOG.md" ]] \
+        && [[ -f "$project_root/.gitignore" ]] \
+        && [[ -f "$project_root/robots.txt" ]] \
+        && [[ -f "$project_root/ai.txt" ]] \
+        && [[ -f "$project_root/scripts/run-tests.sh" ]] \
+        && [[ -f "$project_root/.env.example" ]]
+}
+
+# Shared repo scaffold used by both `manifest init repo` and `manifest init fleet`.
+# Composes required files (incl. crawl privacy) + release gate + env example.
+# All writers honor write_scaffold_no_clobber (real file or .manifest sidecar).
+ensure_repo_scaffold() {
+    local project_root="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
+
+    if [[ -z "$project_root" || ! -d "$project_root" ]]; then
+        log_error "ensure_repo_scaffold: project root missing or not a directory: ${project_root:-<empty>}"
+        return 1
+    fi
+
+    if ! ensure_required_files "$project_root"; then
+        return 1
+    fi
+
+    # Best-effort: a scaffold hiccup warns inside the helper but does not fail
+    # the overall init (parity with historical init-repo behavior).
+    ensure_release_gate_script "$project_root" || true
+    ensure_env_files "$project_root" || true
+    return 0
+}
+
 # Scaffold the release gate script `manifest ship` auto-detects
 # (scripts/run-tests.sh). Since v56.0.0 the release gate is fail-closed: a
 # releaseable repo with no test command refuses to release, and inside
@@ -112,29 +216,41 @@ ensure_required_files() {
 # `manifest init` therefore get a gate on day one, so a fleet's FIRST
 # `ship fleet` never dies on a gate-less member.
 #
-# No-clobber: an existing scripts/run-tests.sh is never touched (it is the
-# repo's own gate). Deliberately NOT called from the orchestrator's ship-time
-# repair paths — materializing an executable mid-ship that the gate would then
-# immediately run is a surprise; gates appear at init time only.
+# No-clobber: an existing scripts/run-tests.sh is never overwritten. When one
+# already exists, write scripts/run-tests.sh.manifest as a merge reference.
+# Deliberately NOT called from the orchestrator's ship-time repair paths —
+# materializing an executable mid-ship that the gate would then immediately
+# run is a surprise; gates appear at init time only.
 ensure_release_gate_script() {
     local project_root="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
     local gate_file="$project_root/scripts/run-tests.sh"
+    local result
 
-    if [[ -f "$gate_file" ]]; then
-        return 0
-    fi
-
-    log_info "Creating release gate script..."
     if ! mkdir -p "$project_root/scripts"; then
         log_warning "Could not create scripts/ — release gate not scaffolded."
         return 1
     fi
-    if ! create_default_run_tests "$gate_file"; then
+
+    result="$(write_scaffold_no_clobber "$gate_file" create_default_run_tests)" || {
         log_warning "Could not write scripts/run-tests.sh — release gate not scaffolded."
         return 1
-    fi
-    chmod +x "$gate_file"
-    log_success "Created scripts/run-tests.sh (release gate — 'manifest ship' runs it before releasing)"
+    }
+
+    case "$result" in
+        "run-tests.sh")
+            chmod +x "$gate_file"
+            log_success "Created scripts/run-tests.sh (release gate — 'manifest ship' runs it before releasing)"
+            ;;
+        "run-tests.sh.manifest")
+            chmod +x "$project_root/scripts/run-tests.sh.manifest" 2>/dev/null || true
+            if [[ -f "$gate_file" ]]; then
+                log_success "Wrote scripts/run-tests.sh.manifest (existing gate preserved — latest Manifest default)"
+            fi
+            ;;
+        "")
+            : # unreachable under current write_scaffold_no_clobber contract
+            ;;
+    esac
     return 0
 }
 
@@ -458,16 +574,59 @@ _manifest_env_render_example() {
 #   spec with `env:`      generate .env.example from it
 #   spec without `env:`   seed a starter `env:` block first, then generate
 #   no spec               starter .env.example (honoring the configured prefix)
-# No-clobber: an existing .env.example is never touched (explicit regeneration
-# is `manifest env generate -y`).
+# No-clobber: an existing .env.example is never overwritten. When one already
+# exists, write .env.example.manifest as a merge reference. Explicit
+# regeneration of the live example is `manifest env generate -y`.
 ensure_env_files() {
     local project_root="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
     local example_file="$project_root/.env.example"
+    local result
 
-    if [[ -f "$example_file" ]]; then
-        return 0
+    # Spec seeding only on first materialization of the live example — never
+    # mutate a service/app spec just to write a sidecar reference.
+    if [[ ! -f "$example_file" ]]; then
+        local prefix spec_file
+        prefix="$(_manifest_env_prefix_for_repo "$project_root")"
+        spec_file="$(_manifest_env_spec_file "$project_root")"
+
+        if [[ -n "$spec_file" ]] && command -v yq >/dev/null 2>&1; then
+            local has_env
+            has_env="$(yq e '.env | length > 0' "$spec_file" 2>/dev/null)"
+            if [[ "$has_env" != "true" ]]; then
+                log_info "Seeding starter env: block in $(basename "$spec_file")..."
+                local repo_dir
+                repo_dir="$(basename "$project_root")"
+                PREFIX="$prefix" REPO_DIR="$repo_dir" yq e -i '.env = [
+                    {"name": strenv(PREFIX) + "LOG_LEVEL", "description": "Structured-log verbosity", "required": false, "default": "info", "secret": false},
+                    {"name": strenv(PREFIX) + "SERVICE_FQN", "description": "Canonical service identity for logs/metrics", "required": false, "default": strenv(REPO_DIR), "secret": false}
+                ]' "$spec_file" 2>/dev/null || {
+                    log_warning "Could not seed env: block in $(basename "$spec_file") — writing starter .env.example instead."
+                }
+            fi
+        fi
     fi
 
+    result="$(write_scaffold_no_clobber "$example_file" create_default_env_example)" || {
+        log_warning "Could not write .env.example — env scaffold skipped."
+        return 1
+    }
+
+    case "$result" in
+        ".env.example")
+            log_success "Created .env.example (env schema template — 'manifest env' manages it)"
+            ;;
+        ".env.example.manifest")
+            log_success "Wrote .env.example.manifest (existing .env.example preserved — latest Manifest default)"
+            ;;
+    esac
+    return 0
+}
+
+# Writer for write_scaffold_no_clobber — emits .env.example content at $1.
+create_default_env_example() {
+    local example_file="$1"
+    local project_root
+    project_root="$(dirname "$example_file")"
     local prefix spec_file
     prefix="$(_manifest_env_prefix_for_repo "$project_root")"
     spec_file="$(_manifest_env_spec_file "$project_root")"
@@ -475,37 +634,22 @@ ensure_env_files() {
     if [[ -n "$spec_file" ]] && command -v yq >/dev/null 2>&1; then
         local has_env
         has_env="$(yq e '.env | length > 0' "$spec_file" 2>/dev/null)"
-        if [[ "$has_env" != "true" ]]; then
-            log_info "Seeding starter env: block in $(basename "$spec_file")..."
-            local repo_dir
-            repo_dir="$(basename "$project_root")"
-            PREFIX="$prefix" REPO_DIR="$repo_dir" yq e -i '.env = [
-                {"name": strenv(PREFIX) + "LOG_LEVEL", "description": "Structured-log verbosity", "required": false, "default": "info", "secret": false},
-                {"name": strenv(PREFIX) + "SERVICE_FQN", "description": "Canonical service identity for logs/metrics", "required": false, "default": strenv(REPO_DIR), "secret": false}
-            ]' "$spec_file" 2>/dev/null || {
-                log_warning "Could not seed env: block in $(basename "$spec_file") — writing starter .env.example instead."
-                spec_file=""
-            }
+        if [[ "$has_env" == "true" ]]; then
+            if ! _manifest_env_render_example "$spec_file" "$project_root" > "$example_file"; then
+                rm -f "$example_file"
+                return 1
+            fi
+            return 0
         fi
-    elif [[ -n "$spec_file" ]]; then
-        # yq unavailable: cannot read the spec — fall back to the starter.
-        spec_file=""
     fi
 
-    if [[ -n "$spec_file" ]]; then
-        if ! _manifest_env_render_example "$spec_file" "$project_root" > "$example_file"; then
-            log_warning "Could not write .env.example — env scaffold skipped."
-            rm -f "$example_file"
-            return 1
-        fi
+    local prefix_note
+    if [[ -n "$prefix" ]]; then
+        prefix_note="# Env prefix policy is on: owned vars start with ${prefix} (framework names are exempt)."
     else
-        local prefix_note
-        if [[ -n "$prefix" ]]; then
-            prefix_note="# Env prefix policy is on: owned vars start with ${prefix} (framework names are exempt)."
-        else
-            prefix_note="# Env prefix policy is off (default). Set env.prefix to require an owned-var prefix."
-        fi
-        cat > "$example_file" << MANIFEST_CLI_ENV_STARTER
+        prefix_note="# Env prefix policy is off (default). Set env.prefix to require an owned-var prefix."
+    fi
+    cat > "$example_file" << MANIFEST_CLI_ENV_STARTER
 # .env.example — scaffolded by Manifest CLI.
 ${prefix_note}
 # Framework names (DATABASE_URL, NEXT_PUBLIC_*, …) are bridged at injection
@@ -515,10 +659,6 @@ ${prefix_note}
 #
 # ${prefix}LOG_LEVEL=info
 MANIFEST_CLI_ENV_STARTER
-    fi
-
-    log_success "Created .env.example (env schema template — 'manifest env' manages it)"
-    return 0
 }
 
 # Create default README.md content
@@ -681,13 +821,12 @@ EOF
 # Smart .gitignore creation
 # - No .gitignore          → create .gitignore
 # - .gitignore with no entries (empty / only comments+blanks) → overwrite .gitignore
-# - .gitignore with entries → create .gitignore.manifest as reference
+# - .gitignore with entries → create/refresh .gitignore.manifest (never touch real)
 #
 # Output (stdout):
 #   ".gitignore"                 — created new file
 #   ".gitignore:empty-overwrite" — overwrote a .gitignore that had no real entries
-#   ".gitignore.manifest"        — reference file created alongside existing .gitignore
-#   (empty)                      — nothing was done
+#   ".gitignore.manifest"        — created or refreshed the sidecar reference
 #
 # Returns 0 on success, 1 on write failure.
 ensure_gitignore_smart() {
@@ -707,9 +846,16 @@ ensure_gitignore_smart() {
         return 0
     fi
 
-    # Count non-blank, non-comment lines (actual ignore entries)
+    # Count non-blank, non-comment lines (actual ignore entries).
+    # grep -c prints "0" and exits 1 when there are no matches — do NOT append
+    # another "0" via `|| echo 0` (that yields "0\n0" and breaks the arithmetic test).
     local entry_count
-    entry_count=$(grep -cvE '^\s*$|^\s*#' "$gitignore_file" 2>/dev/null || echo "0")
+    entry_count=$(grep -cvE '^\s*$|^\s*#' "$gitignore_file" 2>/dev/null || true)
+    entry_count="${entry_count:-0}"
+    # Strip any accidental whitespace/newlines
+    entry_count="${entry_count//$'\n'/}"
+    entry_count="${entry_count//[[:space:]]/}"
+    [[ "$entry_count" =~ ^[0-9]+$ ]] || entry_count=0
 
     if [[ "$entry_count" -eq 0 ]]; then
         # .gitignore exists but has no real entries — overwrite
@@ -723,19 +869,19 @@ ensure_gitignore_smart() {
         return 0
     fi
 
-    # .gitignore has real entries — write a reference file instead
-    if [[ ! -f "$manifest_ref" ]]; then
+    # Real .gitignore has entries — never clobber it. Create or refresh the
+    # sidecar with the latest Manifest-advised defaults.
+    if [[ -f "$manifest_ref" ]]; then
+        log_info "Refreshing .gitignore.manifest with latest Manifest defaults..."
+    else
         log_info "Existing .gitignore has entries, creating .gitignore.manifest as reference..."
-        if ! create_default_gitignore "$manifest_ref"; then
-            log_error "Failed to create .gitignore.manifest in $project_root"
-            return 1
-        fi
-        log_success "Created .gitignore.manifest (merge entries into .gitignore as needed)"
-        echo ".gitignore.manifest"
-        return 0
     fi
-
-    # Both files already exist — nothing to do
+    if ! create_default_gitignore "$manifest_ref"; then
+        log_error "Failed to write .gitignore.manifest in $project_root"
+        return 1
+    fi
+    log_success "Wrote .gitignore.manifest (existing .gitignore preserved — merge as needed)"
+    echo ".gitignore.manifest"
     return 0
 }
 
@@ -750,6 +896,10 @@ create_default_gitignore() {
 .manifest-cli/
 *.manifest-cli.log
 .gitignore.manifest
+robots.txt.manifest
+ai.txt.manifest
+.env.example.manifest
+scripts/run-tests.sh.manifest
 
 # =============================================================================
 # OS generated files
@@ -938,6 +1088,106 @@ terraform.rc
 EOF
 }
 
+# Crawl-privacy defaults — private/safe by default for anything that might be
+# deployed as a web surface. Uses write_scaffold_no_clobber: create the real
+# file when missing; write a .manifest sidecar when the real file already
+# exists; never overwrite either.
+#
+# Prints space-separated basenames of created files (may be empty).
+ensure_crawl_privacy_files() {
+    local project_root="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
+    local created=()
+    local result
+
+    result="$(write_scaffold_no_clobber "$project_root/robots.txt" create_default_robots_txt)" || return 1
+    [[ -n "$result" ]] && created+=("$result")
+
+    result="$(write_scaffold_no_clobber "$project_root/ai.txt" create_default_ai_txt)" || return 1
+    [[ -n "$result" ]] && created+=("$result")
+
+    if [[ ${#created[@]} -gt 0 ]]; then
+        log_success "Crawl privacy: ${created[*]} (Disallow all — private/safe by default)"
+        printf '%s\n' "${created[*]}"
+    fi
+    return 0
+}
+
+create_default_robots_txt() {
+    local dest="$1"
+    cat > "$dest" << 'EOF'
+# Manifest CLI — private/safe by default.
+# Search engines and AI crawlers are disallowed until you deliberately open
+# this surface. Merge from robots.txt.manifest if this file already existed
+# at init time and you want Manifest's defaults.
+#
+# To go public later: replace Disallow rules with your allowlist, or delete
+# this file and serve framework-native robots.
+
+User-agent: *
+Disallow: /
+
+# AI / training crawlers (explicit; some ignore the wildcard Disallow)
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: Diffbot
+Disallow: /
+
+User-agent: FacebookBot
+Disallow: /
+
+User-agent: GoogleOther
+Disallow: /
+
+User-agent: ImagesiftBot
+Disallow: /
+
+User-agent: Omgilibot
+Disallow: /
+
+User-agent: PerplexityBot
+Disallow: /
+EOF
+}
+
+create_default_ai_txt() {
+    local dest="$1"
+    cat > "$dest" << 'EOF'
+# Manifest CLI — private/safe by default.
+# Machine-readable policy for AI agents and crawlers. This surface is not
+# available for crawling, indexing, training, or quoting unless an operator
+# deliberately replaces this file.
+#
+# contact: (set by the repo owner)
+# If ai.txt already existed at init, see ai.txt.manifest for Manifest defaults.
+
+User-Agent: *
+Allow: none
+Disallow: /
+Crawl: no
+Train: no
+Index: no
+EOF
+}
+
 # -----------------------------------------------------------------------------
 # Function: manifest_init_repo
 # -----------------------------------------------------------------------------
@@ -981,7 +1231,9 @@ scripts/run-tests.sh (the release gate 'manifest ship' auto-detects — fail-clo
 Idempotent — safe to re-run. Optionally creates a GitHub repo via 'gh repo create'." \
                     "Options" "  --dry-run                  Explicit preview; no writes
   -y, --yes                  Apply the scaffold plan
-  -f, --force                Re-create files even if they already exist
+  -f, --force                Recreate manifest.config.local.yaml if present
+                             (scaffold content files stay no-clobber; existing
+                             content gets a .manifest sidecar merge reference)
   --create-repo-private      Create a private GitHub repo (gh repo create) and add as origin
   --create-repo-public       Create a public GitHub repo (gh repo create) and add as origin" \
                     "Examples" "  manifest init repo
@@ -1013,10 +1265,18 @@ Idempotent — safe to re-run. Optionally creates a GitHub repo via 'gh repo cre
             echo "  exists:       .git/"
         fi
         local f
-        for f in VERSION README.md CHANGELOG.md .gitignore; do
+        for f in VERSION README.md CHANGELOG.md .gitignore robots.txt ai.txt; do
             if [[ -f "$project_root/$f" ]]; then
-                if [[ "$force" == "true" ]]; then
-                    echo "  would overwrite: $f   (--force)"
+                # Scaffold files are never overwritten — even with --force.
+                # --force only recreates manifest.config.local.yaml (below).
+                # When a content file already exists, apply writes "<name>.manifest"
+                # as a merge reference (see write_scaffold_no_clobber).
+                if [[ "$f" == "robots.txt" || "$f" == "ai.txt" || "$f" == ".gitignore" ]]; then
+                    if [[ -f "$project_root/${f}.manifest" ]]; then
+                        echo "  exists:          $f   (would refresh ${f}.manifest)"
+                    else
+                        echo "  exists:          $f   (would write ${f}.manifest as merge reference)"
+                    fi
                 else
                     echo "  exists:          $f"
                 fi
@@ -1030,19 +1290,31 @@ Idempotent — safe to re-run. Optionally creates a GitHub repo via 'gh repo cre
             echo "  would create:    docs/"
         fi
         if [[ -f "$project_root/scripts/run-tests.sh" ]]; then
-            echo "  exists:          scripts/run-tests.sh"
+            if [[ -f "$project_root/scripts/run-tests.sh.manifest" ]]; then
+                echo "  exists:          scripts/run-tests.sh   (would refresh scripts/run-tests.sh.manifest)"
+            else
+                echo "  exists:          scripts/run-tests.sh   (would write scripts/run-tests.sh.manifest)"
+            fi
         else
             echo "  would create:    scripts/run-tests.sh   (release gate — 'manifest ship' runs it)"
         fi
         if [[ -f "$project_root/.env.example" ]]; then
-            echo "  exists:          .env.example"
+            if [[ -f "$project_root/.env.example.manifest" ]]; then
+                echo "  exists:          .env.example   (would refresh .env.example.manifest)"
+            else
+                echo "  exists:          .env.example   (would write .env.example.manifest)"
+            fi
         else
             echo "  would create:    .env.example   (env schema template)"
         fi
         if [[ -f "$project_root/manifest.config.local.yaml" && "$force" != "true" ]]; then
             echo "  exists:          manifest.config.local.yaml"
         else
-            echo "  would create:    manifest.config.local.yaml"
+            if [[ -f "$project_root/manifest.config.local.yaml" && "$force" == "true" ]]; then
+                echo "  would recreate:  manifest.config.local.yaml   (--force)"
+            else
+                echo "  would create:    manifest.config.local.yaml"
+            fi
         fi
         if [[ -n "$create_repo_visibility" ]]; then
             local repo_target
@@ -1076,20 +1348,12 @@ Idempotent — safe to re-run. Optionally creates a GitHub repo via 'gh repo cre
         fi
     fi
 
-    # Use the shared ensure_required_files function
-    # This creates VERSION, README.md, CHANGELOG.md, docs/, .gitignore
-    if ! ensure_required_files "$project_root"; then
+    # Shared scaffold (same path as fleet member init): VERSION/README/CHANGELOG/
+    # docs/.gitignore/robots.txt/ai.txt + release gate + .env.example.
+    if ! ensure_repo_scaffold "$project_root"; then
         log_error "Failed to create required files"
         return 1
     fi
-
-    # Release gate (scripts/run-tests.sh) — v56's fail-closed gate needs a test
-    # command, so every repo is born with one. Best-effort: a scaffold hiccup
-    # warns (inside the helper) but does not fail init.
-    ensure_release_gate_script "$project_root" || true
-
-    # Env schema template (.env.example) — ENV-001, STANDARD.md §2.7.
-    ensure_env_files "$project_root" || true
 
     # Create manifest.config.local.yaml if it doesn't exist
     local local_config="$project_root/manifest.config.local.yaml"
@@ -1227,6 +1491,7 @@ _manifest_init_fleet_dry_run_phase2() {
     selected=$(parse_start_tsv "$start_file")
 
     local selected_count=0 existing_count=0 missing_count=0 needs_git_count=0
+    local scaffold_count=0 already_complete_count=0
     local create_targets=()
     while IFS=$'\t' read -r name path has_git _url _branch _version; do
         [[ -z "$name" ]] && continue
@@ -1239,6 +1504,13 @@ _manifest_init_fleet_dry_run_phase2() {
                 owns_git=true
             else
                 ((needs_git_count += 1))
+            fi
+
+            if declare -F manifest_repo_scaffold_is_complete >/dev/null 2>&1 \
+                && manifest_repo_scaffold_is_complete "$abs_path"; then
+                ((already_complete_count += 1))
+            else
+                ((scaffold_count += 1))
             fi
 
             if [[ -n "$create_repo_visibility" ]]; then
@@ -1297,7 +1569,7 @@ _manifest_init_fleet_dry_run_phase2() {
     echo "Fleet name:      $fleet_name"
     echo "Selected rows:   $selected_count ($existing_count existing, $missing_count missing)"
     echo "Would git init:  $needs_git_count selected director$( [[ "$needs_git_count" == "1" ]] && echo "y" || echo "ies" ) without git"
-    echo "Would scaffold:  Manifest files (VERSION/README/CHANGELOG/docs/.gitignore/scripts/run-tests.sh) in $existing_count member(s) — no-clobber, already-complete members unchanged"
+    echo "Would scaffold:  ensure_repo_scaffold (VERSION/README/CHANGELOG/docs/.gitignore/robots.txt/ai.txt/scripts/run-tests.sh/.env.example) in $scaffold_count incomplete member(s); skip $already_complete_count already-initialized"
     if [[ -n "$create_repo_visibility" ]]; then
         echo "Would create:    ${#create_targets[@]} $create_repo_visibility GitHub repo(s) after local init"
         local target
@@ -1574,4 +1846,6 @@ export -f manifest_init_dispatch
 export -f ensure_required_files create_default_readme create_default_changelog
 export -f create_default_gitignore ensure_gitignore_smart
 export -f ensure_release_gate_script create_default_run_tests
-export -f ensure_env_files _manifest_env_prefix_for_repo _manifest_env_spec_file _manifest_env_render_example
+export -f ensure_env_files create_default_env_example _manifest_env_prefix_for_repo _manifest_env_spec_file _manifest_env_render_example
+export -f write_scaffold_no_clobber ensure_crawl_privacy_files create_default_robots_txt create_default_ai_txt
+export -f ensure_repo_scaffold manifest_repo_scaffold_is_complete

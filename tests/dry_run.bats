@@ -72,15 +72,18 @@ teardown() {
     ! echo "$output" | grep -q "would create: .git"
 }
 
-@test "init repo --dry-run --force: existing files marked 'would overwrite'" {
+@test "init repo --dry-run --force: scaffold files stay no-clobber; only local config recreates" {
     source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
     cd "$SCRATCH"
     git init -q
     echo "1.0.0" > VERSION
+    touch manifest.config.local.yaml
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run --force
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "would overwrite:.*VERSION"
+    echo "$output" | grep -q "exists:.*VERSION"
+    ! echo "$output" | grep -q "would overwrite:.*VERSION"
+    echo "$output" | grep -q "would recreate:.*manifest.config.local.yaml"
     # Nothing actually mutated.
     [ "$(cat "$SCRATCH/VERSION")" = "1.0.0" ]
 }
