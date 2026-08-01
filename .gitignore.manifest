@@ -4,6 +4,10 @@
 .manifest-cli/
 *.manifest-cli.log
 .gitignore.manifest
+robots.txt.manifest
+ai.txt.manifest
+.env.example.manifest
+scripts/run-tests.sh.manifest
 
 # =============================================================================
 # OS generated files
@@ -37,20 +41,29 @@ $RECYCLE.BIN/
 nbproject/
 
 # =============================================================================
-# Manifest CLI — Local overrides (NEVER commit)
-# =============================================================================
-manifest.config.local.yaml
-
-# =============================================================================
-# Environment and secrets
+# Environment, secrets, and local/generated config
 # =============================================================================
 .env
 .env.*
+*.local.yaml
+*.local.yml
+*.local.json
+*.local.toml
+*.secret.yaml
+*.secret.yml
+*.secret.json
+*.secret.*
+# Keep authoring templates trackable — example/template variants stay in git.
 !.env.example
 !.env.template
-
-# Legacy Manifest CLI env files
-.env.manifest.local
+!*.example.yaml
+!*.example.yml
+!*.example.json
+!*.example.toml
+!*.template.yaml
+!*.template.yml
+!*.template.json
+!*.template.toml
 
 # =============================================================================
 # Logs and runtime data

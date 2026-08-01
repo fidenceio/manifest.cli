@@ -694,16 +694,20 @@ manifest_ship_tap_formula_declares_all_bottle() {
 # Refresh _MANIFEST_CLI_SHIP_BOTTLE_CI_{STATUS,URL,CONCLUSION} from the latest
 # bottle.yml run on the tap. STATUS is one of:
 #   none | queued | in_progress | success | failure | cancelled | unknown
-# Best-effort: missing gh / API errors → unknown (does not abort ship).
+# Best-effort: missing gh leaves the last known status from ensure / a prior
+# poll intact (does not invent "none" and does not abort ship). API errors →
+# unknown.
 manifest_ship_bottle_ci_refresh_status() {
+    if ! command -v gh >/dev/null 2>&1; then
+        # No API client — keep STATUS/URL from ensure_bottle_ci or a prior poll
+        # so the wait loop can still hard-fail on a known failure/cancelled.
+        [ -z "${_MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS:-}" ] && _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="none"
+        return 0
+    fi
+
     _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="unknown"
     _MANIFEST_CLI_SHIP_BOTTLE_CI_URL=""
     _MANIFEST_CLI_SHIP_BOTTLE_CI_CONCLUSION=""
-
-    if ! command -v gh >/dev/null 2>&1; then
-        _MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS="none"
-        return 0
-    fi
 
     local slug row status conclusion url
     slug="$(manifest_ship_homebrew_tap_slug)"
@@ -805,28 +809,31 @@ manifest_ship_wait_for_bottle_upgrade() {
 
     manifest_ship_ensure_bottle_ci
 
+    # Do not hard-fail on ensure's post-dispatch status: ensure re-dispatches on
+    # failure/cancelled, and the latest run can still look terminal for a few
+    # seconds before Actions registers the new one. The poll loop below is the
+    # source of truth. Always call refresh (including when gh is absent) so
+    # stubs and last-known ensure status both work.
     for (( i = 1; i <= attempts; i++ )); do
         sleep "$poll_seconds"
 
         # Re-check CI each poll so a late failure surfaces before the window ends.
-        if command -v gh >/dev/null 2>&1; then
-            manifest_ship_bottle_ci_refresh_status
-            case "${_MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS}" in
-                failure|cancelled)
-                    echo "   Bottle CI ${_MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS}${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL:+ — ${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL}}"
-                    return 2
-                    ;;
-                queued|in_progress)
-                    # Progress breadcrumb about once a minute (every 3rd 20s poll).
-                    if (( i % 3 == 1 )); then
-                        echo "   Bottle CI: ${_MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS}${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL:+ (${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL})}"
-                    fi
-                    ;;
-                success|already_bottled)
-                    : # fall through to pour attempt
-                    ;;
-            esac
-        fi
+        manifest_ship_bottle_ci_refresh_status
+        case "${_MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS}" in
+            failure|cancelled)
+                echo "   Bottle CI ${_MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS}${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL:+ — ${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL}}"
+                return 2
+                ;;
+            queued|in_progress)
+                # Progress breadcrumb about once a minute (every 3rd 20s poll).
+                if (( i % 3 == 1 )); then
+                    echo "   Bottle CI: ${_MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS}${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL:+ (${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL})}"
+                fi
+                ;;
+            success|already_bottled)
+                : # fall through to pour attempt
+                ;;
+        esac
 
         # If the formula writeback already landed locally, prefer pouring now.
         if manifest_ship_tap_formula_declares_all_bottle; then
@@ -842,9 +849,7 @@ manifest_ship_wait_for_bottle_upgrade() {
     done
 
     # Window closed — classify by last known CI state.
-    if command -v gh >/dev/null 2>&1; then
-        manifest_ship_bottle_ci_refresh_status
-    fi
+    manifest_ship_bottle_ci_refresh_status
     case "${_MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS}" in
         failure|cancelled)
             echo "   Bottle CI ${_MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS}${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL:+ — ${_MANIFEST_CLI_SHIP_BOTTLE_CI_URL}}"

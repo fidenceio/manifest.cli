@@ -1,0 +1,50 @@
+# Manifest CLI — private/safe by default.
+# Search engines and AI crawlers are disallowed until you deliberately open
+# this surface. Merge from robots.txt.manifest if this file already existed
+# at init time and you want Manifest's defaults.
+#
+# To go public later: replace Disallow rules with your allowlist, or delete
+# this file and serve framework-native robots.
+
+User-agent: *
+Disallow: /
+
+# AI / training crawlers (explicit; some ignore the wildcard Disallow)
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: Diffbot
+Disallow: /
+
+User-agent: FacebookBot
+Disallow: /
+
+User-agent: GoogleOther
+Disallow: /
+
+User-agent: ImagesiftBot
+Disallow: /
+
+User-agent: Omgilibot
+Disallow: /
+
+User-agent: PerplexityBot
+Disallow: /

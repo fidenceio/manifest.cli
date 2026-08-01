@@ -72,10 +72,29 @@ teardown() {
 
 @test "os: get_timezone_display resolves a named timezone abbreviation" {
     export MANIFEST_CLI_TIMEZONE="America/New_York"
-    # 1700000000 = 2023-11-14, after the DST switch: New York shows EST.
+    # Requires tzdata in the test image (see run-tests.Dockerfile). Missing
+    # zoneinfo fails this assertion honestly — do not skip.
+    # 1700000000 = 2023-11-14, after DST → EST.
     run get_timezone_display 1700000000
     [ "$status" -eq 0 ]
     [ "$output" = "EST" ]
+}
+
+@test "os: get_timezone_display falls back to IANA name when zoneinfo is missing" {
+    export MANIFEST_CLI_TIMEZONE="Fake/NoSuchZone"
+    run get_timezone_display 1700000000
+    [ "$status" -eq 0 ]
+    # Must not invent a short abbreviation (e.g. UTC / path fragment) when the
+    # zone database entry is absent — surface the configured IANA name instead.
+    [ "$output" = "Fake/NoSuchZone" ]
+}
+
+@test "os: get_timezone_display rejects path-traversal timezone values" {
+    export MANIFEST_CLI_TIMEZONE="../../etc/passwd"
+    run get_timezone_display 1700000000
+    [ "$status" -eq 0 ]
+    # Must not probe the filesystem via ..; echo the raw value unchanged.
+    [ "$output" = "../../etc/passwd" ]
 }
 
 @test "os: setup_linux_commands selects GNU date form and plain timeout" {

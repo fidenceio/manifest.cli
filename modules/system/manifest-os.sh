@@ -237,6 +237,24 @@ get_timezone_display() {
         return 0
     fi
 
+    # IANA names are Area/Location (letters, digits, _, -, +, /). Reject anything
+    # else — especially ".." — before interpolating into zoneinfo paths.
+    case "$timezone" in
+        *..*|*[!A-Za-z0-9_/+-]*)
+            echo "$timezone"
+            return 0
+            ;;
+    esac
+
+    # Without zoneinfo for this IANA name, date often still exits 0 and prints a
+    # misleading label (UTC, or a path fragment). Prefer the IANA name over a
+    # wrong short abbreviation when the zone database entry is missing.
+    if [ ! -e "/usr/share/zoneinfo/$timezone" ] \
+        && [ ! -e "/var/db/timezone/zoneinfo/$timezone" ]; then
+        echo "$timezone"
+        return 0
+    fi
+
     # Get the timezone abbreviation at the given timestamp
     TZ="$timezone" date -d "@$timestamp" '+%Z' 2>/dev/null && return 0
     TZ="$timezone" date -r "$timestamp" '+%Z' 2>/dev/null && return 0  # native-BSD fallback
