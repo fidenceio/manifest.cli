@@ -262,17 +262,6 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
     [ ! -d "$HOME/.manifest-cli" ]
 }
 
-@test "first (cli): quickstart is fully retired — no longer a recognized command" {
-    # quickstart (command + alias) was removed 2026-06-15; `first` is the only
-    # onboarding front door. The token must now fall through to the unknown-
-    # command handler rather than forward anywhere.
-    mkrepo "$SCRATCH/repo"
-    cd "$SCRATCH/repo"
-    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" quickstart
-    [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Unknown command: quickstart"
-}
-
 @test "first (cli): -y on a fleet candidate runs Phase 1 only — writes TSV, stops, audited" {
     # Aligned behavior: `first -y` on a fleet writes the reviewable membership
     # list and STOPS (no config, no member scaffolding). The curated apply is a

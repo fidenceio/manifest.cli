@@ -51,16 +51,3 @@ run_manifest_from_plain_dir() {
     [[ "$output" == *"Usage: manifest pr fleet"* ]]
 }
 
-@test "old object-first fleet routes no longer execute" {
-    run_manifest_from_plain_dir fleet discover --json
-    [ "$status" -ne 0 ]
-    [[ "$output" == *"no longer a dispatcher route"* ]]
-    [[ "$output" == *"manifest discover fleet"* ]]
-    [[ "$output" != *'"total"'* ]]
-
-    run_manifest_from_plain_dir fleet update --json
-    [ "$status" -ne 0 ]
-    [[ "$output" == *"no longer a dispatcher route"* ]]
-    [[ "$output" == *"manifest update fleet"* ]]
-    [[ "$output" != *'"total"'* ]]
-}

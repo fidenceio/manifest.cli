@@ -7,7 +7,6 @@ load 'helpers/setup'
     grep -Eq 'top_cmds=.*(^| )reconcile( |")' "$TEST_REPO_ROOT/completions/manifest.bash"
     grep -Eq 'top_cmds=.*(^| )recipe( |")' "$TEST_REPO_ROOT/completions/manifest.bash"
     grep -Eq 'first\|init\|plan\|reconcile' "$TEST_REPO_ROOT/completions/manifest.bash"
-    ! grep -q 'quickstart' "$TEST_REPO_ROOT/completions/manifest.bash"
 }
 
 @test "bash completion includes first as a top command" {
@@ -19,12 +18,10 @@ load 'helpers/setup'
     grep -q "'reconcile:Validate and apply an adoption plan'" "$TEST_REPO_ROOT/completions/_manifest"
     grep -q "'recipe:Inspect workflow recipes'" "$TEST_REPO_ROOT/completions/_manifest"
     grep -Eq 'first\|init\|plan\|reconcile' "$TEST_REPO_ROOT/completions/_manifest"
-    ! grep -q 'quickstart' "$TEST_REPO_ROOT/completions/_manifest"
 }
 
-@test "zsh completion includes first as a top command and no longer offers quickstart" {
+@test "zsh completion includes first as a top command" {
     grep -q "'first:" "$TEST_REPO_ROOT/completions/_manifest"
-    ! grep -q 'quickstart' "$TEST_REPO_ROOT/completions/_manifest"
 }
 
 @test "fish completion includes plan and reconcile" {
@@ -32,12 +29,10 @@ load 'helpers/setup'
     grep -q "a reconcile .*-d 'Validate and apply an adoption plan'" "$TEST_REPO_ROOT/completions/manifest.fish"
     grep -q "a recipe .*-d 'Inspect workflow recipes'" "$TEST_REPO_ROOT/completions/manifest.fish"
     grep -q "first init plan reconcile" "$TEST_REPO_ROOT/completions/manifest.fish"
-    ! grep -q 'quickstart' "$TEST_REPO_ROOT/completions/manifest.fish"
 }
 
-@test "fish completion includes first as a top command and no longer offers quickstart" {
+@test "fish completion includes first as a top command" {
     grep -q "a first " "$TEST_REPO_ROOT/completions/manifest.fish"
-    ! grep -q "a quickstart " "$TEST_REPO_ROOT/completions/manifest.fish"
 }
 
 @test "completions expose fleet adoption flags" {

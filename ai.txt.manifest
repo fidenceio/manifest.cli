@@ -1,0 +1,14 @@
+# Manifest CLI — private/safe by default.
+# Machine-readable policy for AI agents and crawlers. This surface is not
+# available for crawling, indexing, training, or quoting unless an operator
+# deliberately replaces this file.
+#
+# contact: (set by the repo owner)
+# If ai.txt already existed at init, see ai.txt.manifest for Manifest defaults.
+
+User-Agent: *
+Allow: none
+Disallow: /
+Crawl: no
+Train: no
+Index: no
