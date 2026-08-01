@@ -1,5 +1,15 @@
 # Changelog
 
+## [57.0.0] - 2026-08-01
+
+**Release Type:** Major
+
+### Changes
+
+- Add GitHub Release publishing support
+- Add regression coverage for the changed CLI workflow
+
+
 ## [56.8.1] - 2026-07-20
 
 **Release Type:** Patch
@@ -97,13 +107,3 @@
 - Add env naming-law audit to `manifest security`: `FIDENCE_*` law with framework-name allowlist (mirrors `env_framework_names.json`; `MANIFEST_CLI_*` permanently exempt); `env.naming_enforcement` warn (default) / strict, extra entries via `env.naming_allow`
 - Update shell completions and command reference for `manifest env`
 - Test hermeticity: the bats helper strips ambient `MANIFEST_CLI_AUTO_CONFIRM`, so declined-consent tests hold even under non-interactive ship runs
-
-
-## [56.2.0] - 2026-07-02
-
-**Release Type:** Minor
-
-### Changes
-
-- Feat(init): scaffold the release-gate run-tests.sh at repo/fleet init
-- Update 1 file before release
