@@ -1,5 +1,14 @@
 # Changelog
 
+## [57.0.1] - 2026-08-01
+
+**Release Type:** Patch
+
+### Changes
+
+- Add regression coverage for the changed CLI workflow
+
+
 ## [57.0.0] - 2026-08-01
 
 **Release Type:** Major
@@ -94,16 +103,3 @@
 - Add GitHub Release publishing support
 - Update release copy and configuration examples
 - Add regression coverage for the changed CLI workflow
-
-
-## [56.3.0] - 2026-07-03
-
-**Release Type:** Minor
-
-### Changes
-
-- Add `manifest env generate|validate` (ENV-001): spec `env:`-driven `.env.example`, k8s configmap/external-secret env bridges, Dockerfile public-vars bridge block, `--check` drift gate
-- Scaffold `.env.example` at `manifest init`/`manifest prep` (no-clobber; seeds a starter spec `env:` block when absent)
-- Add env naming-law audit to `manifest security`: `FIDENCE_*` law with framework-name allowlist (mirrors `env_framework_names.json`; `MANIFEST_CLI_*` permanently exempt); `env.naming_enforcement` warn (default) / strict, extra entries via `env.naming_allow`
-- Update shell completions and command reference for `manifest env`
-- Test hermeticity: the bats helper strips ambient `MANIFEST_CLI_AUTO_CONFIRM`, so declined-consent tests hold even under non-interactive ship runs
