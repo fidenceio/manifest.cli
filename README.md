@@ -4,7 +4,7 @@ Manifest CLI is release control for agent-assisted development. It keeps version
 
 [![tests](https://github.com/fidenceio/manifest.cli/actions/workflows/test.yml/badge.svg)](https://github.com/fidenceio/manifest.cli/actions/workflows/test.yml)
 
-**Version:** `57.0.1`
+**Version:** `57.1.0`
 **Platforms:** macOS, Linux, FreeBSD
 **Primary interface:** `manifest <verb> <scope> [options]`
 

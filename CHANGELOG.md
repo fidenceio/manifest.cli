@@ -1,5 +1,18 @@
 # Changelog
 
+## [57.1.0] - 2026-08-04
+
+**Release Type:** Minor
+
+### Changes
+
+- Gitignore: ignore AI agent workspaces, keep team-shared config trackable
+- .claude: add sanitized team-shared settings
+- Pre-commit: block absolute home paths in staged content
+- Docs(hooks): document the home-path check and a move-safe install
+- Update 2 files before release
+
+
 ## [57.0.1] - 2026-08-01
 
 **Release Type:** Patch
@@ -91,15 +104,3 @@
 
 - Fix fleet init Git ownership and GitHub targets
 - Update 1 file before release
-
-
-## [56.4.0] - 2026-07-09
-
-**Release Type:** Minor
-
-### Changes
-
-- Docs(changelog): correct 56.3.0 entry — release adds 'manifest env' + env scaffolding + naming audit, not the auto-generated copy
-- Add GitHub Release publishing support
-- Update release copy and configuration examples
-- Add regression coverage for the changed CLI workflow
