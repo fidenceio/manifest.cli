@@ -6,13 +6,24 @@ This directory contains versioned hooks for Manifest CLI contributors.
 
 | Hook | Purpose |
 | ---- | ------- |
-| `pre-commit` | Scans staged content for secrets, private env files, large binaries, and unsafe release artifacts |
+| `pre-commit` | Scans staged content for secrets, private env files, large binaries, unsafe release artifacts, and absolute home paths (`/Users/<name>`, `/home/<name>`) that would leak a developer's account name |
 
 ## Install
 
+Point git at this directory. The path is **relative**, so it keeps working if
+the repo is moved or renamed:
+
 ```bash
-ln -sf ../../.git-hooks/pre-commit .git/hooks/pre-commit
-chmod +x .git/hooks/pre-commit
+git config core.hooksPath .git-hooks
+```
+
+Verify it took effect — an absolute `core.hooksPath` left over from a previous
+checkout location silently disables every hook, and git reports no error:
+
+```bash
+git config core.hooksPath                     # expect: .git-hooks
+test -d "$(git rev-parse --show-toplevel)/$(git config core.hooksPath)" \
+  && echo "hooks live" || echo "hooks DEAD"
 ```
 
 ## Recovery
