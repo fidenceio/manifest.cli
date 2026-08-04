@@ -71,11 +71,13 @@ seed_complete_scaffold() {
     grep -q 'echo mine' "$proj/scripts/run-tests.sh"
     grep -q 'CUSTOM=1' "$proj/.env.example"
     grep -q 'Disallow: /' "$proj/robots.txt"
-    # Sidecars may appear (merge references) — that is still no-clobber.
-    [ -f "$proj/scripts/run-tests.sh.manifest" ] || [ -f "$proj/.env.example.manifest" ] || [ -f "$proj/robots.txt.manifest" ]
+    # No sidecar may appear beside any preserved file.
+    [ ! -e "$proj/scripts/run-tests.sh.manifest" ]
+    [ ! -e "$proj/.env.example.manifest" ]
+    [ ! -e "$proj/robots.txt.manifest" ]
 }
 
-@test "fleet skip: already-initialized members are not re-scaffolded with sidecars" {
+@test "fleet skip: already-initialized members are not re-scaffolded" {
     # shellcheck disable=SC1091
     source "$TEST_REPO_ROOT/modules/fleet/manifest-fleet.sh"
 

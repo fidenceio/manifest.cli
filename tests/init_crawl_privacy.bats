@@ -37,32 +37,28 @@ teardown() {
     grep -q 'Train: no' "$PROJ/ai.txt"
 }
 
-@test "crawl privacy: existing robots.txt gets robots.txt.manifest only" {
+@test "crawl privacy: an existing robots.txt is preserved with no sidecar" {
     printf 'User-agent: *\nAllow: /\n' > "$PROJ/robots.txt"
     run ensure_crawl_privacy_files "$PROJ"
     [ "$status" -eq 0 ]
     grep -q 'Allow: /' "$PROJ/robots.txt"
     ! grep -q 'GPTBot' "$PROJ/robots.txt"
-    [ -f "$PROJ/robots.txt.manifest" ]
-    grep -q 'GPTBot' "$PROJ/robots.txt.manifest"
+    [ ! -e "$PROJ/robots.txt.manifest" ]
+    # The missing companion is still created.
     [ -f "$PROJ/ai.txt" ]
     [ ! -e "$PROJ/ai.txt.manifest" ]
 }
 
-@test "crawl privacy: existing pair + sidecars refreshes only the sidecars" {
+@test "crawl privacy: an existing pair is left completely alone" {
     printf 'CUSTOM_ROBOTS\n' > "$PROJ/robots.txt"
     printf 'CUSTOM_AI\n' > "$PROJ/ai.txt"
-    printf 'STALE_ROBOTS\n' > "$PROJ/robots.txt.manifest"
-    printf 'STALE_AI\n' > "$PROJ/ai.txt.manifest"
 
     run ensure_crawl_privacy_files "$PROJ"
     [ "$status" -eq 0 ]
     grep -qx 'CUSTOM_ROBOTS' "$PROJ/robots.txt"
     grep -qx 'CUSTOM_AI' "$PROJ/ai.txt"
-    ! grep -q 'STALE_ROBOTS' "$PROJ/robots.txt.manifest"
-    ! grep -q 'STALE_AI' "$PROJ/ai.txt.manifest"
-    grep -q 'GPTBot' "$PROJ/robots.txt.manifest"
-    grep -q 'Train: no' "$PROJ/ai.txt.manifest"
+    [ ! -e "$PROJ/robots.txt.manifest" ]
+    [ ! -e "$PROJ/ai.txt.manifest" ]
 }
 
 @test "crawl privacy: ensure_required_files installs both by default" {

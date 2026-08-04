@@ -57,11 +57,11 @@ run_manifest() {
     printf 'node_modules/\n*.log\n' > "$SCRATCH/.gitignore"
     run create_fleet_gitignore "$SCRATCH"
     [ "$status" -eq 0 ]
-    [ "$output" = ".gitignore.manifest" ]
+    [ "$output" = ".gitignore:preserved" ]
     grep -q '^node_modules/$' "$SCRATCH/.gitignore"
     ! grep -q '^/\*$' "$SCRATCH/.gitignore"
-    [ -f "$SCRATCH/.gitignore.manifest" ]
-    grep -q '^/\*$' "$SCRATCH/.gitignore.manifest"
+    # Nothing is written beside a curated .gitignore.
+    [ ! -e "$SCRATCH/.gitignore.manifest" ]
 }
 
 @test "allowlist tracks only coordination files at the git level" {
@@ -112,14 +112,14 @@ run_manifest() {
     [ ! -d "$SCRATCH/.git" ]   # preview wrote nothing
 }
 
-@test "create_fleet_gitignore is idempotent — re-run does not spawn .gitignore.manifest" {
+@test "create_fleet_gitignore is idempotent — re-run is a clean no-op" {
     run create_fleet_gitignore "$SCRATCH"
     [ "$status" -eq 0 ]
     [ "$output" = ".gitignore" ]
     run create_fleet_gitignore "$SCRATCH"   # allowlist already present
     [ "$status" -eq 0 ]
     [ -z "$output" ]                        # clean no-op
-    [ ! -f "$SCRATCH/.gitignore.manifest" ] # no redundant reference file
+    [ ! -e "$SCRATCH/.gitignore.manifest" ] # sidecars no longer exist
 }
 
 @test "_fleet_dir_is_own_git_repo: own repo yes, nested-in-parent no" {

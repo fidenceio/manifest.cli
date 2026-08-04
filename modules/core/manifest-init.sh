@@ -28,10 +28,10 @@
 #
 # NO-CLOBBER CONTRACT (scaffold writers):
 #   Never overwrite an existing real file. When Manifest wants to provide a
-#   default and the real file is already present, write "<name>.manifest" as a
-#   merge reference instead. When both the real file and the sidecar already
-#   exist, refresh the sidecar with the latest Manifest-advised content — still
-#   never touch the real file. Sole exception: an empty .gitignore
+#   default and the real file is already present, leave the real file alone and
+#   report what the advice would add. Nothing is written beside it — the CLI is
+#   the source of the advised content and renders it on demand, so a stored copy
+#   would only duplicate and drift. Sole exception: an empty .gitignore
 #   (comments/blanks only) is treated as "no content yet" and may be filled
 #   once — see ensure_gitignore_smart.
 # =============================================================================
@@ -53,16 +53,20 @@ _MANIFEST_INIT_LOADED=1
 #
 # Outcomes (printed to stdout, one of):
 #   <basename>              — created the real file (it was missing)
-#   <basename>.manifest     — real file existed; created or refreshed the
-#                             sidecar with the latest Manifest defaults
+#   <basename>:preserved    — the real file existed and was left untouched
 #
-# Never overwrites the real file. The sidecar is always kept current with the
-# CLI's advised content when the real file is present. Returns 0 on success,
-# 1 if the writer fails.
+# Never overwrites the real file, and never writes anything beside it. Earlier
+# versions dropped a "<basename>.manifest" copy of the advised content as a merge
+# reference; that produced a per-repo file nothing ever read, which drifted from
+# the CLI that generated it and was committed by accident in some repos. The CLI
+# is the source of the advised content and can render it on demand, so storing a
+# second copy in every repo was pure duplication.
+#
+# Returns 0 on success, 1 if the writer fails.
 write_scaffold_no_clobber() {
     local dest="$1"
     local writer="$2"
-    local base sidecar_dest
+    local base
 
     if [[ -z "$dest" || -z "$writer" ]]; then
         log_error "write_scaffold_no_clobber: dest and writer are required"
@@ -74,7 +78,6 @@ write_scaffold_no_clobber() {
     fi
 
     base="$(basename "$dest")"
-    sidecar_dest="${dest}.manifest"
 
     if [[ ! -e "$dest" ]]; then
         if ! "$writer" "$dest"; then
@@ -84,13 +87,30 @@ write_scaffold_no_clobber() {
         return 0
     fi
 
-    # Real file exists — never clobber it. Create or refresh the sidecar with
-    # the latest Manifest-advised content so operators always have a current
-    # merge reference.
-    if ! "$writer" "$sidecar_dest"; then
-        return 1
+    printf '%s:preserved\n' "$base"
+    return 0
+}
+
+# Advised .gitignore rules that a real .gitignore does not already carry.
+# Prints one missing rule per line (nothing when the file satisfies the advice).
+# Comments and blank lines are ignored on both sides — only real rules count.
+manifest_gitignore_missing_rules() {
+    local real_file="$1"
+    local advised
+    [[ -f "$real_file" ]] || return 0
+
+    advised="$(mktemp)" || return 0
+    if ! create_default_gitignore "$advised"; then
+        rm -f "$advised"
+        return 0
     fi
-    printf '%s\n' "${base}.manifest"
+
+    # A rule counts as present on an exact line match — .gitignore semantics are
+    # positional, so a fuzzy match would under-report and hide real gaps.
+    grep -vE '^\s*$|^\s*#' "$advised" 2>/dev/null | while IFS= read -r rule; do
+        grep -qxF -- "$rule" "$real_file" 2>/dev/null || printf '%s\n' "$rule"
+    done
+    rm -f "$advised"
     return 0
 }
 
@@ -141,7 +161,7 @@ ensure_required_files() {
         ".gitignore:empty-overwrite")
             created_files+=(".gitignore")
             ;;
-        ".gitignore"|".gitignore.manifest")
+        ".gitignore")
             created_files+=("$gitignore_result")
             ;;
     esac
@@ -172,7 +192,7 @@ ensure_required_files() {
 
 # True when a directory already has the full Manifest init scaffold set.
 # Used by fleet init to pass over members that were previously initialized
-# (avoids writing .manifest sidecars on every fleet re-run). Repo init still
+# (avoids redundant scaffold work on every fleet re-run). Repo init still
 # calls ensure_repo_scaffold for idempotent backfill of any missing pieces.
 manifest_repo_scaffold_is_complete() {
     local project_root="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
@@ -189,7 +209,7 @@ manifest_repo_scaffold_is_complete() {
 
 # Shared repo scaffold used by both `manifest init repo` and `manifest init fleet`.
 # Composes required files (incl. crawl privacy) + release gate + env example.
-# All writers honor write_scaffold_no_clobber (real file or .manifest sidecar).
+# All writers honor write_scaffold_no_clobber (create when missing; preserve otherwise).
 ensure_repo_scaffold() {
     local project_root="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
 
@@ -216,8 +236,8 @@ ensure_repo_scaffold() {
 # `manifest init` therefore get a gate on day one, so a fleet's FIRST
 # `ship fleet` never dies on a gate-less member.
 #
-# No-clobber: an existing scripts/run-tests.sh is never overwritten. When one
-# already exists, write scripts/run-tests.sh.manifest as a merge reference.
+# No-clobber: an existing scripts/run-tests.sh is never overwritten, and nothing
+# is written beside it — the existing gate is reported as preserved.
 # Deliberately NOT called from the orchestrator's ship-time repair paths —
 # materializing an executable mid-ship that the gate would then immediately
 # run is a surprise; gates appear at init time only.
@@ -241,11 +261,8 @@ ensure_release_gate_script() {
             chmod +x "$gate_file"
             log_success "Created scripts/run-tests.sh (release gate — 'manifest ship' runs it before releasing)"
             ;;
-        "run-tests.sh.manifest")
-            chmod +x "$project_root/scripts/run-tests.sh.manifest" 2>/dev/null || true
-            if [[ -f "$gate_file" ]]; then
-                log_success "Wrote scripts/run-tests.sh.manifest (existing gate preserved — latest Manifest default)"
-            fi
+        "run-tests.sh:preserved")
+            log_success "scripts/run-tests.sh preserved (existing release gate left untouched)"
             ;;
         "")
             : # unreachable under current write_scaffold_no_clobber contract
@@ -574,8 +591,8 @@ _manifest_env_render_example() {
 #   spec with `env:`      generate .env.example from it
 #   spec without `env:`   seed a starter `env:` block first, then generate
 #   no spec               starter .env.example (honoring the configured prefix)
-# No-clobber: an existing .env.example is never overwritten. When one already
-# exists, write .env.example.manifest as a merge reference. Explicit
+# No-clobber: an existing .env.example is never overwritten, and nothing is
+# written beside it — the existing file is reported as preserved. Explicit
 # regeneration of the live example is `manifest env generate -y`.
 ensure_env_files() {
     local project_root="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
@@ -615,8 +632,8 @@ ensure_env_files() {
         ".env.example")
             log_success "Created .env.example (env schema template — 'manifest env' manages it)"
             ;;
-        ".env.example.manifest")
-            log_success "Wrote .env.example.manifest (existing .env.example preserved — latest Manifest default)"
+        ".env.example:preserved")
+            log_success ".env.example preserved (existing env schema left untouched)"
             ;;
     esac
     return 0
@@ -821,18 +838,17 @@ EOF
 # Smart .gitignore creation
 # - No .gitignore          → create .gitignore
 # - .gitignore with no entries (empty / only comments+blanks) → overwrite .gitignore
-# - .gitignore with entries → create/refresh .gitignore.manifest (never touch real)
+# - .gitignore with entries → leave it alone; report any advised rules it lacks
 #
 # Output (stdout):
 #   ".gitignore"                 — created new file
 #   ".gitignore:empty-overwrite" — overwrote a .gitignore that had no real entries
-#   ".gitignore.manifest"        — created or refreshed the sidecar reference
+#   ".gitignore:preserved"       — existing .gitignore left untouched
 #
 # Returns 0 on success, 1 on write failure.
 ensure_gitignore_smart() {
     local project_root="$1"
     local gitignore_file="$project_root/.gitignore"
-    local manifest_ref="$project_root/.gitignore.manifest"
 
     if [[ ! -f "$gitignore_file" ]]; then
         # No .gitignore at all — create one
@@ -869,19 +885,25 @@ ensure_gitignore_smart() {
         return 0
     fi
 
-    # Real .gitignore has entries — never clobber it. Create or refresh the
-    # sidecar with the latest Manifest-advised defaults.
-    if [[ -f "$manifest_ref" ]]; then
-        log_info "Refreshing .gitignore.manifest with latest Manifest defaults..."
+    # Real .gitignore has entries — never clobber it, and never write beside it.
+    # Report what the advice would add so the operator can act without a second
+    # file appearing in the repo.
+    # Report the gap, but keep it scannable. A minimal .gitignore is missing
+    # nearly the whole advised set; printing ~200 lines on every run is just a
+    # different kind of noise, so the list is capped and the rest summarized.
+    local missing missing_count preview_max=8
+    missing="$(manifest_gitignore_missing_rules "$gitignore_file")"
+    if [[ -n "$missing" ]]; then
+        missing_count="$(printf '%s\n' "$missing" | grep -c . || true)"
+        log_success ".gitignore preserved — $missing_count advised rule(s) not present:"
+        printf '%s\n' "$missing" | head -n "$preview_max" | sed 's/^/    /' >&2
+        if [[ "$missing_count" -gt "$preview_max" ]]; then
+            printf '    … and %s more\n' "$((missing_count - preview_max))" >&2
+        fi
     else
-        log_info "Existing .gitignore has entries, creating .gitignore.manifest as reference..."
+        log_success ".gitignore preserved — already carries every advised rule"
     fi
-    if ! create_default_gitignore "$manifest_ref"; then
-        log_error "Failed to write .gitignore.manifest in $project_root"
-        return 1
-    fi
-    log_success "Wrote .gitignore.manifest (existing .gitignore preserved — merge as needed)"
-    echo ".gitignore.manifest"
+    echo ".gitignore:preserved"
     return 0
 }
 
@@ -895,11 +917,6 @@ create_default_gitignore() {
 # =============================================================================
 .manifest-cli/
 *.manifest-cli.log
-.gitignore.manifest
-robots.txt.manifest
-ai.txt.manifest
-.env.example.manifest
-scripts/run-tests.sh.manifest
 
 # =============================================================================
 # OS generated files
@@ -1124,7 +1141,7 @@ EOF
 
 # Crawl-privacy defaults — private/safe by default for anything that might be
 # deployed as a web surface. Uses write_scaffold_no_clobber: create the real
-# file when missing; write a .manifest sidecar when the real file already
+# file when missing; preserve the real file when it already
 # exists; never overwrite either.
 #
 # Prints space-separated basenames of created files (may be empty).
@@ -1151,8 +1168,7 @@ create_default_robots_txt() {
     cat > "$dest" << 'EOF'
 # Manifest CLI — private/safe by default.
 # Search engines and AI crawlers are disallowed until you deliberately open
-# this surface. Merge from robots.txt.manifest if this file already existed
-# at init time and you want Manifest's defaults.
+# this surface.
 #
 # To go public later: replace Disallow rules with your allowlist, or delete
 # this file and serve framework-native robots.
@@ -1211,7 +1227,6 @@ create_default_ai_txt() {
 # deliberately replaces this file.
 #
 # contact: (set by the repo owner)
-# If ai.txt already existed at init, see ai.txt.manifest for Manifest defaults.
 
 User-Agent: *
 Allow: none
@@ -1267,7 +1282,7 @@ Idempotent — safe to re-run. Optionally creates a GitHub repo via 'gh repo cre
   -y, --yes                  Apply the scaffold plan
   -f, --force                Recreate manifest.config.local.yaml if present
                              (scaffold content files stay no-clobber; existing
-                             content gets a .manifest sidecar merge reference)
+                             content is preserved and nothing is written beside it)
   --create-repo-private      Create a private GitHub repo (gh repo create) and add as origin
   --create-repo-public       Create a public GitHub repo (gh repo create) and add as origin" \
                     "Examples" "  manifest init repo
@@ -1301,18 +1316,19 @@ Idempotent — safe to re-run. Optionally creates a GitHub repo via 'gh repo cre
         local f
         for f in VERSION README.md CHANGELOG.md .gitignore robots.txt ai.txt; do
             if [[ -f "$project_root/$f" ]]; then
-                # Scaffold files are never overwritten — even with --force.
-                # --force only recreates manifest.config.local.yaml (below).
-                # When a content file already exists, apply writes "<name>.manifest"
-                # as a merge reference (see write_scaffold_no_clobber).
-                if [[ "$f" == "robots.txt" || "$f" == "ai.txt" || "$f" == ".gitignore" ]]; then
-                    if [[ -f "$project_root/${f}.manifest" ]]; then
-                        echo "  exists:          $f   (would refresh ${f}.manifest)"
+                # Scaffold files are never overwritten — even with --force, which
+                # only recreates manifest.config.local.yaml (below). An existing
+                # file is preserved and nothing is written beside it.
+                if [[ "$f" == ".gitignore" ]]; then
+                    local missing_n
+                    missing_n="$(manifest_gitignore_missing_rules "$project_root/$f" | grep -c . || true)"
+                    if [[ "${missing_n:-0}" -gt 0 ]]; then
+                        echo "  exists:          $f   (preserved — $missing_n advised rule(s) not present)"
                     else
-                        echo "  exists:          $f   (would write ${f}.manifest as merge reference)"
+                        echo "  exists:          $f   (preserved — carries every advised rule)"
                     fi
                 else
-                    echo "  exists:          $f"
+                    echo "  exists:          $f   (preserved)"
                 fi
             else
                 echo "  would create:    $f"
@@ -1324,20 +1340,12 @@ Idempotent — safe to re-run. Optionally creates a GitHub repo via 'gh repo cre
             echo "  would create:    docs/"
         fi
         if [[ -f "$project_root/scripts/run-tests.sh" ]]; then
-            if [[ -f "$project_root/scripts/run-tests.sh.manifest" ]]; then
-                echo "  exists:          scripts/run-tests.sh   (would refresh scripts/run-tests.sh.manifest)"
-            else
-                echo "  exists:          scripts/run-tests.sh   (would write scripts/run-tests.sh.manifest)"
-            fi
+            echo "  exists:          scripts/run-tests.sh   (preserved)"
         else
             echo "  would create:    scripts/run-tests.sh   (release gate — 'manifest ship' runs it)"
         fi
         if [[ -f "$project_root/.env.example" ]]; then
-            if [[ -f "$project_root/.env.example.manifest" ]]; then
-                echo "  exists:          .env.example   (would refresh .env.example.manifest)"
-            else
-                echo "  exists:          .env.example   (would write .env.example.manifest)"
-            fi
+            echo "  exists:          .env.example   (preserved)"
         else
             echo "  would create:    .env.example   (env schema template)"
         fi
@@ -1596,7 +1604,7 @@ _manifest_init_fleet_dry_run_phase2() {
         fi
     fi
     if [[ -f "$root_dir/.gitignore" ]]; then
-        echo "Exists:          $root_dir/.gitignore (allowlist saved as .gitignore.manifest if it has entries)"
+        echo "Exists:          $root_dir/.gitignore (preserved — coordination allowlist not applied)"
     else
         echo "Would create:    $root_dir/.gitignore (coordination allowlist)"
     fi
@@ -1878,7 +1886,7 @@ export -f manifest_init_fleet
 export -f manifest_init_dispatch
 # Scaffolding helpers (used by orchestrator, documentation, fleet)
 export -f ensure_required_files create_default_readme create_default_changelog
-export -f create_default_gitignore ensure_gitignore_smart
+export -f create_default_gitignore ensure_gitignore_smart manifest_gitignore_missing_rules
 export -f ensure_release_gate_script create_default_run_tests
 export -f ensure_env_files create_default_env_example _manifest_env_prefix_for_repo _manifest_env_spec_file _manifest_env_render_example
 export -f write_scaffold_no_clobber ensure_crawl_privacy_files create_default_robots_txt create_default_ai_txt

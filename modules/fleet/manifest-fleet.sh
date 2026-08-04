@@ -139,8 +139,8 @@ _fleet_ensure_gitignores() {
                 gitignore_overwritten=$((gitignore_overwritten+1))
                 overwritten_repos+=("$name")
                 ;;
-            ".gitignore.manifest")
-                echo "  ~ $name: existing .gitignore preserved, created .gitignore.manifest"
+            ".gitignore:preserved")
+                echo "  ~ $name: existing .gitignore preserved (allowlist not applied)"
                 gitignore_ref=$((gitignore_ref+1))
                 ;;
             *)
@@ -652,10 +652,9 @@ _fleet_init_directory() {
 # artifacts — the full fleet layout lives in manifest.fleet.tsv.
 #
 # No-clobber policy mirrors ensure_gitignore_smart(): an existing populated
-# .gitignore is preserved and the allowlist is written to .gitignore.manifest
-# as a reference instead.
+# .gitignore is preserved and nothing is written beside it.
 #
-# Output (stdout): ".gitignore" | ".gitignore:empty-overwrite" | ".gitignore.manifest" | ""
+# Output (stdout): ".gitignore" | ".gitignore:empty-overwrite" | ".gitignore:preserved" | ""
 # Returns 0 on success, 1 on write failure.
 # -----------------------------------------------------------------------------
 _fleet_write_allowlist_gitignore() {
@@ -711,15 +710,13 @@ _fleet_dir_is_own_git_repo() {
 create_fleet_gitignore() {
     local fleet_root="$1"
     local gitignore_file="$fleet_root/.gitignore"
-    local manifest_ref="$fleet_root/.gitignore.manifest"
 
     if [[ ! -f "$gitignore_file" ]]; then
         _fleet_write_allowlist_gitignore "$gitignore_file" || return 1
         echo ".gitignore"; return 0
     fi
 
-    # Idempotent: an existing allowlist is already correct — no-op, and do NOT
-    # spawn a redundant .gitignore.manifest on repeat runs.
+    # Idempotent: an existing allowlist is already correct — clean no-op.
     if grep -q 'coordination repo .gitignore (ALLOWLIST model)' "$gitignore_file" 2>/dev/null \
        && grep -qxF '/*' "$gitignore_file" 2>/dev/null; then
         return 0
@@ -736,15 +733,10 @@ create_fleet_gitignore() {
         echo ".gitignore:empty-overwrite"; return 0
     fi
 
-    if [[ ! -f "$manifest_ref" ]]; then
-        _fleet_write_allowlist_gitignore "$manifest_ref" || return 1
-        echo ".gitignore.manifest"; return 0
-    fi
-
-    # Both exist — refresh the sidecar with the latest allowlist; never touch
-    # the curated real .gitignore.
-    _fleet_write_allowlist_gitignore "$manifest_ref" || return 1
-    echo ".gitignore.manifest"
+    # A curated .gitignore is already here and is not the allowlist. Never touch
+    # it, and never write beside it — the coordination-repo allowlist is short
+    # enough to state directly.
+    echo ".gitignore:preserved"
     return 0
 }
 
@@ -940,7 +932,7 @@ EOF
         case "$_fleet_root_gi" in
             .gitignore) echo "✓ Created: $target_dir/.gitignore (coordination allowlist)" ;;
             .gitignore:empty-overwrite) echo "✓ Wrote coordination allowlist into empty $target_dir/.gitignore" ;;
-            .gitignore.manifest) echo "✓ Created: $target_dir/.gitignore.manifest (existing .gitignore preserved — merge the allowlist as needed)" ;;
+            .gitignore:preserved) echo "✓ Preserved: $target_dir/.gitignore (existing file kept — coordination allowlist not applied)" ;;
         esac
     else
         log_error "Could not write fleet-root .gitignore in $target_dir"

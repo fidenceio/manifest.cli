@@ -95,19 +95,7 @@ mk_proj() {
     [ "$status" -eq 0 ]
     grep -q "CUSTOM=1" "$PROJ/.env.example"
     ! grep -q "scaffolded by Manifest CLI" "$PROJ/.env.example"
-    [ -f "$PROJ/.env.example.manifest" ]
-    grep -q "scaffolded by Manifest CLI" "$PROJ/.env.example.manifest"
-}
-
-@test "env scaffold: no-clobber — existing example + sidecar refreshes only the sidecar" {
-    mk_proj "fidence.app.demo"
-    printf '# mine\nCUSTOM=1\n' > "$PROJ/.env.example"
-    printf '# stale\nSIDE=1\n' > "$PROJ/.env.example.manifest"
-    run ensure_env_files "$PROJ"
-    [ "$status" -eq 0 ]
-    grep -q "CUSTOM=1" "$PROJ/.env.example"
-    ! grep -q "SIDE=1" "$PROJ/.env.example.manifest"
-    grep -q "scaffolded by Manifest CLI" "$PROJ/.env.example.manifest"
+    [ ! -e "$PROJ/.env.example.manifest" ]
 }
 
 # --- scaffold: spec with env: -----------------------------------------------------

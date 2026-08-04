@@ -31,7 +31,7 @@ _writer_marker() {
     printf 'MARKER_CONTENT\n' > "$1"
 }
 
-@test "no-clobber helper: missing dest creates the real file (no .manifest)" {
+@test "no-clobber helper: missing dest creates the real file" {
     run write_scaffold_no_clobber "$PROJ/sample.txt" _writer_marker
     [ "$status" -eq 0 ]
     [ "$output" = "sample.txt" ]
@@ -40,24 +40,24 @@ _writer_marker() {
     grep -qx 'MARKER_CONTENT' "$PROJ/sample.txt"
 }
 
-@test "no-clobber helper: existing dest writes .manifest sidecar only" {
+@test "no-clobber helper: existing dest is preserved and NOTHING is written beside it" {
     printf 'ORIGINAL\n' > "$PROJ/sample.txt"
     run write_scaffold_no_clobber "$PROJ/sample.txt" _writer_marker
     [ "$status" -eq 0 ]
-    [ "$output" = "sample.txt.manifest" ]
+    [ "$output" = "sample.txt:preserved" ]
     grep -qx 'ORIGINAL' "$PROJ/sample.txt"
-    grep -qx 'MARKER_CONTENT' "$PROJ/sample.txt.manifest"
+    # The sidecar mechanism is gone — no second file may appear.
+    [ ! -e "$PROJ/sample.txt.manifest" ]
 }
 
-@test "no-clobber helper: existing dest + sidecar refreshes only the sidecar" {
+@test "no-clobber helper: preserving adds no file to the directory at all" {
     printf 'ORIGINAL\n' > "$PROJ/sample.txt"
-    printf 'STALE_SIDECAR\n' > "$PROJ/sample.txt.manifest"
+    local before after
+    before="$(ls -A "$PROJ" | sort)"
     run write_scaffold_no_clobber "$PROJ/sample.txt" _writer_marker
     [ "$status" -eq 0 ]
-    [ "$output" = "sample.txt.manifest" ]
-    grep -qx 'ORIGINAL' "$PROJ/sample.txt"
-    grep -qx 'MARKER_CONTENT' "$PROJ/sample.txt.manifest"
-    ! grep -q 'STALE_SIDECAR' "$PROJ/sample.txt.manifest"
+    after="$(ls -A "$PROJ" | sort)"
+    [ "$before" = "$after" ]
 }
 
 # --- ensure_required_files identity pins --------------------------------------
@@ -79,26 +79,32 @@ _writer_marker() {
     [ ! -e "$PROJ/CHANGELOG.md.manifest" ]
 }
 
-@test "no-clobber: non-empty .gitignore is never overwritten (sidecar only)" {
+@test "no-clobber: non-empty .gitignore is preserved with no sidecar" {
     printf 'node_modules/\n' > "$PROJ/.gitignore"
     run ensure_gitignore_smart "$PROJ"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -qx '.gitignore.manifest'
+    echo "$output" | grep -qx '.gitignore:preserved'
     grep -qx 'node_modules/' "$PROJ/.gitignore"
     ! grep -q 'Manifest CLI' "$PROJ/.gitignore"
-    [ -f "$PROJ/.gitignore.manifest" ]
-    grep -q 'Manifest CLI' "$PROJ/.gitignore.manifest"
+    [ ! -e "$PROJ/.gitignore.manifest" ]
 }
 
-@test "no-clobber: existing .gitignore + sidecar refreshes only the sidecar" {
+@test "no-clobber: missing advised rules are reported, not written to a file" {
     printf 'node_modules/\n' > "$PROJ/.gitignore"
-    printf 'STALE\n' > "$PROJ/.gitignore.manifest"
-    run ensure_gitignore_smart "$PROJ"
+    run manifest_gitignore_missing_rules "$PROJ/.gitignore"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -qx '.gitignore.manifest'
-    grep -qx 'node_modules/' "$PROJ/.gitignore"
-    ! grep -q 'STALE' "$PROJ/.gitignore.manifest"
-    grep -q 'Manifest CLI' "$PROJ/.gitignore.manifest"
+    # A minimal .gitignore lacks most advice — the agent rules among them.
+    echo "$output" | grep -qx '.claude/\*'
+    # A rule it DOES carry is not reported as missing.
+    ! echo "$output" | grep -qx 'node_modules/'
+    [ ! -e "$PROJ/.gitignore.manifest" ]
+}
+
+@test "no-clobber: a .gitignore carrying every advised rule reports nothing missing" {
+    create_default_gitignore "$PROJ/.gitignore"
+    run manifest_gitignore_missing_rules "$PROJ/.gitignore"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
 }
 
 @test "no-clobber exception: empty .gitignore may be filled once" {
