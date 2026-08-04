@@ -41,40 +41,6 @@ $RECYCLE.BIN/
 nbproject/
 
 # =============================================================================
-# AI assistants and coding agents
-# =============================================================================
-# Per-developer agent workspaces: sessions, transcripts, caches, local settings.
-# Tools whose dir holds BOTH team-shared and personal config are ignored by
-# CONTENT (dir/*) so the shared subset can be re-included — git cannot re-include
-# a path inside an excluded directory.
-.aider*
-.amazonq/
-.augment/
-.claude/*
-!.claude/agents/
-!.claude/commands/
-!.claude/settings.json
-.cline/
-.codeium/
-.continue/
-.crush/
-.cursor/*
-!.cursor/rules/
-.gemini/
-.goose/
-.junie/
-.kiro/
-.opencode/
-.qodo/
-.roo/
-.specstory/
-.tabnine/
-.trae/
-.windsurf/*
-!.windsurf/rules/
-!.windsurf/workflows/
-
-# =============================================================================
 # Environment, secrets, and local/generated config
 # =============================================================================
 .env
