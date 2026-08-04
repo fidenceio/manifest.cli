@@ -77,6 +77,23 @@ Thumbs.db
 *.swo
 *~
 
+# AI assistants and coding agents
+# Personal agent state stays local; the team-shared subset is re-included.
+# Ignored by CONTENT (dir/*) — git cannot re-include inside an excluded directory.
+.aider*
+.claude/*
+!.claude/agents/
+!.claude/commands/
+!.claude/settings.json
+.codeium/
+.continue/
+.cursor/*
+!.cursor/rules/
+.gemini/
+.windsurf/*
+!.windsurf/rules/
+!.windsurf/workflows/
+
 # Logs
 *.log
 npm-debug.log*

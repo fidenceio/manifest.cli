@@ -52,6 +52,47 @@ teardown() {
     grep -qx '!\*.template.yaml' "$GI"
 }
 
+@test "gitignore: AI assistant / coding-agent workspaces are ignored" {
+    grep -qx '.claude/\*' "$GI"
+    grep -qx '.cursor/\*' "$GI"
+    grep -qx '.windsurf/\*' "$GI"
+    grep -qx '.gemini/' "$GI"
+    grep -qx '.aider\*' "$GI"
+}
+
+@test "gitignore: personal agent state is ignored, team-shared config stays trackable" {
+    cd "$PROJ"
+    git init -q .
+    # Assert the scaffolded template alone — a developer's ~/.gitignore_global
+    # must not be able to change this suite's verdict.
+    git config core.excludesFile /dev/null
+    mkdir -p .claude/commands .claude/agents .cursor/rules
+    : > .claude/settings.local.json
+    : > .claude/settings.json
+    : > .claude/commands/ship.md
+    : > .claude/agents/reviewer.md
+    : > .cursor/rules/style.mdc
+    : > .aider.chat.history.md
+
+    # Personal / per-developer state — ignored.
+    run git check-ignore .claude/settings.local.json .aider.chat.history.md
+    [ "$status" -eq 0 ]
+
+    # Team-shared coordination config — must remain trackable.
+    run git check-ignore .claude/settings.json
+    [ "$status" -ne 0 ]
+    run git check-ignore .claude/commands/ship.md
+    [ "$status" -ne 0 ]
+    run git check-ignore .claude/agents/reviewer.md
+    [ "$status" -ne 0 ]
+    run git check-ignore .cursor/rules/style.mdc
+    [ "$status" -ne 0 ]
+}
+
+@test "gitignore: no absolute home paths leak into the scaffolded template" {
+    ! grep -qE '/(Users|home)/[a-zA-Z0-9._-]+' "$GI"
+}
+
 @test "gitignore: NO blanket *.yaml or *.yml ignore" {
     ! grep -qxE '\*\.ya?ml' "$GI"
 }
@@ -60,6 +101,7 @@ teardown() {
     # Sanity: git honors the file — service.spec.yaml / openapi.yaml stay tracked.
     cd "$PROJ"
     git init -q .
+    git config core.excludesFile /dev/null
     : > service.spec.yaml
     : > openapi.yaml
     : > config.local.yaml
