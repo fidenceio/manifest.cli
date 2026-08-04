@@ -29,7 +29,7 @@ WARNINGS=0
 # =============================================================================
 # CHECK 1: Verify no private environment files are being committed
 # =============================================================================
-echo -e "${BLUE}[1/5] Checking for private environment files...${NC}"
+echo -e "${BLUE}[1/6] Checking for private environment files...${NC}"
 
 for env_file in "${MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES[@]}"; do
     # Check if file is in the staging area
@@ -47,7 +47,7 @@ fi
 # =============================================================================
 # CHECK 2: Scan staged files for sensitive data patterns
 # =============================================================================
-echo -e "${BLUE}[2/5] Scanning staged files for sensitive data patterns...${NC}"
+echo -e "${BLUE}[2/6] Scanning staged files for sensitive data patterns...${NC}"
 
 # Get list of staged files (excluding deleted files)
 STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
@@ -97,7 +97,7 @@ fi
 # =============================================================================
 # CHECK 3: Verify .gitignore includes all necessary patterns
 # =============================================================================
-echo -e "${BLUE}[3/5] Verifying .gitignore configuration...${NC}"
+echo -e "${BLUE}[3/6] Verifying .gitignore configuration...${NC}"
 
 GITIGNORE_ISSUES=0
 
@@ -129,7 +129,7 @@ fi
 # =============================================================================
 # CHECK 4: Check for accidentally staged large files
 # =============================================================================
-echo -e "${BLUE}[4/5] Checking for large files...${NC}"
+echo -e "${BLUE}[4/6] Checking for large files...${NC}"
 
 MAX_FILE_SIZE=10485760  # 10MB in bytes
 LARGE_FILES=0
@@ -160,7 +160,7 @@ fi
 # =============================================================================
 # CHECK 5: Run Manifest CLI security audit if available
 # =============================================================================
-echo -e "${BLUE}[5/5] Running Manifest CLI security module (if available)...${NC}"
+echo -e "${BLUE}[5/6] Running Manifest CLI security module (if available)...${NC}"
 
 # Prefer this repo's working-tree CLI when the hook is running inside the
 # Manifest CLI repo; otherwise use the installed command.
@@ -185,6 +185,43 @@ if [ ${#SECURITY_CMD[@]} -gt 0 ]; then
 else
     echo -e "${YELLOW}   ⚠️  INFO: Manifest CLI not installed, skipping advanced security audit${NC}"
     echo -e "${YELLOW}      Install with: ./install-cli.sh${NC}"
+fi
+
+# =============================================================================
+# CHECK 6: Block absolute home paths (developer PII) in staged content
+# =============================================================================
+# A home path leaks the developer's account name and local layout. Credential
+# scanners (gitleaks) do not flag it — it matches no secret pattern — so this
+# repo checks for it directly. Placeholders used by docs and test fixtures are
+# allowed by name.
+echo -e "${BLUE}[6/6] Checking for absolute home paths...${NC}"
+
+HOME_PATH_HITS=0
+ALLOWED_PLACEHOLDERS='/(Users|home)/(you|user|username|realuser|nobody-here|somebody-who-does-not-exist|runner|linuxbrew|\$|<|\{)'
+
+if [ -n "$STAGED_FILES" ]; then
+    while IFS= read -r file; do
+        [ -f "$MANIFEST_CLI_PROJECT_ROOT/$file" ] || continue
+        # Scan the STAGED blob, not the worktree copy — they can differ.
+        matches="$(git show ":$file" 2>/dev/null \
+            | grep -nE '/(Users|home)/[A-Za-z0-9._-]+' \
+            | grep -vE "$ALLOWED_PLACEHOLDERS" || true)"
+        if [ -n "$matches" ]; then
+            if [ $HOME_PATH_HITS -eq 0 ]; then
+                echo -e "${RED}   ❌ CRITICAL: absolute home paths found in staged content:${NC}"
+            fi
+            echo -e "${RED}      - $file${NC}"
+            echo "$matches" | head -3 | sed 's/^/        /'
+            HOME_PATH_HITS=$((HOME_PATH_HITS + 1))
+            CRITICAL_ISSUES=$((CRITICAL_ISSUES + 1))
+        fi
+    done <<< "$STAGED_FILES"
+fi
+
+if [ $HOME_PATH_HITS -eq 0 ]; then
+    echo -e "${GREEN}   ✅ No absolute home paths in staged content${NC}"
+else
+    echo -e "${YELLOW}      Replace with a relative path, \$HOME, or a named placeholder.${NC}"
 fi
 
 # =============================================================================
