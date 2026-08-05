@@ -119,6 +119,11 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     # gitlink (nested repo with its own .git, no .gitmodules entry) after
     # `git add .`; true records the pointer. See manifest_unstage_accidental_gitlinks.
     ["git.allow_new_gitlinks"]="MANIFEST_CLI_GIT_ALLOW_NEW_GITLINKS"
+    # Gate-drift policy: false (default) leaves out files that changed after the
+    # ship was requested — typically during the multi-minute release gate — so a
+    # release carries only what the operator consented to; true restores the
+    # sweep-everything behavior. See manifest_unstage_gate_drift.
+    ["git.allow_gate_drift"]="MANIFEST_CLI_GIT_ALLOW_GATE_DRIFT"
     ["git.push_strategy"]="MANIFEST_CLI_GIT_PUSH_STRATEGY"
     ["git.pull_strategy"]="MANIFEST_CLI_GIT_PULL_STRATEGY"
     ["git.timeout"]="MANIFEST_CLI_GIT_TIMEOUT"

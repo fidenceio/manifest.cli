@@ -1551,6 +1551,12 @@ manifest_ship_workflow() {
             ;;
     esac
 
+    # Baseline the pending set BEFORE the gate: a full-tier gate runs for
+    # minutes, and the auto-commit below stages whatever the tree looks like
+    # afterwards. Recording it here is what lets that step distinguish the
+    # operator's own work from anything that landed mid-run.
+    manifest_record_pending_snapshot
+
     # Release gate (pre-bump): run the project's tests BEFORE auto-committing,
     # syncing the remote, or any version mutation, so a failing gate leaves the
     # repo genuinely untouched. Also emits the bypass notice for `none`.
@@ -1570,6 +1576,17 @@ manifest_ship_workflow() {
         # AND untracked files, since `commit_changes` runs `git add .`.
         local _ac_files _ac_count _ac_first _ac_hint=""
         _ac_files="$(git status --porcelain | sed 's/^...//')"
+        # Describe only what will actually land. The drift guard withholds paths
+        # that appeared after the snapshot, so counting raw status here would put
+        # a file in the commit subject that the commit does not contain.
+        if [ -n "${MANIFEST_CLI_GIT_PENDING_SNAPSHOT+x}" ] && [ "${MANIFEST_CLI_GIT_ALLOW_GATE_DRIFT:-false}" != "true" ]; then
+            # Mirror the guard's own disposition: snapshot entries land, and so
+            # does Manifest's exempt .manifest-cli/ bookkeeping.
+            _ac_files="$(printf '%s\n' "$_ac_files" | awk -v snap="$MANIFEST_CLI_GIT_PENDING_SNAPSHOT" '
+                BEGIN { n = split(snap, a, "\n"); for (i = 1; i <= n; i++) keep[a[i]] = 1 }
+                /^\.manifest-cli\// || ($0 in keep)
+            ')"
+        fi
         _ac_count=$(printf '%s\n' "$_ac_files" | grep -c .)
         _ac_first=$(printf '%s\n' "$_ac_files" | head -1)
         if [ "$_ac_count" -eq 1 ] && [ -n "$_ac_first" ]; then
@@ -1581,6 +1598,14 @@ manifest_ship_workflow() {
         commit_changes "Auto-commit before Manifest process$_ac_hint" "$timestamp"
         echo ""
     fi
+
+    # The snapshot's only job was to scope that auto-commit to what the operator
+    # had pending. Drop it before any release step runs: everything Manifest
+    # generates from here — VERSION, CHANGELOG, regenerated docs — legitimately
+    # post-dates the snapshot, and the release commit must carry all of it.
+    # Cleared outside the block above so a clean tree (auto-commit skipped)
+    # cannot leave a stale baseline behind either.
+    unset MANIFEST_CLI_GIT_PENDING_SNAPSHOT
     
     # Sync with remote. Skipped when resuming an interrupted ship: the
     # pre-interrupt run already synced before bumping, and pulling now would run

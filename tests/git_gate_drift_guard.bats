@@ -1,0 +1,159 @@
+#!/usr/bin/env bats
+# manifest_unstage_gate_drift — the post-`git add .` guard that keeps work which
+# landed AFTER a ship was requested out of that release. Origin: a full-tier
+# release gate runs for minutes, and the auto-commit stages whatever the tree
+# looks like once it finishes, so a concurrent session's in-flight files were
+# swept into two manifest.cli releases (58.0.1, 58.0.2) that never meant to
+# carry them.
+
+load 'helpers/setup'
+
+setup() {
+    load_modules 'git/manifest-git.sh'
+    SCRATCH="$(mk_scratch)"
+    export GIT_AUTHOR_NAME="bats" GIT_AUTHOR_EMAIL="bats@example"
+    export GIT_COMMITTER_NAME="bats" GIT_COMMITTER_EMAIL="bats@example"
+    unset MANIFEST_CLI_GIT_ALLOW_GATE_DRIFT MANIFEST_CLI_GIT_PENDING_SNAPSHOT
+    REPO="$SCRATCH/repo"
+    mk_repo "$REPO"
+    # commit_changes cds to the project root before staging.
+    export MANIFEST_CLI_PROJECT_ROOT="$REPO"
+    cd "$REPO"
+}
+
+teardown() {
+    cd /tmp
+    rm -rf "$SCRATCH"
+    unset MANIFEST_CLI_GIT_ALLOW_GATE_DRIFT MANIFEST_CLI_GIT_PENDING_SNAPSHOT
+    unset MANIFEST_CLI_GIT_DRIFT_SKIPPED_COUNT MANIFEST_CLI_PROJECT_ROOT
+}
+
+mk_repo() {
+    local dir="$1"
+    mkdir -p "$dir"
+    git -C "$dir" init -q -b main
+    git -C "$dir" config user.email "bats@example"
+    git -C "$dir" config user.name "bats"
+    echo "seed" > "$dir/seed.md"
+    git -C "$dir" add seed.md
+    git -C "$dir" commit -q -m "seed"
+}
+
+staged_paths() { git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' '; }
+
+@test "gate drift: a file appearing after the snapshot is left out of the commit" {
+    echo "mine" >> seed.md                  # the operator's own work
+    manifest_record_pending_snapshot
+    echo "theirs" > concurrent.md           # lands during the gate
+    git add .
+    run manifest_unstage_gate_drift
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Left out 1 file"* ]]
+    [[ "$output" == *"concurrent.md"* ]]
+    [ "$(staged_paths)" = "seed.md " ]
+    [ -f concurrent.md ]                    # still in the working tree
+}
+
+@test "gate drift: everything present at snapshot time still ships" {
+    echo "mine" >> seed.md
+    echo "also mine" > extra.md
+    manifest_record_pending_snapshot
+    git add .
+    local out; out="$(manifest_unstage_gate_drift)"
+    [ -z "$out" ]
+    [ "$(staged_paths)" = "extra.md seed.md " ]
+    # Called in-shell (not via `run`, which subshells) so the export propagates.
+    manifest_unstage_gate_drift >/dev/null
+    [ "$MANIFEST_CLI_GIT_DRIFT_SKIPPED_COUNT" -eq 0 ]
+}
+
+@test "gate drift: .manifest-cli bookkeeping is exempt (the gate writes it mid-run)" {
+    echo "mine" >> seed.md
+    manifest_record_pending_snapshot
+    mkdir -p .manifest-cli
+    echo "1754400000" > .manifest-cli/release-gate-pass.epoch
+    git add .
+    run manifest_unstage_gate_drift
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+    [[ "$(staged_paths)" == *".manifest-cli/release-gate-pass.epoch"* ]]
+    [[ "$(staged_paths)" == *"seed.md"* ]]
+}
+
+@test "gate drift: opt-out records post-request changes as before" {
+    echo "mine" >> seed.md
+    manifest_record_pending_snapshot
+    echo "theirs" > concurrent.md
+    export MANIFEST_CLI_GIT_ALLOW_GATE_DRIFT=true
+    git add .
+    run manifest_unstage_gate_drift
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+    [[ "$(staged_paths)" == *"concurrent.md"* ]]
+}
+
+@test "gate drift: no snapshot means no baseline, so nothing is withheld" {
+    echo "mine" >> seed.md
+    echo "other" > other.md
+    git add .
+    run manifest_unstage_gate_drift
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+    [ "$(staged_paths)" = "other.md seed.md " ]
+}
+
+@test "gate drift: a rename recorded at snapshot time is not treated as drift" {
+    git mv seed.md renamed.md
+    manifest_record_pending_snapshot
+    git add .
+    run manifest_unstage_gate_drift
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"renamed.md"* ]]
+    [[ "$(staged_paths)" == *"renamed.md"* ]]
+}
+
+@test "gate drift: commit_changes withholds drift end to end" {
+    echo "mine" >> seed.md
+    manifest_record_pending_snapshot
+    echo "theirs" > concurrent.md
+    run commit_changes "release" ""
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Left out 1 file"* ]]
+    # the release commit carries only the operator's file
+    [ "$(git show --name-only --format= HEAD | LC_ALL=C sort | tr '\n' ' ')" = "seed.md " ]
+    # and the withheld file survives, uncommitted
+    [ -f concurrent.md ]
+    [ -n "$(git status --porcelain -- concurrent.md)" ]
+}
+
+@test "gate drift: a cleared snapshot lets Manifest's own release commit through" {
+    # Lifecycle contract: ship clears the snapshot after the auto-commit, because
+    # VERSION / CHANGELOG / regenerated docs all post-date it by design. If the
+    # baseline outlived that step, the release commit would be withheld and ship
+    # would fail its completion-clean invariant with a dirty tree.
+    echo "mine" >> seed.md
+    manifest_record_pending_snapshot
+    git add .
+    manifest_unstage_gate_drift >/dev/null
+    unset MANIFEST_CLI_GIT_PENDING_SNAPSHOT      # what the orchestrator does
+    echo "1.2.4" > VERSION                       # generated after the snapshot
+    echo "notes" > CHANGELOG.md
+    run commit_changes "Bump version to 1.2.4" ""
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"Left out"* ]]
+    local files; files="$(git show --name-only --format= HEAD | LC_ALL=C sort | tr '\n' ' ')"
+    [[ "$files" == *"VERSION"* ]]
+    [[ "$files" == *"CHANGELOG.md"* ]]
+    [ -z "$(git status --porcelain)" ]           # tree clean, as ship requires
+}
+
+@test "gate drift: drift-only tree reports nothing to commit and creates no commit" {
+    manifest_record_pending_snapshot
+    echo "theirs" > concurrent.md
+    local before; before="$(git rev-parse HEAD)"
+    run commit_changes "release" ""
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Nothing to commit"* ]]
+    [ "$(git rev-parse HEAD)" = "$before" ]
+    [ -f concurrent.md ]
+}

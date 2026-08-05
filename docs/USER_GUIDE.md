@@ -106,6 +106,8 @@ Repo ship can bump `VERSION`, update `CHANGELOG.md`, refresh docs, commit, tag, 
 
 Ship's auto-commit stages the whole tree, then unstages any nested git repository it would have captured as a bare gitlink (a directory with its own `.git` and no `.gitmodules` entry) and prints a notice with the remediation options. Declared submodules and gitlinks already tracked in `HEAD` are left alone. To record bare gitlinks intentionally, set `git.allow_new_gitlinks: true` (`MANIFEST_CLI_GIT_ALLOW_NEW_GITLINKS`).
 
+Auto-commit also leaves out work that appeared **after** you asked to ship. Ship records the pending set before running the release gate, and a full-tier gate takes minutes — long enough for a concurrent session, an editor autosave, or a background generator to drop files into the tree. Those are unstaged and reported, staying in your working tree for whoever owns them, so the release carries only what you had when you invoked it. Re-run to include them, or set `git.allow_gate_drift: true` (`MANIFEST_CLI_GIT_ALLOW_GATE_DRIFT`) to restore the previous sweep-everything behavior. Manifest's own `.manifest-cli/` bookkeeping is exempt, since the gate writes its pass ledger there mid-run by design.
+
 ## Version Ownership
 
 Manifest has one canonical release-writer file today: `VERSION`.

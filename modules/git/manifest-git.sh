@@ -589,6 +589,86 @@ manifest_unstage_accidental_gitlinks() {
 }
 export -f manifest_unstage_accidental_gitlinks
 
+# Record the working-tree pending set so a later bulk `git add .` can tell what
+# the operator was actually shipping apart from what merely landed while the
+# release gate ran. The gate is the long pole — a full-tier run is minutes — and
+# consent is given when the ship is invoked, not when the tree is finally
+# snapshotted. Anything that appears in between was never agreed to: a
+# concurrent session, an editor autosave, a background generator.
+#
+# Renames are recorded under their destination path, matching what `git add .`
+# would stage. Silent no-op outside a repo so callers need no guard.
+#
+# ARGUMENTS:
+#   $1 - repo path (default ".")
+manifest_record_pending_snapshot() {
+    local repo="${1:-.}"
+    MANIFEST_CLI_GIT_PENDING_SNAPSHOT="$(
+        git -C "$repo" status --porcelain 2>/dev/null |
+            sed -e 's/^...//' -e 's/^.* -> //' |
+            LC_ALL=C sort -u
+    )"
+    export MANIFEST_CLI_GIT_PENDING_SNAPSHOT
+}
+export -f manifest_record_pending_snapshot
+
+# Guard (runs right after a bulk `git add .`): unstage paths that were NOT in
+# the pending snapshot, i.e. that appeared after the operator asked to ship.
+# Their owner keeps them in the working tree, unstaged and untouched — the
+# release carries only what was consented to.
+#
+# Manifest's own bookkeeping under .manifest-cli/ is exempt: the release gate
+# writes its pass ledger there mid-run by design, so it is expected drift, not
+# foreign work.
+#
+# Opt out with git.allow_gate_drift=true (MANIFEST_CLI_GIT_ALLOW_GATE_DRIFT) to
+# keep the old sweep-everything behavior. Never blocks; skip-and-notice,
+# consistent with the notice-not-prompt consent model and with the gitlink
+# guard above. Sets MANIFEST_CLI_GIT_DRIFT_SKIPPED_COUNT so callers can tell
+# "index emptied by the guard" apart from "caller staged nothing".
+#
+# ARGUMENTS:
+#   $1 - repo path (default ".")
+#   $2 - line prefix (default "   ")
+manifest_unstage_gate_drift() {
+    local repo="${1:-.}"
+    local prefix="${2:-   }"
+    export MANIFEST_CLI_GIT_DRIFT_SKIPPED_COUNT=0
+
+    [[ "${MANIFEST_CLI_GIT_ALLOW_GATE_DRIFT:-false}" == "true" ]] && return 0
+    # No snapshot means no ship-invocation baseline to compare against; staging
+    # everything stays correct for direct commit_changes callers.
+    [[ -n "${MANIFEST_CLI_GIT_PENDING_SNAPSHOT+x}" ]] || return 0
+
+    local _staged=() _drift=() _p
+    while IFS= read -r _p; do
+        [[ -n "$_p" ]] && _staged+=("$_p")
+    done < <(git -C "$repo" diff --cached --name-only 2>/dev/null)
+    [[ ${#_staged[@]} -gt 0 ]] || return 0
+
+    for _p in "${_staged[@]}"; do
+        [[ "$_p" == .manifest-cli/* ]] && continue
+        if ! printf '%s\n' "$MANIFEST_CLI_GIT_PENDING_SNAPSHOT" | grep -qxF -- "$_p"; then
+            _drift+=("$_p")
+        fi
+    done
+    [[ ${#_drift[@]} -gt 0 ]] || return 0
+
+    for _p in "${_drift[@]}"; do
+        git -C "$repo" reset -q HEAD -- "$_p" 2>/dev/null || true
+    done
+    MANIFEST_CLI_GIT_DRIFT_SKIPPED_COUNT=${#_drift[@]}
+
+    local _noun="files"
+    [[ ${#_drift[@]} -eq 1 ]] && _noun="file"
+    local _joined
+    printf -v _joined '%s, ' "${_drift[@]}"
+    echo "${prefix}Left out ${#_drift[@]} $_noun that changed after this ship was requested: ${_joined%, }"
+    echo "${prefix}   Not yours to release — they stay in the working tree. Re-run to include them, or set git.allow_gate_drift=true."
+    return 0
+}
+export -f manifest_unstage_gate_drift
+
 commit_changes() {
     local message="$1"
     local timestamp="$2"
@@ -628,6 +708,12 @@ commit_changes() {
     manifest_unstage_accidental_gitlinks
     if [[ "${MANIFEST_CLI_GITLINKS_SKIPPED_COUNT:-0}" -gt 0 ]] && git diff --cached --quiet 2>/dev/null; then
         echo "✅ Nothing to commit (only skipped nested git repos)"
+        return 0
+    fi
+    # Drop work that landed after this ship was requested (e.g. during the gate).
+    manifest_unstage_gate_drift
+    if [[ "${MANIFEST_CLI_GIT_DRIFT_SKIPPED_COUNT:-0}" -gt 0 ]] && git diff --cached --quiet 2>/dev/null; then
+        echo "✅ Nothing to commit (only skipped post-request changes)"
         return 0
     fi
     local commit_ok=false
