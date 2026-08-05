@@ -1,5 +1,16 @@
 # Changelog
 
+## [58.0.3] - 2026-08-05
+
+**Release Type:** Patch
+
+### Changes
+
+- Add GitHub Release publishing support
+- Update release copy and configuration examples
+- Add regression coverage for the changed CLI workflow
+
+
 ## [58.0.2] - 2026-08-05
 
 **Release Type:** Patch
@@ -89,18 +100,4 @@
 
 - Add GitHub Release publishing support
 - Update release copy and configuration examples
-- Add regression coverage for the changed CLI workflow
-
-
-## [56.6.0] - 2026-07-17
-
-**Release Type:** Minor
-
-### Changes
-
-- Fix(tests): revert mk_scratch canonicalization; assert canonical paths with -ef
-- Feat(consent): -y applies without a confirmation prompt; close release-gate stdin
-- Test: dedup suite (-5), hermetic release gate, ship-path coverage (+10)
-- Feat(config): nested repos inherit fleet-root config (github.owner et al.)
-- Test: fill coverage backlog — apply paths, installer branches, helpers (+113); kcov target
 - Add regression coverage for the changed CLI workflow
