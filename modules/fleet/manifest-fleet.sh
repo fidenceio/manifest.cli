@@ -2382,6 +2382,28 @@ _fleet_preflight_no_pr_gated() {
     return 1
 }
 
+# Optional fleet-root policy gate. A coordination workspace may provide this
+# executable to enforce cross-repository policy that cannot live in an
+# individual member's release gate (for example, verified dependency drift).
+# It runs only on apply, before any mutation, and fails closed.
+_fleet_preflight_workspace_policy() {
+    local root="${MANIFEST_CLI_FLEET_ROOT:-$PWD}"
+    local gate="$root/scripts/manifest-fleet-preflight.sh"
+    [[ -f "$gate" ]] || return 0
+    if [[ ! -x "$gate" ]]; then
+        log_error "Pre-flight: workspace policy gate is not executable: $gate"
+        echo "Pre-flight refused before any mutation; no fleet member was shipped."
+        return 1
+    fi
+    echo "Running workspace policy gate..."
+    if ! "$gate"; then
+        log_error "Pre-flight: workspace policy gate failed."
+        echo "Pre-flight refused before any mutation; no fleet member was shipped."
+        return 1
+    fi
+    return 0
+}
+
 # Returns the user-facing service name for plan output. YAML keys are
 # intentionally dot-free for variable-name compatibility (see
 # manifest-fleet-config.sh `tr '[:lower:]-.' '[:upper:]__'`), so the
@@ -3144,6 +3166,10 @@ EOF
     echo ""
 
     if ! _fleet_preflight_no_pr_gated; then
+        return 1
+    fi
+
+    if ! _fleet_preflight_workspace_policy; then
         return 1
     fi
 

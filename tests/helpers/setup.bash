@@ -48,6 +48,15 @@ clear_release_gate_env_override() {
 # precedence still holds: a repo-local user.email, or a test exporting the env
 # vars, continues to win. Without it, a runner with no global identity fails
 # every test that commits.
+#
+# Scope matters: only GLOBAL is redirected. The system scope (/etc/gitconfig) is
+# where run-tests-container.sh records `safe.directory` for the bind-mounted
+# /work checkout — root in the container against a host-owned mount is
+# "dubious ownership", and system scope is the only layer git reads regardless
+# of the per-test $HOME. Redirecting it too makes every repo-scoped test fail
+# in the container with "requires running inside a Git repository", which is
+# how it broke CI in 58.0.1. The host config this guard exists to neutralize —
+# core.excludesFile pointing at ~/.gitignore_global — is global anyway.
 if [ -z "${TEST_GIT_CONFIG_GLOBAL:-}" ]; then
     TEST_GIT_CONFIG_GLOBAL="$(mktemp "${BATS_TEST_TMPDIR:-${BATS_TMPDIR:-/tmp}}/manifest-test-gitconfig.XXXXXX")"
     export TEST_GIT_CONFIG_GLOBAL
@@ -60,7 +69,6 @@ if [ -z "${TEST_GIT_CONFIG_GLOBAL:-}" ]; then
     git config --file "$TEST_GIT_CONFIG_GLOBAL" init.defaultBranch main 2>/dev/null || true
 fi
 export GIT_CONFIG_GLOBAL="$TEST_GIT_CONFIG_GLOBAL"
-export GIT_CONFIG_SYSTEM=/dev/null
 
 # Per-test scratch dir under bats's BATS_TMPDIR.
 #

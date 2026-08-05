@@ -83,3 +83,39 @@ TSV
     [[ "$output" == *"Ship fleet preview"* ]]
     [[ "$output" != *"Pre-flight: .git write denied"* ]]
 }
+
+@test "ship fleet -y fails closed on workspace policy gate before mutation" {
+    write_two_member_fleet
+    mkdir -p "$SCRATCH/work/scripts"
+    cat > "$SCRATCH/work/scripts/manifest-fleet-preflight.sh" <<'SH'
+#!/usr/bin/env bash
+echo "dependency policy blocked"
+exit 42
+SH
+    chmod +x "$SCRATCH/work/scripts/manifest-fleet-preflight.sh"
+
+    run_manifest ship fleet patch -y --local
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"dependency policy blocked"* ]]
+    [[ "$output" == *"workspace policy gate failed"* ]]
+    [[ "$output" == *"no fleet member was shipped"* ]]
+    [ -z "$(git -C "$SCRATCH/work/svc-a" tag 2>/dev/null)" ]
+    [ "$(cat "$SCRATCH/work/svc-a/VERSION")" = "1.0.0" ]
+}
+
+@test "ship fleet preview never invokes workspace policy gate" {
+    write_two_member_fleet
+    mkdir -p "$SCRATCH/work/scripts"
+    cat > "$SCRATCH/work/scripts/manifest-fleet-preflight.sh" <<'SH'
+#!/usr/bin/env bash
+touch invoked
+exit 42
+SH
+    chmod +x "$SCRATCH/work/scripts/manifest-fleet-preflight.sh"
+
+    run_manifest ship fleet patch
+
+    [ "$status" -eq 0 ]
+    [ ! -e "$SCRATCH/work/invoked" ]
+}
