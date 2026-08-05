@@ -43,6 +43,28 @@ EOF
     export PATH="$SCRATCH/bin:$PATH"
 }
 
+# Pin `date -u +%s` so elapsed-time arithmetic in query_time_server is
+# deterministic. query_time_server derives round-trip time from whole seconds
+# (rtt = t_after - t_before) and only reports the Cloudflare fractional
+# uncertainty when rtt < 2. On a loaded machine — a serial full-tier gate run,
+# for instance — spawning the stub can straddle two second boundaries, rtt
+# becomes 2, and the assertion sees the rtt-derived "1.000000" instead. That is
+# a property of the host's load, not of the code under test, so the clock is
+# fixed rather than the assertion loosened. Call AFTER install_curl_stub: the
+# stub reads the same stubbed `date`, so server and client agree.
+install_fixed_clock() {
+    mkdir -p "$SCRATCH/bin"
+    cat > "$SCRATCH/bin/date" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "-u" ] && [ "$2" = "+%s" ]; then
+    printf '1700000000\n'
+    exit 0
+fi
+exec /bin/date "$@"
+EOF
+    chmod +x "$SCRATCH/bin/date"
+}
+
 @test "time: format_timestamp delegates to format_timestamp_cross_platform" {
     run format_timestamp 1700000000 '+%Y-%m-%d'
     [ "$status" -eq 0 ]
@@ -154,6 +176,7 @@ EOF
 
 @test "time: query_time_server parses Cloudflare trace body via stubbed curl" {
     install_curl_stub ok
+    install_fixed_clock
     run query_time_server "https://www.cloudflare.com/cdn-cgi/trace" 2
     [ "$status" -eq 0 ]
     local off unc ip
