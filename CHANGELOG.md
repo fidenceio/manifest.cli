@@ -1,5 +1,14 @@
 # Changelog
 
+## [58.0.1] - 2026-08-05
+
+**Release Type:** Patch
+
+### Changes
+
+- Add regression coverage for the changed CLI workflow
+
+
 ## [58.0.0] - 2026-08-05
 
 **Release Type:** Major
@@ -95,14 +104,4 @@
 ### Changes
 
 - Canonicalize the test scratch dir so macOS path assertions hold
-- Update 1 file before release
-
-
-## [56.4.2] - 2026-07-16
-
-**Release Type:** Patch
-
-### Changes
-
-- Fix fleet update diff to read the TSV roster, not the YAML services map
 - Update 1 file before release
