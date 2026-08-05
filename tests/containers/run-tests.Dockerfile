@@ -1,4 +1,4 @@
-FROM alpine:3.20
+FROM alpine:3.24
 
 # tzdata is required for IANA zone resolution (e.g. America/New_York → EST).
 # Without it, GNU date still exits 0 and prints a misleading abbreviation.

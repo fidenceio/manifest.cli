@@ -35,6 +35,33 @@ clear_release_gate_env_override() {
           2>/dev/null || true
 }
 
+# Hermetic git config: the host's git config must not be able to change a
+# verdict, and the suite must not be able to change the host's. A developer's
+# ~/.gitconfig core.excludesFile pointing at ~/.gitignore_global once made an
+# init-template assertion fail inside the sandbox; separately, tests that run
+# `git config --global init.defaultBranch main` were writing into the real
+# ~/.gitconfig. Redirecting the global layer to a per-run file fixes both
+# directions at once, and — unlike /dev/null — keeps `git config --global`
+# writable, so those tests still get the branch default they set up.
+#
+# Identity goes in that file rather than GIT_AUTHOR_*/GIT_COMMITTER_* so normal
+# precedence still holds: a repo-local user.email, or a test exporting the env
+# vars, continues to win. Without it, a runner with no global identity fails
+# every test that commits.
+if [ -z "${TEST_GIT_CONFIG_GLOBAL:-}" ]; then
+    TEST_GIT_CONFIG_GLOBAL="$(mktemp "${BATS_TEST_TMPDIR:-${BATS_TMPDIR:-/tmp}}/manifest-test-gitconfig.XXXXXX")"
+    export TEST_GIT_CONFIG_GLOBAL
+    git config --file "$TEST_GIT_CONFIG_GLOBAL" user.name "Manifest Test" 2>/dev/null || true
+    git config --file "$TEST_GIT_CONFIG_GLOBAL" user.email "test@manifest.invalid" 2>/dev/null || true
+    # Fixtures that run a bare `git init` and then assert on branch `main` were
+    # passing only because the developer's ~/.gitconfig happened to set this;
+    # git's own fallback is `master`. Own the default here so the branch name is
+    # a property of the suite rather than of whoever is running it.
+    git config --file "$TEST_GIT_CONFIG_GLOBAL" init.defaultBranch main 2>/dev/null || true
+fi
+export GIT_CONFIG_GLOBAL="$TEST_GIT_CONFIG_GLOBAL"
+export GIT_CONFIG_SYSTEM=/dev/null
+
 # Per-test scratch dir under bats's BATS_TMPDIR.
 #
 # The path is returned VERBATIM (not canonicalized). On macOS $TMPDIR lives under
