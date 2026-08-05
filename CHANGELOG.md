@@ -1,5 +1,14 @@
 # Changelog
 
+## [58.0.2] - 2026-08-05
+
+**Release Type:** Patch
+
+### Changes
+
+- Add regression coverage for the changed CLI workflow
+
+
 ## [58.0.1] - 2026-08-05
 
 **Release Type:** Patch
@@ -95,13 +104,3 @@
 - Feat(config): nested repos inherit fleet-root config (github.owner et al.)
 - Test: fill coverage backlog — apply paths, installer branches, helpers (+113); kcov target
 - Add regression coverage for the changed CLI workflow
-
-
-## [56.5.0] - 2026-07-16
-
-**Release Type:** Minor
-
-### Changes
-
-- Canonicalize the test scratch dir so macOS path assertions hold
-- Update 1 file before release
