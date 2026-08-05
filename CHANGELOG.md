@@ -1,5 +1,17 @@
 # Changelog
 
+## [58.0.0] - 2026-08-05
+
+**Release Type:** Major
+
+### Changes
+
+- Gitignore.manifest: regenerate against 57.1.0 so it matches its own template
+- Remove the .manifest sidecar mechanism from the no-clobber contract
+- Tests(time): pin the clock for the Cloudflare uncertainty assertion
+- Update 1 file before release
+
+
 ## [57.1.0] - 2026-08-04
 
 **Release Type:** Minor
@@ -93,14 +105,4 @@
 ### Changes
 
 - Fix fleet update diff to read the TSV roster, not the YAML services map
-- Update 1 file before release
-
-
-## [56.4.1] - 2026-07-13
-
-**Release Type:** Patch
-
-### Changes
-
-- Fix fleet init Git ownership and GitHub targets
 - Update 1 file before release
