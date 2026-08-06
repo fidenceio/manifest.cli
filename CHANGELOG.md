@@ -1,5 +1,15 @@
 # Changelog
 
+## [58.0.4] - 2026-08-06
+
+**Release Type:** Patch
+
+### Changes
+
+- Add a containerized test runner for Manifest CLI
+- Add regression coverage for the changed CLI workflow
+
+
 ## [58.0.3] - 2026-08-05
 
 **Release Type:** Patch
@@ -89,15 +99,4 @@
 
 ### Changes
 
-- Add regression coverage for the changed CLI workflow
-
-
-## [56.7.0] - 2026-07-17
-
-**Release Type:** Minor
-
-### Changes
-
-- Add GitHub Release publishing support
-- Update release copy and configuration examples
 - Add regression coverage for the changed CLI workflow
