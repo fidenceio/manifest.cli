@@ -105,15 +105,43 @@ teardown() {
     [ "$MANIFEST_CLI_OS_SED_CMD" = "sed" ]
 }
 
-@test "os: setup_macos_commands selects GNU date form and gtimeout-or-fallback" {
-    local expected="timeout_fallback"
-    command -v gtimeout >/dev/null 2>&1 && expected="gtimeout"
+# Both macOS branches are pinned by constructing the PATH each one needs. The
+# earlier single test derived its own expectation from whether the host had
+# gtimeout, so it asserted a different contract on every machine and could not
+# fail on either: a broken probe still "matched" whatever the host produced.
+
+# PATH is swapped by explicit save/restore rather than a `VAR=x func` prefix:
+# whether such an assignment survives a shell-function call differs between
+# bash versions and POSIX mode, which is the very kind of ambient dependence
+# these tests exist to remove.
+
+@test "os: setup_macos_commands selects gtimeout when coreutils IS present" {
+    local saved_path="$PATH"
+    mkdir -p "$SCRATCH/bin"
+    printf '#!/usr/bin/env bash\nexit 0\n' > "$SCRATCH/bin/gtimeout"
+    chmod +x "$SCRATCH/bin/gtimeout"
+
+    PATH="$SCRATCH/bin:$PATH"
     setup_macos_commands > "$SCRATCH/macos-setup.out"
+    PATH="$saved_path"
+
     [ "$MANIFEST_CLI_OS_DATE_CMD" = "date -u -d" ]
-    [ "$MANIFEST_CLI_OS_TIMEOUT_CMD" = "$expected" ]
-    if [ "$expected" = "timeout_fallback" ]; then
-        grep -q "gtimeout not found" "$SCRATCH/macos-setup.out"
-    fi
+    [ "$MANIFEST_CLI_OS_TIMEOUT_CMD" = "gtimeout" ]
+    ! grep -q "gtimeout not found" "$SCRATCH/macos-setup.out"
+}
+
+@test "os: setup_macos_commands falls back and warns when coreutils is ABSENT" {
+    local saved_path="$PATH"
+    mkdir -p "$SCRATCH/empty-bin"
+
+    PATH="$SCRATCH/empty-bin"
+    setup_macos_commands > "$SCRATCH/macos-setup.out"
+    PATH="$saved_path"
+
+    [ "$MANIFEST_CLI_OS_DATE_CMD" = "date -u -d" ]
+    [ "$MANIFEST_CLI_OS_TIMEOUT_CMD" = "timeout_fallback" ]
+    grep -q "gtimeout not found" "$SCRATCH/macos-setup.out"
+    grep -q "Install coreutils" "$SCRATCH/macos-setup.out"
 }
 
 @test "os: detect_os dispatches Linux command setup under a stubbed uname" {

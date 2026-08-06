@@ -21,8 +21,12 @@ setup() {
 }
 
 teardown() {
-    cd /tmp
-    rm -rf "$SCRATCH"
+    cd /tmp || true
+    # Prefer a real rm — the missing-yq fixture puts a scrubbed sysbin on PATH
+    # whose `rm` lives *inside* $SCRATCH, so `rm -rf "$SCRATCH"` would unlink
+    # itself mid-delete.
+    PATH=/usr/bin:/bin
+    /bin/rm -rf "$SCRATCH"
 }
 
 # Build $TOOL_DIR with symlinks to the named real tools (resolved from the
@@ -35,6 +39,26 @@ _build_tool_dir() {
         resolved="$(PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin command -v "$tool" 2>/dev/null || true)"
         [ -n "$resolved" ] && ln -sf "$resolved" "$TOOL_DIR/$tool"
     done
+    # Linking is best-effort by design — a tool the platform lacks is simply
+    # absent from TOOL_DIR. Without this the function returns the status of the
+    # LAST loop iteration, so the whole fixture failed whenever the final name
+    # in the list happened to be missing (`curl`, on the Alpine test image).
+    return 0
+}
+
+# Require whichever coreutils timeout command THIS platform's probe looks for,
+# mirroring manifest_requirement_coreutils_timeout_command: `gtimeout` only on
+# Darwin (the Homebrew prefix that keeps GNU tools clear of the BSD ones),
+# plain `timeout` everywhere else. Guarding unconditionally on `gtimeout`
+# skipped these tests on every Linux runner and in the Alpine test container —
+# where GNU coreutils is installed and the binary is simply called `timeout` —
+# so two validate_system hard-fail branches never actually ran in the gate.
+_require_platform_timeout() {
+    if [ "$(uname -s 2>/dev/null || echo "")" = "Darwin" ]; then
+        command -v gtimeout >/dev/null 2>&1 || skip "gtimeout (coreutils) not installed on this macOS host"
+    else
+        command -v timeout >/dev/null 2>&1 || skip "coreutils timeout not installed"
+    fi
 }
 
 # PATH with a recording `brew` stub and NO docker anywhere, for the
@@ -143,9 +167,32 @@ EOF
 # validate_system hard-fail branches (full script runs, e2e-style sandbox)
 # =============================================================================
 
+# PATH for full-script runs that must NOT see the host's yq. The Alpine test
+# image installs yq for the bats suite itself (`apk add yq`), so a naive
+# `PATH=$TOOL_DIR:/usr/bin:/bin` without linking yq still finds /usr/bin/yq
+# and the "missing yq" branch never fires (install proceeds, status 0 — the
+# A9 unmute failure). Scrub a private sysbin of the tools validation needs,
+# excluding yq.
+_path_without_host_yq() {
+    local sysbin="$SCRATCH/sysbin"
+    mkdir -p "$sysbin"
+    local tool resolved
+    for tool in uname mkdir rm cp mv cat ls chmod ln mktemp dirname basename \
+                head cut tr sed awk grep sort find env printf true false; do
+        resolved="$(PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin command -v "$tool" 2>/dev/null || true)"
+        [ -n "$resolved" ] && ln -sf "$resolved" "$sysbin/$tool"
+    done
+    # Refuse to ship a scrub that still exposes yq (host layout drift).
+    if [ -e "$sysbin/yq" ] || [ -L "$sysbin/yq" ]; then
+        echo "_path_without_host_yq: refusing to expose yq via $sysbin" >&2
+        return 1
+    fi
+    export PATH="$TOOL_DIR:$sysbin"
+}
+
 @test "validate_system: docker present but engine down is a hard validation failure" {
     command -v yq >/dev/null 2>&1 || skip "yq not installed on host"
-    command -v gtimeout >/dev/null 2>&1 || skip "gtimeout (coreutils) not installed on host"
+    _require_platform_timeout
     _build_tool_dir git yq gtimeout timeout bash curl
     # Docker stub: the binary exists but `docker info` fails (engine down).
     cat > "$TOOL_DIR/docker" <<'EOS'
@@ -172,14 +219,19 @@ EOS
 }
 
 @test "validate_system: missing yq is rejected with the yq requirement" {
-    command -v gtimeout >/dev/null 2>&1 || skip "gtimeout (coreutils) not installed on host"
+    _require_platform_timeout
     _build_tool_dir git gtimeout timeout bash curl   # deliberately NO yq
     cat > "$TOOL_DIR/docker" <<'EOS'
 #!/usr/bin/env bash
 exit 0
 EOS
     chmod +x "$TOOL_DIR/docker"
-    export PATH="$TOOL_DIR:/usr/bin:/bin"
+    _path_without_host_yq
+    # Precondition: the scrubbed PATH must not resolve yq, or this test is lying.
+    if command -v yq >/dev/null 2>&1; then
+        echo "missing-yq fixture leaked yq via PATH=$(command -v yq)" >&2
+        return 1
+    fi
     cd "$TEST_REPO_ROOT"
 
     OSTYPE=linux-gnu run env \
@@ -188,7 +240,11 @@ EOS
         OSTYPE=linux-gnu \
         bash "$TEST_REPO_ROOT/install-cli.sh" < /dev/null
 
-    [ "$status" -eq 1 ]
+    if [ "$status" -ne 1 ]; then
+        echo "expected status 1, got ${status}; output:" >&2
+        printf '%s\n' "$output" >&2
+        return 1
+    fi
     echo "$output" | grep -q "required for YAML config"
     echo "$output" | grep -q "System validation failed with 1 error(s)"
     [ ! -e "$HOME/.manifest-cli" ]
@@ -252,7 +308,15 @@ EOS
     # The profile append is gated on [ -t 0 ], so the function runs under a
     # pty allocated by script(1). Input 'y' is sent only once the prompt has
     # appeared in the captured output — no timing race.
-    command -v /usr/bin/script >/dev/null 2>&1 || skip "script(1) not available for pty allocation"
+    # BSD script(1) specifically: this uses `script -q <file> <cmd> <args>`,
+    # which util-linux's script does not accept (it takes the command via
+    # `-c "..."` and treats trailing words as the typescript file). Guarding on
+    # mere presence is wrong — the Alpine image HAS a script(1), and the test
+    # fails on its argument form rather than skipping. The sub-second waits
+    # below are perl one-liners, which that image also lacks. Covered on the
+    # macOS CI leg, where both hold.
+    [ "$(uname -s 2>/dev/null || echo "")" = "Darwin" ] \
+        || skip "BSD script(1) + perl needed for pty allocation (covered by the macOS CI leg)"
     local bash5
     bash5="$(PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin command -v bash)"
     local out="$SCRATCH/pty-out.txt"

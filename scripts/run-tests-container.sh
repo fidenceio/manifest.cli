@@ -39,6 +39,23 @@ for var in \
     fi
 done
 
+# Skip budget. A skipped test reports as a TAP pass, so coverage can shrink
+# without the gate noticing — a lost `yq` or a probe that stops matching reads
+# exactly like a green run. This image is the one environment whose tooling we
+# control, so cap the skips it is allowed to produce. The budget covers only
+# what THIS platform cannot execute:
+#   * 3 — ensure_docker_installed cask-offer branches, OSTYPE=darwin*-gated in
+#         source and therefore unreachable on Linux
+#   * 2 — chmod-based write-restriction tests, which root bypasses (the
+#         container runs as root against a host-owned bind mount)
+#   * 1 — configure_path's pty test, written against BSD script(1) + perl
+# All six are covered on the macOS CI leg. Anything beyond that is lost
+# coverage: fix the cause or move the number deliberately, with the reason
+# recorded here.
+MANIFEST_CLI_TEST_MAX_SKIPS="${MANIFEST_CLI_TEST_MAX_SKIPS:-6}"
+export MANIFEST_CLI_TEST_MAX_SKIPS
+ENV_ARGS="$ENV_ARGS -e MANIFEST_CLI_TEST_MAX_SKIPS"
+
 # The repo is bind-mounted at /work but owned by the host user, while the
 # container runs as root. git 2.35.2+ rejects that mismatch as "dubious
 # ownership", so every repo-scoped command (and any test that shells out to git

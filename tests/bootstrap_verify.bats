@@ -38,6 +38,8 @@ EOF
 
     # Stub curl: the tarball download (-o <file>) copies our release tarball; any
     # other curl (api/formula fetch) returns empty so the test relies on pins.
+    # Missing tarball fails loud — a silent cp failure used to look like a
+    # checksum miss with no useful diagnostic.
     STUB="$SCRATCH/bin"
     mkdir -p "$STUB"
     cat > "$STUB/curl" <<EOF
@@ -49,13 +51,30 @@ for a in "\$@"; do
     prev="\$a"
 done
 if [ -n "\$out" ]; then
-    cp "$SCRATCH/release.tar.gz" "\$out"
+    if [ ! -f "$SCRATCH/release.tar.gz" ]; then
+        echo "stub curl: missing fixture tarball at $SCRATCH/release.tar.gz" >&2
+        exit 1
+    fi
+    cp "$SCRATCH/release.tar.gz" "\$out" || exit 1
     exit 0
 fi
 exit 0   # api/formula fetch: empty
 EOF
     chmod +x "$STUB/curl"
     export PATH="$STUB:$PATH"
+}
+
+# Dump the full captured bootstrap output when a needle is missing so the
+# fail-closed path is named in CI logs (not just a silent grep miss).
+_assert_output_contains() {
+    local needle="$1"
+    if ! printf '%s\n' "$output" | grep -q -- "$needle"; then
+        echo "expected output to contain: ${needle}" >&2
+        echo "----- bootstrap output -----" >&2
+        printf '%s\n' "$output" >&2
+        echo "----- end output (status=${status}) -----" >&2
+        return 1
+    fi
 }
 
 teardown() {
@@ -66,7 +85,7 @@ teardown() {
 @test "bootstrap: a MATCHING pinned sha runs the verified installer" {
     MANIFEST_CLI_INSTALL_VERSION="1.0.0" MANIFEST_CLI_INSTALL_SHA256="$GOOD_SHA" run bash "$BOOTSTRAP"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Checksum verified"
+    _assert_output_contains "Checksum verified"
     [ -f "$SCRATCH/installer.ran" ]
     grep -q "INSTALLER_RAN" "$SCRATCH/installer.ran"
     # --manual is forwarded so a verified source-tree install is performed.
@@ -77,7 +96,8 @@ teardown() {
     local wrong="deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
     MANIFEST_CLI_INSTALL_VERSION="1.0.0" MANIFEST_CLI_INSTALL_SHA256="$wrong" run bash "$BOOTSTRAP"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Checksum mismatch"
+    _assert_output_contains "Downloading"
+    _assert_output_contains "Checksum mismatch"
     # The installer must NOT have run — verification gates execution.
     [ ! -f "$SCRATCH/installer.ran" ]
 }
@@ -85,7 +105,7 @@ teardown() {
 @test "bootstrap: a malformed pinned sha is rejected up front" {
     MANIFEST_CLI_INSTALL_VERSION="1.0.0" MANIFEST_CLI_INSTALL_SHA256="not-a-real-digest" run bash "$BOOTSTRAP"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "well-formed digest"
+    _assert_output_contains "well-formed digest"
     [ ! -f "$SCRATCH/installer.ran" ]
 }
 
@@ -94,6 +114,6 @@ teardown() {
     # no expected checksum, so the bootstrap must refuse rather than run blind.
     MANIFEST_CLI_INSTALL_VERSION="1.0.0" run bash "$BOOTSTRAP"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "No published checksum found"
+    _assert_output_contains "No published checksum found"
     [ ! -f "$SCRATCH/installer.ran" ]
 }

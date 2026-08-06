@@ -133,6 +133,43 @@ init_repo_fixture() {
     echo "$output" | grep -q "Auto-confirmed unambiguous target (apply via -y)"
 }
 
+# --- the gate judges its target, not the directory it is standing in ---------
+# Both cases below turn on the difference between the cwd and the explicit
+# target. Before the guard took a target parameter it probed the cwd, so the
+# first case passed its git precondition on the strength of an unrelated repo
+# and the second was refused despite a perfectly good target.
+
+@test "gate: a non-repo target is refused even when the cwd IS a git repository" {
+    init_repo_fixture               # $SCRATCH is a repo, and we are inside it
+    local outsider="$SCRATCH/../not-a-repo.$$"
+    mkdir -p "$outsider"
+
+    MANIFEST_CLI_AUTO_CONFIRM=1 MANIFEST_CLI_PROJECT_ROOT="$outsider" \
+        run manifest_repo_scope_confirm_apply "$outsider" "manifest ship repo patch -y" < /dev/null
+
+    rm -rf "$outsider"
+    [ "$status" -ne 0 ]
+    echo "$output" | grep -q "repo scope requires a Git repository at the requested target"
+    echo "$output" | grep -Fq "Target directory: $outsider"
+    # The ambient repo must not have stood in for the target.
+    ! echo "$output" | grep -q "Auto-confirmed"
+}
+
+@test "gate: a valid target is accepted even when the cwd is NOT a git repository" {
+    init_repo_fixture               # creates and enters the repo at $SCRATCH
+    local elsewhere="$SCRATCH/../outside.$$"
+    mkdir -p "$elsewhere"
+    cd "$elsewhere"                 # stand somewhere that is not a work tree
+
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" \
+        run manifest_repo_scope_confirm_apply "$SCRATCH" "manifest ship repo patch -y" < /dev/null
+
+    cd "$SCRATCH"
+    rm -rf "$elsewhere"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Auto-confirmed unambiguous target (apply via -y)"
+}
+
 @test "target_unambiguous: named branch + origin is unambiguous (origin required)" {
     init_repo_fixture
     run manifest_repo_scope_target_unambiguous "$SCRATCH" "true"

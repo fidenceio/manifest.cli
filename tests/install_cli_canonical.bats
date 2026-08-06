@@ -1,27 +1,9 @@
 #!/usr/bin/env bats
 #
-# Asserts the canonical install_cli pipeline: install-cli.sh in this repo,
-# with Cloud auto-upgrade and CLI reinstall/upgrade non-brew paths delegating
-# to it.
-#
-# The Cloud plugin file lives in a sibling repo (fidenceio.manifest.cloud).
-# Tests skip if the sibling isn't reachable so the CLI repo can be tested
-# in isolation (CI, fresh clones).
+# Asserts the canonical install_cli pipeline: install-cli.sh in this repo, with
+# the CLI reinstall/upgrade non-brew paths delegating to it.
 
 load 'helpers/setup'
-
-_cloud_plugin_path() {
-    local p="$TEST_REPO_ROOT/../fidenceio.manifest.cloud/cli-plugins/workflow/manifest-auto-upgrade.sh"
-    [ -f "$p" ] || return 1
-    echo "$p"
-}
-
-@test "cloud plugin's upgrade_cli_internal delegates to install-cli.sh on non-brew hosts" {
-    local plugin
-    plugin="$(_cloud_plugin_path)" || skip "Cloud plugin not reachable from $TEST_REPO_ROOT"
-
-    grep -qF 'bash "$MANIFEST_CLI_PROJECT_ROOT/install-cli.sh"' "$plugin"
-}
 
 @test "manifest-core.sh reinstall non-brew path delegates to install-cli.sh" {
     grep -qF 'bash "$MANIFEST_CLI_PROJECT_ROOT/install-cli.sh"' "$TEST_REPO_ROOT/modules/core/manifest-core.sh"

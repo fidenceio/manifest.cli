@@ -430,36 +430,82 @@ if [ "$CACHE_ENABLED" -eq 1 ]; then
     fi
 fi
 
-# Lightweight progress: pass every TAP line straight through to stdout (so the
-# results stream and any consumer are untouched) while emitting a "N/TOTAL
-# (pct%)" line to stderr at each 10% boundary. Pure line-counting in awk — no
-# extra processes per test, no cursor control (renders the same piped or in a
-# terminal). Total comes from TAP's `1..N` plan line; works with parallel runs
-# since it counts completed `ok`/`not ok` lines regardless of order.
-_progress_filter() {
-    awk '
+# Pass every TAP line straight through to stdout (so the results stream and any
+# consumer are untouched) while doing two things on the side: emitting a
+# "N/TOTAL (pct%)" line to stderr at each 10% boundary when progress is on, and
+# tallying skipped tests into $2 for the budget check below. Pure line-counting
+# in awk — no extra processes per test, no cursor control (renders the same
+# piped or in a terminal). Total comes from TAP's `1..N` plan line; works with
+# parallel runs since it counts completed `ok`/`not ok` lines regardless of order.
+_tap_filter() {
+    awk -v show_progress="$1" -v skips_out="$2" '
         BEGIN { next_ms = 10 }
         /^1\.\.[0-9]+$/ { total = substr($0, 4) + 0 }
         { print; fflush() }
+        # A skipped test reports as `ok N name # skip reason` — it is counted as
+        # a pass by every TAP consumer, so a lost tool reads as a green run.
+        # Record the names so the budget check below can name what went missing.
+        /^ok /  && / # skip/ { skipped++; names = names substr($0, index($0, " ") + 1) "\n" }
         (/^ok / || /^not ok /) && total > 0 {
             completed++
             pct = int(completed * 100 / total)
-            if (pct >= next_ms && next_ms < 100) {
+            if (show_progress == 1 && pct >= next_ms && next_ms < 100) {
                 printf "  …running tests: %d/%d (%d%%)\n", completed, total, pct > "/dev/stderr"
                 fflush("/dev/stderr")
                 while (next_ms <= pct) next_ms += 10
             }
         }
-        END { if (total > 0) printf "  …tests complete: %d/%d\n", completed, total > "/dev/stderr" }
+        END {
+            if (show_progress == 1 && total > 0)
+                printf "  …tests complete: %d/%d\n", completed, total > "/dev/stderr"
+            printf "%d\n%s", skipped + 0, names > skips_out
+        }
     '
 }
 
-if [ "$PROGRESS" -eq 1 ]; then
-    bats "${PARALLEL[@]}" "${FILTER[@]}" "${TARGET[@]}" | _progress_filter
+# Skip accounting. A skip is invisible in a TAP pass count, so a run that lost
+# `yq`, `jq`, `parallel` or coreutils reports the same green as a run that
+# tested everything. MANIFEST_CLI_TEST_MAX_SKIPS caps how many are tolerated.
+# run-tests-container.sh sets it, because the image is the one environment whose
+# tooling we control; its budget covers only what that platform cannot execute.
+# Unset means "report but do not enforce" — a developer host, and the macOS CI
+# leg that runs host-native, legitimately lack some of these.
+SKIPS_FILE="$(mktemp "${TMPDIR:-/tmp}/manifest-tap-skips.XXXXXX")"
+trap 'rm -f "$SKIPS_FILE"' EXIT
+
+# Piping suppresses bats's pretty formatter (it renders TAP when stdout is not a
+# terminal), so only pipe where that costs nothing: progress mode already did,
+# an enforced budget requires the count, and a non-terminal stdout — every CI,
+# gate and container run — is getting plain TAP either way. An interactive run
+# with no budget keeps the pretty output and simply reports no skip count.
+NEED_TAP_FILTER=0
+[ "$PROGRESS" -eq 1 ] && NEED_TAP_FILTER=1
+[ -n "${MANIFEST_CLI_TEST_MAX_SKIPS:-}" ] && NEED_TAP_FILTER=1
+[ -t 1 ] || NEED_TAP_FILTER=1
+
+if [ "$NEED_TAP_FILTER" -eq 1 ]; then
+    bats "${PARALLEL[@]}" "${FILTER[@]}" "${TARGET[@]}" | _tap_filter "$PROGRESS" "$SKIPS_FILE"
     status=${PIPESTATUS[0]}
 else
     bats "${PARALLEL[@]}" "${FILTER[@]}" "${TARGET[@]}"
     status=$?
+fi
+
+SKIPPED="$(head -n 1 "$SKIPS_FILE" 2>/dev/null || echo 0)"
+[ -n "$SKIPPED" ] || SKIPPED=0
+if [ "$SKIPPED" -gt 0 ]; then
+    echo "[skips] $SKIPPED test(s) skipped:" >&2
+    tail -n +2 "$SKIPS_FILE" | sed 's/^/  - /' >&2
+fi
+if [ -n "${MANIFEST_CLI_TEST_MAX_SKIPS:-}" ]; then
+    if ! [[ "$MANIFEST_CLI_TEST_MAX_SKIPS" =~ ^[0-9]+$ ]]; then
+        echo "[skips] MANIFEST_CLI_TEST_MAX_SKIPS='$MANIFEST_CLI_TEST_MAX_SKIPS' is not a count; failing closed." >&2
+        status=1
+    elif [ "$SKIPPED" -gt "$MANIFEST_CLI_TEST_MAX_SKIPS" ]; then
+        echo "[skips] budget exceeded: $SKIPPED skipped, at most $MANIFEST_CLI_TEST_MAX_SKIPS allowed here." >&2
+        echo "[skips] A skipped test is lost coverage, not a pass. Install the missing tool or raise the budget deliberately." >&2
+        status=1
+    fi
 fi
 if [ "$status" -eq 0 ] && [ "$CACHE_ENABLED" -eq 1 ] && [ "$CACHE_WINDOW" -gt 0 ] && [ -n "$CACHE_FP" ]; then
     if mkdir -p "$CACHE_DIR" 2>/dev/null && printf '%s\n' "$(date +%s)" > "$CACHE_DIR/$CACHE_FP" 2>/dev/null; then

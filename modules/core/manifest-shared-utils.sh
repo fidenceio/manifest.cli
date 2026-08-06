@@ -846,21 +846,46 @@ ensure_repository_root() {
     return 0
 }
 
+# Require that a Git work tree exists. With no $2 the subject is the caller's
+# cwd — the "run this from inside a repo" contract that `manifest status repo`,
+# prep, refresh and ship repo enforce. Pass $2 to check an EXPLICIT target
+# instead: a caller that already resolved which repository it is acting on must
+# have that repository validated, not whatever directory it happens to be
+# standing in. Without the parameter such a caller gets a vacuous check whenever
+# its cwd is any git repo at all, and a false refusal whenever its cwd is not
+# one — the verdict tracks the ambient directory rather than the subject.
 manifest_repo_scope_require_git() {
     local replay_command="${1:-manifest status repo}"
-    local current_dir
-    current_dir="$(pwd)"
+    local target="${2:-}"
+    local subject_dir subject_label
 
-    if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    if [[ -n "$target" ]]; then
+        subject_dir="$target"
+        subject_label="Target directory: $target"
+    else
+        subject_dir="$(pwd)"
+        subject_label="Current directory: $subject_dir"
+    fi
+
+    if git -C "$subject_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
         return 0
     fi
 
-    log_error "repo scope requires running inside a Git repository."
-    log_error "Current directory: $current_dir"
-    log_error ""
-    log_error "Run from the intended repository folder:"
-    log_error "  cd /path/to/repo"
-    log_error "  $replay_command"
+    if [[ -n "$target" ]]; then
+        log_error "repo scope requires a Git repository at the requested target."
+        log_error "$subject_label"
+        log_error ""
+        log_error "The target is not a Git work tree. Initialize or correct it:"
+        log_error "  git -C $target init"
+        log_error "  $replay_command"
+    else
+        log_error "repo scope requires running inside a Git repository."
+        log_error "$subject_label"
+        log_error ""
+        log_error "Run from the intended repository folder:"
+        log_error "  cd /path/to/repo"
+        log_error "  $replay_command"
+    fi
     return 1
 }
 
@@ -960,7 +985,11 @@ manifest_repo_scope_confirm_apply() {
     local origin_required="${3:-true}"
     local git_root branch origin
 
-    if ! manifest_repo_scope_require_git "$replay_command"; then
+    # Validate the repository this call is actually about. The gate receives an
+    # explicit $project_root and every line below operates on it, so checking
+    # the caller's cwd here would let an unrelated ambient repo satisfy the
+    # precondition for a target that is not a work tree at all.
+    if ! manifest_repo_scope_require_git "$replay_command" "$project_root"; then
         return 1
     fi
 
