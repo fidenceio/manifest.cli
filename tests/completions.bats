@@ -92,3 +92,14 @@ load 'helpers/setup'
     grep -q -- '-y --yes --dry-run --force --help' "$TEST_REPO_ROOT/completions/manifest.fish"
     grep -q -- '-y --yes --dry-run --help' "$TEST_REPO_ROOT/completions/manifest.fish"
 }
+
+@test "completions offer fleet as a read-only config list layer" {
+    # 'fleet' is readable but not writable, so it must be offered to
+    # `config list` and withheld from set/unset in every shell.
+    grep -q 'read_layers="global project local fleet"' "$TEST_REPO_ROOT/completions/manifest.bash"
+    grep -q 'write_layers="global project local"' "$TEST_REPO_ROOT/completions/manifest.bash"
+    grep -q 'read_layers=(global project local fleet)' "$TEST_REPO_ROOT/completions/_manifest"
+    grep -q 'write_layers=(global project local)' "$TEST_REPO_ROOT/completions/_manifest"
+    grep -q -- "-a 'global project local fleet'" "$TEST_REPO_ROOT/completions/manifest.fish"
+    grep -q -- "-a 'global project local'" "$TEST_REPO_ROOT/completions/manifest.fish"
+}

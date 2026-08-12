@@ -82,6 +82,35 @@ teardown() {
     echo "$output" | grep -q '"version":null'
 }
 
+@test "status --json: config object always carries the inherited fleet layers" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-config.sh"
+    source "$TEST_REPO_ROOT/modules/core/manifest-status.sh"
+    cd "$SCRATCH"
+    run manifest_status --json
+    [ "$status" -eq 0 ]
+    # Emitted unconditionally so consumers see a stable shape; outside a fleet
+    # the paths are empty and present is false.
+    echo "$output" | grep -q '"fleet":{"path":"","present":false}'
+    echo "$output" | grep -q '"fleet_local":{"path":"","present":false}'
+    echo "$output" | yq e '.' - >/dev/null
+}
+
+@test "status --json: a fleet member reports the fleet config files it inherits" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-config.sh"
+    source "$TEST_REPO_ROOT/modules/core/manifest-status.sh"
+    printf 'fleet:\n  name: "demo"\n' > "$SCRATCH/manifest.fleet.config.yaml"
+    printf 'github:\n  owner: "fidenceio"\n' > "$SCRATCH/manifest.config.local.yaml"
+    mkdir -p "$SCRATCH/services/member"
+    cd "$SCRATCH/services/member"
+
+    run manifest_status --json
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q '"fleet_local":{"path":"[^"]*manifest.config.local.yaml","present":true}'
+    echo "$output" | grep -q '"fleet":{"path":"[^"]*manifest.config.yaml","present":false}'
+    [ "$(echo "$output" | wc -l | tr -d ' ')" = "1" ]
+    echo "$output" | yq e '.' - >/dev/null
+}
+
 @test "status --json: includes detected noncanonical version surfaces" {
     source "$TEST_REPO_ROOT/modules/core/manifest-status.sh"
     cd "$SCRATCH"

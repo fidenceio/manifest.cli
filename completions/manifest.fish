@@ -111,8 +111,11 @@ complete -c manifest -n '__manifest_path pr fleet' \
 for sub in get describe unset set
     complete -c manifest -n "__manifest_path config $sub" -a '(__manifest_keys)'
 end
-complete -c manifest -n '__manifest_path config set'  -a '--layer'
-complete -c manifest -n '__manifest_path config list' -a '--layer'
+complete -c manifest -n '__manifest_path config set'   -a '--layer'
+complete -c manifest -n '__manifest_path config unset' -a '--layer'
+complete -c manifest -n '__manifest_path config list'  -a '--layer'
 
-# --layer value completion, regardless of position.
-complete -c manifest -n 'string match -q -- "--layer" (commandline -opc)[-1]' -a 'global project local'
+# --layer value completion, regardless of position. 'fleet' is READ-ONLY
+# (inherited from the fleet root), so it is offered to `config list` only.
+complete -c manifest -n '__manifest_path config list; and string match -q -- "--layer" (commandline -opc)[-1]' -a 'global project local fleet'
+complete -c manifest -n 'not __manifest_path config list; and string match -q -- "--layer" (commandline -opc)[-1]' -a 'global project local'

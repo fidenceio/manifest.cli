@@ -111,6 +111,16 @@ _manifest_first_report() {
     ps="$root/manifest.config.yaml"
     pl="$root/manifest.config.local.yaml"
     _manifest_first_line "Config:" "$([ -f "$g" ]  && echo "✓" || echo "·") global   $g"
+    # Inherited fleet layer, listed only when this repo actually sits below a
+    # fleet root — a standalone repo's output is unchanged.
+    local cfr=""
+    if declare -F _status_config_fleet_root >/dev/null 2>&1; then
+        cfr="$(_status_config_fleet_root "$root")"
+    fi
+    if [[ -n "$cfr" ]]; then
+        _manifest_first_line ""    "$([ -f "$cfr/manifest.config.yaml" ]       && echo "✓" || echo "·") fleet    $cfr/manifest.config.yaml"
+        _manifest_first_line ""    "$([ -f "$cfr/manifest.config.local.yaml" ] && echo "✓" || echo "·") fleet    $cfr/manifest.config.local.yaml"
+    fi
     _manifest_first_line ""        "$([ -f "$ps" ] && echo "✓" || echo "·") project  $ps"
     _manifest_first_line ""        "$([ -f "$pl" ] && echo "✓" || echo "·") local    $pl"
 

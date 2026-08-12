@@ -41,13 +41,16 @@ _manifest() {
         'help:Show help'
     )
 
-    local -a scopes bumps config_subs pr_subs recipe_subs layers
+    local -a scopes bumps config_subs pr_subs recipe_subs write_layers read_layers
     scopes=(repo fleet)
     bumps=(patch minor major revision)
     config_subs=(show list get set unset describe doctor setup time)
     pr_subs=(create status checks ready merge update queue policy fleet help)
     recipe_subs=(list show explain help)
-    layers=(global project local)
+    # 'fleet' is READ-ONLY (inherited from the fleet root): offered to
+    # `config list`, never to set/unset.
+    write_layers=(global project local)
+    read_layers=(global project local fleet)
 
     _arguments -C \
         '1: :->command' \
@@ -126,7 +129,11 @@ _manifest() {
             ;;
         extra)
             if [[ $words[$((CURRENT-1))] == "--layer" ]]; then
-                _values 'layer' "${layers[@]}"
+                if [[ $words[2] == "config" && $words[3] == "list" ]]; then
+                    _values 'layer' "${read_layers[@]}"
+                else
+                    _values 'layer' "${write_layers[@]}"
+                fi
             else
                 _values 'option' --help -y --yes --local --dry-run --explain --layer --fix --json
             fi

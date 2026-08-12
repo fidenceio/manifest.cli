@@ -15,7 +15,10 @@ _manifest_complete() {
     local bumps="patch minor major revision"
     local config_subs="show list get set unset describe doctor setup time"
     local pr_subs="create status checks ready merge update queue policy fleet help"
-    local layers="global project local"
+    # 'fleet' is READ-ONLY (inherited from the fleet root), so it is offered to
+    # `config list` but never to set/unset, which would try to write it.
+    local write_layers="global project local"
+    local read_layers="global project local fleet"
 
     case $cword in
         1)
@@ -122,7 +125,11 @@ _manifest_complete() {
 
     # --layer <value> handling regardless of position
     if [[ "$prev" == "--layer" ]]; then
-        COMPREPLY=( $(compgen -W "$layers" -- "$cur") )
+        if [[ "${words[1]}" == "config" && "${words[2]}" == "list" ]]; then
+            COMPREPLY=( $(compgen -W "$read_layers" -- "$cur") )
+        else
+            COMPREPLY=( $(compgen -W "$write_layers" -- "$cur") )
+        fi
         return 0
     fi
     if [[ "$cur" == --* ]]; then

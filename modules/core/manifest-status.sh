@@ -71,6 +71,26 @@ _status_git_porcelain_counts() {
     printf '%s %s\n' "$modified" "$untracked"
 }
 
+# Fleet root the CONFIG LOADER would inherit from for project root $1, or empty
+# when no inherited layer applies (not in a fleet, or this project IS the fleet
+# root — in which case those files are already the project/local layers).
+#
+# Deliberately the loader's sentinel walk (_manifest_config_find_fleet_root),
+# NOT the fleet module's find_fleet_root: the latter honors
+# MANIFEST_CLI_FLEET_ROOT and walks from the git root, so it can name a root the
+# loader never inherits from. Reporting a layer the runtime does not load would
+# be a fresh lie in place of the one this reporting exists to remove.
+_status_config_fleet_root() {
+    local proj="$1" canon fr
+    declare -F _manifest_config_find_fleet_root >/dev/null 2>&1 || return 0
+    canon="$(cd "$proj" 2>/dev/null && pwd -P)" || canon="$proj"
+    if fr="$(_manifest_config_find_fleet_root "$proj")" \
+       && [[ -n "$fr" && "$fr" != "$canon" ]]; then
+        printf '%s\n' "$fr"
+    fi
+    return 0
+}
+
 _status_fleet_config_file() {
     local proj="$1"
     if [[ -f "$proj/manifest.fleet.config.yaml" ]]; then
@@ -1029,7 +1049,21 @@ _manifest_status_json() {
     g_p="$([ -f "$g" ] && echo true || echo false)"
     p_p="$([ -f "$ps" ] && echo true || echo false)"
     l_p="$([ -f "$pl" ] && echo true || echo false)"
-    config_json="{\"global\":{$(_json_kv_str "path" "$g"),$(_json_kv_raw "present" "$g_p")},\"project\":{$(_json_kv_str "path" "$ps"),$(_json_kv_raw "present" "$p_p")},\"local\":{$(_json_kv_str "path" "$pl"),$(_json_kv_raw "present" "$l_p")}}"
+    # The inherited fleet layer: the fleet root's shared and local config, which
+    # every member below it loads between 'global' and 'project'. Emitted
+    # unconditionally (path "" / present false outside a fleet) so consumers see
+    # a stable shape. Keys are ordered lowest → highest precedence, as before.
+    local fr fs fl fs_p fl_p
+    fr="$(_status_config_fleet_root "$proj")"
+    if [[ -n "$fr" ]]; then
+        fs="$fr/manifest.config.yaml"
+        fl="$fr/manifest.config.local.yaml"
+    else
+        fs=""; fl=""
+    fi
+    fs_p="$([ -n "$fs" ] && [ -f "$fs" ] && echo true || echo false)"
+    fl_p="$([ -n "$fl" ] && [ -f "$fl" ] && echo true || echo false)"
+    config_json="{\"global\":{$(_json_kv_str "path" "$g"),$(_json_kv_raw "present" "$g_p")},\"fleet\":{$(_json_kv_str "path" "$fs"),$(_json_kv_raw "present" "$fs_p")},\"fleet_local\":{$(_json_kv_str "path" "$fl"),$(_json_kv_raw "present" "$fl_p")},\"project\":{$(_json_kv_str "path" "$ps"),$(_json_kv_raw "present" "$p_p")},\"local\":{$(_json_kv_str "path" "$pl"),$(_json_kv_raw "present" "$l_p")}}"
     surfaces_json="$(_status_version_surfaces_json "$proj")"
 
     printf '{%s,%s,%s,%s,%s,%s}\n' \
@@ -1145,6 +1179,14 @@ _manifest_status_repo() {
     local ps="$proj/manifest.config.yaml"
     local pl="$proj/manifest.config.local.yaml"
     _status_line "Config:" "$([ -f "$g" ]  && echo "✓" || echo "·") global   $g"
+    # Inherited fleet layer, shown only when one actually applies — a repo that
+    # is not a fleet member has byte-identical output to before.
+    local fr
+    fr="$(_status_config_fleet_root "$proj")"
+    if [[ -n "$fr" ]]; then
+        _status_line ""    "$([ -f "$fr/manifest.config.yaml" ]       && echo "✓" || echo "·") fleet    $fr/manifest.config.yaml"
+        _status_line ""    "$([ -f "$fr/manifest.config.local.yaml" ] && echo "✓" || echo "·") fleet    $fr/manifest.config.local.yaml"
+    fi
     _status_line ""        "$([ -f "$ps" ] && echo "✓" || echo "·") project  $ps"
     _status_line ""        "$([ -f "$pl" ] && echo "✓" || echo "·") local    $pl"
 

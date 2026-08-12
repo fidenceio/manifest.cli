@@ -681,7 +681,10 @@ load_configuration() {
     # so a nonzero return here can only mean present-but-broken.
     # Layer 1: User global configuration
     if [ -f "$MANIFEST_CLI_GLOBAL_CONFIG" ]; then
-        echo "🔧 Loading user global configuration from: $MANIFEST_CLI_GLOBAL_CONFIG"
+        # Progress goes to stderr: `manifest config ... --json` and friends load
+        # configuration before emitting, so anything on stdout here lands inside
+        # the JSON document and makes it unparseable.
+        echo "🔧 Loading user global configuration from: $MANIFEST_CLI_GLOBAL_CONFIG" >&2
         if ! load_yaml_to_env "$MANIFEST_CLI_GLOBAL_CONFIG"; then
             log_error "Refusing to continue: user global configuration is present but could not be parsed: $MANIFEST_CLI_GLOBAL_CONFIG"
             return 1
@@ -706,7 +709,7 @@ load_configuration() {
        && [ -n "$fleet_root" ] && [ "$fleet_root" != "$canonical_project_root" ]; then
         local fleet_shared="$fleet_root/manifest.config.yaml"
         if [ -f "$fleet_shared" ]; then
-            echo "🔧 Inheriting fleet configuration from: manifest.config.yaml (Fleet: $fleet_root)"
+            echo "🔧 Inheriting fleet configuration from: manifest.config.yaml (Fleet: $fleet_root)" >&2
             if ! load_yaml_to_env "$fleet_shared"; then
                 log_error "Refusing to continue: fleet configuration is present but could not be parsed: $fleet_shared"
                 return 1
@@ -714,7 +717,7 @@ load_configuration() {
         fi
         local fleet_local="$fleet_root/manifest.config.local.yaml"
         if [ -f "$fleet_local" ]; then
-            echo "🔧 Inheriting fleet local configuration from: manifest.config.local.yaml (Fleet: $fleet_root)"
+            echo "🔧 Inheriting fleet local configuration from: manifest.config.local.yaml (Fleet: $fleet_root)" >&2
             if ! load_yaml_to_env "$fleet_local"; then
                 log_error "Refusing to continue: fleet local configuration is present but could not be parsed: $fleet_local"
                 return 1
@@ -725,7 +728,7 @@ load_configuration() {
     # Layer 2: Project shared configuration
     local project_shared="$project_root/manifest.config.yaml"
     if [ -f "$project_shared" ]; then
-        echo "🔧 Loading project configuration from: manifest.config.yaml (Project: $project_root)"
+        echo "🔧 Loading project configuration from: manifest.config.yaml (Project: $project_root)" >&2
         if ! load_yaml_to_env "$project_shared"; then
             log_error "Refusing to continue: project configuration is present but could not be parsed: $project_shared"
             return 1
@@ -736,7 +739,7 @@ load_configuration() {
     if [ "$include_project_overrides" = "true" ]; then
         local project_local="$project_root/manifest.config.local.yaml"
         if [ -f "$project_local" ]; then
-            echo "🔧 Loading project local configuration from: manifest.config.local.yaml (Project: $project_root)"
+            echo "🔧 Loading project local configuration from: manifest.config.local.yaml (Project: $project_root)" >&2
             if ! load_yaml_to_env "$project_local"; then
                 log_error "Refusing to continue: project local configuration is present but could not be parsed: $project_local"
                 return 1

@@ -140,6 +140,65 @@ teardown() {
 }
 
 # -----------------------------------------------------------------------------
+# the process-env layer outranks every file
+# -----------------------------------------------------------------------------
+#
+# These must export BEFORE the module is sourced: manifest-config.sh snapshots
+# the process environment at source time, and that snapshot — not the live
+# variable — is what marks a value as a genuine user override. (Reading the live
+# variable instead would attribute every key to 'env', since load_configuration
+# ends by exporting all of them.) Hence the `run env ... bash -c` subshell,
+# mirroring tests/yaml.bats.
+
+@test "config get: a process-start env override beats a layer file" {
+    printf 'git:\n  default_branch: "filewins"\n' > "$PROJ/manifest.config.local.yaml"
+
+    run env \
+        HOME="$HOME" \
+        MANIFEST_CLI_PROJECT_ROOT="$PROJ" \
+        MANIFEST_CLI_GIT_DEFAULT_BRANCH=envwins \
+        bash -c 'source "$1/tests/helpers/setup.bash"; load_modules "core/manifest-config.sh" "core/manifest-config-crud.sh"; manifest_config_get git.default_branch' _ "$TEST_REPO_ROOT"
+
+    [ "$status" -eq 0 ]
+    [ "$output" = "envwins" ]
+}
+
+@test "config describe: an exported override is reported as the winning layer, not the file" {
+    printf 'git:\n  default_branch: "filewins"\n' > "$PROJ/manifest.config.local.yaml"
+
+    run env \
+        HOME="$HOME" \
+        MANIFEST_CLI_PROJECT_ROOT="$PROJ" \
+        MANIFEST_CLI_GIT_DEFAULT_BRANCH=envwins \
+        bash -c 'source "$1/tests/helpers/setup.bash"; load_modules "core/manifest-config.sh" "core/manifest-config-crud.sh"; manifest_config_describe git.default_branch' _ "$TEST_REPO_ROOT"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "Effective: envwins"
+    echo "$output" | grep -q "(from env)"
+    echo "$output" | grep -q "env      envwins"
+    # The shadowed file value stays visible, so the operator can see what the
+    # export is overriding.
+    echo "$output" | grep -q "local    filewins"
+}
+
+@test "config describe: an exported-but-empty override is shown as suppressing the file layers" {
+    printf 'git:\n  default_branch: "filewins"\n' > "$PROJ/manifest.config.local.yaml"
+
+    run env \
+        HOME="$HOME" \
+        MANIFEST_CLI_PROJECT_ROOT="$PROJ" \
+        MANIFEST_CLI_GIT_DEFAULT_BRANCH= \
+        bash -c 'source "$1/tests/helpers/setup.bash"; load_modules "core/manifest-config.sh" "core/manifest-config-crud.sh"; manifest_config_describe git.default_branch' _ "$TEST_REPO_ROOT"
+
+    [ "$status" -eq 0 ]
+    # An empty export is re-applied over every YAML layer and then refilled by
+    # set_default_configuration, so the built-in default wins and the file is
+    # ignored — surprising enough that describe must say so out loud.
+    echo "$output" | grep -q "suppresses all file layers"
+    ! echo "$output" | grep -q "Effective: filewins"
+}
+
+# -----------------------------------------------------------------------------
 # global layer safety gate
 # -----------------------------------------------------------------------------
 

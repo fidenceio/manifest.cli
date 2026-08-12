@@ -827,8 +827,15 @@ Usage: manifest config [<subcommand>] [args]
   unset [--layer L] <key>           Remove a key from a layer
   describe <key>                    Show key value at every layer + env var
 
-Layer L is one of: global | project | local
+Readable layers (highest precedence first):
+  env | local | project | fleet | global | defaults
+Writable layers (--layer L on set/unset): global | project | local
+
+'fleet' is the fleet root's config, inherited by every member and read-only from
+inside one — set fleet-wide values by running this command at the fleet root.
+'env' is the exported MANIFEST_CLI_* environment captured at process start.
 Writing to 'global' triggers the safety-gate confirmation.
+Full layer model: docs/USER_GUIDE.md#configuration
 EOF
                     ;;
                 "setup")
