@@ -45,7 +45,7 @@ The guided onboarding front door. By default it runs a read-only inspection of t
 manifest config
 manifest config show
 manifest config setup
-manifest config list
+manifest config list [--layer local|project|fleet|global] [--json]
 manifest config get <key>
 manifest config set [--layer local|project|global] <key> <value>
 manifest config unset [--layer local|project|global] <key>
@@ -54,7 +54,9 @@ manifest config doctor
 manifest config doctor --fix
 ```
 
-Reads and writes layered YAML config. Global writes and destructive fixes are confirmation-gated.
+Reads and writes layered YAML config. `list`/`get`/`describe` resolve every layer — `env`, `local`, `project`, `fleet` (inherited from the fleet root), `global`, and built-in defaults. `set`/`unset` write only `global`, `project` or `local`; `--layer fleet` is rejected, because those files belong to a different repository — change fleet-wide values from the fleet root. Global writes and destructive fixes are confirmation-gated.
+
+Layer model: [User Guide — Configuration](USER_GUIDE.md#configuration).
 
 ### `manifest init`
 
@@ -126,7 +128,9 @@ Action-first fleet syntax is the supported surface.
 It activates only when `topics.from_name` is set (`inner` | `all` | `all-but-first`) —
 in `manifest.fleet.config.yaml` for the whole fleet, or host-local for one machine via
 `manifest config set topics.from_name inner --layer global` (the layered/env value
-takes precedence over the fleet yaml). When enabled, the same projection also runs
+takes precedence over the fleet yaml — note `manifest.fleet.config.yaml` is the fleet
+*definition*, not the `fleet` config layer; see
+[User Guide — Configuration](USER_GUIDE.md#configuration)). When enabled, the same projection also runs
 as part of `manifest update fleet`, and quietly (one summary line at most) at the
 end of a completed `manifest ship fleet -y`.
 

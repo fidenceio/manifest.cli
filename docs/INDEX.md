@@ -33,6 +33,7 @@ Use this index by task. The README is the entry point; this directory carries th
 | [Command Reference](COMMAND_REFERENCE.md) | Command grammar, flags, effects, and environment behavior |
 | [Fleet Design Spec](FLEET_DESIGN_SPEC.md) | Fleet config, detection, adoption, reconciliation, and release behavior |
 | [CLI Transaction Map](CLI_TRANSACTION_MAP.md) | Release and tap transaction boundaries |
+| [User Guide — Configuration](USER_GUIDE.md#configuration) | Canonical layer model: defaults → global → fleet → project → local → env |
 | [YAML config example](../examples/manifest.config.yaml.example) | Full config shape with comments |
 | [Version handler catalog](../modules/catalog/version-handlers.tsv) | Known package/version surfaces used by passive detection |
 | [Recipe schema](contracts/recipe.schema.json) | Built-in and project recipe contract |

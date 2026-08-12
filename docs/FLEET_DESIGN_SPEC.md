@@ -17,6 +17,11 @@ Manifest Fleet coordinates independent Git repositories from one workspace. It d
 | `manifest.fleet.tsv` | Human-reviewable scan output and selection table |
 | `manifest.fleet.config.yaml` | Canonical fleet config used by commands |
 | `manifest.fleet.plan.yaml` | Adoption/reconciliation plan written by `manifest plan fleet --apply` |
+| `manifest.config.yaml` / `manifest.config.local.yaml` (at the fleet root) | Fleet-wide Manifest settings every member inherits as the read-only `fleet` config layer — see [User Guide — Configuration](USER_GUIDE.md#configuration) |
+
+`manifest.fleet.config.yaml` defines *what the fleet is* and is the sentinel that
+makes a directory the fleet root. The two `manifest.config*.yaml` files beside it
+configure *how Manifest behaves* for every member, and are a different mechanism.
 
 ## Fleet States And Vocabulary
 

@@ -17,17 +17,13 @@
 #   manifest.fleet.config.yaml is NOT a layer in the MANIFEST_CLI_* configuration
 #   precedence chain — it never passes through load_yaml_to_env(). It is a separate
 #   file with a separate job, and the sentinel whose presence makes a directory the
-#   fleet root. That chain is resolved entirely by load_configuration() in
-#   modules/core/manifest-config.sh, lowest to highest:
-#     1. Built-in defaults                                    (set_default_configuration)
-#     2. ~/.manifest-cli/manifest.config.global.yaml          (user-level preferences)
-#     3. <fleet-root>/manifest.config.yaml, then
-#        <fleet-root>/manifest.config.local.yaml              (inherited; members only,
-#                                                              skipped at the fleet root)
-#     4. <project>/manifest.config.yaml
-#     5. <project>/manifest.config.local.yaml                 (when project overrides
-#                                                              are requested)
-#     6. Exported MANIFEST_CLI_* env captured at process start (highest)
+#   fleet root. What that sentinel DOES enable is the inherited 'fleet' layer: the
+#   fleet root's own manifest.config.yaml and manifest.config.local.yaml, which
+#   every member below it loads between the user global and its own project config.
+#
+#   That chain is resolved entirely by load_configuration() in
+#   modules/core/manifest-config.sh, and the canonical description of its six
+#   layers lives in docs/USER_GUIDE.md#configuration.
 #
 # KEY FUNCTIONS:
 #   - find_fleet_root()             : Walk up for the manifest.fleet.config.yaml sentinel

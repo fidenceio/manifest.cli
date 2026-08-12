@@ -16,6 +16,12 @@
 # Service-specific overrides go in each service's manifest.config.local.yaml
 # (git-ignored). That is a different file with a different job: this one defines
 # what the fleet IS, that one overrides how Manifest behaves in one member.
+#
+# Fleet-WIDE Manifest settings do NOT belong here either. Put them in
+# <fleet-root>/manifest.config.yaml (committed) or
+# <fleet-root>/manifest.config.local.yaml (git-ignored); every member inherits
+# them as the read-only 'fleet' config layer.
+# See docs/USER_GUIDE.md#configuration
 # =============================================================================
 
 # =============================================================================

@@ -8,7 +8,10 @@
 #   cp examples/manifest.config.local.yaml.example manifest.config.local.yaml
 #
 # Only include keys you want to override — everything else comes from
-# manifest.config.yaml (project) or code defaults.
+# manifest.config.yaml (project), the inherited fleet layer when this repo sits
+# inside a fleet, the user global config, or code defaults.
+#
+# Full layer model: docs/USER_GUIDE.md#configuration
 # =============================================================================
 
 # -----------------------------------------------------------------------------

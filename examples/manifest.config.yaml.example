@@ -10,8 +10,14 @@
 # Precedence (last wins):
 #   1. Code defaults (set_default_configuration)
 #   2. User global (~/.manifest-cli/manifest.config.global.yaml)
-#   3. This file (manifest.config.yaml) — committed, shared
-#   4. Local overrides (manifest.config.local.yaml) — git-ignored, personal
+#   3. Inherited fleet (<fleet-root>/manifest.config.yaml, then
+#      <fleet-root>/manifest.config.local.yaml) — members only; skipped at the
+#      fleet root, where those same files ARE layers 4-5 below
+#   4. This file (manifest.config.yaml) — committed, shared
+#   5. Local overrides (manifest.config.local.yaml) — git-ignored, personal
+#   6. Exported MANIFEST_CLI_* captured at process start — highest
+#
+# Full layer model: docs/USER_GUIDE.md#configuration
 # =============================================================================
 
 # -----------------------------------------------------------------------------

@@ -159,14 +159,11 @@ Complete grammar: [docs/COMMAND_REFERENCE.md](docs/COMMAND_REFERENCE.md).
 
 ## Configuration
 
-Configuration is YAML-backed and layered:
-
-1. Built-in defaults
-2. `~/.manifest-cli/manifest.config.global.yaml`
-3. `manifest.config.yaml`
-4. `manifest.config.local.yaml`
+Configuration is YAML-backed and layered — built-in defaults, user global, an inherited fleet layer, project, local, and the exported `MANIFEST_CLI_*` environment, in increasing order of precedence.
 
 Every user-facing key maps to a `MANIFEST_CLI_*` environment variable through the YAML bridge. Use `manifest config describe <key>` to see the effective value, layer source, and env-var name.
+
+Full layer model: [docs/USER_GUIDE.md#configuration](docs/USER_GUIDE.md#configuration).
 
 Schema example: [examples/manifest.config.yaml.example](examples/manifest.config.yaml.example).
 

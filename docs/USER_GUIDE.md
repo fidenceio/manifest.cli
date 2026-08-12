@@ -229,18 +229,68 @@ If Cloud plugins are missing, Cloud-only routes print install guidance. Native P
 
 ## Configuration
 
-Configuration loads in this order:
+This section is the canonical description of Manifest's configuration layers.
 
-1. Built-in defaults
-2. `~/.manifest-cli/manifest.config.global.yaml`
-3. `manifest.config.yaml`
-4. `manifest.config.local.yaml`
+### Layer model
 
-Commands:
+Every setting is resolved from six layers. Later layers win.
+
+| # | Layer | Source | Applies | Writable |
+| - | ----- | ------ | ------- | -------- |
+| 1 | `defaults` | Built into the CLI | Always | No |
+| 2 | `global` | `~/.manifest-cli/manifest.config.global.yaml` | Always | Yes (safety-gated) |
+| 3 | `fleet` | `<fleet-root>/manifest.config.yaml`, then `<fleet-root>/manifest.config.local.yaml` | Only when this repo sits **below** a fleet root; skipped when it **is** the fleet root | No — write it at the fleet root |
+| 4 | `project` | `./manifest.config.yaml` | Always | Yes |
+| 5 | `local` | `./manifest.config.local.yaml` | Always (git-ignored) | Yes (default) |
+| 6 | `env` | Exported `MANIFEST_CLI_*` captured at process start | Always | n/a |
+
+### The fleet layer
+
+A repository nested inside a fleet inherits the fleet root's configuration as a
+baseline, so one fleet-wide setting applies to every member without being copied
+into each repo. Three things about it are easy to get wrong:
+
+- **`manifest.fleet.config.yaml` is not a configuration layer.** It is the fleet
+  *definition*, and the sentinel whose presence makes a directory the fleet root.
+  The two files that form the `fleet` layer are the fleet root's ordinary
+  `manifest.config.yaml` and `manifest.config.local.yaml`.
+- **Inheritance is skipped at the fleet root itself.** There, those same two
+  files are already layers 4 and 5; counting them twice would be meaningless.
+- **The fleet root is found by walking up for the sentinel**, starting from the
+  project root. Setting a fleet root explicitly does not redirect this — the
+  config layer follows the sentinel and nothing else.
+
+### Inspecting layers
+
+`manifest config describe <key>` shows every layer, highest precedence first,
+with the file each value came from:
+
+```text
+Key:       github.owner
+Env var:   MANIFEST_CLI_GITHUB_OWNER
+Fleet:     /work/acme
+Effective: acme-corp  (from fleet)
+
+Layers (highest precedence first):
+  env      ·   (MANIFEST_CLI_GITHUB_OWNER — not exported at process start)
+  local    ·   (/work/acme/services/api/manifest.config.local.yaml — not present)
+  project  ·   (/work/acme/services/api/manifest.config.yaml — not present)
+  fleet    acme-corp   (/work/acme/manifest.config.local.yaml)
+  fleet    ·   (/work/acme/manifest.config.yaml — not present)
+  global   ·   (~/.manifest-cli/manifest.config.global.yaml — not present)
+  defaults ·   (built-in)
+```
+
+A shadowed value stays visible, so you can see what is overriding what.
+`manifest config list` shows every key that has an explicit source, with its
+winning layer; `--layer <name>` narrows to one layer, including `fleet`.
+
+### Writing configuration
 
 ```bash
 manifest config show
 manifest config list
+manifest config list --layer fleet
 manifest config get git.tag_prefix
 manifest config describe git.tag_prefix
 manifest config set git.tag_prefix release-
@@ -249,7 +299,29 @@ manifest config doctor
 manifest config doctor --fix
 ```
 
-`config set` writes local config by default. Global writes go through an additional safety gate.
+`config set` writes local config by default. Global writes go through an
+additional safety gate.
+
+`--layer` on `set`/`unset` accepts only `global`, `project` and `local`. The
+`fleet` layer is read-only from inside a member because its files live in a
+**different repository** — writing them from here would mutate a repo you did
+not name. To change a fleet-wide value, run the same command **at the fleet
+root**, where those files are ordinary `project`/`local` layers:
+
+```bash
+cd /path/to/fleet-root
+manifest config set --layer project github.owner acme-corp
+```
+
+### Environment overrides
+
+Every user-facing key maps to a `MANIFEST_CLI_*` environment variable. An
+exported variable outranks every configuration file.
+
+This layer is a **snapshot taken when the process starts**: exporting a variable
+part-way through a session does not create an override. And a variable exported
+*empty* is not a no-op — it suppresses all the file layers and falls through to
+the built-in default. `config describe` reports that case explicitly.
 
 ## Documentation Generation
 
