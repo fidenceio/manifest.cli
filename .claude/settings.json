@@ -10,7 +10,8 @@
       "Bash(manifest test:*)",
       "Bash(yq e:*)",
       "Bash(command -v shellcheck)",
-      "Bash(shellcheck -S error modules/git/manifest-git.sh modules/workflow/manifest-orchestrator.sh)"
+      "Bash(shellcheck -S error modules/git/manifest-git.sh modules/workflow/manifest-orchestrator.sh)",
+      "Bash(./scripts/run-tests-container.sh tests/config_fleet_layer.bats)"
     ]
   }
 }
