@@ -21,53 +21,69 @@ MANIFEST_CLI_SHARED_LOG_LEVEL_INFO=1
 MANIFEST_CLI_SHARED_LOG_LEVEL_WARN=2
 MANIFEST_CLI_SHARED_LOG_LEVEL_ERROR=3
 
-# Get current log level
-get_log_level() {
-    local level="$(echo "${MANIFEST_CLI_LOG_LEVEL}" | tr '[:lower:]' '[:upper:]')"
-    case "$level" in
-        DEBUG) echo $MANIFEST_CLI_SHARED_LOG_LEVEL_DEBUG ;;
-        INFO)  echo $MANIFEST_CLI_SHARED_LOG_LEVEL_INFO ;;
-        WARN)  echo $MANIFEST_CLI_SHARED_LOG_LEVEL_WARN ;;
-        ERROR) echo $MANIFEST_CLI_SHARED_LOG_LEVEL_ERROR ;;
-        *)     echo $MANIFEST_CLI_SHARED_LOG_LEVEL_INFO ;;
+# Get current log level.
+# _get_log_level_var sets a global instead of echoing so the log_* guards can
+# probe the level WITHOUT a $() fork — every log_* call used to pay two
+# subshells even when its message was suppressed, which dominated hot loops
+# (measured: ~400ms of a config load was suppressed log_debug forks).
+# Re-reads MANIFEST_CLI_LOG_LEVEL on every call on purpose: the level may
+# change mid-process (tests and load_configuration both re-export it).
+_get_log_level_var() {
+    case "${MANIFEST_CLI_LOG_LEVEL^^}" in
+        DEBUG) _MANIFEST_CLI_LOG_LEVEL_CURRENT=$MANIFEST_CLI_SHARED_LOG_LEVEL_DEBUG ;;
+        INFO)  _MANIFEST_CLI_LOG_LEVEL_CURRENT=$MANIFEST_CLI_SHARED_LOG_LEVEL_INFO ;;
+        WARN)  _MANIFEST_CLI_LOG_LEVEL_CURRENT=$MANIFEST_CLI_SHARED_LOG_LEVEL_WARN ;;
+        ERROR) _MANIFEST_CLI_LOG_LEVEL_CURRENT=$MANIFEST_CLI_SHARED_LOG_LEVEL_ERROR ;;
+        *)     _MANIFEST_CLI_LOG_LEVEL_CURRENT=$MANIFEST_CLI_SHARED_LOG_LEVEL_INFO ;;
     esac
+}
+
+get_log_level() {
+    _get_log_level_var
+    echo "$_MANIFEST_CLI_LOG_LEVEL_CURRENT"
 }
 
 # Enhanced logging functions with levels
 # Every log_* message is passed through manifest_redact so a token that slips
 # into a log/error/verbose line is never printed verbatim.
 log_debug() {
-    if [[ $(get_log_level) -le $MANIFEST_CLI_SHARED_LOG_LEVEL_DEBUG ]]; then
+    _get_log_level_var
+    if [[ $_MANIFEST_CLI_LOG_LEVEL_CURRENT -le $MANIFEST_CLI_SHARED_LOG_LEVEL_DEBUG ]]; then
         echo -e "${PURPLE}🐛 DEBUG: $(manifest_redact "$1")${NC}" >&2
     fi
 }
 
 log_info() {
-    if [[ $(get_log_level) -le $MANIFEST_CLI_SHARED_LOG_LEVEL_INFO ]]; then
+    _get_log_level_var
+    if [[ $_MANIFEST_CLI_LOG_LEVEL_CURRENT -le $MANIFEST_CLI_SHARED_LOG_LEVEL_INFO ]]; then
         echo -e "${BLUE}ℹ️  INFO: $(manifest_redact "$1")${NC}" >&2
     fi
 }
 
 log_success() {
-    if [[ $(get_log_level) -le $MANIFEST_CLI_SHARED_LOG_LEVEL_INFO ]]; then
+    _get_log_level_var
+    if [[ $_MANIFEST_CLI_LOG_LEVEL_CURRENT -le $MANIFEST_CLI_SHARED_LOG_LEVEL_INFO ]]; then
         echo -e "${GREEN}✅ SUCCESS: $(manifest_redact "$1")${NC}" >&2
     fi
 }
 
 log_warning() {
-    if [[ $(get_log_level) -le $MANIFEST_CLI_SHARED_LOG_LEVEL_WARN ]]; then
+    _get_log_level_var
+    if [[ $_MANIFEST_CLI_LOG_LEVEL_CURRENT -le $MANIFEST_CLI_SHARED_LOG_LEVEL_WARN ]]; then
         echo -e "${YELLOW}⚠️  WARN: $(manifest_redact "$1")${NC}" >&2
     fi
 }
 
 log_error() {
-    if [[ $(get_log_level) -le $MANIFEST_CLI_SHARED_LOG_LEVEL_ERROR ]]; then
+    _get_log_level_var
+    if [[ $_MANIFEST_CLI_LOG_LEVEL_CURRENT -le $MANIFEST_CLI_SHARED_LOG_LEVEL_ERROR ]]; then
         echo -e "${RED}❌ ERROR: $(manifest_redact "$1")${NC}" >&2
     fi
 }
 
 log_trace() {
-    if [[ $(get_log_level) -le $MANIFEST_CLI_SHARED_LOG_LEVEL_DEBUG ]]; then
+    _get_log_level_var
+    if [[ $_MANIFEST_CLI_LOG_LEVEL_CURRENT -le $MANIFEST_CLI_SHARED_LOG_LEVEL_DEBUG ]]; then
         echo -e "${CYAN}🔍 TRACE: $(manifest_redact "$1")${NC}" >&2
     fi
 }

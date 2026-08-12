@@ -562,6 +562,16 @@ set_yaml_value() {
         return 1
     fi
 
+    # Write hook: a higher layer holding per-file read caches can register
+    # _manifest_yaml_write_hook to be told a file changed (the config CRUD
+    # layer registers its value-cache invalidator — stale cached values are
+    # wrong answers). Mirrors the _manifest_execution_apply_hook pattern:
+    # this module owns the hook NAME only and stays free of any upward
+    # dependency; when no subscriber is loaded the write completes unhooked.
+    if declare -F _manifest_yaml_write_hook >/dev/null 2>&1; then
+        _manifest_yaml_write_hook "$yaml_file"
+    fi
+
     log_debug "set_yaml_value: set '${dotpath}' = '${value}' in $yaml_file"
     return 0
 }
@@ -633,6 +643,12 @@ write_full_yaml() {
         log_warning "write_full_yaml: no MANIFEST_CLI_* env vars are set; wrote empty config"
     fi
 
+    # Same write-hook contract as set_yaml_value: subscribers must not serve
+    # stale reads of a rewritten file.
+    if declare -F _manifest_yaml_write_hook >/dev/null 2>&1; then
+        _manifest_yaml_write_hook "$yaml_file"
+    fi
+
     log_debug "write_full_yaml: wrote config to $yaml_file"
     return 0
 }
@@ -667,6 +683,132 @@ _manifest_yaml_expand_home_prefix() {
         '$HOME/'*) printf '%s' "$HOME/${v#'$HOME/'}" ;;
         *)         printf '%s' "$v" ;;
     esac
+}
+
+# -----------------------------------------------------------------------------
+# Function: _manifest_yaml_export_mapped_value
+# -----------------------------------------------------------------------------
+# Internal helper shared by both load_yaml_to_env read paths. Trims, expands,
+# and exports one mapped value. Kept as the single implementation so the batch
+# and per-key paths can never drift apart semantically.
+#
+# ARGUMENTS:
+#   $1 - env var name
+#   $2 - raw value as read from YAML (already null-filtered by the caller)
+#
+# RETURNS:
+#   0 if the value was exported, 1 if it was empty after trimming (skipped)
+# -----------------------------------------------------------------------------
+_manifest_yaml_export_mapped_value() {
+    local env_var="$1"
+    local value="$2"
+
+    # Trim leading/trailing whitespace.  Universally safe — YAML doesn't
+    # grant semantic meaning to surrounding whitespace, and a trailing
+    # space silently breaks every downstream string comparison.
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+    # Path-prefix expansion: bash does NOT tilde-expand values pulled
+    # from YAML, so a literal "~/.manifest-cli" would be exported as a
+    # literal "~/..." and downstream joins break. Only leading "~/" and
+    # leading "$HOME/" are expanded; non-path values starting with
+    # anything else (including bare "~") are left untouched. Mirrors
+    # _manifest_yaml_expand_home_prefix inline: this runs once per loaded
+    # key, and the $(...) fork was measurably the loader's hottest spot.
+    case "$value" in
+        '~/'*)     value="$HOME/${value#'~/'}" ;;
+        '$HOME/'*) value="$HOME/${value#'$HOME/'}" ;;
+    esac
+    [[ -n "$value" ]] || return 1
+    # ${!env_var@a}: attribute probe without the $(declare -p) fork.
+    case "${!env_var@a}" in
+        *[aA]*)
+            unset "$env_var"
+            ;;
+    esac
+    export "$env_var"="$value"
+    log_debug "load_yaml_to_env: ${env_var}=${value}"
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# Function: _load_yaml_to_env_batch
+# -----------------------------------------------------------------------------
+# Fast path for load_yaml_to_env (§8.4f): ONE yq walk per file instead of one
+# yq per mapped key (~130 spawns → 1). Emits every non-map leaf as a
+# NUL-terminated "path\npath-depth\nvalue" record; NUL framing is what makes
+# multi-line values (sequences, block scalars) safe to carry. Rendering is
+# per-key-equivalent by construction: to_string for scalars matches `yq e -r`
+# (comments stripped, styles unwrapped), @yaml for sequences matches how `-r`
+# prints a sequence node (block/flow style preserved).
+#
+# The path-depth field guards a flat dotted key ("git.tag_prefix": v at the
+# document root): its joined path collides with a real mapped path, but the
+# per-key reader has never resolved such a key, so it must not load here
+# either — depth < dot-count+1 identifies and skips it.
+#
+# RETURNS:
+#   0 - file handled; mapped values exported
+#   1 - could not handle the file; caller MUST fall back to the per-key loop.
+#       Deliberately reported for: yq too old for -0/to_string (the expression
+#       fails), no scratch space, malformed records, and YAML merge keys
+#       ("<<" path component) — merge keys resolve through per-key traversal
+#       but are invisible to a document walk, so the walk would silently load
+#       LESS config than v59 did. Nothing is exported on return 1.
+# -----------------------------------------------------------------------------
+_load_yaml_to_env_batch() {
+    local yaml_file="$1"
+
+    local tmp_out
+    tmp_out=$(mktemp "$(manifest_make_scratch_path yaml)/tmp.XXXXXXXX" 2>/dev/null) || return 1
+    if ! yq e -0 -r '
+        (.. | select(tag == "!!seq")
+            | (path | join(".")) + "\n" + (path | length) + "\n" + @yaml),
+        (.. | select(tag != "!!map" and tag != "!!seq" and tag != "!!null")
+            | (path | join(".")) + "\n" + (path | length) + "\n" + to_string)
+        ' "$yaml_file" > "$tmp_out" 2>/dev/null; then
+        rm -f "$tmp_out" 2>/dev/null
+        return 1
+    fi
+
+    # Buffer mapped records before exporting anything: a disqualifying record
+    # (merge key, malformed frame) can appear anywhere in the stream, and a
+    # partial export followed by the per-key fallback would double-load.
+    local rec yaml_path rest depth value dots
+    local -a pending=()
+    while IFS= read -r -d '' rec; do
+        yaml_path="${rec%%$'\n'*}"
+        rest="${rec#*$'\n'}"
+        depth="${rest%%$'\n'*}"
+        value="${rest#*$'\n'}"
+        if [[ "$rec" != *$'\n'*$'\n'* || ! "$depth" =~ ^[0-9]+$ ]]; then
+            rm -f "$tmp_out" 2>/dev/null
+            return 1
+        fi
+        if [[ ".${yaml_path}." == *".<<."* ]]; then
+            rm -f "$tmp_out" 2>/dev/null
+            return 1
+        fi
+        [[ -n "${_MANIFEST_YAML_TO_ENV[$yaml_path]:-}" ]] || continue
+        dots="${yaml_path//[^.]/}"
+        [[ "$depth" -eq $(( ${#dots} + 1 )) ]] || continue
+        # Strip the rendering's trailing newlines (command substitution did
+        # this on the per-key path), then apply the per-key "null" contract:
+        # a value rendering exactly "null" was always treated as absent.
+        while [[ "$value" == *$'\n' ]]; do value="${value%$'\n'}"; done
+        [[ "$value" == "null" ]] && continue
+        pending+=( "${_MANIFEST_YAML_TO_ENV[$yaml_path]}" "$value" )
+    done < "$tmp_out"
+    rm -f "$tmp_out" 2>/dev/null
+
+    local i loaded_count=0
+    for (( i = 0; i < ${#pending[@]}; i += 2 )); do
+        if _manifest_yaml_export_mapped_value "${pending[i]}" "${pending[i+1]}"; then
+            loaded_count=$((loaded_count + 1))
+        fi
+    done
+    log_debug "load_yaml_to_env: loaded $loaded_count values from $yaml_file (batch)"
+    return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -738,6 +880,13 @@ load_yaml_to_env() {
 
     log_debug "load_yaml_to_env: loading config from $yaml_file"
 
+    # §8.4f fast path: one yq walk for the whole file. Falls through to the
+    # per-key loop when the walk can't guarantee per-key-equivalent results
+    # (old yq without -0/to_string, YAML merge keys, no scratch space).
+    if _load_yaml_to_env_batch "$yaml_file"; then
+        return 0
+    fi
+
     local yaml_path env_var value
     local loaded_count=0
 
@@ -746,25 +895,7 @@ load_yaml_to_env() {
 
         # get_yaml_value handles parser detection and caching internally
         if value=$(get_yaml_value "$yaml_file" ".${yaml_path}" "" 2>/dev/null); then
-            # Trim leading/trailing whitespace.  Universally safe — YAML doesn't
-            # grant semantic meaning to surrounding whitespace, and a trailing
-            # space silently breaks every downstream string comparison.
-            value="${value#"${value%%[![:space:]]*}"}"
-            value="${value%"${value##*[![:space:]]}"}"
-            # Path-prefix expansion: bash does NOT tilde-expand values pulled
-            # from YAML, so a literal "~/.manifest-cli" would be exported as a
-            # literal "~/..." and downstream joins break. Only leading "~/" and
-            # leading "$HOME/" are expanded; non-path values starting with
-            # anything else (including bare "~") are left untouched.
-            value=$(_manifest_yaml_expand_home_prefix "$value")
-            if [[ -n "$value" ]]; then
-                case "$(declare -p "$env_var" 2>/dev/null || true)" in
-                    declare\ -a*|declare\ -A*)
-                        unset "$env_var"
-                        ;;
-                esac
-                export "$env_var"="$value"
-                log_debug "load_yaml_to_env: ${env_var}=${value}"
+            if _manifest_yaml_export_mapped_value "$env_var" "$value"; then
                 loaded_count=$((loaded_count + 1))
             fi
         fi
@@ -785,5 +916,7 @@ export -f get_yaml_value
 export -f set_yaml_value
 export -f write_full_yaml
 export -f load_yaml_to_env
+export -f _load_yaml_to_env_batch
+export -f _manifest_yaml_export_mapped_value
 export -f yaml_path_to_env_var
 export -f env_var_to_yaml_path

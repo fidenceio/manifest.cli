@@ -57,25 +57,41 @@ _CFG_R_LAYER=""
 _CFG_R_FILE=""
 _CFG_R_VALUE=""
 
-# Per-file key-presence index: "<file>|<dot.path>" -> 1, plus a per-file
-# "already scanned" flag. One yq call per FILE replaces one per (key, file) --
-# `config list` walks every mapped key across up to five layers, so the naive
-# form is hundreds of yq spawns.
+# Per-file key index (§8.4f): one yq walk per FILE replaces one yq per
+# (key, file) -- `config list` walks every mapped key across up to five
+# layers, so the naive form is hundreds of yq spawns.
 #
-# INVARIANT: the index may over-report and must never under-report. Keys with
-# empty or null values appear in it, and entries can go stale after a write;
-# both are harmless because a hit only permits the authoritative value read,
-# which then filters the key out on its own. A miss, by contrast, would hide a
-# key that is really there -- so anything that could remove entries (rather than
-# add them) is unsafe here.
+# Two tiers, filled together by _cfg_index_file:
+#
+#   Value tier: _CFG_VALUE["<file>|<dot.path>"] holds the rendered value for
+#   every mapped key explicitly set (non-empty, non-null) in that file;
+#   _CFG_VALUES_CACHED["<file>"]=1 marks the tier usable. Unlike presence,
+#   a cached value IS authoritative, so this tier is purged and rebuilt
+#   atomically inside each scan and every YAML writer must invalidate
+#   (set_yaml_value itself does, so config doctor migrations are covered).
+#
+#   Presence tier: _CFG_PRESENT["<file>|<dot.path>"] -> 1. May over-report
+#   and must never under-report -- a hit only permits the authoritative
+#   per-key read. Used only when the batch walk cannot mirror per-key reads
+#   (yq without -0/to_string, YAML merge keys): those files keep the lazy
+#   presence-gated per-key read path.
 declare -gA _CFG_PRESENT=()
 declare -gA _CFG_INDEXED=()
+declare -gA _CFG_VALUE=()
+declare -gA _CFG_VALUES_CACHED=()
 
 # Single resolution point for the project root. The layer files AND the fleet
 # walk must start from the same base, or the "is the project the fleet root?"
 # test can disagree with the paths it is comparing.
+# _var form sets _CFG_ROOT instead of echoing: the resolve path runs once per
+# mapped key, and a $() fork per key is exactly the cost §8.4f removed.
+_cfg_project_root_var() {
+    _CFG_ROOT="${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
+}
+
 _cfg_project_root() {
-    printf '%s\n' "${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}"
+    _cfg_project_root_var
+    printf '%s\n' "$_CFG_ROOT"
 }
 
 # WRITE resolver: echoes the target file for a writable layer, or empty string.
@@ -171,12 +187,15 @@ _cfg_env_override_map_ready() {
 # find_fleet_root: that one honors MANIFEST_CLI_FLEET_ROOT and starts from the
 # git root, so it can name a root the loader never inherits from. Reporting a
 # layer the runtime does not load would be a new lie in place of the old one.
-_cfg_fleet_root() {
+# _var form sets _CFG_FLEET_ROOT (same fork-avoidance as _cfg_project_root_var);
+# the memoized walk itself still only runs on a cache-key change.
+_cfg_fleet_root_var() {
     local root key
-    root="$(_cfg_project_root)"
+    _cfg_project_root_var
+    root="$_CFG_ROOT"
     key="${root}|${MANIFEST_CLI_FLEET_CONFIG_FILENAME:-manifest.fleet.config.yaml}"
     if [[ "${_CFG_FLEET_CACHE_KEY:-}" == "$key" ]]; then
-        printf '%s\n' "${_CFG_FLEET_CACHE_VAL:-}"
+        _CFG_FLEET_ROOT="${_CFG_FLEET_CACHE_VAL:-}"
         return 0
     fi
     local val="" canon fr
@@ -189,7 +208,12 @@ _cfg_fleet_root() {
     fi
     _CFG_FLEET_CACHE_KEY="$key"
     _CFG_FLEET_CACHE_VAL="$val"
-    printf '%s\n' "$val"
+    _CFG_FLEET_ROOT="$val"
+}
+
+_cfg_fleet_root() {
+    _cfg_fleet_root_var
+    printf '%s\n' "$_CFG_FLEET_ROOT"
 }
 
 # Populate _CFG_READ_LAYERS with "layer<TAB>file", highest precedence first.
@@ -197,8 +221,10 @@ _cfg_fleet_root() {
 # file shadows its shared file, matching the loader's load order).
 _cfg_build_read_layers() {
     local root fleet key
-    root="$(_cfg_project_root)"
-    fleet="$(_cfg_fleet_root)"
+    _cfg_project_root_var
+    root="$_CFG_ROOT"
+    _cfg_fleet_root_var
+    fleet="$_CFG_FLEET_ROOT"
     key="${root}|${fleet}|${MANIFEST_CLI_GLOBAL_CONFIG:-}"
     [[ "${_CFG_LAYERS_CACHE_KEY:-}" == "$key" ]] && return 0
     _CFG_READ_LAYERS=(
@@ -231,13 +257,27 @@ _cfg_filter_layer_files() {
     return 0
 }
 
-# Scan $1 once, recording every dot-path it defines. Cheap no-op on repeat
-# calls and on missing files.
+# Scan $1 once, recording every dot-path it defines and (batch tier) each
+# mapped key's rendered value. Cheap no-op on repeat calls and missing files.
 _cfg_index_file() {
     local file="$1" p
     [[ -n "${_CFG_INDEXED[$file]:-}" ]] && return 0
     _CFG_INDEXED["$file"]=1
+    # Fresh scan: drop this file's value tier first, so keys REMOVED from the
+    # file since the last scan can never serve a stale hit. Presence entries
+    # stay -- they only over-report, which the value read corrects.
+    for p in "${!_CFG_VALUE[@]}"; do
+        [[ "$p" == "$file|"* ]] && unset "_CFG_VALUE[$p]"
+    done
+    unset "_CFG_VALUES_CACHED[$file]" 2>/dev/null || true
     [[ -f "$file" ]] || return 0
+
+    if _cfg_index_file_batch "$file"; then
+        _CFG_VALUES_CACHED["$file"]=1
+        return 0
+    fi
+
+    # Fallback: presence-only scan; values are then read lazily per key.
     while IFS= read -r p; do
         [[ -n "$p" ]] || continue
         _CFG_PRESENT["$file|$p"]=1
@@ -251,18 +291,108 @@ _cfg_index_file() {
     return 0
 }
 
-# Might $2 be set in $1? False means definitely not; true means "read it and
-# see". See the INVARIANT above.
-_cfg_layer_has_key() {
-    _cfg_index_file "$1"
-    [[ -n "${_CFG_PRESENT[$1|$2]:-}" ]]
+# One yq walk over $1 filling BOTH index tiers. Emits every non-map leaf as a
+# NUL-terminated "path\npath-depth\nvalue" record (NUL framing is what makes
+# multi-line sequence values safe to carry). Rendering matches the per-key
+# read: to_string for scalars, @yaml for sequence nodes. The depth field
+# rejects a flat dotted key ("git.tag_prefix": v at the root) whose joined
+# path collides with a real mapped path but which per-key traversal has never
+# resolved.
+#
+# Returns 1 -- leaving no value-tier residue -- when the walk cannot mirror
+# per-key reads: yq too old for -0/to_string, no scratch space, a malformed
+# record, or a YAML merge key ("<<" path component; merge keys resolve through
+# per-key traversal but are invisible to a document walk).
+_cfg_index_file_batch() {
+    local file="$1"
+    local tmp_out
+    tmp_out=$(mktemp "$(manifest_make_scratch_path yaml)/tmp.XXXXXXXX" 2>/dev/null) || return 1
+    if ! yq e -0 -r '
+        (.. | select(tag == "!!seq")
+            | (path | join(".")) + "\n" + (path | length) + "\n" + @yaml),
+        (.. | select(tag != "!!map" and tag != "!!seq" and tag != "!!null")
+            | (path | join(".")) + "\n" + (path | length) + "\n" + to_string)
+        ' "$file" > "$tmp_out" 2>/dev/null; then
+        rm -f "$tmp_out" 2>/dev/null
+        return 1
+    fi
+    local rec p rest depth value dots bad=0
+    while IFS= read -r -d '' rec; do
+        p="${rec%%$'\n'*}"
+        rest="${rec#*$'\n'}"
+        depth="${rest%%$'\n'*}"
+        value="${rest#*$'\n'}"
+        if [[ "$rec" != *$'\n'*$'\n'* || ! "$depth" =~ ^[0-9]+$ || ".${p}." == *".<<."* ]]; then
+            bad=1
+            break
+        fi
+        _CFG_PRESENT["$file|$p"]=1
+        if [[ -n "${_MANIFEST_YAML_TO_ENV[$p]:-}" ]]; then
+            dots="${p//[^.]/}"
+            if [[ "$depth" -eq $(( ${#dots} + 1 )) ]]; then
+                # Strip the rendering's trailing newlines (the per-key read's
+                # command substitution did the same), then keep only values
+                # the per-key read would report as set.
+                while [[ "$value" == *$'\n' ]]; do value="${value%$'\n'}"; done
+                if [[ -n "$value" && "$value" != "null" ]]; then
+                    _CFG_VALUE["$file|$p"]="$value"
+                fi
+            fi
+        fi
+        while [[ "$p" =~ \.[0-9]+$ ]]; do
+            p="${p%.*}"
+            _CFG_PRESENT["$file|$p"]=1
+        done
+    done < "$tmp_out"
+    rm -f "$tmp_out" 2>/dev/null
+    if [[ "$bad" -ne 0 ]]; then
+        for p in "${!_CFG_VALUE[@]}"; do
+            [[ "$p" == "$file|"* ]] && unset "_CFG_VALUE[$p]"
+        done
+        return 1
+    fi
+    return 0
+}
+
+# Value of $2 as explicitly set in $1, via the out-variable _CFG_LV ("" when
+# the key is not set there). An out-variable rather than echo for the same
+# reason as _cfg_resolve: no fork per key, and sequence values are multi-line.
+_CFG_LV=""
+_cfg_layer_value() {
+    local file="$1" path="$2"
+    _CFG_LV=""
+    _cfg_index_file "$file"
+    if [[ -n "${_CFG_VALUES_CACHED[$file]:-}" ]]; then
+        _CFG_LV="${_CFG_VALUE[$file|$path]:-}"
+        return 0
+    fi
+    # Lazy path for files the batch walk couldn't index: presence gate plus
+    # one authoritative per-key read.
+    [[ -n "${_CFG_PRESENT[$file|$path]:-}" ]] || return 0
+    local val
+    val="$(yq e -r ".${path}" "$file" 2>/dev/null)" || val=""
+    if [[ -n "$val" && "$val" != "null" ]]; then
+        _CFG_LV="$val"
+    fi
+    return 0
 }
 
 # Drop the scanned flag for $1 after a write, so the next read re-scans and
 # picks up newly added keys. Stale _CFG_PRESENT entries are left alone on
-# purpose -- they only over-report, which the value read corrects.
+# purpose -- they only over-report, which the value read corrects. The value
+# tier needs no handling here: _cfg_index_file purges and rebuilds it at the
+# start of the re-scan this unset forces.
 _cfg_invalidate_index() {
     unset "_CFG_INDEXED[$1]" 2>/dev/null || true
+}
+
+# Subscribe to the yaml module's write hook (see set_yaml_value): every write
+# through the yaml choke point invalidates this module's per-file value cache,
+# so config doctor migrations and any other set_yaml_value caller can never
+# leave a stale cached value behind in the same process. Single provider by
+# design, like _manifest_execution_apply_hook.
+_manifest_yaml_write_hook() {
+    _cfg_invalidate_index "$1"
 }
 
 # Resolve a key across every layer in RUNTIME precedence order, setting
@@ -295,16 +425,15 @@ _cfg_resolve() {
     fi
 
     if [[ "$env_suppressed" != true ]]; then
-        local entry layer file val
+        local entry layer file
         _cfg_build_read_layers
         for entry in "${_CFG_READ_LAYERS[@]}"; do
             layer="${entry%%$'\t'*}"
             file="${entry#*$'\t'}"
             [[ -f "$file" ]] || continue
-            _cfg_layer_has_key "$file" "$path" || continue
-            val="$(yq e "(.${path} // \"\")" "$file" 2>/dev/null)"
-            if [[ -n "$val" && "$val" != "null" ]]; then
-                _CFG_R_LAYER="$layer"; _CFG_R_FILE="$file"; _CFG_R_VALUE="$val"
+            _cfg_layer_value "$file" "$path"
+            if [[ -n "$_CFG_LV" ]]; then
+                _CFG_R_LAYER="$layer"; _CFG_R_FILE="$file"; _CFG_R_VALUE="$_CFG_LV"
                 return 0
             fi
         done
@@ -381,10 +510,8 @@ With --json, emit a machine-readable array." \
             for path in "${!_MANIFEST_YAML_TO_ENV[@]}"; do
                 local val=""
                 for file in "${files[@]}"; do
-                    _cfg_layer_has_key "$file" "$path" || continue
-                    val="$(yq e "(.${path} // \"\")" "$file" 2>/dev/null)"
-                    [[ -n "$val" && "$val" != "null" ]] && break
-                    val=""
+                    _cfg_layer_value "$file" "$path"
+                    [[ -n "$_CFG_LV" ]] && { val="$_CFG_LV"; break; }
                 done
                 if [[ -n "$val" ]]; then
                     printf "  %-40s %s\n" "$path" "$val"
@@ -443,13 +570,12 @@ _config_list_json_layer() {
     while IFS= read -r path; do
         local val="" src="" file
         for file in "${files[@]}"; do
-            _cfg_layer_has_key "$file" "$path" || continue
-            val="$(yq e "(.${path} // \"\")" "$file" 2>/dev/null)"
-            if [[ -n "$val" && "$val" != "null" ]]; then
+            _cfg_layer_value "$file" "$path"
+            if [[ -n "$_CFG_LV" ]]; then
+                val="$_CFG_LV"
                 src="$file"
                 break
             fi
-            val=""
         done
         if [[ -n "$val" ]]; then
             local entry
@@ -695,15 +821,15 @@ manifest_config_describe() {
         printf "  %-8s %s   (%s — not exported at process start)\n" "env" "·" "$env_var"
     fi
 
-    local entry layer file val
+    local entry layer file
     _cfg_build_read_layers
     for entry in "${_CFG_READ_LAYERS[@]}"; do
         layer="${entry%%$'\t'*}"
         file="${entry#*$'\t'}"
         if [[ -f "$file" ]]; then
-            val="$(yq e "(.${path} // \"\")" "$file" 2>/dev/null)"
-            if [[ -n "$val" && "$val" != "null" ]]; then
-                printf "  %-8s %s   (%s)\n" "$layer" "$val" "$file"
+            _cfg_layer_value "$file" "$path"
+            if [[ -n "$_CFG_LV" ]]; then
+                printf "  %-8s %s   (%s)\n" "$layer" "$_CFG_LV" "$file"
             else
                 printf "  %-8s %s   (%s)\n" "$layer" "·" "$file"
             fi
