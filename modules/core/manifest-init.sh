@@ -962,6 +962,7 @@ nbproject/
 .claude/*
 !.claude/agents/
 !.claude/commands/
+!.claude/skills/
 !.claude/settings.json
 .cline/
 .codeium/

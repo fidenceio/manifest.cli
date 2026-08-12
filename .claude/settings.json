@@ -8,7 +8,9 @@
       "Bash(scripts/run-tests.sh:*)",
       "Bash(manifest --version)",
       "Bash(manifest test:*)",
-      "Bash(yq e:*)"
+      "Bash(yq e:*)",
+      "Bash(command -v shellcheck)",
+      "Bash(shellcheck -S error modules/git/manifest-git.sh modules/workflow/manifest-orchestrator.sh)"
     ]
   }
 }

@@ -1574,19 +1574,13 @@ manifest_ship_workflow() {
         # Add a scope hint to the auto-commit subject so `git log --oneline`
         # alone tells you what got swept up. Hint covers tracked changes
         # AND untracked files, since `commit_changes` runs `git add .`.
-        local _ac_files _ac_count _ac_first _ac_hint=""
-        _ac_files="$(git status --porcelain | sed 's/^...//')"
         # Describe only what will actually land. The drift guard withholds paths
         # that appeared after the snapshot, so counting raw status here would put
         # a file in the commit subject that the commit does not contain.
-        if [ -n "${MANIFEST_CLI_GIT_PENDING_SNAPSHOT+x}" ] && [ "${MANIFEST_CLI_GIT_ALLOW_GATE_DRIFT:-false}" != "true" ]; then
-            # Mirror the guard's own disposition: snapshot entries land, and so
-            # does Manifest's exempt .manifest-cli/ bookkeeping.
-            _ac_files="$(printf '%s\n' "$_ac_files" | awk -v snap="$MANIFEST_CLI_GIT_PENDING_SNAPSHOT" '
-                BEGIN { n = split(snap, a, "\n"); for (i = 1; i <= n; i++) keep[a[i]] = 1 }
-                /^\.manifest-cli\// || ($0 in keep)
-            ')"
-        fi
+        # manifest_pending_commit_paths is the single place that answers "what
+        # lands", shared with the guard so the two cannot disagree.
+        local _ac_files _ac_count _ac_first _ac_hint=""
+        _ac_files="$(manifest_pending_commit_paths)"
         _ac_count=$(printf '%s\n' "$_ac_files" | grep -c .)
         _ac_first=$(printf '%s\n' "$_ac_files" | head -1)
         if [ "$_ac_count" -eq 1 ] && [ -n "$_ac_first" ]; then

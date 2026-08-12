@@ -5,12 +5,17 @@
 # Manifest CLI can manage together for coordinated versioning and releases.
 #
 # USAGE:
-#   1. Copy this file: cp manifest.fleet.yaml.example manifest.fleet.yaml
+#   1. Copy this file: cp manifest.fleet.config.yaml.example manifest.fleet.config.yaml
 #   2. Customize for your microservices/polyrepo setup
 #   3. Run: manifest fleet status
 #
+# The filename matters: manifest.fleet.config.yaml is the sentinel whose presence
+# makes a directory the fleet root (_manifest_config_find_fleet_root).
+#
 # This file SHOULD be committed to version control.
-# Service-specific overrides go in each service's .env.manifest.local (git-ignored)
+# Service-specific overrides go in each service's manifest.config.local.yaml
+# (git-ignored). That is a different file with a different job: this one defines
+# what the fleet IS, that one overrides how Manifest behaves in one member.
 # =============================================================================
 
 # =============================================================================

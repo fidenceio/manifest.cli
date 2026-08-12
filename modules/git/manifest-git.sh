@@ -500,7 +500,7 @@ manifest_notice_new_untracked_files() {
     local _new_files=() _nf
     while IFS= read -r _nf; do
         [[ -n "$_nf" ]] && _new_files+=("$_nf")
-    done < <(git -C "$repo" status --porcelain 2>/dev/null | sed -n 's/^?? //p')
+    done < <(git -C "$repo" status --porcelain --untracked-files=all 2>/dev/null | sed -n 's/^?? //p')
     [[ ${#_new_files[@]} -gt 0 ]] || return 0
     local _nf_noun="files"
     [[ ${#_new_files[@]} -eq 1 ]] && _nf_noun="file"
@@ -599,12 +599,20 @@ export -f manifest_unstage_accidental_gitlinks
 # Renames are recorded under their destination path, matching what `git add .`
 # would stage. Silent no-op outside a repo so callers need no guard.
 #
+# --untracked-files=all is load-bearing, not a preference. Plain `--porcelain`
+# collapses a wholly-untracked directory into a single `?? dir/` entry, while the
+# staged set this is compared against (`git diff --cached --name-only`) always
+# names individual files. That granularity mismatch made every file under a new
+# directory look like post-request drift: adding `.claude/agents/` pre-ship
+# recorded `.claude/` but staged `.claude/agents/<each>.md`, so the guard below
+# "left out" files the operator had in fact staged before invoking the ship.
+#
 # ARGUMENTS:
 #   $1 - repo path (default ".")
 manifest_record_pending_snapshot() {
     local repo="${1:-.}"
     MANIFEST_CLI_GIT_PENDING_SNAPSHOT="$(
-        git -C "$repo" status --porcelain 2>/dev/null |
+        git -C "$repo" status --porcelain --untracked-files=all 2>/dev/null |
             sed -e 's/^...//' -e 's/^.* -> //' |
             LC_ALL=C sort -u
     )"
@@ -663,11 +671,59 @@ manifest_unstage_gate_drift() {
     [[ ${#_drift[@]} -eq 1 ]] && _noun="file"
     local _joined
     printf -v _joined '%s, ' "${_drift[@]}"
+    # Scope this claim to what it can actually keep. The guard only holds paths
+    # out of the commit it runs for; `ship` unsets the snapshot before its
+    # version commit (by design — VERSION, CHANGELOG and regenerated docs all
+    # legitimately post-date the snapshot), so that later `git add .` stages the
+    # withheld paths after all. Promising "they stay in the working tree" made
+    # the log contradict the tree and sent operators hunting a phantom bug.
     echo "${prefix}Left out ${#_drift[@]} $_noun that changed after this ship was requested: ${_joined%, }"
-    echo "${prefix}   Not yours to release — they stay in the working tree. Re-run to include them, or set git.allow_gate_drift=true."
+    echo "${prefix}   Held out of THIS commit. During a ship, a later commit stages the whole tree,"
+    echo "${prefix}   so check 'git show --stat HEAD' before assuming they went unreleased."
     return 0
 }
 export -f manifest_unstage_gate_drift
+
+# Echo the pending paths a following auto-commit will ACTUALLY land, one per
+# line. Callers describe the commit with this (subject hint, file count) instead
+# of re-deriving the guard's disposition themselves — that duplication is what
+# let the ship log drift out of agreement with the commit it was describing.
+#
+# Normalization matches manifest_record_pending_snapshot exactly: -uall so an
+# untracked directory expands to files, and renames collapsed to their
+# destination. Reading raw `git status` instead reported a rename as the literal
+# string "old -> new", which matched no snapshot entry and dropped out of the
+# count.
+#
+# ARGUMENTS:
+#   $1 - repo path (default ".")
+manifest_pending_commit_paths() {
+    local repo="${1:-.}"
+    local _all
+    _all="$(git -C "$repo" status --porcelain --untracked-files=all 2>/dev/null |
+        sed -e 's/^...//' -e 's/^.* -> //')"
+    # No baseline (or drift explicitly allowed): a bulk `git add .` lands it all.
+    if [[ -z "${MANIFEST_CLI_GIT_PENDING_SNAPSHOT+x}" ]] ||
+       [[ "${MANIFEST_CLI_GIT_ALLOW_GATE_DRIFT:-false}" == "true" ]]; then
+        printf '%s\n' "$_all"
+        return 0
+    fi
+    # Mirror manifest_unstage_gate_drift: snapshot entries land, and so does
+    # Manifest's exempt .manifest-cli/ bookkeeping.
+    #
+    # The snapshot is newline-separated, so it must NOT be handed to `awk -v`: a
+    # literal newline in a -v value aborts awk with "awk: newline in string
+    # <first entry>... at source line 1". That emptied this list and made ship
+    # print "Auto-committing 0 pending file(s)" for every release with more than
+    # one pending path, while the commit itself — a plain `git add .` — was
+    # correct, so the log libeled the commit. Read the snapshot as awk's first
+    # input file, where newlines are the record separator, not a syntax error.
+    awk 'NR == FNR { keep[$0] = 1; next }
+         /^\.manifest-cli\// || ($0 in keep)' \
+        <(printf '%s\n' "$MANIFEST_CLI_GIT_PENDING_SNAPSHOT") \
+        <(printf '%s\n' "$_all")
+}
+export -f manifest_pending_commit_paths
 
 commit_changes() {
     local message="$1"

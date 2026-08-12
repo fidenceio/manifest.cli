@@ -9,19 +9,34 @@
 #   environment variables. Provides a unified interface for accessing
 #   fleet settings throughout the application.
 #
-# CONFIGURATION SOURCES (in order of precedence, lowest to highest):
-#   1. Built-in defaults (defined in this module)
-#   2. ~/.manifest-cli/manifest.config.global.yaml (user-level preferences)
-#   3. <fleet-root>/manifest.config.local.yaml (fleet-level overrides)
-#   4. manifest.fleet.config.yaml (fleet definition - committed to git)
-#   5. <service>/manifest.config.local.yaml (service-specific overrides)
-#   6. Command-line flags (highest priority)
+# CONFIGURATION SOURCES:
+#   This module reads ONE file: <fleet-root>/manifest.fleet.config.yaml, the fleet
+#   definition. Its values are pulled key-by-key via get_yaml_value() into
+#   MANIFEST_CLI_FLEET_* variables, falling back to the defaults defined below.
+#
+#   manifest.fleet.config.yaml is NOT a layer in the MANIFEST_CLI_* configuration
+#   precedence chain — it never passes through load_yaml_to_env(). It is a separate
+#   file with a separate job, and the sentinel whose presence makes a directory the
+#   fleet root. That chain is resolved entirely by load_configuration() in
+#   modules/core/manifest-config.sh, lowest to highest:
+#     1. Built-in defaults                                    (set_default_configuration)
+#     2. ~/.manifest-cli/manifest.config.global.yaml          (user-level preferences)
+#     3. <fleet-root>/manifest.config.yaml, then
+#        <fleet-root>/manifest.config.local.yaml              (inherited; members only,
+#                                                              skipped at the fleet root)
+#     4. <project>/manifest.config.yaml
+#     5. <project>/manifest.config.local.yaml                 (when project overrides
+#                                                              are requested)
+#     6. Exported MANIFEST_CLI_* env captured at process start (highest)
 #
 # KEY FUNCTIONS:
-#   - load_fleet_config()      : Load and merge all configuration sources
-#   - get_fleet_value()        : Get a configuration value with fallback
-#   - parse_fleet_yaml()       : Parse manifest.fleet.config.yaml into shell variables
-#   - validate_fleet_config()  : Validate configuration completeness
+#   - find_fleet_root()             : Walk up for the manifest.fleet.config.yaml sentinel
+#   - is_fleet_mode_enabled()       : Resolve fleet mode (auto | true | false)
+#   - load_fleet_config()           : Read the fleet definition into MANIFEST_CLI_FLEET_*
+#   - get_fleet_config_value()      : Get a fleet config value with fallback
+#   - get_fleet_service_path()      : Resolve a service's absolute path
+#   - get_fleet_service_property()  : Get one property of one service
+#   - validate_fleet_config()       : Validate configuration completeness
 #
 # DEPENDENCIES:
 #   - manifest-shared-utils.sh (logging functions)
