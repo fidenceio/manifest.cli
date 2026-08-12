@@ -1,5 +1,17 @@
 # Changelog
 
+## [59.0.0] - 2026-08-12
+
+**Release Type:** Major
+
+### Changes
+
+- Fix(config): report the inherited fleet layer and the env layer honestly
+- Perf(config): index each config file once instead of once per key
+- Docs(config): make USER_GUIDE the canonical layer model
+- Update 2 files before release
+
+
 ## [58.0.5] - 2026-08-12
 
 **Release Type:** Patch
@@ -87,16 +99,6 @@
 ## [57.0.0] - 2026-08-01
 
 **Release Type:** Major
-
-### Changes
-
-- Add GitHub Release publishing support
-- Add regression coverage for the changed CLI workflow
-
-
-## [56.8.1] - 2026-07-20
-
-**Release Type:** Patch
 
 ### Changes
 
