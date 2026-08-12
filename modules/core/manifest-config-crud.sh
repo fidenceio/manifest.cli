@@ -57,6 +57,20 @@ _CFG_R_LAYER=""
 _CFG_R_FILE=""
 _CFG_R_VALUE=""
 
+# Per-file key-presence index: "<file>|<dot.path>" -> 1, plus a per-file
+# "already scanned" flag. One yq call per FILE replaces one per (key, file) --
+# `config list` walks every mapped key across up to five layers, so the naive
+# form is hundreds of yq spawns.
+#
+# INVARIANT: the index may over-report and must never under-report. Keys with
+# empty or null values appear in it, and entries can go stale after a write;
+# both are harmless because a hit only permits the authoritative value read,
+# which then filters the key out on its own. A miss, by contrast, would hide a
+# key that is really there -- so anything that could remove entries (rather than
+# add them) is unsafe here.
+declare -gA _CFG_PRESENT=()
+declare -gA _CFG_INDEXED=()
+
 # Single resolution point for the project root. The layer files AND the fleet
 # walk must start from the same base, or the "is the project the fleet root?"
 # test can disagree with the paths it is comparing.
@@ -217,6 +231,40 @@ _cfg_filter_layer_files() {
     return 0
 }
 
+# Scan $1 once, recording every dot-path it defines. Cheap no-op on repeat
+# calls and on missing files.
+_cfg_index_file() {
+    local file="$1" p
+    [[ -n "${_CFG_INDEXED[$file]:-}" ]] && return 0
+    _CFG_INDEXED["$file"]=1
+    [[ -f "$file" ]] || return 0
+    while IFS= read -r p; do
+        [[ -n "$p" ]] || continue
+        _CFG_PRESENT["$file|$p"]=1
+        # Sequence leaves enumerate as security.private_files.0 / .1 -- record
+        # each parent so the mapped dot-path itself resolves.
+        while [[ "$p" =~ \.[0-9]+$ ]]; do
+            p="${p%.*}"
+            _CFG_PRESENT["$file|$p"]=1
+        done
+    done < <(yq e -r '.. | select(tag != "!!map" and tag != "!!seq") | (path | join("."))' "$file" 2>/dev/null)
+    return 0
+}
+
+# Might $2 be set in $1? False means definitely not; true means "read it and
+# see". See the INVARIANT above.
+_cfg_layer_has_key() {
+    _cfg_index_file "$1"
+    [[ -n "${_CFG_PRESENT[$1|$2]:-}" ]]
+}
+
+# Drop the scanned flag for $1 after a write, so the next read re-scans and
+# picks up newly added keys. Stale _CFG_PRESENT entries are left alone on
+# purpose -- they only over-report, which the value read corrects.
+_cfg_invalidate_index() {
+    unset "_CFG_INDEXED[$1]" 2>/dev/null || true
+}
+
 # Resolve a key across every layer in RUNTIME precedence order, setting
 # _CFG_R_LAYER / _CFG_R_FILE / _CFG_R_VALUE. Returns 1 when the key is set
 # nowhere at all. Out-variables rather than a packed "layer:value" string: it
@@ -253,6 +301,7 @@ _cfg_resolve() {
             layer="${entry%%$'\t'*}"
             file="${entry#*$'\t'}"
             [[ -f "$file" ]] || continue
+            _cfg_layer_has_key "$file" "$path" || continue
             val="$(yq e "(.${path} // \"\")" "$file" 2>/dev/null)"
             if [[ -n "$val" && "$val" != "null" ]]; then
                 _CFG_R_LAYER="$layer"; _CFG_R_FILE="$file"; _CFG_R_VALUE="$val"
@@ -332,6 +381,7 @@ With --json, emit a machine-readable array." \
             for path in "${!_MANIFEST_YAML_TO_ENV[@]}"; do
                 local val=""
                 for file in "${files[@]}"; do
+                    _cfg_layer_has_key "$file" "$path" || continue
                     val="$(yq e "(.${path} // \"\")" "$file" 2>/dev/null)"
                     [[ -n "$val" && "$val" != "null" ]] && break
                     val=""
@@ -393,6 +443,7 @@ _config_list_json_layer() {
     while IFS= read -r path; do
         local val="" src="" file
         for file in "${files[@]}"; do
+            _cfg_layer_has_key "$file" "$path" || continue
             val="$(yq e "(.${path} // \"\")" "$file" 2>/dev/null)"
             if [[ -n "$val" && "$val" != "null" ]]; then
                 src="$file"
@@ -514,6 +565,7 @@ here — set fleet-wide values by running this command at the fleet root." \
 
     mkdir -p "$(dirname "$file")"
     set_yaml_value "$file" "$path" "$value" || return 1
+    _cfg_invalidate_index "$file"
     echo "✓ set ${layer}:${path} = ${value}"
     echo "  ${file}"
 }
@@ -585,6 +637,7 @@ here — remove fleet-wide values by running this command at the fleet root." \
     fi
 
     yq e "del(.${path})" -i "$file" 2>/dev/null
+    _cfg_invalidate_index "$file"
     echo "✓ unset ${layer}:${path}"
 }
 

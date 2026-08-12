@@ -217,3 +217,41 @@ teardown() {
     echo "$output" | grep -q "✓ set global:brew.tap_repo = example/homebrew-tap"
     [ "$(yq e '.brew.tap_repo' "$HOME/.manifest-cli/manifest.config.global.yaml")" = "example/homebrew-tap" ]
 }
+
+# -----------------------------------------------------------------------------
+# per-file key-presence index
+# -----------------------------------------------------------------------------
+#
+# The read path filters candidate keys through a per-file index so it spawns one
+# yq per file instead of one per (key, file). These pin the two ways that filter
+# could wrongly hide a key that is really set.
+
+@test "config: a sequence-valued key survives the presence index" {
+    # Sequence leaves enumerate as security.private_files.0/.1, so the index has
+    # to record the parent path too or the key looks absent.
+    cat > "$PROJ/manifest.config.local.yaml" <<'YAML'
+security:
+  private_files:
+    - .env
+    - .env.local
+YAML
+    run manifest_config_get security.private_files
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q ".env.local"
+
+    run manifest_config_list
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -qE '^ +security\.private_files +local '
+}
+
+@test "config: a key written in this process is visible to a later read" {
+    run manifest_config_list
+    [ "$status" -eq 0 ]
+    ! echo "$output" | grep -qE '^ +git\.tag_prefix +local '
+
+    # Same shell: the index must be invalidated by the write, or the new key
+    # stays invisible until the process restarts.
+    run bash -c 'source "$1/tests/helpers/setup.bash"; load_modules "core/manifest-config.sh" "core/manifest-config-crud.sh"; export MANIFEST_CLI_PROJECT_ROOT="$2"; manifest_config_list >/dev/null; manifest_config_set git.tag_prefix rel- -y >/dev/null; manifest_config_get git.tag_prefix' _ "$TEST_REPO_ROOT" "$PROJ"
+    [ "$status" -eq 0 ]
+    [ "$output" = "rel-" ]
+}
