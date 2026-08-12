@@ -1,5 +1,15 @@
 # Changelog
 
+## [59.0.1] - 2026-08-12
+
+**Release Type:** Patch
+
+### Changes
+
+- Add GitHub Release publishing support
+- Update release copy and configuration examples
+
+
 ## [59.0.0] - 2026-08-12
 
 **Release Type:** Major
@@ -93,14 +103,4 @@
 
 ### Changes
 
-- Add regression coverage for the changed CLI workflow
-
-
-## [57.0.0] - 2026-08-01
-
-**Release Type:** Major
-
-### Changes
-
-- Add GitHub Release publishing support
 - Add regression coverage for the changed CLI workflow
