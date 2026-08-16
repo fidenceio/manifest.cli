@@ -1,5 +1,15 @@
 # Changelog
 
+## [59.1.0] - 2026-08-16
+
+**Release Type:** Minor
+
+### Changes
+
+- Update release copy and configuration examples
+- Add regression coverage for the changed CLI workflow
+
+
 ## [59.0.1] - 2026-08-12
 
 **Release Type:** Patch
@@ -95,12 +105,3 @@
 - Pre-commit: block absolute home paths in staged content
 - Docs(hooks): document the home-path check and a move-safe install
 - Update 2 files before release
-
-
-## [57.0.1] - 2026-08-01
-
-**Release Type:** Patch
-
-### Changes
-
-- Add regression coverage for the changed CLI workflow
