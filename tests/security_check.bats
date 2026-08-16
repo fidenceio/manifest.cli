@@ -61,8 +61,8 @@ teardown() {
     grep -q 'manifest security --check' "$TEST_REPO_ROOT/.git-hooks/pre-commit"
     grep -q 'security_output=' "$TEST_REPO_ROOT/.git-hooks/pre-commit"
     grep -q 'env -u MANIFEST_CLI_BASH_REEXEC' "$TEST_REPO_ROOT/.git-hooks/pre-commit"
-    ! grep -q "$skip_var" "$TEST_REPO_ROOT/.git-hooks/pre-commit"
-    ! grep -q "$skip_var" "$TEST_REPO_ROOT/modules/system/manifest-security.sh"
+    refute grep -q "$skip_var" "$TEST_REPO_ROOT/.git-hooks/pre-commit"
+    refute grep -q "$skip_var" "$TEST_REPO_ROOT/modules/system/manifest-security.sh"
 }
 
 @test "pre-commit hook clears inherited bash re-exec sentinel for repo-local CLI" {

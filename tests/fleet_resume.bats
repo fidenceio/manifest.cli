@@ -427,7 +427,7 @@ TSV
     grep -q '^svc-b:remote-ci$' "$SCRATCH/resume-calls.log"
     # svcc must never have been attempted (fail-fast)
     [[ "$output" != *"svcc: resuming"* ]]
-    ! grep -q '^svc-c:' "$SCRATCH/resume-calls.log"
+    refute grep -q '^svc-c:' "$SCRATCH/resume-calls.log"
     # Aborts with structured error
     [[ "$output" == *"Fleet resume aborted at svcb"* ]]
 }

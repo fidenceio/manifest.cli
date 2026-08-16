@@ -216,7 +216,7 @@ EOF
     manifest_install_paths_shell_profiles() { echo "$SANDBOX_HOME/.zshrc"; }
     run -0 manifest_install_paths_cleanup_profile_entries 0 0
     # Seeded MANIFEST line must be gone, unrelated content preserved.
-    ! grep -q 'MANIFEST_CLI_FAKE' "$SANDBOX_HOME/.zshrc"
+    refute grep -q 'MANIFEST_CLI_FAKE' "$SANDBOX_HOME/.zshrc"
     grep -q "alias ll='ls -la'" "$SANDBOX_HOME/.zshrc"
     # Exactly one backup written for this profile.
     local backups
@@ -242,7 +242,7 @@ EOF
     # Tripwire must skip the rewrite; file untouched, no backup written.
     [ -f "$decoy" ]
     [ "$(shasum "$decoy" | awk '{print $1}')" = "$original_sum" ]
-    ! ls "$decoy".manifest-backup-* >/dev/null 2>&1
+    refute ls "$decoy".manifest-backup-* >/dev/null 2>&1
     rm -rf "$decoy_dir"
 }
 

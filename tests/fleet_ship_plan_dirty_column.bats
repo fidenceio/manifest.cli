@@ -168,7 +168,7 @@ TSV
     # dirty-svc row must contain the 1m+1u marker.
     echo "$output" | grep -E "dirty-svc[[:space:]].*1m\+1u" >/dev/null
     # clean-svc row must NOT contain any Nm+Nu marker.
-    ! echo "$output" | grep -E "clean-svc[[:space:]].*[0-9]+m\+[0-9]+u" >/dev/null
+    refute grep -E "clean-svc[[:space:]].*[0-9]+m\+[0-9]+u" >/dev/null <<<"$output"
 }
 
 @test "fleet ship preview: unchanged tagged member is skipped, changed member is releaseable" {
@@ -177,7 +177,7 @@ TSV
     run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
     [ "$status" -eq 0 ]
     echo "$output" | grep -E "clean-svc[[:space:]].*read[[:space:]]+skip[[:space:]].*no changes" >/dev/null
-    ! echo "$output" | grep -E "clean-svc[[:space:]].*1\.2\.3->" >/dev/null
+    refute grep -E "clean-svc[[:space:]].*1\.2\.3->" >/dev/null <<<"$output"
     echo "$output" | grep -E "dirty-svc[[:space:]].*4\.5\.6->4\.5\.7" >/dev/null
     echo "$output" | grep -E "Plan summary: 1 releaseable, 0 pr-gated, 1 skipped" >/dev/null
 }
@@ -208,7 +208,7 @@ TSV
     run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
     [ "$status" -eq 0 ]
     echo "$output" | grep -E "clean-svc[[:space:]].*read[[:space:]]+skip[[:space:]].*no changes" >/dev/null
-    ! echo "$output" | grep -E "clean-svc[[:space:]].*1\.2\.3->" >/dev/null
+    refute grep -E "clean-svc[[:space:]].*1\.2\.3->" >/dev/null <<<"$output"
     echo "$output" | grep -E "dirty-svc[[:space:]].*4\.5\.6->4\.5\.7" >/dev/null
 }
 

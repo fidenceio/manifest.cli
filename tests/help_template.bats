@@ -70,8 +70,8 @@ Line two." \
     echo "$output" | grep -q -- "--noprep"
     echo "$output" | grep -q -- "--dry-run"
     echo "$output" | grep -q -- "-y, --yes"
-    ! echo "$output" | grep -q -- "--method"
-    ! echo "$output" | grep -q -- "--draft"
+    refute grep -q -- "--method" <<<"$output"
+    refute grep -q -- "--draft" <<<"$output"
     # Flow section should be present so users see the pipeline.
     echo "$output" | grep -qFx "Flow:"
 }

@@ -116,7 +116,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"GitHub Release: exists (v1.2.3)"* ]]
     grep -q "release view v1.2.3" "$MANIFEST_CLI_GH_TEST_LOG"
-    ! grep -q "release create" "$MANIFEST_CLI_GH_TEST_LOG"
+    refute grep -q "release create" "$MANIFEST_CLI_GH_TEST_LOG"
 }
 
 @test "github release creation creates missing release with changelog notes" {

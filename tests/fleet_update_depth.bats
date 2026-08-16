@@ -71,7 +71,7 @@ disc_row() {
 
     # The hand-edited URL on alpha survives — scan metadata must NOT clobber it.
     grep -q $'\talpha\tapps/alpha\ttrue\tgit@github.com:org/keep-this-url.git\tmain' "$WS/out.tsv"
-    ! grep -q "SCANNED-OTHER" "$WS/out.tsv"
+    refute grep -q "SCANNED-OTHER" "$WS/out.tsv"
 
     # beta was NOT in the discovered set but must be preserved (not dropped).
     grep -q $'\tbeta\tdb/beta\t' "$WS/out.tsv"
@@ -98,7 +98,7 @@ disc_row() {
     merge_update_tsv "$discovered" "$WS/manifest.fleet.tsv" "$WS" 2 append 2>/dev/null > "$WS/out.tsv"
 
     grep -q "^# Depth: 2$" "$WS/out.tsv"               # depth header untouched
-    ! grep -q "2026-01-01T00:00:00Z" "$WS/out.tsv"     # stale timestamp replaced
+    refute grep -q "2026-01-01T00:00:00Z" "$WS/out.tsv"     # stale timestamp replaced
     grep -q "^# Last scanned: " "$WS/out.tsv"          # ... with a fresh one
 }
 

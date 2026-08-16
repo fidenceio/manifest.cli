@@ -310,5 +310,5 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"• https://time.example/x"* ]]
     # Defaults are fully replaced: no Cloudflare/Google/Apple bullets.
-    ! echo "$output" | grep -q "• https://www.cloudflare.com"
+    refute grep -q "• https://www.cloudflare.com" <<<"$output"
 }

@@ -87,6 +87,31 @@ mk_scratch() {
 
 # Source one or more module files in dependency order.
 # Modules expect MANIFEST_CLI_CORE_MODULES_DIR to point at the modules root.
+# Assert that a command FAILS.
+#
+# Bash exempts any command prefixed with `!` from errexit — POSIX: "the -e
+# setting shall be ignored when ... the command is prefixed with !". In a bats
+# test body that makes a bare `! grep -q ...` inert unless it happens to be the
+# test's final command, whose status becomes the test's status. 114 assertions
+# in this suite sat mid-test and could never fail; one of them was masking a
+# real defect (three-segment-only CHANGELOG section matching).
+#
+# `refute cmd ...` is an ordinary command, so errexit applies wherever it
+# appears, and a violation reports what it expected instead of passing quietly.
+#
+# Pipelines take a herestring instead of a pipe:
+#   ! echo "$output" | grep -q needle   ->   refute grep -q needle <<<"$output"
+#
+# For a command whose own stdout/status you also need, keep using bats's `run`
+# plus [ "$status" -ne 0 ]; `refute` deliberately does not touch $output.
+refute() {
+    if "$@"; then
+        printf 'refute: expected failure, but command succeeded: %s\n' "$*" >&2
+        return 1
+    fi
+    return 0
+}
+
 load_modules() {
     export MANIFEST_CLI_CORE_MODULES_DIR="$TEST_REPO_ROOT/modules"
     # Always-needed minimal stack: shared utils + yaml.

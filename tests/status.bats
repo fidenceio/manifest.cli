@@ -119,7 +119,7 @@ JSON
 
     run manifest_status repo
     [ "$status" -eq 0 ]
-    ! echo "$output" | grep -q "Version files:"
+    refute grep -q "Version files:" <<<"$output"
 }
 
 @test "status: working-tree counts render as one clean line" {
@@ -134,8 +134,8 @@ JSON
     run manifest_status
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Working:.*clean"
-    ! echo "$output" | grep -qx "0 modified, 0"
-    ! echo "$output" | grep -qx "0 untracked"
+    refute grep -qx "0 modified, 0" <<<"$output"
+    refute grep -qx "0 untracked" <<<"$output"
 }
 
 @test "status: working-tree counts separate modified and untracked files" {
@@ -360,7 +360,7 @@ YAML
     echo "$output" | grep -q "m1"
     echo "$output" | grep -q "m3"
     # Proof of the bug fix: the count must not be 0 just because .services is {}.
-    ! echo "$output" | grep -q "Repos:.*0 total"
+    refute grep -q "Repos:.*0 total" <<<"$output"
 }
 
 @test "status fleet --json: repositories array reflects the TSV roster" {
@@ -449,7 +449,7 @@ YAML
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Bootstrap:.*1 member(s) declared but absent"
     echo "$output" | grep -q "manifest status fleet --bootstrap"
-    ! echo "$output" | grep -q "Bootstrap preview"
+    refute grep -q "Bootstrap preview" <<<"$output"
     [ ! -d "$SCRATCH/svc/ghost" ]
 }
 

@@ -286,7 +286,7 @@ TSV
     grep -q $'^true\trootworkspace\t.\ttrue' "$SCRATCH/work/manifest.fleet.tsv"
     # svc (git repo) is appended; svc/src (plain subdir) is not.
     grep -q $'^true\tsvc\tsvc\ttrue' "$SCRATCH/work/manifest.fleet.tsv"
-    ! grep -q $'\tsvc/src\t' "$SCRATCH/work/manifest.fleet.tsv"
+    refute grep -q $'\tsvc/src\t' "$SCRATCH/work/manifest.fleet.tsv"
 }
 
 @test "ship fleet preview Service column preserves dots via path basename" {

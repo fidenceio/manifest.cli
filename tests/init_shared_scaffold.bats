@@ -57,7 +57,7 @@ seed_complete_scaffold() {
     printf '1.0.0\n' > "$partial/VERSION"
 
     manifest_repo_scaffold_is_complete "$complete"
-    ! manifest_repo_scaffold_is_complete "$partial"
+    refute manifest_repo_scaffold_is_complete "$partial"
 }
 
 @test "shared scaffold: re-run never clobbers real files" {
@@ -110,7 +110,7 @@ seed_complete_scaffold() {
     mkdir -p "$member"
     git -C "$member" init -q
 
-    ! manifest_repo_scaffold_is_complete "$member"
+    refute manifest_repo_scaffold_is_complete "$member"
     run ensure_repo_scaffold "$member"
     [ "$status" -eq 0 ]
     manifest_repo_scaffold_is_complete "$member"

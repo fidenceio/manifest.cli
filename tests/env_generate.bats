@@ -90,7 +90,7 @@ YAML
     grep -q 'NEXT_PUBLIC_SITE_URL: "https://demo.fidence.io"' "$PROJ/k8s/env/configmap.yaml"
     grep -q 'FIDENCE_APP_DEMO_LOG_LEVEL: "info"' "$PROJ/k8s/env/configmap.yaml"
     # Secrets never appear in the ConfigMap.
-    ! grep -q "DB_PASSWORD" "$PROJ/k8s/env/configmap.yaml"
+    refute grep -q "DB_PASSWORD" "$PROJ/k8s/env/configmap.yaml"
 
     # Secret bridge orientation (D-ENV-3/§2.7.2): secretKey = framework name,
     # property = FIDENCE stored name, path = secret/{env}/{slug}/{group}.

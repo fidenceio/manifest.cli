@@ -34,7 +34,7 @@ mkrepo() { mkdir -p "$1" && git init -q "$1"; }
     echo "$output" | grep -q "no git repo or child repos found"
     echo "$output" | grep -q "No git repository or child repos found here."
     # Empty context offers no apply footer.
-    ! echo "$output" | grep -q "Re-run with -y"
+    refute grep -q "Re-run with -y" <<<"$output"
     [ -z "$(ls -A "$SCRATCH/plain")" ]
 }
 

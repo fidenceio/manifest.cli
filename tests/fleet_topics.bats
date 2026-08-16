@@ -192,7 +192,7 @@ accounting" ]
     [[ "$output" == *"+accounting"* ]]
     [[ "$output" == *"+fleet-test-fleet"* ]]
     [[ "$output" == *"manifest update fleet -y"* ]]
-    ! grep -q "edit" "$MANIFEST_CLI_GH_STUB_LOG"
+    refute grep -q "edit" "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
 @test "run: apply pushes only topics GitHub does not already have" {
@@ -209,8 +209,8 @@ accounting" ]
     [ "$status" -eq 0 ]
     [[ "$output" == *"1 updated"* ]]
     grep -q -e $'--add-topic\taccounting' "$MANIFEST_CLI_GH_STUB_LOG"
-    ! grep -q -e $'--add-topic\tservice' "$MANIFEST_CLI_GH_STUB_LOG"
-    ! grep -q -e $'--add-topic\tfleet-test-fleet' "$MANIFEST_CLI_GH_STUB_LOG"
+    refute grep -q -e $'--add-topic\tservice' "$MANIFEST_CLI_GH_STUB_LOG"
+    refute grep -q -e $'--add-topic\tfleet-test-fleet' "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
 @test "run: fully up-to-date repo gets zero writes" {
@@ -224,7 +224,7 @@ accounting" ]
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false"
     [ "$status" -eq 0 ]
     [[ "$output" == *"1 up to date"* ]]
-    ! grep -q "edit" "$MANIFEST_CLI_GH_STUB_LOG"
+    refute grep -q "edit" "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
 @test "run: non-GitHub origin is skipped, never written" {
@@ -237,7 +237,7 @@ accounting" ]
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false"
     [ "$status" -eq 0 ]
     [[ "$output" == *"1 skipped"* ]]
-    ! grep -q "edit" "$MANIFEST_CLI_GH_STUB_LOG"
+    refute grep -q "edit" "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
 # --- run: degraded gh, never fatal -------------------------------------------
@@ -264,7 +264,7 @@ accounting" ]
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false"
     [ "$status" -eq 0 ]
     [[ "$output" == *"not authenticated"* ]]
-    ! grep -q "repo" "$MANIFEST_CLI_GH_STUB_LOG"
+    refute grep -q "repo" "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
 # --- wiring: manifest update fleet -------------------------------------------
@@ -290,7 +290,7 @@ accounting" ]
     [ "$status" -eq 0 ]
     [[ "$output" == *"Topics (topics.from_name: inner)"* ]]
     [[ "$output" == *"+service"* ]]
-    ! grep -q "edit" "$MANIFEST_CLI_GH_STUB_LOG"
+    refute grep -q "edit" "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
 # --- Phase 2 roster: pure candidate matching ---------------------------------
@@ -366,7 +366,7 @@ acme/Fidence.Tools.cli" ]
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "true"
     [ "$status" -eq 0 ]
     [[ "$output" != *"Roster"* ]]
-    ! grep -q -e $'repo\tlist' "$MANIFEST_CLI_GH_STUB_LOG"
+    refute grep -q -e $'repo\tlist' "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
 # --- wiring smoke for no-topics path (unchanged by Phase 2) ------------------
@@ -447,7 +447,7 @@ acme/Fidence.Tools.cli" ]
     run manifest_fleet_topics_run "$SCRATCH/work" "$SCRATCH/work/$CONFIG" "false" "true"
     [ "$status" -eq 0 ]
     [[ "$output" != *"Roster"* ]]
-    ! grep -q -e $'repo\tlist' "$MANIFEST_CLI_GH_STUB_LOG"
+    refute grep -q -e $'repo\tlist' "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
 # --- wiring: manifest topics fleet ---------------------------------------------
@@ -464,7 +464,7 @@ acme/Fidence.Tools.cli" ]
     [[ "$output" == *"Topics (topics.from_name: inner)"* ]]
     [[ "$output" == *"+service"* ]]
     [[ "$output" == *"To apply, run: manifest topics fleet -y"* ]]
-    ! grep -q "edit" "$MANIFEST_CLI_GH_STUB_LOG"
+    refute grep -q "edit" "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
 @test "topics fleet: -y pushes the missing topics" {

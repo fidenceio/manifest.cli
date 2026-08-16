@@ -268,6 +268,46 @@ JSON
     [ "$(jq -r '.bundledDep.version' package.json)" = "9.9.9" ]
 }
 
+@test "version-sync: a revision version (X.Y.Z.R) mirrors like any other" {
+    # `manifest ship repo revision` produces a four-segment version. The safety
+    # gate used to require exactly three, so every revision ship was refused and
+    # the sync targets silently stayed a full version behind the canonical VERSION.
+    cat > package.json <<'JSON'
+{
+  "version": "20.1.0"
+}
+JSON
+    export MANIFEST_CLI_VERSION_SYNC="package.json"
+    run manifest_version_sync_apply '20.1.0.1'
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.version' package.json)" = "20.1.0.1" ]
+}
+
+@test "version-sync: a further-segmented version still mirrors (syntax stays open-ended)" {
+    cat > package.json <<'JSON'
+{
+  "version": "20.1.0"
+}
+JSON
+    export MANIFEST_CLI_VERSION_SYNC="package.json"
+    run manifest_version_sync_apply '20.1.0.1.7'
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.version' package.json)" = "20.1.0.1.7" ]
+}
+
+@test "version-sync: a two-segment version is still refused (sed-safety shape is not loosened)" {
+    cat > package.json <<'JSON'
+{
+  "version": "1.0.0"
+}
+JSON
+    export MANIFEST_CLI_VERSION_SYNC="package.json"
+    run manifest_version_sync_apply '20.1'
+    [ "$status" -ne 0 ]
+    echo "$output" | grep -qi "unsafe"
+    [ "$(jq -r '.version' package.json)" = "1.0.0" ]
+}
+
 @test "version-sync: refuses an unsafe (non-semver) version string, leaving the file untouched (§7.7)" {
     cat > package.json <<'JSON'
 {

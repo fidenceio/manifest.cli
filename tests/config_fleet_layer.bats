@@ -63,7 +63,7 @@ setup_fleet() {
     echo "$output" | grep -q "Effective: fidenceio"
     echo "$output" | grep -q "(from fleet)"
     # The regression this whole change exists to remove.
-    ! echo "$output" | grep -q "(from defaults)"
+    refute grep -q "(from defaults)" <<<"$output"
     echo "$output" | grep -q "Layers (highest precedence first):"
     echo "$output" | grep -q "fleet    fidenceio"
     # The member's own layers are still reported, and still empty.
@@ -168,8 +168,8 @@ setup_fleet() {
     [ "$status" -eq 0 ]
     # At the fleet root those files ARE the project/local layers.
     echo "$output" | grep -q "(from local)"
-    ! echo "$output" | grep -qE '^  fleet '
-    ! echo "$output" | grep -q "^Fleet:     "
+    refute grep -qE '^  fleet ' <<<"$output"
+    refute grep -q "^Fleet:     " <<<"$output"
 
     run manifest_config_list
     [ "$status" -eq 0 ]
@@ -187,7 +187,7 @@ setup_fleet() {
     echo "$output" | grep -q "local    trunk"
     echo "$output" | grep -q "project  ·"
     echo "$output" | grep -q "global   ·"
-    ! echo "$output" | grep -qE '^  fleet '
+    refute grep -qE '^  fleet ' <<<"$output"
 }
 
 @test "the config fleet layer follows the loader's sentinel walk, not MANIFEST_CLI_FLEET_ROOT" {
@@ -228,7 +228,7 @@ setup_fleet() {
     echo "$output" | grep -q "read-only"
     # The guard must sit above the preview branch, or the operator is told the
     # write is merely pending rather than impossible.
-    ! echo "$output" | grep -q "Would set"
+    refute grep -q "Would set" <<<"$output"
 }
 
 @test "config unset --layer fleet is rejected, not treated as a missing-file no-op" {
@@ -236,7 +236,7 @@ setup_fleet() {
     run manifest_config_unset --layer fleet github.owner -y
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "read-only"
-    ! echo "$output" | grep -q "nothing to unset"
+    refute grep -q "nothing to unset" <<<"$output"
     [ "$(yq e '.github.owner' "$SCRATCH/manifest.config.local.yaml")" = "fidenceio" ]
 }
 
@@ -246,7 +246,7 @@ setup_fleet() {
     run manifest_config_set --layer fleet git.default_branch trunk -y
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "read-only"
-    ! echo "$output" | grep -q "Unknown layer"
+    refute grep -q "Unknown layer" <<<"$output"
 }
 
 @test "config set --layer bogus still reports an unknown layer" {

@@ -20,7 +20,7 @@ load 'helpers/setup'
     declare -F manifest_requirement_parallel_is_gnu >/dev/null
 
     # A missing binary is not GNU parallel.
-    ! manifest_requirement_parallel_is_gnu /nonexistent-parallel-xyz
+    refute manifest_requirement_parallel_is_gnu /nonexistent-parallel-xyz
 
     # A same-named binary that isn't GNU (the moreutils collision) is rejected,
     # not accepted just because something called 'parallel' is on PATH.
@@ -30,7 +30,7 @@ load 'helpers/setup'
 echo "parallel (moreutils-style) 0.0 — not GNU"
 EOF
     chmod +x "$fake"
-    ! manifest_requirement_parallel_is_gnu "$fake"
+    refute manifest_requirement_parallel_is_gnu "$fake"
 }
 
 @test "test container and CI install GNU parallel for run-tests.sh --jobs" {
@@ -48,12 +48,12 @@ EOF
     grep -F './scripts/run-tests-container.sh' "$TEST_REPO_ROOT/.github/workflows/test.yml" >/dev/null
     grep -F './scripts/run-tests-container.sh --print-image' "$TEST_REPO_ROOT/.github/workflows/test.yml" >/dev/null
     # …and no longer installs test deps on the runner host.
-    ! grep -F 'apt-get install -y bats parallel' "$TEST_REPO_ROOT/.github/workflows/test.yml"
+    refute grep -F 'apt-get install -y bats parallel' "$TEST_REPO_ROOT/.github/workflows/test.yml"
     # macOS leg is host-native and brew-installs parallel (and gnu-sed for §5.11).
     grep -F 'brew install bats-core yq bash coreutils gnu-sed parallel' "$TEST_REPO_ROOT/.github/workflows/test.yml" >/dev/null
 
-    ! grep -iqE 'parallel' "$TEST_REPO_ROOT/install-cli.sh"
-    ! grep -iqE 'parallel' "$TEST_REPO_ROOT/formula/manifest.rb"
+    refute grep -iqE 'parallel' "$TEST_REPO_ROOT/install-cli.sh"
+    refute grep -iqE 'parallel' "$TEST_REPO_ROOT/formula/manifest.rb"
 }
 
 @test "requirements expose a GNU-specific sed check (rejects BSD sed of the same name) (§7.9)" {
@@ -63,7 +63,7 @@ EOF
     declare -F manifest_requirement_runtime_sed_is_gnu >/dev/null
 
     # A missing binary is not GNU sed.
-    ! manifest_requirement_sed_command_is_gnu /nonexistent-sed-xyz
+    refute manifest_requirement_sed_command_is_gnu /nonexistent-sed-xyz
 
     # BSD sed (the macOS default) has no GNU banner — it must be rejected, not
     # accepted just because something called 'sed' is on PATH.
@@ -74,7 +74,7 @@ echo "usage: sed [-Ealn] command [file ...]" >&2
 exit 1
 EOF
     chmod +x "$fake_bsd"
-    ! manifest_requirement_sed_command_is_gnu "$fake_bsd"
+    refute manifest_requirement_sed_command_is_gnu "$fake_bsd"
 
     # Busybox has historically emitted text containing "not GNU sed"; substring
     # matching must not accept that as GNU.
@@ -84,7 +84,7 @@ EOF
 echo "This is not GNU sed version 4.0"
 EOF
     chmod +x "$fake_not_gnu"
-    ! manifest_requirement_sed_command_is_gnu "$fake_not_gnu"
+    refute manifest_requirement_sed_command_is_gnu "$fake_not_gnu"
 
     # A GNU sed banner is accepted.
     local fake_gnu="$BATS_TEST_TMPDIR/sed-gnu-fake"
@@ -106,7 +106,7 @@ EOF
     grep -F 'brew install gnu-sed' "$TEST_REPO_ROOT/modules/core/manifest-doctor.sh" >/dev/null
     # Warning, not error: surfaced via print_warning / _doctor_warn only.
     grep -F 'print_warning "⚠️  GNU sed not found' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
-    ! grep -qF 'print_error "❌ GNU sed' "$TEST_REPO_ROOT/install-cli.sh"
+    refute grep -qF 'print_error "❌ GNU sed' "$TEST_REPO_ROOT/install-cli.sh"
     grep -F '_doctor_warn "GNU sed (optional)"' "$TEST_REPO_ROOT/modules/core/manifest-doctor.sh" >/dev/null
 }
 
@@ -120,7 +120,7 @@ EOF
     grep -F '| Bash | 5.0+ |' "$TEST_REPO_ROOT/README.md" >/dev/null
     grep -F '| yq | 4.0+ (Mike Farah' "$TEST_REPO_ROOT/README.md" >/dev/null
     grep -F '| coreutils | Any |' "$TEST_REPO_ROOT/README.md" >/dev/null
-    ! grep -F 'MANIFEST_CLI_REQUIRED_SCRIPT' "$TEST_REPO_ROOT/modules/core/manifest-requirements.sh" >/dev/null
+    refute grep -F 'MANIFEST_CLI_REQUIRED_SCRIPT' "$TEST_REPO_ROOT/modules/core/manifest-requirements.sh" >/dev/null
 }
 
 @test "Manifest-owned environment variables use MANIFEST_CLI namespace" {
@@ -160,7 +160,7 @@ EOF
 }
 
 @test "OS detection never installs host dependencies during runtime setup" {
-    ! grep -F 'brew install coreutils' "$TEST_REPO_ROOT/modules/system/manifest-os.sh" >/dev/null
+    refute grep -F 'brew install coreutils' "$TEST_REPO_ROOT/modules/system/manifest-os.sh" >/dev/null
     grep -F 'using fallback timeout method' "$TEST_REPO_ROOT/modules/system/manifest-os.sh" >/dev/null
     grep -F 'Install coreutils for the supported macOS timeout command' "$TEST_REPO_ROOT/modules/system/manifest-os.sh" >/dev/null
 }
@@ -169,7 +169,7 @@ EOF
     grep -F 'brew install bats-core yq bash coreutils' "$TEST_REPO_ROOT/.github/workflows/test.yml" >/dev/null
     grep -F 'manifest_git_timeout_command' "$TEST_REPO_ROOT/modules/git/manifest-git.sh" >/dev/null
     grep -F 'gtimeout' "$TEST_REPO_ROOT/modules/git/manifest-git.sh" >/dev/null
-    ! grep -F 'if timeout "$timeout"' "$TEST_REPO_ROOT/modules/git/manifest-git.sh" >/dev/null
+    refute grep -F 'if timeout "$timeout"' "$TEST_REPO_ROOT/modules/git/manifest-git.sh" >/dev/null
 }
 
 @test "installer handles Homebrew before Docker before final validation" {
@@ -215,8 +215,8 @@ EOF
     # Regression: install-cli.sh used to symlink into $(brew --prefix)/etc and
     # /share, clobbering the formula's own completions and breaking the next
     # `brew upgrade`. The installer must only ever touch user-owned paths.
-    ! grep -F 'etc/bash_completion.d/manifest' "$TEST_REPO_ROOT/install-cli.sh"
-    ! grep -F 'share/zsh/site-functions/_manifest' "$TEST_REPO_ROOT/install-cli.sh"
+    refute grep -F 'etc/bash_completion.d/manifest' "$TEST_REPO_ROOT/install-cli.sh"
+    refute grep -F 'share/zsh/site-functions/_manifest' "$TEST_REPO_ROOT/install-cli.sh"
     # The Homebrew install path must not call install_shell_completions at all;
     # the formula owns completions there. Exactly the two manual-path callers remain.
     run grep -c 'install_shell_completions$' "$TEST_REPO_ROOT/install-cli.sh"

@@ -85,7 +85,7 @@ mk_proj() {
     [ "$status" -eq 0 ]
     grep -q "Env prefix policy is off" "$PROJ/.env.example"
     grep -qE "^# LOG_LEVEL=info$" "$PROJ/.env.example"
-    ! grep -q "FIDENCE_" "$PROJ/.env.example"
+    refute grep -q "FIDENCE_" "$PROJ/.env.example"
 }
 
 @test "env scaffold: no-clobber — an existing .env.example is never overwritten" {
@@ -94,7 +94,7 @@ mk_proj() {
     run ensure_env_files "$PROJ"
     [ "$status" -eq 0 ]
     grep -q "CUSTOM=1" "$PROJ/.env.example"
-    ! grep -q "scaffolded by Manifest CLI" "$PROJ/.env.example"
+    refute grep -q "scaffolded by Manifest CLI" "$PROJ/.env.example"
     [ ! -e "$PROJ/.env.example.manifest" ]
 }
 
@@ -126,7 +126,7 @@ YAML
     grep -q "^# FIDENCE_APP_DEMO_DB_PASSWORD=$" "$PROJ/.env.example"
     grep -q "secret/{env}/fidence.app.demo/db" "$PROJ/.env.example"
     grep -q "DATABASE_URL" "$PROJ/.env.example"
-    ! grep -q "^FIDENCE_APP_DEMO_DB_PASSWORD=" "$PROJ/.env.example"
+    refute grep -q "^FIDENCE_APP_DEMO_DB_PASSWORD=" "$PROJ/.env.example"
 }
 
 # --- scaffold: spec without env: --------------------------------------------------

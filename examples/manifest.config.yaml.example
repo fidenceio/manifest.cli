@@ -110,8 +110,10 @@ ship:
 # -----------------------------------------------------------------------------
 github:
   # Optional default namespace for `manifest init|prep ... --create-repo-*`.
-  # Empty = the user authenticated in gh; set an organization explicitly to
-  # prevent fleet members from landing in a personal account.
+  # Empty = taken from this repo's own `origin` remote, falling back to the
+  # user authenticated in gh when there is no origin. Set an organization
+  # explicitly to prevent fleet members from landing in a personal account;
+  # a value here wins over origin and reports the disagreement.
   owner: ""
   release:
     enabled: true       # Create a matching GitHub Release after tag push.

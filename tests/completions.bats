@@ -45,14 +45,14 @@ load 'helpers/setup'
 
 @test "completions expose recipe and explain surfaces" {
     grep -q 'list show explain help' "$TEST_REPO_ROOT/completions/manifest.bash"
-    ! grep -q 'list show explain run help' "$TEST_REPO_ROOT/completions/manifest.bash"
+    refute grep -q 'list show explain run help' "$TEST_REPO_ROOT/completions/manifest.bash"
     grep -q -- '--explain' "$TEST_REPO_ROOT/completions/manifest.bash"
     grep -q 'recipe_subs=(list show explain help)' "$TEST_REPO_ROOT/completions/_manifest"
-    ! grep -q 'recipe_subs=(list show explain run help)' "$TEST_REPO_ROOT/completions/_manifest"
+    refute grep -q 'recipe_subs=(list show explain run help)' "$TEST_REPO_ROOT/completions/_manifest"
     grep -q -- '--explain' "$TEST_REPO_ROOT/completions/_manifest"
 
     grep -q "__manifest_path recipe.*-a 'list show explain help'" "$TEST_REPO_ROOT/completions/manifest.fish"
-    ! grep -q "list show explain run help" "$TEST_REPO_ROOT/completions/manifest.fish"
+    refute grep -q "list show explain run help" "$TEST_REPO_ROOT/completions/manifest.fish"
     grep -q -- '--explain' "$TEST_REPO_ROOT/completions/manifest.fish"
 }
 

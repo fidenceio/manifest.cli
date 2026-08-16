@@ -103,7 +103,7 @@ YAML
     run config_doctor --file "$CFG"
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "✅ No configuration drift detected."
-    ! echo "$output" | grep -q "Findings:"
+    refute grep -q "Findings:" <<<"$output"
 }
 
 # -----------------------------------------------------------------------------

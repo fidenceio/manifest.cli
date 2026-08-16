@@ -50,7 +50,7 @@ run_manifest() {
     grep -q '^!/manifest.fleet.tsv$' "$SCRATCH/.gitignore"
     grep -q '^!/FLEET_VERSION$' "$SCRATCH/.gitignore"
     # host-local config is deliberately NOT tracked
-    ! grep -q 'manifest.config.local.yaml' "$SCRATCH/.gitignore"
+    refute grep -q 'manifest.config.local.yaml' "$SCRATCH/.gitignore"
 }
 
 @test "create_fleet_gitignore preserves a populated .gitignore (no clobber)" {
@@ -59,7 +59,7 @@ run_manifest() {
     [ "$status" -eq 0 ]
     [ "$output" = ".gitignore:preserved" ]
     grep -q '^node_modules/$' "$SCRATCH/.gitignore"
-    ! grep -q '^/\*$' "$SCRATCH/.gitignore"
+    refute grep -q '^/\*$' "$SCRATCH/.gitignore"
     # Nothing is written beside a curated .gitignore.
     [ ! -e "$SCRATCH/.gitignore.manifest" ]
 }

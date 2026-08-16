@@ -65,7 +65,7 @@ teardown() {
     grep -qx "trust --formula fidenceio/tap/manifest" "$BREW_LOG"
     grep -qx "install fidenceio/tap/manifest" "$BREW_LOG"
     # Fresh machine → the upgrade branch must not fire.
-    ! grep -q "^upgrade" "$BREW_LOG"
+    refute grep -q "^upgrade" "$BREW_LOG"
 }
 
 @test "install_via_homebrew: existing brew-managed install routes to upgrade, not install" {
@@ -76,7 +76,7 @@ teardown() {
     echo "$output" | grep -q "already installed via Homebrew, upgrading"
     echo "$output" | grep -q "Manifest CLI installed via Homebrew"
     grep -qx "upgrade fidenceio/tap/manifest" "$BREW_LOG"
-    ! grep -qx "install fidenceio/tap/manifest" "$BREW_LOG"
+    refute grep -qx "install fidenceio/tap/manifest" "$BREW_LOG"
 }
 
 @test "install_via_homebrew: failed tap aborts with an error before any install" {
@@ -93,8 +93,8 @@ EOF
     [ "$status" -eq 1 ]
     echo "$output" | grep -q "Failed to tap fidenceio/tap"
     # Nothing beyond the failed tap was attempted.
-    ! grep -q "install" "$BREW_LOG"
-    ! grep -q "upgrade" "$BREW_LOG"
+    refute grep -q "install" "$BREW_LOG"
+    refute grep -q "upgrade" "$BREW_LOG"
 }
 
 @test "remove_brew_managed_install: no brew-managed copy is a silent no-op" {
@@ -102,7 +102,7 @@ EOF
     run remove_brew_managed_install
     [ "$status" -eq 0 ]
     [ -z "$output" ]
-    ! grep -q "uninstall" "$BREW_LOG"
+    refute grep -q "uninstall" "$BREW_LOG"
 }
 
 @test "remove_brew_managed_install: sandbox tripwire blocks brew uninstall under bats" {
@@ -112,7 +112,7 @@ EOF
     echo "$output" | grep -q "Removing Homebrew-managed Manifest"
     echo "$output" | grep -q "brew uninstall skipped by sandbox tripwire"
     # The stub was never asked to uninstall anything.
-    ! grep -q "uninstall" "$BREW_LOG"
+    refute grep -q "uninstall" "$BREW_LOG"
 }
 
 @test "remove_brew_managed_install: escape hatch drives brew uninstall of the tap formula" {
@@ -122,5 +122,5 @@ EOF
     echo "$output" | grep -q "Removed Homebrew-managed Manifest"
     grep -qx "uninstall fidenceio/tap/manifest" "$BREW_LOG"
     # The tap-qualified uninstall succeeded → no bare-name fallback call.
-    ! grep -qx "uninstall manifest" "$BREW_LOG"
+    refute grep -qx "uninstall manifest" "$BREW_LOG"
 }

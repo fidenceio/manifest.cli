@@ -69,7 +69,7 @@ teardown() {
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "exists:.*VERSION"
     # And the .git dir is not marked for creation.
-    ! echo "$output" | grep -q "would create: .git"
+    refute grep -q "would create: .git" <<<"$output"
 }
 
 @test "init repo --dry-run --force: scaffold files stay no-clobber; only local config recreates" {
@@ -82,7 +82,7 @@ teardown() {
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run --force
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "exists:.*VERSION"
-    ! echo "$output" | grep -q "would overwrite:.*VERSION"
+    refute grep -q "would overwrite:.*VERSION" <<<"$output"
     echo "$output" | grep -q "would recreate:.*manifest.config.local.yaml"
     # Nothing actually mutated.
     [ "$(cat "$SCRATCH/VERSION")" = "1.0.0" ]
@@ -169,7 +169,7 @@ teardown() {
     echo "$output" | grep -q "Current repo:.*example/project"
     echo "$output" | grep -q "Origin:.*example/project"
     echo "$output" | grep -q "Mutation scope:.*this Git repository only"
-    ! echo "$output" | grep -q "Git and publish plan"
+    refute grep -q "Git and publish plan" <<<"$output"
     echo "$output" | grep -q "No changes written. Re-run with -y to apply this plan:"
     echo "$output" | grep -q "manifest ship repo minor -y"
     echo "$output" | grep -q "DRY RUN COMPLETE: APPLY PREFLIGHT WAS NOT RUN"

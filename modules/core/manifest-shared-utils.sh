@@ -1147,6 +1147,26 @@ sanitize_path() {
     echo "$path"
 }
 
+# Canonical ERE for a version string as this CLI GENERATES them, unanchored so
+# each consumer can anchor and extend it. get_next_version() emits X.Y.Z for
+# patch/minor/major and X.Y.Z.R once a `revision` bump lands, so a pattern that
+# hardcodes three segments stops matching the moment a repo ships its first
+# revision — and every one of these consumers fails by silently skipping its
+# rewrite, not by reporting. The trailing group is open-ended so a repo can
+# change version syntax again mid-lifecycle without another round of edits.
+#
+# Three segments are required, not two: these patterns scan prose and filenames
+# for "the version", and a 2+ shape would let an unrelated backticked `3.11` in
+# a README win the first-match scan.
+#
+# Digits and dots only, which is what makes it safe to interpolate into a sed
+# replacement — no "/", "&" or "\" can reach the substitution.
+#
+# NOT interchangeable with MANIFEST_CLI_VERSION_REGEX (config: version.regex):
+# that one is user-configurable and validates version INPUT; this one guards
+# internal rewrites, so it stays fixed and out of user reach.
+_MANIFEST_CLI_VERSION_ERE='[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)*'
+
 validate_version_format() {
     local version="$1"
     local pattern="${MANIFEST_CLI_VERSION_REGEX:-^[0-9]+(\.[0-9]+)*$}"

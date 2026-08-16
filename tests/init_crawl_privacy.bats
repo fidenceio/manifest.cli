@@ -42,7 +42,7 @@ teardown() {
     run ensure_crawl_privacy_files "$PROJ"
     [ "$status" -eq 0 ]
     grep -q 'Allow: /' "$PROJ/robots.txt"
-    ! grep -q 'GPTBot' "$PROJ/robots.txt"
+    refute grep -q 'GPTBot' "$PROJ/robots.txt"
     [ ! -e "$PROJ/robots.txt.manifest" ]
     # The missing companion is still created.
     [ -f "$PROJ/ai.txt" ]

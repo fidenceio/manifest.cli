@@ -48,26 +48,26 @@ setup() {
 }
 
 @test "is_truthy: rejects empty string" {
-    ! is_truthy ""
+    refute is_truthy ""
 }
 
 @test "is_truthy: rejects falsy tokens" {
-    ! is_truthy "0"
-    ! is_truthy "false"
-    ! is_truthy "no"
-    ! is_truthy "off"
-    ! is_truthy "FALSE"
+    refute is_truthy "0"
+    refute is_truthy "false"
+    refute is_truthy "no"
+    refute is_truthy "off"
+    refute is_truthy "FALSE"
 }
 
 @test "is_truthy: rejects garbage" {
-    ! is_truthy "garbage"
-    ! is_truthy "tru"
-    ! is_truthy "ye s"  # internal whitespace not collapsed
-    ! is_truthy "2"
+    refute is_truthy "garbage"
+    refute is_truthy "tru"
+    refute is_truthy "ye s"  # internal whitespace not collapsed
+    refute is_truthy "2"
 }
 
 @test "is_truthy: missing arg is treated as empty (falsy)" {
-    ! is_truthy
+    refute is_truthy
 }
 
 # -----------------------------------------------------------------------------
@@ -92,16 +92,16 @@ setup() {
 }
 
 @test "is_falsy: rejects truthy tokens" {
-    ! is_falsy "1"
-    ! is_falsy "true"
-    ! is_falsy "yes"
-    ! is_falsy "on"
+    refute is_falsy "1"
+    refute is_falsy "true"
+    refute is_falsy "yes"
+    refute is_falsy "on"
 }
 
 @test "is_falsy: rejects garbage (not strict inverse of is_truthy)" {
     # A garbage value is neither truthy nor falsy — callers decide.
-    ! is_falsy "garbage"
-    ! is_falsy "maybe"
+    refute is_falsy "garbage"
+    refute is_falsy "maybe"
 }
 
 # -----------------------------------------------------------------------------

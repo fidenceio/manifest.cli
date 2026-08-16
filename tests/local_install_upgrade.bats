@@ -56,8 +56,8 @@ teardown() {
     echo "$output" | grep -q "Local manifest is not installed via Homebrew"
     echo "$output" | grep -q "brew install fidenceio/tap/manifest"
     # The new probe must replace the legacy generic warning, not run alongside it.
-    ! echo "$output" | grep -q "Homebrew upgrade did not complete"
-    ! echo "$output" | grep -q "Local installation upgraded"
+    refute grep -q "Homebrew upgrade did not complete" <<<"$output"
+    refute grep -q "Local installation upgraded" <<<"$output"
 }
 
 @test "local upgrade reports success when brew upgrade manifest succeeds" {
@@ -74,8 +74,8 @@ teardown() {
 
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Local installation upgraded to v1.2.3 via Homebrew"
-    ! echo "$output" | grep -q "Local manifest is not installed via Homebrew"
-    ! echo "$output" | grep -q "Homebrew upgrade did not complete"
+    refute grep -q "Local manifest is not installed via Homebrew" <<<"$output"
+    refute grep -q "Homebrew upgrade did not complete" <<<"$output"
     # A completed ship upgrade stamps the cooldown: the next ambient
     # auto-upgrade check would be a no-op, so don't burn a brew update on it.
     [ -f "$SCRATCH/state/.auto_upgrade_last_check" ]
@@ -149,8 +149,8 @@ teardown() {
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Homebrew upgrade did not complete"
     echo "$output" | grep -q "brew update && brew upgrade manifest"
-    ! echo "$output" | grep -q "Local manifest is not installed via Homebrew"
-    ! echo "$output" | grep -q "Local installation upgraded"
+    refute grep -q "Local manifest is not installed via Homebrew" <<<"$output"
+    refute grep -q "Local installation upgraded" <<<"$output"
     [ ! -f "$SCRATCH/state/.auto_upgrade_last_check" ]
 }
 
@@ -167,10 +167,10 @@ teardown() {
     run manifest_ship_post_push_steps "1.2.3" "$(git rev-parse HEAD)" "v1.2.3" "success"
 
     [ "$status" -eq 0 ]
-    ! echo "$output" | grep -q "Upgrading local Manifest CLI installation"
-    ! echo "$output" | grep -q "Local installation upgraded"
-    ! echo "$output" | grep -q "Local manifest is not installed via Homebrew"
-    ! echo "$output" | grep -q "Homebrew upgrade did not complete"
+    refute grep -q "Upgrading local Manifest CLI installation" <<<"$output"
+    refute grep -q "Local installation upgraded" <<<"$output"
+    refute grep -q "Local manifest is not installed via Homebrew" <<<"$output"
+    refute grep -q "Homebrew upgrade did not complete" <<<"$output"
 }
 
 @test "is_brew_managed: Cellar keg is authoritative even when brew list transiently fails (§8.13)" {
@@ -284,7 +284,7 @@ teardown() {
     echo "$output" | grep -q "can't source-build"
     echo "$output" | grep -q "Waiting for tap CI"
     echo "$output" | grep -q "Local installation upgraded to v1.2.3 via Homebrew bottle"
-    ! echo "$output" | grep -q "Homebrew upgrade did not complete"
+    refute grep -q "Homebrew upgrade did not complete" <<<"$output"
     [ -f "$sentinel" ]
     [ -f "$SCRATCH/state/.auto_upgrade_last_check" ]
 }
@@ -332,9 +332,9 @@ teardown() {
     echo "$output" | grep -q "is not published yet"
     echo "$output" | grep -q "shipped"
     echo "$output" | grep -q "cooldown has been cleared"
-    ! echo "$output" | grep -q "Tap bottle CI failed"
-    ! echo "$output" | grep -q "Homebrew upgrade did not complete"
-    ! echo "$output" | grep -q "Local installation upgraded"
+    refute grep -q "Tap bottle CI failed" <<<"$output"
+    refute grep -q "Homebrew upgrade did not complete" <<<"$output"
+    refute grep -q "Local installation upgraded" <<<"$output"
     [ ! -f "$sentinel" ]
     [ ! -f "$SCRATCH/state/.auto_upgrade_last_check" ]
 }
@@ -359,7 +359,7 @@ teardown() {
     run manifest_ship_post_push_steps "1.2.3" "$(git rev-parse HEAD)" "v1.2.3" "success"
 
     [ "$status" -eq 0 ]
-    ! echo "$output" | grep -q "Waiting for tap CI"
+    refute grep -q "Waiting for tap CI" <<<"$output"
     echo "$output" | grep -q "is not published yet"
     [ ! -f "$brewlog" ]
     [ ! -f "$ensure_log" ]   # wait=0 returns before ensure/dispatch
@@ -470,8 +470,8 @@ teardown() {
     echo "$output" | grep -q "Tap bottle CI failed"
     echo "$output" | grep -q "https://example.test/bottle/run/fail"
     echo "$output" | grep -q "gh workflow run bottle.yml"
-    ! echo "$output" | grep -q "is not published yet"
-    ! echo "$output" | grep -q "Local installation upgraded"
+    refute grep -q "is not published yet" <<<"$output"
+    refute grep -q "Local installation upgraded" <<<"$output"
     [ ! -f "$SCRATCH/state/.auto_upgrade_last_check" ]
 }
 
@@ -513,7 +513,7 @@ RB
 
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "already declares an :all bottle"
-    ! grep -q "workflow run" "$ghlog"
+    refute grep -q "workflow run" "$ghlog"
     echo "$output" | grep -q "Local installation upgraded to v1.2.3 via Homebrew bottle"
 }
 

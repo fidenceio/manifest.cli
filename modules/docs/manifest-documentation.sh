@@ -547,7 +547,7 @@ update_readme_version() {
             rm -f "$temp_file"
             local old_version=""
             if [[ -f "$MANIFEST_CLI_PROJECT_ROOT/VERSION" ]]; then
-                old_version=$(grep -oE '`[0-9]+\.[0-9]+\.[0-9]+`' "$readme_file" | head -1 | tr -d '`')
+                old_version=$(grep -oE '`'"${_MANIFEST_CLI_VERSION_ERE}"'`' "$readme_file" | head -1 | tr -d '`')
             fi
             if [[ -n "$old_version" ]] && [[ "$old_version" != "$version" ]]; then
                 sed -i'' -e "s|\`${old_version}\`|\`${version}\`|g" "$readme_file"
@@ -593,7 +593,7 @@ generate_docs_index() {
     if manifest_is_canonical_repo "$MANIFEST_CLI_PROJECT_ROOT"; then
         if [[ -f "$index_file" ]]; then
             local old_version=""
-            old_version=$(grep -oE '`[0-9]+\.[0-9]+\.[0-9]+`' "$index_file" | head -1 | tr -d '`')
+            old_version=$(grep -oE '`'"${_MANIFEST_CLI_VERSION_ERE}"'`' "$index_file" | head -1 | tr -d '`')
             if [[ -n "$old_version" ]] && [[ "$old_version" != "$version" ]]; then
                 sed -i'' -e "s|\`${old_version}\`|\`${version}\`|g" "$index_file"
             fi
@@ -848,7 +848,7 @@ prepend_root_changelog_entry() {
 }
 
 # Apply docs.retain to root CHANGELOG.md. "N versions" keeps the top N
-# `## [X.Y.Z]` sections; "N days" keeps sections whose date is within
+# `## [X.Y.Z]` / `## [X.Y.Z.R]` sections; "N days" keeps sections whose date is within
 # the last N days; "off" keeps everything. Malformed specs are ignored
 # with a warning (the file is left untouched).
 _manifest_prune_root_changelog() {
@@ -879,6 +879,11 @@ _manifest_prune_root_changelog() {
 
     local tmp
     tmp="$(mktemp "$(manifest_make_scratch_path docs)/tmp.XXXXXXXX")"
+    # The section pattern travels through the environment rather than `awk -v`:
+    # -v assignments run escape processing, which would strip the backslash in
+    # _MANIFEST_CLI_VERSION_ERE's "\." and leave a dot-matches-anything pattern
+    # deciding which sections get pruned. ENVIRON values are taken literally.
+    _MANIFEST_CLI_VERSION_ERE="$_MANIFEST_CLI_VERSION_ERE" \
     awk -v kind="$kind" -v value="$value" -v cutoff="$cutoff_date" '
         function flush_section(    keep) {
             if (section_index == 0) return
@@ -893,8 +898,15 @@ _manifest_prune_root_changelog() {
                 kept++
             }
         }
-        BEGIN { in_section = 0; kept = 0; section_index = 0; section_buf = ""; section_date = "" }
-        /^## \[[0-9]+\.[0-9]+\.[0-9]+\] - [0-9]{4}-[0-9]{2}-[0-9]{2}/ {
+        BEGIN {
+            in_section = 0; kept = 0; section_index = 0; section_buf = ""; section_date = ""
+            # A `revision` ship writes "## [X.Y.Z.R]". Under a three-segment-only
+            # pattern those headings were not recognized as section starts, so the
+            # section fell through to the passthrough rule: never counted toward
+            # the retention budget and never pruned, growing the file forever.
+            section_re = "^## \\[" ENVIRON["_MANIFEST_CLI_VERSION_ERE"] "\\] - [0-9]{4}-[0-9]{2}-[0-9]{2}"
+        }
+        $0 ~ section_re {
             flush_section()
             section_index++
             section_buf = $0 "\n"

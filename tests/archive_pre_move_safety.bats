@@ -44,6 +44,20 @@ seed_audit_file() {
     [ -f "docs/zArchive/SECURITY_ANALYSIS_REPORT_v46.0.0.md" ]
 }
 
+@test "archive sweep moves an audit file stamped with a revision version" {
+    # The report filename interpolates the live VERSION verbatim, so a repo that
+    # has shipped a revision generates SECURITY_ANALYSIS_REPORT_v<X.Y.Z.R>.md.
+    # While the archivable pattern required exactly three segments those reports
+    # matched nothing and accumulated in docs/ forever.
+    seed_audit_file "46.0.0.3" "real content"
+    git add docs/SECURITY_ANALYSIS_REPORT_v46.0.0.3.md && git commit -q -m "seed"
+
+    run main_cleanup "46.12.2" "2026-05-05 22:00:00 UTC"
+    [ "$status" -eq 0 ]
+    [ ! -f "docs/SECURITY_ANALYSIS_REPORT_v46.0.0.3.md" ]
+    [ -f "docs/zArchive/SECURITY_ANALYSIS_REPORT_v46.0.0.3.md" ]
+}
+
 @test "archive sweep aborts on uncommitted edit to a sweepable file" {
     seed_audit_file "46.0.0" "original"
     git add docs/SECURITY_ANALYSIS_REPORT_v46.0.0.md && git commit -q -m "seed"

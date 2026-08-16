@@ -91,7 +91,7 @@ teardown() {
     [ "$(git rev-parse HEAD)" = "$pre_head" ]
     [[ "$output" == *"modified formula/manifest.rb in the CLI repo"* ]]
     [[ "$output" == *"Refusing to create a post-tag CLI commit"* ]]
-    ! git log --format=%s | grep -q "Update Homebrew formula to v1.2.3"
+    refute grep -q "Update Homebrew formula to v1.2.3" < <(git log --format=%s)
 }
 
 @test "GitHub Release failure (required) aborts before Homebrew with homebrew status still skipped" {
@@ -106,7 +106,7 @@ teardown() {
     [ "$status" -eq 1 ]
 
     grep -qx "github_release" "$ORDER_LOG"
-    ! grep -qx "homebrew_formula" "$ORDER_LOG"
+    refute grep -qx "homebrew_formula" "$ORDER_LOG"
     [[ "$output" == *"failed step:        github_release"* ]]
     [[ "$output" == *"homebrew status:    skipped"* ]]
 }
@@ -141,8 +141,8 @@ teardown() {
     grep -qx "github_release" "$ORDER_LOG"
     grep -qx "homebrew_formula" "$ORDER_LOG"
     # ...and neither the brew nor the manifest upgrade arm fired.
-    ! grep -qx "brew_called" "$ORDER_LOG"
-    ! grep -qx "manifest_upgrade_called" "$ORDER_LOG"
+    refute grep -qx "brew_called" "$ORDER_LOG"
+    refute grep -qx "manifest_upgrade_called" "$ORDER_LOG"
     [[ "$output" == *"failed step:        homebrew_update"* ]]
 }
 
@@ -237,7 +237,7 @@ teardown() {
     # The view-guard ran...
     grep -q $'\trelease\tview' "$MANIFEST_CLI_GH_STUB_LOG"
     # ...and create was never reached.
-    ! grep -q $'\trelease\tcreate' "$MANIFEST_CLI_GH_STUB_LOG"
+    refute grep -q $'\trelease\tcreate' "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
 # --- Hook 1: tap reconciliation after the bottle-wait upgrade -----------------

@@ -93,7 +93,7 @@ make_stub() {
     grep -qx '^- Added fleet adoption planning across the v46 line$' "$changes"
     grep -qx '^- Fixed release-note generation so empty ranges no longer emit filler$' "$changes"
     # Original local bullets are gone.
-    ! grep -q '^- Add fleet adoption planning$' "$changes"
+    refute grep -q '^- Add fleet adoption planning$' "$changes"
 }
 
 @test "provider=command: missing command env var falls back without aborting" {
@@ -209,7 +209,7 @@ EOF
     [ "$status" -eq 0 ]
     [ "$(echo "$output" | grep -c '^- ')" -eq 15 ]
     echo "$output" | grep -q '^- Bullet number 15$'
-    ! echo "$output" | grep -q '^- Bullet number 16$'
+    refute grep -q '^- Bullet number 16$' <<<"$output"
 }
 
 @test "validation: bullets containing banned LLM-preamble phrases are rejected" {
@@ -237,6 +237,6 @@ EOF
 
     [ "$status" -eq 0 ]
     [ "$(echo "$output" | grep -c '^- ')" -eq 2 ]
-    ! echo "$output" | grep -q "Hope that helps"
-    ! echo "$output" | grep -q "Let me know"
+    refute grep -q "Hope that helps" <<<"$output"
+    refute grep -q "Let me know" <<<"$output"
 }

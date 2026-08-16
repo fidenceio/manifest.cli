@@ -61,7 +61,7 @@ RUNNER() { "$TEST_REPO_ROOT/scripts/run-tests.sh" --jobs 1 --no-cache "$@"; }
     unset MANIFEST_CLI_TEST_MAX_SKIPS
     run RUNNER "$FIXTURE"
     [ "$status" -eq 0 ]
-    ! echo "$output" | grep -q "budget exceeded"
+    refute grep -q "budget exceeded" <<<"$output"
 }
 
 @test "skips: exceeding the budget FAILS the run even though every test passed" {
@@ -69,20 +69,20 @@ RUNNER() { "$TEST_REPO_ROOT/scripts/run-tests.sh" --jobs 1 --no-cache "$@"; }
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "budget exceeded: 1 skipped, at most 0 allowed"
     # The fixture's own TAP stream is still all-green — that is the whole point.
-    ! echo "$output" | grep -q "^not ok "
+    refute grep -q "^not ok " <<<"$output"
 }
 
 @test "skips: a budget at or above the count passes" {
     MANIFEST_CLI_TEST_MAX_SKIPS=1 run RUNNER "$FIXTURE"
     [ "$status" -eq 0 ]
-    ! echo "$output" | grep -q "budget exceeded"
+    refute grep -q "budget exceeded" <<<"$output"
 }
 
 @test "skips: a zero budget passes when nothing skips" {
     _write_fixture "$SCRATCH/clean.bats" no-skip
     MANIFEST_CLI_TEST_MAX_SKIPS=0 run RUNNER "$SCRATCH/clean.bats"
     [ "$status" -eq 0 ]
-    ! echo "$output" | grep -q "test(s) skipped"
+    refute grep -q "test(s) skipped" <<<"$output"
 }
 
 @test "skips: a non-numeric budget fails closed rather than being ignored" {

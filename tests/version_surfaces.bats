@@ -44,7 +44,7 @@ JSON
     run manifest_version_surface_scan "$SCRATCH" 3
     [ "$status" -eq 0 ]
     echo "$output" | grep -q $'npm-package\tpackage-manifest\tjson\tnoncanonical\tpackages/app/package.json\t2.0.0'
-    ! echo "$output" | grep -q "node_modules/pkg/package.json"
+    refute grep -q "node_modules/pkg/package.json" <<<"$output"
 }
 
 @test "version surfaces: custom canonical version file is canonical without mutating VERSION" {
@@ -174,5 +174,5 @@ TSV
     echo "$output" | grep -q $'custom-version-file\tcanonical\ttext\tcanonical\tVERSION\t1.0.0'
     # The malformed (3-column) row is dropped without warning or error, so its
     # file never becomes a scanned surface.
-    ! echo "$output" | grep -q "orphan.txt"
+    refute grep -q "orphan.txt" <<<"$output"
 }

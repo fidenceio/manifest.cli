@@ -20,7 +20,7 @@ teardown() {
     run manifest_discovery_find_files "$SCRATCH" 3 0 version package.json
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "packages/app/package.json"
-    ! echo "$output" | grep -q "node_modules/pkg/package.json"
+    refute grep -q "node_modules/pkg/package.json" <<<"$output"
 }
 
 @test "discovery: fleet profile preserves fleet's package-directory pruning" {
@@ -59,5 +59,5 @@ teardown() {
     run manifest_discovery_find_git_repos "$SCRATCH" 5 true 1 fleet true
     [ "$status" -eq 0 ]
     echo "$output" | grep -q $'^outer\t'
-    ! echo "$output" | grep -q "outer/inner"
+    refute grep -q "outer/inner" <<<"$output"
 }

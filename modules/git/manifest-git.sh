@@ -417,7 +417,10 @@ manifest_version_sync_apply() {
     # replacement string: the helper trusts its caller, and a "/", "&" or "\"
     # in the value would corrupt the substitution. Callers pass clean
     # integer-arithmetic semver today; this fail-closes loudly if that changes.
-    if ! [[ "$new_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.+-]+)?$ ]]; then
+    # The segment count comes from _MANIFEST_CLI_VERSION_ERE so a `revision` bump
+    # (X.Y.Z.R) syncs like any other: hardcoding three segments here refused
+    # every revision ship and left the sync targets a full version behind.
+    if ! [[ "$new_version" =~ ^${_MANIFEST_CLI_VERSION_ERE}([-+][0-9A-Za-z.+-]+)?$ ]]; then
         echo "   ⚠️  version.sync: refusing unsafe version string '${new_version}' — skipped"
         return 1
     fi
@@ -999,6 +1002,65 @@ manifest_assert_release_branch() {
 }
 export -f manifest_assert_release_branch
 
+# Give the default branch an upstream when it has none, after a successful push.
+#
+# push_changes() below pushes a literal refspec (`git push <remote> <branch>
+# <tag>`), which updates refs/remotes/<remote>/<branch> but never writes
+# branch.<name>.remote / branch.<name>.merge — git only writes those on a clone
+# or an explicit `push -u`. So in a repo that Manifest ships but no human has
+# ever pushed by hand, the branch ends up with no upstream: bare `git push` /
+# `git pull` fail with "no upstream branch" and `git status` shows no
+# ahead/behind. Manifest itself is unaffected (it always passes an explicit
+# remote and refspec and never consults the tracking ref) — the cost is entirely
+# to the human, who should not have to push once by hand to get a working repo.
+#
+# Done as a separate config write *after* the push rather than by adding -u to
+# the push itself, so the release refspec stays literal and untouched: the
+# guarantee that ship pushes exactly the branch it validated
+# (manifest_assert_release_branch, the v4.0.0 mishap) is not in play here at all.
+#
+# Deliberately conservative:
+#   - only when the branch has no upstream; an existing one is the user's choice
+#   - only for 'origin', or a lone remote when there is no 'origin'. An upstream
+#     is single-valued; picking among several named remotes is not ours to guess.
+#   - announced in one line, never silent — this writes to the user's git config
+#   - never fatal. The push already succeeded and the release is public; failing
+#     here would turn a shipped release into a reported failure.
+#
+# ARGUMENTS:
+#   $1 - repo path (default ".")
+#   $2 - branch (default ${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main})
+# RETURNS: always 0.
+manifest_set_upstream_if_absent() {
+    local repo="${1:-.}"
+    local branch="${2:-${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}}"
+
+    # An upstream already configured is the user's decision — leave it alone.
+    if git -C "$repo" config --get "branch.$branch.remote" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    local remotes remote=""
+    remotes="$(git -C "$repo" remote 2>/dev/null)"
+    if printf '%s\n' "$remotes" | grep -qx 'origin'; then
+        remote="origin"
+    elif [ "$(printf '%s\n' "$remotes" | grep -c .)" -eq 1 ]; then
+        remote="$(printf '%s\n' "$remotes" | grep .)"
+    fi
+    [ -n "$remote" ] || return 0
+
+    # Requires the remote-tracking ref the push just updated.
+    git -C "$repo" rev-parse --verify -q "refs/remotes/$remote/$branch" >/dev/null 2>&1 || return 0
+
+    if git -C "$repo" branch --set-upstream-to="$remote/$branch" "$branch" >/dev/null 2>&1; then
+        echo "   🔗 Set upstream '$branch' → $remote/$branch (it had none; bare git push/pull/status now work)"
+    else
+        echo "   ⚠️  Could not set upstream for '$branch' (non-fatal — the release is already pushed)"
+    fi
+    return 0
+}
+export -f manifest_set_upstream_if_absent
+
 push_changes() {
     local version="$1"
     local tag_name
@@ -1025,7 +1087,11 @@ push_changes() {
             return 1
         fi
     done
-    
+
+    # Every remote pushed. The literal refspecs above create no tracking config,
+    # so a repo only ever pushed by Manifest would be left with no upstream.
+    manifest_set_upstream_if_absent "$MANIFEST_CLI_PROJECT_ROOT" "$default_branch"
+
     echo "✅ All remotes updated successfully"
     return 0
 }

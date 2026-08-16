@@ -146,7 +146,7 @@ EOF
     run ensure_docker_installed <<< "n"
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Skipping Docker installation"
-    ! echo "$output" | grep -q "Docker Desktop installed"
+    refute grep -q "Docker Desktop installed" <<<"$output"
     [ ! -s "$BREW_LOG" ]
 }
 
@@ -358,7 +358,7 @@ EOF
     ln -sfn "runtime/v2.0.0" "$HOME/.manifest-cli/current"
     run prune_old_versions 5
     [ "$status" -eq 0 ]
-    ! echo "$output" | grep -q "Pruned"
+    refute grep -q "Pruned" <<<"$output"
     [ -d "$rt/v1.0.0" ]
     [ -d "$rt/v2.0.0" ]
 }
@@ -372,7 +372,7 @@ EOF
     ln -sfn "runtime/v2.0.0" "$HOME/.manifest-cli/current"
     run prune_old_versions
     [ "$status" -eq 0 ]
-    ! echo "$output" | grep -q "Pruned"
+    refute grep -q "Pruned" <<<"$output"
     [ -d "$rt/v1.0.0" ]
     [ -d "$rt/v2.0.0" ]
 }

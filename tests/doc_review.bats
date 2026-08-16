@@ -89,7 +89,8 @@ teardown() {
     git log -1 --pretty=%B | grep -q "Documentation files changed: 1"
     git show --name-only --pretty= HEAD | grep -q "modules/core/manifest-core.sh"
     git show --name-only --pretty= HEAD | grep -q "docs/documentation-reviews/DOC_REVIEW_"
-    ! git show --name-only --pretty= HEAD | grep -q ".git/manifest-doc-review/latest.md"
+    refute grep -q ".git/manifest-doc-review/latest.md" \
+        < <(git show --name-only --pretty= HEAD)
 }
 
 @test "documentation review release notes are included in git changes" {

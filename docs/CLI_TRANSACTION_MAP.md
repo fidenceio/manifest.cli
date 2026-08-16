@@ -24,7 +24,7 @@ This map identifies high-consequence paths and their side-effect boundaries.
 7. Update README/docs metadata.
 8. Commit release files.
 9. Create tag.
-10. Push branch and tag.
+10. Push branch and tag, then set the branch's upstream if it has none. The push uses a literal refspec, which never writes tracking config, so a repo only ever pushed by Manifest would otherwise have no upstream. This is a `local-write` occurring *after* the `remote-write`: it is conditional (skipped when an upstream exists, or when several remotes make the choice ambiguous), announced on stdout, and never fatal — the release is already public by then, so it cannot fail the ship.
 11. Create or reuse GitHub Release.
 12. Update Homebrew tap when canonical CLI release rules apply.
 13. Verify completion cleanliness before printing success: the source tree must be clean, and published ships must still have `HEAD` at the pushed release head.

@@ -45,7 +45,7 @@ teardown() {
     manifest_repo_scope_confirm_apply() { echo "CONFIRM-CALLED"; return 0; }
     run manifest_execution_require_apply "preview" "/tmp" "hint -y"
     [ "$status" -eq 0 ]
-    ! echo "$output" | grep -q "CONFIRM-CALLED"
+    refute grep -q "CONFIRM-CALLED" <<<"$output"
 }
 
 @test "require_apply: apply mode confirms and proceeds on accept" {

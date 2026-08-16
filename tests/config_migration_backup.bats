@@ -58,7 +58,7 @@ teardown() {
     [ "$status" -eq 0 ]
 
     # No backup file.
-    ! ls "$CFG".bak.* >/dev/null 2>&1
+    refute ls "$CFG".bak.* >/dev/null 2>&1
     # No mutation: file byte-identical to the pre-migration content.
     [ "$(cat "$CFG")" = "$pre" ]
 }
@@ -72,7 +72,7 @@ teardown() {
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "would-update"
 
-    ! ls "$CFG".bak.* >/dev/null 2>&1
+    refute ls "$CFG".bak.* >/dev/null 2>&1
     [ "$(cat "$CFG")" = "$pre" ]
 }
 
@@ -90,5 +90,5 @@ YAML
 
     run _manifest_config_apply_migrations "$CFG" "false"
     [ "$status" -eq 0 ]
-    ! ls "$CFG".bak.* >/dev/null 2>&1
+    refute ls "$CFG".bak.* >/dev/null 2>&1
 }

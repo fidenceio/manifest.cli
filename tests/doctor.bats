@@ -40,7 +40,7 @@ init_repo() {
     run manifest_doctor
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Version surfaces.*disabled by policy"
-    ! echo "$output" | grep -q "noncanonical detected"
+    refute grep -q "noncanonical detected" <<<"$output"
 }
 
 @test "doctor: warns on invalid version surface policy but stays read-only" {

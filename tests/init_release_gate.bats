@@ -44,7 +44,7 @@ teardown() {
     run ensure_release_gate_script "$PROJ"
     [ "$status" -eq 0 ]
     grep -q 'echo mine' "$PROJ/scripts/run-tests.sh"
-    ! grep -q 'scaffolded by Manifest CLI' "$PROJ/scripts/run-tests.sh"
+    refute grep -q 'scaffolded by Manifest CLI' "$PROJ/scripts/run-tests.sh"
     # The existing gate is preserved and nothing is written beside it.
     [ ! -e "$PROJ/scripts/run-tests.sh.manifest" ]
 }
@@ -127,9 +127,9 @@ EOF
     ensure_release_gate_script "$PROJ"
     grep -q 'run_check npm run lint' "$PROJ/scripts/run-tests.sh"
     grep -q 'run_check npm run build' "$PROJ/scripts/run-tests.sh"
-    ! grep -qE 'run_check npm run test' "$PROJ/scripts/run-tests.sh"
+    refute grep -qE 'run_check npm run test' "$PROJ/scripts/run-tests.sh"
     # Host-native only: the neutral default never imposes a container.
-    ! grep -q 'docker' "$PROJ/scripts/run-tests.sh"
+    refute grep -q 'docker' "$PROJ/scripts/run-tests.sh"
 }
 
 @test "gate scaffold: node repo with build+test gets both via the detected pm" {
@@ -149,7 +149,7 @@ EOF
     touch "$PROJ/pnpm-lock.yaml"
     ensure_release_gate_script "$PROJ"
     grep -q 'run_check pnpm run build' "$PROJ/scripts/run-tests.sh"
-    ! grep -q 'run_check npm run' "$PROJ/scripts/run-tests.sh"
+    refute grep -q 'run_check npm run' "$PROJ/scripts/run-tests.sh"
 }
 
 @test "gate scaffold: package-manager detection — yarn lockfile" {
@@ -173,7 +173,7 @@ EOF
     touch "$PROJ/yarn.lock"
     ensure_release_gate_script "$PROJ"
     grep -q 'run_check pnpm run build' "$PROJ/scripts/run-tests.sh"
-    ! grep -q 'run_check yarn run' "$PROJ/scripts/run-tests.sh"
+    refute grep -q 'run_check yarn run' "$PROJ/scripts/run-tests.sh"
 }
 
 @test "gate scaffold: Go repo gets host-native go build + go test" {
@@ -181,7 +181,7 @@ EOF
     ensure_release_gate_script "$PROJ"
     grep -q 'run_check go build ./\.\.\.' "$PROJ/scripts/run-tests.sh"
     grep -q 'run_check go test ./\.\.\.' "$PROJ/scripts/run-tests.sh"
-    ! grep -q 'docker' "$PROJ/scripts/run-tests.sh"
+    refute grep -q 'docker' "$PROJ/scripts/run-tests.sh"
 }
 
 @test "gate scaffold: Makefile test target is a fallback when nothing more specific is declared" {
@@ -196,7 +196,7 @@ EOF
     printf 'test:\n\techo test\n' > "$PROJ/Makefile"
     ensure_release_gate_script "$PROJ"
     grep -q 'run_check cargo test' "$PROJ/scripts/run-tests.sh"
-    ! grep -q 'run_check make test' "$PROJ/scripts/run-tests.sh"
+    refute grep -q 'run_check make test' "$PROJ/scripts/run-tests.sh"
 }
 
 @test "gate scaffold: .NET repo (.csproj, no package.json) gets a dotnet gate, not 'other'" {
@@ -205,8 +205,8 @@ EOF
     ensure_release_gate_script "$PROJ"
     grep -q 'run_check dotnet build' "$PROJ/scripts/run-tests.sh"
     grep -q 'run_check dotnet test' "$PROJ/scripts/run-tests.sh"
-    ! grep -q 'cannot certify' "$PROJ/scripts/run-tests.sh"
-    ! grep -q 'docker' "$PROJ/scripts/run-tests.sh"
+    refute grep -q 'cannot certify' "$PROJ/scripts/run-tests.sh"
+    refute grep -q 'docker' "$PROJ/scripts/run-tests.sh"
 }
 
 @test "gate scaffold: .NET solution at repo root is detected" {
@@ -226,14 +226,14 @@ EOF
     printf 'services:\n  x:\n    image: nginx\n' > "$PROJ/docker-compose.yml"
     ensure_release_gate_script "$PROJ"
     grep -q 'run_check go build' "$PROJ/scripts/run-tests.sh"
-    ! grep -q 'docker compose config' "$PROJ/scripts/run-tests.sh"
+    refute grep -q 'docker compose config' "$PROJ/scripts/run-tests.sh"
 }
 
 @test "gate scaffold: Docker-only repo is NOT auto-containerized — falls to the loud path" {
     echo "1.0.0" > "$PROJ/VERSION"
     printf 'FROM alpine:3.20\nCMD ["true"]\n' > "$PROJ/Dockerfile"
     ensure_release_gate_script "$PROJ"
-    ! grep -q 'docker build' "$PROJ/scripts/run-tests.sh"
+    refute grep -q 'docker build' "$PROJ/scripts/run-tests.sh"
     grep -q 'cannot certify' "$PROJ/scripts/run-tests.sh"
 }
 
@@ -246,7 +246,7 @@ EOF
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "cannot certify"
     echo "$output" | grep -q "release_gate=none"
-    ! echo "$output" | grep -q "run-tests: PASS"
+    refute grep -q "run-tests: PASS" <<<"$output"
 }
 
 @test "gate scaffold: no verification declared — smoke tier stays a fast baseline preflight" {

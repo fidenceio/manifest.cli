@@ -36,7 +36,7 @@ teardown() {
 }
 
 @test "apply header with no hook registered prints only the apply line" {
-    ! declare -F _manifest_execution_apply_hook
+    refute declare -F _manifest_execution_apply_hook
 
     run manifest_execution_apply_header
     [ "$status" -eq 0 ]
@@ -57,7 +57,7 @@ teardown() {
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/work" run manifest_prep_repo --dry-run
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Dry run"
-    ! echo "$output" | grep -q "hook-fired"
+    refute grep -q "hook-fired" <<<"$output"
     [ ! -f "$SCRATCH/hook.marker" ]
 }
 

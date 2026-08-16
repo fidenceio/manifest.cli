@@ -85,7 +85,7 @@ _writer_marker() {
     [ "$status" -eq 0 ]
     echo "$output" | grep -qx '.gitignore:preserved'
     grep -qx 'node_modules/' "$PROJ/.gitignore"
-    ! grep -q 'Manifest CLI' "$PROJ/.gitignore"
+    refute grep -q 'Manifest CLI' "$PROJ/.gitignore"
     [ ! -e "$PROJ/.gitignore.manifest" ]
 }
 
@@ -96,7 +96,7 @@ _writer_marker() {
     # A minimal .gitignore lacks most advice — the agent rules among them.
     echo "$output" | grep -qx '.claude/\*'
     # A rule it DOES carry is not reported as missing.
-    ! echo "$output" | grep -qx 'node_modules/'
+    refute grep -qx 'node_modules/' <<<"$output"
     [ ! -e "$PROJ/.gitignore.manifest" ]
 }
 
@@ -132,10 +132,10 @@ _writer_marker() {
     export MANIFEST_CLI_PROJECT_ROOT="$PROJ"
     run manifest_init_repo --dry-run --force
     [ "$status" -eq 0 ]
-    ! echo "$output" | grep -q 'would overwrite: VERSION'
-    ! echo "$output" | grep -q 'would overwrite: README.md'
-    ! echo "$output" | grep -q 'would overwrite: CHANGELOG.md'
-    ! echo "$output" | grep -q 'would overwrite: .gitignore'
-    ! echo "$output" | grep -q 'would overwrite: robots.txt'
+    refute grep -q 'would overwrite: VERSION' <<<"$output"
+    refute grep -q 'would overwrite: README.md' <<<"$output"
+    refute grep -q 'would overwrite: CHANGELOG.md' <<<"$output"
+    refute grep -q 'would overwrite: .gitignore' <<<"$output"
+    refute grep -q 'would overwrite: robots.txt' <<<"$output"
     echo "$output" | grep -q 'would recreate:  manifest.config.local.yaml'
 }

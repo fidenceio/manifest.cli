@@ -305,17 +305,101 @@ _manifest_dir_is_own_git_repository() {
 }
 
 # -----------------------------------------------------------------------------
+# Function: manifest_github_owner_from_origin
+# -----------------------------------------------------------------------------
+# The owner half of origin's slug, or empty when the repo has no origin remote
+# (or its URL is not a recognizable owner/name form). URL parsing is delegated
+# to manifest_origin_repo_slug so this file keeps exactly one origin parser.
+# -----------------------------------------------------------------------------
+manifest_github_owner_from_origin() {
+    local project_root="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
+
+    # Only an origin the directory OWNS may speak for it. `git -C DIR` walks
+    # upward, so a member nested in a fleet root would otherwise inherit the
+    # parent's namespace and create its repo in the wrong org.
+    _manifest_dir_is_own_git_repository "$project_root" || return 0
+
+    local slug=""
+    slug="$(manifest_origin_repo_slug "$project_root" 2>/dev/null || true)"
+    [[ "$slug" == */* ]] || return 0
+    printf '%s\n' "${slug%%/*}"
+}
+
+# -----------------------------------------------------------------------------
+# Function: manifest_resolve_github_owner
+# -----------------------------------------------------------------------------
+# The effective GitHub owner, in precedence order:
+#   1. github.owner when set — an explicit choice always wins.
+#   2. the origin remote's owner — the repo's own git metadata is a better
+#      answer than "whoever gh happens to be authenticated as", and it needs
+#      no prompt to obtain.
+#   3. empty, preserving gh's authenticated-user default for a repo that has
+#      no origin yet (the normal state during `--create-repo-*`).
+#
+# Silent in every ordinary case. The one situation worth interrupting for is a
+# configured owner that disagrees with origin — nearly always a config copied
+# from another repo or fleet member, which would create the repo in the wrong
+# namespace. Interactive runs ask; non-interactive runs warn once and keep the
+# configured value, so a CI ship never blocks on stdin.
+# -----------------------------------------------------------------------------
+manifest_resolve_github_owner() {
+    local project_root="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
+    local configured="${MANIFEST_CLI_GITHUB_OWNER:-}"
+    local origin_owner=""
+    origin_owner="$(manifest_github_owner_from_origin "$project_root")"
+
+    if [[ -z "$configured" ]]; then
+        printf '%s\n' "$origin_owner"
+        return 0
+    fi
+
+    if [[ -z "$origin_owner" || "$origin_owner" == "$configured" ]]; then
+        printf '%s\n' "$configured"
+        return 0
+    fi
+
+    # Conflict. Warn at most once per process so a fleet run reports it for the
+    # member that hit it without repeating on every subsequent resolve.
+    case ":${_MANIFEST_CLI_GITHUB_OWNER_CONFLICT_WARNED:-}:" in
+        *":${project_root}:"*) printf '%s\n' "$configured"; return 0 ;;
+    esac
+    export _MANIFEST_CLI_GITHUB_OWNER_CONFLICT_WARNED="${_MANIFEST_CLI_GITHUB_OWNER_CONFLICT_WARNED:-}:${project_root}"
+
+    # Every human-facing line goes to stderr: this function's stdout IS its
+    # return value, and a stray message there lands in the caller's owner
+    # variable and fails validation.
+    log_warning "github.owner is '${configured}' but origin belongs to '${origin_owner}'."
+
+    if [[ -t 0 ]] && [[ "${MANIFEST_CLI_AUTO_CONFIRM:-0}" != "1" ]]; then
+        local answer=""
+        # `read -p` writes its prompt to stderr already.
+        read -r -p "   Use '${origin_owner}' (from origin) instead of '${configured}'? [y/N] " answer
+        case "$answer" in
+            [Yy]*)
+                echo "   Using '${origin_owner}'. Persist it with: manifest config set --layer local github.owner ${origin_owner}" >&2
+                printf '%s\n' "$origin_owner"
+                return 0
+                ;;
+        esac
+    fi
+
+    echo "   Keeping the configured owner '${configured}'." >&2
+    printf '%s\n' "$configured"
+}
+
+# -----------------------------------------------------------------------------
 # Function: _manifest_github_repo_target
 # -----------------------------------------------------------------------------
-# Resolves the target passed to `gh repo create`. github.owner is optional;
-# unset preserves gh's authenticated-user default. The configured owner is
-# intentionally one fleet/repo-wide value, not a per-member override map.
+# Resolves the target passed to `gh repo create`. github.owner is optional; when
+# it is unset the owner is taken from the origin remote, and only a repo with
+# neither falls through to gh's authenticated-user default. The configured owner
+# is intentionally one fleet/repo-wide value, not a per-member override map.
 # -----------------------------------------------------------------------------
 _manifest_github_repo_target() {
     local project_root="$1"
     local name owner
     name="$(basename "$project_root")"
-    owner="${MANIFEST_CLI_GITHUB_OWNER:-}"
+    owner="$(manifest_resolve_github_owner "$project_root")"
 
     if [[ -z "$owner" ]]; then
         printf '%s\n' "$name"

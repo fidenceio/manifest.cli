@@ -33,7 +33,7 @@ teardown() {
     [ -f "$MIGRATE_SCRIPT" ]
     grep -qE '^[[:space:]]*migrate_user_global_configuration[[:space:]]*\(\)[[:space:]]*\{' "$MIGRATE_SCRIPT"
     # install-cli.sh must NOT define the function inline anymore.
-    ! grep -qE '^[[:space:]]*migrate_user_global_configuration[[:space:]]*\(\)[[:space:]]*\{' "$INSTALLER"
+    refute grep -qE '^[[:space:]]*migrate_user_global_configuration[[:space:]]*\(\)[[:space:]]*\{' "$INSTALLER"
 }
 
 @test "migrate: install-cli.sh sources the extracted script" {
@@ -172,7 +172,7 @@ EOF
     run _run_migration
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "No user config migrations needed"
-    ! ls "$CFG".bak.* >/dev/null 2>&1
+    refute ls "$CFG".bak.* >/dev/null 2>&1
 }
 
 @test "migrate: MANIFEST_CLI_CONFIG_SKIP_WRITES suppresses both backup and mutation" {
@@ -187,6 +187,6 @@ EOF
     [ "$status" -eq 0 ]
 
     # No backup, and the file is byte-identical (no in-place rewrite happened).
-    ! ls "$CFG".bak.* >/dev/null 2>&1
+    refute ls "$CFG".bak.* >/dev/null 2>&1
     [ "$(cat "$CFG")" = "$pre" ]
 }

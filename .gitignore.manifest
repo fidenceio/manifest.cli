@@ -3,11 +3,6 @@
 # =============================================================================
 .manifest-cli/
 *.manifest-cli.log
-.gitignore.manifest
-robots.txt.manifest
-ai.txt.manifest
-.env.example.manifest
-scripts/run-tests.sh.manifest
 
 # =============================================================================
 # OS generated files
@@ -53,6 +48,7 @@ nbproject/
 .claude/*
 !.claude/agents/
 !.claude/commands/
+!.claude/skills/
 !.claude/settings.json
 .cline/
 .codeium/
@@ -98,6 +94,56 @@ nbproject/
 !*.template.yml
 !*.template.json
 !*.template.toml
+
+# ============================================================================
+#  KEY MATERIAL
+# ============================================================================
+# Deny-by-default. Manifest's release commit is a bare `git add .` and its
+# security gate does not scan for key material, so an unmatched private key
+# gets pushed to the remote permanently, on the next ship, silently.
+#
+# Escape hatch for a legitimately-public file caught below:
+#     git add -f path/to/public-thing.pem
+
+# --- PEM-family containers: the extension does not tell you what's inside ---
+*.key
+*.pem
+*.p8
+*.pkcs8
+*.der
+
+# --- Binary bundles: these always carry the private half ---
+*.pfx
+*.p12
+*.jks
+*.keystore
+*.bks
+
+# --- SSH private keys ---
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+id_ecdsa_sk
+id_ed25519_sk
+*_rsa
+*_ed25519
+*.ppk
+
+# --- GPG private keyrings only. NOT *.gpg — that is ciphertext and is often
+#     committed deliberately (git-crypt, sops, pass). ---
+secring.*
+*.private.gpg
+*.secret.gpg
+
+# ----------------------------------------------------------------------------
+#  EXCEPTIONS — public halves, re-included. Must stay AFTER the rules above.
+# ----------------------------------------------------------------------------
+!*.pub
+!*public*.pem
+!*public*.key
+!fullchain.pem
+!chain.pem
 
 # =============================================================================
 # Logs and runtime data

@@ -113,5 +113,5 @@ _write_manifest() {
     # No .data-dirs files written — output must not contain the legacy hardcode.
     mkdir -p "$MANIFEST_CLI_CLOUD_DIR/cli-plugins"
     run manifest_install_paths_data_dirs
-    ! echo "$output" | grep -qx "$HOME/.manifest-agent"
+    refute grep -qx "$HOME/.manifest-agent" <<<"$output"
 }

@@ -35,11 +35,17 @@ teardown() {
     [ -f "$cfg" ]
     # The whole validation: block and each former knob must be gone — none of
     # them was ever read by a gate, so advertising them was a contract hole.
-    ! grep -qE '^validation:' "$cfg"
-    ! grep -q 'require_clean_status' "$cfg"
-    ! grep -q 'enforce_dependencies' "$cfg"
-    ! grep -q 'require_expected_branch' "$cfg"
-    ! grep -q 'allow_branch_operations' "$cfg"
+    #
+    # Anchored to YAML key position, not bare word: the generated file's own
+    # comment explains the removal by naming require_expected_branch, and a
+    # substring match cannot tell that prose from a live key. (The bare-word
+    # form was here first but sat mid-test, where a `!` prefix is exempt from
+    # errexit, so it never failed and the mismatch went unnoticed.)
+    refute grep -qE '^validation:' "$cfg"
+    refute grep -qE '^[[:space:]]*require_clean_status[[:space:]]*:' "$cfg"
+    refute grep -qE '^[[:space:]]*enforce_dependencies[[:space:]]*:' "$cfg"
+    refute grep -qE '^[[:space:]]*require_expected_branch[[:space:]]*:' "$cfg"
+    refute grep -qE '^[[:space:]]*allow_branch_operations[[:space:]]*:' "$cfg"
 }
 
 @test "fleet config mapper exposes no validation short keys" {
@@ -51,5 +57,5 @@ teardown() {
     [ "$(get_fleet_config_value strict SENTINEL)" = "SENTINEL" ]
 
     # And the source must not map any short key onto a .validation.* path.
-    ! grep -qE '\.validation\.' "$TEST_REPO_ROOT/modules/fleet/manifest-fleet-config.sh"
+    refute grep -qE '\.validation\.' "$TEST_REPO_ROOT/modules/fleet/manifest-fleet-config.sh"
 }

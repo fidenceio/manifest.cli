@@ -222,7 +222,7 @@ EOF
     local current_sum
     current_sum="$(shasum "$decoy" | awk '{print $1}')"
     [ "$current_sum" = "$original_sum" ]
-    ! ls "$decoy".manifest-backup-* >/dev/null 2>&1
+    refute ls "$decoy".manifest-backup-* >/dev/null 2>&1
     rm -rf "$decoy_dir"
 }
 
@@ -312,7 +312,7 @@ EOF
     local current_sum
     current_sum="$(shasum "$decoy" | awk '{print $1}')"
     [ "$current_sum" = "$original_sum" ]
-    ! ls "$decoy".manifest-backup-* >/dev/null 2>&1
+    refute ls "$decoy".manifest-backup-* >/dev/null 2>&1
     rm -rf "$decoy_dir"
 }
 
@@ -396,6 +396,6 @@ EOF
     local current_sum
     current_sum="$(shasum "$decoy" | awk '{print $1}')"
     [ "$current_sum" = "$original_sum" ]
-    ! ls "$decoy".manifest-backup-* >/dev/null 2>&1
+    refute ls "$decoy".manifest-backup-* >/dev/null 2>&1
     rm -rf "$decoy_dir"
 }

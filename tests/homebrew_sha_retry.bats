@@ -117,7 +117,7 @@ teardown() {
     # The source formula must be untouched: still the all-zero placeholder, never
     # an empty or partial sha.
     grep -q 'sha256 "0000000000000000000000000000000000000000000000000000000000000000"' "$MANIFEST_CLI_PROJECT_ROOT/formula/manifest.rb"
-    ! grep -q 'sha256 ""' "$MANIFEST_CLI_PROJECT_ROOT/formula/manifest.rb"
+    refute grep -q 'sha256 ""' "$MANIFEST_CLI_PROJECT_ROOT/formula/manifest.rb"
     [ ! -f "$PUSHED_FORMULA" ]
 }
 

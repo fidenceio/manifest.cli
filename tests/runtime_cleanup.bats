@@ -46,7 +46,7 @@ teardown() {
     source "$TEST_REPO_ROOT/modules/system/manifest-install-paths.sh"
     run manifest_install_paths_cache_dirs
     [ "$status" -eq 0 ]
-    ! echo "$output" | grep -q "manifest-agent"
+    refute grep -q "manifest-agent" <<<"$output"
 }
 
 @test "cache_dirs: excludes \$HOME/.manifest-cli (user config state)" {
@@ -54,7 +54,7 @@ teardown() {
     source "$TEST_REPO_ROOT/modules/system/manifest-install-paths.sh"
     run manifest_install_paths_cache_dirs
     [ "$status" -eq 0 ]
-    ! echo "$output" | grep -qF "$SCRATCH/.manifest-cli"
+    refute grep -qF "$SCRATCH/.manifest-cli" <<<"$output"
 }
 
 # --- _manifest_runtime_maybe_cleanup_cache ----------------------------------

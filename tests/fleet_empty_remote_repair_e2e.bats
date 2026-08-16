@@ -122,5 +122,5 @@ YAML
 
     # file:// origin is not GitHub: the Release step must skip, not call gh.
     [[ "$output" == *"GitHub Release: skipped (origin is not a GitHub repository)"* ]]
-    ! grep -q $'\trelease\t' "$MANIFEST_CLI_GH_STUB_LOG"
+    refute grep -q $'\trelease\t' "$MANIFEST_CLI_GH_STUB_LOG"
 }

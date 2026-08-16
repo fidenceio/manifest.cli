@@ -115,7 +115,10 @@ validate_repository() {
 # Per-version RELEASE/CHANGELOG files are no longer generated — root
 # CHANGELOG.md is the single archival surface — so only point-in-time
 # audit artifacts (SECURITY_ANALYSIS_REPORT_v*) are archived now.
-_MANIFEST_ARCHIVABLE_REGEX='^SECURITY_ANALYSIS_REPORT_v[0-9]+\.[0-9]+\.[0-9]+(_[0-9]+T[0-9]+Z)?\.md$'
+# The version segment comes from _MANIFEST_CLI_VERSION_ERE (manifest-shared-utils.sh,
+# always sourced first) so a report stamped with a revision version — the
+# generator interpolates the live VERSION verbatim — is still archivable.
+_MANIFEST_ARCHIVABLE_REGEX='^SECURITY_ANALYSIS_REPORT_v'"${_MANIFEST_CLI_VERSION_ERE}"'(_[0-9]+T[0-9]+Z)?\.md$'
 
 # Note: docs/zArchive/ is a read-only "memory" — files enter by move only,
 # and nothing is ever created or modified inside it. There is deliberately no

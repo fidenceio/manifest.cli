@@ -127,7 +127,7 @@ teardown() {
 
     [ "$MANIFEST_CLI_OS_DATE_CMD" = "date -u -d" ]
     [ "$MANIFEST_CLI_OS_TIMEOUT_CMD" = "gtimeout" ]
-    ! grep -q "gtimeout not found" "$SCRATCH/macos-setup.out"
+    refute grep -q "gtimeout not found" "$SCRATCH/macos-setup.out"
 }
 
 @test "os: setup_macos_commands falls back and warns when coreutils is ABSENT" {

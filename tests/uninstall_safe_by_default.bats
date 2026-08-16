@@ -81,7 +81,7 @@ create_fake_install_artifacts() {
     [ ! -d "$HOME/.manifest-cli" ]
     [ ! -f "$HOME/.local/bin/manifest" ]
     [ -f "$HOME/.zshrc" ]
-    ! grep -q "MANIFEST_CLI_TEST" "$HOME/.zshrc"
+    refute grep -q "MANIFEST_CLI_TEST" "$HOME/.zshrc"
 }
 
 @test "uninstall removes manual shell-completion files (both channels swept)" {
@@ -116,7 +116,7 @@ create_fake_install_artifacts() {
     [ -f "$SCRATCH/other-bin/manifest" ]
     echo "$output" | grep -q "Manifest CLI uninstalled successfully"
     echo "$output" | grep -q "CLI binary removed: $HOME/.local/bin/manifest"
-    ! echo "$output" | grep -q "$SCRATCH/other-bin/manifest"
+    refute grep -q "$SCRATCH/other-bin/manifest" <<<"$output"
 }
 
 @test "uninstall and reinstall help advertise preview and apply flags" {

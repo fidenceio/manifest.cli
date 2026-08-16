@@ -33,6 +33,20 @@
 #   timezone: "America/New_York"
 
 # -----------------------------------------------------------------------------
+# GitHub (per-developer overrides)
+# -----------------------------------------------------------------------------
+# owner — the namespace new repositories are created under
+# (`manifest init|prep ... --create-repo-*`). Left unset it is read from this
+# repo's own `origin` remote, and only a repo with no origin falls back to
+# whoever `gh` is authenticated as. Set it here when neither answer is right —
+# e.g. your gh login is personal but you ship to an organization. A value set
+# here wins over origin, and the disagreement is reported rather than silent.
+# Accepts one GitHub user or organization name — no owner/name slug.
+#
+# github:
+#   owner: "acme-corp"
+
+# -----------------------------------------------------------------------------
 # Git (per-developer overrides)
 # -----------------------------------------------------------------------------
 # git:

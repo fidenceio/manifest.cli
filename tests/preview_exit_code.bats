@@ -97,10 +97,10 @@ setup_repo_with_remote() {
     manifest_plan_fingerprint_persist "ship-repo" "deadbeef0001" "$SCRATCH/work"
     run manifest_plan_fingerprint_warn_on_drift "ship-repo" "deadbeef0001" "$SCRATCH/work"
     [ "$status" -eq 0 ]
-    ! echo "$output" | grep -q "Plan changed since preview"
+    refute grep -q "Plan changed since preview" <<<"$output"
     # Second check is silent: the stash was consumed by the first apply.
     run manifest_plan_fingerprint_warn_on_drift "ship-repo" "deadbeef0001" "$SCRATCH/work"
-    ! echo "$output" | grep -q "Plan changed since preview"
+    refute grep -q "Plan changed since preview" <<<"$output"
 }
 
 @test "fingerprint drift between preview and apply warns (never blocks)" {

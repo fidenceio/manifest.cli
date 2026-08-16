@@ -76,7 +76,7 @@ teardown() {
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run --create-repo-private
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "exists:.*origin remote"
-    ! echo "$output" | grep -q "would gh repo create"
+    refute grep -q "would gh repo create" <<<"$output"
 }
 
 # -----------------------------------------------------------------------------
@@ -91,7 +91,7 @@ teardown() {
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_prep_repo --dry-run --create-repo-private < /dev/null
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "would gh repo create:.*private"
-    ! echo "$output" | grep -q "would prompt for an origin URL"
+    refute grep -q "would prompt for an origin URL" <<<"$output"
 }
 
 @test "prep repo --dry-run --create-repo-public: visibility flows through" {
@@ -592,7 +592,7 @@ teardown() {
     run _manifest_gh_repo_create "$SCRATCH/childrepo" "private"
     [ "$status" -eq 1 ]
     [[ "$output" == *"not its own Git repository"* ]]
-    ! grep -q $'repo\tcreate' "$MANIFEST_CLI_GH_STUB_LOG"
+    refute grep -q $'repo\tcreate' "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
 @test "_manifest_github_repo_target: rejects an invalid configured owner" {
@@ -602,6 +602,77 @@ teardown() {
     run _manifest_github_repo_target "$SCRATCH/myrepo"
     [ "$status" -eq 1 ]
     [[ "$output" == *"Invalid github.owner"* ]]
+}
+
+@test "owner resolve: unset github.owner takes the owner from the repo's own origin" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-shared-functions.sh"
+    unset MANIFEST_CLI_GITHUB_OWNER
+    git init -q "$SCRATCH/myrepo"
+    git -C "$SCRATCH/myrepo" remote add origin git@github.com:acme/myrepo.git
+
+    run manifest_resolve_github_owner "$SCRATCH/myrepo"
+    [ "$status" -eq 0 ]
+    [ "$output" = "acme" ]
+
+    run _manifest_github_repo_target "$SCRATCH/myrepo"
+    [ "$status" -eq 0 ]
+    [ "$output" = "acme/myrepo" ]
+}
+
+@test "owner resolve: no origin leaves the owner empty (gh's authenticated user still decides)" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-shared-functions.sh"
+    unset MANIFEST_CLI_GITHUB_OWNER
+    git init -q "$SCRATCH/lonely"
+
+    run manifest_resolve_github_owner "$SCRATCH/lonely"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+
+    run _manifest_github_repo_target "$SCRATCH/lonely"
+    [ "$status" -eq 0 ]
+    [ "$output" = "lonely" ]
+}
+
+@test "owner resolve: a directory nested in a parent repo does not inherit the parent's owner" {
+    # `git -C DIR` walks upward, so without an ownership check a fleet member
+    # would be created in whatever org the fleet root belongs to.
+    source "$TEST_REPO_ROOT/modules/core/manifest-shared-functions.sh"
+    unset MANIFEST_CLI_GITHUB_OWNER
+    git init -q "$SCRATCH/parent"
+    git -C "$SCRATCH/parent" remote add origin git@github.com:parentorg/parent.git
+    mkdir -p "$SCRATCH/parent/member"
+
+    run manifest_resolve_github_owner "$SCRATCH/parent/member"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "owner resolve: a configured owner wins over origin and reports the conflict on stderr" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-shared-functions.sh"
+    export MANIFEST_CLI_GITHUB_OWNER=configured-org
+    git init -q "$SCRATCH/myrepo"
+    git -C "$SCRATCH/myrepo" remote add origin git@github.com:acme/myrepo.git
+
+    # Non-interactive (bats has no TTY on stdin): keep the configured value and
+    # never block. Asserted through command substitution rather than bats's
+    # `run`, because that is how the caller consumes it — `run` merges stderr
+    # into $output and would hide warning text leaking into the value.
+    local target stderr_file="${SCRATCH}/warn.txt"
+    target="$(_manifest_github_repo_target "$SCRATCH/myrepo" 2>"$stderr_file")"
+    [ "$target" = "configured-org/myrepo" ]
+    grep -q "origin belongs to 'acme'" "$stderr_file"
+    unset _MANIFEST_CLI_GITHUB_OWNER_CONFLICT_WARNED
+}
+
+@test "owner resolve: a configured owner matching origin is silent" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-shared-functions.sh"
+    export MANIFEST_CLI_GITHUB_OWNER=acme
+    git init -q "$SCRATCH/myrepo"
+    git -C "$SCRATCH/myrepo" remote add origin git@github.com:acme/myrepo.git
+
+    run manifest_resolve_github_owner "$SCRATCH/myrepo"
+    [ "$status" -eq 0 ]
+    [ "$output" = "acme" ]
 }
 
 @test "_manifest_gh_repo_create (live): returns 1 when gh repo create fails" {

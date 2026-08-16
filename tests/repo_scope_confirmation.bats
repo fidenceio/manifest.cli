@@ -63,8 +63,8 @@ init_repo_fixture() {
     echo "$output" | grep -q "Current repo:.*example/repo"
     echo "$output" | grep -q "Git root:.*$SCRATCH"
     echo "$output" | grep -q "Mutation scope:.*this Git repository only"
-    ! echo "$output" | grep -q "Apply to this repository"
-    ! echo "$output" | grep -q "Apply target repository"
+    refute grep -q "Apply to this repository" <<<"$output"
+    refute grep -q "Apply target repository" <<<"$output"
 }
 
 # --- consent model: apply-target gate (no interactive prompt) ----------------
@@ -85,7 +85,7 @@ init_repo_fixture() {
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Apply target repository"
     echo "$output" | grep -q "Auto-confirmed unambiguous target (apply via -y)"
-    ! echo "$output" | grep -q "Repo confirmation requires an interactive terminal"
+    refute grep -q "Repo confirmation requires an interactive terminal" <<<"$output"
 }
 
 @test "gate: NO origin (origin_required default) refuses as ambiguous" {
@@ -152,7 +152,7 @@ init_repo_fixture() {
     echo "$output" | grep -q "repo scope requires a Git repository at the requested target"
     echo "$output" | grep -Fq "Target directory: $outsider"
     # The ambient repo must not have stood in for the target.
-    ! echo "$output" | grep -q "Auto-confirmed"
+    refute grep -q "Auto-confirmed" <<<"$output"
 }
 
 @test "gate: a valid target is accepted even when the cwd is NOT a git repository" {

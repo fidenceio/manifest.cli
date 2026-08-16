@@ -60,7 +60,7 @@ _stub_brew_managed_plan() {
     grep -qx "uninstall fidenceio/tap/manifest" "$BREW_LOG"
     grep -qx "untap fidenceio/tap" "$BREW_LOG"
     # The tap-qualified uninstall succeeded → no bare-name fallback call.
-    ! grep -qx "uninstall manifest" "$BREW_LOG"
+    refute grep -qx "uninstall manifest" "$BREW_LOG"
 }
 
 @test "apply_plan under bats without the escape hatch skips brew and calls nothing" {

@@ -21,9 +21,9 @@ teardown() {
 
     [ "$status" -eq 0 ]
     grep -qx '^## Highlights for v99.0.0$' "$changes"
-    ! grep -q '^### ' "$changes"
-    ! grep -q '^- ' "$changes"
-    ! grep -q "No notable user-facing changes" "$changes"
+    refute grep -q '^### ' "$changes"
+    refute grep -q '^- ' "$changes"
+    refute grep -q "No notable user-facing changes" "$changes"
 }
 
 @test "analyze_changes: cleaned bullets land under a single '### Changes' section" {
@@ -45,10 +45,10 @@ EOF
     # Trailing period stripped on the doc-review attachment line.
     grep -qx '^- Documentation review: Documentation impact appears low$' "$changes"
     # No counts table, no per-bucket headings.
-    ! grep -q '^- Notable changes:' "$changes"
-    ! grep -q '^### Bug Fixes$' "$changes"
-    ! grep -q '^### New Features$' "$changes"
-    ! grep -q '^### Improvements$' "$changes"
+    refute grep -q '^- Notable changes:' "$changes"
+    refute grep -q '^### Bug Fixes$' "$changes"
+    refute grep -q '^### New Features$' "$changes"
+    refute grep -q '^### Improvements$' "$changes"
 }
 
 @test "analyze_changes: lowercase first letter is capitalized" {

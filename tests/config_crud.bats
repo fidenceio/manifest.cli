@@ -195,7 +195,7 @@ teardown() {
     # set_default_configuration, so the built-in default wins and the file is
     # ignored — surprising enough that describe must say so out loud.
     echo "$output" | grep -q "suppresses all file layers"
-    ! echo "$output" | grep -q "Effective: filewins"
+    refute grep -q "Effective: filewins" <<<"$output"
 }
 
 # -----------------------------------------------------------------------------
@@ -247,7 +247,7 @@ YAML
 @test "config: a key written in this process is visible to a later read" {
     run manifest_config_list
     [ "$status" -eq 0 ]
-    ! echo "$output" | grep -qE '^ +git\.tag_prefix +local '
+    refute grep -qE '^ +git\.tag_prefix +local ' <<<"$output"
 
     # Same shell: the index must be invalidated by the write, or the new key
     # stays invisible until the process restarts.

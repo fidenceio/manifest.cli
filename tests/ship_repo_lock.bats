@@ -243,7 +243,7 @@ teardown() {
     # And the acquire wrapper returns success without refusing the lock.
     MANIFEST_CLI_AUDIT_SOURCE=cli-fleet run _manifest_ship_repo_lock_acquire
     [ "$status" -eq 0 ]
-    ! echo "$output" | grep -q "already applying"
+    refute grep -q "already applying" <<<"$output"
     rm -rf "$dir"
 }
 
@@ -260,7 +260,7 @@ teardown() {
     [ "$status" -ne 0 ]
     MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE=1 run _manifest_ship_repo_lock_acquire
     [ "$status" -eq 0 ]
-    ! echo "$output" | grep -q "already applying"
+    refute grep -q "already applying" <<<"$output"
     rm -rf "$dir"
 }
 

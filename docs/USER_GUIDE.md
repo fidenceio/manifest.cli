@@ -165,7 +165,7 @@ github:
   owner: fidenceio
 ```
 
-The preview prints every repository that would be created as `<owner>/<name>`. With `github.owner` unset, the displayed owner is `<authenticated-user>` and `gh` creates under its authenticated account. Existing member origins win; directories without their own `.git` are initialized from live disk state even if the preserved TSV still says `HAS_GIT=true`.
+The preview prints every repository that would be created as `<owner>/<name>`. With `github.owner` unset, the owner is taken from the repository's own `origin` remote; only a directory with no origin of its own displays `<authenticated-user>`, where `gh` creates under its authenticated account. A directory nested inside a parent repository does not inherit that parent's owner. When `github.owner` is set and disagrees with `origin`, the configured value wins and the conflict is reported — an interactive run offers the origin owner instead, a non-interactive one never blocks. Existing member origins win; directories without their own `.git` are initialized from live disk state even if the preserved TSV still says `HAS_GIT=true`.
 
 ### Adopt An Existing Workspace
 

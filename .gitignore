@@ -6,6 +6,14 @@ manifest.config
 # Manifest CLI — TTL'd green-run test cache (run-tests.sh, never commit)
 .test-cache/
 
+# Audit runs — local evidence, never committed.
+# The release commit is a bare `git add .`, so without this an audit left in the
+# tree gets swept into the next release. Keeping them untracked is also what the
+# audits themselves assume: each locks a baseline of the tracked tree (277 files
+# at 93fe4ac), and committing its own output would invalidate that baseline.
+# Deliberately a prefix glob so future audit runs are covered without an edit.
+CODEX_AUDIT_*
+
 # Manifest CLI — Local overrides (NEVER commit)
 manifest.config.local.yaml
 
@@ -35,17 +43,60 @@ secrets/
 secrets.yml
 secrets.yaml
 secrets.json
-*.pem
-*.key
-*.p12
-*.pfx
+
+# Certificates (public halves — kept ignored here by local convention)
 *.crt
 *.cer
+
+# ============================================================================
+#  KEY MATERIAL
+# ============================================================================
+# Deny-by-default. Manifest's release commit is a bare `git add .` and its
+# security gate does not scan for key material, so an unmatched private key
+# gets pushed to the remote permanently, on the next ship, silently.
+#
+# Escape hatch for a legitimately-public file caught below:
+#     git add -f path/to/public-thing.pem
+
+# --- PEM-family containers: the extension does not tell you what's inside ---
+*.key
+*.pem
+*.p8
+*.pkcs8
+*.der
+
+# --- Binary bundles: these always carry the private half ---
+*.pfx
+*.p12
+*.jks
+*.keystore
+*.bks
+
+# --- SSH private keys ---
 id_rsa
 id_dsa
 id_ecdsa
 id_ed25519
+id_ecdsa_sk
+id_ed25519_sk
+*_rsa
+*_ed25519
 *.ppk
+
+# --- GPG private keyrings only. NOT *.gpg — that is ciphertext and is often
+#     committed deliberately (git-crypt, sops, pass). ---
+secring.*
+*.private.gpg
+*.secret.gpg
+
+# ----------------------------------------------------------------------------
+#  EXCEPTIONS — public halves, re-included. Must stay AFTER the rules above.
+# ----------------------------------------------------------------------------
+!*.pub
+!*public*.pem
+!*public*.key
+!fullchain.pem
+!chain.pem
 
 # Cloud provider credentials
 .aws/
