@@ -135,7 +135,15 @@ Thumbs.db
 .claude/*
 !.claude/agents/
 !.claude/commands/
-!.claude/settings.json
+# .claude/settings.json is deliberately NOT re-included (untracked 2026-08-16).
+# Claude Code writes "don't ask again" permission grants into it as you work, and
+# those grants embed absolute paths (/Users/<you>/…). Because Manifest's release
+# commit is a bare `git add .`, a tracked settings.json means every ship tries to
+# commit whatever the IDE last wrote there. That is what blocked the v59.1.0 ship.
+# It was sanitized by hand once (63a8ed5) and re-polluted by three auto-commits;
+# 16 of its 19 rules were one-off command strings, so it never functioned as
+# curated team config. Agent/command definitions above ARE still shared — those
+# are authored, not machine-generated. See TRACKER §9.11.
 .codeium/
 .continue/
 .cursor/*
