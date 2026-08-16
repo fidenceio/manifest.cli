@@ -2934,20 +2934,13 @@ _fleet_next_version() {
             fi
             ;;
         semver|*)
-            local major minor patch revision
-            IFS='.' read -r major minor patch revision <<< "${current:-0.0.0}"
-            major=${major:-0}; minor=${minor:-0}; patch=${patch:-0}; revision=${revision:-0}
-            case "$increment_type" in
-                minor) minor=$((minor + 1)); patch=0 ;;
-                major) major=$((major + 1)); minor=0; patch=0 ;;
-                revision) revision=$((revision + 1)) ;;
-                *) patch=$((patch + 1)) ;;
-            esac
-            if [[ "$revision" -gt 0 ]]; then
-                echo "$major.$minor.$patch.$revision"
-            else
-                echo "$major.$minor.$patch"
-            fi
+            # Delegates to the one implementation (modules/core/manifest-shared-functions.sh).
+            # This branch used to carry its own copy, with the same tail-lumping
+            # read that made a 5-segment FLEET_VERSION bump DOWNWARD, and the
+            # same carried-revision divergence from what the repo writer does.
+            local _fnv_type="$increment_type"
+            manifest_version_level "$_fnv_type" >/dev/null 2>&1 || _fnv_type="patch"
+            manifest_version_next "${current:-0.0.0}" "$_fnv_type" || return 1
             ;;
     esac
 }

@@ -30,21 +30,15 @@ _status_preview_bump() {
     local current="$1"
     local kind="$2"
     local sep="${MANIFEST_CLI_VERSION_SEPARATOR:-.}"
-    # Require strict X<sep>Y<sep>Z with numeric components (BSD cut otherwise
-    # echoes the whole input back when the delimiter is absent).
-    if [[ "$current" != *"$sep"*"$sep"* ]]; then echo "?"; return; fi
-    local major minor patch
-    major=$(echo "$current" | cut -d"$sep" -f1)
-    minor=$(echo "$current" | cut -d"$sep" -f2)
-    patch=$(echo "$current" | cut -d"$sep" -f3)
-    if ! [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ && "$patch" =~ ^[0-9]+$ ]]; then
-        echo "?"; return
-    fi
-    case "$kind" in
-        patch) echo "${major}${sep}${minor}${sep}$((patch + 1))" ;;
-        minor) echo "${major}${sep}$((minor + 1))${sep}0" ;;
-        major) echo "$((major + 1))${sep}0${sep}0" ;;
-    esac
+
+    # Delegates to the one implementation (modules/core/manifest-shared-functions.sh)
+    # so this read-only preview cannot drift from what a ship would actually
+    # write. The private copy this replaced split with cut -f1/-f2/-f3, which
+    # pinned it to three segments and left it with no `revision` case at all —
+    # `manifest status` simply printed nothing for that increment type.
+    # "?" stays the display for anything unusable, as before.
+    if ! declare -F manifest_version_next >/dev/null 2>&1; then echo "?"; return; fi
+    manifest_version_next "$current" "$kind" "$sep" 2>/dev/null || echo "?"
 }
 
 # Render a single line aligned at column 14 for label, then value.

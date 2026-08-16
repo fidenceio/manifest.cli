@@ -1830,22 +1830,21 @@ manifest_test_dry_run() {
     echo "📋 Version Testing:"
     echo "   Current version: $current_version"
     
-    case "$increment_type" in
-        "patch")
-            next_version=$(echo "$current_version" | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')
-            ;;
-        "minor")
-            next_version=$(echo "$current_version" | awk -F. '{$2 = $2 + 1; $3 = 0;} 1' | sed 's/ /./g')
-            ;;
-        "major")
-            next_version=$(echo "$current_version" | awk -F. '{print $1 + 1 ".0.0"}')
-            ;;
-        "revision")
-            next_version="$current_version.1"
-            ;;
-    esac
-    
-    echo "   Next version: $next_version"
+    # Delegates to the one implementation. This block used to hold a third copy
+    # of the arithmetic, in awk, and it was the least correct of the three: for
+    # `patch` it incremented the LAST field rather than the patch field, so from
+    # 20.1.0.3 the run offered to cut 20.1.0.4 — a revision bump — while the plan
+    # said 20.1.1.3 and the file would have become 20.1.1. `revision` appended a
+    # fifth segment (20.1.0.3.1). This is the surface labelled "recommended" in
+    # the interactive menu, so it was the copy a cautious user was most likely
+    # to read before consenting.
+    next_version="$(get_next_version "$increment_type" 2>/dev/null)" || next_version=""
+
+    if [ -n "$next_version" ]; then
+        echo "   Next version: $next_version"
+    else
+        echo "   Next version: unavailable (could not compute from '$current_version')"
+    fi
     echo "   Increment type: $increment_type"
     echo ""
     

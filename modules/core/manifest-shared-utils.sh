@@ -1148,12 +1148,15 @@ sanitize_path() {
 }
 
 # Canonical ERE for a version string as this CLI GENERATES them, unanchored so
-# each consumer can anchor and extend it. get_next_version() emits X.Y.Z for
-# patch/minor/major and X.Y.Z.R once a `revision` bump lands, so a pattern that
-# hardcodes three segments stops matching the moment a repo ships its first
-# revision — and every one of these consumers fails by silently skipping its
-# rewrite, not by reporting. The trailing group is open-ended so a repo can
-# change version syntax again mid-lifecycle without another round of edits.
+# each consumer can anchor and extend it. manifest_version_next() emits X.Y.Z
+# for patch/minor/major and X.Y.Z.R for `revision`, so a pattern that hardcodes
+# three segments stops matching the moment a repo ships its first revision —
+# and every one of these consumers fails by silently skipping its rewrite, not
+# by reporting. The fourth segment is subordinate, so it also DISAPPEARS again
+# at the next patch/minor/major: a repo can move between the two shapes
+# repeatedly and a pattern must match both. The trailing group is open-ended so
+# a repo can change version syntax again mid-lifecycle without another round of
+# edits.
 #
 # Three segments are required, not two: these patterns scan prose and filenames
 # for "the version", and a 2+ shape would let an unrelated backticked `3.11` in

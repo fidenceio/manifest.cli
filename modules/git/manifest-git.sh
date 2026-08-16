@@ -27,15 +27,16 @@ validate_version_selection() {
     return 0
 }
 
+# Accepts whatever the version arithmetic can address: a conventional name
+# (major/minor/patch/revision) or a segment number. Enumerating the names here
+# capped the CLI at four segments independently of the arithmetic, so the two
+# could — and did — disagree about what a valid increment is.
 validate_increment_type() {
     local increment_type="$1"
-    
+
     # Convert to lowercase and validate
     increment_type="$(echo "$increment_type" | tr '[:upper:]' '[:lower:]')"
-    case "$increment_type" in
-        patch|minor|major|revision) return 0 ;;
-        *) return 1 ;;
-    esac
+    manifest_version_level "$increment_type" >/dev/null 2>&1
 }
 
 manifest_git_timeout_command() {
@@ -166,54 +167,27 @@ bump_version() {
     echo "📦 Bumping version..."
     echo "   Current version: $current_version"
     
-    # Parse version components using configuration
-    local separator="${MANIFEST_CLI_VERSION_SEPARATOR:-.}"
-    local major=$(echo "$current_version" | cut -d"$separator" -f1)
-    local minor=$(echo "$current_version" | cut -d"$separator" -f2)
-    local patch=$(echo "$current_version" | cut -d"$separator" -f3)
-    
-    case "$increment_type" in
-        "patch")
-            patch=$((patch + 1))
-            echo "   Incrementing patch version"
-            ;;
-        "minor")
-            minor=$((minor + 1))
-            patch=0
-            echo "   Incrementing minor version"
-            ;;
-        "major")
-            major=$((major + 1))
-            minor=0
-            patch=0
-            echo "   Incrementing major version"
-            ;;
-        "revision")
-            # Add revision number (e.g., 1.0.0.1)
-            if [ -f "VERSION" ]; then
-                local revision=$(echo "$current_version" | cut -d"$separator" -f4)
-                if [ -z "$revision" ]; then
-                    revision=1
-                else
-                    revision=$((revision + 1))
-                fi
-                new_version="${major}${separator}${minor}${separator}${patch}${separator}${revision}"
-            else
-                echo "   ❌ Revision increment only supported with VERSION file"
-                return 1
-            fi
-            ;;
-        *)
-            echo "   ❌ Invalid increment type: $increment_type"
-            return 1
-            ;;
-    esac
-    
-    # Generate new version if not already set
-    if [ -z "$new_version" ]; then
-        new_version="${major}${separator}${minor}${separator}${patch}"
+    echo "   Incrementing $increment_type version"
+
+    # The arithmetic lives in get_next_version() and ONLY there. This function
+    # used to compute the new version itself, which is how the ship plan came to
+    # preview one version while the VERSION file received another (see the note
+    # on get_next_version). It is sourced ahead of this module by
+    # manifest-core.sh; a missing definition is a load-order regression, not a
+    # condition to paper over with a local fallback copy.
+    if ! declare -F get_next_version >/dev/null 2>&1; then
+        echo "   ❌ get_next_version is unavailable — module load order is broken"
+        return 1
     fi
-    
+
+    # get_next_version reads ./VERSION; we are already cd'd to the project root
+    # and have confirmed the file is present and non-empty above.
+    new_version="$(get_next_version "$increment_type")" || return 1
+    if [ -z "$new_version" ]; then
+        echo "   ❌ Could not compute the next version from '$current_version'"
+        return 1
+    fi
+
     echo "   New version: $new_version"
     
     # Update VERSION file

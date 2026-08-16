@@ -100,6 +100,37 @@ Repo ship can bump version, generate docs, commit, tag, push, publish GitHub Rel
 
 Fleet ship applies the same release policy to release-enabled fleet services that have release changes. Already-tagged, clean members are listed and skipped as `no changes`.
 
+### Version increments
+
+A version is an ordered list of numeric segments of **any length** — nothing assumes three or four. An increment names one segment; bumping it clears every segment to its right:
+
+| From | `major` | `minor` | `patch` | `revision` |
+| ---- | ------- | ------- | ------- | ---------- |
+| `20.1.0` | `21.0.0` | `20.2.0` | `20.1.1` | `20.1.0.1` |
+| `20.1.0.3` | `21.0.0` | `20.2.0` | `20.1.1` | `20.1.0.4` |
+| `1.2.3.4.5` | `2.0.0` | `1.3.0` | `1.2.4` | `1.2.3.5` |
+
+So a fourth segment is *subordinate* to the third, not a counter running alongside it. `20.1.0.3` reads as "the third revision of `20.1.0`", and a `patch` lands on `20.1.1` — a patch that has had no revisions — so the segment goes away. Use `revision` to re-cut an already-released version (a bad tag, a packaging-only correction) where the code identity of `20.1.0` still stands. **It is not a durable counter**: it survives only until the next `patch`/`minor`/`major`, by design. Anything that must persist across ordinary releases does not belong in `VERSION`, whose job is to answer "is production this tree".
+
+**Segments are addressed by position; names are aliases.** Pass a segment number to reach any position, named or not:
+
+```bash
+manifest ship repo patch      # the 3rd segment
+manifest ship repo 3          # identical
+manifest ship repo 6          # the 6th segment (1.2.3 -> 1.2.3.0.0.1)
+```
+
+**The names are configurable** via `version.components`, an ordered list whose index *is* the position — there is no second place to declare a position, so the two cannot disagree. It defaults to `major,minor,patch,revision`, and the standard four are themselves overridable:
+
+```yaml
+version:
+  components: "generation,major,minor,patch"   # `major` now addresses segment 2
+```
+
+Naming positions beyond the fourth is just a longer list (`major,minor,patch,revision,build,hotfix`). An unusable list — a duplicate name, an all-digit name that would collide with segment numbering, or a blank entry that would shift every later name one segment left — is refused rather than quietly replaced by the defaults, since substituting the standard four for a project that configured something else would cut the release one segment off target.
+
+Versions carrying non-numeric text (`1.2.3-rc1`, `v1.2.3`) are refused rather than coerced, and `VERSION` is left untouched. `version.separator` (default `.`) applies throughout.
+
 Version-file behavior:
 
 - Repo and fleet release writers use `VERSION` as the canonical version file today.

@@ -237,6 +237,72 @@ manifest_ship_preview_summary_from_bullets() {
 }
 
 # Stable fingerprint of the single-repo ship plan. Computed identically in
+# Refuse a repo release when the repo has no version of its own.
+#
+# `ship repo` reads "$repo_root/VERSION" directly, and every read falls back to
+# the literal string "unknown" when the file is absent. Without this guard the
+# release proceeds on that fallback: "Current version: unknown", "Next version:
+# unknown", release tag "unknown", and a CHANGELOG entry for "unknown" — and
+# answering -y cuts a real release keyed on that string. A missing input is a
+# stop condition, not an empty value.
+#
+# The usual way to hit this is running `ship repo` at a **fleet root**. A fleet
+# root is a git repo, but it is versioned by its own scheme: manifest.fleet.config.yaml
+# declares `fleet.version_file` (e.g. FLEET_VERSION for a date-versioned fleet),
+# never `VERSION`. `ship repo` releases one repo and cannot release a fleet, so
+# name the command that can rather than failing dirty.
+#
+# NB: a fleet root is not itself a release target today — fleet-root tagging and
+# CHANGELOG_FLEET.md generation are deferred (TRACKER §9.7). `ship fleet` releases
+# the *members*. This guard therefore points at the command that does something,
+# and does not imply the root itself gets tagged.
+#
+# ARGUMENTS:
+#   $1 - repo root
+# RETURNS: 0 when a usable VERSION exists; 1 (with guidance) otherwise.
+manifest_ship_require_version_file() {
+    local repo_root="${1:-$PWD}"
+    local version_file="$repo_root/VERSION"
+
+    # Present and non-blank is the only passing case. An empty or whitespace-only
+    # VERSION yields "" rather than "unknown", which fails further downstream and
+    # even less legibly.
+    if [[ -f "$version_file" ]]; then
+        local raw
+        raw="$(tr -d '[:space:]' < "$version_file" 2>/dev/null || true)"
+        [[ -n "$raw" ]] && return 0
+        log_error "ship repo: $version_file is empty."
+        echo "   A release needs a current version to increment from."
+        echo "   Write a version (e.g. 0.1.0) or run: manifest init repo"
+        return 1
+    fi
+
+    local fleet_config="$repo_root/${MANIFEST_CLI_FLEET_CONFIG_FILENAME:-manifest.fleet.config.yaml}"
+    if [[ -f "$fleet_config" ]]; then
+        local fleet_version_file="" fleet_scheme=""
+        if declare -F get_yaml_value >/dev/null 2>&1; then
+            fleet_version_file="$(get_yaml_value "$fleet_config" ".fleet.version_file" "FLEET_VERSION" 2>/dev/null || echo "FLEET_VERSION")"
+            fleet_scheme="$(get_yaml_value "$fleet_config" ".fleet.versioning" "" 2>/dev/null || echo "")"
+        fi
+        log_error "ship repo: this is a fleet root, not a single repo."
+        echo "   It has no VERSION file; it is versioned as a fleet by '${fleet_version_file:-FLEET_VERSION}'${fleet_scheme:+ (scheme: $fleet_scheme)}."
+        echo "   Config: $fleet_config"
+        echo ""
+        echo "   Release the fleet's members instead:"
+        echo "     manifest ship fleet <patch|minor|major|revision>"
+        echo ""
+        echo "   To release one member, run ship repo from that member's directory."
+        return 1
+    fi
+
+    log_error "ship repo: no VERSION file in $repo_root."
+    echo "   ship repo releases a single repo and needs a VERSION file to increment."
+    echo "   Create the release scaffold:  manifest init repo"
+    echo "   Or run from the repo you meant to release."
+    return 1
+}
+export -f manifest_ship_require_version_file
+
 # preview and apply so the two can be compared (and so the future apply-event
 # audit log can record exactly which plan was applied).
 manifest_ship_repo_plan_fingerprint() {
@@ -244,7 +310,10 @@ manifest_ship_repo_plan_fingerprint() {
     local local_only="$2"
     local repo_root="${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
     local current next tag
-    current="$(tr -d '[:space:]' < "$repo_root/VERSION" 2>/dev/null || echo "unknown")"
+    # Brace-group the redirection: 2>/dev/null on the bare command silences tr's
+    # stderr, not the SHELL's "No such file or directory" for a failed input
+    # redirection, so a missing VERSION leaked a raw error path to the terminal.
+    current="$({ tr -d '[:space:]' < "$repo_root/VERSION"; } 2>/dev/null || echo "unknown")"
     next="$(manifest_ship_preview_next_version "$increment_type")"
     if [[ "$next" != "unknown" ]] && declare -F manifest_release_tag_name >/dev/null 2>&1; then
         tag="$(manifest_release_tag_name "$next")"
@@ -260,7 +329,7 @@ manifest_ship_preview_plan() {
     local repo_root="${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
     local current_version next_version tag_name
 
-    current_version="$(tr -d '[:space:]' < "$repo_root/VERSION" 2>/dev/null || echo "unknown")"
+    current_version="$({ tr -d '[:space:]' < "$repo_root/VERSION"; } 2>/dev/null || echo "unknown")"
     next_version="$(manifest_ship_preview_next_version "$increment_type")"
     if [[ "$next_version" != "unknown" ]] && declare -F manifest_release_tag_name >/dev/null 2>&1; then
         tag_name="$(manifest_release_tag_name "$next_version")"
@@ -356,9 +425,15 @@ manifest_ship_repo() {
     set -- "${remaining_args[@]}"
 
     while [[ $# -gt 0 ]]; do
+        # A conventional name (major/minor/patch/revision) or a segment number.
+        # manifest_version_level is the single authority on what is addressable,
+        # so this parser cannot cap the arithmetic at four segments — enumerating
+        # the four words here is how the CLI and the arithmetic came to disagree
+        # about which increments exist.
+        if manifest_version_level "$1" >/dev/null 2>&1; then
+            increment_type="$1"; shift; continue
+        fi
         case "$1" in
-            patch|minor|major|revision)
-                increment_type="$1"; shift ;;
             resume)
                 manifest_ship_repo_resume "$@"
                 return $?
@@ -422,6 +497,10 @@ manifest_ship_repo() {
         return 1
     fi
 
+    if ! manifest_ship_require_version_file "$MANIFEST_CLI_PROJECT_ROOT"; then
+        return 1
+    fi
+
     # Symmetric "nothing to release" gate (parity with ship fleet's per-member
     # skip): a clean working tree already at the current release tag has nothing
     # to ship. Reuses the repo-side predicate so repo and fleet decide
@@ -432,7 +511,7 @@ manifest_ship_repo() {
     else
         local _repo_root="${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
         local _cur_version _cur_tag
-        _cur_version="$(tr -d '[:space:]' < "$_repo_root/VERSION" 2>/dev/null || echo "unknown")"
+        _cur_version="$({ tr -d '[:space:]' < "$_repo_root/VERSION"; } 2>/dev/null || echo "unknown")"
         if [[ "$_cur_version" != "unknown" ]] && declare -F manifest_release_tag_name >/dev/null 2>&1; then
             _cur_tag="$(manifest_release_tag_name "$_cur_version")"
         else
@@ -571,9 +650,15 @@ manifest_ship_fleet() {
     set -- "${remaining_args[@]}"
 
     while [[ $# -gt 0 ]]; do
+        # A conventional name (major/minor/patch/revision) or a segment number.
+        # manifest_version_level is the single authority on what is addressable,
+        # so this parser cannot cap the arithmetic at four segments — enumerating
+        # the four words here is how the CLI and the arithmetic came to disagree
+        # about which increments exist.
+        if manifest_version_level "$1" >/dev/null 2>&1; then
+            increment_type="$1"; shift; continue
+        fi
         case "$1" in
-            patch|minor|major|revision)
-                increment_type="$1"; shift ;;
             resume)
                 subcommand="resume"; shift ;;
             --explain) explain=true; shift ;;

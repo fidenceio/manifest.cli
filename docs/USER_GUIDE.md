@@ -112,6 +112,8 @@ Auto-commit also leaves out work that appeared **after** you asked to ship. Ship
 
 Manifest has one canonical release-writer file today: `VERSION`.
 
+`VERSION` holds an ordered list of numeric segments of any length. How an increment maps to a segment, how segments are named (`version.components`), and why a fourth segment does not survive a `patch` are documented once, in [Command Reference — Version increments](COMMAND_REFERENCE.md#version-increments).
+
 Other version-bearing files are non-canonical. This includes package manifests, package locks, module files, and chart files such as `package.json`, `package-lock.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, and `Chart.yaml`. Manifest detects these surfaces from the committed handler catalog, but detection is passive: it does not rewrite them, print noisy warnings during scripts, or stop non-interactive runs.
 
 To mirror the canonical version into selected package/version files, opt in with `version.sync`:

@@ -16,63 +16,268 @@ get_current_version() {
     fi
 }
 
-# Get next version based on increment type
+# THE version arithmetic. Pure: takes a version STRING, echoes the next one,
+# touches no file and prints no diagnostics (callers report in their own voice).
+#
+# Every version bump in the CLI resolves here — the repo writer (bump_version),
+# the ship plan and interactive previews (get_next_version), the fleet-level
+# bump (_fleet_next_version) and the status preview (_status_preview_bump).
+# There were five separate copies and they agreed only while every version had
+# exactly three segments, which is every repo right up until someone runs
+# `ship repo revision` once. From 20.1.0.3 a `patch` produced 20.1.1.3 in the
+# plan, 20.1.0.4 in the dry-run and 20.1.1 on disk. Do not add a sixth copy.
+#
+# ARBITRARY ARITY. A version is a list of numeric segments of any length, and
+# bump levels are POSITIONAL: major=1, minor=2, patch=3, revision=4. Nothing
+# here counts to three or four. The copies that did read the tail into a single
+# trailing name, so 1.2.3.4.5 arrived as revision="4.5" and the arithmetic
+# failed into 1.2.3 — a LOWER version than it started from, silently.
+#
+# Segments right of the bumped one are SUBORDINATE and do not survive it:
+# 20.1.0.3 means "third revision of 20.1.0", so a patch lands on 20.1.1, which
+# has had no revisions. Carrying it (20.1.1.3) would name a third revision of a
+# patch whose first and second never existed; 21.0.0.3 asserts that about an
+# entire major line.
+#
+# Returns non-zero without output for an unknown increment type or a version
+# that is not a list of non-negative integers.
+manifest_version_next() {
+    local current_version="$1"
+    local increment_type="$2"
+    local separator="${3:-${MANIFEST_CLI_VERSION_SEPARATOR:-.}}"
+
+    local level
+    level="$(manifest_version_level "$increment_type")" || return 1
+
+    local -a seg=()
+    manifest_version_segments_into seg "$current_version" "$separator" || return 1
+
+    # Pad so the target segment exists (revision from 1.2.3 -> 1.2.3.0).
+    while [ "${#seg[@]}" -lt "$level" ]; do
+        seg+=(0)
+    done
+
+    seg[level-1]=$(( ${seg[level-1]} + 1 ))
+
+    # Zero any segment between the target and the minimum length, then drop
+    # everything beyond. The minimum is the shape every consumer's version
+    # pattern expects (see _MANIFEST_CLI_VERSION_ERE), so `major` yields 21.0.0,
+    # not 21.
+    local floor="${MANIFEST_CLI_VERSION_MIN_SEGMENTS:-3}"
+    local keep=$(( level > floor ? level : floor ))
+    local i
+    for (( i = level; i < keep; i++ )); do
+        seg[i]=0
+    done
+    seg=("${seg[@]:0:keep}")
+
+    local IFS="$separator"
+    echo "${seg[*]}"
+}
+
+# File-reading wrapper: the next version for the repo rooted at the current
+# directory. Reports in the CLI's voice; the arithmetic is manifest_version_next.
 get_next_version() {
     local increment_type="$1"
     local current_version=""
-    
+
     # Read current version
     if [ -f "VERSION" ]; then
         current_version=$(cat VERSION 2>/dev/null || echo "1.0.0")
     else
         current_version="1.0.0"
     fi
-    
-    # Validate increment type
-    case "$increment_type" in
-        patch|minor|major|revision)
+
+    if ! manifest_version_level "$increment_type" >/dev/null; then
+        show_validation_error "Invalid increment type: $increment_type"
+        return 1
+    fi
+
+    local next
+    if ! next="$(manifest_version_next "$current_version" "$increment_type")"; then
+        show_validation_error "Unusable version '$current_version' — expected numbers separated by '${MANIFEST_CLI_VERSION_SEPARATOR:-.}'"
+        return 1
+    fi
+    echo "$next"
+}
+
+# Names for the leading segment positions, in order. Config: `version.components`
+# (env MANIFEST_CLI_VERSION_COMPONENTS), accepted as a bash array or a
+# comma-separated string, matching _manifest_version_sync_targets.
+#
+# This is an ALIAS TABLE, not the set of levels that exist. The arithmetic
+# addresses segments by NUMBER and has no upper bound, so a 7-segment version is
+# bumped at its 7th segment by passing 7 whether or not position 7 has a name.
+# Naming is a convenience over the positional truth, which is why a name's
+# position is simply its index in this list — there is no second place to state
+# it and therefore no way for the two to disagree.
+#
+# The standard four are the default, and are themselves overridable: a project
+# that versions as `generation.major.minor.patch` sets
+# `version.components: "generation,major,minor,patch"` and `manifest ship repo
+# major` then addresses segment 2.
+_MANIFEST_CLI_VERSION_COMPONENTS_DEFAULT=(major minor patch revision)
+
+_manifest_version_component_names() {
+    local decl
+    decl="$(declare -p MANIFEST_CLI_VERSION_COMPONENTS 2>/dev/null || true)"
+    case "$decl" in
+        declare\ -a*|declare\ -ax*)
+            printf '%s\n' "${MANIFEST_CLI_VERSION_COMPONENTS[@]}"
+            return 0
             ;;
+    esac
+
+    local raw="${MANIFEST_CLI_VERSION_COMPONENTS:-}"
+    if [ -z "$raw" ]; then
+        printf '%s\n' "${_MANIFEST_CLI_VERSION_COMPONENTS_DEFAULT[@]}"
+        return 0
+    fi
+
+    local item
+    local -a items=()
+    IFS=',' read -r -a items <<< "$raw"
+    for item in "${items[@]}"; do
+        item="${item#"${item%%[![:space:]]*}"}"
+        item="${item%"${item##*[![:space:]]}"}"
+        [ -n "$item" ] && printf '%s\n' "$item"
+    done
+}
+
+# Emit the validated, ordered component names, one per line. Fails (with a
+# diagnostic on stderr) on a name list that cannot be resolved unambiguously.
+# A bad list must stop the release rather than fall back to the defaults: silently
+# substituting `major,minor,patch,revision` for a project that configured
+# `generation,major,minor,patch` would cut the release one segment off target.
+manifest_version_components() {
+    # An empty element in a POSITIONAL list is not a harmless blank: dropping it
+    # shifts every name after it one segment left, so "major,,minor" would
+    # quietly resolve minor to segment 2. (Unset/empty entirely is different —
+    # that means "not configured" and yields the defaults.)
+    local raw="${MANIFEST_CLI_VERSION_COMPONENTS:-}"
+    if [ -n "$raw" ] && [[ "$raw" == *,* ]]; then
+        case ",${raw// /}," in
+            *,,*)
+                echo "version.components: empty entry in '$raw' — a position cannot be left blank" >&2
+                return 1
+                ;;
+        esac
+    fi
+
+    local -a names=()
+    local n
+    while IFS= read -r n; do
+        [ -n "$n" ] && names+=("$n")
+    done < <(_manifest_version_component_names)
+
+    if [ "${#names[@]}" -eq 0 ]; then
+        echo "version.components is empty — expected an ordered list of segment names" >&2
+        return 1
+    fi
+
+    local i j
+    for (( i = 0; i < ${#names[@]}; i++ )); do
+        # An all-digit name is unusable: it cannot be told apart from the
+        # segment number it would compete with.
+        case "${names[i]}" in
+            ''|*[!0-9]*) ;;
+            *)
+                echo "version.components: '${names[i]}' is all digits and would collide with segment numbering" >&2
+                return 1
+                ;;
+        esac
+        case "${names[i]}" in
+            *[!a-zA-Z0-9_-]*)
+                echo "version.components: '${names[i]}' contains unsupported characters (use letters, digits, '_' or '-')" >&2
+                return 1
+                ;;
+        esac
+        for (( j = 0; j < i; j++ )); do
+            if [ "${names[i]}" = "${names[j]}" ]; then
+                echo "version.components: '${names[i]}' is listed twice; a name must address one segment" >&2
+                return 1
+            fi
+        done
+    done
+
+    printf '%s\n' "${names[@]}"
+}
+
+# Resolve an increment type to a 1-based segment index. Accepts a configured
+# component name or any positive integer. Echoes the index; returns non-zero,
+# echoing nothing, for anything else.
+#
+# Keeping this separate is the point: hard-coupling four words to four positions
+# inside the arithmetic capped it at four segments, which is how a 5-segment
+# version ended up unreachable by every increment type the CLI had.
+manifest_version_level() {
+    local level="$1"
+
+    # A bare positive integer addresses that segment directly, named or not.
+    case "$level" in
+        ''|*[!0-9]*) ;;
         *)
-            show_validation_error "Invalid increment type: $increment_type"
+            if [ "$level" -ge 1 ]; then
+                echo "$level"
+                return 0
+            fi
             return 1
             ;;
     esac
-    
-    # Parse version components
-    local major minor patch revision
-    IFS='.' read -r major minor patch revision <<< "$current_version"
-    
-    # Default values if missing
-    major=${major:-0}
-    minor=${minor:-0}
-    patch=${patch:-0}
-    revision=${revision:-0}
-    
-    # Increment based on type
-    case "$increment_type" in
-        "patch")
-            patch=$((patch + 1))
-            ;;
-        "minor")
-            minor=$((minor + 1))
-            patch=0
-            ;;
-        "major")
-            major=$((major + 1))
-            minor=0
-            patch=0
-            ;;
-        "revision")
-            revision=$((revision + 1))
-            ;;
-    esac
-    
-    # Return new version
-    if [ "$revision" -gt 0 ]; then
-        echo "$major.$minor.$patch.$revision"
-    else
-        echo "$major.$minor.$patch"
-    fi
+
+    local -a names=()
+    local n
+    while IFS= read -r n; do
+        [ -n "$n" ] && names+=("$n")
+    done < <(manifest_version_components) || return 1
+    [ "${#names[@]}" -gt 0 ] || return 1
+
+    local i
+    for (( i = 0; i < ${#names[@]}; i++ )); do
+        if [ "$level" = "${names[i]}" ]; then
+            echo "$(( i + 1 ))"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Split VERSION_STRING into its numeric segments and assign them to the caller's
+# array ARRAY_NAME. Returns non-zero, assigning nothing, when the string is not
+# a separator-delimited list of non-negative integers.
+#
+# Refusing malformed input is the point. Bash arithmetic reads "3-rc1" as
+# "3 - rc1" with rc1 an unset variable, so a prerelease version silently bumped
+# to 1.2.4 as though the suffix were not there; a version carrying anything
+# unexpected must stop the release, not be coerced into a plausible-looking
+# wrong answer.
+#
+# Usage:  local -a seg=(); manifest_version_segments_into seg "1.2.3" "."
+manifest_version_segments_into() {
+    local __mvs_target="$1"
+    local version="$2"
+    local separator="${3:-${MANIFEST_CLI_VERSION_SEPARATOR:-.}}"
+
+    # Trim surrounding whitespace (VERSION files carry a trailing newline).
+    version="${version#"${version%%[![:space:]]*}"}"
+    version="${version%"${version##*[![:space:]]}"}"
+    [ -n "$version" ] || return 1
+
+    local -a parts=()
+    local IFS="$separator"
+    read -r -a parts <<< "$version"
+    [ "${#parts[@]}" -gt 0 ] || return 1
+
+    local p
+    for p in "${parts[@]}"; do
+        # Non-negative integers only. Rejects "", "1a", "-1", "3-rc1", "01x".
+        case "$p" in
+            ''|*[!0-9]*) return 1 ;;
+        esac
+    done
+
+    eval "$__mvs_target=(\"\${parts[@]}\")"
+    return 0
 }
 
 # Get latest version from GitHub API with OS-dependent timeout

@@ -118,11 +118,20 @@ YAML
     echo "$output" | grep -q "Manifest CLI Configuration"
     # Override is reflected...
     echo "$output" | grep -q "Default Branch: trunk"
-    # ...alongside untouched defaults.
-    echo "$output" | grep -q "Format: XX.XX.XX"
+    # ...alongside untouched defaults. Uses a default that is actually READ by
+    # the CLI: this line previously asserted "Format: XX.XX.XX", a key nothing
+    # consumes, so it proved only that a string reached the screen.
+    echo "$output" | grep -q "Separator: \."
     echo "$output" | grep -q "Tag Prefix: v"
     echo "$output" | grep -q "Server 1: https://www.cloudflare.com/cdn-cgi/trace"
     echo "$output" | grep -q "Auto-Upgrade: true"
+
+    # Keys nothing reads must be shown as such, never as an assertion about
+    # behavior. `config show` used to state "Major Target: 1 (which component
+    # increments)" for a value the arithmetic has never consulted.
+    echo "$output" | grep -q "Declared but NOT in force"
+    refute grep -q "which component increments" <<<"$output"
+    refute grep -q "components reset to 0" <<<"$output"
 }
 
 # -----------------------------------------------------------------------------

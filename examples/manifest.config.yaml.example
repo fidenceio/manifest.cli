@@ -24,29 +24,57 @@
 # Versioning
 # -----------------------------------------------------------------------------
 version:
-  format: "XX.XX.XX"           # XX.XX.XX | XXXX.XXXX.XXXX | YYYY.MM.DD
   separator: "."
-  components: "major,minor,patch"
-  max_values: "0,0,0"          # 0 = unlimited
   regex: "^[0-9]+(\\.[0-9]+)*$"
   validation: true
+
+  # Ordered names for the leading version segments. A name's POSITION IS ITS
+  # INDEX in this list, so there is nowhere else to declare a position and no
+  # way for the two to disagree. `manifest ship repo <name>` bumps that name's
+  # segment and clears every segment to its right.
+  #
+  # A version is a list of numeric segments of any length — nothing assumes
+  # three or four. Any segment is also addressable by NUMBER, named or not:
+  # `manifest ship repo 3` == `manifest ship repo patch`, and
+  # `manifest ship repo 6` reaches the sixth segment (1.2.3 -> 1.2.3.0.0.1).
+  #
+  # Rename or extend freely — the standard four are only the default:
+  #   components: "generation,major,minor,patch"       # `major` = segment 2
+  #   components: "major,minor,patch,revision,build"   # names a fifth
+  #
+  # An unusable list is refused rather than replaced by the defaults (a silent
+  # fallback would cut the release one segment off target): no duplicate names,
+  # no all-digit name (it would collide with segment numbering), and no blank
+  # entry (dropping it shifts every later name one segment left).
+  components: "major,minor,patch,revision"
+
   sync: ""                       # Optional comma-separated JSON files whose
                                   # top-level "version" mirrors VERSION on bump.
                                   # Empty = only VERSION.
 
-  component_position:
+  # ---------------------------------------------------------------------------
+  # DECLARED BUT NOT IN FORCE — no code path reads any of the keys below.
+  # `manifest config show` lists them under "Declared but NOT in force".
+  # Setting them changes nothing; segment positions and reset behavior both
+  # come from `components` above. Pending removal — see TRACKER §9.14, and do
+  # not build anything that assumes these are authoritative.
+  # ---------------------------------------------------------------------------
+  format: "XX.XX.XX"           # not read
+  max_values: "0,0,0"          # not read
+
+  component_position:          # not read — position comes from `components`
     major: 1
     minor: 2
     patch: 3
     revision: 4
 
-  increment_target:
+  increment_target:            # not read — a bump targets its own segment
     major: 1
     minor: 2
     patch: 3
     revision: 4
 
-  reset_components:
+  reset_components:            # not read — a bump clears everything to its right
     major: "2,3,4"
     minor: "3,4"
     patch: "4"

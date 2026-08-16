@@ -766,7 +766,10 @@ set_default_configuration() {
     # Versioning Configuration
     export MANIFEST_CLI_VERSION_FORMAT="${MANIFEST_CLI_VERSION_FORMAT:-XX.XX.XX}"
     export MANIFEST_CLI_VERSION_SEPARATOR="${MANIFEST_CLI_VERSION_SEPARATOR:-.}"
-    export MANIFEST_CLI_VERSION_COMPONENTS="${MANIFEST_CLI_VERSION_COMPONENTS:-major,minor,patch}"
+    # Ordered segment names; position is the index in this list. `revision` is
+    # included because it is a real increment level — omitting it left the one
+    # config key that names segments disagreeing with the four the CLI accepted.
+    export MANIFEST_CLI_VERSION_COMPONENTS="${MANIFEST_CLI_VERSION_COMPONENTS:-major,minor,patch,revision}"
     export MANIFEST_CLI_VERSION_MAX_VALUES="${MANIFEST_CLI_VERSION_MAX_VALUES:-0,0,0}"
     
     # Human-Intuitive Component Mapping (defaults to standard semantic versioning)
@@ -1249,31 +1252,43 @@ show_configuration() {
     echo ""
     
     echo "📋 Versioning Configuration:"
-    echo "   Format: ${MANIFEST_CLI_VERSION_FORMAT}"
     echo "   Separator: ${MANIFEST_CLI_VERSION_SEPARATOR}"
     echo "   Components: ${MANIFEST_CLI_VERSION_COMPONENTS}"
-    echo "   Max Values: ${MANIFEST_CLI_VERSION_MAX_VALUES}"
     echo ""
     
-    echo "🧠 Human-Intuitive Component Mapping:"
-    echo "   Major Position: ${MANIFEST_CLI_MAJOR_COMPONENT_POSITION} (leftmost = biggest impact)"
-    echo "   Minor Position: ${MANIFEST_CLI_MINOR_COMPONENT_POSITION} (middle = moderate impact)"
-    echo "   Patch Position: ${MANIFEST_CLI_PATCH_COMPONENT_POSITION} (rightmost = least impact)"
-    echo "   Revision Position: ${MANIFEST_CLI_REVISION_COMPONENT_POSITION} (most right = most specific)"
+    # Resolved from version.components, which is what the arithmetic actually
+    # reads. This block used to print MANIFEST_CLI_*_COMPONENT_POSITION and
+    # MANIFEST_CLI_*_INCREMENT_TARGET, which nothing has ever consulted: setting
+    # version.component_position.major=3 made this screen report that `major`
+    # increments the third segment while the bump still hit the first. Report
+    # the mapping in force, never a value that merely looks like configuration.
+    echo "🧠 Segment Mapping (name → position, from version.components):"
+    local _cfg_names _cfg_i=0 _cfg_n
+    if _cfg_names="$(manifest_version_components 2>/dev/null)"; then
+        while IFS= read -r _cfg_n; do
+            [ -n "$_cfg_n" ] || continue
+            _cfg_i=$((_cfg_i + 1))
+            echo "   ${_cfg_n}: segment ${_cfg_i}"
+        done <<< "$_cfg_names"
+        echo "   (leftmost = biggest impact; any segment is also addressable by number)"
+    else
+        echo "   ⚠️  version.components is unusable — see 'manifest config doctor'"
+    fi
     echo ""
     
-    echo "📈 Increment Behavior:"
-    echo "   Major Target: ${MANIFEST_CLI_MAJOR_INCREMENT_TARGET} (which component increments)"
-    echo "   Minor Target: ${MANIFEST_CLI_MINOR_INCREMENT_TARGET} (which component increments)"
-    echo "   Patch Target: ${MANIFEST_CLI_PATCH_INCREMENT_TARGET} (which component increments)"
-    echo "   Revision Target: ${MANIFEST_CLI_REVISION_INCREMENT_TARGET} (which component increments)"
-    echo ""
-    
-    echo "🔄 Reset Behavior:"
-    echo "   Major Reset: ${MANIFEST_CLI_MAJOR_RESET_COMPONENTS} (components reset to 0)"
-    echo "   Minor Reset: ${MANIFEST_CLI_MINOR_RESET_COMPONENTS} (components reset to 0)"
-    echo "   Patch Reset: ${MANIFEST_CLI_PATCH_RESET_COMPONENTS} (components reset to 0)"
-    echo "   Revision Reset: ${MANIFEST_CLI_REVISION_RESET_COMPONENTS} (components reset to 0)"
+    # These keys are declared and settable but NO code path reads them (TRACKER
+    # §9.14). They are still shown, so a value someone set does not vanish from
+    # the screen — but never again as an assertion about behavior. The previous
+    # wording ("Major Reset: … (components reset to 0)", "Major Target: … (which
+    # component increments)") told a user their setting was in force while the
+    # arithmetic ignored it entirely. Remove this block if the keys are removed.
+    echo "🚫 Declared but NOT in force (nothing reads these — TRACKER §9.14):"
+    echo "   version.format:            ${MANIFEST_CLI_VERSION_FORMAT}"
+    echo "   version.max_values:        ${MANIFEST_CLI_VERSION_MAX_VALUES}"
+    echo "   version.component_position: major=${MANIFEST_CLI_MAJOR_COMPONENT_POSITION} minor=${MANIFEST_CLI_MINOR_COMPONENT_POSITION} patch=${MANIFEST_CLI_PATCH_COMPONENT_POSITION} revision=${MANIFEST_CLI_REVISION_COMPONENT_POSITION}"
+    echo "   version.increment_target:   major=${MANIFEST_CLI_MAJOR_INCREMENT_TARGET} minor=${MANIFEST_CLI_MINOR_INCREMENT_TARGET} patch=${MANIFEST_CLI_PATCH_INCREMENT_TARGET} revision=${MANIFEST_CLI_REVISION_INCREMENT_TARGET}"
+    echo "   version.reset_components:   major=${MANIFEST_CLI_MAJOR_RESET_COMPONENTS} minor=${MANIFEST_CLI_MINOR_RESET_COMPONENTS} patch=${MANIFEST_CLI_PATCH_RESET_COMPONENTS} revision=${MANIFEST_CLI_REVISION_RESET_COMPONENTS}"
+    echo "   Segment position and reset behavior come from version.components above."
     echo ""
     
     echo "🌿 Branch Configuration:"
@@ -1351,10 +1366,9 @@ show_configuration() {
     echo "   • LEFT components = More MAJOR changes (bigger impact)"
     echo "   • RIGHT components = More MINOR changes (smaller impact)"
     echo "   • More digits after last dot = More specific/precise changes"
-    echo "   • 'manifest prep major' increments component ${MANIFEST_CLI_MAJOR_INCREMENT_TARGET}"
-    echo "   • 'manifest prep minor' increments component ${MANIFEST_CLI_MINOR_INCREMENT_TARGET}"
-    echo "   • 'manifest prep patch' increments component ${MANIFEST_CLI_PATCH_INCREMENT_TARGET}"
-    echo "   • 'manifest prep revision' increments component ${MANIFEST_CLI_REVISION_INCREMENT_TARGET}"
+    echo "   • 'manifest ship repo <name>' increments that name's segment (see the mapping above)"
+    echo "   • 'manifest ship repo <N>' increments segment N directly, named or not"
+    echo "   • Bumping a segment clears every segment to its right"
     echo ""
     echo "Quick views:"
     echo "   • manifest config          # Interactive setup wizard"
