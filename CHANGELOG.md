@@ -1,5 +1,17 @@
 # Changelog
 
+## [59.2.0] - 2026-08-16
+
+**Release Type:** Minor
+
+### Changes
+
+- Add GitHub Release publishing support
+- Add smart ship preview summaries
+- Update release copy and configuration examples
+- Add regression coverage for the changed CLI workflow
+
+
 ## [59.1.1] - 2026-08-16
 
 **Release Type:** Patch
@@ -89,15 +101,3 @@
 ### Changes
 
 - Add regression coverage for the changed CLI workflow
-
-
-## [58.0.0] - 2026-08-05
-
-**Release Type:** Major
-
-### Changes
-
-- Gitignore.manifest: regenerate against 57.1.0 so it matches its own template
-- Remove the .manifest sidecar mechanism from the no-clobber contract
-- Tests(time): pin the clock for the Cloudflare uncertainty assertion
-- Update 1 file before release
