@@ -1,5 +1,14 @@
 # Changelog
 
+## [59.1.1] - 2026-08-16
+
+**Release Type:** Patch
+
+### Changes
+
+- Update release copy and configuration examples
+
+
 ## [59.1.0] - 2026-08-16
 
 **Release Type:** Minor
@@ -92,16 +101,3 @@
 - Remove the .manifest sidecar mechanism from the no-clobber contract
 - Tests(time): pin the clock for the Cloudflare uncertainty assertion
 - Update 1 file before release
-
-
-## [57.1.0] - 2026-08-04
-
-**Release Type:** Minor
-
-### Changes
-
-- Gitignore: ignore AI agent workspaces, keep team-shared config trackable
-- .claude: add sanitized team-shared settings
-- Pre-commit: block absolute home paths in staged content
-- Docs(hooks): document the home-path check and a move-safe install
-- Update 2 files before release
