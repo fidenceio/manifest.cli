@@ -25,8 +25,7 @@
 # -----------------------------------------------------------------------------
 version:
   separator: "."
-  regex: "^[0-9]+(\\.[0-9]+)*$"
-  validation: true
+  regex: "^[0-9]+(\\.[0-9]+)*$"   # read by validate_version_format()
 
   # Ordered names for the leading version segments. A name's POSITION IS ITS
   # INDEX in this list, so there is nowhere else to declare a position and no
@@ -52,33 +51,18 @@ version:
                                   # top-level "version" mirrors VERSION on bump.
                                   # Empty = only VERSION.
 
-  # ---------------------------------------------------------------------------
-  # DECLARED BUT NOT IN FORCE — no code path reads any of the keys below.
-  # `manifest config show` lists them under "Declared but NOT in force".
-  # Setting them changes nothing; segment positions and reset behavior both
-  # come from `components` above. Pending removal — see TRACKER §9.14, and do
-  # not build anything that assumes these are authoritative.
-  # ---------------------------------------------------------------------------
-  format: "XX.XX.XX"           # not read
-  max_values: "0,0,0"          # not read
-
-  component_position:          # not read — position comes from `components`
-    major: 1
-    minor: 2
-    patch: 3
-    revision: 4
-
-  increment_target:            # not read — a bump targets its own segment
-    major: 1
-    minor: 2
-    patch: 3
-    revision: 4
-
-  reset_components:            # not read — a bump clears everything to its right
-    major: "2,3,4"
-    minor: "3,4"
-    patch: "4"
-    revision: ""
+  # REMOVED 2026-08-16: format, max_values, validation, component_position.*,
+  # increment_target.* and reset_components.* are no longer part of the schema.
+  # Nothing ever read them, while `manifest config show` reported them as
+  # behavior in force — set component_position.major to 3 and the screen said
+  # `major` bumped the third segment while the release still moved the first,
+  # and `validation: false` read back as an opt-out from version validation
+  # that did not exist. Segment position is the index in `components`, and a
+  # bump always clears everything to its right; both facts now have exactly one
+  # home. Note that `regex` (above) is NOT removed — validate_version_format()
+  # genuinely reads it.
+  # `manifest config doctor` flags these if an older config still carries them,
+  # and `--fix -y` deletes them.
 
 # -----------------------------------------------------------------------------
 # Release

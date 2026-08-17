@@ -1040,7 +1040,8 @@ time:
   cache_stale_max_age: 21600
 
 version:
-  format: "XX.XX.XX"
+  separator: "."
+  components: "major,minor,patch,revision"
 
 git:
   tag_prefix: "v"

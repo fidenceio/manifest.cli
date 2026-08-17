@@ -371,7 +371,7 @@ YAML
 @test "yaml: write_full_yaml dumps mapped MANIFEST_CLI_* values as structured YAML" {
     export MANIFEST_CLI_GIT_TAG_PREFIX="rel-"
     export MANIFEST_CLI_GIT_DEFAULT_BRANCH="trunk"
-    export MANIFEST_CLI_VERSION_FORMAT="XX.XX"
+    export MANIFEST_CLI_VERSION_SEPARATOR="_"
     unset MANIFEST_CLI_GIT_TAG_SUFFIX
 
     run write_full_yaml "$YAML"
@@ -385,7 +385,7 @@ YAML
     # Each set env var landed at its mapped dot-path.
     [ "$(yq e '.git.tag_prefix' "$YAML")" = "rel-" ]
     [ "$(yq e '.git.default_branch' "$YAML")" = "trunk" ]
-    [ "$(yq e '.version.format' "$YAML")" = "XX.XX" ]
+    [ "$(yq e '.version.separator' "$YAML")" = "_" ]
     # Unset mapped vars are omitted, not written as empties.
     [ "$(yq e '.git.tag_suffix' "$YAML")" = "null" ]
 }

@@ -110,7 +110,9 @@ A version is an ordered list of numeric segments of **any length** — nothing a
 | `20.1.0.3` | `21.0.0` | `20.2.0` | `20.1.1` | `20.1.0.4` |
 | `1.2.3.4.5` | `2.0.0` | `1.3.0` | `1.2.4` | `1.2.3.5` |
 
-So a fourth segment is *subordinate* to the third, not a counter running alongside it. `20.1.0.3` reads as "the third revision of `20.1.0`", and a `patch` lands on `20.1.1` — a patch that has had no revisions — so the segment goes away. Use `revision` to re-cut an already-released version (a bad tag, a packaging-only correction) where the code identity of `20.1.0` still stands. **It is not a durable counter**: it survives only until the next `patch`/`minor`/`major`, by design. Anything that must persist across ordinary releases does not belong in `VERSION`, whose job is to answer "is production this tree".
+So a fourth segment is *subordinate* to the third, not a counter running alongside it. `20.1.0.3` reads as "the third revision of `20.1.0`", and a `patch` lands on `20.1.1` — a patch that has had no revisions — so the segment goes away. Use `revision` to re-cut an already-released version (a bad tag, a packaging-only correction) where the code identity of `20.1.0` still stands. **It is not a durable counter**: it survives only until the next `patch`/`minor`/`major`, by design.
+
+> **Locked 2026-08-16.** `revision` means a non-durable re-cut, and that is settled — not a default awaiting a better idea. Anything that must persist across ordinary releases needs a field of its own, because it has to be able to hold still while `VERSION` moves and move while `VERSION` holds still. `VERSION` cannot do that: its one job is to answer "is production this tree", and release verification leans on it having exactly one meaning and one lifecycle. A second meaning sharing the field would break that, and no arithmetic over a single field can give two meanings separate lifecycles.
 
 **Segments are addressed by position; names are aliases.** Pass a segment number to reach any position, named or not:
 

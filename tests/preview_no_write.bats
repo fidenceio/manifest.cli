@@ -461,29 +461,29 @@ TSV
 # -----------------------------------------------------------------------------
 
 @test "config set: default preview makes no writes" {
-    assert_preview_clean config set --layer project version.format semver
+    assert_preview_clean config set --layer project version.separator _
 }
 
 @test "config set: --dry-run makes no writes" {
-    assert_preview_clean config set --layer project version.format semver --dry-run
+    assert_preview_clean config set --layer project version.separator _ --dry-run
 }
 
 @test "config set: AUTO_CONFIRM=1 default still previews and makes no writes" {
     export MANIFEST_CLI_AUTO_CONFIRM=1
-    assert_preview_clean config set --layer project version.format semver
+    assert_preview_clean config set --layer project version.separator _
 }
 
 @test "config unset: default preview makes no writes" {
-    assert_preview_clean config unset --layer project version.format
+    assert_preview_clean config unset --layer project version.separator
 }
 
 @test "config unset: --dry-run makes no writes" {
-    assert_preview_clean config unset --layer project version.format --dry-run
+    assert_preview_clean config unset --layer project version.separator --dry-run
 }
 
 @test "config unset: AUTO_CONFIRM=1 default still previews and makes no writes" {
     export MANIFEST_CLI_AUTO_CONFIRM=1
-    assert_preview_clean config unset --layer project version.format
+    assert_preview_clean config unset --layer project version.separator
 }
 
 # -----------------------------------------------------------------------------

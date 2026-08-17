@@ -51,24 +51,24 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     # -------------------------------------------------------------------------
     # version — versioning scheme configuration
     # -------------------------------------------------------------------------
-    ["version.format"]="MANIFEST_CLI_VERSION_FORMAT"
-    ["version.separator"]="MANIFEST_CLI_VERSION_SEPARATOR"
+    # Segment names, ordered; a name's index in this list IS its position. This
+    # is the only key the bump arithmetic reads for naming — see
+    # manifest_version_components / manifest_version_level.
     ["version.components"]="MANIFEST_CLI_VERSION_COMPONENTS"
-    ["version.max_values"]="MANIFEST_CLI_VERSION_MAX_VALUES"
-    ["version.component_position.major"]="MANIFEST_CLI_MAJOR_COMPONENT_POSITION"
-    ["version.component_position.minor"]="MANIFEST_CLI_MINOR_COMPONENT_POSITION"
-    ["version.component_position.patch"]="MANIFEST_CLI_PATCH_COMPONENT_POSITION"
-    ["version.component_position.revision"]="MANIFEST_CLI_REVISION_COMPONENT_POSITION"
-    ["version.increment_target.major"]="MANIFEST_CLI_MAJOR_INCREMENT_TARGET"
-    ["version.increment_target.minor"]="MANIFEST_CLI_MINOR_INCREMENT_TARGET"
-    ["version.increment_target.patch"]="MANIFEST_CLI_PATCH_INCREMENT_TARGET"
-    ["version.increment_target.revision"]="MANIFEST_CLI_REVISION_INCREMENT_TARGET"
-    ["version.reset_components.major"]="MANIFEST_CLI_MAJOR_RESET_COMPONENTS"
-    ["version.reset_components.minor"]="MANIFEST_CLI_MINOR_RESET_COMPONENTS"
-    ["version.reset_components.patch"]="MANIFEST_CLI_PATCH_RESET_COMPONENTS"
-    ["version.reset_components.revision"]="MANIFEST_CLI_REVISION_RESET_COMPONENTS"
+    ["version.separator"]="MANIFEST_CLI_VERSION_SEPARATOR"
+    # Retired 2026-08-16: version.format, version.max_values and
+    # the component_position.* / increment_target.* / reset_components.* families
+    # were declared and settable but read by nothing outside `config show`, which
+    # reported them as behavior in force. Position is now the index in
+    # version.components and reset is intrinsic to the bump, so re-adding any of
+    # them creates a second place to state a fact that already has one home.
+    # version.validation was retired the same day for the same reason: it read
+    # `Version Validation: true` on screen while validate_version_format() ran
+    # unconditionally, so setting it false promised an opt-out that did not
+    # exist. version.regex, directly below, IS live — it supplies that
+    # function's pattern — so the two are not interchangeable.
+    # _MANIFEST_CLI_CONFIG_RETIRED_KEYS keeps them detectable in existing configs.
     ["version.regex"]="MANIFEST_CLI_VERSION_REGEX"
-    ["version.validation"]="MANIFEST_CLI_VERSION_VALIDATION"
     # Opt-in list of files whose own version field mirrors VERSION on each bump.
     # Comma-separated (e.g. "package.json"); unset = no sync. See
     # _manifest_version_sync_targets / manifest_version_sync_apply.

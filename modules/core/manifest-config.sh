@@ -329,9 +329,54 @@ warn_deprecated_configuration() {
     fi
 }
 
+# Config paths that were removed from the schema on 2026-08-16.
+# Listed at the FAMILY level, not per leaf: deleting the four
+# `version.component_position.*` children individually would leave an empty
+# `component_position: {}` map behind, which reads as configuration that is
+# merely blank rather than gone.
+#
+# Retiring a key silently would repeat the defect these were retired for. The
+# loader skips unmapped paths without a word, so a config that still sets them
+# would look accepted forever; `config doctor` names them instead, and --fix
+# deletes them. Removal is safe by construction — no code path has ever read
+# them, so deleting one cannot change any release outcome.
+declare -ga _MANIFEST_CLI_CONFIG_RETIRED_KEYS=(
+    "version.format"
+    "version.max_values"
+    "version.component_position"
+    "version.increment_target"
+    "version.reset_components"
+    # Same defect, found while removing the others: `config show` printed
+    # "Version Validation: true" for a key no code path read, so setting it
+    # false offered an opt-out from validation that never existed —
+    # validate_version_format() runs regardless. Its neighbour version.regex is
+    # genuinely live (it supplies that function's pattern) and stays.
+    "version.validation"
+)
+
+# True when a dot-path exists in the file with any non-null value. Kept separate
+# from get_yaml_value because these paths may hold MAPS, whose multi-line
+# serialization would corrupt the `|`-delimited finding protocol if echoed.
+_manifest_config_path_present() {
+    local config_file="$1"
+    local path="$2"
+    local raw
+    raw="$(get_yaml_value "$config_file" ".${path}" "")" || return 1
+    [ -n "$raw" ] && [ "$raw" != "null" ]
+}
+
 _manifest_config_detect_issues() {
     local config_file="$1"
     [ -f "$config_file" ] || return 1
+
+    local _retired
+    for _retired in "${_MANIFEST_CLI_CONFIG_RETIRED_KEYS[@]}"; do
+        if _manifest_config_path_present "$config_file" "$_retired"; then
+            # from/to deliberately empty: there is no replacement value, and the
+            # present value may be a map.
+            echo "obsolete|$_retired||"
+        fi
+    done
 
     local ts1 ts2 ts3 ts4 tap_repo
     ts1=$(get_yaml_value "$config_file" ".time.server1" "")
@@ -384,6 +429,28 @@ _manifest_config_upsert_key() {
 
     # key is now a YAML dot-path (e.g. "time.server1")
     set_yaml_value "$file" "$key" "$value"
+}
+
+# Remove a dot-path outright. Only used for retired keys
+# (_MANIFEST_CLI_CONFIG_RETIRED_KEYS); there is no set_yaml_value equivalent because
+# `config unset` deletes through the key map, which by definition no longer
+# holds these paths.
+_manifest_config_delete_key() {
+    local file="$1"
+    local key="$2"
+    [ -f "$file" ] || return 1
+    yq e "del(.${key})" -i "$file" 2>/dev/null || return 1
+
+    # Removing the last child leaves `version: {}` behind — present but blank,
+    # which is the same "looks like configuration, means nothing" shape these
+    # keys were retired for. Prune a parent the delete just emptied. One level
+    # is enough: every retired path is a direct child of `version`.
+    local parent="${key%.*}"
+    [ "$parent" = "$key" ] && return 0
+    local remaining
+    remaining="$(yq e ".${parent} | length" "$file" 2>/dev/null)" || return 0
+    [ "$remaining" = "0" ] && yq e "del(.${parent})" -i "$file" 2>/dev/null
+    return 0
 }
 
 _manifest_config_lock_acquire() {
@@ -448,6 +515,22 @@ _manifest_config_apply_migrations() {
                     echo "added|$key||$to"
                 fi
                 ;;
+            "obsolete")
+                # Deleting a key the runtime never reads cannot change behavior,
+                # and the backup below still runs first. Left in place, it would
+                # be reported as a finding on every doctor run with no way to
+                # clear it.
+                if [ "$dry_run" = "true" ]; then
+                    echo "would-remove|$key||"
+                else
+                    if [ "$backed_up" -eq 0 ]; then
+                        _manifest_config_backup_before_migration "$config_file" || return 1
+                        backed_up=1
+                    fi
+                    _manifest_config_delete_key "$config_file" "$key" && applied=$((applied + 1))
+                    echo "removed|$key||"
+                fi
+                ;;
         esac
     done < <(_manifest_config_detect_issues "$config_file")
 
@@ -466,6 +549,13 @@ auto_migrate_user_global_configuration() {
         return 0
     fi
 
+    # `obsolete` is deliberately NOT actionable here. Every global config the
+    # installer has ever written carries version.format (install-cli.sh seeded
+    # it), so treating retired keys as drift would put a warning in front of
+    # essentially every existing user for a condition that cannot affect a
+    # single release — nothing reads those keys. `manifest config doctor`
+    # reports them on request and `--fix` removes them; that is the right place
+    # for a cosmetic cleanup. Do not add "obsolete" to this list.
     local actionable=0
     while IFS='|' read -r issue_type _key _from _to; do
         case "$issue_type" in
@@ -597,6 +687,9 @@ config_doctor() {
                 ;;
             "deprecated")
                 echo " - DEPRECATED: $key is set ('$from'); use '$to'"
+                ;;
+            "obsolete")
+                echo " - OBSOLETE: $key is set but no longer exists; nothing reads it (removed 2026-08-16). Safe to delete."
                 ;;
         esac
     done
@@ -763,33 +856,22 @@ load_configuration() {
 
 # Set default configuration values
 set_default_configuration() {
-    # Versioning Configuration
-    export MANIFEST_CLI_VERSION_FORMAT="${MANIFEST_CLI_VERSION_FORMAT:-XX.XX.XX}"
+    # Versioning Configuration.
+    #
+    # These two keys are the whole versioning surface, and both are read by the
+    # bump arithmetic. Fifteen further version.* keys were retired 2026-08-16
+    # because nothing read them: a name's position is its index
+    # in `components`, and clearing every segment right of the bumped one is
+    # intrinsic to the bump, so component_position.* / increment_target.* /
+    # reset_components.* each restated a fact that already had one home — and
+    # `config show` reported them as behavior in force. version.format and
+    # version.max_values described a shape the arithmetic never consulted.
     export MANIFEST_CLI_VERSION_SEPARATOR="${MANIFEST_CLI_VERSION_SEPARATOR:-.}"
     # Ordered segment names; position is the index in this list. `revision` is
     # included because it is a real increment level — omitting it left the one
     # config key that names segments disagreeing with the four the CLI accepted.
     export MANIFEST_CLI_VERSION_COMPONENTS="${MANIFEST_CLI_VERSION_COMPONENTS:-major,minor,patch,revision}"
-    export MANIFEST_CLI_VERSION_MAX_VALUES="${MANIFEST_CLI_VERSION_MAX_VALUES:-0,0,0}"
-    
-    # Human-Intuitive Component Mapping (defaults to standard semantic versioning)
-    export MANIFEST_CLI_MAJOR_COMPONENT_POSITION="${MANIFEST_CLI_MAJOR_COMPONENT_POSITION:-1}"
-    export MANIFEST_CLI_MINOR_COMPONENT_POSITION="${MANIFEST_CLI_MINOR_COMPONENT_POSITION:-2}"
-    export MANIFEST_CLI_PATCH_COMPONENT_POSITION="${MANIFEST_CLI_PATCH_COMPONENT_POSITION:-3}"
-    export MANIFEST_CLI_REVISION_COMPONENT_POSITION="${MANIFEST_CLI_REVISION_COMPONENT_POSITION:-4}"
-    
-    # Increment Behavior (defaults to standard semantic versioning)
-    export MANIFEST_CLI_MAJOR_INCREMENT_TARGET="${MANIFEST_CLI_MAJOR_INCREMENT_TARGET:-1}"
-    export MANIFEST_CLI_MINOR_INCREMENT_TARGET="${MANIFEST_CLI_MINOR_INCREMENT_TARGET:-2}"
-    export MANIFEST_CLI_PATCH_INCREMENT_TARGET="${MANIFEST_CLI_PATCH_INCREMENT_TARGET:-3}"
-    export MANIFEST_CLI_REVISION_INCREMENT_TARGET="${MANIFEST_CLI_REVISION_INCREMENT_TARGET:-4}"
-    
-    # Reset Behavior (defaults to standard semantic versioning)
-    export MANIFEST_CLI_MAJOR_RESET_COMPONENTS="${MANIFEST_CLI_MAJOR_RESET_COMPONENTS:-2,3,4}"
-    export MANIFEST_CLI_MINOR_RESET_COMPONENTS="${MANIFEST_CLI_MINOR_RESET_COMPONENTS:-3,4}"
-    export MANIFEST_CLI_PATCH_RESET_COMPONENTS="${MANIFEST_CLI_PATCH_RESET_COMPONENTS:-4}"
-    export MANIFEST_CLI_REVISION_RESET_COMPONENTS="${MANIFEST_CLI_REVISION_RESET_COMPONENTS:-}"
-    
+
     # Git Configuration
     export MANIFEST_CLI_GIT_TAG_PREFIX="${MANIFEST_CLI_GIT_TAG_PREFIX:-v}"
     export MANIFEST_CLI_GIT_TAG_SUFFIX="${MANIFEST_CLI_GIT_TAG_SUFFIX:-}"
@@ -957,8 +1039,9 @@ set_default_configuration() {
     export MANIFEST_CLI_CLOUD_API_KEY_ENV="${MANIFEST_CLI_CLOUD_API_KEY_ENV:-MANIFEST_CLI_CLOUD_API_KEY}"
     
     # Advanced Configuration
+    # version.regex is live: validate_version_format() reads it. version.validation
+    # sat beside it until 2026-08-16 doing nothing — see _MANIFEST_CLI_CONFIG_RETIRED_KEYS.
     export MANIFEST_CLI_VERSION_REGEX="${MANIFEST_CLI_VERSION_REGEX:-^[0-9]+(\.[0-9]+)*$}"
-    export MANIFEST_CLI_VERSION_VALIDATION="${MANIFEST_CLI_VERSION_VALIDATION:-true}"
     export MANIFEST_CLI_VERSION_SURFACES_ENABLED="${MANIFEST_CLI_VERSION_SURFACES_ENABLED:-true}"
     export MANIFEST_CLI_VERSION_HANDLER_CATALOG="${MANIFEST_CLI_VERSION_HANDLER_CATALOG:-}"
     export MANIFEST_CLI_VERSION_SURFACE_SCAN_DEPTH="${MANIFEST_CLI_VERSION_SURFACE_SCAN_DEPTH:-5}"
@@ -1276,21 +1359,6 @@ show_configuration() {
     fi
     echo ""
     
-    # These keys are declared and settable but NO code path reads them (TRACKER
-    # §9.14). They are still shown, so a value someone set does not vanish from
-    # the screen — but never again as an assertion about behavior. The previous
-    # wording ("Major Reset: … (components reset to 0)", "Major Target: … (which
-    # component increments)") told a user their setting was in force while the
-    # arithmetic ignored it entirely. Remove this block if the keys are removed.
-    echo "🚫 Declared but NOT in force (nothing reads these — TRACKER §9.14):"
-    echo "   version.format:            ${MANIFEST_CLI_VERSION_FORMAT}"
-    echo "   version.max_values:        ${MANIFEST_CLI_VERSION_MAX_VALUES}"
-    echo "   version.component_position: major=${MANIFEST_CLI_MAJOR_COMPONENT_POSITION} minor=${MANIFEST_CLI_MINOR_COMPONENT_POSITION} patch=${MANIFEST_CLI_PATCH_COMPONENT_POSITION} revision=${MANIFEST_CLI_REVISION_COMPONENT_POSITION}"
-    echo "   version.increment_target:   major=${MANIFEST_CLI_MAJOR_INCREMENT_TARGET} minor=${MANIFEST_CLI_MINOR_INCREMENT_TARGET} patch=${MANIFEST_CLI_PATCH_INCREMENT_TARGET} revision=${MANIFEST_CLI_REVISION_INCREMENT_TARGET}"
-    echo "   version.reset_components:   major=${MANIFEST_CLI_MAJOR_RESET_COMPONENTS} minor=${MANIFEST_CLI_MINOR_RESET_COMPONENTS} patch=${MANIFEST_CLI_PATCH_RESET_COMPONENTS} revision=${MANIFEST_CLI_REVISION_RESET_COMPONENTS}"
-    echo "   Segment position and reset behavior come from version.components above."
-    echo ""
-    
     echo "🌿 Branch Configuration:"
     echo "   Default Branch: ${MANIFEST_CLI_GIT_DEFAULT_BRANCH}"
     echo "   Feature Prefix: ${MANIFEST_CLI_GIT_FEATURE_BRANCH_PREFIX}"
@@ -1349,7 +1417,6 @@ show_configuration() {
     
     echo "⚙️  Advanced Configuration:"
     echo "   Version Regex: ${MANIFEST_CLI_VERSION_REGEX}"
-    echo "   Version Validation: ${MANIFEST_CLI_VERSION_VALIDATION}"
     echo "   Version Surface Detection: ${MANIFEST_CLI_VERSION_SURFACES_ENABLED}"
     echo "   Version Surface Catalog: ${MANIFEST_CLI_VERSION_HANDLER_CATALOG:-built-in}"
     echo "   Version Surface Depth: ${MANIFEST_CLI_VERSION_SURFACE_SCAN_DEPTH}"

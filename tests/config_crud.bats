@@ -46,10 +46,10 @@ teardown() {
 }
 
 @test "config set -y --layer project: writes manifest.config.yaml" {
-    run manifest_config_set --layer project version.format semver -y
+    run manifest_config_set --layer project version.separator _ -y
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "✓ set project:version.format = semver"
-    [ "$(yq e '.version.format' "$PROJ/manifest.config.yaml")" = "semver" ]
+    echo "$output" | grep -q "✓ set project:version.separator = _"
+    [ "$(yq e '.version.separator' "$PROJ/manifest.config.yaml")" = "_" ]
     [ ! -f "$PROJ/manifest.config.local.yaml" ]
 }
 

@@ -598,7 +598,7 @@ manifest_config_get() {
         _render_help \
             "manifest config get <key>" \
             "Print a config key's effective value (after layering)." \
-            "Examples" "  manifest config get version.format
+            "Examples" "  manifest config get version.separator
   manifest config get git.default_branch"
         return 1
     fi
@@ -643,7 +643,7 @@ confirmation via the global-config safety gate.
 Writable layers are global, project and local. The 'fleet' layer is read-only
 here — set fleet-wide values by running this command at the fleet root." \
                     "Examples" "  manifest config set git.default_branch main
-  manifest config set --layer project version.format semver
+  manifest config set --layer project version.separator .
   manifest config set --layer global brew.tap_repo fidenceio/homebrew.tap"
                 return 0
                 ;;
@@ -719,7 +719,7 @@ manifest_config_unset() {
 Writable layers are global, project and local. The 'fleet' layer is read-only
 here — remove fleet-wide values by running this command at the fleet root." \
                     "Examples" "  manifest config unset git.default_branch
-  manifest config unset --layer project version.format"
+  manifest config unset --layer project version.separator"
                 return 0
                 ;;
             *) _render_help_error "Unknown option: $1" "manifest config unset [--layer ...] <key>"; return 1 ;;
@@ -775,7 +775,7 @@ manifest_config_describe() {
         _render_help \
             "manifest config describe <key>" \
             "Show where a key's value comes from across layers, plus its env-var name." \
-            "Examples" "  manifest config describe version.format
+            "Examples" "  manifest config describe version.separator
   manifest config describe brew.tap_repo"
         return 1
     fi
