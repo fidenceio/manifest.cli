@@ -112,7 +112,24 @@ refute() {
     return 0
 }
 
+# Module functions must execute under the shell options they ship with.
+# manifest-core.sh:7 sets `set -eo pipefail` at top level, but that is the
+# entrypoint module — sourcing it here would also run its path resolution and
+# pull in the whole module tree, so the suite loads the leaf modules directly
+# and has to set the options itself.
+#
+# Measured, not assumed (2026-08-18): bats already runs test bodies under
+# errexit, so `-e` was never actually missing. `pipefail` WAS missing, and that
+# is the real gap this line closes — a module function whose pipeline fails in
+# an early element but succeeds in the last one returned 0 to the assertions
+# here while aborting in production. Setting both keeps the pair together and
+# matched to manifest-core.sh; suite_shell_options.bats asserts they stay that
+# way, and would have caught the drift.
+#
+# `run` clears errexit for the command it captures and `refute` evaluates its
+# command as an `if` condition, so both idioms keep working unchanged.
 load_modules() {
+    set -eo pipefail
     export MANIFEST_CLI_CORE_MODULES_DIR="$TEST_REPO_ROOT/modules"
     # Always-needed minimal stack: shared utils + yaml.
     # shellcheck disable=SC1091
