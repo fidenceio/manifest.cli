@@ -635,6 +635,16 @@ get_fleet_service_path() {
     var_name=$(echo "$service" | tr '[:lower:]-.' '[:upper:]__')
 
     local path_var="MANIFEST_CLI_FLEET_SERVICE_${var_name}_PATH"
+    # Hardening, not an exploit fix — the distinction matters, so it is written
+    # down. Service names come from the name column of manifest.fleet.tsv (repo
+    # data) and `tr` only case-folds, so subscript syntax survives into the
+    # name. That does NOT currently execute: the injected text lands mid-name
+    # with `_PATH` appended, so `[...]` is not a trailing subscript and bash
+    # rejects the whole thing as "invalid variable name" rather than evaluating
+    # it (verified 2026-08-18). The guard replaces that stderr leak with a
+    # clean miss, and keeps the property from depending on the suffix — drop
+    # the suffix in a refactor and the unguarded form becomes SEC-017.
+    manifest_is_valid_env_var_name "$path_var" || return 1
     local path="${!path_var:-}"
 
     if [[ -z "$path" ]]; then
@@ -673,7 +683,14 @@ get_fleet_service_property() {
     prop_upper=$(echo "$property" | tr '[:lower:]' '[:upper:]')
 
     local full_var="MANIFEST_CLI_FLEET_SERVICE_${var_name}_${prop_upper}"
-    local value="${!full_var:-}"
+    # Same hardening as get_fleet_service_path, same non-exploitability reason
+    # (the name always carries a trailing _${prop_upper}). An unreadable name
+    # falls back to the default rather than expanding, which is the same answer
+    # an unset var would give.
+    local value=""
+    if manifest_is_valid_env_var_name "$full_var"; then
+        value="${!full_var:-}"
+    fi
 
     if [[ -n "$value" ]]; then
         echo "$value"
@@ -710,8 +727,15 @@ get_fleet_config_value() {
     local env_key
     env_key="MANIFEST_CLI_FLEET_$(echo "$key" | tr '[:lower:]' '[:upper:]')"
 
-    # Check environment variable first
-    local env_value="${!env_key:-}"
+    # Check environment variable first. Unlike the two helpers above, the
+    # injected text WOULD be trailing here (no suffix is appended), so this is
+    # the one fleet site where a hostile key would actually evaluate. Every
+    # caller currently passes a string literal, so it is unreachable today —
+    # the guard is what keeps that true without relying on call-site discipline.
+    local env_value=""
+    if manifest_is_valid_env_var_name "$env_key"; then
+        env_value="${!env_key:-}"
+    fi
     if [[ -n "$env_value" ]]; then
         echo "$env_value"
         return 0

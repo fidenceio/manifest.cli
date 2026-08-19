@@ -353,13 +353,47 @@ manifest_preview_exit_code() {
 # from an unknown source is still caught). Not a security boundary — defense in
 # depth so an accidental echo/verbose-dump never prints a live credential.
 
+# True when $1 is a syntactically valid shell identifier, i.e. safe to hand to
+# bash's indirect expansion `${!name}`.
+#
+# WHY THIS EXISTS: `${!name}` treats a trailing `[...]` as an ARRAY SUBSCRIPT,
+# and bash evaluates array subscripts in an ARITHMETIC context, where command
+# substitution runs. So `name='x[$(touch /tmp/pwned)]'` EXECUTES on read — the
+# expansion is not a lookup, it is an evaluation. Names reaching indirect reads
+# are not always ours: cloud.api_key_env is a repo-supplied config value, and
+# fleet service names come from manifest.fleet.tsv. Prove the shape first.
+#
+# `case` rather than `[[ =~ ]]`: no regex engine, no subshell, no fork — this
+# sits on the logging hot path via manifest_redact.
+manifest_is_valid_env_var_name() {
+    case "${1-}" in
+        '' | [!A-Za-z_]* | *[!A-Za-z0-9_]*) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
+# Value of the env var NAMED by $1, or empty. Returns 1 without expanding when
+# the name is not a valid identifier, so a hostile name can never reach `${!}`.
+manifest_env_value_of() {
+    manifest_is_valid_env_var_name "${1-}" || return 1
+    printf '%s' "${!1-}"
+}
+
 # Names of env vars whose VALUES must never appear in output. Includes the var
 # named by MANIFEST_CLI_CLOUD_API_KEY_ENV (the cloud key is indirected).
+#
+# The indirected name is repo-controlled (manifest.config.yaml -> cloud.api_key_env),
+# so it is shape-checked HERE as well as at the read below. Emitting it at all
+# is what turned the redactor into an execution sink: config validation rejects a
+# malformed name but reports the rejection through log_warning, which runs the
+# redactor over the still-hostile value.
 _manifest_redaction_env_var_names() {
     printf '%s\n' \
         GITHUB_TOKEN GH_TOKEN HOMEBREW_GITHUB_API_TOKEN \
         MANIFEST_CLI_CLOUD_API_KEY MANIFEST_CLI_CLOUD_API_TOKEN
-    [ -n "${MANIFEST_CLI_CLOUD_API_KEY_ENV:-}" ] && printf '%s\n' "$MANIFEST_CLI_CLOUD_API_KEY_ENV"
+    if manifest_is_valid_env_var_name "${MANIFEST_CLI_CLOUD_API_KEY_ENV:-}"; then
+        printf '%s\n' "$MANIFEST_CLI_CLOUD_API_KEY_ENV"
+    fi
     return 0
 }
 
@@ -373,6 +407,11 @@ manifest_redact() {
     local var val
     while IFS= read -r var; do
         [ -n "$var" ] || continue
+        # Defence in depth: the producer already filters, but this is the actual
+        # expansion site, so it re-proves the shape rather than trusting its
+        # caller. Checked inline (not via manifest_env_value_of) to stay
+        # fork-free on the logging hot path.
+        manifest_is_valid_env_var_name "$var" || continue
         val="${!var-}"
         # Require a non-trivial length so a short/empty value can't over-redact.
         [ -n "$val" ] && [ "${#val}" -ge 8 ] && text="${text//"$val"/[REDACTED]}"

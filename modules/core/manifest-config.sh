@@ -55,6 +55,12 @@ _manifest_config_apply_secret_env_refs() {
     fi
 
     if [[ ! "$ref_var" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+        # UNSET before reporting, and report the name only after it is gone.
+        # "Ignoring" previously meant "this function ignores it" while the value
+        # stayed exported for every other consumer — including the redactor that
+        # log_warning itself invokes, which expanded it indirectly and so
+        # EXECUTED it. Rejecting a value has to mean removing it.
+        unset MANIFEST_CLI_CLOUD_API_KEY_ENV
         log_warning "Ignoring invalid cloud.api_key_env value: $ref_var"
         return 0
     fi
