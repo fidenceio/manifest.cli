@@ -687,10 +687,17 @@ main() {
             load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "false"
             ;;
         # status is read-only; it handles non-git directories itself
+        # Both self-describe as read-only ("never modifies anything" / "Zero
+        # side effects"), so they take the same read-only guard as `first`
+        # below. Measured 2026-08-19: they already write nothing — with legacy
+        # keys present, the cooldown cleared and AUTO_CONFIRM set, both leave
+        # the global config byte-identical and only ADVISE running `upgrade`.
+        # The guard is here so that stays a property of the entry point rather
+        # than of the migration gate downstream, which is free to change.
         "status"|"doctor")
             MANIFEST_CLI_PROJECT_ROOT="$(pwd)"
             export MANIFEST_CLI_PROJECT_ROOT
-            load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "false"
+            MANIFEST_CLI_CONFIG_SKIP_WRITES=1 load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "false"
             ;;
         # first onboards single repos AND fleet roots (which need not be git
         # repos), so don't require one. The inspection must not touch disk: load
