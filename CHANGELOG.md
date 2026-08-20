@@ -1,5 +1,27 @@
 # Changelog
 
+## [59.3.0] - 2026-08-20
+
+**Release Type:** Minor
+
+### Changes
+
+- File the input-shape sweep that the shipped entries took with them
+- Record that the audit is 9/13 phases unrun where a clone can see it
+- File the 13-phase audit results: 3 P0, 34 P1, 35 P2
+- Run the suite under the shipped shell options (pipefail was missing)
+- Stop repository config from reaching shell execution (SEC-017)
+- Withdraw two of the audit's three P0s; they did not survive reproduction
+- Declare status/doctor read-only at the entry point (ATOM-003)
+- Record the fix-campaign state in §9.20 so it can be resumed cold
+- Correct the suite count: 1508, not 1507
+- Reconcile the P1 count with the register: 32 remaining, not 33
+- Add GitHub Release publishing support
+- Update release copy and configuration examples
+- Wire first-class CLI commands to inspectable built-in recipe definitions
+- Add regression coverage for the changed CLI workflow
+
+
 ## [59.2.1] - 2026-08-17
 
 **Release Type:** Patch
@@ -93,13 +115,4 @@
 
 - Add GitHub Release publishing support
 - Update release copy and configuration examples
-- Add regression coverage for the changed CLI workflow
-
-
-## [58.0.2] - 2026-08-05
-
-**Release Type:** Patch
-
-### Changes
-
 - Add regression coverage for the changed CLI workflow
