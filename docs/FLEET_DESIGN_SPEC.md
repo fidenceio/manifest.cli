@@ -180,7 +180,7 @@ Repo-scoped commands use the current `.git` root. Fleet-scoped commands use the 
 
 ## Docs Generation
 
-Fleet docs generation can refresh per-service docs and generate a managed Jekyll docs site. Docs-site generation is on by default and covered in [DOCS_SITE.md](DOCS_SITE.md).
+Fleet docs generation can refresh per-service docs and generate a managed Jekyll docs site. Docs-site generation is **opt-in** (`docs.generate.site`, default `false`) and covered in [DOCS_SITE.md](DOCS_SITE.md).
 
 ## Current Limitations
 

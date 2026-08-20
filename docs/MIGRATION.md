@@ -1,68 +1,81 @@
 # Migration Guide
 
-This guide covers the behaviors most likely to surprise someone adopting
-Manifest CLI or upgrading an existing automation. The throughline is one rule:
-**Manifest is safe by default — it shows you the plan and changes nothing until
-you explicitly say apply.**
+This guide covers the two things most likely to catch out someone new to Manifest CLI,
+or someone upgrading a pipeline that already existed. Both come back to one rule:
+
+**Manifest shows you the plan and changes nothing until you explicitly say go.**
 
 ## The preview / apply model
 
-Every mutating command (`init`, `prep`, `refresh`, `ship`) **previews by
-default** and writes nothing. You opt into changes explicitly:
+Every command that could change something — `init`, `prep`, `refresh`, `ship` — prints
+what it *would* do and then stops. Nothing is written until you ask:
 
 ```bash
-manifest ship repo patch        # preview — no writes, commits, tags, or pushes
-manifest ship repo patch -y     # apply — performs the release
+manifest ship repo patch        # plan only: no writes, no commit, no tag, no push
+manifest ship repo patch -y     # do it: performs the release
 ```
 
-| Spelling | Meaning |
+| What you type | What it means |
 | -------- | ------- |
-| (no flag) | Preview. Prints the plan; makes no changes. |
-| `--dry-run` | Explicit preview. Same as no flag; use it to be unambiguous in scripts. |
-| `-y` / `--yes` | Apply. Performs the planned changes. |
-| `--local -y` | Apply local release work only — no tag, push, GitHub Release, or Homebrew tap publish. |
+| nothing extra | Plan only. Prints what would happen; changes nothing. |
+| `--dry-run` | The same thing, written out. Use it in scripts so a reader can see the intent. |
+| `-y` / `--yes` | Do it. Performs the planned work. |
+| `--local -y` | Do only the local part — no tag, no push, no GitHub Release, no Homebrew publish. |
 
-You cannot combine `--dry-run` with `-y`; preview is already the default, so the
-combination is rejected rather than silently guessed.
+You cannot pass `--dry-run` and `-y` together. Plan-only is already the default, so
+rather than guess which one you meant, Manifest refuses the combination.
 
-### `-y` applies without a confirmation prompt
+### `-y` does not then ask "are you sure?"
 
-`-y` is full apply authorization: it applies with **no** interactive
-confirmation prompt, whether or not a terminal is attached. On a normal repo (a
-named branch + an `origin` remote) `-y` alone applies. An **ambiguous** target —
-detached HEAD, or no `origin` when one is required — is *refused* (never
-prompted); fix the repo, or set `MANIFEST_CLI_AUTO_CONFIRM=1` to authorize it.
+`-y` is the confirmation. Manifest applies immediately, whether or not you are sitting
+at a terminal — this is deliberate, because a command that blocks waiting for input in
+CI is a command that hangs a pipeline.
 
-### `MANIFEST_CLI_AUTO_CONFIRM` is not an apply switch
+For an ordinary repository — one on a named branch, with an `origin` remote — `-y` on
+its own is all you need.
 
-`MANIFEST_CLI_AUTO_CONFIRM=1` only authorizes an *ambiguous* apply target
-**after** apply mode has already been selected with `-y`. It does **not**
-authorize apply on its own — a command without `-y` still previews even when it
-is set — and it is not needed for an ordinary (unambiguous) apply.
+There is one exception. If Manifest cannot tell what it would be acting on, it
+**refuses** rather than prompting. Two cases cause that:
+
+- **Detached HEAD** — your checkout is sitting on a specific commit rather than on a
+  branch, so there is no branch to push.
+- **No `origin` remote** on a command that needs to push somewhere.
+
+Fix the repository, or authorise it explicitly with the variable below.
+
+### `MANIFEST_CLI_AUTO_CONFIRM` is not a way to apply
+
+`MANIFEST_CLI_AUTO_CONFIRM=1` does exactly one job: it authorises an *ambiguous* target
+like the two above, and only **after** you have already asked for apply with `-y`.
+
+It cannot start an apply. A command without `-y` still only prints a plan, even with the
+variable set. And you do not need it for a normal apply.
 
 ```bash
-manifest ship repo patch -y                              # normal repo: applies, no prompt
-MANIFEST_CLI_AUTO_CONFIRM=1 manifest ship repo patch -y  # also authorizes an ambiguous target
+manifest ship repo patch -y                              # ordinary repo: applies, no prompt
+MANIFEST_CLI_AUTO_CONFIRM=1 manifest ship repo patch -y  # also allows an ambiguous target
 ```
 
-Fleet apply (`manifest ship fleet <type> -y`) treats its own `-y` as consent for
-every selected member and does not prompt per member.
+This separation exists so that a variable sitting in a CI environment can never, by
+itself, publish a release.
 
-## The release gate (new)
+For a fleet, `manifest ship fleet <type> -y` treats that single `-y` as consent for
+every selected member. It does not ask again for each one.
 
-Releases are now gated on verification before they publish. The single
-self-describing setting `release.gate` (env `MANIFEST_CLI_RELEASE_GATE`) controls
-what must be green:
+## The release gate
 
-| Value | Behavior |
+Before publishing, Manifest can require that something has passed. One setting controls
+it: `release.gate` (or the variable `MANIFEST_CLI_RELEASE_GATE`).
+
+| Value | What must pass |
 | ----- | -------- |
-| `local-tests` (default) | Run the project's test command first — before auto-commit, remote sync, or any version mutation; a failure aborts with the repo untouched. |
-| `remote-ci` | Require the pushed commit's GitHub checks to be green before the GitHub Release / Homebrew tap publish (the tag is already pushed). |
-| `all` | `local-tests` **and** `remote-ci`. |
-| `none` | No verification. Emits a loud warning and records an audited bypass. |
+| `local-tests` (default) | Your project's tests, run **first** — before the automatic commit, before syncing with the remote, before any version change. If they fail, the run stops and your repository is untouched. |
+| `remote-ci` | GitHub's checks on the pushed commit must be green before the GitHub Release and Homebrew publish. Note the tag has already been pushed by this point. |
+| `all` | Both of the above. |
+| `none` | Nothing. Prints a loud warning and records the bypass in the audit log. |
 
-The `local-tests` command is auto-detected as `./scripts/run-tests.sh`, or set
-your own:
+For `local-tests`, Manifest looks for `./scripts/run-tests.sh`. Point it somewhere else
+if your project differs:
 
 ```yaml
 # manifest.config.yaml
@@ -71,23 +84,29 @@ release:
   gate_command: "pytest -q"     # or "go test ./...", "npm test", "make test"
 ```
 
-If `local-tests` is selected but no test command can be resolved, Manifest warns
-and proceeds (it cannot run tests that do not exist) — set `release.gate_command` or use
-`remote-ci`/`all` to enforce hard gating.
+**One sharp edge worth knowing.** If you choose `local-tests` but Manifest cannot work
+out a test command, it warns and continues — it cannot run tests that do not exist. That
+means `local-tests` alone is not a guarantee. If you need the gate to be able to *stop* a
+release, either set `release.gate_command` explicitly or use `remote-ci` / `all`.
 
-**Upgrading existing automation:** if your pipeline previously shipped without
-running tests and you do not want that to change yet, set `release.gate: none`
-explicitly (the bypass is logged and recorded in the ship status file). To adopt
-gating, point `release.gate_command` at your test entrypoint.
+**Upgrading a pipeline that already worked.** If your automation previously released
+without running tests and you are not ready to change that, set `release.gate: none`
+explicitly. It is logged and recorded in the ship status file, so the choice is visible
+rather than implied. When you are ready, point `release.gate_command` at your tests.
 
 ## Versions are independent across a fleet
 
-Each repository bumps from its own `VERSION`. Manifest never aligns or locksteps
-versions across a fleet; a fleet ship runs each member's own release with its own
-versioning, explicit `version.sync` targets, and its own release gate.
+Each repository counts up from its own `VERSION` file. Manifest never aligns versions
+across a fleet or moves them in lockstep. A fleet release runs each member's own
+release: its own version number, its own `version.sync` targets if any, and its own
+release gate.
+
+If you want every member to share a version number, that is not something Manifest
+does — and the fleet root's own version is a separate thing again, covered in
+[FLEET_DESIGN_SPEC.md](FLEET_DESIGN_SPEC.md).
 
 ## See also
 
-- [User Guide](USER_GUIDE.md) — daily workflows.
-- [Command Reference](COMMAND_REFERENCE.md) — full grammar and flags.
-- [Configuration example](../examples/manifest.config.yaml.example) — every setting with comments.
+- [User Guide](USER_GUIDE.md) — day-to-day workflows.
+- [Command Reference](COMMAND_REFERENCE.md) — every command, flag, and exit code.
+- [Configuration example](../examples/manifest.config.yaml.example) — every setting, with comments.

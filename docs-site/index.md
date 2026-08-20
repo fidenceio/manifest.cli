@@ -17,7 +17,7 @@ title: Home
     </article>
     <article class="doc-link">
       <h2>Changelog</h2>
-      <p><a href="CHANGELOG.md">Release history for v50.1.2</a></p>
+      <p><a href="CHANGELOG.md">Release history</a></p>
     </article>
     <article class="doc-link">
       <h2>Documentation Index</h2>

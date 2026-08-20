@@ -1,28 +1,41 @@
 # Manifest CLI Command Reference
 
-This reference documents the supported public command surface. Use `manifest <command> --help` for live help text. For the preview/apply model, `MANIFEST_CLI_AUTO_CONFIRM` semantics, and the release gate, see the [Migration Guide](MIGRATION.md).
+Every supported command, with its flags. For live help, run
+`manifest <command> --help`.
+
+If you have not met the preview/apply model, `MANIFEST_CLI_AUTO_CONFIRM`, or the release
+gate yet, read the [Migration Guide](MIGRATION.md) first — this page assumes them.
 
 ## Global Rules
 
 | Rule | Detail |
 | ---- | ------ |
-| Scope grammar | `manifest <verb> <scope>`, for example `manifest ship repo patch` |
-| Preview default | Mutating commands preview unless `-y` / `--yes` is present |
-| Explicit dry run | `--dry-run` always means preview |
-| Local apply | `--local -y` applies local writes and suppresses remote side effects |
-| Repo identity | Repo scope uses the current `.git` root |
-| Fleet identity | Fleet scope uses fleet config and selected TSV entries |
+| Shape of a command | `manifest <verb> <scope>`, for example `manifest ship repo patch` |
+| Plan by default | Anything that changes something only plans, unless `-y` / `--yes` is present |
+| Explicit plan | `--dry-run` always means plan only |
+| Local apply | `--local -y` does the local work and skips everything remote |
+| Which repo? | Repo scope uses the `.git` root of your current directory |
+| Which repos? | Fleet scope uses the fleet config and the selected rows of the fleet TSV |
 
 ### Exit Codes
 
 | Code | Meaning |
 | ---- | ------- |
-| `0` | Command succeeded — an apply completed, or a preview ran (default) |
-| `1` | Error: bad arguments, failed pre-flight, declined confirmation, or a failed apply |
-| `3` | Protective skip — a sandbox guard refused a destructive op (e.g. uninstall under a temp `HOME`) |
-| `10` | Preview happened, no consent — emitted only when `preview.exit_code` is set to `distinct` |
+| `0` | Success — either an apply finished, or a plan was printed (the default) |
+| `1` | Error: bad arguments, a failed pre-flight check, a declined confirmation, or a failed apply |
+| `3` | Protective skip — a safety guard refused something destructive (for example `uninstall` running under a temporary `HOME`) |
+| `10` | A plan was printed and no consent was given — only ever returned when `preview.exit_code` is set to `distinct` |
 
-A preview returns `0` by default, exactly like a successful apply. CI wrappers that need to tell "previewed, awaiting `-y`" apart from a real apply can set `preview.exit_code: distinct` (env `MANIFEST_CLI_PREVIEW_EXIT_CODE=distinct`); every preview surface — `ship`, `ship fleet`, and the `pr` previews — then returns `10` instead of `0`. This is purely additive: `--dry-run` stays a preview, apply exit codes are unchanged, and the recomputed plan fingerprint is compared at apply time so a plan that drifted since the preview prints a non-blocking warning.
+**Why `0` covers both cases.** A plan is a successful run, so by default it exits `0`
+just like an apply. That is fine for a human and awkward for a script that needs to tell
+"I printed a plan, waiting for `-y`" apart from "I released something".
+
+If you need that distinction, set `preview.exit_code: distinct` (or
+`MANIFEST_CLI_PREVIEW_EXIT_CODE=distinct`). Every plan surface — `ship`, `ship fleet`,
+and the `pr` plans — then returns `10` instead of `0`. Nothing else changes: `--dry-run`
+is still a plan, apply exit codes are untouched, and Manifest re-checks the plan
+fingerprint at apply time so a plan that drifted since you read it prints a warning
+without blocking.
 
 ## Core Journey
 
@@ -37,7 +50,14 @@ manifest first --name NAME
 manifest first -f|--force
 ```
 
-The guided onboarding front door. By default it runs a read-only inspection of the current directory and previews an opinionated setup — a single repo, a fleet candidate, or an already-configured repo/fleet — writing nothing. With `-y` it applies the proposed setup through the audited apply gate (one apply-event record per run); for a single repo the apply is confirmed with no extra env var when the target is unambiguous (a named branch — an origin remote is not required during onboarding).
+The guided front door. By default it inspects your current directory without changing
+anything and shows a proposed setup — recognising a single repository, a folder that
+could become a fleet, or something already configured.
+
+With `-y` it applies that setup through the audited apply path, writing one audit record
+per run. For a single repository the apply needs no extra environment variable as long as
+the target is unambiguous — meaning you are on a named branch. An `origin` remote is not
+required during onboarding, since you may not have created one yet.
 
 ### `manifest config`
 
@@ -54,7 +74,16 @@ manifest config doctor
 manifest config doctor --fix
 ```
 
-Reads and writes layered YAML config. `list`/`get`/`describe` resolve every layer — `env`, `local`, `project`, `fleet` (inherited from the fleet root), `global`, and built-in defaults. `set`/`unset` write only `global`, `project` or `local`; `--layer fleet` is rejected, because those files belong to a different repository — change fleet-wide values from the fleet root. Global writes and destructive fixes are confirmation-gated.
+Reads and writes the layered YAML configuration.
+
+`list`, `get`, and `describe` look at every layer: `env`, `local`, `project`, `fleet`
+(inherited from the fleet root), `global`, and the built-in defaults.
+
+`set` and `unset` can write only `global`, `project`, or `local`. `--layer fleet` is
+rejected on purpose — those files live in a **different repository**, so writing them
+from inside a member would modify a repo you never named. Change fleet-wide values by
+running the same command at the fleet root. Writing the global config, and destructive
+fixes, both require confirmation.
 
 Layer model: [User Guide — Configuration](USER_GUIDE.md#configuration).
 
@@ -65,7 +94,27 @@ manifest init repo [--dry-run] [-y|--yes] [--create-repo-private|--create-repo-p
 manifest init fleet [--dry-run] [-y|--yes] [--depth N] [--all-folders] [--name NAME] [--force] [--create-repo-private|--create-repo-public]
 ```
 
-`init repo` scaffolds required repo files. An existing `.gitignore` is never overwritten, but it *is* upgraded in place — advised rules it lacks are appended under a marked header, and the count is reported. This is how a `.gitignore` written by an older CLI acquires rules added since, notably the `KEY MATERIAL` block that denies private keys by default. Append-only: nothing existing is rewritten, reordered, or removed, and a rule whose exact negation is already present is skipped rather than reversing a deliberate choice. Re-running adds nothing. Releases never do this — `manifest ship` only reports the gap. `init fleet` is a two-phase fleet discovery and config creation workflow. GitHub repository creation is an explicit remote side effect: add exactly one `--create-repo-private|--create-repo-public` flag. Set `github.owner` to a GitHub user or organization to make the preview and apply target `<owner>/<repo>`; when unset, `gh` uses its authenticated user. Fleet Phase 2 re-checks each selected directory's own `.git` state from disk, so stale `HAS_GIT` inventory cannot make a member inherit the fleet root's repository or origin.
+`init repo` creates the files a Manifest project needs.
+
+**How it treats an existing `.gitignore`.** It never overwrites it. Instead it *adds*
+missing recommended rules under a marked header and tells you how many it added. This is
+how a `.gitignore` written by an older version of Manifest picks up rules added since —
+notably the `KEY MATERIAL` block that refuses to commit private keys.
+
+The upgrade is strictly append-only. Nothing existing is rewritten, reordered, or
+removed. If a rule's exact opposite is already present, it is skipped rather than
+reversing a choice you made deliberately. Running it again adds nothing. Releases never
+do this — `manifest ship` only reports the gap.
+
+`init fleet` discovers a fleet in two phases: the first run writes the member list for
+you to review, the second acts on it.
+
+**Creating GitHub repositories is always explicit.** Pass exactly one of
+`--create-repo-private` or `--create-repo-public`. Set `github.owner` to a user or
+organisation and both the plan and the apply target `<owner>/<repo>`; leave it unset and
+`gh` uses whichever account you are logged in as. Phase 2 re-checks each selected
+directory's own `.git` state from disk, so a stale `HAS_GIT` value in the TSV cannot
+cause a member to inherit the fleet root's repository or remote.
 
 ### `manifest prep`
 
@@ -74,7 +123,7 @@ manifest prep repo [--dry-run] [-y|--yes]
 manifest prep fleet [--dry-run] [-y|--yes] [--parallel]
 ```
 
-Prepares remotes and workspace state before release work.
+Gets remotes and workspace state ready before release work.
 
 ### `manifest refresh`
 
@@ -85,9 +134,9 @@ manifest refresh fleet [--dry-run] [-y|--yes]   # DEPRECATED — use 'manifest u
 
 Refreshes generated metadata, docs, and fleet membership.
 
-`refresh fleet` is **deprecated**: it still runs (with a warning) but prefer
-`manifest update fleet` to re-scan membership and `manifest docs fleet` to
-regenerate documentation.
+`refresh fleet` is **deprecated**. It still works and warns. Prefer
+`manifest update fleet` to re-scan which repositories are members, and
+`manifest docs fleet` to regenerate documentation.
 
 ### `manifest ship`
 
@@ -96,13 +145,20 @@ manifest ship repo patch|minor|major|revision [--dry-run] [-y|--yes] [--local] [
 manifest ship fleet patch|minor|major|revision [--dry-run] [-y|--yes] [--local]
 ```
 
-Repo ship can bump version, generate docs, commit, tag, push, publish GitHub Release notes, and publish the Homebrew tap formula when applicable. Completion requires a clean source tree; published ships also require `HEAD` to remain at the pushed release head.
+A repo release can raise the version, generate docs, commit, tag, push, publish GitHub
+Release notes, and — where applicable — publish the Homebrew formula. Before reporting
+success it requires a clean source tree, and for a published release it also requires
+that `HEAD` is still the commit it pushed.
 
-Fleet ship applies the same release policy to release-enabled fleet services that have release changes. Already-tagged, clean members are listed and skipped as `no changes`.
+A fleet release applies the same policy to each release-enabled member that has
+something to release. Members that are already tagged and clean are listed and skipped
+as `no changes`.
 
 ### Version increments
 
-A version is an ordered list of numeric segments of **any length** — nothing assumes three or four. An increment names one segment; bumping it clears every segment to its right:
+A version is an ordered list of numbers of **any length** — nothing here assumes three
+or four. An increment names one position; raising it resets every position to its right
+to zero, or removes it:
 
 | From | `major` | `minor` | `patch` | `revision` |
 | ---- | ------- | ------- | ------- | ---------- |
@@ -110,36 +166,67 @@ A version is an ordered list of numeric segments of **any length** — nothing a
 | `20.1.0.3` | `21.0.0` | `20.2.0` | `20.1.1` | `20.1.0.4` |
 | `1.2.3.4.5` | `2.0.0` | `1.3.0` | `1.2.4` | `1.2.3.5` |
 
-So a fourth segment is *subordinate* to the third, not a counter running alongside it. `20.1.0.3` reads as "the third revision of `20.1.0`", and a `patch` lands on `20.1.1` — a patch that has had no revisions — so the segment goes away. Use `revision` to re-cut an already-released version (a bad tag, a packaging-only correction) where the code identity of `20.1.0` still stands. **It is not a durable counter**: it survives only until the next `patch`/`minor`/`major`, by design.
+**Read a fourth number as belonging to the third, not running alongside it.** `20.1.0.3`
+means "the third re-cut of `20.1.0`". So a `patch` from there gives `20.1.1` — a patch
+that has had no re-cuts — and the fourth number simply goes away.
 
-> **Locked 2026-08-16.** `revision` means a non-durable re-cut, and that is settled — not a default awaiting a better idea. Anything that must persist across ordinary releases needs a field of its own, because it has to be able to hold still while `VERSION` moves and move while `VERSION` holds still. `VERSION` cannot do that: its one job is to answer "is production this tree", and release verification leans on it having exactly one meaning and one lifecycle. A second meaning sharing the field would break that, and no arithmetic over a single field can give two meanings separate lifecycles.
+Use `revision` when you need to re-cut a version you already released (a bad tag, a
+packaging-only fix) and the code identity of `20.1.0` still stands. **It is not a
+durable counter**: it lasts only until the next `patch`, `minor`, or `major`. That is by
+design.
 
-**Segments are addressed by position; names are aliases.** Pass a segment number to reach any position, named or not:
+> **Locked 2026-08-16.** `revision` meaning a non-durable re-cut is settled, not a
+> placeholder waiting for a better idea. Anything that must survive ordinary releases
+> needs its own field, because it has to be able to hold still while `VERSION` moves and
+> move while `VERSION` holds still. `VERSION` cannot do both: its single job is to answer
+> "is production this tree?", and release verification depends on it having exactly one
+> meaning and one lifecycle. Two meanings sharing one field would break that, and no
+> amount of arithmetic on a single field can give two meanings separate lifecycles.
+
+**Positions are what matter; names are just aliases.** You can address any position by
+number, named or not:
 
 ```bash
-manifest ship repo patch      # the 3rd segment
-manifest ship repo 3          # identical
-manifest ship repo 6          # the 6th segment (1.2.3 -> 1.2.3.0.0.1)
+manifest ship repo patch      # the 3rd number
+manifest ship repo 3          # exactly the same thing
+manifest ship repo 6          # the 6th number (1.2.3 -> 1.2.3.0.0.1)
 ```
 
-**The names are configurable** via `version.components`, an ordered list whose index *is* the position — there is no second place to declare a position, so the two cannot disagree. It defaults to `major,minor,patch,revision`, and the standard four are themselves overridable:
+**You can rename the positions** with `version.components`, an ordered list where the
+index *is* the position — so there is no second place to declare a position and no way
+for the two to disagree. It defaults to `major,minor,patch,revision`, and even those four
+can be replaced:
 
 ```yaml
 version:
-  components: "generation,major,minor,patch"   # `major` now addresses segment 2
+  components: "generation,major,minor,patch"   # `major` now means position 2
 ```
 
-Naming positions beyond the fourth is just a longer list (`major,minor,patch,revision,build,hotfix`). An unusable list — a duplicate name, an all-digit name that would collide with segment numbering, or a blank entry that would shift every later name one segment left — is refused rather than quietly replaced by the defaults, since substituting the standard four for a project that configured something else would cut the release one segment off target.
+Naming positions beyond the fourth is just a longer list
+(`major,minor,patch,revision,build,hotfix`).
 
-Versions carrying non-numeric text (`1.2.3-rc1`, `v1.2.3`) are refused rather than coerced, and `VERSION` is left untouched. `version.separator` (default `.`) applies throughout.
+An unusable list is **refused**, not quietly replaced with the defaults. That covers a
+duplicate name, an all-digit name that would collide with addressing positions by
+number, and a blank entry that would silently shift every later name one position left.
+Falling back to the standard four for a project that configured something else would cut
+the release against the wrong position.
 
-Version-file behavior:
+Versions containing non-numeric text (`1.2.3-rc1`, `v1.2.3`) are refused rather than
+guessed at, and `VERSION` is left alone. `version.separator` (default `.`) applies
+throughout.
 
-- Repo and fleet release writers use `VERSION` as the canonical version file today.
-- `version.sync` is opt-in. When unset, package manifests and lockfiles are not incremented.
-- `version.sync` supports top-level JSON, TOML, and YAML `version` fields. Missing, nested-only, and unsupported targets are skipped.
-- The passive version-surface scanner uses `modules/catalog/version-handlers.tsv` to describe known package/version files. `manifest status`, `manifest status --json`, `manifest doctor`, fleet status, and fleet ship previews surface detections without mutating those files.
-- Configure passive reporting with `version.surfaces.enabled`, `version.surfaces.catalog`, `version.surfaces.scan_depth`, and `version.surfaces.notification_mode`.
+Which files get written:
+
+- Repo and fleet releases write `VERSION`, and only `VERSION`, today.
+- `version.sync` is opt-in. Unset, no package manifest or lockfile is touched.
+- `version.sync` handles a `version` field at the **top level** of JSON, TOML, and YAML.
+  Missing files, versions nested deeper, and unsupported formats are skipped.
+- A read-only scanner uses `modules/catalog/version-handlers.tsv` to recognise known
+  package and version files. `manifest status`, `manifest status --json`,
+  `manifest doctor`, fleet status, and fleet release plans report what they found and
+  change nothing.
+- Tune that reporting with `version.surfaces.enabled`, `version.surfaces.catalog`,
+  `version.surfaces.scan_depth`, and `version.surfaces.notification_mode`.
 
 ## Fleet Operations
 
@@ -155,17 +242,23 @@ manifest plan fleet [--apply]
 manifest reconcile fleet [--do|--apply] [--commit] [--push] [--adopt-submodules]
 ```
 
-Action-first fleet syntax is the supported surface.
+Verb-first is the supported spelling (`manifest topics fleet`, not `manifest fleet topics`).
 
-`manifest topics fleet` projects repo-name slugs onto GitHub topics (additive-only).
-It activates only when `topics.from_name` is set (`inner` | `all` | `all-but-first`) —
-in `manifest.fleet.config.yaml` for the whole fleet, or host-local for one machine via
-`manifest config set topics.from_name inner --layer global` (the layered/env value
-takes precedence over the fleet yaml — note `manifest.fleet.config.yaml` is the fleet
-*definition*, not the `fleet` config layer; see
-[User Guide — Configuration](USER_GUIDE.md#configuration)). When enabled, the same projection also runs
-as part of `manifest update fleet`, and quietly (one summary line at most) at the
-end of a completed `manifest ship fleet -y`.
+`manifest topics fleet` turns the pieces of a repository's dotted name into GitHub
+topics, and only ever **adds** them. It runs only when `topics.from_name` is set to
+`inner`, `all`, or `all-but-first` — either in `manifest.fleet.config.yaml` for the whole
+fleet, or just for your machine with:
+
+```bash
+manifest config set topics.from_name inner --layer global
+```
+
+A layered or environment value beats the fleet YAML. Note the distinction:
+`manifest.fleet.config.yaml` is the fleet *definition*, not the `fleet` configuration
+layer — see [User Guide — Configuration](USER_GUIDE.md#configuration).
+
+Once enabled, the same projection also runs as part of `manifest update fleet`, and
+quietly — one summary line at most — at the end of a completed `manifest ship fleet -y`.
 
 ## Diagnostics
 
@@ -178,11 +271,11 @@ manifest recipe show <recipe-id>
 manifest recipe explain <recipe-id>
 ```
 
-Diagnostics are read-only unless a command explicitly documents otherwise.
+Diagnostics change nothing unless a command explicitly says otherwise.
 
 ## Pull Requests
 
-Native `gh` wrappers:
+These wrap `gh` and need no Cloud:
 
 ```bash
 manifest pr
@@ -194,7 +287,7 @@ manifest pr merge [<number|branch>] [--squash|--merge|--rebase] [-y|--yes]
 manifest pr update [<number|branch>] [-y|--yes]
 ```
 
-Cloud extensions:
+These need Cloud:
 
 ```bash
 manifest pr queue
@@ -211,7 +304,8 @@ manifest docs cleanup
 manifest docs fleet --dry-run
 ```
 
-Docs-site publishing is controlled by `docs.generate.site`, `docs.site.enabled`, and related config keys. See [DOCS_SITE.md](DOCS_SITE.md).
+The documentation website is **off by default**. Turn it on with `docs.generate.site`
+(or `docs.site.enabled`) and see [DOCS_SITE.md](DOCS_SITE.md) for the rest of the keys.
 
 ## Env Schema
 
@@ -220,28 +314,35 @@ manifest env generate [--check] [--dry-run] [-y|--yes]
 manifest env validate
 ```
 
-The component spec's `env:` block is the source of truth for a repo's
-environment schema. `env generate` renders the bridge artifacts from it —
-`.env.example` (always), `k8s/env/configmap.yaml` +
-`k8s/env/external-secret.yaml` (when `k8s/` exists), and the Dockerfile
-ARG→ENV marker block for build-time publics. Preview is the default; `-y`
-writes; `--check` is the drift gate for release-gate stanzas (exit 1 when any
-generated artifact is stale). `env validate` is read-only: env prefix policy +
-generated-artifact drift + `.env` gitignore hygiene.
+A component spec's `env:` block is the single source of truth for a repository's
+environment variables. `env generate` builds the derived files from it:
 
-The env prefix policy is ON by default to encourage good env-var hygiene:
-custom application env-var names must start with this repo's prefix; recognized
-framework names (`DATABASE_URL`, `NEXT_PUBLIC_*`, …) and the `MANIFEST_CLI_*`
-namespace are always allowed. With no `env.prefix` configured, the prefix is
-DERIVED from the project name and stays vendor-neutral (`fidence.app.kanizsa` →
-`FIDENCE_APP_KANIZSA_`, `my-tool` → `MY_TOOL_`). Set `env.prefix` to an explicit
-value (e.g. `ACME_`) to require that instead, or `env.prefix: off` to disable
-the policy entirely. Enforcement level is config-driven: `env.naming_enforcement`
-(`strict` default — violations block the audit; `warn` makes them advisory) and
-`env.naming_allow` (extra allowlist entries, comma-separated; trailing `_` means
-prefix). `manifest init repo` and `manifest prep repo` scaffold a missing
-`.env.example` (no-clobber; spec-driven when an
-`env:` block exists), honoring the configured prefix.
+- `.env.example` — always
+- `k8s/env/configmap.yaml` and `k8s/env/external-secret.yaml` — when a `k8s/` directory exists
+- the Dockerfile `ARG`→`ENV` marker block, for values needed at build time
+
+Planning is the default and `-y` writes. `--check` is the drift gate for use in a
+release: it exits `1` if any generated file is out of date. `env validate` only reads —
+it checks the prefix policy, whether generated files have drifted, and that `.env` is
+properly git-ignored.
+
+**The prefix policy is on by default**, to keep environment-variable names tidy. Your
+application's own variable names must start with this repository's prefix. Well-known
+framework names (`DATABASE_URL`, `NEXT_PUBLIC_*`, and similar) and the `MANIFEST_CLI_*`
+namespace are always allowed.
+
+With no `env.prefix` set, the prefix is **derived from the project name** and stays
+vendor-neutral: `fidence.app.kanizsa` becomes `FIDENCE_APP_KANIZSA_`, and `my-tool`
+becomes `MY_TOOL_`. Set `env.prefix` to something explicit (`ACME_`) to require that
+instead, or `env.prefix: off` to switch the policy off.
+
+How strictly it is enforced is configurable: `env.naming_enforcement` is `strict` by
+default, which blocks; `warn` makes violations advisory. `env.naming_allow` takes extra
+allowed entries, comma-separated, where a trailing `_` means "treat as a prefix".
+
+`manifest init repo` and `manifest prep repo` create a missing `.env.example` — never
+overwriting an existing one — using the spec when an `env:` block exists, and honouring
+the configured prefix.
 
 ## Maintenance
 
@@ -253,13 +354,14 @@ manifest security [--write]
 manifest test [suite]
 ```
 
-`security` is **read-only by default**. It reports tracked private files, likely PII,
-and environment-file hygiene, and writes nothing. `--write` additionally saves a
-timestamped report under the docs archive. Neither mode writes
-`docs/SECURITY_ANALYSIS_REPORT.md`, which is hand-maintained. `--check` is still
-accepted and still means read-only, so existing hooks and recipes keep working.
+`security` is **read-only by default**. It reports private files that are tracked in git,
+anything that looks like personal data, and environment-file hygiene — and writes
+nothing. `--write` additionally saves a timestamped report to the docs archive. Neither
+mode writes `docs/SECURITY_ANALYSIS_REPORT.md`, which is maintained by hand. `--check` is
+still accepted and also means read-only, so existing hooks and recipes keep working.
 
-`uninstall` previews by default and preserves global config unless destructive removal is explicitly confirmed.
+`uninstall` plans by default, and keeps your global config unless you confirm removing it
+separately.
 
 ## Optional Cloud And Agent
 
@@ -268,22 +370,23 @@ manifest cloud config|status|generate
 manifest agent init|auth|status
 ```
 
-These routes require Manifest Cloud plugins. Core repo and fleet release commands do not require Cloud.
+These need Manifest Cloud plugins. Ordinary repo and fleet releases do not.
 
 ## Environment
 
-Common environment variables:
+Frequently used variables:
 
 | Variable | Purpose |
 | -------- | ------- |
-| `MANIFEST_CLI_AUTO_CONFIRM` | Authorize an ambiguous apply target (detached HEAD / no origin) after `-y`; not needed for an ordinary apply |
-| `MANIFEST_CLI_PREVIEW_EXIT_CODE` | `zero` (default) or `distinct` — exit code for a preview-without-consent (see Exit Codes) |
-| `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH` | Control canonical follow-up patch behavior |
-| `MANIFEST_CLI_DOCS_GENERATE_SITE` | Enable docs-site generation |
-| `MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES` | Request Pages enablement through `gh api` |
-| `MANIFEST_CLI_GITHUB_ACTIONS_WAIT` | Wait for GitHub Actions in release paths |
-| `MANIFEST_CLI_ENV_PREFIX` | Env prefix policy: empty = derived from project name (default, on); explicit value overrides; `off` disables |
-| `MANIFEST_CLI_ENV_NAMING_ENFORCEMENT` | Prefix-policy enforcement: `strict` (default, blocks) or `warn` (advisory) |
-| `MANIFEST_CLI_ENV_NAMING_ALLOW` | Extra naming allowlist entries (comma-separated; trailing `_` = prefix) |
+| `MANIFEST_CLI_AUTO_CONFIRM` | Allow an ambiguous apply target (detached HEAD, or no origin) **after** `-y`. Not needed for an ordinary apply, and cannot start one |
+| `MANIFEST_CLI_PREVIEW_EXIT_CODE` | `zero` (default) or `distinct` — the exit code for a plan with no consent; see Exit Codes |
+| `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH` | Controls the canonical follow-up patch behaviour |
+| `MANIFEST_CLI_DOCS_GENERATE_SITE` | Turn on documentation-website generation (default off) |
+| `MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES` | Ask GitHub to enable Pages via `gh api` |
+| `MANIFEST_CLI_GITHUB_ACTIONS_WAIT` | Wait for GitHub Actions during release paths |
+| `MANIFEST_CLI_ENV_PREFIX` | Prefix policy: empty means derived from the project name (the default, and on); an explicit value overrides; `off` disables |
+| `MANIFEST_CLI_ENV_NAMING_ENFORCEMENT` | `strict` (default, blocks) or `warn` (advisory) |
+| `MANIFEST_CLI_ENV_NAMING_ALLOW` | Extra allowed names, comma-separated; a trailing `_` means prefix |
 
-Use `manifest config describe <key>` for the authoritative YAML-to-env mapping.
+Every setting has a matching variable. For the authoritative mapping of a specific key,
+including which layer currently wins, run `manifest config describe <key>`.

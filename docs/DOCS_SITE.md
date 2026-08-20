@@ -1,34 +1,78 @@
 # Docs Site Generation
 
-Manifest can generate a managed Jekyll source tree and, optionally, a GitHub Pages workflow. This is separate from the product marketing site.
+Manifest can build a small documentation website for your repository and publish it
+with GitHub Pages. This is **off by default** — you turn it on when you want it.
+
+A few terms used below:
+
+- **Jekyll** is the site builder GitHub Pages runs. It turns Markdown files into HTML.
+- **GitHub Pages** is GitHub's free web hosting for a repository.
+- **Managed file** means Manifest wrote it and may rewrite it. Manifest marks each one
+  with a comment so it can tell its own files from yours.
 
 ## What It Generates
 
-When enabled, Manifest writes a managed source directory, defaulting to `docs-site/`, with:
+When you enable it, Manifest writes a source directory — `docs-site/` unless you
+choose another name — containing:
 
-- `_config.yml`
-- `index.md`
-- `_layouts/default.html`
-- `assets/css/manifest.css`
-- `.gitignore`
+- `_config.yml` — Jekyll's settings
+- `index.md` — the landing page
+- `_layouts/default.html` — the page template
+- `assets/css/manifest.css` — the stylesheet
+- `.gitignore` — keeps Jekyll's build output out of git
 
-If workflow generation is enabled, it also writes:
+If workflow generation is also on (it is, once the site is on), Manifest writes:
 
 - `.github/workflows/manifest-docs-pages.yml`
 
-The workflow builds the Jekyll source through GitHub Pages Actions and deploys the uploaded artifact.
+That workflow asks GitHub Pages to build the site and publish the result.
 
-## Defaults and Behavior
+## Defaults
 
-Docs-site generation, the Pages workflow, and GitHub Pages enablement are all on by default — Manifest generates the full docs experience without extra configuration. It never commits build artifacts to the repository.
+The site is off until you ask for it. Once you do, the pieces that support it are
+already on, so enabling one key is normally enough.
 
-Pages enablement is best-effort and never interrupts a run. If Pages cannot be enabled — most commonly a private repository on a GitHub plan that does not include Pages for private repos (HTTP 422) — Manifest emits a clear notice and continues. The managed site and the Pages workflow are still committed, so Pages publishes automatically the moment it becomes available (upgrade the plan or make the repo public).
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `docs.generate.enabled` | **on** | Manifest's documentation generation in general (changelog, index, README version) |
+| `docs.generate.site` | **off** | The website itself. **This is the switch to flip.** |
+| `docs.site.enabled` | **off** | A second name for the same switch; either one turns the site on |
+| `docs.generate.site_workflow` | on | Write the Pages workflow — only takes effect once the site is on |
+| `docs.site.enable_pages` | on | Ask GitHub to turn Pages on — only takes effect once the site is on |
 
-The generator refuses unmanaged collisions. If `docs-site/index.md` or another target exists without the Manifest managed marker, Manifest stops instead of overwriting user-owned site files.
+So the shortest way to get a site is one line:
+
+```yaml
+docs:
+  generate:
+    site: true
+```
+
+Manifest never commits Jekyll's build output. Only the source files above are
+committed.
+
+## Behavior
+
+**Turning on Pages is best-effort and never stops a release.** If GitHub refuses —
+most often a private repository on a plan that does not include Pages for private
+repos, which returns HTTP 422 — Manifest prints a notice and carries on. The site
+source and the workflow are still committed, so publishing starts by itself once
+Pages becomes available. Make the repository public or upgrade the plan, and nothing
+else is needed.
+
+**Manifest will not overwrite files you wrote.** Every file it manages carries a
+marker comment. If `docs-site/index.md` (or any other target) already exists *without*
+that marker, Manifest stops rather than replacing it. Move your file aside if you want
+Manifest to take over that path.
+
+**The landing page carries no version number.** Because generation is opt-in, the page
+is written once and then sits unchanged until you regenerate — a version baked into it
+would slowly become wrong. It once advertised `v50.1.2` while the project was on
+`59.3.0`. The changelog it links to always states its own latest version.
 
 ## Configuration
 
-Project config example:
+A fuller example, if you want to set more than the one switch:
 
 ```yaml
 docs:
@@ -44,22 +88,25 @@ docs:
     description: ""
 ```
 
-Important keys:
-
 | Key | Meaning |
 | --- | ------- |
-| `docs.generate.site` | Generate managed Jekyll source |
-| `docs.generate.site_workflow` | Generate the Pages workflow when site generation is enabled |
+| `docs.generate.site` | Build the managed Jekyll source |
+| `docs.generate.site_workflow` | Write the Pages workflow (applies only when the site is on) |
 | `docs.site.enabled` | Alternate switch for site generation |
-| `docs.site.enable_pages` | Best-effort `gh api` enablement of workflow-based Pages publishing (never fatal) |
-| `docs.site.source_dir` | Source directory for managed site files |
+| `docs.site.enable_pages` | Best-effort request to GitHub to enable Pages; never fatal |
+| `docs.site.source_dir` | Where the managed site files go |
+
+Leaving `title` and `description` empty makes Manifest derive them from the repository
+name.
 
 ## Verification
 
-The focused regression suite is containerized:
+The focused regression suite runs in a container:
 
 ```bash
 ./scripts/run-tests-container.sh tests/docs_generation.bats
 ```
 
-The suite proves managed file generation, collision refusal, workflow generation, and the `gh api` Pages enablement call path.
+It covers four things: that the managed files are written, that Manifest refuses to
+overwrite an unmarked file, that the workflow is generated, and that the call asking
+GitHub to enable Pages is made.

@@ -1,68 +1,114 @@
 # Manifest CLI
 
-Manifest CLI is release control for agent-assisted development. It keeps version bumps, changelogs, docs, tags, pushes, GitHub Releases, pull requests, and multi-repo fleet releases on one explicit preview/apply path.
+Manifest CLI runs your releases. It handles the whole chore — raising the version
+number, writing the changelog, regenerating docs, tagging, pushing, publishing a
+GitHub Release, opening pull requests — and it does the same job across many
+repositories at once. Every command that changes something shows you a plan first and
+waits for you to say yes.
 
 [![tests](https://github.com/fidenceio/manifest.cli/actions/workflows/test.yml/badge.svg)](https://github.com/fidenceio/manifest.cli/actions/workflows/test.yml)
 
+<!-- Keep the version line below FIRST among any `x.y.z` in backticks. At release
+     time Manifest finds the first backticked version string in this file and
+     replaces every copy of it (manifest-documentation.sh, update_readme_version).
+     Adding another backticked bare version above this line would retarget that
+     rewrite at the wrong string. -->
 **Version:** `59.3.0`
-**Platforms:** macOS, Linux, FreeBSD
+**Platforms:** macOS, Linux
 **Primary interface:** `manifest <verb> <scope> [options]`
 
 ## Why It Exists
 
-Agent-assisted work makes it easy to create several changes at once. Shipping them safely is the harder part. Manifest gives a repository or fleet a repeatable release path:
+When you work with an AI assistant, changes pile up fast. Shipping them safely is the
+slow part. Manifest turns releasing into the same short, repeatable path every time:
 
-- Inspect current state before acting.
-- Preview local and remote side effects.
-- Apply only after `-y` / `--yes`.
-- Keep release notes, changelog entries, generated docs, tags, and GitHub Releases aligned.
-- Use the same command model for one repo and for a fleet.
+- Look at what state things are actually in.
+- See exactly what would change, locally and on GitHub.
+- Change nothing until you add `-y`.
+- Keep the version number, changelog, generated docs, tag, and GitHub Release telling
+  the same story.
+- Use the identical commands whether you have one repository or thirty.
 
-## Safety Model
+## The One Rule Worth Knowing
 
-Manifest mutating commands preview by default.
+**Nothing that changes anything happens without `-y`.**
+
+Run a command bare and Manifest prints a plan and stops. Add `-y` and it does the work.
 
 ```bash
-manifest ship repo patch        # preview
-manifest ship repo patch -y     # apply
+manifest ship repo patch        # shows the plan, changes nothing
+manifest ship repo patch -y     # actually releases
 manifest ship repo patch --local -y
 ```
 
-`--dry-run` is the explicit preview spelling. `--local -y` applies local release work without tag, push, GitHub Release, or Homebrew publication. `MANIFEST_CLI_AUTO_CONFIRM=1` can answer prompts after apply mode is selected; it does not authorize apply by itself.
+`--dry-run` is a longer way to spell "just show me the plan". `--local -y` does the
+release work on your own machine only — it skips the tag, the push, the GitHub Release,
+and the Homebrew publish, so nothing becomes public.
 
-## Version Ownership
+There is an environment variable, `MANIFEST_CLI_AUTO_CONFIRM=1`, that answers follow-up
+prompts for you. It is **not** a substitute for `-y`: it cannot start an apply, only
+answer questions once you already asked for one. This matters in CI, where a variable
+set in the environment must never be able to trigger a release on its own.
 
-Manifest treats `VERSION` as the canonical release file for repo and fleet ship today. It does not rewrite package-manager files such as `package.json`, `package-lock.json`, `pyproject.toml`, `Cargo.toml`, or lockfiles unless the project explicitly opts in.
+## Which Version File Manifest Owns
 
-`version.sync` is the opt-in mirror list for files whose own top-level version field should follow the canonical version during a bump. With `version.sync` unset, `manifest ship repo patch -y` updates the canonical version only. Sync writers currently support top-level JSON, TOML, and YAML `version` fields and skip missing, nested-only, or unsupported targets without creating files.
+Manifest treats a plain file named `VERSION` as the one true version for a release.
+That file is what it reads and writes.
 
-Manifest also ships a committed handler catalog at [modules/catalog/version-handlers.tsv](modules/catalog/version-handlers.tsv). The catalog powers passive detection of non-canonical version surfaces in `manifest status`, `manifest doctor`, `manifest status fleet`, and fleet ship previews without mutating files or blocking non-interactive scripts. Tune reporting with `version.surfaces.enabled`, `version.surfaces.catalog`, `version.surfaces.scan_depth`, and `version.surfaces.notification_mode` (`summary`, `list`, or `off`). `files.version` is mapped and recognized by the passive scanner, but full repo/fleet release writing still uses `VERSION` today.
+It deliberately leaves package-manager files alone — `package.json`,
+`package-lock.json`, `pyproject.toml`, `Cargo.toml`, lockfiles — unless you ask for
+them. This is so Manifest can never surprise you by editing a file your build depends
+on.
 
-Canonical CLI releases may publish the Homebrew tap formula after the GitHub Release exists. That tap formula publish is a distribution update only; Manifest must not add a generated post-tag formula commit to the CLI repo. Before reporting success, ship verifies that the source working tree is clean and that a published release has not advanced `HEAD` after the branch/tag push.
+If you *do* want other files to follow along, `version.sync` is an opt-in list of them.
+Leave it unset and `manifest ship repo patch -y` touches only `VERSION`. Set it and
+Manifest updates a top-level `version` field in JSON, TOML, or YAML files. It skips
+anything it cannot handle — a missing file, or a version buried deeper than the top
+level — and never creates a file that was not already there.
+
+Separately, Manifest keeps a catalog of places version numbers commonly hide:
+[modules/catalog/version-handlers.tsv](modules/catalog/version-handlers.tsv). It uses
+that only to **tell you** about them in `manifest status`, `manifest doctor`,
+`manifest status fleet`, and fleet release previews. It reads; it does not write, and it
+never blocks a script. Tune what gets reported with `version.surfaces.enabled`,
+`version.surfaces.catalog`, `version.surfaces.scan_depth`, and
+`version.surfaces.notification_mode` (`summary`, `list`, or `off`).
+
+There is a config key `files.version` for naming a different canonical file. The
+detection side honours it, but repo and fleet releases still write `VERSION` today —
+so treat that key as not yet finished.
+
+For Manifest's own releases only, the Homebrew formula is published after the GitHub
+Release exists. That is a distribution update and must not add a commit back to this
+repository. Before reporting success, a release checks two things: that your working
+copy is clean, and that nothing has been committed on top of the release you just
+pushed.
 
 ## Install
 
-For product use, install from the Homebrew tap:
+Normal use — install from the Homebrew tap (a "tap" is a third-party Homebrew source):
 
 ```bash
 brew tap fidenceio/tap
 brew install manifest
 ```
 
-Install script alternative (download, verify, then run — no piping remote code into a shell):
+Prefer the install script? Download it, read it, then run it. Manifest does not ask you
+to pipe code off the internet straight into a shell:
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/fidenceio/manifest.cli/main/bootstrap.sh
-# inspect bootstrap.sh, then run it:
-bash bootstrap.sh                               # latest published tag
-MANIFEST_CLI_INSTALL_VERSION=v55.2.1 bash bootstrap.sh      # pin an exact version
+# read bootstrap.sh, then:
+bash bootstrap.sh                                      # newest published release
+MANIFEST_CLI_INSTALL_VERSION=v59.3.0 bash bootstrap.sh # or pin an exact one
 ```
 
-`bootstrap.sh` downloads the pinned release tarball, verifies its sha256 against
-the published checksum (or `MANIFEST_CLI_INSTALL_SHA256` if you pin one), and only then runs
-the installer from the verified tree.
+`bootstrap.sh` downloads the release archive, checks its SHA-256 checksum against the
+published one (or against `MANIFEST_CLI_INSTALL_SHA256` if you supply your own), and
+only runs the installer if that check passes.
 
-For repository development and validation, do not install dependencies on the host. Use the containerized test runner:
+Working *on* Manifest rather than with it? Don't install its dependencies on your
+machine — use the container:
 
 ```bash
 ./scripts/run-tests-container.sh
@@ -72,43 +118,43 @@ More detail: [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
 ## Runtime Requirements
 
-| Requirement | Version | Notes |
-| ----------- | ------- | ----- |
-| Bash | 5.0+ | Required for associative arrays and modern shell behavior |
-| yq | 4.0+ (Mike Farah) | Required for YAML configuration parsing |
-| Git | Any supported release | Required for repository status, tags, commits, and pushes |
-| coreutils | Any | Required on macOS for the supported timeout command |
-| Docker | Running engine | Required by the containerized development and test workflow |
+| Requirement | Version | Why |
+| ----------- | ------- | --- |
+| Bash | 5.0+ | Needs associative arrays, which Bash 3 (still shipped by macOS) lacks |
+| yq | 4.0+ (Mike Farah's) | Reads the YAML config. Note there is another, unrelated `yq` — this is not it |
+| Git | Any current release | Status, tags, commits, pushes |
+| coreutils | Any | macOS only, for a `timeout` command that behaves as expected |
+| Docker | Running | Only for the containerized development and test workflow |
 
-## First Release
+## Your First Release
 
-New here? `manifest first` inspects the current directory (single repo or a
-folder of repos), reports what's set up, and proposes the rest as a preview —
-writing only when you confirm with `-y`:
+New to Manifest? `manifest first` looks at where you are — one repository, or a folder
+containing several — tells you what is already set up, and proposes the rest as a plan.
+It writes nothing until you add `-y`:
 
 ```bash
 cd your-project
 
-manifest first                  # read-only: inspect + preview the setup plan
-manifest first -y               # apply the proposed setup (audited)
+manifest first                  # look and propose; changes nothing
+manifest first -y               # do the proposed setup (recorded in the audit log)
 ```
 
-Or drive each step yourself:
+Prefer to drive each step yourself:
 
 ```bash
-manifest init repo              # preview required files
-manifest init repo -y           # write VERSION, CHANGELOG.md, docs/, ignores
-manifest init repo --create-repo-private       # preview local + GitHub target
-manifest init repo --create-repo-private -y    # apply; github.owner selects org/user
+manifest init repo              # show which files are missing
+manifest init repo -y           # create VERSION, CHANGELOG.md, docs/, ignore files
+manifest init repo --create-repo-private       # also show the GitHub repo it would create
+manifest init repo --create-repo-private -y    # create it; github.owner picks the org or user
 
-manifest prep repo              # preview remote/config prep
-manifest prep repo -y           # apply prep
+manifest prep repo              # show remote and config preparation
+manifest prep repo -y           # do it
 
-manifest ship repo patch        # preview release
-manifest ship repo patch -y     # publish release
+manifest ship repo patch        # show the release
+manifest ship repo patch -y     # publish it
 ```
 
-Useful read-only checks:
+Checks that never change anything:
 
 ```bash
 manifest status
@@ -116,26 +162,31 @@ manifest doctor
 manifest config list
 ```
 
-## Fleet Release
+## Releasing Many Repositories At Once
 
-A fleet is a workspace of independent Git repositories described by `manifest.fleet.config.yaml` and `manifest.fleet.tsv`.
+A **fleet** is a folder holding several independent Git repositories that you want to
+release together. Two files describe it: `manifest.fleet.config.yaml` for the settings
+and `manifest.fleet.tsv` for the list of members and which ones are selected.
 
 ```bash
-manifest init fleet             # scan or consume fleet TSV
-manifest init fleet --create-repo-private      # preview missing private remotes
-manifest status fleet           # inspect selected repos
-manifest ship fleet patch       # preview services with release changes
-manifest ship fleet patch -y    # apply services with release changes
+manifest init fleet             # scan the folder, or read an existing fleet TSV
+manifest init fleet --create-repo-private      # show which members have no remote yet
+manifest status fleet           # inspect the selected repositories
+manifest ship fleet patch       # show which members would be released
+manifest ship fleet patch -y    # release them
 ```
 
-Fleet ship skips unchanged members. A release-enabled member is eligible for release, but it is only bumped when its worktree has release changes or its HEAD differs from the current `VERSION` tag.
+**A fleet release skips members with nothing to release.** Being release-enabled only
+makes a member *eligible*. It is actually bumped when one of two things is true: its
+working copy has release-worthy changes, or its latest commit is not the one its current
+`VERSION` tag points at.
 
-Fleet adoption and reconciliation stay preview-first:
+Adopting an existing folder into a fleet, or repairing one, is also plan-first:
 
 ```bash
-manifest plan fleet
+manifest plan fleet             # write a plan describing what adoption would do
 manifest plan fleet --apply
-manifest reconcile fleet
+manifest reconcile fleet        # show the changes that plan implies
 manifest reconcile fleet --do
 ```
 
@@ -143,56 +194,75 @@ More detail: [docs/FLEET_DESIGN_SPEC.md](docs/FLEET_DESIGN_SPEC.md).
 
 ## Command Model
 
+Commands read as `manifest <verb> <scope>`, where scope is usually `repo` or `fleet`.
+
 | Area | Commands |
 | ---- | -------- |
 | Setup | `manifest first`, `manifest config`, `manifest init repo`, `manifest init fleet` |
 | Preparation | `manifest prep repo`, `manifest prep fleet` |
-| Refresh | `manifest refresh repo`, `manifest update fleet` (was `refresh fleet`) |
+| Refresh | `manifest refresh repo`, `manifest update fleet` (once called `refresh fleet`) |
 | Release | `manifest ship repo <type>`, `manifest ship fleet <type>` |
-| Diagnostics | `manifest status`, `manifest doctor`, `manifest security --check` |
+| Diagnostics | `manifest status`, `manifest doctor`, `manifest security` |
 | Pull requests | `manifest pr create`, `manifest pr checks`, `manifest pr ready`, `manifest pr merge`, `manifest pr update` |
 | Recipes | `manifest recipe list`, `manifest recipe show`, `manifest recipe explain` |
 
-Release types: `patch`, `minor`, `major`, `revision`.
+Release types are `patch`, `minor`, `major`, and `revision`. The first three follow the
+usual semantic-versioning meanings: `patch` for fixes, `minor` for additions, `major`
+for breaking changes. `revision` re-cuts a release without claiming it is a new one.
 
 Complete grammar: [docs/COMMAND_REFERENCE.md](docs/COMMAND_REFERENCE.md).
 
 ## Configuration
 
-Configuration is YAML-backed and layered — built-in defaults, user global, an inherited fleet layer, project, local, and the exported `MANIFEST_CLI_*` environment, in increasing order of precedence.
+Settings live in YAML and stack in layers. Later layers win:
 
-Every user-facing key maps to a `MANIFEST_CLI_*` environment variable through the YAML bridge. Use `manifest config describe <key>` to see the effective value, layer source, and env-var name.
+1. Manifest's built-in defaults
+2. Your personal global config
+3. A fleet-wide layer, if this repo belongs to a fleet
+4. The project's config
+5. A local, private config that you do not commit
+6. `MANIFEST_CLI_*` environment variables
 
-Full layer model: [docs/USER_GUIDE.md#configuration](docs/USER_GUIDE.md#configuration).
+Every setting has a matching `MANIFEST_CLI_*` environment variable, so anything you can
+put in a file you can also set for a single command. To find out what a setting is
+currently doing, and *which layer decided that*, ask:
 
-Schema example: [examples/manifest.config.yaml.example](examples/manifest.config.yaml.example).
+```bash
+manifest config describe <key>
+```
+
+Full explanation: [docs/USER_GUIDE.md#configuration](docs/USER_GUIDE.md#configuration).
+Worked example file: [examples/manifest.config.yaml.example](examples/manifest.config.yaml.example).
 
 ## Documentation Map
 
 | Document | Purpose |
 | -------- | ------- |
-| [docs/INDEX.md](docs/INDEX.md) | Task-based documentation index |
-| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | Daily workflows and operating model |
-| [docs/COMMAND_REFERENCE.md](docs/COMMAND_REFERENCE.md) | Command grammar and flags |
-| [docs/EXAMPLES.md](docs/EXAMPLES.md) | Copyable workflow examples |
-| [docs/INSTALLATION.md](docs/INSTALLATION.md) | Product install and contributor validation |
-| [docs/FLEET_DESIGN_SPEC.md](docs/FLEET_DESIGN_SPEC.md) | Fleet architecture |
-| [docs/CLI_TRANSACTION_MAP.md](docs/CLI_TRANSACTION_MAP.md) | High-consequence transaction paths |
-| [modules/catalog/version-handlers.tsv](modules/catalog/version-handlers.tsv) | Known non-canonical version/package surfaces |
-| [tests/README.md](tests/README.md) | Containerized test workflow |
+| [docs/INDEX.md](docs/INDEX.md) | Index, organised by what you are trying to do |
+| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | Day-to-day workflows and how the tool thinks |
+| [docs/COMMAND_REFERENCE.md](docs/COMMAND_REFERENCE.md) | Every command, flag, and exit code |
+| [docs/EXAMPLES.md](docs/EXAMPLES.md) | Copy-and-paste recipes |
+| [docs/INSTALLATION.md](docs/INSTALLATION.md) | Installing, upgrading, removing; and contributor setup |
+| [docs/FLEET_DESIGN_SPEC.md](docs/FLEET_DESIGN_SPEC.md) | How fleets are designed and named |
+| [docs/CLI_TRANSACTION_MAP.md](docs/CLI_TRANSACTION_MAP.md) | Exactly what a release touches, in order |
+| [modules/catalog/version-handlers.tsv](modules/catalog/version-handlers.tsv) | Places version numbers commonly hide |
+| [tests/README.md](tests/README.md) | Running the tests in a container |
 
 ## Optional Cloud
 
-Manifest CLI works without Manifest Cloud. Optional Cloud plugins can extend release-note generation, queue/policy behavior, MCP reports, and agent workflows. Missing Cloud plugins fall back to install guidance instead of blocking core repo and fleet releases.
+Manifest works fully without Manifest Cloud. Cloud plugins can add nicer release notes,
+queue and policy behaviour, MCP reports, and agent workflows. If a Cloud plugin is not
+installed, Manifest tells you how to get it and carries on — a missing plugin never
+blocks an ordinary release.
 
-Cloud repo: [fidenceio.manifest.cloud](https://github.com/fidenceio/manifest.cloud)
+Cloud repository: [fidenceio.manifest.cloud](https://github.com/fidenceio/manifest.cloud)
 
 ## Project
 
 | Document | Purpose |
 | -------- | ------- |
 | [LICENSE](LICENSE) | Apache License 2.0 |
-| [SECURITY.md](SECURITY.md) | Security policy and private vulnerability disclosure |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup, tests, and contribution flow |
+| [SECURITY.md](SECURITY.md) | Security policy and how to report a vulnerability privately |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup, tests, and how to contribute |
 
 Licensed under the [Apache License 2.0](LICENSE).

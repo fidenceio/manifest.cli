@@ -1,19 +1,20 @@
 # Manifest CLI User Guide
 
-Manifest organizes release work into explicit stages:
+Manifest breaks release work into named stages, each of which you run when you want it:
 
 ```text
 config -> init -> prep -> refresh -> ship
 ```
 
-Each mutating stage previews by default. Add `-y` or `--yes` to apply. New to
-the preview/apply model or the release gate? See the [Migration Guide](MIGRATION.md).
+Every stage that would change something shows you a plan and stops. Add `-y` (or
+`--yes`) to actually do it. If preview-and-apply or the release gate are new to you,
+read the [Migration Guide](MIGRATION.md) first — it covers just those two ideas.
 
 ## Core Concepts
 
 ### Repo Scope
 
-Repo scope targets the enclosing Git repository.
+"Repo scope" means the command acts on the one Git repository you are standing in.
 
 ```bash
 manifest status repo
@@ -21,11 +22,16 @@ manifest ship repo patch
 manifest ship repo patch -y
 ```
 
-Manifest chooses the repo from the current directory's `.git` root. It does not accept a path selector for repo-scoped release commands.
+Manifest works out which repository that is by looking upward from your current
+directory for the `.git` folder. You cannot pass it a path instead — release commands
+deliberately act on where you are, so a mistyped path can never release the wrong
+project.
 
 ### Fleet Scope
 
-Fleet scope targets repositories selected by `manifest.fleet.config.yaml` and `manifest.fleet.tsv`.
+A **fleet** is a group of separate Git repositories you manage together. Two files
+define it: `manifest.fleet.config.yaml` holds the settings, and `manifest.fleet.tsv`
+lists the members and marks which are selected.
 
 ```bash
 manifest status fleet
@@ -33,29 +39,42 @@ manifest ship fleet patch
 manifest ship fleet patch -y
 ```
 
-Fleet commands print the fleet root, config path, selected services, release decisions, and branch state before apply.
+Before changing anything, fleet commands print where the fleet root is, which config
+file they read, which members are selected, what they decided to do with each, and what
+branch each one is on.
 
 ### Preview And Apply
 
-| Form | Meaning |
+| What you type | What happens |
 | ---- | ------- |
-| No `-y` | Preview |
-| `--dry-run` | Explicit preview |
-| `-y` / `--yes` | Apply |
-| `--local -y` | Apply local writes only; skip remote side effects |
+| no `-y` | Shows the plan only |
+| `--dry-run` | Same thing, spelled out |
+| `-y` / `--yes` | Does the work |
+| `--local -y` | Does only the parts that stay on your machine; nothing goes to GitHub |
 
-`-y` applies with no confirmation prompt. `MANIFEST_CLI_AUTO_CONFIRM=1` only authorizes an *ambiguous* apply target (detached HEAD, or no `origin`) after `-y`; it is not an apply selector and is not needed for an ordinary apply.
+`-y` does not then stop to ask "are you sure?" — asking for apply *is* the
+confirmation.
+
+There is a separate variable, `MANIFEST_CLI_AUTO_CONFIRM=1`. It exists for one narrow
+job: letting an apply continue when Manifest cannot tell what it would act on — a
+"detached HEAD" (your checkout is not on any branch) or a repository with no `origin`
+remote. It only has an effect *after* you have already passed `-y`. It cannot start an
+apply, and you do not need it for a normal one. This split matters in CI, where an
+environment variable must never be able to publish a release by itself.
 
 ## First-Time Setup
 
-Start with `manifest first` — the guided onboarding front door. It inspects the current directory (a single repo, a directory of repos, or an already-configured project) and previews an opinionated setup, writing nothing until you apply.
+Start with `manifest first`. It is the guided front door: it looks at where you are —
+one repository, a folder of repositories, or a project already set up — and proposes a
+sensible setup. It writes nothing until you apply.
 
 ```bash
 manifest first
 manifest first -y
 ```
 
-`manifest first` previews by default and applies the proposed setup with `-y` (audited). Under the hood it delegates to the initializers below, so you can also drive them directly:
+Applying is recorded in the audit log. Underneath, `manifest first` just calls the
+commands below, so you can run them yourself instead:
 
 ```bash
 manifest doctor
@@ -64,25 +83,26 @@ manifest init repo
 manifest init repo -y
 ```
 
-`manifest init repo` scaffolds required project files such as `VERSION`, `CHANGELOG.md`, docs, and ignore rules.
+`manifest init repo` creates the files a Manifest-managed project needs: `VERSION`,
+`CHANGELOG.md`, a docs folder, and ignore rules.
 
 ## Repository Release Workflow
 
-Inspect:
+Look first:
 
 ```bash
 manifest status
 manifest doctor
 ```
 
-Prepare:
+Get the repository ready:
 
 ```bash
 manifest prep repo
 manifest prep repo -y
 ```
 
-Preview release:
+See what a release would do:
 
 ```bash
 manifest ship repo patch
@@ -90,55 +110,100 @@ manifest ship repo minor
 manifest ship repo major
 ```
 
-Apply:
+Do it:
 
 ```bash
 manifest ship repo patch -y
 ```
 
-Local-only apply:
+Do only the local half, leaving nothing public:
 
 ```bash
 manifest ship repo minor --local -y
 ```
 
-Repo ship can bump `VERSION`, update `CHANGELOG.md`, refresh docs, commit, tag, push, create a GitHub Release, and publish the Homebrew tap formula when the repo is the canonical CLI repo. The tap formula publish does not create a post-tag commit in the CLI repo, and ship refuses to report success if completion leaves the source tree dirty or advances `HEAD` after the pushed release head.
+A repo release can raise `VERSION`, add a `CHANGELOG.md` entry, regenerate docs, commit,
+create a tag, push, publish a GitHub Release, and — only in Manifest's own repository —
+update the Homebrew formula. That formula update does not add a commit back here. Before
+Manifest reports success it checks two things: that your working copy is clean, and that
+nothing has been committed on top of the release it just pushed.
 
-Ship's auto-commit stages the whole tree, then unstages any nested git repository it would have captured as a bare gitlink (a directory with its own `.git` and no `.gitmodules` entry) and prints a notice with the remediation options. Declared submodules and gitlinks already tracked in `HEAD` are left alone. To record bare gitlinks intentionally, set `git.allow_new_gitlinks: true` (`MANIFEST_CLI_GIT_ALLOW_NEW_GITLINKS`).
+### What the automatic commit includes, and what it leaves out
 
-Auto-commit also leaves out work that appeared **after** you asked to ship. Ship records the pending set before running the release gate, and a full-tier gate takes minutes — long enough for a concurrent session, an editor autosave, or a background generator to drop files into the tree. Those are unstaged and reported, so the **auto-commit** carries only what you had when you invoked it. Note the scope: the guard holds those paths out of the auto-commit, not out of the release. The version commit later in the same ship stages the whole tree by design — `VERSION`, `CHANGELOG.md` and regenerated docs all legitimately post-date the snapshot — so anything the guard listed still lands there, one commit later. Treat the `Left out …` list as "not in the auto-commit", and confirm with `git show --stat HEAD` rather than assuming those files went unreleased. Set `git.allow_gate_drift: true` (`MANIFEST_CLI_GIT_ALLOW_GATE_DRIFT`) to skip the guard entirely and sweep everything into the auto-commit. Manifest's own `.manifest-cli/` bookkeeping is exempt, since the gate writes its pass ledger there mid-run by design.
+Releasing starts by committing whatever you had uncommitted. Two rules shape that
+commit, and both are easy to misread.
+
+**Nested repositories are left alone.** If a folder inside your project has its own
+`.git` and is not a declared submodule, Git would otherwise record it as a bare
+"gitlink" — a pointer to a commit in a repository nobody can find. Manifest unstages
+those and tells you, with your options. Declared submodules, and gitlinks already
+recorded in history, are untouched. If you genuinely want bare gitlinks committed, set
+`git.allow_new_gitlinks: true` (`MANIFEST_CLI_GIT_ALLOW_NEW_GITLINKS`).
+
+**Work that appeared after you asked to ship is held back.** Manifest notes which files
+were pending before it runs the test gate. A full gate takes minutes — long enough for
+another session, an editor autosave, or a background generator to drop new files into
+the tree. Those get unstaged and listed.
+
+Read that list carefully, because its scope is narrower than it looks: those files are
+kept out of **the automatic commit**, not out of the release. Later in the same run, the
+version commit stages the whole tree on purpose — `VERSION`, `CHANGELOG.md`, and
+regenerated docs all legitimately appear after the snapshot — so anything on the
+"Left out …" list still gets committed one commit later. To see what actually shipped,
+run `git show --stat HEAD` rather than assuming. To turn the guard off and sweep
+everything into the first commit, set `git.allow_gate_drift: true`
+(`MANIFEST_CLI_GIT_ALLOW_GATE_DRIFT`). Manifest's own `.manifest-cli/` bookkeeping is
+always exempt, because the gate writes its results there while running.
 
 ## Version Ownership
 
-Manifest has one canonical release-writer file today: `VERSION`.
+Manifest writes exactly one version file: `VERSION`.
 
-`VERSION` holds an ordered list of numeric segments of any length. How an increment maps to a segment, how segments are named (`version.components`), and why a fourth segment does not survive a `patch` are documented once, in [Command Reference — Version increments](COMMAND_REFERENCE.md#version-increments).
+`VERSION` holds numbers separated by dots — any number of them, not just three. Which
+number an increment changes, what the positions are called (`version.components`), and
+why a fourth number does not survive a `patch` are all explained in one place:
+[Command Reference — Version increments](COMMAND_REFERENCE.md#version-increments).
 
-Other version-bearing files are non-canonical. This includes package manifests, package locks, module files, and chart files such as `package.json`, `package-lock.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, and `Chart.yaml`. Manifest detects these surfaces from the committed handler catalog, but detection is passive: it does not rewrite them, print noisy warnings during scripts, or stop non-interactive runs.
+Every other file that mentions a version is **non-canonical** — Manifest reads it but
+will not write it. That covers `package.json`, `package-lock.json`, `pyproject.toml`,
+`Cargo.toml`, `go.mod`, `Chart.yaml`, and similar. Manifest finds them using a catalog
+that ships with the tool, but finding is all it does: it will not edit them, will not
+spam warnings into your scripts, and will not stop an unattended run.
 
-To mirror the canonical version into selected package/version files, opt in with `version.sync`:
+Want some of them kept in step? Opt in by listing them:
 
 ```yaml
 version:
   sync: "package.json,pyproject.toml,Chart.yaml"
 ```
 
-Unset `version.sync` is the default and leaves package files and lockfiles untouched. The current writer updates only top-level JSON, TOML, and YAML `version` fields and skips missing, nested-only, or unsupported targets.
+Leaving `version.sync` unset is the default and means package files and lockfiles are
+never touched. When set, the writer updates a `version` field at the **top level** of a
+JSON, TOML, or YAML file. It skips files that do not exist, files where the version is
+nested deeper, and formats it does not handle — and it never creates a file.
 
-Version-surface reporting is configurable:
+How much Manifest tells you about the files it found is configurable:
 
 ```yaml
 version:
   surfaces:
     enabled: true
-    catalog: ""          # empty = built-in catalog
+    catalog: ""          # empty means use the built-in catalog
     scan_depth: 5
     notification_mode: summary # summary | list | off
 ```
 
-Human `manifest status` and fleet status stay quiet when only canonical version files are present, summarize non-canonical detections by default, and list files when `notification_mode` is `list`. `manifest status --json` includes the full `version_surfaces` object. `manifest doctor` reports invalid policy and non-canonical detections as warnings only.
+`manifest status` and fleet status say nothing when only `VERSION` is present, give a
+one-line summary when other version files exist, and name them individually when
+`notification_mode` is `list`. `manifest status --json` always includes the complete
+`version_surfaces` object. `manifest doctor` reports both invalid settings and found
+files as warnings only — never as errors.
 
-`files.version` is available in configuration and is used by the passive scanner to classify a custom version file as canonical. Repo ship, the main status version field, resume, and fleet release paths still treat `VERSION` as the release-writer file; full custom canonical filename support is tracked in [TRACKER §8.12](TRACKER.md#8--enterprise-readiness-audit-2026-06-05).
+One caveat worth knowing: there is a `files.version` setting for naming a different
+canonical file, and the detection side honours it. But repo release, the main version
+field in `status`, `resume`, and fleet release all still write `VERSION`. Until that is
+finished, treat `files.version` as incomplete — it is tracked in
+[TRACKER §8.12](TRACKER.md#8--enterprise-readiness-audit-2026-06-05).
 
 ## Fleet Workflow
 
@@ -148,7 +213,9 @@ Human `manifest status` and fleet status stay quiet when only canonical version 
 manifest init fleet
 ```
 
-The first run scans and writes `manifest.fleet.tsv` for review. After editing the TSV, run the command again to create fleet config and repo scaffolding.
+The first run scans the folder and writes `manifest.fleet.tsv` for you to review.
+Edit that file — in particular, which members are selected — then run the command
+again to create the fleet config and set up the repositories.
 
 Useful variants:
 
@@ -156,18 +223,32 @@ Useful variants:
 manifest init fleet --depth 3
 manifest init fleet --all-folders
 manifest init fleet --name platform-services
-manifest init fleet --create-repo-private   # preview local init + remote targets
+manifest init fleet --create-repo-private   # show local setup plus the GitHub repos it would create
 manifest init fleet --create-repo-private -y
 ```
 
-Remote creation remains explicit even with `-y`. Configure the destination namespace once when repositories belong to an organization:
+**Creating remote repositories always has to be asked for explicitly**, even with `-y`.
+If your repositories live under an organisation, say so once:
 
 ```yaml
 github:
   owner: fidenceio
 ```
 
-The preview prints every repository that would be created as `<owner>/<name>`. With `github.owner` unset, the owner is taken from the repository's own `origin` remote; only a directory with no origin of its own displays `<authenticated-user>`, where `gh` creates under its authenticated account. A directory nested inside a parent repository does not inherit that parent's owner. When `github.owner` is set and disagrees with `origin`, the configured value wins and the conflict is reported — an interactive run offers the origin owner instead, a non-interactive one never blocks. Existing member origins win; directories without their own `.git` are initialized from live disk state even if the preserved TSV still says `HAS_GIT=true`.
+The preview names every repository it would create as `<owner>/<name>`, so you can read
+the list before anything exists. Where does the owner come from if you do not set
+`github.owner`?
+
+- From the repository's own `origin` remote, if it has one.
+- Only a directory with no `origin` of its own shows `<authenticated-user>`, meaning
+  `gh` would create it under whichever account you are logged in as.
+- A directory nested inside a parent repository does **not** inherit that parent's owner.
+
+If you set `github.owner` and it disagrees with an existing `origin`, your configured
+value wins and Manifest reports the conflict. Run interactively and it offers the origin
+owner instead; run unattended and it never blocks. Members that already have an origin
+keep it. A directory with no `.git` of its own is set up from what is actually on disk,
+even if a leftover row in the TSV still claims `HAS_GIT=true`.
 
 ### Adopt An Existing Workspace
 
@@ -178,37 +259,54 @@ manifest reconcile fleet
 manifest reconcile fleet --do
 ```
 
-`--commit` requires `--apply` / `--do`. `--push` requires `--commit`.
+The flags stack, so you cannot skip a step by accident: `--commit` requires `--apply` or
+`--do`, and `--push` requires `--commit`.
 
 ### Operate A Fleet
 
 ```bash
 manifest status fleet
 manifest prep fleet
-manifest update fleet          # re-scan membership (was 'refresh fleet'; docs: 'manifest docs fleet')
+manifest update fleet          # re-scan which repos are members (once called 'refresh fleet'; for docs use 'manifest docs fleet')
 manifest ship fleet patch
 manifest ship fleet patch -y
 manifest ship fleet patch --local -y
 ```
 
-Release-disabled services are listed and skipped by ship. Release-enabled services are still skipped when they have no release changes, which means a clean worktree whose HEAD already matches the current `VERSION` tag.
+Members with releases turned off are listed and skipped. Members with releases turned
+**on** are also skipped when there is nothing to release — meaning a clean working copy
+whose latest commit is already the one the current `VERSION` tag points at.
 
 ### Project Repo Names Onto GitHub Topics
 
-Fleets whose repo names follow a dot-separated convention can mirror that taxonomy as GitHub topics, making the org page filterable (`?q=topic:accounting`). Opt in with one key in `manifest.fleet.config.yaml`:
+If your repository names follow a dotted convention, Manifest can mirror that structure
+as GitHub **topics** — the tags shown on a repository page — which makes an organisation
+page filterable with a query like `?q=topic:accounting`. Opt in with one key in
+`manifest.fleet.config.yaml`:
 
 ```yaml
 topics:
   from_name: inner   # fidence.service.accounting.avalara -> service, accounting
 ```
 
-Modes: `inner` (drop first and last slug), `all-but-first`, `all`. Members also receive a `fleet-<name>` topic. `manifest update fleet` previews the per-repo delta; `-y` applies it. Pushes are additive-only — Manifest reads each repo's existing topics first, never re-pushes one that is already defined, and never removes anything. Removing the key stops topic management without undoing prior pushes. When `gh` is missing or unauthenticated the step is skipped with a notice.
+The modes are `inner` (drop the first and last piece), `all-but-first`, and `all`. Every
+member also gets a `fleet-<name>` topic. `manifest update fleet` shows the per-repository
+changes; `-y` applies them.
 
-The same run also reports a roster check: org repos that share a naming family with an enrolled member (same first dot-slug) but are not in the local fleet — typically new repos nobody has cloned yet. The roster is read-only; clone a listed repo into the fleet root and rerun `manifest update fleet` to enroll it.
+**Topic changes only ever add.** Manifest reads each repository's existing topics first,
+never re-pushes one that is already there, and never removes anything — a repository can
+belong to two fleets, and removing a "stale" topic on one fleet's run would fight the
+other. Deleting the config key stops topic management but does not undo past changes. If
+`gh` is missing or you are not logged in, the step is skipped with a notice.
+
+The same run also reports a roster check: repositories in your organisation that share a
+naming family with a member (the same first dotted piece) but are not in your local
+fleet — usually new ones nobody has cloned yet. This is read-only. To enrol one, clone it
+into the fleet root and run `manifest update fleet` again.
 
 ## Pull Request Workflow
 
-Native PR commands wrap `gh` and do not require Manifest Cloud:
+These wrap the `gh` command-line tool and need no Manifest Cloud:
 
 ```bash
 manifest pr
@@ -219,7 +317,7 @@ manifest pr update
 manifest pr merge --squash
 ```
 
-Cloud-only extensions:
+These need Cloud:
 
 ```bash
 manifest pr queue
@@ -227,45 +325,47 @@ manifest pr policy show
 manifest pr policy validate
 ```
 
-If Cloud plugins are missing, Cloud-only routes print install guidance. Native PR routes continue to work.
+Without Cloud plugins, the Cloud-only commands print installation guidance. Everything
+above them keeps working.
 
 ## Configuration
 
-This section is the canonical description of Manifest's configuration layers.
+This section is the authoritative description of how Manifest's configuration layers
+work. Other documents point here rather than repeating it.
 
 ### Layer model
 
-Every setting is resolved from six layers. Later layers win.
+A setting's value is worked out from six layers. **Lower in this table wins.**
 
-| # | Layer | Source | Applies | Writable |
+| # | Layer | Where it lives | When it applies | Can you write it? |
 | - | ----- | ------ | ------- | -------- |
 | 1 | `defaults` | Built into the CLI | Always | No |
-| 2 | `global` | `~/.manifest-cli/manifest.config.global.yaml` | Always | Yes (safety-gated) |
-| 3 | `fleet` | `<fleet-root>/manifest.config.yaml`, then `<fleet-root>/manifest.config.local.yaml` | Only when this repo sits **below** a fleet root; skipped when it **is** the fleet root | No — write it at the fleet root |
+| 2 | `global` | `~/.manifest-cli/manifest.config.global.yaml` | Always | Yes, behind a safety gate |
+| 3 | `fleet` | The fleet root's `manifest.config.yaml`, then its `manifest.config.local.yaml` | Only when this repo sits **below** a fleet root; skipped when it **is** the root | No — write it at the fleet root |
 | 4 | `project` | `./manifest.config.yaml` | Always | Yes |
-| 5 | `local` | `./manifest.config.local.yaml` | Always (git-ignored) | Yes (default) |
-| 6 | `env` | Exported `MANIFEST_CLI_*` captured at process start | Always | n/a |
+| 5 | `local` | `./manifest.config.local.yaml` | Always (and git-ignored) | Yes, the default target |
+| 6 | `env` | Exported `MANIFEST_CLI_*` variables, read when the process starts | Always | n/a |
 
 ### The fleet layer
 
-A repository nested inside a fleet inherits the fleet root's configuration as a
-baseline, so one fleet-wide setting applies to every member without being copied
-into each repo. Three things about it are easy to get wrong:
+A repository inside a fleet inherits the fleet root's settings as a starting point, so
+one setting at the root applies to every member without being copied into each one.
+Three things about this catch people out:
 
-- **`manifest.fleet.config.yaml` is not a configuration layer.** It is the fleet
-  *definition*, and the sentinel whose presence makes a directory the fleet root.
-  The two files that form the `fleet` layer are the fleet root's ordinary
-  `manifest.config.yaml` and `manifest.config.local.yaml`.
-- **Inheritance is skipped at the fleet root itself.** There, those same two
-  files are already layers 4 and 5; counting them twice would be meaningless.
-- **The fleet root is found by walking up for the sentinel**, starting from the
-  project root. Setting a fleet root explicitly does not redirect this — the
-  config layer follows the sentinel and nothing else.
+- **`manifest.fleet.config.yaml` is not one of the layers.** It defines the fleet, and
+  its presence is what marks a directory as the fleet root. The two files that form the
+  `fleet` layer are the root's ordinary `manifest.config.yaml` and
+  `manifest.config.local.yaml`.
+- **At the fleet root itself, inheritance is skipped.** There, those same two files are
+  already layers 4 and 5; counting them twice would mean nothing.
+- **The fleet root is found by walking up the directory tree** looking for
+  `manifest.fleet.config.yaml`. Pointing a setting at some other fleet root does not
+  change this — the config layer follows that file and nothing else.
 
 ### Inspecting layers
 
-`manifest config describe <key>` shows every layer, highest precedence first,
-with the file each value came from:
+`manifest config describe <key>` shows every layer, strongest first, and names the file
+each value came from:
 
 ```text
 Key:       github.owner
@@ -283,9 +383,9 @@ Layers (highest precedence first):
   defaults ·   (built-in)
 ```
 
-A shadowed value stays visible, so you can see what is overriding what.
-`manifest config list` shows every key that has an explicit source, with its
-winning layer; `--layer <name>` narrows to one layer, including `fleet`.
+Values that lost still appear, so you can see exactly what is overriding what.
+`manifest config list` shows every key that has been set somewhere along with the layer
+that won; `--layer <name>` narrows it to one layer, `fleet` included.
 
 ### Writing configuration
 
@@ -301,14 +401,14 @@ manifest config doctor
 manifest config doctor --fix
 ```
 
-`config set` writes local config by default. Global writes go through an
-additional safety gate.
+`config set` writes to your local config unless told otherwise. Writing the global
+config passes through an extra safety gate.
 
-`--layer` on `set`/`unset` accepts only `global`, `project` and `local`. The
-`fleet` layer is read-only from inside a member because its files live in a
-**different repository** — writing them from here would mutate a repo you did
-not name. To change a fleet-wide value, run the same command **at the fleet
-root**, where those files are ordinary `project`/`local` layers:
+On `set` and `unset`, `--layer` accepts only `global`, `project`, and `local`. The
+`fleet` layer is deliberately read-only from inside a member, because its files live in
+a **different repository** — writing them from here would change a repo you never named.
+To change a fleet-wide value, run the same command **at the fleet root**, where those
+files are just the ordinary `project` and `local` layers:
 
 ```bash
 cd /path/to/fleet-root
@@ -317,13 +417,16 @@ manifest config set --layer project github.owner acme-corp
 
 ### Environment overrides
 
-Every user-facing key maps to a `MANIFEST_CLI_*` environment variable. An
-exported variable outranks every configuration file.
+Every setting has a matching `MANIFEST_CLI_*` environment variable, and an exported
+variable beats every config file.
 
-This layer is a **snapshot taken when the process starts**: exporting a variable
-part-way through a session does not create an override. And a variable exported
-*empty* is not a no-op — it suppresses all the file layers and falls through to
-the built-in default. `config describe` reports that case explicitly.
+Two things about this layer surprise people:
+
+- **It is a snapshot taken when the process starts.** Exporting a variable halfway
+  through a session does not create an override for a command already running.
+- **Exporting it *empty* is not the same as not setting it.** An empty value still
+  suppresses all the file layers, so the built-in default takes over. `config describe`
+  calls this case out explicitly rather than leaving you to guess.
 
 ## Documentation Generation
 
@@ -334,27 +437,35 @@ manifest docs cleanup
 manifest docs fleet --dry-run
 ```
 
-Docs-site generation for Jekyll/GitHub Pages is on by default; disable it via config if you don't want it. See [DOCS_SITE.md](DOCS_SITE.md).
+Manifest can also build a small documentation website for GitHub Pages. That is
+**off by default** — turn it on with `docs.generate.site: true`. See
+[DOCS_SITE.md](DOCS_SITE.md).
 
 ## Testing Manifest
 
-Contributor validation is containerized:
+Contributor checks run in a container, so you do not install test dependencies on your
+own machine:
 
 ```bash
 ./scripts/run-tests-container.sh
 ./scripts/run-tests-container.sh tests/docs_generation.bats
 ```
 
-Do not install test dependencies on the host.
-
 ## Security And Maintenance
 
 ```bash
-manifest security --check
-manifest security
+manifest security          # read-only checks; writes nothing
+manifest security --write  # also save a timestamped report to the docs archive
 manifest upgrade
-manifest uninstall
+manifest uninstall         # shows what it would remove
 manifest uninstall -y
 ```
 
-The versioned pre-commit hook is documented in [../.git-hooks/README.md](../.git-hooks/README.md).
+`manifest security` checks three things: whether files meant to stay private are tracked
+in git, whether anything looks like personal data, and whether environment-variable names
+follow the expected pattern. It is read-only unless you pass `--write`, and it never
+touches the hand-written `docs/SECURITY_ANALYSIS_REPORT.md`. (`--check` is still accepted
+and also means read-only, so existing hooks and scripts keep working.)
+
+The pre-commit hook — which is versioned in the repository but must be enabled per clone
+— is documented in [../.git-hooks/README.md](../.git-hooks/README.md).

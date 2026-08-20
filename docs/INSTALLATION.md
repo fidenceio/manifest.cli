@@ -1,72 +1,93 @@
 # Manifest CLI Installation
 
-This document separates product installation from repository development.
+This document has two halves, and you only need one of them:
 
-- Product users install the CLI on their machine.
-- Contributors working in this repo validate through containers and do not install repo dependencies on the host.
+- **Installing the tool** to use it on your projects — read "Product Installation".
+- **Working on Manifest itself** — read "Contributor Validation". You do not install
+  Manifest's dependencies on your machine for that; everything runs in a container.
 
 ## Product Installation
 
 ### Homebrew
 
-Recommended for macOS and Linux users with Homebrew:
+The recommended route on macOS and Linux. A "tap" is just a third-party source
+Homebrew can install from:
 
 ```bash
 brew tap fidenceio/tap
 brew install manifest
 ```
 
-Homebrew installs the formula dependencies declared in the tap: Bash 5, yq, Git, and coreutils. It also installs shell completions.
+Homebrew pulls in what Manifest needs — Bash 5, yq, Git, coreutils — and sets up shell
+completions (tab-completion for Manifest's commands).
 
-Upgrade:
+To upgrade later:
 
 ```bash
 brew update
 brew upgrade manifest
 ```
 
-The install script, `manifest upgrade`, `manifest reinstall`, and the post-ship self-upgrade automatically trust the formula when Homebrew allows formula-level trust, then fall back to tap-level trust only when Homebrew rejects individual formula trust for a custom-remote tap. This keeps Homebrew loading Manifest once tap-trust is enforced (`HOMEBREW_REQUIRE_TAP_TRUST=1`, slated to become the default in a future Homebrew). Older Homebrew without `brew trust` skips this step. If Homebrew ever warns that `fidenceio/tap` is untrusted — or an upgrade silently stays on the old version — trust it manually:
+#### About Homebrew "trust"
+
+Newer Homebrew versions will refuse to load a tap you have not marked as trusted.
+Manifest handles this for you: the install script, `manifest upgrade`,
+`manifest reinstall`, and the automatic self-upgrade after a release all mark the
+formula trusted, falling back to trusting the whole tap only if Homebrew rejects
+trusting a single formula from a custom-remote tap. Older Homebrew versions have no
+`brew trust` command and skip this entirely.
+
+If Homebrew ever warns that `fidenceio/tap` is untrusted — or an upgrade quietly leaves
+you on the old version — do it by hand:
 
 ```bash
 brew trust --formula fidenceio/tap/manifest
 ```
 
-If Homebrew responds that it cannot trust individual items because `fidenceio/tap` uses a custom remote, trust the tap instead:
+If Homebrew replies that it cannot trust individual items because the tap uses a custom
+remote, trust the tap:
 
 ```bash
 brew trust fidenceio/tap
 ```
 
-> **Security boundary:** auto-trust only keeps a formula/tap you already chose loadable once Homebrew starts ignoring untrusted taps. It trusts by Homebrew *identity*, not pinned *content*, and is re-applied on every upgrade — so it is **not** a defense against a compromised tap. To defend against that, pin an expected formula revision so a content change forces a fresh `brew trust` prompt.
+> **What trust does and does not protect you from.** Marking something trusted only
+> keeps a tap you already chose loadable. It trusts by Homebrew *identity* — "this is
+> the tap I picked" — not by *content*, and it is re-applied on every upgrade. So it is
+> **not** protection against a tap that has been compromised. If that is your concern,
+> pin an expected formula revision, so any content change forces a fresh trust prompt
+> that you have to look at.
 
 ### Install Script
 
-Use the install script when Homebrew is not the desired distribution path. Do
-not pipe a remote script straight into a shell — that executes unverified code
-before you have seen it. Instead, use the verifying bootstrap, which downloads a
-pinned release tarball, checks its sha256 against the published checksum, and
-only then runs the installer from the verified tree:
+Use this when Homebrew is not what you want.
+
+**Do not pipe a remote script straight into a shell.** Doing so runs code you have not
+seen. Instead use the bootstrap script, which downloads a specific release archive,
+checks its SHA-256 checksum against the published one, and only then runs the installer
+from the verified files:
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/fidenceio/manifest.cli/main/bootstrap.sh
-# inspect bootstrap.sh, then run it:
-bash bootstrap.sh                               # latest published tag
-MANIFEST_CLI_INSTALL_VERSION=v55.2.1 bash bootstrap.sh      # pin an exact version
+# read bootstrap.sh, then run it:
+bash bootstrap.sh                                      # newest published release
+MANIFEST_CLI_INSTALL_VERSION=v59.3.0 bash bootstrap.sh # or pin an exact release
 ```
 
-For the strongest guarantee, pin the expected digest as well — the install then
-aborts on any mismatch:
+For the strongest guarantee, supply the checksum you expect as well. The install then
+stops if anything differs:
 
 ```bash
-MANIFEST_CLI_INSTALL_VERSION=v55.2.1 \
+MANIFEST_CLI_INSTALL_VERSION=v59.3.0 \
 MANIFEST_CLI_INSTALL_SHA256=<sha256-of-the-source-tarball> \
   bash bootstrap.sh
 ```
 
-The published per-release sha256 is the `sha256` value in the tap formula at
-`fidenceio/homebrew-tap` (`Formula/manifest.rb`). The installer validates runtime
-requirements before installing and writes Manifest runtime state under
-`~/.manifest-cli/`.
+Where do you get that checksum? It is the `sha256` value in the tap's formula file, at
+`fidenceio/homebrew-tap` in `Formula/manifest.rb`.
+
+The installer checks your runtime requirements before installing anything, and keeps
+Manifest's own state in `~/.manifest-cli/`.
 
 ## Verify Product Install
 
@@ -77,66 +98,72 @@ manifest status
 manifest config show
 ```
 
-`manifest doctor` checks dependencies, config layers, and repository state. `manifest status` is read-only and reports what Manifest would target from the current directory.
+`manifest doctor` checks your dependencies, your configuration layers, and the state of
+the repository you are in. `manifest status` changes nothing and tells you what Manifest
+would act on from where you are standing — a good habit before any release command.
 
 ## Contributor Validation
 
-Do not install repo dependencies on the host to work on this codebase. Run tests through the containerized harness:
+To work on this codebase, do not install its dependencies on your machine. Run the
+tests through the container:
 
 ```bash
 ./scripts/run-tests-container.sh
 ```
 
-Focused suite example:
+To run a single file rather than the whole suite:
 
 ```bash
 ./scripts/run-tests-container.sh tests/command_surface_inventory.bats
 ```
 
-The container runner provides the toolchain needed for bats and shell integration tests. See [tests/README.md](../tests/README.md).
+The container supplies the toolchain that bats and the shell integration tests need, so
+results do not depend on what happens to be installed on your machine. More detail:
+[tests/README.md](../tests/README.md).
 
 ## Runtime Requirements
 
-Manifest requires:
-
-| Dependency | Purpose |
+| Dependency | Why it is needed |
 | ---------- | ------- |
-| Bash 5+ | Shell runtime |
-| Git | Repository operations |
-| yq v4+ | YAML config parsing |
-| coreutils | Portable date/stat/timeout behavior |
-| curl | API and timestamp calls |
-| Docker | Containerized validation and some workflows |
-| gh | Optional GitHub PR and release operations |
+| Bash 5+ | Manifest uses associative arrays, which Bash 3 — still what macOS ships — does not have |
+| Git | Reading repository state; commits, tags, pushes |
+| yq v4+ | Reading the YAML configuration. Must be Mike Farah's `yq`; there is an unrelated tool with the same name |
+| coreutils | Consistent `date`, `stat`, and `timeout` behaviour across macOS and Linux |
+| curl | API calls and the trusted-timestamp lookup |
+| Docker | The containerized test workflow, and a few other flows |
+| gh | Optional. Needed for GitHub pull request and release commands |
 
-The source of truth for runtime checks is `modules/core/manifest-requirements.sh`.
+If a document and the code ever disagree about requirements, the code wins:
+`modules/core/manifest-requirements.sh` is what actually runs the checks.
 
 ## Shell Completions
 
-Homebrew installs completions automatically. Manual setup instructions live in [completions/README.md](../completions/README.md).
+Homebrew sets these up for you. If you installed another way, the manual steps are in
+[completions/README.md](../completions/README.md).
 
 ## Uninstall
 
-Preview first:
+See what would be removed:
 
 ```bash
 manifest uninstall
 ```
 
-Apply removal:
+Actually remove it:
 
 ```bash
 manifest uninstall -y
 ```
 
-Global config removal requires additional confirmation. This prevents accidental deletion of `~/.manifest-cli/manifest.config.global.yaml`.
+Deleting your global configuration takes an extra confirmation on top of `-y`, so
+`~/.manifest-cli/manifest.config.global.yaml` cannot go by accident.
 
 ## Troubleshooting
 
-| Symptom | Check |
+| Symptom | What to check |
 | ------- | ----- |
-| `manifest` not found | Confirm `brew --prefix` or `~/.local/bin` is on `PATH` |
-| Bash version error | Run `manifest doctor`; Homebrew installs Bash 5 for the formula |
-| YAML config error | Confirm `yq --version` reports Mike Farah yq v4+ |
-| GitHub release or PR commands fail | Run `gh auth status` |
-| Repo command targets the wrong path | Run `manifest status` from the intended Git checkout |
+| `manifest: command not found` | Is `brew --prefix`'s `bin`, or `~/.local/bin`, on your `PATH`? |
+| Bash version error | Run `manifest doctor`. Homebrew installs Bash 5 alongside the formula; macOS's built-in Bash 3 is too old |
+| YAML config error | Run `yq --version` and confirm it reports Mike Farah's yq, v4 or newer |
+| GitHub release or PR commands fail | Run `gh auth status` — you are probably not logged in |
+| A repo command acts on the wrong project | Run `manifest status` from the checkout you meant. Repo commands use your current directory, not a path argument |

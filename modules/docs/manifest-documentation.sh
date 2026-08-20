@@ -244,6 +244,12 @@ EOF
 }
 
 _manifest_docs_generate_site() {
+    # $1 is accepted but no longer rendered: the generated page must not bake in a
+    # version, because site generation is opt-in and the page then sits unrefreshed
+    # (it advertised v50.1.2 while the project was on 59.3.0). Kept in the signature
+    # rather than removed — five other positional args and six call sites follow it,
+    # and a site generator being handed the release version is not itself wrong.
+    # shellcheck disable=SC2034  # deliberately unused; see above
     local version="$1"
     local timestamp="$2"
     local scope="${3:-repo}"
@@ -274,6 +280,11 @@ exclude:
   - vendor
 EOF
 
+    # The Changelog card deliberately carries no version number. Site generation is
+    # opt-in (docs.generate.site, default false), so this page is written once and
+    # then sits in the repo unrefreshed — a baked-in version does not age with the
+    # project. It read "Release history for v50.1.2" while the project was on
+    # 59.3.0. The changelog it links to always states its own latest version.
     cat > "$index_file" << EOF
 ---
 layout: default
@@ -294,7 +305,7 @@ title: Home
     </article>
     <article class="doc-link">
       <h2>Changelog</h2>
-      <p><a href="CHANGELOG.md">Release history for v$version</a></p>
+      <p><a href="CHANGELOG.md">Release history</a></p>
     </article>
     <article class="doc-link">
       <h2>Documentation Index</h2>
