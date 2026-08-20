@@ -15,10 +15,10 @@
 #           preferred `_MANIFEST_CLI_*`). Today's catalog is allowlisted
 #           verbatim so any NEW underscored legacy-namespace global trips
 #           the test.
-#   Gap D — the existing audit only inspects two doc files
-#           (COMMAND_REFERENCE.md, IMPROVEMENT_TRACKER.md). We extend
-#           coverage to every active doc under docs/ (everything not in
-#           zArchive/), with the same comment-line skipping rule.
+#   Gap D — the existing audit inspects only one doc file
+#           (COMMAND_REFERENCE.md). We extend coverage to every active doc
+#           under docs/ (everything not in zArchive/), with the same
+#           comment-line skipping rule.
 #
 # These tests use the SAME core scanning loop as the existing audit so
 # results stay consistent.

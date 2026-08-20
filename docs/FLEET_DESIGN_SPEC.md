@@ -100,12 +100,15 @@ Outward actions — push, GitHub Release, create-remote — gate on `verified`, 
 
 ### Verbs
 
-| Verb | Moves | Idempotent | Safety | Status |
-| ---- | ----- | ---------- | ------ | ------ |
-| select / unselect | membership flag (`SELECT`) | yes | default benched; reversible | realized (TSV toggle) |
-| clone | Local `absent` → `repo` | yes (skip if present) | read-only on remote | designed |
-| verify | Remote `declared` → `verified` | yes (pure read) | grants outward trust | primitive in use (`git ls-remote`); user-facing sweep designed |
-| create-remote | Remote → `verified` | yes (create-if-absent, never clobber) | irreversible — dry-run first | realized for repo and fleet init (`--create-repo-*`) |
+| Verb | Moves | Idempotent | Safety | Available as |
+| ---- | ----- | ---------- | ------ | ------------ |
+| select / unselect | membership flag (`SELECT`) | yes | default benched; reversible | `SELECT` toggle in `manifest.fleet.tsv` |
+| clone | Local `absent` → `repo` | yes (skip if present) | read-only on remote | no user-facing verb — see [TRACKER §9.25](TRACKER.md) |
+| verify | Remote `declared` → `verified` | yes (pure read) | grants outward trust | internal `git ls-remote` primitive only; no user-facing sweep — see [TRACKER §9.25](TRACKER.md) |
+| create-remote | Remote → `verified` | yes (create-if-absent, never clobber) | irreversible — dry-run first | `manifest init repo\|fleet --create-repo-private\|public` |
+
+The last column states what a caller can invoke **today**, not what is planned. Gaps
+are tracked in [TRACKER.md](TRACKER.md), never as a status word here.
 
 Release disposition (eligible / current / release-disabled / PR-gated) is an orthogonal axis — see [Release Model](#release-model).
 
@@ -181,6 +184,9 @@ Fleet docs generation can refresh per-service docs and generate a managed Jekyll
 
 ## Current Limitations
 
-- Repo-scoped release commands do not accept a path selector.
-- Fleet release strategies are `direct`, `none`, or `pr` (PR-gated, routed to `manifest pr fleet`); more advanced orchestration belongs behind explicit future config.
-- MCP fleet operations are planned as read-only in v1.
+These are deliberate scope boundaries, not pending work. Anything that *is* pending
+lives in [TRACKER.md](TRACKER.md).
+
+- Repo-scoped release commands do not accept a path selector. Locked as a Non-Goal in [NORTH_STAR.md](NORTH_STAR.md) until the repo-identity contract is redesigned.
+- Fleet release strategies are `direct`, `none`, or `pr` (PR-gated, routed to `manifest pr fleet`). Richer orchestration is out of scope; it would require explicit config that does not exist and is not planned.
+- MCP fleet operations are read-only.

@@ -344,7 +344,13 @@ _fleet_apply_plan() {
             if ! git -C "$root_dir" diff --cached --quiet; then
                 git -C "$root_dir" commit -m "Reconcile fleet adoption plan" || return 1
             fi
-            [[ "$push" == "true" ]] && git -C "$root_dir" push || return 1
+            # Explicit if/then, not `[[ cond ]] && cmd || return 1`. In that shape
+            # the `||` arm fires whenever the CONDITION is false, so a run without
+            # --push reported failure despite having done everything asked of it.
+            # Only an actual push failure is a failure here.
+            if [[ "$push" == "true" ]]; then
+                git -C "$root_dir" push || return 1
+            fi
         else
             log_warning "--commit requested, but fleet root is not a git repository"
         fi

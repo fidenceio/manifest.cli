@@ -141,8 +141,15 @@ YAML
 
     # The spec gained the starter env: block (source of truth, D-ENV-2)…
     [ "$(yq e '.env | length' "$PROJ/service.spec.yaml")" = "2" ]
-    yq e '.env[].name' "$PROJ/service.spec.yaml" | grep -q "FIDENCE_SERVICE_DEMO_LOG_LEVEL"
-    yq e '.env[].name' "$PROJ/service.spec.yaml" | grep -q "FIDENCE_SERVICE_DEMO_SERVICE_FQN"
+    # Capture first, then match. Piping an external producer into `grep -q` is
+    # unsafe under pipefail: grep exits at the first match, yq takes SIGPIPE, and
+    # the pipeline reports 141 — a shell artifact, not a failed expectation. This
+    # assertion flaked ~1 run in 8. The separate assignment keeps errexit catching
+    # a yq failure, which a herestring would have masked.
+    local env_names
+    env_names="$(yq e '.env[].name' "$PROJ/service.spec.yaml")"
+    grep -q "FIDENCE_SERVICE_DEMO_LOG_LEVEL" <<<"$env_names"
+    grep -q "FIDENCE_SERVICE_DEMO_SERVICE_FQN" <<<"$env_names"
 
     # …and the example was generated from it.
     grep -q "^FIDENCE_SERVICE_DEMO_LOG_LEVEL=info$" "$PROJ/.env.example"

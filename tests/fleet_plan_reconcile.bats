@@ -103,6 +103,28 @@ YAML
     grep -q '^  plain:' "$SCRATCH/work/manifest.fleet.config.yaml"
 }
 
+@test "reconcile fleet --apply --commit succeeds when --push was not requested" {
+    # Regression: the push step was written `[[ "$push" == "true" ]] && git push || return 1`.
+    # In that shape the `||` arm fires when the CONDITION is false, so committing
+    # WITHOUT --push returned 1 — reporting failure for a run that did everything
+    # asked of it. --commit requires --apply; --push is deliberately omitted here,
+    # which is precisely the path that used to fail.
+    mkdir -p "$SCRATCH/work/plain"
+    git -C "$SCRATCH/work" init -q
+    git -C "$SCRATCH/work" config user.email "test@example.com"
+    git -C "$SCRATCH/work" config user.name "Test"
+    write_plan
+
+    run_manifest reconcile fleet --apply --commit
+
+    [ "$status" -eq 0 ]
+    [ -f "$SCRATCH/work/manifest.fleet.config.yaml" ]
+    # The commit was actually made, so a green exit is not a no-op.
+    local subjects
+    subjects="$(git -C "$SCRATCH/work" log --pretty=%s)"
+    grep -q 'Reconcile fleet adoption plan' <<<"$subjects"
+}
+
 @test "reconcile fleet --do behaves like --apply" {
     mkdir -p "$SCRATCH/work/plain"
     write_plan
@@ -254,6 +276,8 @@ YAML
     [ -d "$SCRATCH/work/standalone/infra/.git" ]
     [ -f "$SCRATCH/work/manifest.fleet.config.yaml" ]
     grep -q '^  infra:' "$SCRATCH/work/manifest.fleet.config.yaml"
-    git -C "$SCRATCH/work/shell" status --porcelain | grep -q 'infra'
+    local porcelain
+    porcelain="$(git -C "$SCRATCH/work/shell" status --porcelain)"
+    grep -q 'infra' <<<"$porcelain"
     [ ! -e "$SCRATCH/work/shell/infra" ]
 }

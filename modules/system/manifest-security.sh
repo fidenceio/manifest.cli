@@ -41,22 +41,33 @@ _manifest_security_private_env_files() {
 manifest_security() {
     if [[ "${1:-}" == "help" || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
         _render_help \
-            "manifest security [--check]" \
+            "manifest security [--write]" \
             "Run a security audit for tracked private files, likely PII, and environment-file hygiene." \
-            "Options" "  --check   Run read-only checks and do not write reports"
+            "Options" "  --write   Also write a timestamped report to the docs archive
+  --check   Accepted for compatibility; read-only is now the default"
         return 0
     fi
 
-    local write_report=true
+    # Read-only by DEFAULT. This used to be inverted: the bare command wrote two
+    # files and copied one over the tracked docs/SECURITY_ANALYSIS_REPORT.md, with
+    # `--check` as the only way to opt OUT. A diagnostic verb that mutates tracked
+    # content unless told not to is backwards — writing is the surprising act, so
+    # writing is what needs the flag. `--check` stays accepted (and still means
+    # read-only) because the pre-commit hook, orchestrator and recipe runner all
+    # pass it explicitly.
+    local write_report=false
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            --write)
+                write_report=true
+                ;;
             --check)
                 write_report=false
                 ;;
             "")
                 ;;
             *)
-                _render_help_error "Unknown security option: $1" "manifest security [--check]"
+                _render_help_error "Unknown security option: $1" "manifest security [--write]"
                 return 1
                 ;;
         esac
@@ -303,11 +314,20 @@ generate_security_report() {
 
 ## 📋 Executive Summary
 
-The Manifest CLI has undergone a comprehensive security review. The codebase demonstrates **strong security practices** with robust input validation, secure file operations, and proper handling of sensitive data.
+This report records the result of THREE automated checks: tracked/unignored private
+files, a PII regex sweep, and environment-variable naming. **It is not a code review
+and not a comprehensive security assessment.** Every section below that is not one of
+those three checks is a fixed template, not a measurement — read it as a checklist of
+what a reviewer should look at, never as a finding.
 
-**Security Status:** $(if [ $critical_issues -eq 0 ] && [ $warnings -eq 0 ]; then echo "✅ **SECURE** - No issues found"; elif [ $critical_issues -eq 0 ]; then echo "⚠️ **WARNING** - $warnings warning(s) found"; else echo "❌ **CRITICAL** - $critical_issues critical issue(s) and $warnings warning(s) found"; fi)
+**Checks run:** private-file tracking, PII regex, env-var naming
+**Result:** $(if [ $critical_issues -eq 0 ] && [ $warnings -eq 0 ]; then echo "no issues raised by those three checks"; elif [ $critical_issues -eq 0 ]; then echo "$warnings warning(s) from those three checks"; else echo "$critical_issues critical and $warnings warning(s) from those three checks"; fi)
 
-## 🎯 Security Score: $(if [ $critical_issues -eq 0 ] && [ $warnings -eq 0 ]; then echo "**A+ (95/100)**"; elif [ $critical_issues -eq 0 ]; then echo "**A (85/100)**"; else echo "**C (60/100)**"; fi)
+<!-- No overall score is emitted. A grade computed from three cheap checks reads as
+     an assessment of the whole codebase, which it is not; the previous template
+     printed "A+ (95/100)" whenever those three checks were quiet. -->
+
+## 🎯 Security Score: not scored — see above
 
 ### ✅ **Strengths Identified**
 
@@ -342,7 +362,7 @@ The Manifest CLI has undergone a comprehensive security review. The codebase dem
 - **Array-based Command Execution:** Commands parsed into arrays before execution
 - **Git Command Validation:** Only \`git\` commands allowed in \`git_retry()\`
 - **Input Validation:** Commands validated before execution
-- **No \`eval\` Usage:** No dangerous \`eval\` statements found
+- **\`eval\` Usage:** NOT CHECKED by this run. (This line previously asserted "No dangerous \`eval\` statements found"; four \`eval\` sites exist in \`modules/\` and two more in \`install-cli.sh\`, and no check here inspects them.)
 
 ### 3. **File Operation Security** ✅ **EXCELLENT**
 
@@ -480,9 +500,16 @@ $(if [ $critical_issues -eq 0 ] && [ $warnings -eq 0 ]; then echo "The codebase 
 EOF
 
     echo "📄 Versioned security report generated: $report_file"
-    
-    # Also create/update the main security report in docs directory
-    local main_report="$docs_dir/SECURITY_ANALYSIS_REPORT.md"
-    cp "$report_file" "$main_report"
-    echo "📄 Main security report updated: $main_report"
+
+    # docs/SECURITY_ANALYSIS_REPORT.md is NOT written here, deliberately.
+    #
+    # This used to `cp "$report_file"` straight over it. That file is tracked,
+    # hand-maintained, and is what SECURITY.md points the public at — and the
+    # template above is a fixed heredoc whose ratings are not derived from any
+    # check that ran. Copying it over the curated doc replaced a reviewed
+    # statement of posture with generated text asserting things nobody measured,
+    # and the next `git add .` committed it.
+    #
+    # Run output belongs in the timestamped archive copy above, which is what a
+    # reader should compare against. The curated doc stays curated.
 }

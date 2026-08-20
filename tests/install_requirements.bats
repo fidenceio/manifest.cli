@@ -134,8 +134,21 @@ EOF
         "$TEST_REPO_ROOT/.github"
         "$TEST_REPO_ROOT/README.md"
         "$TEST_REPO_ROOT/docs/COMMAND_REFERENCE.md"
-        "$TEST_REPO_ROOT/docs/IMPROVEMENT_TRACKER.md"
     )
+    # Every path must exist. The grep below sends stderr to /dev/null and ends in
+    # `|| true`, so a renamed or deleted target would silently drop out of the
+    # sweep and the test would still pass having scanned less than it claims —
+    # `docs/IMPROVEMENT_TRACKER.md` sat here doing exactly that after a rename.
+    # Broader doc coverage lives in namespace_audit_extended.bats (Gap D), which
+    # walks every active file under docs/.
+    local p
+    for p in "${search_paths[@]}"; do
+        [ -e "$p" ] || {
+            printf 'search path does not exist: %s\n' "$p" >&2
+            return 1
+        }
+    done
+
     local offenders="" file line text var
 
     while IFS=: read -r file line text; do

@@ -51,7 +51,9 @@ teardown() {
     dir="$(_fleet_lock_dir_path)"
     [[ "$dir" == "$(manifest_install_paths_locks_dir)/fleet-"*.lock.d ]]
     # locks is in the upgrade-preserved set so a swap can't delete a held lock.
-    manifest_install_paths_preserved_subdirs | grep -qx "locks"
+    local preserved
+    preserved="$(manifest_install_paths_preserved_subdirs)"
+    grep -qx "locks" <<<"$preserved"
 }
 
 @test "fleet lock: path is stable for the same workspace regardless of cwd" {

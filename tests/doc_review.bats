@@ -85,12 +85,16 @@ teardown() {
     [ "$(git log -1 --pretty=%s)" = "Add command docs" ]
     report="$(ls docs/documentation-reviews/DOC_REVIEW_*.md)"
     [ -f "$report" ]
-    git log -1 --pretty=%B | grep -q "Documentation review:"
-    git log -1 --pretty=%B | grep -q "Documentation files changed: 1"
-    git show --name-only --pretty= HEAD | grep -q "modules/core/manifest-core.sh"
-    git show --name-only --pretty= HEAD | grep -q "docs/documentation-reviews/DOC_REVIEW_"
-    refute grep -q ".git/manifest-doc-review/latest.md" \
-        < <(git show --name-only --pretty= HEAD)
+    # Capture once, then match — piping git into `grep -q` lets grep exit first and
+    # leaves git holding SIGPIPE, which pipefail reports as a failed assertion.
+    local body files
+    body="$(git log -1 --pretty=%B)"
+    files="$(git show --name-only --pretty= HEAD)"
+    grep -q "Documentation review:" <<<"$body"
+    grep -q "Documentation files changed: 1" <<<"$body"
+    grep -q "modules/core/manifest-core.sh" <<<"$files"
+    grep -q "docs/documentation-reviews/DOC_REVIEW_" <<<"$files"
+    refute grep -q ".git/manifest-doc-review/latest.md" <<<"$files"
 }
 
 @test "documentation review release notes are included in git changes" {
@@ -195,7 +199,9 @@ teardown() {
 
     [ "$status" -eq 0 ]
     [ "$(git log -1 --pretty=%s)" = "Provider subject" ]
-    git log -1 --pretty=%B | grep -q "Provider commit body"
+    local body
+    body="$(git log -1 --pretty=%B)"
+    grep -q "Provider commit body" <<<"$body"
 
     run get_git_changes "1.0.0"
     [ "$status" -eq 0 ]

@@ -459,23 +459,84 @@ _manifest_config_delete_key() {
     return 0
 }
 
+# The lock mechanism is shared with the fleet lock — see system/manifest-lock.sh.
+# manifest-core.sh sources it before this module; guard anyway, because this
+# module is also sourced standalone by tests and partial-tree subshells and an
+# undefined primitive would surface only at the moment of a config write.
+if ! declare -f _manifest_lock_acquire_dir >/dev/null 2>&1; then
+    _manifest_config_lock_modules_dir="${MANIFEST_CLI_CORE_MODULES_DIR:-}"
+    if [ -z "$_manifest_config_lock_modules_dir" ]; then
+        _manifest_config_lock_modules_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    fi
+    # shellcheck disable=SC1091
+    source "$_manifest_config_lock_modules_dir/system/manifest-lock.sh"
+    unset _manifest_config_lock_modules_dir
+fi
+
+# Lock dirs this process is holding, released by the EXIT/INT/TERM trap below.
+_MANIFEST_CLI_CONFIG_HELD_LOCKS=()
+
+# Release every config lock this process still holds. Registered as a trap so a
+# writer killed mid-write does not leave the lock behind. Without this, the lock
+# dir survived the dead process and every later write to that file spun for 5s
+# and then refused — permanently, with no message explaining why.
+_manifest_config_locks_release_all() {
+    local d
+    for d in "${_MANIFEST_CLI_CONFIG_HELD_LOCKS[@]:-}"; do
+        [ -n "$d" ] && _manifest_lock_release_dir "$d"
+    done
+    _MANIFEST_CLI_CONFIG_HELD_LOCKS=()
+}
+
+_manifest_config_lock_trap_install() {
+    [ -n "${_MANIFEST_CLI_CONFIG_LOCK_TRAP_SET:-}" ] && return 0
+    # INT/TERM re-raise after cleanup so the caller still sees a signal death
+    # rather than a plain exit code — the install lock's missing-SIGINT gap
+    # (§8.2b) is the same bug seen from the other side.
+    trap '_manifest_config_locks_release_all' EXIT
+    trap '_manifest_config_locks_release_all; trap - INT; kill -INT $$' INT
+    trap '_manifest_config_locks_release_all; trap - TERM; kill -TERM $$' TERM
+    _MANIFEST_CLI_CONFIG_LOCK_TRAP_SET=1
+    return 0
+}
+
+# Returns 0 holding the lock and sets _MANIFEST_CLI_CONFIG_LOCK_DIR; returns 1
+# without taking it. Mirrors _manifest_ship_repo_lock_acquire.
+#
+# It sets a global instead of echoing the path, and that is load-bearing, not
+# style. The old signature echoed, so every caller wrote
+# `lock_dir=$(_manifest_config_lock_acquire "$f")` — a COMMAND SUBSTITUTION,
+# which runs in a subshell. Any release bookkeeping (and the EXIT trap that acts
+# on it) then belongs to that subshell and fires the instant the substitution
+# closes, dropping the lock while the caller believes it is held. Returning
+# through a global keeps acquisition in the caller's own shell.
 _manifest_config_lock_acquire() {
     local target_file="$1"
+    _MANIFEST_CLI_CONFIG_LOCK_DIR=""
     local lock_dir="${target_file}.lock.d"
-    local attempts=0
-    while ! mkdir "$lock_dir" 2>/dev/null; do
-        attempts=$((attempts + 1))
-        if [ "$attempts" -ge 50 ]; then
-            return 1
-        fi
-        sleep 0.1
-    done
-    echo "$lock_dir"
+    _manifest_config_lock_trap_install
+    if ! _manifest_lock_acquire_dir \
+            "$lock_dir" \
+            "${MANIFEST_CLI_CONFIG_LOCK_ATTEMPTS:-50}" \
+            "${MANIFEST_CLI_CONFIG_LOCK_GRACE_SECONDS:-15}" \
+            "config lock"; then
+        return 1
+    fi
+    _MANIFEST_CLI_CONFIG_HELD_LOCKS+=("$lock_dir")
+    _MANIFEST_CLI_CONFIG_LOCK_DIR="$lock_dir"
+    return 0
 }
 
 _manifest_config_lock_release() {
     local lock_dir="$1"
-    [ -n "$lock_dir" ] && [ -d "$lock_dir" ] && rmdir "$lock_dir" 2>/dev/null || true
+    [ -n "$lock_dir" ] || return 0
+    _manifest_lock_release_dir "$lock_dir"
+    # Drop it from the held list so the EXIT trap does not try again.
+    local remaining=() d
+    for d in "${_MANIFEST_CLI_CONFIG_HELD_LOCKS[@]:-}"; do
+        [ -n "$d" ] && [ "$d" != "$lock_dir" ] && remaining+=("$d")
+    done
+    _MANIFEST_CLI_CONFIG_HELD_LOCKS=("${remaining[@]:-}")
 }
 
 _manifest_config_apply_migrations() {
@@ -593,7 +654,16 @@ auto_migrate_user_global_configuration() {
     fi
 
     local lock_dir=""
-    lock_dir=$(_manifest_config_lock_acquire "$config_file") || return 0
+    if ! _manifest_config_lock_acquire "$config_file"; then
+        # Skipping is correct — a live holder is already migrating this file — but
+        # it must not be silent. Before the lock gained stale reclaim, a crashed
+        # writer left the lock behind and this line skipped the migration forever
+        # while reporting success, which is why "auto-migration never ran" had no
+        # symptom to search for.
+        _manifest_config_warn "Config auto-migration skipped: $config_file is locked by another Manifest process."
+        return 0
+    fi
+    lock_dir="$_MANIFEST_CLI_CONFIG_LOCK_DIR"
     local migration_output=""
     migration_output=$(_manifest_config_apply_migrations "$config_file" "false")
     _manifest_config_lock_release "$lock_dir"
@@ -713,10 +783,11 @@ config_doctor() {
                 return 1
             fi
             local lock_dir=""
-            lock_dir=$(_manifest_config_lock_acquire "$config_file") || {
+            if ! _manifest_config_lock_acquire "$config_file"; then
                 echo "❌ Could not acquire config lock for migration: ${config_file}.lock.d"
                 return 1
-            }
+            fi
+            lock_dir="$_MANIFEST_CLI_CONFIG_LOCK_DIR"
             _manifest_config_apply_migrations "$config_file" "$dry_run"
             _manifest_config_lock_release "$lock_dir"
         fi

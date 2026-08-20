@@ -47,6 +47,11 @@ source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-yaml.sh"
 # Source plugin loader (must come after shared-utils for log_* functions)
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-plugin-loader.sh"
 
+# Shared advisory-lock primitives. MUST precede config (which takes a lock on
+# every write) and fleet (which takes the ship lock); both are thin wrappers
+# over this one implementation.
+source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-lock.sh"
+
 # Now source core modules after variables are set
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-config.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-os.sh"

@@ -7,19 +7,20 @@ security of those paths seriously and welcome responsible disclosure.
 ## Supported Versions
 
 Manifest CLI ships from a single trunk; each release supersedes the prior one. We
-provide security fixes for the current major series.
+provide security fixes for the **current major series only** — the one published as
+the latest release. Every earlier major is unsupported.
 
-| Version        | Supported          |
-| -------------- | ------------------ |
-| 50.x (current) | :white_check_mark: |
-| < 50.0         | :x:                |
-
-Always upgrade to the latest release before reporting:
+This is stated as a rule rather than a version table on purpose: a pinned table goes
+stale silently between releases and then misinforms exactly the person trying to
+find out whether they are covered. To see the supported series, read the latest
+release rather than this file:
 
 ```bash
 brew upgrade manifest
 manifest version
 ```
+
+Always upgrade to the latest release before reporting.
 
 ## Reporting a Vulnerability
 

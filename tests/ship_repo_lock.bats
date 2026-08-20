@@ -60,7 +60,9 @@ teardown() {
     dir="$(_manifest_repo_lock_dir_path)"
     [[ "$dir" == "$(manifest_install_paths_locks_dir)/repo-"*.lock.d ]]
     # locks is in the upgrade-preserved set so a swap can't delete a held lock.
-    manifest_install_paths_preserved_subdirs | grep -qx "locks"
+    local preserved
+    preserved="$(manifest_install_paths_preserved_subdirs)"
+    grep -qx "locks" <<<"$preserved"
 }
 
 @test "repo lock: path is stable for the same repo regardless of cwd" {

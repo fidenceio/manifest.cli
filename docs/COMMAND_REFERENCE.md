@@ -172,7 +172,7 @@ end of a completed `manifest ship fleet -y`.
 ```bash
 manifest status [repo|fleet] [--json] [--bootstrap]
 manifest doctor
-manifest security --check
+manifest security [--write]
 manifest recipe list
 manifest recipe show <recipe-id>
 manifest recipe explain <recipe-id>
@@ -249,9 +249,15 @@ prefix). `manifest init repo` and `manifest prep repo` scaffold a missing
 manifest upgrade
 manifest uninstall [--dry-run] [-y|--yes]
 manifest reinstall [--dry-run] [-y|--yes]
-manifest security
+manifest security [--write]
 manifest test [suite]
 ```
+
+`security` is **read-only by default**. It reports tracked private files, likely PII,
+and environment-file hygiene, and writes nothing. `--write` additionally saves a
+timestamped report under the docs archive. Neither mode writes
+`docs/SECURITY_ANALYSIS_REPORT.md`, which is hand-maintained. `--check` is still
+accepted and still means read-only, so existing hooks and recipes keep working.
 
 `uninstall` previews by default and preserves global config unless destructive removal is explicitly confirmed.
 

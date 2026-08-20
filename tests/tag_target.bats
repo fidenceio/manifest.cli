@@ -195,7 +195,9 @@ teardown() {
     # Annotated tag object now exists.
     [ "$(git cat-file -t v1.0.0)" = "tag" ]
     # The tag object carries an SSH signature block.
-    git cat-file tag v1.0.0 | grep -q "BEGIN SSH SIGNATURE"
+    local tag_obj
+    tag_obj="$(git cat-file tag v1.0.0)"
+    grep -q "BEGIN SSH SIGNATURE" <<<"$tag_obj"
 }
 
 @test "tag signing method: reports ssh:<key> when gpg.format=ssh and a key is set" {

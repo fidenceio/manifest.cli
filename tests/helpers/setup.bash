@@ -131,7 +131,12 @@ refute() {
 load_modules() {
     set -eo pipefail
     export MANIFEST_CLI_CORE_MODULES_DIR="$TEST_REPO_ROOT/modules"
-    # Always-needed minimal stack: shared utils + yaml.
+    # Always-needed minimal stack: shared utils + yaml + lock primitives.
+    # manifest-lock.sh has no dependencies of its own (it probes for log_warning
+    # rather than requiring it) and is consumed by both the config and fleet
+    # locks, so it belongs in the base stack alongside shared-utils.
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/system/manifest-lock.sh"
     # shellcheck disable=SC1091
     source "$TEST_REPO_ROOT/modules/core/manifest-requirements.sh"
     # shellcheck disable=SC1091

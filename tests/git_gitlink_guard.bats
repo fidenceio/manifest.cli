@@ -139,7 +139,9 @@ staged_gitlinks() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"Skipped nested git repo: nested"* ]]
     [ -z "$(staged_gitlinks)" ]
-    git ls-files --stage | grep -q "a.txt"
+    local staged
+    staged="$(git ls-files --stage)"
+    grep -q "a.txt" <<<"$staged"
 }
 
 @test "commit_changes: gitlink-only dirt commits nothing and succeeds" {
@@ -173,6 +175,8 @@ staged_gitlinks() {
     [[ "$output" == *"Skipped nested git repo: nested"* ]]
     [ "$(git rev-parse HEAD)" != "$before" ]
     # The commit carries the file change and no gitlink.
-    git show --stat HEAD | grep -q "seed.md"
+    local stat
+    stat="$(git show --stat HEAD)"
+    grep -q "seed.md" <<<"$stat"
     [ -z "$(git ls-tree HEAD | awk '$1 == "160000"')" ]
 }

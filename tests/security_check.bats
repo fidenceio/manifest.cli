@@ -31,12 +31,44 @@ teardown() {
     [ ! -d "$MANIFEST_CLI_PROJECT_ROOT/docs/zArchive" ]
 }
 
-@test "security without read-only flag writes reports" {
+@test "security with no flags is read-only — writing needs --write" {
+    # The default used to write two files and copy one over the tracked
+    # docs/SECURITY_ANALYSIS_REPORT.md, with --check as the only opt-out. A
+    # diagnostic verb must not mutate tracked content unless asked.
     run manifest_security
 
     [ "$status" -eq 0 ]
-    [ -f "$MANIFEST_CLI_PROJECT_ROOT/docs/SECURITY_ANALYSIS_REPORT.md" ]
-    find "$MANIFEST_CLI_PROJECT_ROOT/docs/zArchive" -name 'SECURITY_ANALYSIS_REPORT_v46.10.0_*.md' | grep -q .
+    [[ "$output" == *"Security audit passed with no issues."* ]]
+    [ ! -e "$MANIFEST_CLI_PROJECT_ROOT/docs/SECURITY_ANALYSIS_REPORT.md" ]
+    [ ! -d "$MANIFEST_CLI_PROJECT_ROOT/docs/zArchive" ]
+}
+
+@test "security --write archives a report and never touches the curated doc" {
+    run manifest_security --write
+
+    [ "$status" -eq 0 ]
+    # The timestamped archive copy is the run's output…
+    # `find … | grep -q .` exits on the first byte, so the producer reliably takes
+    # SIGPIPE under pipefail. The assertion is only "at least one match", so test
+    # for non-empty output directly instead of piping.
+    local archived
+    archived="$(find "$MANIFEST_CLI_PROJECT_ROOT/docs/zArchive" -name 'SECURITY_ANALYSIS_REPORT_v46.10.0_*.md')"
+    [ -n "$archived" ]
+    # …and the curated, tracked posture doc is left alone even on an explicit write.
+    [ ! -e "$MANIFEST_CLI_PROJECT_ROOT/docs/SECURITY_ANALYSIS_REPORT.md" ]
+}
+
+@test "security --write does not overwrite an existing curated report" {
+    mkdir -p "$MANIFEST_CLI_PROJECT_ROOT/docs"
+    printf 'CURATED CONTENT — hand maintained\n' \
+        > "$MANIFEST_CLI_PROJECT_ROOT/docs/SECURITY_ANALYSIS_REPORT.md"
+
+    run manifest_security --write
+
+    [ "$status" -eq 0 ]
+    local after
+    after="$(cat "$MANIFEST_CLI_PROJECT_ROOT/docs/SECURITY_ANALYSIS_REPORT.md")"
+    [ "$after" = "CURATED CONTENT — hand maintained" ]
 }
 
 @test "security: ignored private files are not reported as tracked" {
