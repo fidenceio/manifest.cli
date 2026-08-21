@@ -1,5 +1,17 @@
 # Changelog
 
+## [59.4.2] - 2026-08-21
+
+**Release Type:** Patch
+
+### Changes
+
+- Add GitHub Release publishing support
+- Update documentation and examples
+- Wire first-class CLI commands to inspectable built-in recipe definitions
+- Add regression coverage for the changed CLI workflow
+
+
 ## [59.4.1] - 2026-08-21
 
 **Release Type:** Patch
@@ -110,14 +122,3 @@
 - Perf(config): index each config file once instead of once per key
 - Docs(config): make USER_GUIDE the canonical layer model
 - Update 2 files before release
-
-
-## [58.0.5] - 2026-08-12
-
-**Release Type:** Patch
-
-### Changes
-
-- Add GitHub Release publishing support
-- Update release copy and configuration examples
-- Add regression coverage for the changed CLI workflow
