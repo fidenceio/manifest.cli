@@ -1412,15 +1412,23 @@ Run 'git switch -' to go back to the branch you came from." \
 
         # =====================================================================
         # HIDDEN LEGACY ALIASES (still functional, not shown in help)
+        #
+        # Each arm below carries a `# manifest:hidden` marker, and that marker —
+        # not this banner and not position in the file — is what exempts it.
+        # The banner cannot be the rule: "docs", "help" and "version" all sit
+        # below it and are current commands. tests/help_dispatch_parity.bats
+        # requires every UNMARKED arm to appear in display_help and in the bash
+        # completion, so adding a command without listing it fails the suite,
+        # and hiding one is a deliberate act you have to write down.
         # =====================================================================
 
         # Old "manifest fleet *" top-level — help plus replacement hints only
-        "fleet")
+        "fleet")  # manifest:hidden
             fleet_main "$@"
             ;;
 
         # Old "manifest sync" -> new "manifest prep repo"
-        "sync")
+        "sync")  # manifest:hidden
             if _manifest_cli_has_help_token "$@"; then
                 _render_help \
                     "manifest sync" \
@@ -1432,7 +1440,7 @@ Run 'git switch -' to go back to the branch you came from." \
             ;;
 
         # Old "manifest time" -> accessible via "manifest config time"
-        "time")
+        "time")  # manifest:hidden
             if _manifest_cli_has_help_token "$@"; then
                 _render_help \
                     "manifest time" \
@@ -1443,7 +1451,7 @@ Run 'git switch -' to go back to the branch you came from." \
             ;;
 
         # Old "manifest commit" — plumbing, called by ship
-        "commit")
+        "commit")  # manifest:hidden
             if _manifest_cli_has_help_token "$@"; then
                 _render_help \
                     "manifest commit <message>" \
@@ -1457,7 +1465,7 @@ Run 'git switch -' to go back to the branch you came from." \
             ;;
 
         # Old "manifest version" — plumbing, called by ship internally
-        "bump-version")
+        "bump-version")  # manifest:hidden
             if _manifest_cli_has_help_token "$@"; then
                 _render_help \
                     "manifest bump-version <patch|minor|major|revision>" \
@@ -1555,7 +1563,7 @@ Run 'git switch -' to go back to the branch you came from." \
         # main_cleanup() moves doc files and prunes empty dirs, so this
         # deprecated alias is mutating and must obey the same safe-by-default
         # contract as its replacement: preview unless -y is given.
-        "cleanup")
+        "cleanup")  # manifest:hidden
             local execution_mode="preview"
             local _local_only=false
             local cleanup_args=()

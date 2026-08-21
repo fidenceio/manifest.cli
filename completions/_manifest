@@ -39,6 +39,9 @@ _manifest() {
         'reinstall:Remove and install Manifest CLI again'
         'uninstall:Remove Manifest CLI'
         'revert:Check out an older version tag'
+        'test:Run diagnostic tests (needs Manifest Cloud)'
+        'cloud:Manifest Cloud connector (needs Manifest Cloud)'
+        'agent:Containerized cloud agent (needs Manifest Cloud)'
         'version:Show CLI version'
         'help:Show help'
     )
@@ -80,6 +83,12 @@ _manifest() {
                     ;;
                 env)
                     _values 'env subcommand' generate validate help
+                    ;;
+                # See completions/manifest.bash: 'cloud' subcommands are
+                # declared in-repo; 'agent' has only an argument-ignoring stub,
+                # so it deliberately gets no subcommand list.
+                cloud)
+                    _values 'cloud subcommand' config status generate
                     ;;
                 pr)
                     _values 'pr subcommand' "${pr_subs[@]}"

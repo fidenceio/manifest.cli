@@ -10,7 +10,7 @@ _manifest_complete() {
     words=("${COMP_WORDS[@]}")
 
     # Top-level commands shown in `manifest --help`
-    local top_cmds="first config init plan reconcile status recipe discover update add validate prep refresh docs topics ship pr doctor security env upgrade reinstall uninstall revert version help"
+    local top_cmds="first config init plan reconcile status recipe discover update add validate prep refresh docs topics ship pr doctor security env upgrade reinstall uninstall revert test cloud agent version help"
     local scopes="repo fleet"
     local bumps="patch minor major revision"
     local config_subs="show list get set unset describe doctor setup time"
@@ -41,6 +41,14 @@ _manifest_complete() {
                     ;;
                 env)
                     COMPREPLY=( $(compgen -W "generate validate help" -- "$cur") )
+                    return 0
+                    ;;
+                # 'cloud' subcommands are declared in manifest-core.sh's own
+                # usage block, so they are verifiable here. 'agent' is not:
+                # its only in-repo implementation is a stub that ignores its
+                # arguments, so no subcommand list is offered for it.
+                cloud)
+                    COMPREPLY=( $(compgen -W "config status generate" -- "$cur") )
                     return 0
                     ;;
                 config)

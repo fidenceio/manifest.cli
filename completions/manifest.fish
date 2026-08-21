@@ -64,6 +64,9 @@ complete -c manifest -n '__manifest_token_count 1' -a upgrade     -d 'Update Man
 complete -c manifest -n '__manifest_token_count 1' -a reinstall   -d 'Remove and install Manifest CLI again'
 complete -c manifest -n '__manifest_token_count 1' -a uninstall   -d 'Remove Manifest CLI'
 complete -c manifest -n '__manifest_token_count 1' -a revert      -d 'Check out an older version tag'
+complete -c manifest -n '__manifest_token_count 1' -a test        -d 'Run diagnostic tests (needs Manifest Cloud)'
+complete -c manifest -n '__manifest_token_count 1' -a cloud       -d 'Manifest Cloud connector (needs Manifest Cloud)'
+complete -c manifest -n '__manifest_token_count 1' -a agent       -d 'Containerized cloud agent (needs Manifest Cloud)'
 complete -c manifest -n '__manifest_token_count 1' -a version     -d 'Show CLI version'
 complete -c manifest -n '__manifest_token_count 1' -a help        -d 'Show help'
 
@@ -82,6 +85,9 @@ complete -c manifest -n '__manifest_token_count 2; and __manifest_path topics' -
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path config' -a 'show list get set unset describe doctor setup time'
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path recipe' -a 'list show explain help'
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path env'    -a 'generate validate help'
+# 'cloud' subcommands are declared in manifest-core.sh; 'agent' has only an
+# argument-ignoring stub in this repo, so it gets no subcommand list.
+complete -c manifest -n '__manifest_token_count 2; and __manifest_path cloud'  -a 'config status generate'
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path pr'     -a 'create status checks ready merge update queue policy fleet help'
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path uninstall' -a '-y --yes --dry-run --force --help'
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path reinstall' -a '-y --yes --dry-run --help'
