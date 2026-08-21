@@ -1875,7 +1875,7 @@ fleet_topics() {
             -h|--help|help)
                 _render_help \
                     "manifest topics fleet [-y|--yes] [--dry-run]" \
-                    "Project fleet repo-name slugs onto GitHub topics (additive-only)." \
+                    "Turn the parts of each repo's dotted name into GitHub topics. Only adds topics; never removes one." \
                     "Options" "  --dry-run    Explicit preview; no GitHub writes
   -y, --yes    Push the missing topics"
                 return 0
@@ -3798,7 +3798,7 @@ Use action-first commands:
   manifest validate fleet       Validate fleet configuration
   manifest add fleet <path>     Add a service to the fleet
   manifest docs fleet           Generate fleet documentation
-  manifest topics fleet         Project repo-name slugs onto GitHub topics
+  manifest topics fleet         Add GitHub topics from each repo name
   manifest pr fleet             Fleet-wide PR operations
   manifest ship fleet <bump>    Coordinated release
 
@@ -3890,7 +3890,8 @@ COMMAND DETAILS:
     under 'manifest pr fleet ...'.
 
   manifest topics fleet [-y|--yes] [--dry-run]
-    Project fleet repo-name slugs onto GitHub topics (additive-only; §9.1).
+    Turn the parts of each repo's dotted name into GitHub topics. Only adds
+    topics; never removes one, including ones you set by hand.
     Preview by default; -y pushes the missing topics. Requires topics.from_name
     (inner | all | all-but-first) in manifest.fleet.config.yaml, or host-local:
       manifest config set topics.from_name inner --layer global

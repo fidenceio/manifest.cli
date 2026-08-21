@@ -141,8 +141,10 @@ Refreshes generated metadata, docs, and fleet membership.
 ### `manifest ship`
 
 ```bash
-manifest ship repo patch|minor|major|revision [--dry-run] [-y|--yes] [--local] [--explain] [-i]
-manifest ship fleet patch|minor|major|revision [--dry-run] [-y|--yes] [--local]
+manifest ship repo patch|minor|major|revision [--dry-run] [-y|--yes] [--local] [--explain] [--force-bump] [-i]
+manifest ship fleet patch|minor|major|revision [--dry-run] [-y|--yes] [--local] [--force-bump] [--noprep]
+manifest ship repo resume [--dry-run] [-y|--yes]
+manifest ship fleet resume [--dry-run] [-y|--yes]
 ```
 
 A repo release can raise the version, generate docs, commit, tag, push, publish GitHub
@@ -153,6 +155,14 @@ that `HEAD` is still the commit it pushed.
 A fleet release applies the same policy to each release-enabled member that has
 something to release. Members that are already tagged and clean are listed and skipped
 as `no changes`.
+
+`--force-bump` releases even when nothing has changed since the last tag. It is
+forward-only: you get a new commit and a new tag, and no history is ever rewritten.
+
+`resume` picks up a release that stopped partway. It does not repeat the whole release —
+it continues the remaining steps for the version and tag already on disk, such as pushing
+the tag or publishing the formula. `manifest ship fleet resume` does the same for each
+stranded member, and does not accept `--local`.
 
 ### Version increments
 
@@ -343,6 +353,32 @@ allowed entries, comma-separated, where a trailing `_` means "treat as a prefix"
 `manifest init repo` and `manifest prep repo` create a missing `.env.example` — never
 overwriting an existing one — using the spec when an `env:` block exists, and honouring
 the configured prefix.
+
+## Recovery
+
+```bash
+manifest ship repo resume     # continue a release that stopped partway
+manifest revert               # check out an older version tag
+```
+
+`revert` lists the ten highest version tags and checks out the one you pick. It acts as
+soon as you choose — there is no `-y` step — but it only moves where you are looking. It
+rewrites nothing and deletes no commits, and git refuses if you have local changes that
+the checkout would overwrite.
+
+Afterwards you are in **detached HEAD**: viewing that tag rather than being on a branch.
+`git switch -` returns you to the branch you came from. `revert` is therefore a way to
+*look at* an old release, not a way to undo a published one — see §8.8 of
+[TRACKER.md](TRACKER.md) for the open question of whether a guarded `rollback` should
+exist at all.
+
+When a release fails partway, run `manifest ship repo resume` first. The failure report
+may also suggest `git reset --hard <sha>`; read it before running it. A release **begins**
+by committing whatever you had uncommitted (see
+[User Guide](USER_GUIDE.md#what-the-automatic-commit-includes-and-what-it-leaves-out)), so
+that `<sha>` is from before your own work was committed, and a hard reset discards your
+changes together with Manifest's. Check `git log` and `git status` first; `git reflog` can
+still find a commit you have moved away from.
 
 ## Maintenance
 

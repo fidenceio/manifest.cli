@@ -72,8 +72,10 @@ YAML
     run manifest_env_dispatch -h
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "manifest env <generate|validate>"
-    echo "$output" | grep -q "generate   Generate .env.example"
-    echo "$output" | grep -q "validate   Env prefix policy + drift + gitignore hygiene"
+    # Anchored on the subcommand name plus the opening words of its line, so a
+    # reworded description is caught while a reflowed continuation line is not.
+    echo "$output" | grep -q "generate   Write .env.example"
+    echo "$output" | grep -q "validate   Check variable-name prefixes"
 }
 
 @test "env dispatch: empty subcommand shows help but exits 1" {

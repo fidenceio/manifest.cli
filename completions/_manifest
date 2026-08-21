@@ -28,15 +28,17 @@ _manifest() {
         'validate:Validate fleet configuration'
         'prep:Connect remotes, pull latest'
         'refresh:Regenerate docs and metadata'
-        'docs:Generate fleet documentation'
-        'topics:Project repo-name slugs onto GitHub topics'
+        'docs:Regenerate documentation for a repo or fleet'
+        'topics:Add GitHub topics from each repo name'
         'ship:Publish a release (version + tag + push)'
         'pr:Pull-request operations (gh wrapper)'
         'doctor:Health check'
         'security:Security audit'
-        'env:Env schema artifacts (ENV-001)'
+        'env:Generate or check environment-variable files'
         'upgrade:Update Manifest CLI'
+        'reinstall:Remove and install Manifest CLI again'
         'uninstall:Remove Manifest CLI'
+        'revert:Check out an older version tag'
         'version:Show CLI version'
         'help:Show help'
     )
@@ -96,10 +98,10 @@ _manifest() {
                     _values 'option' -y --yes --depth --all-folders --force --dry-run --name --create-repo-private --create-repo-public --help
                     ;;
                 "ship repo")
-                    _values 'release type / option' "${bumps[@]}" -y --yes --local --dry-run --explain -i --interactive
+                    _values 'release type / option' "${bumps[@]}" resume -y --yes --local --dry-run --explain --force-bump -i --interactive
                     ;;
                 "ship fleet")
-                    _values 'release type / option' "${bumps[@]}" resume -y --yes --local --dry-run --explain --noprep
+                    _values 'release type / option' "${bumps[@]}" resume -y --yes --local --dry-run --explain --force-bump --noprep
                     ;;
                 "topics fleet")
                     _values 'option' -y --yes --dry-run --help

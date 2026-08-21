@@ -53,15 +53,17 @@ complete -c manifest -n '__manifest_token_count 1' -a add         -d 'Add a reso
 complete -c manifest -n '__manifest_token_count 1' -a validate    -d 'Validate fleet configuration'
 complete -c manifest -n '__manifest_token_count 1' -a prep        -d 'Connect remotes, pull latest'
 complete -c manifest -n '__manifest_token_count 1' -a refresh     -d 'Regenerate docs and metadata'
-complete -c manifest -n '__manifest_token_count 1' -a docs        -d 'Generate fleet documentation'
-complete -c manifest -n '__manifest_token_count 1' -a topics      -d 'Project repo-name slugs onto GitHub topics'
+complete -c manifest -n '__manifest_token_count 1' -a docs        -d 'Regenerate documentation for a repo or fleet'
+complete -c manifest -n '__manifest_token_count 1' -a topics      -d 'Add GitHub topics from each repo name'
 complete -c manifest -n '__manifest_token_count 1' -a ship        -d 'Publish a release (version + tag + push)'
 complete -c manifest -n '__manifest_token_count 1' -a pr          -d 'Pull-request operations (gh wrapper)'
 complete -c manifest -n '__manifest_token_count 1' -a doctor      -d 'Health check'
 complete -c manifest -n '__manifest_token_count 1' -a security    -d 'Security audit'
-complete -c manifest -n '__manifest_token_count 1' -a env         -d 'Env schema artifacts (ENV-001)'
+complete -c manifest -n '__manifest_token_count 1' -a env         -d 'Generate or check environment-variable files'
 complete -c manifest -n '__manifest_token_count 1' -a upgrade     -d 'Update Manifest CLI'
+complete -c manifest -n '__manifest_token_count 1' -a reinstall   -d 'Remove and install Manifest CLI again'
 complete -c manifest -n '__manifest_token_count 1' -a uninstall   -d 'Remove Manifest CLI'
+complete -c manifest -n '__manifest_token_count 1' -a revert      -d 'Check out an older version tag'
 complete -c manifest -n '__manifest_token_count 1' -a version     -d 'Show CLI version'
 complete -c manifest -n '__manifest_token_count 1' -a help        -d 'Show help'
 
@@ -89,9 +91,9 @@ complete -c manifest -n '__manifest_token_count 2; and __manifest_path reinstall
 complete -c manifest -n '__manifest_path init fleet' \
     -a '-y --yes --depth --all-folders --force --dry-run --name --create-repo-private --create-repo-public --help'
 complete -c manifest -n '__manifest_path ship repo' \
-    -a 'patch minor major revision -y --yes --local --dry-run --explain -i --interactive'
+    -a 'patch minor major revision resume -y --yes --local --dry-run --explain --force-bump -i --interactive'
 complete -c manifest -n '__manifest_path ship fleet' \
-    -a 'patch minor major revision resume -y --yes --local --dry-run --explain --noprep'
+    -a 'patch minor major revision resume -y --yes --local --dry-run --explain --force-bump --noprep'
 complete -c manifest -n '__manifest_path topics fleet' \
     -a '-y --yes --dry-run --help'
 complete -c manifest -n '__manifest_path plan fleet' \

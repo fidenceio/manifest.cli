@@ -451,6 +451,47 @@ own machine:
 ./scripts/run-tests-container.sh tests/docs_generation.bats
 ```
 
+## When A Release Goes Wrong
+
+A release touches several things in order — version, changelog, docs, commit, tag, push,
+GitHub Release, formula — so it can stop in the middle with some of them done.
+
+Start here:
+
+```bash
+manifest status            # where am I, and what is already published?
+manifest ship repo resume  # continue the remaining steps
+manifest ship repo resume -y
+```
+
+`resume` does not repeat the release. It picks up the steps that had not run yet for the
+version and tag already on disk — pushing the tag, publishing the formula, and so on. For
+a fleet, `manifest ship fleet resume` does the same for each member left stranded.
+
+**Read the suggested rollback command before you run it.** A failed release prints a
+recovery block that can include `git reset --hard <sha>`. Remember from
+[the section above](#what-the-automatic-commit-includes-and-what-it-leaves-out) that a
+release *starts* by committing whatever you had uncommitted — so that `<sha>` is from
+before your own work was committed, and a hard reset throws your changes away along with
+Manifest's. Look at `git log` and `git status` first. If you have already run it, `git
+reflog` can usually still find the commit you moved away from.
+
+To go and look at an earlier release:
+
+```bash
+manifest revert
+```
+
+This lists the ten highest version tags and checks out the one you pick. It acts
+immediately — there is no `-y` here — but it only changes what you are looking at: no
+commits are deleted and nothing is rewritten, and git refuses outright if you have local
+changes the checkout would overwrite. You end up in **detached HEAD**, meaning you are
+viewing that tag rather than sitting on a branch. Run `git switch -` to go back.
+
+So `revert` is for inspecting an old release, not for undoing a published one. Undoing a
+release that is already public is a deliberate, manual job — usually a new forward release
+rather than an attempt to erase the old one.
+
 ## Security And Maintenance
 
 ```bash

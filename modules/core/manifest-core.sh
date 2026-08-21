@@ -1032,7 +1032,7 @@ EOF
                     if _manifest_cli_has_help_token "$@"; then
                         _render_help \
                             "manifest topics fleet [-y|--yes] [--dry-run]" \
-                            "Project fleet repo-name slugs onto GitHub topics (additive-only)." \
+                            "Turn the parts of each repo's dotted name into GitHub topics. Only adds topics; never removes one." \
                             "Options" "  --dry-run    Explicit preview; no GitHub writes
   -y, --yes    Push the missing topics"
                         return 0
@@ -1042,7 +1042,7 @@ EOF
                 help|-h|--help)
                     _render_help \
                         "manifest topics <fleet>" \
-                        "Project repo-name slugs onto GitHub topics." \
+                        "Turn the parts of a repo's dotted name into GitHub topics." \
                         "Scopes" "  fleet   Stamp topics across fleet members"
                     ;;
                 "")
@@ -1197,7 +1197,13 @@ EOF
             if _manifest_cli_has_help_token "$@"; then
                 _render_help \
                     "manifest revert" \
-                    "Interactively check out a previous version tag."
+                    "Pick one of the last 10 version tags and check it out. Acts as soon as you
+choose — there is no -y step here. It rewrites nothing and deletes no commits.
+
+You end up in 'detached HEAD': looking at that tag rather than on a branch.
+Run 'git switch -' to go back to the branch you came from." \
+                    "See also" "  manifest status    which version you are on now
+  git tag            the full tag list (this menu shows only 10)"
                 return 0
             fi
             revert_version
@@ -1602,46 +1608,95 @@ EOF
 }
 
 # Display help
+#
+# This listing is the CLI's front door, so it is held to two rules that are
+# easy to break by accident:
+#
+#   1. Every command listed here must be dispatched, and every CURRENT command
+#      that is dispatched should be listed. It drifted badly once: eight
+#      supported verb-first fleet commands (discover/add/update/validate/plan/
+#      reconcile/topics/docs) were dispatched and documented in
+#      docs/COMMAND_REFERENCE.md but absent here, while the DEPRECATED
+#      'refresh fleet' spelling was advertised under "Core workflow".
+#      Deliberately still unlisted: only the arms under the "HIDDEN LEGACY
+#      ALIASES" banner below (fleet, sync, time, commit, bump-version,
+#      cleanup). Those are deprecated spellings or ship-internal plumbing;
+#      listing an alias beside the verb it aliases makes this longer, not
+#      clearer. Anything NOT under that banner belongs here — 'reinstall' sat
+#      outside it, documented in COMMAND_REFERENCE.md and next to 'uninstall'
+#      in the dispatcher, yet missing from this listing.
+#
+#   2. No claim here may overstate safety. The old '--local' line read
+#      "Preview locally without pushing" — but --local -y bumps VERSION,
+#      writes the changelog, regenerates docs, and COMMITS. In this CLI's own
+#      vocabulary "preview" means nothing is written, so that line told a user
+#      the one thing that would make them run it without reading.
 display_help() {
     cat << 'EOF'
 Manifest CLI
 
 Usage: manifest <command> [scope] [options]
 
-  Core workflow:
-    first                               Guided onboarding: inspect + set up
-    config                              Setup wizard / show configuration
-    init repo|fleet                     Scaffold repo or fleet
-    status                              Read-only snapshot (next bump, sync state)
-    recipe                              Inspect workflow recipe definitions
-    prep repo|fleet                     Connect remotes, pull latest
-    refresh repo|fleet                  Regenerate docs, metadata, membership
-    ship repo|fleet <patch|minor|major> Publish release (version + tag + push)
-         --local                        Preview locally without pushing
+Most commands only show you a plan. Add -y (or --yes) to actually make the
+changes. A few use their own word instead: 'plan fleet --apply' and
+'reconcile fleet --do'. [Cloud] marks a feature that needs a Cloud plugin.
 
-  Pull requests:                              (gh wrapper, no Cloud needed)
-    pr                                  Show current PR or prompt to create
-    pr create|status|ready              Create, view, mark-ready (gh)
-    pr checks|merge|update              CI status, merge, update branch (gh)
+  Getting started:
+    first                               Inspect this folder and set Manifest up
+    init repo|fleet                     Create the files a repo or fleet needs
+    doctor                              Check tools, config, repo health
+    status                              Show what would happen next (read-only)
+
+  Releasing:
+    ship repo|fleet <patch|minor|major> Release: version, tag, push, publish
+         --local                        All of that except tag, push, publish
+                                        — it still commits
+    recipe list|show|explain            See the exact steps a command runs
+    revert                              Check out an older tag; leaves you in
+                                        detached HEAD (no branch)
+
+  Fleet — a folder of repositories managed together:
+    discover fleet                      Find repos that could become members
+    add fleet <path>                    Add one repo to the member list
+    update fleet                        Re-scan membership, refresh metadata
+    validate fleet                      Check the member list against disk
+    plan fleet                          Write a plan of proposed repairs
+    reconcile fleet                     Carry out that plan
+    topics fleet                        Set GitHub topics from repo names
+    prep repo|fleet                     Add missing remotes, clone, pull
+
+  Documentation:
+    docs [fleet]                        Regenerate docs for a repo or fleet
+    refresh repo                        Regenerate docs and metadata only —
+                                        no version change, no network
+
+  Pull requests:                        (wraps the gh CLI; no Cloud needed)
+    pr                                  Show this branch's PR, or offer to open
+    pr create|status|ready              Open, view, mark ready for review
+    pr checks|merge|update              CI results, merge, update from base
     pr queue|policy                     Auto-merge, policy enforcement [Cloud]
 
-  Config:
-    config doctor                       Detect and fix config issues
+  Settings:
+    config                              Setup wizard, or print the settings
+    config list                         Every setting and where it came from
+    config get|set|unset <key>          Read or change one setting
+    config describe <key>               Its value at every layer. Start here
+                                        when a setting is not taking effect
+    config doctor                       Find and fix config problems
 
   Maintenance:
-    doctor                              Health check (deps, config, repo)
-    upgrade                             Update Manifest CLI  [Cloud]
+    security                            Audit for tracked secrets and PII
+    env generate|validate               Build .env.example from your spec, or
+                                        check env names, drift, and gitignore
+    upgrade                             Update the CLI [Cloud]. On Homebrew:
+                                        brew update && brew upgrade manifest
+    reinstall                           Remove and install it again
     uninstall                           Remove Manifest CLI
-    security                            Run security audit
-    env generate|validate               Env schema artifacts (ENV-001)
     test                                Run diagnostic tests [Cloud]
 
-  Cloud:                                       [Cloud]
-    cloud config|status|generate        Manifest Cloud connector
-    agent init|auth|status              Containerized cloud agent
-
-  Recovery:
-    revert                              Roll back to a previous version
+  Cloud — optional; everything above works without it:
+    cloud config|status|generate        Manifest Cloud connector [Cloud]
+    agent init|auth|status              Containerized cloud agent [Cloud]
 
   Info:
     version                             Show CLI version

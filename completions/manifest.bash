@@ -10,7 +10,7 @@ _manifest_complete() {
     words=("${COMP_WORDS[@]}")
 
     # Top-level commands shown in `manifest --help`
-    local top_cmds="first config init plan reconcile status recipe discover update add validate prep refresh docs topics ship pr doctor security env upgrade uninstall version help"
+    local top_cmds="first config init plan reconcile status recipe discover update add validate prep refresh docs topics ship pr doctor security env upgrade reinstall uninstall revert version help"
     local scopes="repo fleet"
     local bumps="patch minor major revision"
     local config_subs="show list get set unset describe doctor setup time"
@@ -68,11 +68,11 @@ _manifest_complete() {
                     return 0
                     ;;
                 "ship repo")
-                    COMPREPLY=( $(compgen -W "$bumps -y --yes --local --dry-run --explain -i --interactive" -- "$cur") )
+                    COMPREPLY=( $(compgen -W "$bumps resume -y --yes --local --dry-run --explain --force-bump -i --interactive" -- "$cur") )
                     return 0
                     ;;
                 "ship fleet")
-                    COMPREPLY=( $(compgen -W "$bumps resume -y --yes --local --dry-run --explain --noprep" -- "$cur") )
+                    COMPREPLY=( $(compgen -W "$bumps resume -y --yes --local --dry-run --explain --force-bump --noprep" -- "$cur") )
                     return 0
                     ;;
                 "topics fleet")

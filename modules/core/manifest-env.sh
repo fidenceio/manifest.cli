@@ -204,14 +204,16 @@ manifest_env_generate() {
             -h|--help)
                 _render_help \
                     "manifest env generate [--check] [--dry-run] [-y|--yes]" \
-                    "Generate env bridge artifacts from the spec env: block (ENV-001)." \
+                    "Write the env files your spec's env: block describes, so the variable
+names live in one place instead of being retyped per deployment target." \
                     "Options" "  --dry-run    Explicit preview; no writes (default)
-  --check      Drift gate: exit 1 if any generated artifact is stale
-  -y, --yes    Write the artifacts" \
-                    "Artifacts" "  .env.example                  stored-name schema template
-  k8s/env/configmap.yaml        non-secret bridge (when k8s/ exists)
-  k8s/env/external-secret.yaml  secret bridge via ESO (when k8s/ exists)
-  Dockerfile bridge block       build-time publics ARG→ENV (when present)"
+  --check      Exit 1 if any generated file is out of date (for CI)
+  -y, --yes    Write the files" \
+                    "Files written" "  .env.example                  the variable names, with no values
+  k8s/env/configmap.yaml        Kubernetes non-secret values (if k8s/ exists)
+  k8s/env/external-secret.yaml  Kubernetes secret refs, via External Secrets
+                                Operator (if k8s/ exists)
+  Dockerfile bridge block       build-time public vars, ARG→ENV (if present)"
                 return 0
                 ;;
             *)
@@ -227,9 +229,13 @@ manifest_env_generate() {
     spec_file="$(_manifest_env_spec_file "$project_root")"
 
     if ! _manifest_env_spec_ready "$project_root"; then
+        # No STANDARD.md reference here. It is a Fidence-workspace document and
+        # does not ship with the CLI, so for anyone who installed via Homebrew
+        # this message used to cite a file they cannot open.
         echo "No spec env: block found (service.spec.yaml / app.spec.yaml)."
-        echo "Declare the repo's environment schema there first — it is the source"
-        echo "of truth (STANDARD.md §2.7 D-ENV-2). Scaffold a starter with: manifest init repo -y"
+        echo "List your environment variables under 'env:' in that file first — it is"
+        echo "the one place they are declared, and everything else is generated from"
+        echo "it. To create a starter spec: manifest init repo -y"
         # Nothing to generate is not drift.
         return 0
     fi
@@ -413,9 +419,12 @@ manifest_env_dispatch() {
         help|-h|--help|"")
             _render_help \
                 "manifest env <generate|validate>" \
-                "Manage env schema artifacts (ENV-001, STANDARD.md §2.7)." \
-                "Subcommands" "  generate   Generate .env.example + k8s/Dockerfile bridges from the spec env: block
-  validate   Env prefix policy + drift + gitignore hygiene (read-only)"
+                "Keep your environment-variable names in one place — the spec's env: block —
+and generate the per-target files from it." \
+                "Subcommands" "  generate   Write .env.example, plus Kubernetes and Dockerfile files, from
+             the spec's env: block
+  validate   Check variable-name prefixes, whether the generated files are
+             out of date, and that real .env files are gitignored (read-only)"
             [[ -z "${1:-}" ]] && return 1
             return 0
             ;;
