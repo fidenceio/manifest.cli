@@ -115,7 +115,7 @@ teardown() {
 # grep takes SIGPIPE, and pipefail turns that into status 141 — which failed
 # these two tests intermittently in CI (twice on the Linux leg, 2026-08-21 and
 # on the v59.3.0 push) while passing locally. -m1 makes grep itself stop, so
-# nothing writes into a closed pipe. See TRACKER §9.21.
+# nothing writes into a closed pipe. See TRACKER §9.27(b), which absorbed §9.21.
 _first_line() { grep -m1 -nE "$2" "$1" | cut -d: -f1; }
 
 @test "tap-trust: installer trusts before brew install/upgrade" {

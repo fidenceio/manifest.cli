@@ -91,7 +91,7 @@ during release automation:
   `.git-hooks/pre-commit` are never scanned. This is not academic: bash exempts a
   `!`-prefixed command from errexit, and 114 bats assertions were consequently
   inert — shellcheck's **SC2251** detects exactly that shape but is `info`
-  severity, below the only blocking job. (TRACKER §8.6b)
+  severity, below the only blocking job. (TRACKER §9.27(b))
 - `manifest status`, `manifest doctor`, and `manifest security` provide read-only
   diagnostics before consequential commands run. `manifest security` is read-only
   by default; `--write` archives a timestamped report and writes nothing else.
@@ -123,7 +123,7 @@ been triaged to the same depth. Treat the audit as a lead list, not a defect lis
 clean): macOS, FreeBSD and WSL2 have no executable evidence and cannot get any
 without provisioned images; the Linux evidence base is Alpine/musl on a mutable
 tag, not the Ubuntu-LTS glibc target; eight mutation routes were offline-
-infeasible. (TRACKER §9.16, §8.7)
+infeasible. (TRACKER §9.20's absorbed §9.16 ledger, §8.7)
 
 This document should never claim that an older audit is current, and should never
 list controls without their known gaps. Update it after any dedicated security

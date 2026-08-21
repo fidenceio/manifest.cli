@@ -132,7 +132,7 @@ refute() {
 # purpose still passed on Alpine and failed on macOS.
 #
 # No pipe here on purpose: it also keeps this helper out of the
-# producer-into-early-exiting-consumer SIGPIPE class (§9.21).
+# producer-into-early-exiting-consumer SIGPIPE class (§9.27(b), which absorbed §9.21).
 sha256_of() {
     local out
     if command -v shasum >/dev/null 2>&1; then
