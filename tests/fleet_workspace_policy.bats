@@ -5,8 +5,12 @@
 # it, and the preview neither ran nor mentioned it — so a preview could close
 # with "Re-run with -y to apply this plan" for an apply that was guaranteed to
 # refuse (found live 2026-08-21: a 19-releaseable plan over a hard-failing
-# gate). These tests pin the preview verdict surface, the announce escape
-# hatch, and the apply refusal.
+# gate). These tests pin the preview surface, the apply refusal, and — since
+# the default was inverted on 2026-08-21 before either behavior shipped — that
+# preview ANNOUNCES the gate rather than executing it, with
+# MANIFEST_CLI_FLEET_PREVIEW_POLICY_GATE=run as the opt-in for callers who want
+# the real verdict. Executing a workspace-supplied script is opt-in because the
+# CLI does not own that script; see _fleet_preview_workspace_policy.
 
 load 'helpers/setup'
 
@@ -55,6 +59,7 @@ write_gate() { # $1 = body; creates an executable gate script
 @test "ship fleet preview runs a passing policy gate and keeps the apply recommendation" {
     write_ship_fixture
     write_gate 'echo gate-ran-ok; exit 0'
+    export MANIFEST_CLI_FLEET_PREVIEW_POLICY_GATE=run
 
     run_manifest ship fleet patch
 
@@ -68,6 +73,7 @@ write_gate() { # $1 = body; creates an executable gate script
 @test "ship fleet preview surfaces a failing policy gate and withdraws the bare recommendation" {
     write_ship_fixture
     write_gate 'echo probing; echo "BLOCKING-FINDING-XYZ" >&2; exit 3'
+    export MANIFEST_CLI_FLEET_PREVIEW_POLICY_GATE=run
 
     run_manifest ship fleet patch
 
@@ -90,6 +96,36 @@ write_gate() { # $1 = body; creates an executable gate script
     [ "$status" -eq 0 ]
     [[ "$output" != *"Workspace policy gate"* ]]
     [[ "$output" == *"No changes written. Re-run with -y to apply this plan:"* ]]
+}
+
+# The default is the security-relevant case: preview must not execute a script
+# the CLI does not own. A marker file proves non-execution rather than trusting
+# the absence of a log line, and no env var is set — that is the whole point.
+@test "ship fleet preview does NOT execute the policy gate by default" {
+    write_ship_fixture
+    write_gate "touch '$SCRATCH/work/gate-executed'; exit 0"
+
+    run_manifest ship fleet patch
+
+    [ "$status" -eq 0 ]
+    [ ! -e "$SCRATCH/work/gate-executed" ]
+    [[ "$output" == *"Workspace policy gate: scripts/manifest-fleet-preflight.sh (not run in preview; apply refuses if it fails)"* ]]
+    # An un-run gate is not a failing gate: the recommendation still stands.
+    [[ "$output" == *"No changes written. Re-run with -y to apply this plan:"* ]]
+}
+
+# An unrecognized value must announce, not execute — fail safe toward the
+# non-executing branch rather than treating "anything not announce" as run.
+@test "ship fleet preview announces on an unrecognized policy-gate mode" {
+    write_ship_fixture
+    write_gate "touch '$SCRATCH/work/gate-executed'; exit 0"
+    export MANIFEST_CLI_FLEET_PREVIEW_POLICY_GATE=yes-please
+
+    run_manifest ship fleet patch
+
+    [ "$status" -eq 0 ]
+    [ ! -e "$SCRATCH/work/gate-executed" ]
+    [[ "$output" == *"(not run in preview; apply refuses if it fails)"* ]]
 }
 
 @test "MANIFEST_CLI_FLEET_PREVIEW_POLICY_GATE=announce names the gate without executing it" {

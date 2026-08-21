@@ -2408,11 +2408,25 @@ _fleet_preflight_workspace_policy() {
 # Preview-side counterpart of _fleet_preflight_workspace_policy. Apply refuses
 # on that gate, so a preview that stays silent about it can recommend a -y that
 # is guaranteed to refuse (found live 2026-08-21: a 19-releaseable plan whose
-# policy gate hard-fails on blocking findings). The gate is the workspace's own
-# check — read-only by contract, and apply would execute it moments later — so
-# preview runs it by default and prints the verdict. Set
-# MANIFEST_CLI_FLEET_PREVIEW_POLICY_GATE=announce to name the gate without
-# executing it (slow gates). Output is captured; only a failure prints a tail.
+# policy gate hard-fails on blocking findings).
+#
+# The gate is NOT executed by default. It is a workspace-supplied script the CLI
+# does not own: in someone else's fleet it may be slow, or have side effects, and
+# a preview that runs arbitrary repo code is not a preview. So the default names
+# the gate and says apply will run it; set
+# MANIFEST_CLI_FLEET_PREVIEW_POLICY_GATE=run to opt in to executing it and
+# seeing the real verdict. Anything other than an explicit "run" announces, so an
+# unrecognized value fails safe toward not executing.
+#
+# (This default was `run` when the feature was written and was inverted on
+# 2026-08-21, before either behavior shipped. The argument that settled it: the
+# earlier reasoning — "apply runs the same script a keystroke later, so preview
+# isn't widening the trust boundary" — holds for the fleet you own and not for
+# the fleets this CLI gets installed against.)
+#
+# Executability IS still checked either way. That is a stat, not an execution,
+# and a non-executable gate makes apply refuse, so it is worth forecasting free.
+#
 # Never fails the preview itself: the verdict only changes the closing
 # recommendation. Sets _MANIFEST_CLI_FLEET_PREVIEW_GATE_VERDICT to one of
 # absent|ok|failed|announced.
@@ -2423,14 +2437,14 @@ _fleet_preview_workspace_policy() {
     [[ -f "$gate" ]] || return 0
 
     echo ""
-    if [[ "${MANIFEST_CLI_FLEET_PREVIEW_POLICY_GATE:-run}" == "announce" ]]; then
-        _MANIFEST_CLI_FLEET_PREVIEW_GATE_VERDICT="announced"
-        echo "Workspace policy gate: scripts/manifest-fleet-preflight.sh (not run in preview; apply refuses if it fails)"
-        return 0
-    fi
     if [[ ! -x "$gate" ]]; then
         _MANIFEST_CLI_FLEET_PREVIEW_GATE_VERDICT="failed"
         echo "Workspace policy gate: scripts/manifest-fleet-preflight.sh is not executable — apply would REFUSE."
+        return 0
+    fi
+    if [[ "${MANIFEST_CLI_FLEET_PREVIEW_POLICY_GATE:-announce}" != "run" ]]; then
+        _MANIFEST_CLI_FLEET_PREVIEW_GATE_VERDICT="announced"
+        echo "Workspace policy gate: scripts/manifest-fleet-preflight.sh (not run in preview; apply refuses if it fails)"
         return 0
     fi
 

@@ -104,7 +104,20 @@ SH
     [ "$(cat "$SCRATCH/work/svc-a/VERSION")" = "1.0.0" ]
 }
 
-@test "ship fleet preview never invokes workspace policy gate" {
+# Contract history, 2026-08-21. 282f875 briefly made preview EXECUTE this gate,
+# to stop preview closing with "re-run with -y" for an apply guaranteed to
+# refuse (found live on a 19-releaseable plan). The default was then inverted to
+# announce, before either behavior shipped: the gate is a workspace-supplied
+# script the CLI does not own, and in someone else's fleet it may be slow or
+# side-effectful, so a preview must not run it unasked.
+#
+# So this test's original claim — preview does not execute the gate — holds
+# again, and now carries a second half: preview must still NAME the gate, or the
+# -y recommendation keeps the false confidence 282f875 set out to fix.
+#
+# Opt-in execution (MANIFEST_CLI_FLEET_PREVIEW_POLICY_GATE=run) and the verdict
+# surface are covered in fleet_workspace_policy.bats.
+@test "ship fleet preview announces the workspace policy gate without running it" {
     write_two_member_fleet
     mkdir -p "$SCRATCH/work/scripts"
     cat > "$SCRATCH/work/scripts/manifest-fleet-preflight.sh" <<'SH'
@@ -117,5 +130,9 @@ SH
     run_manifest ship fleet patch
 
     [ "$status" -eq 0 ]
+    # Not executed — the stub's marker file is the proof, not the absence of a
+    # log line, which a refactor could drop without changing behaviour.
     [ ! -e "$SCRATCH/work/invoked" ]
+    # But named, so preview is not silent about what apply is going to do.
+    [[ "$output" == *"not run in preview; apply refuses if it fails"* ]]
 }
