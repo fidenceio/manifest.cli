@@ -71,8 +71,8 @@ teardown() {
     grep -qx "homebrew_formula" "$ORDER_LOG"
     # ...and the release step is recorded strictly before the formula step.
     local gh_line brew_line
-    gh_line="$(grep -n '^github_release$' "$ORDER_LOG" | head -1 | cut -d: -f1)"
-    brew_line="$(grep -n '^homebrew_formula$' "$ORDER_LOG" | head -1 | cut -d: -f1)"
+    gh_line="$(grep -m1 -n '^github_release$' "$ORDER_LOG" | cut -d: -f1)"
+    brew_line="$(grep -m1 -n '^homebrew_formula$' "$ORDER_LOG" | cut -d: -f1)"
     [ "$gh_line" -lt "$brew_line" ]
 }
 
@@ -167,8 +167,8 @@ teardown() {
     grep -qx "github_release_view_ok" "$ORDER_LOG"
     grep -qx "homebrew_formula_retry" "$ORDER_LOG"
     local gh_line brew_line
-    gh_line="$(grep -n '^github_release_view_ok$' "$ORDER_LOG" | head -1 | cut -d: -f1)"
-    brew_line="$(grep -n '^homebrew_formula_retry$' "$ORDER_LOG" | head -1 | cut -d: -f1)"
+    gh_line="$(grep -m1 -n '^github_release_view_ok$' "$ORDER_LOG" | cut -d: -f1)"
+    brew_line="$(grep -m1 -n '^homebrew_formula_retry$' "$ORDER_LOG" | cut -d: -f1)"
     [ "$gh_line" -lt "$brew_line" ]
 }
 

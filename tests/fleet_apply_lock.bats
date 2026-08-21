@@ -181,7 +181,7 @@ teardown() {
 @test "fleet lock: acquired only after the read-only pre-flights, never in preview" {
     local f="$TEST_REPO_ROOT/modules/fleet/manifest-fleet.sh"
     local preflight_line acquire_line preview_return_line
-    acquire_line=$(grep -n '_fleet_lock_acquire "\$fleet_lock"' "$f" | head -1 | cut -d: -f1)
+    acquire_line=$(grep -m1 -n '_fleet_lock_acquire "\$fleet_lock"' "$f" | cut -d: -f1)
     # The pre-flight / preview-return strings appear in several fleet functions;
     # pick the occurrence in fleet_ship's body = the greatest line below acquire.
     preflight_line=$(grep -n "_fleet_preflight_on_default_branch" "$f" | cut -d: -f1 \

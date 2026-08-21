@@ -19,7 +19,10 @@ snapshot_tree() {
         if [[ -e "$p" ]]; then
             if [[ -f "$p" ]]; then
                 local hash
-                hash="$(shasum -a 256 "$p" 2>/dev/null | awk '{print $1}')"
+                # UNHASHABLE rather than an empty field: an unreadable file is
+                # tolerated (as before), but it must not compare equal to every
+                # other unreadable file, which is what "" did.
+                hash="$(sha256_of "$p" 2>/dev/null)" || hash="UNHASHABLE"
                 printf '%s\t%s\n' "$hash" "$p"
             elif [[ -L "$p" ]]; then
                 printf 'SYMLINK:%s\t%s\n' "$(readlink "$p")" "$p"
@@ -33,7 +36,7 @@ snapshot_tree() {
                                 printf 'SYMLINK:%s\t%s\n' "$(readlink "$path")" "$p/${path#./}"
                             else
                                 local h
-                                h="$(shasum -a 256 "$path" 2>/dev/null | awk '{print $1}')"
+                                h="$(sha256_of "$path" 2>/dev/null)" || h="UNHASHABLE"
                                 printf '%s\t%s\n' "$h" "$p/${path#./}"
                             fi
                         done

@@ -57,7 +57,11 @@ teardown() {
     [ "$(git config --get "branch.$BRANCH.remote")" = "origin" ]
     [ "$(git config --get "branch.$BRANCH.merge")" = "refs/heads/$BRANCH" ]
     # The user-visible payoff: ahead/behind works without a manual push first.
-    [[ "$(git status -sb | head -1)" == *"$BRANCH...origin/$BRANCH"* ]]
+    # Captured whole and sliced rather than piped into `head -1`, which would
+    # close the pipe on git mid-write and surface as pipefail status 141.
+    local sb
+    sb="$(git status -sb)"
+    [[ "${sb%%$'\n'*}" == *"$BRANCH...origin/$BRANCH"* ]]
 }
 
 @test "push_changes: announces the config write rather than doing it silently" {

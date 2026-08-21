@@ -103,8 +103,12 @@ _seed_prior_install() {
 }
 
 # Compute the sha256 of a file (portable across bats hosts).
+#
+# Delegates rather than calling shasum: the Alpine test container has no
+# shasum, which made this helper's "portable" claim false — see sha256_of in
+# tests/helpers/setup.bash for what that cost.
 _sha() {
-    shasum -a 256 "$1" | awk '{print $1}'
+    sha256_of "$1"
 }
 
 @test "atomic-upgrade: fresh-install creates current symlink and versioned dir" {
@@ -176,17 +180,17 @@ _sha() {
     printf '# preserved-config-sentinel\n' >> "$HOME/.manifest-cli/manifest.config.global.yaml"
 
     local logs_sha audit_sha config_sha
-    logs_sha="$(shasum -a 256 "$HOME/.manifest-cli/logs/op.log" | awk '{print $1}')"
-    audit_sha="$(shasum -a 256 "$HOME/.manifest-cli/audit/event.jsonl" | awk '{print $1}')"
-    config_sha="$(shasum -a 256 "$HOME/.manifest-cli/manifest.config.global.yaml" | awk '{print $1}')"
+    logs_sha="$(_sha "$HOME/.manifest-cli/logs/op.log")"
+    audit_sha="$(_sha "$HOME/.manifest-cli/audit/event.jsonl")"
+    config_sha="$(_sha "$HOME/.manifest-cli/manifest.config.global.yaml")"
 
     _run_installer
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
 
     # Each user-state file unchanged.
-    [ "$(shasum -a 256 "$HOME/.manifest-cli/logs/op.log" | awk '{print $1}')" = "$logs_sha" ]
-    [ "$(shasum -a 256 "$HOME/.manifest-cli/audit/event.jsonl" | awk '{print $1}')" = "$audit_sha" ]
-    [ "$(shasum -a 256 "$HOME/.manifest-cli/manifest.config.global.yaml" | awk '{print $1}')" = "$config_sha" ]
+    [ "$(_sha "$HOME/.manifest-cli/logs/op.log")" = "$logs_sha" ]
+    [ "$(_sha "$HOME/.manifest-cli/audit/event.jsonl")" = "$audit_sha" ]
+    [ "$(_sha "$HOME/.manifest-cli/manifest.config.global.yaml")" = "$config_sha" ]
 }
 
 @test "atomic-upgrade: upgrade does not rewrite shell profiles (duplicate-write defect regression)" {
@@ -204,7 +208,7 @@ export MANIFEST_CLI_FOO=bar
 export PATH="$HOME/.local/bin:$PATH"
 EOF
     local zshrc_sha
-    zshrc_sha="$(shasum -a 256 "$HOME/.zshrc" | awk '{print $1}')"
+    zshrc_sha="$(_sha "$HOME/.zshrc")"
 
     _run_installer
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
@@ -215,7 +219,7 @@ EOF
     [ "$n" = "0" ]
 
     # Shasum unchanged.
-    [ "$(shasum -a 256 "$HOME/.zshrc" | awk '{print $1}')" = "$zshrc_sha" ]
+    [ "$(_sha "$HOME/.zshrc")" = "$zshrc_sha" ]
 }
 
 @test "atomic-upgrade: prune keeps N most recent versions" {

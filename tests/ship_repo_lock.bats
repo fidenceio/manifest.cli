@@ -288,7 +288,7 @@ teardown() {
     acquire_line=$(grep -n '_manifest_ship_repo_lock_acquire' "$f" \
         | grep -v '_manifest_ship_repo_lock_acquire()' | tail -1 | cut -d: -f1)
     # The preview early-return guard (writes nothing -> needs no lock).
-    preview_return_line=$(grep -n 'execution_mode.*==.*preview' "$f" | head -1 | cut -d: -f1)
+    preview_return_line=$(grep -m1 -n 'execution_mode.*==.*preview' "$f" | cut -d: -f1)
     [ -n "$acquire_line" ]
     [ -n "$preview_return_line" ]
     # Acquisition is wired AFTER the preview early-return, so preview never locks.

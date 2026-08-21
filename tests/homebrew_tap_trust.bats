@@ -110,7 +110,13 @@ teardown() {
 # first (→ silent no-op under enforced tap-trust) trips a red test.
 
 # Echo the 1-based line of the first match of $2 in file $1, or empty.
-_first_line() { grep -nE "$2" "$1" | head -1 | cut -d: -f1; }
+#
+# `grep -m1` rather than `grep | head -1`: head closes the pipe after one line,
+# grep takes SIGPIPE, and pipefail turns that into status 141 — which failed
+# these two tests intermittently in CI (twice on the Linux leg, 2026-08-21 and
+# on the v59.3.0 push) while passing locally. -m1 makes grep itself stop, so
+# nothing writes into a closed pipe. See TRACKER §9.21.
+_first_line() { grep -m1 -nE "$2" "$1" | cut -d: -f1; }
 
 @test "tap-trust: installer trusts before brew install/upgrade" {
     f="$TEST_REPO_ROOT/install-cli.sh"

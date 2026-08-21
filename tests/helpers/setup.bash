@@ -112,6 +112,40 @@ refute() {
     return 0
 }
 
+# Print the sha256 of a file, on any platform the suite runs on.
+#
+# `shasum` is a Perl script: macOS ships it, and the Alpine test container does
+# NOT (it has coreutils' sha256sum instead). Tests that called `shasum` bare
+# behaved two different wrong ways in CI depending on whether the file had run
+# load_modules, which is what sets pipefail:
+#
+#   with pipefail    `x="$(shasum f | awk '{print $1}')"` -> 127 propagates,
+#                    the test FAILS loudly (status.bats did this on every
+#                    Linux leg since 62adae6)
+#   without pipefail awk exits 0 and swallows the 127, so x is EMPTY and the
+#                    later `[ "$after" = "$before" ]` compares "" to "" and
+#                    PASSES VACUOUSLY
+#
+# The second is the dangerous one: the vacuously-passing assertions were the
+# uninstall/path-modification tripwires, which exist to prove a decoy file was
+# never touched. Verified 2026-08-21 by mutation — corrupting the decoy on
+# purpose still passed on Alpine and failed on macOS.
+#
+# No pipe here on purpose: it also keeps this helper out of the
+# producer-into-early-exiting-consumer SIGPIPE class (§9.21).
+sha256_of() {
+    local out
+    if command -v shasum >/dev/null 2>&1; then
+        out="$(shasum -a 256 "$1")" || return 1
+    elif command -v sha256sum >/dev/null 2>&1; then
+        out="$(sha256sum "$1")" || return 1
+    else
+        printf 'sha256_of: no sha256 tool available (need shasum or sha256sum)\n' >&2
+        return 1
+    fi
+    printf '%s\n' "${out%% *}"
+}
+
 # Module functions must execute under the shell options they ship with.
 # manifest-core.sh:7 sets `set -eo pipefail` at top level, but that is the
 # entrypoint module — sourcing it here would also run its path resolution and

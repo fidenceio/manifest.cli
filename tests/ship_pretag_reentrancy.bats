@@ -102,8 +102,8 @@ state_of() { manifest_ship_repo_pretag_state "$1"; }
 @test "pretag: probe runs before the auto-commit and gates the bump" {
     local f="$TEST_REPO_ROOT/modules/workflow/manifest-orchestrator.sh"
     local probe_line autocommit_line bump_guard_line
-    probe_line=$(grep -n 'pretag_state="\$(manifest_ship_repo_pretag_state' "$f" | head -1 | cut -d: -f1)
-    autocommit_line=$(grep -n 'Uncommitted changes detected' "$f" | head -1 | cut -d: -f1)
+    probe_line=$(grep -m1 -n 'pretag_state="\$(manifest_ship_repo_pretag_state' "$f" | cut -d: -f1)
+    autocommit_line=$(grep -m1 -n 'Uncommitted changes detected' "$f" | cut -d: -f1)
     bump_guard_line=$(grep -n 'resume_in_place.*!=.*true' "$f" | tail -1 | cut -d: -f1)
     # Probe precedes the auto-commit (so the dirty VERSION signal survives) ...
     [ "$probe_line" -lt "$autocommit_line" ]

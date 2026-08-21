@@ -51,3 +51,41 @@ setup() {
     grep -qE '^set -eo pipefail$' "$TEST_REPO_ROOT/modules/core/manifest-core.sh"
     grep -qE '^\s*set -eo pipefail$' "$TEST_REPO_ROOT/tests/helpers/setup.bash"
 }
+
+# Same theme as the options above: a suite assertion that cannot fail is worse
+# than a missing one. `shasum` is a Perl script macOS ships and the Alpine CI
+# container does not, so a bare call there exits 127 — and pipefail decides
+# whether that is loud or silent:
+#
+#   with pipefail    status.bats FAILED on every Linux leg since 62adae6
+#   without pipefail awk swallowed the 127, the captured sum was EMPTY, and
+#                    `[ "$after" = "$before" ]` compared "" to "" and PASSED
+#
+# The silent form had disabled twenty assertions across the uninstall and
+# path-modification tripwires — the ones that exist to prove a decoy file was
+# never touched. Proved by mutation 2026-08-21: corrupting the decoy on purpose
+# still passed on Alpine and failed on macOS. Route file hashing through
+# sha256_of (helpers/setup.bash), which resolves the tool itself.
+@test "suite portability: files are hashed via sha256_of, never a bare shasum call" {
+    # Only the file-hashing form is flagged: `... | shasum -a 256 | cut` hashes
+    # stdin and is already portable where it appears under a `command -v` probe.
+    local pat='(shasum|sha256sum)([[:space:]]+-a[[:space:]]+256)?[[:space:]]+"'
+
+    # Positive control. sha256_of's own two branches are the only legitimate
+    # hits; if the pattern or the path stops matching, the scan below would
+    # report a clean suite forever — the exact failure mode being guarded.
+    local control
+    control="$(grep -cE "$pat" "$TEST_REPO_ROOT/tests/helpers/setup.bash")"
+    [ "$control" -eq 2 ]
+
+    local offenders
+    offenders="$(grep -rnE "$pat" "$TEST_REPO_ROOT/tests" \
+        | grep -v '/helpers/setup.bash:' || true)"
+
+    if [ -n "$offenders" ]; then
+        echo "Bare file-hashing shasum/sha256sum call(s) in the suite:" >&2
+        echo "$offenders" >&2
+        echo "Use sha256_of \"\$file\" — it resolves shasum or sha256sum per host." >&2
+        return 1
+    fi
+}

@@ -638,10 +638,10 @@ YAML
     } > "$SCRATCH/manifest.fleet.tsv"
 
     local before after
-    before="$(shasum "$SCRATCH/manifest.fleet.tsv" | awk '{print $1}')"
+    before="$(sha256_of "$SCRATCH/manifest.fleet.tsv")"
     run _manifest_status_fleet "$SCRATCH" "false" "off" "true"
     [ "$status" -eq 0 ]
-    after="$(shasum "$SCRATCH/manifest.fleet.tsv" | awk '{print $1}')"
+    after="$(sha256_of "$SCRATCH/manifest.fleet.tsv")"
     [ "$before" = "$after" ]
     # No verification cache file was written to the fleet root either.
     [ ! -e "$SCRATCH/.manifest-cli" ]

@@ -151,7 +151,7 @@ setup_repo_with_remote() {
     run_manifest ship repo patch
     [ "$status" -eq 0 ]
     local shown stash_dir
-    shown="$(echo "$output" | grep 'Plan fingerprint:' | head -1 | awk '{print $NF}')"
+    shown="$(echo "$output" | grep -m1 'Plan fingerprint:' | awk '{print $NF}')"
     [ -n "$shown" ]
     # The run dir is keyed by the git toplevel (resolved), so derive it the same
     # way the code does rather than hashing the literal sandbox path.

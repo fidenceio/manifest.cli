@@ -236,12 +236,12 @@ export MANIFEST_CLI_FAKE=oops
 alias gs='git status'
 EOF
     local original_sum
-    original_sum="$(shasum "$decoy" | awk '{print $1}')"
+    original_sum="$(sha256_of "$decoy")"
     manifest_install_paths_shell_profiles() { echo "$decoy"; }
     run manifest_install_paths_cleanup_profile_entries 0 0
     # Tripwire must skip the rewrite; file untouched, no backup written.
     [ -f "$decoy" ]
-    [ "$(shasum "$decoy" | awk '{print $1}')" = "$original_sum" ]
+    [ "$(sha256_of "$decoy")" = "$original_sum" ]
     refute ls "$decoy".manifest-backup-* >/dev/null 2>&1
     rm -rf "$decoy_dir"
 }

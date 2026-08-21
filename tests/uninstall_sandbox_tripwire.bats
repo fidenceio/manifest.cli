@@ -212,7 +212,7 @@ export MANIFEST_CLI_FAKE=oops
 alias ll='ls -la'
 EOF
     local original_sum
-    original_sum="$(shasum "$decoy" | awk '{print $1}')"
+    original_sum="$(sha256_of "$decoy")"
     manifest_install_paths_shell_profiles() { printf '%s\n' "$decoy"; }
     export -f manifest_install_paths_shell_profiles
     manifest_make_scratch_path() { echo "$BATS_TEST_TMPDIR"; }
@@ -220,7 +220,7 @@ EOF
     run cleanup_environment_variables
     [ -f "$decoy" ]
     local current_sum
-    current_sum="$(shasum "$decoy" | awk '{print $1}')"
+    current_sum="$(sha256_of "$decoy")"
     [ "$current_sum" = "$original_sum" ]
     refute ls "$decoy".manifest-backup-* >/dev/null 2>&1
     rm -rf "$decoy_dir"
@@ -304,13 +304,13 @@ export MANIFEST_CLI_GHOST=oops
 alias gs='git status'
 EOF
     local original_sum
-    original_sum="$(shasum "$decoy" | awk '{print $1}')"
+    original_sum="$(sha256_of "$decoy")"
     manifest_install_paths_shell_profiles() { printf '%s\n' "$decoy"; }
     export -f manifest_install_paths_shell_profiles
     run cleanup_environment_variables
     [ -f "$decoy" ]
     local current_sum
-    current_sum="$(shasum "$decoy" | awk '{print $1}')"
+    current_sum="$(sha256_of "$decoy")"
     [ "$current_sum" = "$original_sum" ]
     refute ls "$decoy".manifest-backup-* >/dev/null 2>&1
     rm -rf "$decoy_dir"
@@ -379,7 +379,7 @@ export PATH="$HOME/.manifest-cli/bin:$PATH"
 alias x='echo y'
 EOF
     local original_sum
-    original_sum="$(shasum "$decoy" | awk '{print $1}')"
+    original_sum="$(sha256_of "$decoy")"
     found_install_dirs()      { :; }
     found_binaries()          { :; }
     found_configs()           { :; }
@@ -394,7 +394,7 @@ EOF
     run apply_plan
     [ -f "$decoy" ]
     local current_sum
-    current_sum="$(shasum "$decoy" | awk '{print $1}')"
+    current_sum="$(sha256_of "$decoy")"
     [ "$current_sum" = "$original_sum" ]
     refute ls "$decoy".manifest-backup-* >/dev/null 2>&1
     rm -rf "$decoy_dir"
