@@ -3,7 +3,7 @@
 Find what you need by what you are trying to do. The [README](../README.md) is the place
 to start; the documents here go into detail.
 
-**Version:** 59.4.0 | **Updated:** 2026-08-21
+**Version:** 59.4.1 | **Updated:** 2026-08-21
 
 ## Start
 

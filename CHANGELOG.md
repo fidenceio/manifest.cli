@@ -1,5 +1,18 @@
 # Changelog
 
+## [59.4.1] - 2026-08-21
+
+**Release Type:** Patch
+
+### Changes
+
+- Fix(fleet): preview runs the workspace policy gate and withdraws -y when it would refuse
+- Fix(tests): portable file hashing, and stop the grep|head SIGPIPE flakes
+- Fix(fleet)!: preview announces the workspace policy gate instead of running it
+- Update release copy and configuration examples
+- Add regression coverage for the changed CLI workflow
+
+
 ## [59.4.0] - 2026-08-21
 
 **Release Type:** Minor
@@ -107,14 +120,4 @@
 
 - Add GitHub Release publishing support
 - Update release copy and configuration examples
-- Add regression coverage for the changed CLI workflow
-
-
-## [58.0.4] - 2026-08-06
-
-**Release Type:** Patch
-
-### Changes
-
-- Add a containerized test runner for Manifest CLI
 - Add regression coverage for the changed CLI workflow
