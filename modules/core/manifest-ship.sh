@@ -679,8 +679,10 @@ manifest_ship_fleet() {
   --noprep                 Skip per-service prep step (requires clean trees)
   --force-bump             Ship every release-eligible member even with no changes since its tag
                            (forward-only — new commit + tag; honors pr-gated/release-disabled)" \
-                    "Flow" "  preview:  load fleet -> render per-service release plan
-  apply:    load fleet -> ship release-enabled services directly
+                    "Flow" "  preview:  load fleet -> render per-service release plan -> run workspace policy gate
+            (scripts/manifest-fleet-preflight.sh, verdict shown; apply refuses when it fails;
+            MANIFEST_CLI_FLEET_PREVIEW_POLICY_GATE=announce names it without executing)
+  apply:    load fleet -> pre-flights (policy gate among them) -> ship release-enabled services
   resume:   load fleet -> per-member eligibility probe -> delegate to repo resume
   PR work:  use manifest pr fleet ... explicitly" \
                     "Examples" "  manifest ship fleet patch

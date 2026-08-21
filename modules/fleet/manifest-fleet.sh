@@ -1214,12 +1214,13 @@ changelog:
 # =============================================================================
 # VALIDATION
 # =============================================================================
-# Fleet apply always requires a clean working tree: any service with
-# uncommitted changes is refused at plan and apply time. This guarantee is
-# unconditional and intentionally not configurable, so there is no
-# validation: block here — config that advertised a toggle the CLI ignores
-# was removed (see CLI TRACKER §2.8, following the require_expected_branch
-# precedent).
+# Fleet apply delegates each releaseable member to `manifest ship repo -y`,
+# which auto-commits that member's pending changes as part of the release
+# (subject to the gate-drift snapshot rules), so a fleet apply SHIPS dirty
+# members rather than refusing them. Only `--noprep` requires every tree to
+# be clean and refuses otherwise. There is no validation: block here —
+# config that advertised a toggle the CLI ignores was removed (see CLI
+# TRACKER §2.8, following the require_expected_branch precedent).
 EOF
 }
 
@@ -2404,6 +2405,55 @@ _fleet_preflight_workspace_policy() {
     return 0
 }
 
+# Preview-side counterpart of _fleet_preflight_workspace_policy. Apply refuses
+# on that gate, so a preview that stays silent about it can recommend a -y that
+# is guaranteed to refuse (found live 2026-08-21: a 19-releaseable plan whose
+# policy gate hard-fails on blocking findings). The gate is the workspace's own
+# check — read-only by contract, and apply would execute it moments later — so
+# preview runs it by default and prints the verdict. Set
+# MANIFEST_CLI_FLEET_PREVIEW_POLICY_GATE=announce to name the gate without
+# executing it (slow gates). Output is captured; only a failure prints a tail.
+# Never fails the preview itself: the verdict only changes the closing
+# recommendation. Sets _MANIFEST_CLI_FLEET_PREVIEW_GATE_VERDICT to one of
+# absent|ok|failed|announced.
+_fleet_preview_workspace_policy() {
+    _MANIFEST_CLI_FLEET_PREVIEW_GATE_VERDICT="absent"
+    local root="${MANIFEST_CLI_FLEET_ROOT:-$PWD}"
+    local gate="$root/scripts/manifest-fleet-preflight.sh"
+    [[ -f "$gate" ]] || return 0
+
+    echo ""
+    if [[ "${MANIFEST_CLI_FLEET_PREVIEW_POLICY_GATE:-run}" == "announce" ]]; then
+        _MANIFEST_CLI_FLEET_PREVIEW_GATE_VERDICT="announced"
+        echo "Workspace policy gate: scripts/manifest-fleet-preflight.sh (not run in preview; apply refuses if it fails)"
+        return 0
+    fi
+    if [[ ! -x "$gate" ]]; then
+        _MANIFEST_CLI_FLEET_PREVIEW_GATE_VERDICT="failed"
+        echo "Workspace policy gate: scripts/manifest-fleet-preflight.sh is not executable — apply would REFUSE."
+        return 0
+    fi
+
+    echo "Workspace policy gate: running scripts/manifest-fleet-preflight.sh (apply refuses if it fails)..."
+    local gate_log rc=0
+    if ! gate_log=$(mktemp "${TMPDIR:-/tmp}/manifest-fleet-gate.XXXXXX"); then
+        _MANIFEST_CLI_FLEET_PREVIEW_GATE_VERDICT="failed"
+        echo "Workspace policy gate: could not create a scratch log — treating as failed."
+        return 0
+    fi
+    if "$gate" >"$gate_log" 2>&1; then
+        _MANIFEST_CLI_FLEET_PREVIEW_GATE_VERDICT="ok"
+        echo "Workspace policy gate: OK"
+    else
+        rc=$?
+        _MANIFEST_CLI_FLEET_PREVIEW_GATE_VERDICT="failed"
+        echo "Workspace policy gate: FAILED (exit $rc) — apply would REFUSE before any mutation. Last lines:"
+        tail -n 12 "$gate_log" | sed 's/^/  | /'
+    fi
+    rm -f "$gate_log"
+    return 0
+}
+
 # Returns the user-facing service name for plan output. YAML keys are
 # intentionally dot-free for variable-name compatibility (see
 # manifest-fleet-config.sh `tr '[:lower:]-.' '[:upper:]__'`), so the
@@ -3063,8 +3113,8 @@ Options:
                             since its tag (forward-only; honors pr-gated/disabled)
 
 Flow:
-  default: preview release plan
-  -y:      direct ship of releaseable services
+  default: preview release plan + workspace policy gate verdict
+  -y:      direct ship of releaseable services (refuses if the policy gate fails)
   PR work: manifest pr fleet ...
 
 Fleet membership and release-eligibility are determined by manifest.fleet.config.yaml.
@@ -3086,12 +3136,22 @@ EOF
         _fleet_scope_block
         _fleet_ship_plan "$increment_type" "$local_only" "$force_bump"
         _fleet_root_release "$increment_type" "preview" "$local_only" "${MANIFEST_CLI_FLEET_PLAN_RELEASEABLE_COUNT:-0}"
+        # The apply path refuses on the workspace policy gate, so an honest
+        # preview must not recommend -y without consulting it.
+        _fleet_preview_workspace_policy
         # Stash the fingerprint the user is reading so a later apply can warn if
         # the fleet plan drifted between this preview and that apply.
         manifest_plan_fingerprint_persist "ship-fleet" "${MANIFEST_CLI_FLEET_PLAN_FINGERPRINT:-}" "${MANIFEST_CLI_FLEET_ROOT:-$PWD}"
         local replay_command="manifest ship fleet $increment_type"
         [[ "$local_only" == "true" ]] && replay_command="$replay_command --local"
-        manifest_execution_footer "$replay_command -y"
+        if [[ "${_MANIFEST_CLI_FLEET_PREVIEW_GATE_VERDICT:-absent}" == "failed" ]]; then
+            echo ""
+            echo "No changes written. The workspace policy gate failed, so '$replay_command -y' would refuse before any mutation."
+            echo "Fix the gate findings, then re-run:"
+            echo "  $replay_command -y"
+        else
+            manifest_execution_footer "$replay_command -y"
+        fi
         # Preview-without-consent exit code: 0 by default, or the distinct code
         # when preview.exit_code=distinct (CLI tracker §2.2).
         return "$(manifest_preview_exit_code)"
