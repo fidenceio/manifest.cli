@@ -7,10 +7,20 @@
 # VERSION MANAGEMENT FUNCTIONS
 # =============================================================================
 
-# Get current version from VERSION file
+# Get current version from VERSION file.
+#
+# CR-safe (PLAT-001): a CRLF VERSION file (Windows checkout, editor default)
+# would otherwise poison every version string with a trailing \r. Strip CRs
+# and trailing whitespace on the read. The "unknown" fallback is display-path
+# only; the ship path refuses a missing/blank VERSION separately via
+# manifest_ship_require_version_file (manifest-ship.sh).
 get_current_version() {
     if [ -f "$MANIFEST_CLI_PROJECT_ROOT/VERSION" ]; then
-        cat "$MANIFEST_CLI_PROJECT_ROOT/VERSION" 2>/dev/null || echo "unknown"
+        local version
+        version=$(cat "$MANIFEST_CLI_PROJECT_ROOT/VERSION" 2>/dev/null || echo "unknown")
+        version=${version//$'\r'/}
+        version=${version%"${version##*[![:space:]]}"}
+        echo "$version"
     else
         echo "unknown"
     fi
@@ -687,6 +697,10 @@ _manifest_gh_repo_create() {
     fi
 
     echo "  Creating GitHub repo: $target ($visibility)..."
+    # §9.2: `repo create` is a content-generating call — pace it so a fleet
+    # bootstrap loop (one create per member) stays under GitHub's secondary
+    # limits instead of dying on an opaque 403 mid-apply.
+    manifest_gh_rate_limit_gate
     local create_out
     if ! create_out=$(gh repo create "$target" "$vis_flag" \
             --source="$project_root" --remote=origin 2>&1); then
@@ -706,6 +720,184 @@ _manifest_gh_repo_create() {
     fi
     echo "  ✓ Created GitHub repo: $target"
     echo "  Origin: $url"
+    return 0
+}
+
+# =============================================================================
+# GH MUTATION RATE-LIMIT CONTROLLER (tracker §9.2)
+# =============================================================================
+# Per-member fleet loops multiply gh WRITE calls linearly: `init fleet
+# --create-repo-*` does one `gh repo create` per member, `topics fleet` (and the
+# post-ship topics pass) one `gh repo edit --add-topic` per repo, `ship fleet`
+# one `gh release create` per member. GitHub's secondary limits (~80
+# content-generating requests/min, 500/hr) surface as opaque 403s mid-apply.
+#
+# This controller paces MUTATION (content-generating) calls only — `gh repo
+# create`, `gh repo edit`, `gh release create`, `gh workflow run`. Read calls
+# (`repo view`, `repo list`, `run list`, `auth status`) are NEVER paced, and
+# preview runs make no gh calls at all, so previews never wait.
+#
+# Accounting is a sliding window over a per-user timestamps file: two windows,
+# a fixed floor of ≤60 mutations per rolling 60s (below GitHub's ~80/min), and
+# ≤N per rolling 3600s with N from github.rate_limit_per_hour (default 150;
+# 0 disables pacing entirely). When a call would exceed a window, the gate
+# sleeps until the oldest relevant timestamp ages out — it never skips a
+# member, never reorders, and never asks for consent; pacing only stretches
+# time, loudly (one notice the first time it engages in a run, a compact line
+# for subsequent waits).
+#
+# State lives under the per-user state root — NEVER bare /tmp (SEC-011: shared
+# /tmp staging is attacker-influenceable) — with tight modes (dir 0700, file
+# 0600; the audit-dir pattern from manifest-shared-utils.sh). It persists
+# across invocations so back-to-back fleet commands within the hour share one
+# budget. A swept or missing file just resets the window: the controller
+# forgets prior calls and would admit a fresh burst — accepted, because
+# GitHub's own limiter is the backstop and a reset can never LOSE a call.
+# Concurrent manifest processes append best-effort without locking; fleet
+# apply is single-flight (fleet lock), so cross-process racing is marginal
+# and an undercount only errs toward a slightly earlier call.
+
+# Path of the timestamps state file (one Unix epoch per line, one line per
+# mutation). Grouped in its own 0700 subdir so modes never depend on what else
+# lives in the state root.
+_manifest_gh_rate_state_file() {
+    local state_dir
+    if declare -F manifest_install_paths_global_state_dir >/dev/null 2>&1; then
+        state_dir="$(manifest_install_paths_global_state_dir)"
+    else
+        state_dir="$HOME/.manifest-cli"
+    fi
+    printf '%s/gh-rate/mutation-epochs' "$state_dir"
+}
+
+# "Now" for the rate window. MANIFEST_CLI_GH_RATE_NOW_EPOCH is a TEST-ONLY
+# override so pacing decisions can be exercised with synthetic time instead of
+# real sleeps; production never sets it.
+_manifest_gh_rate_now_epoch() {
+    local now="${MANIFEST_CLI_GH_RATE_NOW_EPOCH:-}"
+    [[ "$now" =~ ^[0-9]+$ ]] || now="$(date +%s)"
+    printf '%s' "$now"
+}
+
+# Pure decision function: seconds a new mutation must wait, computed from
+# (timestamps-file contents, now-epoch, hourly limit) with no side effects, no
+# sleeping, and no environment reads — tests drive it directly with synthetic
+# files and a synthetic now.
+#
+# ARGUMENTS:
+#   $1 - timestamps state file (missing/unreadable = empty window)
+#   $2 - now as a Unix epoch
+#   $3 - hourly cap (0 = no hourly cap; the 60/min floor still applies)
+#
+# Echoes an integer ≥ 0. Sliding-window arithmetic: with c timestamps in a
+# window of length L and cap K, admitting one more requires c < K; the
+# earliest such moment is when the (c-K+1) oldest entries have aged out, i.e.
+# ascending-sorted ts[c-K] + L. Non-numeric lines are ignored; future-dated
+# entries (clock rollback) still count, which only errs toward MORE pacing.
+manifest_gh_rate_required_wait() {
+    local state_file="$1"
+    local now="$2"
+    local per_hour="$3"
+    local per_minute=60   # fixed floor, below GitHub's ~80/min secondary limit
+
+    [[ "$now" =~ ^[0-9]+$ ]] || { printf '0'; return 0; }
+    [[ "$per_hour" =~ ^[0-9]+$ ]] || per_hour=0
+
+    local -a hour_ts=() min_ts=()
+    local ts
+    if [[ -f "$state_file" && -r "$state_file" ]]; then
+        while IFS= read -r ts; do
+            [[ "$ts" =~ ^[0-9]+$ ]] || continue
+            if (( now - ts < 3600 )); then
+                hour_ts+=("$ts")
+                if (( now - ts < 60 )); then
+                    min_ts+=("$ts")
+                fi
+            fi
+        done < <(sort -n "$state_file" 2>/dev/null)
+    fi
+
+    local wait_hour=0 wait_min=0 idx
+    if (( per_hour > 0 )) && (( ${#hour_ts[@]} >= per_hour )); then
+        idx=$(( ${#hour_ts[@]} - per_hour ))
+        wait_hour=$(( hour_ts[idx] + 3600 - now ))
+    fi
+    if (( ${#min_ts[@]} >= per_minute )); then
+        idx=$(( ${#min_ts[@]} - per_minute ))
+        wait_min=$(( min_ts[idx] + 60 - now ))
+    fi
+
+    local wait=$(( wait_hour > wait_min ? wait_hour : wait_min ))
+    (( wait > 0 )) || wait=0
+    printf '%s' "$wait"
+}
+
+# The gate. Call IMMEDIATELY BEFORE each gh mutation. Reads the configured
+# hourly cap, waits when a window is full (never silently — see the header),
+# then records this call's timestamp and prunes entries older than the hour
+# window so the file stays bounded. Best-effort throughout: an unwritable
+# state dir must never block a release, so every error path returns 0 and the
+# mutation proceeds unpaced (GitHub's own limiter is the backstop).
+manifest_gh_rate_limit_gate() {
+    local per_hour="${MANIFEST_CLI_GITHUB_RATE_LIMIT_PER_HOUR:-150}"
+    [[ "$per_hour" =~ ^[0-9]+$ ]] || per_hour=150
+    if (( per_hour == 0 )); then
+        return 0    # pacing disabled: no wait, no state recorded
+    fi
+
+    local state_file dir now wait
+    state_file="$(_manifest_gh_rate_state_file)"
+    dir="${state_file%/*}"
+    # umask 077 in a subshell makes create-with-mode atomic (no 0644 window);
+    # chmod repairs a dir that pre-existed looser. Same pattern as the audit
+    # dir in manifest-shared-utils.sh (§8.3d).
+    ( umask 077; mkdir -p "$dir" ) 2>/dev/null || return 0
+    chmod 700 "$dir" 2>/dev/null || true
+
+    now="$(_manifest_gh_rate_now_epoch)"
+    wait="$(manifest_gh_rate_required_wait "$state_file" "$now" "$per_hour")"
+    if (( wait > 0 )); then
+        # Pacing is NEVER silent: one full notice per process the first time it
+        # engages, compact lines after that.
+        if [[ -z "${_MANIFEST_CLI_GH_RATE_NOTICE_SHOWN:-}" ]]; then
+            _MANIFEST_CLI_GH_RATE_NOTICE_SHOWN=1
+            echo "⏳ Pacing GitHub mutation calls: ${per_hour}/hr configured (fixed 60/min floor); waiting ${wait}s before the next call..."
+        else
+            echo "   ⏳ pacing: waiting ${wait}s"
+        fi
+        if [[ -z "${MANIFEST_CLI_GH_RATE_NOW_EPOCH:-}" ]]; then
+            sleep "$wait"
+            now="$(_manifest_gh_rate_now_epoch)"
+        else
+            # Injected-time mode (tests): advance the synthetic clock instead
+            # of sleeping for real.
+            now=$(( now + wait ))
+        fi
+    fi
+
+    # Record this mutation; prune entries that have left the hour window.
+    # Write-then-rename inside the 0700 dir so an interrupted write never
+    # truncates the ledger, created 0600 under umask 077.
+    local tmp="${state_file}.tmp.$$"
+    if ! (
+        umask 077
+        {
+            if [[ -f "$state_file" && -r "$state_file" ]]; then
+                local ts
+                while IFS= read -r ts; do
+                    [[ "$ts" =~ ^[0-9]+$ ]] || continue
+                    (( now - ts < 3600 )) || continue
+                    printf '%s\n' "$ts"
+                done < "$state_file"
+            fi
+            printf '%s\n' "$now"
+        } > "$tmp"
+    ) 2>/dev/null; then
+        rm -f "$tmp" 2>/dev/null
+        return 0
+    fi
+    chmod 600 "$tmp" 2>/dev/null || true
+    mv -f "$tmp" "$state_file" 2>/dev/null || rm -f "$tmp" 2>/dev/null
     return 0
 }
 
@@ -1001,6 +1193,8 @@ safe_json_write() {
 export -f get_current_version get_next_version get_latest_version
 export -f manifest_origin_repo_slug manifest_is_canonical_repo manifest_repo_display_name
 export -f _manifest_require_gh _manifest_dir_is_own_git_repository
+export -f _manifest_gh_rate_state_file _manifest_gh_rate_now_epoch
+export -f manifest_gh_rate_required_wait manifest_gh_rate_limit_gate
 export -f _manifest_github_repo_target _manifest_github_repo_display_target
 export -f _manifest_parse_create_repo_flag _manifest_gh_repo_create
 export -f secure_curl_request check_network_connectivity check_required_tools

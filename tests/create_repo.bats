@@ -5,6 +5,11 @@ load 'helpers/setup'
 setup() {
     load_modules
     SCRATCH="$(mk_scratch)"
+    # §9.2: _manifest_gh_repo_create paces mutations through a per-user state
+    # file resolved via manifest_install_paths_global_state_dir — keep that
+    # write inside the scratch dir, never the developer's real HOME (pattern:
+    # local_install_upgrade.bats).
+    manifest_install_paths_global_state_dir() { echo "$SCRATCH/state"; }
 }
 
 teardown() {

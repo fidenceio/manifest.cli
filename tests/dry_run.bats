@@ -160,7 +160,7 @@ teardown() {
     echo "$output" | grep -q "Next version:     1.3.0"
     echo "$output" | grep -q "What's new"
     echo "$output" | grep -q "Added smart ship preview summaries"
-    echo "$output" | grep -q "Updated release copy and configuration examples"
+    echo "$output" | grep -q "Updated documentation and examples"
     echo "$output" | grep -q "Working tree: 5 pending file(s) would be auto-committed"
     echo "$output" | grep -q "VERSION: update 1.2.3 -> 1.3.0"
     echo "$output" | grep -q "CHANGELOG.md: prepend the 1.3.0 release entry"

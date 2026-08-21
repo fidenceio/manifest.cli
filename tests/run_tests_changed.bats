@@ -118,7 +118,13 @@ NONSMOKE_FILE="/recipe.bats"
 }
 
 @test "changed: combines with --jobs (parallel flag precedes the file list)" {
-    if ! command -v parallel >/dev/null 2>&1 || ! parallel --version 2>/dev/null | grep -qi 'GNU parallel'; then
+    # Capture-then-match: piping `parallel --version` into an early-exiting
+    # grep -q can report SIGPIPE (141) under pipefail → spurious skip.
+    local pv=""
+    if command -v parallel >/dev/null 2>&1; then
+        pv="$(parallel --version 2>/dev/null || true)"
+    fi
+    if ! grep -qi 'GNU parallel' <<<"$pv"; then
         skip "GNU parallel not installed in this environment"
     fi
     MANIFEST_CLI_TEST_CHANGED_PATHS="modules/pr/manifest-pr-native.sh" \

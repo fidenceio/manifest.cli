@@ -1,0 +1,25 @@
+# Line-ending policy (PLAT-001). Every tracked file in this repo is text; a
+# CRLF checkout of anything bash executes or the CLI parses byte-wise breaks
+# it (a CRLF VERSION file poisons every version string with a trailing \r).
+# Normalize everything, and pin LF explicitly where CRLF is fatal.
+
+* text=auto
+
+# Shell code: executed by bash/zsh/fish, CRLF is a syntax error.
+*.sh    text eol=lf
+*.bash  text eol=lf
+*.bats  text eol=lf
+*.fish  text eol=lf
+completions/_manifest text eol=lf
+.git-hooks/pre-commit text eol=lf
+
+# Files the CLI reads byte-wise: VERSION feeds every version string, the TSVs
+# are parsed line- and tab-wise, the epoch file is compared numerically.
+VERSION text eol=lf
+*.tsv   text eol=lf
+*.epoch text eol=lf
+
+# Consumed by external LF-expecting tools (Homebrew, docker build).
+*.rb          text eol=lf
+*.Dockerfile  text eol=lf
+Dockerfile    text eol=lf

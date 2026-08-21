@@ -980,6 +980,14 @@ set_default_configuration() {
     # The freshness clock advances only on a real PASS — a stamp-only skip never
     # bumps it, so repeated stamps can never keep the window green without tests.
     export MANIFEST_CLI_RELEASE_GATE_FRESHNESS_DAYS="${MANIFEST_CLI_RELEASE_GATE_FRESHNESS_DAYS:-30}"
+    # §9.27(a): CI's verdict binds the ship. Before any mutation, a publishing
+    # ship reads origin's latest COMPLETED `tests` workflow run on the default
+    # branch and REFUSES when it concluded failure (the local gate proves this
+    # host's OS only; CI proves the other leg). false keeps the pre-flight and
+    # its printed finding but never refuses. Degraded states (no gh, no run yet,
+    # gh errors) are announced as "unverified" and proceed — absence is not a
+    # verdict (§9.15).
+    export MANIFEST_CLI_RELEASE_REQUIRE_CI_GREEN="${MANIFEST_CLI_RELEASE_REQUIRE_CI_GREEN:-true}"
     # How long a green test run stays reusable before run-tests.sh re-runs it
     # (§5.10 TTL'd cache). English-reading duration: 4h / 30m / 90s / 2d, or
     # 'off' to always run. Accelerates dev/CI loops only — the release gate
@@ -1001,6 +1009,12 @@ set_default_configuration() {
     export MANIFEST_CLI_GITHUB_RELEASE_REQUIRED="${MANIFEST_CLI_GITHUB_RELEASE_REQUIRED:-false}"
     export MANIFEST_CLI_GITHUB_RELEASE_DRAFT="${MANIFEST_CLI_GITHUB_RELEASE_DRAFT:-false}"
     export MANIFEST_CLI_GITHUB_RELEASE_PRERELEASE="${MANIFEST_CLI_GITHUB_RELEASE_PRERELEASE:-false}"
+    # §9.2: gh mutation pacing — content-generating calls (repo create/edit,
+    # release create, workflow dispatch) per rolling hour, on by default so
+    # fleet-scale loops stay under GitHub's secondary limits (~80/min, 500/hr
+    # content-generating). A fixed 60/min floor always applies alongside it.
+    # 0 disables pacing entirely. Reads are never paced.
+    export MANIFEST_CLI_GITHUB_RATE_LIMIT_PER_HOUR="${MANIFEST_CLI_GITHUB_RATE_LIMIT_PER_HOUR:-150}"
     export MANIFEST_CLI_INTERACTIVE_MODE="${MANIFEST_CLI_INTERACTIVE_MODE:-false}"
     
     # Branch Naming Configuration

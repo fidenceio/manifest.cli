@@ -1035,32 +1035,71 @@ manifest_set_upstream_if_absent() {
 }
 export -f manifest_set_upstream_if_absent
 
+# Per-remote push ledger (§8.1a), read by the ship failure report after a
+# failed push_changes. A branch/tag already public on remote #1 must never be
+# offered `git reset --hard` just because remote #2 refused.
+#   _MANIFEST_CLI_GIT_PUSH_STATUS          success | failed | partial
+#                                      ("partial" = at least one remote pushed
+#                                      AND at least one did not)
+#   _MANIFEST_CLI_GIT_PUSH_REMOTE_RESULTS  one "<remote>|<state>" entry per remote,
+#                                      state ∈ success / failed / not_attempted
+_MANIFEST_CLI_GIT_PUSH_STATUS=""
+_MANIFEST_CLI_GIT_PUSH_REMOTE_RESULTS=()
+
 push_changes() {
     local version="$1"
     local tag_name
     tag_name="$(manifest_release_tag_name "$version")"
     local default_branch="${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}"
-    
+
+    # Reset the ledger before anything can fail, so a caller never reads a
+    # previous invocation's verdict.
+    _MANIFEST_CLI_GIT_PUSH_STATUS="failed"
+    _MANIFEST_CLI_GIT_PUSH_REMOTE_RESULTS=()
+
     echo "🚀 Pushing to all remotes..."
-    
+
     # Change to project root directory
     cd "$MANIFEST_CLI_PROJECT_ROOT" || {
         echo "❌ Failed to change to project root: $MANIFEST_CLI_PROJECT_ROOT"
         return 1
     }
-    
+
     # Get list of remotes
     local remotes=$(git remote)
-    
+    local pushed_any="false" failed_remote=""
+
     for remote in $remotes; do
+        if [ -n "$failed_remote" ]; then
+            # A remote already failed. Record the rest as not_attempted instead
+            # of pushing MORE public state after a detected failure — the ledger
+            # still names every remote, so the failure report can print a
+            # per-remote retry for each one that lacks the release.
+            _MANIFEST_CLI_GIT_PUSH_REMOTE_RESULTS+=("${remote}|not_attempted")
+            continue
+        fi
         echo "   Pushing to $remote..."
-        
+
         # Push branch and the exact release tag together in one operation.
-        if ! git_retry "📤 Pushing $default_branch branch and $tag_name to $remote" "git push --progress $remote $default_branch $tag_name"; then
+        if git_retry "📤 Pushing $default_branch branch and $tag_name to $remote" "git push --progress $remote $default_branch $tag_name"; then
+            _MANIFEST_CLI_GIT_PUSH_REMOTE_RESULTS+=("${remote}|success")
+            pushed_any="true"
+        else
             echo "   ❌ Failed to push to $remote"
-            return 1
+            _MANIFEST_CLI_GIT_PUSH_REMOTE_RESULTS+=("${remote}|failed")
+            failed_remote="$remote"
         fi
     done
+
+    if [ -n "$failed_remote" ]; then
+        if [ "$pushed_any" = "true" ]; then
+            _MANIFEST_CLI_GIT_PUSH_STATUS="partial"
+        else
+            _MANIFEST_CLI_GIT_PUSH_STATUS="failed"
+        fi
+        return 1
+    fi
+    _MANIFEST_CLI_GIT_PUSH_STATUS="success"
 
     # Every remote pushed. The literal refspecs above create no tracking config,
     # so a repo only ever pushed by Manifest would be left with no upstream.

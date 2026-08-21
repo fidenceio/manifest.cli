@@ -249,7 +249,11 @@ manifest_homebrew_tap_push_formula() {
 
     if [ "$push_status" -eq 0 ]; then
         cat "$push_log"
-        echo "   ✅ Pushed to homebrew-tap repo (${push_remote_url})"
+        # Redacted for parity with the failure sibling below, which routes the
+        # same URL through log_error (hence through manifest_redact). The success
+        # path is a bare echo, so it leaked a credentialed tap remote while the
+        # failure path did not — the asymmetry was the bug.
+        echo "   ✅ Pushed to homebrew-tap repo ($(manifest_redact "${push_remote_url}"))"
         rm -f "$push_log"
         return 0
     fi
@@ -581,9 +585,20 @@ _manifest_pr_fleet_dispatch() {
             pr_subcommand="queue"
             implicit_queue=true
             ;;
-        *)
+        -*)
+            # Options with no subcommand (e.g. `manifest pr fleet -y`) keep the
+            # implicit-queue default; the flag stays in "$@" for the parser.
             pr_subcommand="queue"
             implicit_queue=true
+            ;;
+        *)
+            # UX-007: an unknown bare token used to silently mean `queue`, so a
+            # typo like `manifest pr fleet quue` queued a fleet PR sweep. Refuse
+            # before any parsing or gh call.
+            log_error "Unknown 'pr fleet' subcommand: '$1'"
+            echo "   Valid subcommands: queue, create, status, checks, ready, help" >&2
+            echo "   Run 'manifest pr fleet help' for usage." >&2
+            return 1
             ;;
     esac
 

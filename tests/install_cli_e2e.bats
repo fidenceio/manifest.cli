@@ -87,13 +87,24 @@ teardown() {
 
 @test "installed bin script preserves install-paths module" {
     cd "$TEST_REPO_ROOT"
-    OSTYPE=linux-gnu env \
+
+    OSTYPE=linux-gnu run env \
         HOME="$HOME" \
         PATH="$PATH" \
         OSTYPE=linux-gnu \
-        bash "$TEST_REPO_ROOT/install-cli.sh" < /dev/null >/dev/null 2>&1 || {
-            skip "install-cli.sh failed in setup; covered by the previous test"
-        }
+        bash "$TEST_REPO_ROOT/install-cli.sh" < /dev/null
+
+    # §8.6d / PLAT-006: an installer failure here is a FAILURE, never a skip.
+    # This used to read `|| skip "covered by the previous test"`, which TAP
+    # reports as ok — so a FLAKY installer looked green, a name-filtered run of
+    # this test alone reported green against a broken installer, and the skip
+    # silently consumed the container's skip budget. The only legitimate skip in
+    # this file is the declared platform precondition in setup() (`yq`).
+    if [ "$status" -ne 0 ]; then
+        echo "install-cli.sh exited $status. Output:" >&2
+        echo "$output" >&2
+    fi
+    [ "$status" -eq 0 ]
 
     # Manifest-install-paths.sh must end up under the installed modules tree
     # — otherwise reinstall/uninstall flows running from $HOME/.manifest-cli

@@ -29,6 +29,7 @@ Give developers a safe way to ship fast agent-assisted changes without losing co
 ## Non-Goals
 
 - No hidden auto-release based on inferred change type.
+- No rollback of a published release (decided 2026-08-21). Recovery is **roll-forward**: ship a new version. `revert` is a viewer — it checks out a tag into detached HEAD and undoes nothing — and no guarded `rollback` verb will be built. A release that reached a remote is history, not state to unwind.
 - No path selector for repo ship until the repo-identity contract is redesigned.
 - No Cloud dependency for core repo or fleet release.
 - No host dependency installation for contributor validation.

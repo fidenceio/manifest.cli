@@ -89,6 +89,11 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     ["release.gate_command"]="MANIFEST_CLI_RELEASE_GATE_COMMAND"
     ["release.gate_tier"]="MANIFEST_CLI_RELEASE_GATE_TIER"
     ["release.gate_freshness_days"]="MANIFEST_CLI_RELEASE_GATE_FRESHNESS_DAYS"
+    # §9.27(a): a publishing ship consults origin's latest completed `tests`
+    # workflow run before any mutation and refuses when it concluded failure.
+    # false keeps the pre-flight (and its finding) but makes it advisory.
+    # Consumed by manifest_ship_ci_verdict_preflight (manifest-orchestrator.sh).
+    ["release.require_ci_green"]="MANIFEST_CLI_RELEASE_REQUIRE_CI_GREEN"
     ["release.tag_signing"]="MANIFEST_CLI_RELEASE_TAG_SIGNING"
     ["test.skip_unchanged_within"]="MANIFEST_CLI_TEST_SKIP_UNCHANGED_WITHIN"
     ["github.owner"]="MANIFEST_CLI_GITHUB_OWNER"
@@ -96,6 +101,11 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     ["github.release.required"]="MANIFEST_CLI_GITHUB_RELEASE_REQUIRED"
     ["github.release.draft"]="MANIFEST_CLI_GITHUB_RELEASE_DRAFT"
     ["github.release.prerelease"]="MANIFEST_CLI_GITHUB_RELEASE_PRERELEASE"
+    # §9.2: ceiling on content-generating gh calls (repo create/edit, release
+    # create, workflow dispatch) per rolling hour; 0 disables pacing. Read
+    # calls are never paced. Consumed by manifest_gh_rate_limit_gate
+    # (manifest-shared-functions.sh).
+    ["github.rate_limit_per_hour"]="MANIFEST_CLI_GITHUB_RATE_LIMIT_PER_HOUR"
 
     # -------------------------------------------------------------------------
     # ship — release workflow behavior

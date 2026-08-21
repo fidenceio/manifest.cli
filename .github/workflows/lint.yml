@@ -21,11 +21,34 @@ jobs:
           set -euo pipefail
           docker run --rm -v "$PWD:/work" -w /work koalaman/shellcheck-alpine:v0.10.0 sh -lc '
             set -euo pipefail
-            # All first-party shell sources. Reads .shellcheckrc automatically.
+            # All first-party shell sources, the test suite included — ShellCheck
+            # (>= 0.7) parses .bats natively, and .bats files carry error-level
+            # bats-specific checks (e.g. SC2314: a bare `!` in a @test never fails
+            # the test). Reads .shellcheckrc automatically.
             find modules scripts -name "*.sh" -type f -print0 > files.zero
+            find tests -name "*.bats" -type f -print0 >> files.zero
+            find tests -name "*.bash" -type f -print0 >> files.zero
             printf "%s\0%s\0%s\0" install-cli.sh uninstall-cli.sh bootstrap.sh >> files.zero
             echo "scripts: $(tr -dc "\0" < files.zero | wc -c)"
             xargs -0 shellcheck --severity=error < files.zero
+          '
+
+      - name: ShellCheck (hard gate — inert !-prefixed suite assertions)
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/work" -w /work koalaman/shellcheck-alpine:v0.10.0 sh -lc '
+            set -euo pipefail
+            # A `!`-prefixed command is exempt from errexit, so a mid-test
+            # `! cmd` assertion can never fail — 114 sat inert in this suite
+            # until 2026-08-15 (all converted to the refute helper). ShellCheck
+            # spells that defect SC2314 (error) inside bats @test blocks and
+            # SC2251 (info) in plain bash such as tests/helpers/*.bash; with
+            # --include only those codes are reported, so info severity is safe
+            # as a hard gate.
+            find tests -name "*.bats" -type f -print0 > testfiles.zero
+            find tests -name "*.bash" -type f -print0 >> testfiles.zero
+            echo "test files: $(tr -dc "\0" < testfiles.zero | wc -c)"
+            xargs -0 shellcheck --include=SC2251,SC2314 --severity=info < testfiles.zero
           '
 
       - name: ShellCheck (advisory — warnings reported, do not block)

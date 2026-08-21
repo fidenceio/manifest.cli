@@ -9,6 +9,15 @@
 #   MANIFEST_CLI_GH_STUB_STDERR    - text echoed to stderr before exit
 #   MANIFEST_CLI_GH_STUB_ADD_REMOTE - when true, successful `repo create`
 #                                     simulates --remote by adding an origin
+#   MANIFEST_CLI_GH_STUB_RUN_LIST_STDOUT - when SET, `gh run list ...` prints
+#                                     this instead of the generic stdout and
+#                                     exits RUN_LIST_EXIT. Set-but-empty means
+#                                     "no runs": print nothing, exit 0 — the
+#                                     shape gh's --jq gives for an empty list.
+#                                     Unset leaves `run list` on the generic
+#                                     contract (existing scenarios unchanged).
+#   MANIFEST_CLI_GH_STUB_RUN_LIST_EXIT - exit code for `gh run list` when the
+#                                     RUN_LIST hook is active (default 0)
 #
 # The stub never touches the network. Each invocation is recorded so tests
 # can assert exactly what was called.
@@ -21,6 +30,18 @@ if [[ -n "${MANIFEST_CLI_GH_STUB_LOG:-}" ]]; then
         printf '\t%s' "$arg" >> "$MANIFEST_CLI_GH_STUB_LOG"
     done
     printf '\n' >> "$MANIFEST_CLI_GH_STUB_LOG"
+fi
+
+# `gh run list` hook (opt-in, keyed on the variable being SET): lets one test
+# drive the CI-verdict pre-flight / completion report while every other stubbed
+# call keeps the generic contract. Placed before the generic stdout/stderr
+# blocks so a run-list call emits ONLY its own contract.
+if [[ "${1:-}" == "run" && "${2:-}" == "list" \
+    && -n "${MANIFEST_CLI_GH_STUB_RUN_LIST_STDOUT+set}" ]]; then
+    if [[ -n "$MANIFEST_CLI_GH_STUB_RUN_LIST_STDOUT" ]]; then
+        printf '%s\n' "$MANIFEST_CLI_GH_STUB_RUN_LIST_STDOUT"
+    fi
+    exit "${MANIFEST_CLI_GH_STUB_RUN_LIST_EXIT:-0}"
 fi
 
 if [[ -n "${MANIFEST_CLI_GH_STUB_STDOUT:-}" ]]; then

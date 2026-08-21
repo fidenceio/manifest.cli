@@ -38,7 +38,8 @@ teardown() {
 
     # Exactly one backup created, and its contents equal the pre-migration file.
     local bak
-    bak="$(ls "$CFG".bak.* 2>/dev/null | head -1)"
+    bak="$(ls "$CFG".bak.* 2>/dev/null || true)"
+    bak="${bak%%$'\n'*}"
     [ -n "$bak" ]
     [ "$(cat "$bak")" = "$pre" ]
 

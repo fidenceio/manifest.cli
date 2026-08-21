@@ -153,7 +153,8 @@ EOF
 
     # A snapshot equal to the pre-migration file must exist.
     local bak
-    bak="$(ls "$CFG".bak.* 2>/dev/null | head -1)"
+    bak="$(ls "$CFG".bak.* 2>/dev/null || true)"
+    bak="${bak%%$'\n'*}"
     [ -n "$bak" ]
     [ "$(cat "$bak")" = "$pre" ]
 

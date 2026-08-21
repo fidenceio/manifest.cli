@@ -68,13 +68,16 @@ write_status_file() {
 
 @test "recovery report: local-only — failure before push, safe to retry or rollback locally" {
     local sf="$SCRATCH/svcb.status"
+    # commits_created is a VERIFIED positive count — the only state in which the
+    # report may claim a local rollback is safe (§9.10).
     write_status_file "$sf" \
         result failed \
         failure_step version_commit \
         push_status not_attempted \
         homebrew_status not_applicable \
         version 1.2.3 \
-        tag none
+        tag none \
+        commits_created 2
 
     local -a completed=("svca|./svc-a|$SCRATCH/svca.status")
     local -a not_started=("svcc|./svc-c")
@@ -91,6 +94,100 @@ write_status_file() {
     [[ "$output" == *"manifest ship repo patch -y"* ]]
     [[ "$output" != *"DO NOT rollback"* ]]
     [[ "$output" == *"⏭  svcd (release disabled)"* ]]
+}
+
+@test "recovery report: completion_clean after successful push is stranded, never rollback-safe (RED-001)" {
+    # The fleet's own copy of the post-push step set omitted completion_clean,
+    # so this member was classified local-only and offered rollback advice for
+    # a release that was already public. The shared classifier closes that.
+    local sf="$SCRATCH/svcb.status"
+    write_status_file "$sf" \
+        result failed \
+        failure_step completion_clean \
+        push_status success \
+        homebrew_status success \
+        version 1.2.3 \
+        tag v1.2.3 \
+        commits_created 2
+
+    local -a completed=() not_started=() skipped=()
+
+    run _fleet_emit_recovery_report svcb ./svc-b "$sf" patch false
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"category: pushed-then-stranded"* ]]
+    [[ "$output" == *"DO NOT rollback"* ]]
+    [[ "$output" != *"Safe to retry or rollback locally"* ]]
+    [[ "$output" != *"Or retry:"* ]]
+}
+
+@test "recovery report: partial multi-remote push is never rollback-safe (§8.1a)" {
+    local sf="$SCRATCH/svcb.status"
+    write_status_file "$sf" \
+        result failed \
+        failure_step push_changes \
+        push_status partial \
+        homebrew_status skipped \
+        version 1.2.3 \
+        tag v1.2.3 \
+        commits_created 1
+
+    local -a completed=() not_started=() skipped=()
+
+    run _fleet_emit_recovery_report svcb ./svc-b "$sf" patch false
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"category: partial-push"* ]]
+    [[ "$output" == *"public where it landed"* ]]
+    [[ "$output" == *"DO NOT rollback"* ]]
+    [[ "$output" != *"Safe to retry or rollback locally"* ]]
+    [[ "$output" == *"manifest ship repo resume"* ]]
+    [[ "$output" != *"Or retry:"* ]]
+}
+
+@test "recovery report: local-only with zero commits never claims rollback is safe (§9.10)" {
+    local sf="$SCRATCH/svcb.status"
+    write_status_file "$sf" \
+        result failed \
+        failure_step version_commit \
+        push_status not_attempted \
+        homebrew_status not_applicable \
+        version 1.2.3 \
+        tag none \
+        commits_created 0
+
+    local -a completed=() not_started=() skipped=()
+
+    run _fleet_emit_recovery_report svcb ./svc-b "$sf" patch false
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"category: local-only"* ]]
+    [[ "$output" == *"do NOT hard-reset"* ]]
+    [[ "$output" != *"Safe to retry or rollback locally"* ]]
+    [[ "$output" == *"Or retry:"* ]]
+}
+
+@test "recovery report: local-only with unverifiable commit count suppresses the rollback claim (§9.10)" {
+    # No commits_created key at all (an older or truncated status file):
+    # absence is not a value — the report must not claim rollback is safe.
+    local sf="$SCRATCH/svcb.status"
+    write_status_file "$sf" \
+        result failed \
+        failure_step version_commit \
+        push_status not_attempted \
+        homebrew_status not_applicable \
+        version 1.2.3 \
+        tag none
+
+    local -a completed=() not_started=() skipped=()
+
+    run _fleet_emit_recovery_report svcb ./svc-b "$sf" patch false
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"category: local-only"* ]]
+    [[ "$output" == *"Commits-created count unverified"* ]]
+    [[ "$output" != *"Safe to retry or rollback locally"* ]]
+    [[ "$output" != *"rollback locally"* ]]
 }
 
 @test "recovery report: unknown — status file missing, defer to per-member report" {
@@ -138,6 +235,10 @@ write_status_file() {
     grep -q "^push_status=success$" "$sf"
     grep -q "^version=1.2.3$" "$sf"
     grep -q "^tag=v1.2.3$" "$sf"
+    # §9.10: the fleet recovery report classifies rollback safety from this key.
+    # (Value not pinned: "abc123" is an abbreviation the host object store may
+    # or may not resolve; presence of the key is the contract.)
+    grep -q "^commits_created=" "$sf"
 }
 
 @test "orchestrator emit_ship_failure_report is a no-op for the status file when env var is unset" {

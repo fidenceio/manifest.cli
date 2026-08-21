@@ -143,8 +143,24 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"Add GitHub Release publishing support"* ]]
     [[ "$output" == *"Add smart ship preview summaries"* ]]
-    [[ "$output" == *"Update release copy and configuration examples"* ]]
+    [[ "$output" == *"Update documentation and examples"* ]]
     [[ "$output" == *"Add regression coverage for the changed CLI workflow"* ]]
+}
+
+@test "README change in a plain repo gets a repo-neutral bullet, not Manifest product copy" {
+    # RED-008: the docs/README/examples classification arm fires on almost any
+    # repo the CLI ships. Its bullet must not describe Manifest's own product
+    # ("release copy and configuration examples") in a stranger's changelog.
+    git tag v0.9.0
+    echo "# Some Service" > README.md
+    git add README.md
+    git commit -q -m "Auto-commit before Manifest process (README.md) [TS: 2026-08-21 00:00:00 UTC]"
+
+    run get_git_changes "1.0.0"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"Update release copy and configuration examples"* ]]
+    [[ "$output" == *"Update documentation and examples"* ]]
 }
 
 @test "root changelog auto-commit gets a descriptive release note" {

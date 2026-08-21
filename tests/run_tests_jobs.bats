@@ -11,10 +11,21 @@ load 'helpers/setup'
 
 RUNNER() { "$TEST_REPO_ROOT/scripts/run-tests.sh" "$@"; }
 
-@test "jobs: bare run defaults to --jobs auto (parallel) when GNU parallel is present" {
-    if ! command -v parallel >/dev/null 2>&1 || ! parallel --version 2>/dev/null | grep -qi 'GNU parallel'; then
+# Probe capture-then-match rather than piping `parallel --version` into an
+# early-exiting grep -q: under pipefail that pipe can report SIGPIPE (141)
+# and turn "GNU parallel present" into a spurious skip.
+_skip_unless_gnu_parallel() {
+    local pv=""
+    if command -v parallel >/dev/null 2>&1; then
+        pv="$(parallel --version 2>/dev/null || true)"
+    fi
+    if ! grep -qi 'GNU parallel' <<<"$pv"; then
         skip "GNU parallel not installed in this environment"
     fi
+}
+
+@test "jobs: bare run defaults to --jobs auto (parallel) when GNU parallel is present" {
+    _skip_unless_gnu_parallel
     run RUNNER --print-cmd
     [ "$status" -eq 0 ]
     # auto resolves to the CPU count; on any multi-core box that's a --jobs N flag.
@@ -32,18 +43,14 @@ RUNNER() { "$TEST_REPO_ROOT/scripts/run-tests.sh" "$@"; }
 }
 
 @test "jobs: an explicit count threads --jobs N to bats" {
-    if ! command -v parallel >/dev/null 2>&1 || ! parallel --version 2>/dev/null | grep -qi 'GNU parallel'; then
-        skip "GNU parallel not installed in this environment"
-    fi
+    _skip_unless_gnu_parallel
     run RUNNER --jobs 4 --print-cmd
     [ "$status" -eq 0 ]
     [ "$output" = "bats --jobs 4 $TEST_REPO_ROOT/tests" ]
 }
 
 @test "jobs: --jobs combines with --tier (parallel flag precedes the tag filter)" {
-    if ! command -v parallel >/dev/null 2>&1 || ! parallel --version 2>/dev/null | grep -qi 'GNU parallel'; then
-        skip "GNU parallel not installed in this environment"
-    fi
+    _skip_unless_gnu_parallel
     run RUNNER --jobs 4 --tier smoke --print-cmd
     [ "$status" -eq 0 ]
     [ "$output" = "bats --jobs 4 --filter-tags smoke $TEST_REPO_ROOT/tests" ]
@@ -62,9 +69,7 @@ RUNNER() { "$TEST_REPO_ROOT/scripts/run-tests.sh" "$@"; }
 }
 
 @test "jobs: --jobs=N form is accepted (equals syntax)" {
-    if ! command -v parallel >/dev/null 2>&1 || ! parallel --version 2>/dev/null | grep -qi 'GNU parallel'; then
-        skip "GNU parallel not installed in this environment"
-    fi
+    _skip_unless_gnu_parallel
     run RUNNER --jobs=3 --print-cmd
     [ "$status" -eq 0 ]
     [ "$output" = "bats --jobs 3 $TEST_REPO_ROOT/tests" ]

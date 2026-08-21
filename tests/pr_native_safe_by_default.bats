@@ -78,6 +78,46 @@ teardown() {
     [ ! -f "$SCRATCH/fleet_calls.log" ]
 }
 
+@test "fleet PR dispatch: bare invocation keeps the implicit queue default" {
+    load_modules "core/manifest-core.sh"
+
+    run _manifest_pr_fleet_dispatch
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Default fleet PR action: queue"* ]]
+    [[ "$output" == *"Would run fleet PR operation: queue"* ]]
+}
+
+@test "fleet PR dispatch: option-only invocation still routes to the queue default" {
+    load_modules "core/manifest-core.sh"
+
+    run _manifest_pr_fleet_dispatch --dry-run
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Default fleet PR action: queue"* ]]
+    [[ "$output" == *"Would run fleet PR operation: queue"* ]]
+}
+
+@test "fleet PR dispatch: unknown subcommand errors, names the token, calls nothing" {
+    # UX-007: `manifest pr fleet quue` used to silently mean `queue`. The
+    # rejection must fire before manifest_execution_parse, any gh call, and
+    # the fleet PR module.
+    load_modules "core/manifest-core.sh"
+    gh_stub_install
+    manifest_fleet_pr_dispatch() {
+        echo "should-not-call" >> "$SCRATCH/fleet_calls.log"
+        return 77
+    }
+
+    run _manifest_pr_fleet_dispatch quue
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"quue"* ]]
+    [[ "$output" == *"Valid subcommands: queue, create, status, checks, ready, help"* ]]
+    [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
+    [ ! -f "$SCRATCH/fleet_calls.log" ]
+}
+
 @test "top-level PR help advertises apply and preview flags for mutating commands" {
     run manifest_pr_help
 

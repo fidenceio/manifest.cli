@@ -736,7 +736,11 @@ _manifest_status_fleet_json() {
         fleet_state="$(_status_fleet_member_state "$local_axis" "$remote_axis")"
         tally[$fleet_state]=$(( tally[$fleet_state] + 1 ))
         local item
-        item="{$(_json_kv_str "name" "$service"),$(_json_kv_str "path" "$path"),$(_json_kv_str "remote_url" "$remote_url"),$(_json_kv_str "branch" "$branch"),$(_json_kv_str "state" "$state"),$(_json_kv_str "fleet_state" "$fleet_state"),$(_json_kv_str "local" "$local_axis"),$(_json_kv_str "remote" "$remote_axis"),$(_json_kv_str "version" "$version"),$(_json_kv_str "latest_commit_timestamp" "$commit_timestamp"),$(_json_kv_str "latest_commit" "$commit"),$(_json_kv_raw "version_surfaces" "$surfaces_json")}"
+        # remote_url is redacted, not merely JSON-escaped: _json_kv_str only makes
+        # the value *parseable*, so a roster remote carrying `user:pass@` would be
+        # emitted verbatim into machine-readable output (and into whatever
+        # consumes/stores it).
+        item="{$(_json_kv_str "name" "$service"),$(_json_kv_str "path" "$path"),$(_json_kv_str "remote_url" "$(manifest_redact "$remote_url")"),$(_json_kv_str "branch" "$branch"),$(_json_kv_str "state" "$state"),$(_json_kv_str "fleet_state" "$fleet_state"),$(_json_kv_str "local" "$local_axis"),$(_json_kv_str "remote" "$remote_axis"),$(_json_kv_str "version" "$version"),$(_json_kv_str "latest_commit_timestamp" "$commit_timestamp"),$(_json_kv_str "latest_commit" "$commit"),$(_json_kv_raw "version_surfaces" "$surfaces_json")}"
         if [[ "$first" == "true" ]]; then
             repos_json="$item"
             first=false
@@ -946,8 +950,9 @@ _status_fleet_bootstrap_report() {
 
     local i
     for ((i = 0; i < pending; i++)); do
+        # Same roster remote as the --json path above, same reason to redact it.
         printf "  %-36s would clone from %s -> %s\n" \
-            "${_names_ref[$i]}" "${_urls_ref[$i]}" "${_paths_ref[$i]}"
+            "${_names_ref[$i]}" "$(manifest_redact "${_urls_ref[$i]}")" "${_paths_ref[$i]}"
     done
     local name
     for name in "${_lost_ref[@]}"; do

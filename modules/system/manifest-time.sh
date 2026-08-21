@@ -51,6 +51,104 @@ _manifest_time_maybe_cleanup_cache() {
     printf '%s\n' "$now" > "$cleanup_marker" 2>/dev/null || true
 }
 
+# Report a refused (malformed) cache. Absence of a cache is an ordinary miss and
+# stays at debug level; a cache that exists but cannot be trusted is a PROBLEM,
+# and §9.15 forbids letting absent-or-malformed input read as a value — so it is
+# announced at warning level instead of being silently coerced into "no cache".
+_manifest_time_cache_refuse() {
+    local reason="$1" cache_file="$2"
+    if declare -F log_warning >/dev/null 2>&1; then
+        log_warning "Ignoring malformed trusted-time cache (${reason}): ${cache_file} — re-querying instead."
+    else
+        echo "   ⚠️  Ignoring malformed trusted-time cache (${reason}): ${cache_file} — re-querying instead." >&2
+    fi
+    return 1
+}
+
+# Parse the time cache.
+#   $1 = cache file
+#   $2 = name of the caller variable to receive "saved|ts|offset|uncertainty|server|server_ip"
+#   $3 = name of the caller variable to receive a short refusal reason
+# Returns 0 when the whole file parsed, 1 otherwise. Results travel by nameref
+# rather than stdout precisely so the caller does NOT need a command
+# substitution — a $(...) subshell would discard the refusal reason.
+#
+# The cache is PARSED, never sourced. `. "$cache_file"` (the previous
+# implementation) meant anything able to write that file — a squatted cache dir,
+# a MANIFEST_CLI_CACHE_DIR pointed somewhere hostile — ran arbitrary code inside
+# the CLI's own process (§9.22). Parsing is strictly weaker: only the six keys
+# the writer emits are accepted, each value must match its declared shape, and
+# ANY other line refuses the whole file. Refusing whole-file rather than
+# per-line is deliberate: a cache with an unexplained line is a cache of unknown
+# provenance, and a partially-trusted timestamp is worse than a fresh fetch.
+_manifest_time_cache_parse() {
+    local cache_file="$1"
+    local -n _out_ref="$2"
+    local -n _reason_ref="$3"
+    local line key value
+    local saved="" ts="" offset="" uncertainty="" server="" server_ip=""
+    _out_ref=""
+    _reason_ref=""
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        [ -n "$line" ] || continue
+        if [[ "$line" != *=* ]]; then
+            _reason_ref="line is not KEY=value"
+            return 1
+        fi
+        key="${line%%=*}"
+        value="${line#*=}"
+        # `|` is the field separator of this module's own wire format, so a
+        # value carrying one would silently shift every downstream field.
+        if [[ "$value" == *"|"* ]]; then
+            _reason_ref="value for ${key} contains a field separator"
+            return 1
+        fi
+        case "$key" in
+            MANIFEST_CLI_TIME_CACHE_SAVED_AT)
+                [[ "$value" =~ ^[0-9]{1,19}$ ]] || { _reason_ref="bad saved_at"; return 1; }
+                saved="$value" ;;
+            MANIFEST_CLI_TIME_CACHE_TIMESTAMP)
+                [[ "$value" =~ ^[0-9]{1,19}$ ]] || { _reason_ref="bad timestamp"; return 1; }
+                ts="$value" ;;
+            MANIFEST_CLI_TIME_CACHE_OFFSET)
+                [[ "$value" =~ ^[+-]?[0-9]{1,19}(\.[0-9]{1,9})?$ ]] \
+                    || { _reason_ref="bad offset"; return 1; }
+                offset="$value" ;;
+            MANIFEST_CLI_TIME_CACHE_UNCERTAINTY)
+                [[ "$value" =~ ^[+-]?[0-9]{1,19}(\.[0-9]{1,9})?$ ]] \
+                    || { _reason_ref="bad uncertainty"; return 1; }
+                uncertainty="$value" ;;
+            MANIFEST_CLI_TIME_CACHE_SERVER)
+                # A URL or a short token. Empty is tolerated (the reader
+                # substitutes a default), anything with whitespace or a control
+                # character is not. The length bound is a separate test, NOT a
+                # regex interval: bash's ERE caps a repetition at 255, so
+                # `{1,512}` is a hard regex ERROR (not a non-match) and refused
+                # every cache it was asked about — caught by the release gate.
+                [ -z "$value" ] || { [ "${#value}" -le 512 ] && [[ "$value" =~ ^[[:graph:]]+$ ]]; } \
+                    || { _reason_ref="bad server"; return 1; }
+                server="$value" ;;
+            MANIFEST_CLI_TIME_CACHE_SERVER_IP)
+                [ -z "$value" ] || [[ "$value" =~ ^[0-9a-fA-F.:]{1,45}$ ]] \
+                    || { _reason_ref="bad server_ip"; return 1; }
+                server_ip="$value" ;;
+            *)
+                _reason_ref="unexpected key ${key}"
+                return 1 ;;
+        esac
+    done < "$cache_file"
+
+    # A cache without both epochs cannot be aged, so it is not a cache. This
+    # also catches the truncated-write case (an empty or half-written file),
+    # which the sourcing version turned into saved_at=0 and a silent TTL miss.
+    [ -n "$saved" ] || { _reason_ref="missing saved_at"; return 1; }
+    [ -n "$ts" ]    || { _reason_ref="missing timestamp"; return 1; }
+
+    printf -v _out_ref '%s|%s|%s|%s|%s|%s' \
+        "$saved" "$ts" "$offset" "$uncertainty" "$server" "$server_ip"
+}
+
 # Read cache. Mode "fresh" honors TTL; "stale" honors STALE_MAX_AGE.
 # Echoes: timestamp|offset|uncertainty|server|server_ip|method
 _manifest_time_read_cache_data() {
@@ -59,14 +157,15 @@ _manifest_time_read_cache_data() {
     cache_file=$(_manifest_time_cache_file)
     [ -f "$cache_file" ] || return 1
 
-    # shellcheck disable=SC1090
-    . "$cache_file" 2>/dev/null || return 1
+    local parsed="" reason=""
+    if ! _manifest_time_cache_parse "$cache_file" parsed reason; then
+        _manifest_time_cache_refuse "${reason:-unparseable}" "$cache_file"
+        return 1
+    fi
 
-    local now saved ts
+    local now saved ts offset uncertainty server server_ip
+    IFS='|' read -r saved ts offset uncertainty server server_ip <<< "$parsed"
     now=$(date -u +%s)
-    saved="${MANIFEST_CLI_TIME_CACHE_SAVED_AT:-0}"
-    ts="${MANIFEST_CLI_TIME_CACHE_TIMESTAMP:-0}"
-    [[ "$saved" =~ ^[0-9]+$ ]] && [[ "$ts" =~ ^[0-9]+$ ]] || return 1
 
     local age=$((now - saved))
     [ "$age" -lt 0 ] && return 1
@@ -80,7 +179,7 @@ _manifest_time_read_cache_data() {
     [[ "$max_age" =~ ^[0-9]+$ ]] && [ "$max_age" -ge 1 ] || return 1
     [ "$age" -gt "$max_age" ] && return 1
 
-    echo "$((ts + age))|${MANIFEST_CLI_TIME_CACHE_OFFSET:-0.000000}|${MANIFEST_CLI_TIME_CACHE_UNCERTAINTY:-0.000000}|${MANIFEST_CLI_TIME_CACHE_SERVER:-cache}|${MANIFEST_CLI_TIME_CACHE_SERVER_IP:-127.0.0.1}|${method}"
+    echo "$((ts + age))|${offset:-0.000000}|${uncertainty:-0.000000}|${server:-cache}|${server_ip:-127.0.0.1}|${method}"
 }
 
 _manifest_time_write_cache_data() {
@@ -91,15 +190,26 @@ _manifest_time_write_cache_data() {
     cache_file=$(_manifest_time_cache_file)
     mkdir -p "$cache_dir" 2>/dev/null || return 1
     now=$(date -u +%s)
-    umask 077
-    {
-        echo "MANIFEST_CLI_TIME_CACHE_SAVED_AT=${now}"
-        echo "MANIFEST_CLI_TIME_CACHE_TIMESTAMP=${timestamp}"
-        echo "MANIFEST_CLI_TIME_CACHE_OFFSET=${offset}"
-        echo "MANIFEST_CLI_TIME_CACHE_UNCERTAINTY=${uncertainty}"
-        echo "MANIFEST_CLI_TIME_CACHE_SERVER=${server}"
-        echo "MANIFEST_CLI_TIME_CACHE_SERVER_IP=${server_ip}"
-    } > "$cache_file" 2>/dev/null || return 1
+    # umask 077 goes INSIDE a subshell so the tight mode applies to this write
+    # and nothing else. At function scope (§9.22) it leaked process-wide: every
+    # file the same manifest process created afterwards — generated docs, the
+    # CHANGELOG, user-facing output — inherited 0600. Same subshell pattern as
+    # the audit log in manifest-shared-utils.sh; the cache itself must stay
+    # 0600, which is what the umask is here for.
+    (
+        umask 077
+        {
+            echo "MANIFEST_CLI_TIME_CACHE_SAVED_AT=${now}"
+            echo "MANIFEST_CLI_TIME_CACHE_TIMESTAMP=${timestamp}"
+            echo "MANIFEST_CLI_TIME_CACHE_OFFSET=${offset}"
+            echo "MANIFEST_CLI_TIME_CACHE_UNCERTAINTY=${uncertainty}"
+            echo "MANIFEST_CLI_TIME_CACHE_SERVER=${server}"
+            echo "MANIFEST_CLI_TIME_CACHE_SERVER_IP=${server_ip}"
+        } > "$cache_file"
+    ) 2>/dev/null || return 1
+    # A cache file that pre-existed 0644 keeps its old mode through a truncating
+    # redirect, so repair it — same reason the audit writer chmods after mkdir.
+    chmod 600 "$cache_file" 2>/dev/null || true
 }
 
 # Effective server list from MANIFEST_CLI_TIME_SERVER1..4, or defaults.

@@ -45,6 +45,42 @@ teardown() {
     [[ "$output" != *"Roll back:"* ]]
 }
 
+@test "ship failure report never advises reset --hard when no commits were created (§9.10)" {
+    # The real incident: a pre-commit hook blocked version_commit, so zero
+    # commits existed — running the advised `git reset --hard` would have
+    # erased the uncommitted working tree unrecoverably.
+    run emit_ship_failure_report "version_commit" "$(git rev-parse HEAD)" "1.2.4" "none" "not_attempted" "not_applicable"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"commits created:    0"* ]]
+    [[ "$output" != *"reset --hard"* ]]
+    [[ "$output" == *"do NOT hard-reset"* ]]
+    [[ "$output" == *"git checkout HEAD -- VERSION CHANGELOG.md README.md docs/INDEX.md"* ]]
+}
+
+@test "ship failure report suppresses destructive advice when the commit count is unverifiable (§9.10)" {
+    # start_sha is not a resolvable commit -> commits_created stays "unknown".
+    # An unverifiable count must not authorize a destructive command.
+    run emit_ship_failure_report "version_commit" "0000000000000000000000000000000000000000" "1.2.4" "none" "not_attempted" "not_applicable"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"commits created:    unknown"* ]]
+    [[ "$output" != *"reset --hard"* ]]
+    [[ "$output" != *"git checkout HEAD --"* ]]
+    [[ "$output" == *"rollback advice suppressed"* ]]
+}
+
+@test "ship failure report still advises rollback for a verified positive commit count" {
+    # Anti-regression pin: the pre-push failure path with real commits keeps its
+    # existing `git reset --hard <start_sha>` advice byte-for-byte.
+    local start_sha
+    start_sha="$(git rev-parse HEAD)"
+    git commit --allow-empty -qm "ship-created commit"
+    run emit_ship_failure_report "push_changes" "$start_sha" "1.2.4" "v1.2.4" "failed" "skipped"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"commits created:    1"* ]]
+    [[ "$output" == *"Roll back:   git reset --hard ${start_sha}"* ]]
+    [[ "$output" != *"git checkout HEAD --"* ]]
+}
+
 @test "ship repo resume pushes existing local release tag" {
     local remote="$SCRATCH/remote.git"
     git init --bare -q "$remote"

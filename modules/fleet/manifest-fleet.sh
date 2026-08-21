@@ -2468,6 +2468,24 @@ _fleet_preview_workspace_policy() {
     return 0
 }
 
+# §9.27(a) preview-side counterpart of the per-member CI verdict pre-flight.
+# Apply binds each member's release to origin's latest completed `tests` run
+# (manifest_ship_ci_verdict_preflight, run inside each member's ship), so an
+# honest preview names that gate — but preview makes ZERO gh calls, so this
+# ANNOUNCES only and queries nothing (same posture as the workspace policy
+# gate announcement above). When release.require_ci_green=false the override
+# is announced the same way, so a preview never implies a refusal the apply
+# will not perform. Never fails the preview.
+_fleet_preview_ci_verdict() {
+    echo ""
+    if is_falsy "${MANIFEST_CLI_RELEASE_REQUIRE_CI_GREEN:-true}"; then
+        echo "CI verdict gate: release.require_ci_green=false — apply reports each member's latest completed 'tests' run without refusing (not queried in preview)"
+    else
+        echo "CI verdict gate: latest completed 'tests' workflow run on each member's origin default branch (not queried in preview; apply will refuse a member if CI is red)"
+    fi
+    return 0
+}
+
 # Returns the user-facing service name for plan output. YAML keys are
 # intentionally dot-free for variable-name compatibility (see
 # manifest-fleet-config.sh `tr '[:lower:]-.' '[:upper:]__'`), so the
@@ -2701,10 +2719,28 @@ _fleet_ship_plan() {
     return 0
 }
 
+# Ship-failure classification is shared with the orchestrator's failure report
+# — see core/manifest-ship-classify.sh (RED-001: this module's own copy of the
+# post-push step set omitted completion_clean, so a member whose push succeeded
+# but failed at completion_clean was offered rollback advice for a release that
+# was already public). manifest-core.sh loads the orchestrator (which sources
+# it) before this module, but this module is also sourced on its own — by tests
+# and by subshells that pull in only part of the tree — so guarantee it here.
+if ! declare -f manifest_ship_recovery_mode >/dev/null 2>&1; then
+    _manifest_fleet_classify_modules_dir="${MANIFEST_CLI_CORE_MODULES_DIR:-}"
+    if [ -z "$_manifest_fleet_classify_modules_dir" ]; then
+        _manifest_fleet_classify_modules_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    fi
+    # shellcheck disable=SC1091
+    source "$_manifest_fleet_classify_modules_dir/core/manifest-ship-classify.sh"
+    unset _manifest_fleet_classify_modules_dir
+fi
+
 # Reads a key=value status file written by the orchestrator and prints a
 # structured fleet-level recovery report. Classifies the failed member into
 # one of:
 #   pushed-then-stranded - release is on origin; formula/release-notes stranded; DO NOT rollback
+#   partial-push         - push reached some remotes but not all; DO NOT rollback
 #   local-only           - failure before push; no public state on origin
 #   unknown              - status file missing or unparsable (rare; child crashed before emit)
 # Reads `completed`, `not_started`, `skipped` arrays from caller scope.
@@ -2716,7 +2752,7 @@ _fleet_emit_recovery_report() {
     local local_only="$5"
 
     local result="unknown" failure_step="unknown" push_status="unknown"
-    local homebrew_status="unknown" version="" tag=""
+    local homebrew_status="unknown" version="" tag="" commits_created="unknown"
     if [[ -f "$status_file" ]]; then
         local k v
         while IFS='=' read -r k v; do
@@ -2727,19 +2763,43 @@ _fleet_emit_recovery_report() {
                 homebrew_status) homebrew_status="$v" ;;
                 version)         version="$v" ;;
                 tag)             tag="$v" ;;
+                commits_created) commits_created="$v" ;;
             esac
         done < "$status_file"
     fi
 
+    # The shared classifier decides whether rollback may be advised, so this
+    # report and the orchestrator's failure report can never diverge (RED-001).
+    local recovery_mode
+    recovery_mode="$(manifest_ship_recovery_mode "$push_status" "$failure_step" "$commits_created")"
+
     local category recovery_line resume_cmd retry_cmd
-    if [[ "$push_status" == "success" && "$failure_step" =~ ^(homebrew_|github_release) ]]; then
+    if [[ "$recovery_mode" == "post-push" ]]; then
         category="pushed-then-stranded"
         recovery_line="Release v${version:-?} is live (tag ${tag:-?} on origin). Formula/release stranded. DO NOT rollback."
         resume_cmd="cd $failed_path && manifest ship repo resume"
         retry_cmd=""
+    elif [[ "$recovery_mode" == "partial-push" ]]; then
+        category="partial-push"
+        recovery_line="Push reached some remotes but not all for v${version:-?} (tag ${tag:-?}); the release is public where it landed. DO NOT rollback — see the member's report above for per-remote retries."
+        resume_cmd="cd $failed_path && manifest ship repo resume"
+        retry_cmd=""
     elif [[ "$push_status" == "failed" || "$result" == "failed" ]]; then
         category="local-only"
-        recovery_line="Failure before public push; no remote state for this member. Safe to retry or rollback locally."
+        # §9.10: only a VERIFIED positive commit count may claim a local
+        # rollback is safe. Zero commits means a hard reset would erase
+        # uncommitted work; an unverifiable count advises nothing destructive.
+        case "$(manifest_ship_commits_created_class "$commits_created")" in
+            positive)
+                recovery_line="Failure before public push; no remote state for this member. Safe to retry or rollback locally."
+                ;;
+            zero)
+                recovery_line="Failure before public push; no remote state for this member. Nothing was committed — do NOT hard-reset (it would erase uncommitted work). Safe to retry."
+                ;;
+            *)
+                recovery_line="Failure before public push; no remote state for this member. Safe to retry. (Commits-created count unverified; not advising a local rollback.)"
+                ;;
+        esac
         resume_cmd="cd $failed_path && manifest ship repo resume"
         retry_cmd="cd $failed_path && manifest ship repo $increment_type -y"
     else
@@ -3153,6 +3213,10 @@ EOF
         # The apply path refuses on the workspace policy gate, so an honest
         # preview must not recommend -y without consulting it.
         _fleet_preview_workspace_policy
+        # Apply also binds each member's ship to origin CI's verdict (§9.27(a)).
+        # Announce only — preview makes zero gh calls; the query runs per member
+        # during apply.
+        _fleet_preview_ci_verdict
         # Stash the fingerprint the user is reading so a later apply can warn if
         # the fleet plan drifted between this preview and that apply.
         manifest_plan_fingerprint_persist "ship-fleet" "${MANIFEST_CLI_FLEET_PLAN_FINGERPRINT:-}" "${MANIFEST_CLI_FLEET_ROOT:-$PWD}"

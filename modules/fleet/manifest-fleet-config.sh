@@ -514,8 +514,10 @@ load_fleet_config() {
         log_warning "No services found in manifest.fleet.tsv"
     fi
 
-    # Load per-service configuration from TSV + optional YAML overrides
-    _load_all_service_configs "$MANIFEST_CLI_FLEET_ROOT"
+    # Load per-service configuration from TSV + optional YAML overrides.
+    # Propagate failure: a normalized-key collision between two member names
+    # must refuse the whole load, not continue with merged config.
+    _load_all_service_configs "$MANIFEST_CLI_FLEET_ROOT" || return 1
 
     local _svc_count=0
     for _ in $MANIFEST_CLI_FLEET_SERVICES; do _svc_count=$((_svc_count + 1)); done
@@ -552,6 +554,13 @@ _load_all_service_configs() {
         return 0
     fi
 
+    # Normalized-key collision guard (TYPE-001): the tr mapping below folds
+    # both '-' and '.' to '_', so distinct member names like `my-service` and
+    # `my.service` land on the same MANIFEST_CLI_FLEET_SERVICE_<NAME>_* keys
+    # and the later member silently overwrites the earlier one's config.
+    # Refuse loudly instead of merging.
+    local -A _seen_name_for_key=()
+
     while IFS=$'\t' read -r selected name path has_git url branch version; do
         [[ "$selected" =~ ^#.*$ ]] && continue
         [[ -z "$selected" ]] && continue
@@ -560,6 +569,13 @@ _load_all_service_configs() {
         # Sanitize service name for variable names
         local var_name
         var_name=$(echo "$name" | tr '[:lower:]-.' '[:upper:]__')
+
+        if [[ -n "${_seen_name_for_key[$var_name]:-}" && "${_seen_name_for_key[$var_name]}" != "$name" ]]; then
+            log_error "Fleet member name collision: '${_seen_name_for_key[$var_name]}' and '$name' both normalize to config key '$var_name'."
+            log_error "Rename one of them in manifest.fleet.tsv so their configuration keys stay distinct."
+            return 1
+        fi
+        _seen_name_for_key[$var_name]="$name"
 
         # Resolve relative path to absolute
         local abs_path="$path"

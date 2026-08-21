@@ -418,15 +418,35 @@ manifest_redact() {
     done < <(_manifest_redaction_env_var_names)
 
     # Pattern-based: only fork sed when a token sigil is actually present.
+    #
+    # The credentialed-URL clause (`scheme://user:pass@host` -> `scheme://[REDACTED]@host`)
+    # collapses the whole userinfo, not just the password: the username half of a
+    # PAT-in-URL remote is itself the credential often enough (`https://<token>@…`,
+    # `https://x-access-token:<token>@…`) that keeping it is not worth the risk.
+    # Scheme and host survive so the line still identifies WHICH remote it is.
+    #
+    # The password class excludes `/` (RFC 3986 forbids it unencoded in userinfo,
+    # and git's own parser ends the authority at the first `/`) — that is a
+    # deliberate narrowing of the obvious `[^@[:space:]]+`, which would swallow
+    # path text and turn `http://host:8443/p@v1` into `http://[REDACTED]@v1`.
+    #
+    # STRUCTURAL NOTE: redaction is wired into log_* only. Thousands of bare
+    # `echo`/`printf` calls across the modules bypass it entirely, so a pattern
+    # added here protects only the sites that actually call manifest_redact. The
+    # apply-target banner, `status --json` remote_url, the fleet bootstrap
+    # preview, and the tap-push success line were routed through it alongside
+    # this clause; that is the set that was confirmed, NOT a claim that the class
+    # is closed. Closing it needs an output helper every site goes through.
     case "$text" in
-        *gh[pousr]_*|*github_pat_*|*AKIA*|*sk-*|*eyJ*|*[Bb]earer\ *)
+        *gh[pousr]_*|*github_pat_*|*AKIA*|*sk-*|*eyJ*|*[Bb]earer\ *|*://*:*@*)
             text="$(printf '%s' "$text" | sed -E \
                 -e 's/github_pat_[A-Za-z0-9_]{20,}/[REDACTED]/g' \
                 -e 's/gh[pousr]_[A-Za-z0-9]{20,}/[REDACTED]/g' \
                 -e 's/AKIA[0-9A-Z]{16}/[REDACTED]/g' \
                 -e 's/sk-[A-Za-z0-9]{20,}/[REDACTED]/g' \
                 -e 's/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/[REDACTED]/g' \
-                -e 's/([Bb]earer )[A-Za-z0-9._-]{12,}/\1[REDACTED]/g')"
+                -e 's/([Bb]earer )[A-Za-z0-9._-]{12,}/\1[REDACTED]/g' \
+                -e 's#([A-Za-z][A-Za-z0-9+.-]*://)[^:/@[:space:]]+:[^/@[:space:]]+@#\1[REDACTED]@#g')"
             ;;
     esac
     printf '%s' "$text"
@@ -1061,7 +1081,11 @@ manifest_repo_scope_confirm_apply() {
     echo "-----------------------"
     echo "  Changes will be made to this Git repository only."
     echo "  Git root: $git_root"
-    echo "  Origin:   $origin"
+    # Redacted: `git remote get-url origin` returns whatever is configured, and a
+    # credential-in-URL remote would otherwise print its password on every single
+    # apply confirmation. This is a bare echo, so the log_* redaction wiring
+    # does not reach it — the call has to be explicit.
+    echo "  Origin:   $(manifest_redact "$origin")"
     echo "  Branch:   $branch"
     echo "  Command:  $replay_command"
     echo ""

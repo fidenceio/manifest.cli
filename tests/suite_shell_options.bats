@@ -89,3 +89,97 @@ setup() {
         return 1
     fi
 }
+
+# The two guards below ban one mechanism with two spellings. load_modules sets
+# `set -eo pipefail`; when a pipeline's consumer exits early (grep -q at its
+# first match, head after N lines) the still-writing EXTERNAL producer takes
+# SIGPIPE and the pipeline reports status 141, which errexit turns into a test
+# failure — intermittently, a different test each run. That intermittency is
+# the tell: both incidents passed locally and failed only CI's Linux leg.
+#
+# Both scans skip full-line comments (a comment cannot SIGPIPE, and two prior
+# incident write-ups in the suite quote the banned shapes verbatim). Their
+# regex fixtures are assembled at runtime from ${pipe} so this file can never
+# trip its own scan, and each scan asserts it visited a believable number of
+# files so a broken glob cannot pass vacuously (the positive-control pattern
+# from help_dispatch_parity.bats).
+
+# Incident (2026-08-21, and the v59.3.0 push): _first_line in
+# homebrew_tap_trust.bats and ship_pretag_reentrancy.bats:106 each fed a
+# streaming grep into head; head closed the pipe after one line and the Linux
+# leg failed with 141 while macOS passed. Both were fixed with grep -m1, which
+# stops reading without killing a producer. head as a pipeline consumer is
+# banned outright — not just behind external producers — because every safe
+# instance has a cheaper spelling, so per-site safety analysis is review
+# burden with no payoff:
+#   first grep hit only   ->  grep -m1 pat file
+#   first line of "$var"  ->  "${var%%$'\n'*}"
+#   first line of a file  ->  "$(head -1 file)"   (no pipe, no SIGPIPE)
+@test "suite portability: no pipeline feeds head — use grep -m1 or capture-and-slice" {
+    local pat='\|[[:space:]]*head([^[:alnum:]_./-]|$)'
+
+    # Positive controls: the regex still recognizes the banned shape, ignores
+    # the sanctioned replacement, and the glob still finds the suite.
+    local pipe='|'
+    grep -qE "$pat" <<<"git tag --list ${pipe} head -1"
+    refute grep -qE "$pat" <<<"grep -m1 needle file.txt"
+    local files=("$TEST_REPO_ROOT"/tests/*.bats)
+    [ "${#files[@]}" -gt 50 ]
+
+    local offenders
+    offenders="$(grep -nE "$pat" "${files[@]}" \
+        | grep -vE '^[^:]*:[0-9]+:[[:space:]]*#' || true)"
+
+    if [ -n "$offenders" ]; then
+        echo "Pipeline(s) feeding head in the suite:" >&2
+        echo "$offenders" >&2
+        echo "Use grep -m1, or capture whole and slice: \"\${v%%\$'\\n'*}\"." >&2
+        return 1
+    fi
+}
+
+# Incident (measured 2026-08-19): env_scaffold.bats fed yq into grep -q and
+# failed 1 run in 8; 14 external-producer sites were converted that day to
+# capture-then-match, and 0 failures in 15 runs followed:
+#     v="$(producer ...)"        # producer status stays observable
+#     grep -q needle <<<"$v"
+# Always two lines — folding into one herestring around a command substitution
+# discards the producer's exit status.
+#
+# Design: a denylist of the external producers observed in this suite, not a
+# parser. Builtin producers are SAFE — echo/printf make one small write that
+# fits the pipe buffer, so grep's early exit cannot SIGPIPE them — and ~646
+# such pipelines exist here; flagging by consumer alone would drown the suite
+# in rewrites carrying zero flake risk. Stated limits: (1) line-based — a
+# denylisted word anywhere before the pipe on the same line trips it, even
+# quoted as data; rewrite to capture-then-match either way. (2) a NEW external
+# producer, or a shell-function producer, is invisible until listed — when one
+# bites, add it beside its incident. `head` must stay FIRST in the alternation
+# so this pattern's own text never contains a pipe character directly before
+# the word head, which the guard above scans for.
+@test "suite portability: no external producer is piped into grep -q — capture, then match" {
+    local pat='(^|[^[:alnum:]_./-])(head|git|gh|yq|jq|find|cat|sed|awk|curl|ls|tail|tr|cut|parallel)[[:space:]][^|]*\|[[:space:]]*grep[[:space:]]+(-[[:alnum:]]+[[:space:]]+)*-[[:alnum:]]*q'
+
+    # Positive controls: the regex flags an external producer anywhere in the
+    # pipeline, and does NOT flag the builtin-producer form the suite uses
+    # hundreds of times.
+    local pipe='|'
+    grep -qE "$pat" <<<"yq e '.k' cfg.yaml ${pipe} grep -q v"
+    grep -qE "$pat" <<<"echo x ${pipe} sed s/x/y/ ${pipe} grep -q y"
+    refute grep -qE "$pat" <<<"echo \"\$x\" ${pipe} grep -q needle"
+    local files=("$TEST_REPO_ROOT"/tests/*.bats)
+    [ "${#files[@]}" -gt 50 ]
+
+    local offenders
+    offenders="$(grep -nE "$pat" "${files[@]}" \
+        | grep -vE '^[^:]*:[0-9]+:[[:space:]]*#' || true)"
+
+    if [ -n "$offenders" ]; then
+        echo "External producer(s) piped into grep -q in the suite:" >&2
+        echo "$offenders" >&2
+        echo "Capture first, then match on a second line:" >&2
+        echo "    v=\"\$(producer ...)\"" >&2
+        echo "    grep -q needle <<<\"\$v\"" >&2
+        return 1
+    fi
+}

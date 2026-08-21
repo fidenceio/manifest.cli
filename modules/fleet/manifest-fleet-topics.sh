@@ -366,6 +366,12 @@ manifest_fleet_topics_run() {
             [[ "$quiet" != "true" ]] && printf "  + %-25s%s\n" "$repo_name" "$delta_label"
             pushed=$((pushed + 1))
         else
+            # §9.2: `repo edit --add-topic` is a content-generating call — pace
+            # it so a fleet-wide topics pass stays under GitHub's secondary
+            # limits. The reads above (repo view / repo list) are never paced.
+            if declare -F manifest_gh_rate_limit_gate >/dev/null 2>&1; then
+                manifest_gh_rate_limit_gate
+            fi
             local -a edit_args=("repo" "edit" "$slug")
             for topic in "${delta[@]}"; do edit_args+=("--add-topic" "$topic"); done
             if gh "${edit_args[@]}" >/dev/null 2>&1; then

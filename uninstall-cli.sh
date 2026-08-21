@@ -31,6 +31,12 @@ print_header()  { echo -e "${BOLD}${CYAN}$1${NC}"; }
 
 APPLY=0
 
+# Count of directories apply_plan refused because they carry no evidence of
+# being a Manifest CLI install (see is_owned_install_dir). A refusal is not a
+# "nothing to do" — main() exits non-zero when this is non-empty so the run
+# cannot look clean while an env-var-derived target was left standing.
+REFUSED_INSTALL_DIRS=0
+
 usage() {
     cat <<EOF
 Usage: ./uninstall-cli.sh [--dry-run | -y | --yes] [-h | --help]
@@ -46,7 +52,11 @@ Options:
 
 Artifacts considered:
   - Homebrew package fidenceio/tap/manifest and the fidenceio/tap tap
-  - Install dirs: ~/.manifest-cli, /usr/local/share/manifest-cli
+  - Install dirs: ~/.manifest-cli, /usr/local/share/manifest-cli, plus any
+              MANIFEST_CLI_INSTALL_DIR / MANIFEST_CLI_INSTALL_LOCATION
+              override — an override is removed only if it actually contains
+              a Manifest CLI payload; otherwise it is refused, named, and the
+              run exits non-zero
   - Binaries: ~/.local/bin/manifest, /usr/local/bin/manifest,
               /opt/manifest-cli/bin/manifest, and any \`manifest\` on PATH
               that carries Manifest CLI markers
@@ -84,6 +94,14 @@ if [ -f "$_UNINSTALL_CLI_PATHS_MOD" ]; then
     DATA_DIRS=()
     SHELL_PROFILES=()
     while IFS= read -r _p; do [ -n "$_p" ] && INSTALL_DIRS+=("$_p"); done < <(manifest_install_paths_install_dirs)
+    # The two locations the installer itself writes. Everything else that
+    # manifest_install_paths_install_dirs yields came from
+    # MANIFEST_CLI_INSTALL_LOCATION / MANIFEST_CLI_INSTALL_DIR and must prove
+    # it is ours before a recursive removal (see is_owned_install_dir).
+    CANONICAL_INSTALL_DIRS=(
+        "$(manifest_install_paths_global_state_dir)"
+        "$(manifest_install_paths_legacy_install_dir)"
+    )
     while IFS= read -r _p; do [ -n "$_p" ] && BINARY_CANDIDATES+=("$_p"); done < <(manifest_install_paths_binary_candidates)
     while IFS= read -r _p; do
         [ -n "$_p" ] || continue
@@ -105,6 +123,9 @@ else
         "$HOME/.manifest-cli"
         "/usr/local/share/manifest-cli"
     )
+    # In the fallback there is no env-var expansion, so the whole list IS the
+    # canonical pair. Copy it rather than repeating the literals.
+    CANONICAL_INSTALL_DIRS=("${INSTALL_DIRS[@]}")
     BINARY_CANDIDATES=(
         "$HOME/.local/bin/manifest"
         "/usr/local/bin/manifest"
@@ -167,6 +188,59 @@ is_owned_binary() {
     for d in "${INSTALL_DIRS[@]}"; do
         case "$resolved" in "$d"/*) return 0 ;; esac
     done
+    return 1
+}
+
+# A directory may be recursively removed only if it is one of the two
+# canonical install locations, or carries positive evidence of being a
+# Manifest CLI install. The distinction matters because INSTALL_DIRS is fed by
+# MANIFEST_CLI_INSTALL_LOCATION / MANIFEST_CLI_INSTALL_DIR
+# (manifest_install_paths_install_dirs) and a /usr/local/* or /opt/* member
+# classifies as privileged in apply_plan, i.e. reaches `sudo rm -rf`. The
+# sandbox tripwire blocks empty paths, exact system roots, $HOME itself and
+# out-of-sandbox targets — it has no ownership and no marker check, so
+# `MANIFEST_CLI_INSTALL_DIR=/opt/homebrew ./uninstall-cli.sh -y` would have
+# removed all of Homebrew (SEC-009 / §9.23).
+#
+# Evidence is the shipped payload, in the same spirit as is_owned_binary's
+# marker grep: no extra sentinel file is used, because a sentinel would only
+# ever appear in installs made AFTER this change, and the payload identifies
+# every layout we have ever shipped. Both layouts are accepted:
+#   §5.7 (current): <dir>/current/modules/core/manifest-core.sh
+#   pre-§5.7 flat:  <dir>/modules/core/manifest-core.sh
+# plus the state-root's own global config, which survives a runtime tree that
+# was never finished or has already been half-removed.
+is_owned_install_dir() {
+    local dir="$1" candidate marker
+    [ -d "$dir" ] || return 1
+    for candidate in "${CANONICAL_INSTALL_DIRS[@]}"; do
+        [ "$dir" = "$candidate" ] && return 0
+    done
+    for marker in \
+        "current/modules/core/manifest-core.sh" \
+        "modules/core/manifest-core.sh" \
+        "manifest.config.global.yaml"; do
+        [ -e "$dir/$marker" ] && return 0
+    done
+    return 1
+}
+
+# Permission bits of an existing file as an octal string (e.g. "644"); empty +
+# non-zero when absent or when neither stat dialect answers. GNU/busybox is
+# `stat -c %a`, BSD/macOS is `stat -f %Lp`; the wrong flag exits non-zero, and
+# GNU's `-f` (--file-system) prints unrelated numbers, so the octal-digit check
+# is what makes the fallback safe rather than merely lucky.
+file_mode_of() {
+    local path="$1" mode
+    [ -e "$path" ] || return 1
+    if mode="$(stat -c '%a' "$path" 2>/dev/null)" && [ -n "$mode" ] && [ -z "${mode//[0-7]/}" ]; then
+        printf '%s\n' "$mode"
+        return 0
+    fi
+    if mode="$(stat -f '%Lp' "$path" 2>/dev/null)" && [ -n "$mode" ] && [ -z "${mode//[0-7]/}" ]; then
+        printf '%s\n' "$mode"
+        return 0
+    fi
     return 1
 }
 
@@ -274,7 +348,17 @@ print_plan() {
     brew_package_present && { echo "  brew uninstall $BREW_FORMULA"; found=1; }
     brew_tap_present     && { echo "  brew untap $BREW_TAP";          found=1; }
 
-    while IFS= read -r f; do [ -n "$f" ] && { echo "  remove dir:        $f"; found=1; }; done < <(found_install_dirs)
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        if is_owned_install_dir "$f"; then
+            echo "  remove dir:        $f"
+        else
+            # Announce the refusal in the preview instead of promising a
+            # removal that apply_plan will decline (SEC-009 / §9.23).
+            echo "  REFUSE dir:        $f (not a Manifest CLI install directory)"
+        fi
+        found=1
+    done < <(found_install_dirs)
     while IFS= read -r f; do [ -n "$f" ] && { echo "  remove binary:     $f"; found=1; }; done < <(found_binaries)
     while IFS= read -r f; do [ -n "$f" ] && { echo "  remove config:     $f"; found=1; }; done < <(found_configs)
     while IFS= read -r f; do [ -n "$f" ] && { echo "  remove data dir:   $f"; found=1; }; done < <(found_data_dirs)
@@ -331,6 +415,15 @@ apply_plan() {
 
     while IFS= read -r f; do
         [ -n "$f" ] || continue
+        # Positive-evidence gate BEFORE the recursive remove. This is the only
+        # plan block whose targets can be named by an environment variable and
+        # then classified privileged below, so it is the only one that needs it.
+        if ! is_owned_install_dir "$f"; then
+            print_error "Refusing to remove $f: not a Manifest CLI install directory (no Manifest payload found, and it is not a canonical install location). Remove it by hand if you are certain."
+            REFUSED_INSTALL_DIRS=$((REFUSED_INSTALL_DIRS + 1))
+            errors=$((errors + 1))
+            continue
+        fi
         privileged="no"; case "$f" in /usr/local/*|/opt/*) privileged="yes" ;; esac
         if remove_path "$f" "$privileged"; then
             print_success "Removed $f"
@@ -380,20 +473,55 @@ apply_plan() {
         fi
     done < <(brew_completion_targets)
 
+    local mode filter_status
     while IFS= read -r f; do
         [ -n "$f" ] || continue
         if ! manifest_install_paths_assert_destructive_target_safe "$f" "profile-rewrite"; then
             continue
         fi
-        backup="${f}.manifest-backup-$(date +%Y%m%d-%H%M%S)"
-        tmp="$(mktemp)"
-        cp "$f" "$backup"
-        grep -v -E "$PROFILE_LINE_REGEX" "$f" > "$tmp" 2>/dev/null || true
+        # Stage the rewrite BESIDE the target, never in the shared system temp
+        # dir (SEC-011 / §8.5e — same defect class as install-cli.sh's sweep).
+        # A bare `mktemp` lands in a world-visible /tmp on Linux and the `mv`
+        # back over the rc is then a cross-filesystem copy, i.e. not atomic —
+        # and it hands the rc the temp's 0600, silently tightening a 0644 rc.
+        if ! mode="$(file_mode_of "$f")"; then
+            print_warning "Could not read permissions of $f — left unchanged"
+            errors=$((errors + 1))
+            continue
+        fi
+        if ! tmp="$(mktemp "${f}.manifest-rewrite.XXXXXX" 2>/dev/null)"; then
+            print_warning "Could not stage rewrite beside $f — left unchanged"
+            errors=$((errors + 1))
+            continue
+        fi
+        filter_status=0
+        grep -v -E "$PROFILE_LINE_REGEX" "$f" > "$tmp" 2>/dev/null || filter_status=$?
+        # grep exit 1 = selected nothing (an emptied rc is legitimate);
+        # 2+ = a real read/write failure, so discard and keep the original.
+        if [ "$filter_status" -gt 1 ]; then
+            rm -f "$tmp"
+            print_warning "Rewrite of $f failed (grep exit $filter_status) — left unchanged"
+            errors=$((errors + 1))
+            continue
+        fi
         if cmp -s "$f" "$tmp"; then
-            rm -f "$tmp" "$backup"
-        else
-            mv "$tmp" "$f"
+            rm -f "$tmp"
+            continue
+        fi
+        chmod "$mode" "$tmp" 2>/dev/null || true
+        backup="${f}.manifest-backup-$(date +%Y%m%d-%H%M%S)"
+        if ! cp "$f" "$backup" 2>/dev/null; then
+            rm -f "$tmp"
+            print_warning "Could not back up $f — left unchanged"
+            errors=$((errors + 1))
+            continue
+        fi
+        if mv "$tmp" "$f" 2>/dev/null; then
             print_success "Cleaned $f (backup: $backup)"
+        else
+            rm -f "$tmp"
+            print_warning "Could not replace $f — left unchanged (backup: $backup)"
+            errors=$((errors + 1))
         fi
     done < <(found_profile_files)
 
@@ -459,7 +587,11 @@ main() {
         print_warning "Encountered $apply_errors removal error(s) — see above"
     fi
 
-    if verify_clean; then
+    if [ "$REFUSED_INSTALL_DIRS" -gt 0 ]; then
+        print_error "$REFUSED_INSTALL_DIRS directory(ies) refused — see above. Nothing was removed for them."
+    fi
+
+    if verify_clean && [ "$REFUSED_INSTALL_DIRS" -eq 0 ]; then
         echo ""
         print_status "💡 Restart your terminal (or 'source ~/.zshrc' / equivalent) for shell-profile changes to take effect."
         exit 0

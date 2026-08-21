@@ -78,8 +78,11 @@ manifest_git_changes_bullets_for_files() {
     if _manifest_git_changes_files_match "$files" '(^|/)modules/core/manifest-ship\.sh$'; then
         _manifest_git_changes_emit_once "Add smart ship preview summaries" emitted
     fi
+    # This pattern fires on almost ANY repo the CLI ships (nearly every repo
+    # has a README.md or docs/), so the bullet must stay repo-neutral — no
+    # Manifest-specific product wording (RED-008).
     if _manifest_git_changes_files_match "$files" '(^|/)docs/|(^|/)README\.md$|(^|/)examples/'; then
-        _manifest_git_changes_emit_once "Update release copy and configuration examples" emitted
+        _manifest_git_changes_emit_once "Update documentation and examples" emitted
     fi
     if [[ "$github_release_changed" != "true" ]] && _manifest_git_changes_files_match "$files" '(^|/)modules/recipe/|(^|/)recipes/builtin/|(^|/)docs/contracts/recipe\.schema\.json$'; then
         _manifest_git_changes_emit_once "Add recipe-backed workflow definitions and recipe introspection support" emitted

@@ -208,7 +208,7 @@ mk_repo_clean() {
     run _refresh_fleet_commit_changes
     [ "$status" -eq 0 ]
     # Exactly one commit should have happened (one "committed" line).
-    [ "$(printf '%s\n' "$output" | grep -c 'committed' | head -n1)" -ge 1 ]
+    [ "$(printf '%s\n' "$output" | grep -c 'committed')" -ge 1 ]
     [[ "$output" == *"1 committed"* ]]
     [[ "$output" != *"main: committed"* ]]
 }

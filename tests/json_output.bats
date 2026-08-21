@@ -220,5 +220,5 @@ EOF
     # Single-line JSON array.
     [ "$(echo "$output" | wc -l | tr -d ' ')" = "1" ]
     echo "$output" | yq e '.' - >/dev/null
-    echo "$output" | yq e 'type == "!!seq"' - | grep -q true
+    [ "$(yq e 'type == "!!seq"' - <<<"$output")" = "true" ]
 }

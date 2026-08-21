@@ -5,6 +5,11 @@ load 'helpers/setup'
 setup() {
     load_modules
     source "$TEST_REPO_ROOT/modules/workflow/manifest-orchestrator.sh"
+    # §9.2: release creation paces mutations through a per-user state file
+    # resolved via manifest_install_paths_global_state_dir — keep that write
+    # inside the per-test tmpdir, never the developer's real HOME (pattern:
+    # local_install_upgrade.bats).
+    manifest_install_paths_global_state_dir() { echo "${BATS_TEST_TMPDIR:-/tmp}/manifest-state"; }
 }
 
 teardown() {

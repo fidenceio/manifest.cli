@@ -7,6 +7,21 @@
 
 # Orchestrator module - modules are already sourced by manifest-core.sh
 
+# Ship-failure classification is shared with the fleet recovery report — see
+# core/manifest-ship-classify.sh (RED-001: two divergent copies of the
+# post-push step set advised rollback of an already-public release). Guard the
+# source because this module is also sourced standalone by tests and
+# partial-tree subshells, where load order is not guaranteed.
+if ! declare -f manifest_ship_recovery_mode >/dev/null 2>&1; then
+    _manifest_orch_classify_modules_dir="${MANIFEST_CLI_CORE_MODULES_DIR:-}"
+    if [ -z "$_manifest_orch_classify_modules_dir" ]; then
+        _manifest_orch_classify_modules_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    fi
+    # shellcheck disable=SC1091
+    source "$_manifest_orch_classify_modules_dir/core/manifest-ship-classify.sh"
+    unset _manifest_orch_classify_modules_dir
+fi
+
 _emit_ship_status_file() {
     # Writes key=value lines to $MANIFEST_CLI_SHIP_STATUS_FILE when set.
     # Used by fleet ship to classify per-member outcomes without parsing stdout.
@@ -106,20 +121,45 @@ emit_ship_failure_report() {
     git status --short --branch 2>/dev/null || echo "   (unavailable)"
     echo ""
     echo "🛠️  Recovery commands:"
-    if [[ "$push_status" == "success" && "$failure_step" == "completion_clean" ]]; then
+    # Advice is decided by the shared classifier (core/manifest-ship-classify.sh)
+    # so this report and the fleet recovery report can never diverge (RED-001).
+    local recovery_mode
+    recovery_mode="$(manifest_ship_recovery_mode "$push_status" "$failure_step" "$commits_created")"
+    if [[ "$recovery_mode" == "post-push" && "$failure_step" == "completion_clean" ]]; then
         echo "   Release artifacts are already pushed. Do not delete the tag or hard-reset unless you are intentionally rolling back a public release."
         echo "   Inspect status:  git status --short"
         if [ -n "$tag_name" ] && [ "$tag_name" != "none" ]; then
             echo "   Inspect commits: git log --oneline ${tag_name}..HEAD"
             echo "   Verify tag:      git ls-remote --tags origin ${tag_name}"
         fi
-    elif [[ "$push_status" == "success" && "$failure_step" =~ ^(homebrew_|github_release) ]]; then
+    elif [[ "$recovery_mode" == "post-push" ]]; then
         echo "   Release artifacts are already pushed. Do not delete the tag or hard-reset unless you are intentionally rolling back a public release."
         echo "   Resume:      manifest ship repo resume"
         echo "   Retry branch push if needed: git push origin ${branch}"
         if [ -n "$tag_name" ] && [ "$tag_name" != "none" ]; then
             echo "   Verify tag:  git ls-remote --tags origin ${tag_name}"
         fi
+    elif [[ "$recovery_mode" == "partial-push" ]]; then
+        # §8.1a: the push reached some remotes but not all. Public state exists
+        # wherever it landed, so a hard reset / tag delete would diverge from a
+        # remote that already serves the release.
+        echo "   Push reached some remotes but not all — the release is already public on every remote marked success below."
+        echo "   Do NOT hard-reset or delete the tag: a remote that has the release already serves it."
+        local _pr_entry _pr_remote _pr_state _pr_refspec
+        _pr_refspec="${branch}"
+        if [ -n "$tag_name" ] && [ "$tag_name" != "none" ]; then
+            _pr_refspec="${branch} ${tag_name}"
+        fi
+        for _pr_entry in "${_MANIFEST_CLI_GIT_PUSH_REMOTE_RESULTS[@]}"; do
+            _pr_remote="${_pr_entry%%|*}"
+            _pr_state="${_pr_entry##*|}"
+            echo "   Remote ${_pr_remote}: ${_pr_state}"
+            if [ "$_pr_state" != "success" ]; then
+                echo "      Retry:    git push ${_pr_remote} ${_pr_refspec}"
+            fi
+        done
+        echo "   Resume:      manifest ship repo resume"
+        echo "   Note: resume re-pushes every configured remote, but its pre-push status probe checks origin only."
     elif [ -n "$tag_name" ] && [ "$tag_name" != "none" ]; then
         echo "   Retry push:  git push origin ${branch} ${tag_name}"
         echo "   Resume:      manifest ship repo resume"
@@ -127,9 +167,29 @@ emit_ship_failure_report() {
     else
         echo "   Retry push:  git push origin ${branch}"
     fi
-    if [ -n "$start_sha" ] && ! [[ "$push_status" == "success" && "$failure_step" =~ ^(homebrew_|github_release$|completion_clean$) ]]; then
-        echo "   Roll back:   git reset --hard ${start_sha}"
-    fi
+    case "$recovery_mode" in
+        rollback)
+            # A verified positive commit count: reset --hard only discards the
+            # commits this run created (nothing public exists in this mode).
+            if [ -n "$start_sha" ]; then
+                echo "   Roll back:   git reset --hard ${start_sha}"
+            fi
+            ;;
+        checkout-files)
+            # §9.10: zero commits created — a hard reset would erase UNCOMMITTED
+            # work unrecoverably (no commit, no reflog, no stash). Revert only
+            # the files the ship generates. The destructive command is not even
+            # named here, so it cannot be copy-pasted from this report.
+            echo "   No commits were created by this run — do NOT hard-reset; it would erase uncommitted work unrecoverably."
+            echo "   Revert ship-generated files instead:"
+            echo "                git checkout HEAD -- VERSION CHANGELOG.md README.md docs/INDEX.md"
+            ;;
+        no-destructive)
+            # §9.10 fail-safe: an unverifiable commit count must not authorize a
+            # destructive command (§9.15: absence is not a value).
+            echo "   (rollback advice suppressed: the commits-created count is unverifiable, so no destructive command is advised)"
+            ;;
+    esac
     echo ""
 
     _emit_ship_status_file \
@@ -138,7 +198,8 @@ emit_ship_failure_report() {
         version "${version:-}" \
         tag "${tag_name:-}" \
         push_status "$push_status" \
-        homebrew_status "$homebrew_status"
+        homebrew_status "$homebrew_status" \
+        commits_created "$commits_created"
 
     # Close the per-run diagnostic log (§5.6) on the failure path, recording
     # the step the ship stopped at so resume can report "picking up from step X".
@@ -197,6 +258,160 @@ manifest_check_github_actions_for_head() {
     echo "GitHub Actions: failed"
     echo "   Inspect: gh run view $run_id --log-failed"
     return 1
+}
+
+# Split one "id<TAB>conclusion<TAB>url" row (the --jq shape the CI-verdict
+# pre-flight and completion report request) into _MANIFEST_CLI_CI_ROW_{ID,CONCLUSION,URL}.
+# Positional splitting, NOT `IFS=$'\t' read`: tab is IFS whitespace, so read
+# collapses consecutive tabs and an EMPTY conclusion (an in-progress run) would
+# silently shift the URL into the conclusion field.
+_manifest_ci_row_parse() {
+    local row="$1" rest
+    _MANIFEST_CLI_CI_ROW_ID="${row%%$'\t'*}"
+    _MANIFEST_CLI_CI_ROW_CONCLUSION=""
+    _MANIFEST_CLI_CI_ROW_URL=""
+    rest="${row#*$'\t'}"
+    [ "$rest" = "$row" ] && return 0
+    _MANIFEST_CLI_CI_ROW_CONCLUSION="${rest%%$'\t'*}"
+    local url="${rest#*$'\t'}"
+    [ "$url" = "$rest" ] || _MANIFEST_CLI_CI_ROW_URL="$url"
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# CI verdict pre-flight — CI's verdict binds the ship (tracker §9.27(a)).
+# -----------------------------------------------------------------------------
+# The local release gate proves the suite on THIS host's OS only, while the
+# two-OS `tests` workflow on origin bound nothing — the ubuntu leg was red
+# across two releases unnoticed. So before any mutation, a publishing ship asks
+# origin for the latest COMPLETED `tests` run on the default branch:
+#
+#   concluded failure (or timed_out/startup_failure) -> REFUSE, naming run + URL
+#   concluded success                                -> proceed, stating it
+#   anything neutral (cancelled, skipped, ...)       -> announced skip; proceed
+#
+# Every degradation is ANNOUNCED, never silent (§9.15: absence is not a
+# verdict): no gh on PATH, gh unauthenticated, gh errors (no network, workflow
+# never registered), and no completed run yet each print exactly one line
+# stating which condition, then proceed. An announced skip is NOT a pass — the
+# wording is "unverified", never "green".
+#
+# Override: release.require_ci_green (MANIFEST_CLI_RELEASE_REQUIRE_CI_GREEN),
+# default true. false keeps the query and prints the finding but never
+# refuses — the override changes the binding, not the visibility.
+
+manifest_ship_require_ci_green() {
+    ! is_falsy "${MANIFEST_CLI_RELEASE_REQUIRE_CI_GREEN:-true}"
+}
+
+manifest_ship_ci_verdict_preflight() {
+    local branch="${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}"
+    local workflow="tests"
+
+    if ! command -v gh >/dev/null 2>&1; then
+        echo "CI verdict: unverified — gh (GitHub CLI) is not installed; proceeding without origin CI confirmation."
+        return 0
+    fi
+    if ! gh auth status >/dev/null 2>&1; then
+        echo "CI verdict: unverified — gh is not authenticated; proceeding without origin CI confirmation."
+        return 0
+    fi
+
+    # One read call; TSV via --jq keeps parsing free of a jq dependency
+    # (same shape as manifest_ship_bottle_ci_refresh_status).
+    local row
+    if ! row="$(gh run list --workflow "$workflow" --branch "$branch" --status completed --limit 1 \
+        --json databaseId,conclusion,url \
+        --jq 'if length == 0 then empty else "\(.[0].databaseId)\t\(.[0].conclusion // "")\t\(.[0].url // "")" end' \
+        2>/dev/null)"; then
+        echo "CI verdict: unverified — could not list '${workflow}' workflow runs on origin/${branch} (gh error, no network, or the workflow never ran); proceeding without origin CI confirmation."
+        return 0
+    fi
+    if [[ -z "$row" ]]; then
+        echo "CI verdict: unverified — no completed '${workflow}' workflow run on origin/${branch} yet; proceeding without origin CI confirmation."
+        return 0
+    fi
+
+    local run_id conclusion url
+    _manifest_ci_row_parse "$row"
+    run_id="$_MANIFEST_CLI_CI_ROW_ID"
+    conclusion="$_MANIFEST_CLI_CI_ROW_CONCLUSION"
+    url="$_MANIFEST_CLI_CI_ROW_URL"
+
+    case "$conclusion" in
+        success)
+            echo "✅ CI green on origin/${branch} (run ${run_id})."
+            return 0
+            ;;
+        failure|timed_out|startup_failure)
+            if ! manifest_ship_require_ci_green; then
+                log_warning "CI is red on origin/${branch}: run ${run_id} concluded ${conclusion}."
+                if [[ -n "$url" ]]; then
+                    echo "   Run: $url"
+                fi
+                echo "   release.require_ci_green=false — proceeding despite the red run (finding reported, not binding)."
+                return 0
+            fi
+            log_error "CI is red on origin/${branch}: run ${run_id} concluded ${conclusion} — fix or override."
+            if [[ -n "$url" ]]; then
+                echo "   Run: $url"
+            fi
+            echo "   Override: release.require_ci_green=false (MANIFEST_CLI_RELEASE_REQUIRE_CI_GREEN=false) ships despite red CI; the finding is still printed."
+            return 1
+            ;;
+        *)
+            echo "CI verdict: unverified — latest completed '${workflow}' run on origin/${branch} concluded '${conclusion:-unknown}' (run ${run_id}), neither green nor red; proceeding without origin CI confirmation."
+            return 0
+            ;;
+    esac
+}
+
+# -----------------------------------------------------------------------------
+# Post-push CI completion report (§9.27(a), part 3). After a successful push,
+# name the CI run that push just triggered so the operator watches the leg the
+# local gate cannot cover. Bounded and best-effort: a few short polls (≤ ~10s
+# total at the defaults), never blocking completion and never failing the ship;
+# when the run is not visible yet, print the exact command to find it.
+# MANIFEST_CLI_SHIP_CI_REPORT_ATTEMPTS / MANIFEST_CLI_SHIP_CI_REPORT_DELAY_SECONDS
+# are env-only pacing knobs (tests set delay 0); deliberately not config keys.
+# -----------------------------------------------------------------------------
+manifest_ship_completion_ci_report() {
+    local head_sha="${1:-}"
+    [ -n "$head_sha" ] || return 0
+    local hint="gh run list --commit $head_sha --limit 1"
+
+    if ! command -v gh >/dev/null 2>&1 || ! gh auth status >/dev/null 2>&1; then
+        echo "   CI run for ${head_sha:0:7}: unverified (gh unavailable). Check later: $hint"
+        return 0
+    fi
+
+    local attempts="${MANIFEST_CLI_SHIP_CI_REPORT_ATTEMPTS:-3}"
+    local delay="${MANIFEST_CLI_SHIP_CI_REPORT_DELAY_SECONDS:-3}"
+    case "$attempts" in ''|*[!0-9]*) attempts=3 ;; esac
+    case "$delay" in ''|*[!0-9]*) delay=3 ;; esac
+    [ "$attempts" -lt 1 ] && attempts=1
+
+    local i row run_id conclusion url
+    for (( i = 1; i <= attempts; i++ )); do
+        row="$(gh run list --commit "$head_sha" --limit 1 \
+            --json databaseId,conclusion,url \
+            --jq 'if length == 0 then empty else "\(.[0].databaseId)\t\(.[0].conclusion // "")\t\(.[0].url // "")" end' \
+            2>/dev/null || true)"
+        if [ -n "$row" ]; then
+            _manifest_ci_row_parse "$row"
+            run_id="$_MANIFEST_CLI_CI_ROW_ID"
+            url="$_MANIFEST_CLI_CI_ROW_URL"
+            echo "   CI run for ${head_sha:0:7}: ${run_id}${url:+ — $url}"
+            echo "   Watch it — a green local gate does not cover the Linux leg."
+            return 0
+        fi
+        if (( i < attempts )) && (( delay > 0 )); then
+            sleep "$delay"
+        fi
+    done
+
+    echo "   CI run for ${head_sha:0:7}: not visible yet. Check: $hint"
+    return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -661,6 +876,12 @@ manifest_create_github_release_for_tag() {
     echo "🐙 Creating GitHub Release..."
     echo "   Repo:  $repo_slug"
     echo "   Tag:   $tag_name"
+    # §9.2: `release create` is a content-generating call — pace it so a fleet
+    # ship (one release per member) stays under GitHub's secondary limits. A
+    # single-repo ship makes one call, which never paces at the defaults.
+    if declare -F manifest_gh_rate_limit_gate >/dev/null 2>&1; then
+        manifest_gh_rate_limit_gate
+    fi
     if gh "${args[@]}"; then
         echo "GitHub Release: created ($tag_name)"
         return 0
@@ -774,6 +995,11 @@ manifest_ship_ensure_bottle_ci() {
     esac
 
     echo "   Bottle CI: ${_MANIFEST_CLI_SHIP_BOTTLE_CI_STATUS:-none} — dispatching bottle.yml (dry_run=false)..."
+    # §9.2: `workflow run` is a content-generating call — pace it like the
+    # other gh writes on the ship path.
+    if declare -F manifest_gh_rate_limit_gate >/dev/null 2>&1; then
+        manifest_gh_rate_limit_gate
+    fi
     if gh workflow run bottle.yml --repo "$slug" -f dry_run=false >/dev/null 2>&1; then
         # Give Actions a moment to register the run before the wait loop polls.
         sleep 2
@@ -1345,7 +1571,7 @@ manifest_ship_repo_resume() {
 
     if ! push_changes "$version"; then
         log_error "Resume failed while pushing branch/tag."
-        emit_ship_failure_report "resume_push" "$(git rev-parse HEAD 2>/dev/null || echo "")" "$version" "$tag_name" "failed" "skipped"
+        emit_ship_failure_report "resume_push" "$(git rev-parse HEAD 2>/dev/null || echo "")" "$version" "$tag_name" "${_MANIFEST_CLI_GIT_PUSH_STATUS:-failed}" "skipped"
         return 1
     fi
     local pushed_head_sha
@@ -1551,6 +1777,19 @@ manifest_ship_workflow() {
             ;;
     esac
 
+    # CI verdict pre-flight (§9.27(a)): before the local gate — and before any
+    # mutation — consult origin's latest completed `tests` run. Publish mode
+    # only: a --local prep pushes nothing, so origin's CI has nothing to bind.
+    # Placed ahead of the local gate deliberately: the query costs seconds and
+    # the local gate costs minutes, so a red-CI refusal is cheap.
+    if [ "$publish_release" = "true" ]; then
+        if ! _manifest_ship_step "ci_verdict" manifest_ship_ci_verdict_preflight; then
+            emit_ship_failure_report "ci_verdict" "$workflow_start_sha" "$(cat "${MANIFEST_CLI_PROJECT_ROOT:-$PWD}/VERSION" 2>/dev/null || echo unknown)" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+            return 1
+        fi
+        echo ""
+    fi
+
     # Baseline the pending set BEFORE the gate: a full-tier gate runs for
     # minutes, and the auto-commit below stages whatever the tree looks like
     # afterwards. Recording it here is what lets that step distinguish the
@@ -1709,7 +1948,9 @@ manifest_ship_workflow() {
         # Push changes
         workflow_push_status="attempted"
         if ! _manifest_ship_step "push_changes" push_changes "$new_version"; then
-            workflow_push_status="failed"
+            # push_changes reports its per-remote ledger verdict: "partial" when
+            # some remotes already have the release (§8.1a), else "failed".
+            workflow_push_status="${_MANIFEST_CLI_GIT_PUSH_STATUS:-failed}"
             log_error "Push failed; aborting ship workflow."
             emit_ship_failure_report "push_changes" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
             return 1
@@ -1745,6 +1986,12 @@ manifest_ship_workflow() {
             else
                 workflow_actions_status="skipped"
             fi
+        fi
+        # §9.27(a) completion report: name the CI run this push just triggered.
+        # Only when the waiter above did not run (default: it is disabled and
+        # reports "skipped") — when it ran, it already named and watched the run.
+        if [ "$workflow_actions_status" = "skipped" ]; then
+            manifest_ship_completion_ci_report "$workflow_final_head_sha"
         fi
         echo ""
     else

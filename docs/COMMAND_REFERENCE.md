@@ -368,9 +368,9 @@ the checkout would overwrite.
 
 Afterwards you are in **detached HEAD**: viewing that tag rather than being on a branch.
 `git switch -` returns you to the branch you came from. `revert` is therefore a way to
-*look at* an old release, not a way to undo a published one — see §8.8 of
-[TRACKER.md](TRACKER.md) for the open question of whether a guarded `rollback` should
-exist at all.
+*look at* an old release, not a way to undo a published one. Undoing a published release
+is a declared Non-Goal ([NORTH_STAR.md](NORTH_STAR.md)): recovery is roll-forward — ship
+a new version.
 
 When a release fails partway, run `manifest ship repo resume` first. The failure report
 may also suggest `git reset --hard <sha>`; read it before running it. A release **begins**

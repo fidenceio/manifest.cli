@@ -353,13 +353,111 @@ source_manifest_uninstall() {
     fi
 }
 
+# Permission bits of an existing file as an octal string (e.g. "644").
+# Empty + non-zero when the path is absent or neither stat dialect answers.
+#
+# Both dialects are tried because the wrong one exits non-zero on the other
+# platform: GNU/busybox is `stat -c %a`, BSD/macOS is `stat -f %Lp`. GNU's `-f`
+# means --file-system and prints unrelated numbers, so the digit check below is
+# what makes the fallback safe rather than merely lucky.
+_manifest_install_file_mode() {
+    local path="$1" mode
+    [ -e "$path" ] || return 1
+    if mode="$(stat -c '%a' "$path" 2>/dev/null)" && [ -n "$mode" ] && [ -z "${mode//[0-7]/}" ]; then
+        printf '%s\n' "$mode"
+        return 0
+    fi
+    if mode="$(stat -f '%Lp' "$path" 2>/dev/null)" && [ -n "$mode" ] && [ -z "${mode//[0-7]/}" ]; then
+        printf '%s\n' "$mode"
+        return 0
+    fi
+    return 1
+}
+
 # Strip MANIFEST_* exports and manifest-related source/PATH lines from shell
-# profiles. Delegates to the canonical impl in manifest-install-paths.sh so
-# the regex, tripwire, and backup pattern live in one place. Called once
-# before installing to remove residue from previous installs.
+# profiles. Called once before installing to remove residue from previous
+# installs, and again by the post-uninstall residue sweep.
+#
+# The regex, the profile list, the destructive tripwire and the backup naming
+# all still come from manifest-install-paths.sh — only the STAGING is local,
+# which is the whole point (SEC-011 / §8.5e). The module's own
+# manifest_install_paths_cleanup_profile_entries stages the rewritten rc in
+# `manifest_make_scratch_path`, i.e. ${TMPDIR:-/tmp}/manifest-cli/scratch/…:
+# on Linux (TMPDIR usually unset) that is a world-visible /tmp path created
+# with the ambient umask, `mkdir -p` succeeds silently against a
+# pre-created one, and whoever owns that directory can swap the staged file
+# between the cmp below and the mv — arbitrary content into ~/.zshrc, executed
+# at the user's next shell start. macOS's per-user $TMPDIR mitigates it there;
+# Linux/Alpine is a supported platform and does not.
+#
+# So stage BESIDE the target, exactly as manifest-install-paths.sh:425-428
+# already mandates for write-then-mv sites. That directory is the rc file's own
+# (only its owner can plant a file there) and it makes the replace a
+# same-filesystem rename(2) — which the cross-device /tmp case never was.
 cleanup_environment_variables() {
     print_subheader "🧹 Cleaning Up Manifest CLI Shell-Profile Entries"
-    manifest_install_paths_cleanup_profile_entries 0 0
+
+    local profile_regex removed_count=0
+    profile_regex="$(manifest_install_paths_profile_line_regex)"
+
+    local profile_file backup_file temp_file mode filter_status
+    while IFS= read -r profile_file; do
+        [ -n "$profile_file" ] || continue
+        [ -f "$profile_file" ] || continue
+        if ! manifest_install_paths_assert_destructive_target_safe "$profile_file" "profile-rewrite"; then
+            continue
+        fi
+
+        # Read the mode BEFORE staging: a fresh mktemp is 0600, so a rewrite
+        # that skipped this would silently tighten a conventionally-0644 rc.
+        # Unreadable mode ⇒ refuse the rewrite rather than guess at the bits.
+        if ! mode="$(_manifest_install_file_mode "$profile_file")"; then
+            print_warning "⚠️  Could not read permissions of $profile_file — left unchanged"
+            continue
+        fi
+        if ! temp_file="$(mktemp "${profile_file}.manifest-rewrite.XXXXXX" 2>/dev/null)"; then
+            print_warning "⚠️  Could not stage rewrite beside $profile_file — left unchanged"
+            continue
+        fi
+
+        filter_status=0
+        grep -v -E "$profile_regex" "$profile_file" > "$temp_file" || filter_status=$?
+        # grep exits 1 when it selected nothing (every line was ours) — an
+        # emptied rc is a legitimate result. 2+ is a real read/write failure:
+        # drop the staged file and leave the original alone.
+        if [ "$filter_status" -gt 1 ]; then
+            rm -f "$temp_file"
+            print_warning "⚠️  Rewrite of $profile_file failed (grep exit $filter_status) — left unchanged"
+            continue
+        fi
+
+        if cmp -s "$profile_file" "$temp_file"; then
+            rm -f "$temp_file"
+            continue
+        fi
+
+        chmod "$mode" "$temp_file" 2>/dev/null || true
+        backup_file="${profile_file}.manifest-backup-$(date +%Y%m%d-%H%M%S)"
+        if ! cp "$profile_file" "$backup_file" 2>/dev/null; then
+            rm -f "$temp_file"
+            print_warning "⚠️  Could not back up $profile_file — left unchanged"
+            continue
+        fi
+        if mv "$temp_file" "$profile_file" 2>/dev/null; then
+            echo "  ✅ Cleaned: $profile_file (backup: $backup_file)"
+            removed_count=$((removed_count + 1))
+        else
+            rm -f "$temp_file"
+            print_warning "⚠️  Could not replace $profile_file — left unchanged (backup: $backup_file)"
+        fi
+    done < <(manifest_install_paths_shell_profiles)
+
+    if [ "$removed_count" -eq 0 ]; then
+        echo "  No Manifest CLI entries found in shell profiles"
+    else
+        echo "  ✅ Cleaned $removed_count shell profile(s) — restart your terminal to apply"
+    fi
+    return 0
 }
 
 # Clean up legacy installation locations
