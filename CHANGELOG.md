@@ -1,5 +1,18 @@
 # Changelog
 
+## [59.4.0] - 2026-08-21
+
+**Release Type:** Minor
+
+### Changes
+
+- Record the v59.3.0 release in §9.20 and add a cold-start resume point
+- Rewrite the user-facing docs for readability, and fix three untruths found doing it
+- Make the CLI's own help agree with the CLI, and document recovery
+- Guard the command surfaces against each other (TRACKER §9.26)
+- Update 1 file before release
+
+
 ## [59.3.0] - 2026-08-20
 
 **Release Type:** Minor
@@ -104,15 +117,4 @@
 ### Changes
 
 - Add a containerized test runner for Manifest CLI
-- Add regression coverage for the changed CLI workflow
-
-
-## [58.0.3] - 2026-08-05
-
-**Release Type:** Patch
-
-### Changes
-
-- Add GitHub Release publishing support
-- Update release copy and configuration examples
 - Add regression coverage for the changed CLI workflow

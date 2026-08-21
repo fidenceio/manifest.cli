@@ -13,7 +13,7 @@ waits for you to say yes.
      replaces every copy of it (manifest-documentation.sh, update_readme_version).
      Adding another backticked bare version above this line would retarget that
      rewrite at the wrong string. -->
-**Version:** `59.3.0`
+**Version:** `59.4.0`
 **Platforms:** macOS, Linux
 **Primary interface:** `manifest <verb> <scope> [options]`
 
