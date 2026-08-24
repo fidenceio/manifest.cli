@@ -84,6 +84,43 @@ EOF
     grep -q '^## \[46\.13\.6\]' "${SCRATCH}/CHANGELOG.md"
 }
 
+@test "prepend: writes via temp+rename and leaves no temp behind (TRACKER §9.23)" {
+    local changes="${SCRATCH}/changes.md"
+    seed_changes_file "$changes" "46.13.6"
+
+    run prepend_root_changelog_entry "$SCRATCH" "46.13.6" "2026-05-05 12:00:00 UTC" "patch" "$changes"
+    [ "$status" -eq 0 ]
+    # The assembly temp is created beside the target, so a leftover would be a
+    # tracked-directory turd the ship's own sweep would then have to remove.
+    run bash -c "ls ${SCRATCH}/CHANGELOG.md.* 2>/dev/null"
+    [ -z "$output" ]
+}
+
+@test "prepend: an existing CHANGELOG.md keeps its permission bits (TRACKER §9.23)" {
+    # mktemp creates 0600. Switching from an in-place redirect to temp+rename
+    # must not quietly make a published, tracked file owner-readable only.
+    local changes="${SCRATCH}/changes.md"
+    seed_changes_file "$changes" "46.13.6"
+    printf '# Changelog\n\n## [46.0.0] - 2026-01-01\n\n- old\n' > "${SCRATCH}/CHANGELOG.md"
+    chmod 644 "${SCRATCH}/CHANGELOG.md"
+
+    run prepend_root_changelog_entry "$SCRATCH" "46.13.6" "2026-05-05 12:00:00 UTC" "patch" "$changes"
+    [ "$status" -eq 0 ]
+    [ "$(manifest_file_mode "${SCRATCH}/CHANGELOG.md")" = "644" ]
+    # Positive control: the write actually happened.
+    grep -q '^## \[46\.13\.6\]' "${SCRATCH}/CHANGELOG.md"
+}
+
+@test "prepend: a new CHANGELOG.md is created readable, not 0600 (TRACKER §9.23)" {
+    local changes="${SCRATCH}/changes.md"
+    seed_changes_file "$changes" "46.13.6"
+
+    run prepend_root_changelog_entry "$SCRATCH" "46.13.6" "2026-05-05 12:00:00 UTC" "patch" "$changes"
+    [ "$status" -eq 0 ]
+    [ "$(manifest_file_mode "${SCRATCH}/CHANGELOG.md")" != "600" ]
+    grep -q '^## \[46\.13\.6\]' "${SCRATCH}/CHANGELOG.md"
+}
+
 @test "prepend: subsequent ships add new entry above existing ones" {
     local changes="${SCRATCH}/changes.md"
     seed_changes_file "$changes" "46.13.6"

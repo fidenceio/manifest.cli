@@ -453,6 +453,33 @@ manifest_redact() {
 }
 
 # -----------------------------------------------------------------------------
+# Permission bits of an existing file as an octal string (e.g. "644").
+# Empty + non-zero when the path is absent or neither stat dialect answers.
+#
+# Both dialects are tried because the wrong one exits non-zero on the other
+# platform: GNU/busybox is `stat -c %a`, BSD/macOS is `stat -f %Lp`. GNU's `-f`
+# means --file-system and prints unrelated numbers, so the digit check is what
+# makes the fallback safe rather than merely lucky.
+#
+# NOTE: `_manifest_install_file_mode` in install-cli.sh is a deliberate twin of
+# this function, not drift. The installer runs before any module exists on the
+# machine, so it cannot source this file. Change both together.
+# -----------------------------------------------------------------------------
+manifest_file_mode() {
+    local path="$1" mode
+    [ -e "$path" ] || return 1
+    if mode="$(stat -c '%a' "$path" 2>/dev/null)" && [ -n "$mode" ] && [ -z "${mode//[0-7]/}" ]; then
+        printf '%s\n' "$mode"
+        return 0
+    fi
+    if mode="$(stat -f '%Lp' "$path" 2>/dev/null)" && [ -n "$mode" ] && [ -z "${mode//[0-7]/}" ]; then
+        printf '%s\n' "$mode"
+        return 0
+    fi
+    return 1
+}
+
+# -----------------------------------------------------------------------------
 # JSON helpers — minimal hand-rolled emitters so --json works without jq.
 # We only support the small subset of JSON the CLI actually emits: strings,
 # numbers/booleans/null (caller-classified), and flat arrays/objects.

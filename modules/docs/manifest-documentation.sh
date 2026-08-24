@@ -837,7 +837,19 @@ prepend_root_changelog_entry() {
         ' "$root_changelog" > "$existing_body_file"
     fi
 
-    {
+    # Assemble beside the target, then rename into place (TRACKER §9.23).
+    # Writing straight over $root_changelog truncated it at redirect-open, so an
+    # interrupt mid-write left a half-written changelog with no copy of the old
+    # one. The temp lives in the same directory so the rename stays on one
+    # filesystem, and therefore atomic.
+    local assembled
+    assembled="$(mktemp "${root_changelog}.XXXXXX")" || {
+        log_error "Root CHANGELOG.md: could not create a temporary file beside it"
+        rm -f "$entry_file" "$existing_body_file"
+        return 1
+    }
+
+    if ! {
         printf '# Changelog\n\n'
         cat "$entry_file"
         if [[ -s "$existing_body_file" ]]; then
@@ -848,7 +860,30 @@ prepend_root_changelog_entry() {
             printf '\n'
             cat "$existing_body_file"
         fi
-    } > "$root_changelog"
+    } > "$assembled"; then
+        log_error "Root CHANGELOG.md: assembly failed; the existing file is untouched"
+        rm -f "$assembled" "$entry_file" "$existing_body_file"
+        return 1
+    fi
+
+    # mktemp creates 0600, but the old in-place `>` redirect left an existing
+    # file's mode untouched and gave a new one the umask default. Reproduce both
+    # so switching to temp+rename does not quietly make CHANGELOG.md
+    # owner-readable only.
+    local target_mode=""
+    if [[ -f "$root_changelog" ]]; then
+        target_mode="$(manifest_file_mode "$root_changelog" 2>/dev/null || true)"
+    fi
+    if [[ -z "$target_mode" ]]; then
+        target_mode="$(printf '%o' "$(( 0666 & ~0$(umask) ))")"
+    fi
+    chmod "$target_mode" "$assembled" 2>/dev/null || true
+
+    if ! mv -f "$assembled" "$root_changelog"; then
+        log_error "Root CHANGELOG.md: rename failed; the existing file is untouched"
+        rm -f "$assembled" "$entry_file" "$existing_body_file"
+        return 1
+    fi
 
     rm -f "$entry_file" "$existing_body_file"
 
@@ -931,12 +966,40 @@ _manifest_prune_root_changelog() {
         END { flush_section() }
     ' "$file" > "$tmp"
 
+    # The trimmed result is assembled BESIDE the target rather than in the
+    # shared scratch dir, because this is the file that gets renamed onto
+    # $file: a scratch-to-repo `mv` can cross filesystems, and a cross-device
+    # rename degrades to copy-then-unlink, which is not atomic. That is the rule
+    # already stated in manifest-install-paths.sh, applied here (TRACKER §9.23).
+    local trimmed
+    if ! trimmed="$(mktemp "${file}.XXXXXX")"; then
+        log_warning "CHANGELOG retention: could not stage the pruned file beside it; leaving it untouched"
+        rm -f "$tmp"
+        return 0
+    fi
+
     # Strip trailing blank lines.
-    awk 'BEGIN{n=0} {lines[++n]=$0} END{
+    if ! awk 'BEGIN{n=0} {lines[++n]=$0} END{
         while (n>0 && lines[n] ~ /^[[:space:]]*$/) n--
         for (i=1; i<=n; i++) print lines[i]
-    }' "$tmp" > "${tmp}.trim"
-    mv "${tmp}.trim" "$file"
+    }' "$tmp" > "$trimmed"; then
+        log_warning "CHANGELOG retention: trim failed; leaving the file untouched"
+        rm -f "$tmp" "$trimmed"
+        return 0
+    fi
+
+    # mktemp creates 0600, and the rename carries the temp's bits onto the
+    # target, so the target's own mode has to be reapplied or a published file
+    # silently becomes owner-only.
+    local mode
+    mode="$(manifest_file_mode "$file" 2>/dev/null || true)"
+    [[ -n "$mode" ]] || mode="$(printf '%o' "$(( 0666 & ~0$(umask) ))")"
+    chmod "$mode" "$trimmed" 2>/dev/null || true
+
+    if ! mv -f "$trimmed" "$file"; then
+        log_warning "CHANGELOG retention: rename failed; leaving the file untouched"
+        rm -f "$trimmed"
+    fi
     rm -f "$tmp"
 }
 
