@@ -3093,14 +3093,29 @@ _fleet_root_release() {
     # SECURITY: stage ONLY coordination files, by name. The version file is
     # force-added (it is coordination by definition, even under a custom name);
     # everything else is left to the allowlist.
+    # Record what the caller already had staged BEFORE this run touches the
+    # index, so the abort path below can undo exactly what this run added and
+    # nothing else (TRACKER §9.23 — it used to run a pathspec-less `git reset`,
+    # which discarded the user's entire staged set on refusal).
+    local line
+    local -A preexisting_staged=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && preexisting_staged["$line"]=1
+    done < <(git -C "$root" diff --cached --name-only 2>/dev/null)
+
     local f
+    local -a staged_by_run=()
     for f in .gitignore manifest.fleet.config.yaml manifest.fleet.tsv CHANGELOG_FLEET.md; do
-        [[ -f "$root/$f" ]] && git -C "$root" add -- "$f" 2>/dev/null
+        [[ -f "$root/$f" ]] || continue
+        git -C "$root" add -- "$f" 2>/dev/null || continue
+        [[ -n "${preexisting_staged[$f]+set}" ]] || staged_by_run+=("$f")
     done
-    [[ -f "$version_file" ]] && git -C "$root" add -f -- "$version_name" 2>/dev/null
+    if [[ -f "$version_file" ]] && git -C "$root" add -f -- "$version_name" 2>/dev/null; then
+        [[ -n "${preexisting_staged[$version_name]+set}" ]] || staged_by_run+=("$version_name")
+    fi
 
     # Defense-in-depth: refuse to commit if ANYTHING outside the allowlist is staged.
-    local staged bad="" line
+    local staged bad=""
     staged="$(git -C "$root" diff --cached --name-only 2>/dev/null)"
     while IFS= read -r line; do
         [[ -n "$line" ]] || continue
@@ -3112,7 +3127,12 @@ _fleet_root_release() {
     if [[ -n "$bad" ]]; then
         log_error "Fleet-root release ABORTED: non-coordination files staged at the root:$bad"
         log_error "Refusing to commit — this would leak workspace content into the coordination repo."
-        git -C "$root" reset -q >/dev/null 2>&1 || true
+        # Unstage only what this run staged. The offending paths were staged by
+        # the user, and unstaging those would reverse a staging decision this
+        # code has no business touching.
+        if [[ ${#staged_by_run[@]} -gt 0 ]]; then
+            git -C "$root" reset -q -- "${staged_by_run[@]}" >/dev/null 2>&1 || true
+        fi
         return 1
     fi
 

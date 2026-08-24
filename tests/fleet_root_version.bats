@@ -108,7 +108,34 @@ YAML
     run _fleet_root_release patch apply false 1
     [ "$status" -ne 0 ]
     [[ "$output" == *"ABORTED"* ]]
-    # the index was reset and nothing was committed
+    # nothing was committed
+    run git -C "$SCRATCH" rev-parse -q --verify HEAD
+    [ "$status" -ne 0 ]
+}
+
+@test "_fleet_root_release abort leaves the user's own staged set intact (TRACKER §9.23)" {
+    # The abort path used to run a pathspec-less `git reset`, which threw away
+    # everything the user had staged — not just what this run added. Refusing to
+    # commit is this function's job; reversing the user's staging decision is not.
+    mk_fleet_root date ""
+    mkdir -p "$SCRATCH/secure"
+    echo 'Password=x' > "$SCRATCH/secure/leak.json"
+    echo 'my work' > "$SCRATCH/mywork.txt"
+    git -C "$SCRATCH" add -f -- secure/leak.json mywork.txt
+
+    run _fleet_root_release patch apply false 1
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"ABORTED"* ]]
+
+    # Both of the user's staged paths are still staged.
+    run git -C "$SCRATCH" diff --cached --name-only
+    [[ "$output" == *"secure/leak.json"* ]]
+    [[ "$output" == *"mywork.txt"* ]]
+
+    # And what this run staged itself was withdrawn, so a retry starts clean.
+    [[ "$output" != *"FLEET_VERSION"* ]]
+
+    # Still no commit.
     run git -C "$SCRATCH" rev-parse -q --verify HEAD
     [ "$status" -ne 0 ]
 }
