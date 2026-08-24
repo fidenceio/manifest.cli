@@ -1,5 +1,19 @@
 # Changelog
 
+## [59.4.3] - 2026-08-24
+
+**Release Type:** Patch
+
+### Changes
+
+- Docs(tracker): consolidate after v59.4.2 — delete shipped items, fold 17 adjudications
+- Fix(cleanup)!: bound the ship-time temp sweep to what the caller asked for
+- Fix(docs): write CHANGELOG.md through temp+rename, preserving its mode
+- Fix(fleet): a refused fleet-root commit unstages only what the run staged
+- Docs(tracker): file §9.30 and §6.5 from the Fidence plan; record §9.23 progress
+- Update 1 file before release
+
+
 ## [59.4.2] - 2026-08-21
 
 **Release Type:** Patch
@@ -110,15 +124,3 @@
 
 - Add GitHub Release publishing support
 - Update release copy and configuration examples
-
-
-## [59.0.0] - 2026-08-12
-
-**Release Type:** Major
-
-### Changes
-
-- Fix(config): report the inherited fleet layer and the env layer honestly
-- Perf(config): index each config file once instead of once per key
-- Docs(config): make USER_GUIDE the canonical layer model
-- Update 2 files before release
