@@ -12,14 +12,14 @@ _manifest_cloud_not_available() {
     return 1
 }
 
-# Apply-intent contract guard (workspace §1.1, CLI §3.1).
+# Apply-intent contract guard (workspace §1.1, CLI §38).
 #
 # Every Cloud-backed mutation must carry an explicit execution_mode=apply.
 # Requests that omit the field — or that declare preview while asking the
 # cloud to mutate — are rejected here, before any provider or analyzer runs.
 # The check fails closed: an unset or unrecognized mode is treated as "not
 # apply". This pins the contract on the stub now, so it is already enforced
-# when §3.1 wires real Cloud calls and populates MANIFEST_CLI_CLOUD_EXECUTION_MODE
+# when §38 wires real Cloud calls and populates MANIFEST_CLI_CLOUD_EXECUTION_MODE
 # from the parsed CLI execution mode.
 manifest_cloud_require_apply_intent() {
     local execution_mode="${MANIFEST_CLI_CLOUD_EXECUTION_MODE:-}"

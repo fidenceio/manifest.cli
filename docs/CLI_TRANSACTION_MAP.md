@@ -18,17 +18,21 @@ This map identifies high-consequence paths and their side-effect boundaries.
 1. Resolve repo identity.
 2. Load config layers.
 3. Check working tree and branch policy.
-4. Compute next version.
-5. Bump `VERSION` and any explicit `version.sync` JSON/TOML/YAML targets.
-6. Generate release notes and changelog entry.
-7. Update README/docs metadata.
-8. Archive sweep — a `local-write` that **deletes files**, so it is listed rather than left implicit. Point-in-time audit artifacts move into `docs/zArchive/`; then temporary files are removed. That removal never touches `.git`, never touches a file git tracks, and only sweeps `*.tmp`/`*.temp`/`*.bak`/`*.backup`/`*~` under the docs tree — `.DS_Store` and `Thumbs.db` are the only patterns swept tree-wide. The files it would remove are named in the preview.
-9. Commit release files.
-10. Create tag.
-11. Push branch and tag, then set the branch's upstream if it has none. The push uses a literal refspec, which never writes tracking config, so a repo only ever pushed by Manifest would otherwise have no upstream. This is a `local-write` occurring *after* the `remote-write`: it is conditional (skipped when an upstream exists, or when several remotes make the choice ambiguous), announced on stdout, and never fatal — the release is already public by then, so it cannot fail the ship.
-12. Create or reuse GitHub Release.
-13. Update Homebrew tap when canonical CLI release rules apply.
-14. Verify completion cleanliness before printing success: the source tree must be clean, and published ships must still have `HEAD` at the pushed release head.
+4. CI verdict gate — read origin's latest *completed* `tests` conclusion and refuse a red one before any mutation. Makes no `gh` call in preview. Every degradation (no `gh`, unauthenticated, no completed run, `cancelled`) is announced as *unverified* rather than green, and `release.require_ci_green: false` opts out while still reporting the finding.
+5. Release gate (pre-bump) — run the repo's test gate. A `local-write`, listed because it writes: on a verified pass it records the epoch in `.manifest-cli/release-gate-pass.epoch`, the ledger the freshness window is measured from. That directory is machine-local state and is gitignored by the Manifest `.gitignore` template; a repo that tracks it will see this write land in the next step's commit.
+6. Auto-commit of pre-existing working-tree changes — a `local-write` that **creates a commit** out of whatever the tree already carried, using a bare `git add .`. Listed rather than left implicit because it commits content nobody reviewed for this release, and because it runs *after* step 3 checked the tree and step 5 wrote to it. Skipped on a clean tree.
+7. Compute next version.
+8. Bump `VERSION` and any explicit `version.sync` JSON/TOML/YAML targets.
+9. Generate release notes and changelog entry.
+10. Update docs metadata. Files carrying a Manifest-managed block are updated in place; a `README.md` or `docs/INDEX.md` with no managed block is preserved untouched, and the run says so. Nothing infers authorship from a file's title or wording.
+11. Archive sweep — a `local-write` that **deletes files**, so it is listed rather than left implicit. Point-in-time audit artifacts move into `docs/zArchive/`; then temporary files are removed. That removal never touches `.git`, never touches a file git tracks, and only sweeps `*.tmp`/`*.temp`/`*.bak`/`*.backup`/`*~` under the docs tree — `.DS_Store` and `Thumbs.db` are the only patterns swept tree-wide. The files it would remove are named in the preview.
+12. Commit release files.
+13. Create tag.
+14. Push branch and tag, then set the branch's upstream if it has none. The push uses a literal refspec, which never writes tracking config, so a repo only ever pushed by Manifest would otherwise have no upstream. This is a `local-write` occurring *after* the `remote-write`: it is conditional (skipped when an upstream exists, or when several remotes make the choice ambiguous), announced on stdout, and never fatal — the release is already public by then, so it cannot fail the ship.
+15. Release gate (post-push).
+16. Create or reuse GitHub Release.
+17. Update Homebrew tap when canonical CLI release rules apply.
+18. Verify completion cleanliness before printing success: the source tree must be clean, and published ships must still have `HEAD` at the pushed release head.
 
 Preview mode stops before local and remote writes. `--local -y` allows local writes and suppresses remote writes.
 

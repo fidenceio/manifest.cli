@@ -9,7 +9,7 @@
 #     failure REFUSES (naming run id + URL), success proceeds (naming the run),
 #     and EVERY degradation (no gh, unauthenticated, gh error, no completed
 #     run, neutral conclusion) is an announced "unverified" skip that proceeds.
-#     Announced skip is not a pass (§9.15: absence is not a verdict).
+#     Announced skip is not a pass (§6: absence is not a verdict).
 #   - override: release.require_ci_green=false keeps the query and the printed
 #     finding but never refuses.
 #   - completion report: after a push, a bounded poll names the run the push
@@ -101,7 +101,7 @@ GREEN_ROW=$'171717\tsuccess\thttps://github.com/acme/svc/actions/runs/171717'
     grep -q -e $'--status\tcompleted' <<<"$calls"
 }
 
-# --- announced degradations (absence is not a verdict, §9.15) -------------------
+# --- announced degradations (absence is not a verdict, §6) -------------------
 
 @test "ci verdict: no gh on PATH announces the skip as unverified and proceeds" {
     mkdir -p "$SCRATCH/no-gh"

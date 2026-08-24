@@ -2,7 +2,7 @@
 # §5.10 smoke tier (safety-contract suite)
 # bats file_tags=smoke
 #
-# Coverage for SEC-007 (owned by tracker §9.9): a remote URL carrying inline
+# Coverage for SEC-007 (owned by tracker §2): a remote URL carrying inline
 # credentials (`scheme://user:pass@host`) must never print verbatim.
 #
 # manifest_redact grew a userinfo clause, and the output sites that print a

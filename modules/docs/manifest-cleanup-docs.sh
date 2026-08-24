@@ -22,7 +22,7 @@ ensure_zarchive_dir() {
 
 
 # ---------------------------------------------------------------------------
-# Temporary-file sweep (TRACKER §9.23)
+# Temporary-file sweep (TRACKER §3)
 #
 # This runs as the `archive_sweep` ship step, so it deletes files on every
 # release, and until 2026-08-23 it walked the whole project root removing every
@@ -56,7 +56,7 @@ declare -gA _MANIFEST_CLI_CLEANUP_TRACKED=()
 # Load the tracked-file set for $1. Returns non-zero when git cannot answer,
 # which the caller must treat as "refuse to delete" — reading an unavailable
 # index as "nothing is tracked" is exactly the absent-input-as-a-value shape
-# that TRACKER §9.15 exists to remove.
+# that TRACKER §6 exists to remove.
 _manifest_cleanup_load_tracked() {
     local root="$1" path
     _MANIFEST_CLI_CLEANUP_TRACKED=()

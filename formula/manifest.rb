@@ -1,11 +1,18 @@
 # Source template for the Homebrew tap formula. Release publishing renders a
 # concrete copy of this file with the release tag URL and sha256, then commits
 # that generated copy only to fidenceio.homebrew.tap/Formula/manifest.rb.
+#
+# The url and sha256 below are SENTINELS, not a release. They are never updated
+# by a ship and must never be read as this repo's version — the only concrete
+# formula is the rendered copy in the tap. `v0.0.0` and the 64 zeros are the same
+# sentinels every formula fixture under tests/ uses, and both still satisfy the
+# render patterns in update_homebrew_formula (`tags/v.*\.tar\.gz`, `[a-f0-9]*`),
+# so a substitution failure is still caught by that function's layout guard.
 class Manifest < Formula
   desc "A powerful CLI tool for managing manifest files, versioning, and repository operations with trusted timestamp verification"
   homepage "https://github.com/fidenceio/manifest.cli"
-  url "https://github.com/fidenceio/manifest.cli/archive/refs/tags/v53.0.0.tar.gz"
-  sha256 "5b9fae313d333a50131952f42af0d238adf369b0e8d39a08f244c096029f63e3"
+  url "https://github.com/fidenceio/manifest.cli/archive/refs/tags/v0.0.0.tar.gz"
+  sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   license "Apache-2.0"
   head "https://github.com/fidenceio/manifest.cli.git", branch: "main"
 

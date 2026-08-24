@@ -7,7 +7,7 @@
 > reports three checks and, with `--write`, archives a timestamped copy under
 > `docs/zArchive/`. Until 2026-08-19 a bare `manifest security` copied a generated
 > template over this file, replacing reviewed text with fixed claims ("No `eval`
-> Usage", "A+ 95/100") that no check produced. See TRACKER §8.5a.
+> Usage", "A+ 95/100") that no check produced. See TRACKER §26.
 >
 > The gaps below are stated because a posture summary that lists only controls
 > overstates the posture. Each names the tracker item that owns it.
@@ -26,16 +26,16 @@ during release automation:
   **Gap — it is not installed by cloning.** The hook is reached via
   `core.hooksPath=.git-hooks`, which lives in `.git/config` and is not cloned, so
   on a fresh clone this control is simply absent and a teammate can commit past
-  it. `CONTRIBUTING.md` documents the manual step. (TRACKER §9.11)
+  it. `CONTRIBUTING.md` documents the manual step. (TRACKER §7)
 - CI runs `gitleaks` over the tree on pushes to `main`, PRs targeting `main`, and
   manual dispatch (`.github/workflows/lint.yml`). It scans the **working tree
-  only** — history is fetched but not range-scanned. (TRACKER §8.6b)
+  only** — history is fetched but not range-scanned. (TRACKER §13)
 - `.gitignore` enforcement keeps local config and private environment files out
   of version control. **Gap — `.gitignore` does not apply to already-tracked
   files**, and there is no key-material scan of any kind: `manifest security`
   checks the `security.private_files` list, a PII regex, and env-var naming, so a
   private key under an unmatched name (`credentials.json`, `privkey`) is caught by
-  nothing while the release commit is a bare `git add .`. (TRACKER §9.9)
+  nothing while the release commit is a bare `git add .`. (TRACKER §2)
 - Output redaction: `manifest_redact` strips known credential env-var values
   (e.g. `GITHUB_TOKEN`, `HOMEBREW_GITHUB_API_TOKEN`, the cloud API key and the
   var named by `MANIFEST_CLI_CLOUD_API_KEY_ENV`) and token shapes (GitHub
@@ -44,7 +44,7 @@ during release automation:
   **Gap — value redaction is inert under `gh`-managed auth**, where no
   `GITHUB_TOKEN` exists in the environment to match; shape-based patterns still
   apply. It is also wired only into `log_*`, so output printed by a bare `echo`
-  bypasses it. (TRACKER §8.5c)
+  bypasses it. (TRACKER §28)
 
 ### Safe-by-default execution
 
@@ -77,7 +77,7 @@ during release automation:
   Contention therefore resolves as a *queue* when the holder finishes inside 5 s
   and as a *refusal* when it does not. A ship routinely exceeds 5 s, so refusal is
   the common case — this is timing-dependent by construction, not a guarantee of
-  either behaviour. (TRACKER §8.2)
+  either behaviour. (TRACKER §14)
 - Pre-tag re-entrancy: an interrupted ship (VERSION bumped but uncommitted)
   resumes in place instead of double-bumping.
 
@@ -114,7 +114,7 @@ during release automation:
 A full 13-phase assurance audit ran against v59.2.1 in August 2026. Its artifacts
 are deliberately untracked, so **this file and `docs/TRACKER.md` are the only
 record a clone can see.** Its headline verdict was Fail-or-NotProven across nine
-of ten categories — but read that with TRACKER §9.20 in hand: of the findings
+of ten categories — but read that with TRACKER §5 in hand: of the findings
 adjudicated so far only a minority were real *as filed*, two of three P0s were
 defects in the audit harness rather than the product, and the remainder have not
 been triaged to the same depth. Treat the audit as a lead list, not a defect list.
@@ -123,7 +123,7 @@ been triaged to the same depth. Treat the audit as a lead list, not a defect lis
 clean): macOS, FreeBSD and WSL2 have no executable evidence and cannot get any
 without provisioned images; the Linux evidence base is Alpine/musl on a mutable
 tag, not the Ubuntu-LTS glibc target; eight mutation routes were offline-
-infeasible. (TRACKER §9.20's absorbed §9.16 ledger, §8.7)
+infeasible. (TRACKER §5's absorbed §9.16 ledger, §21a)
 
 This document should never claim that an older audit is current, and should never
 list controls without their known gaps. Update it after any dedicated security

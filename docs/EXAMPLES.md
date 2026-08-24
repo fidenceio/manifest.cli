@@ -155,4 +155,4 @@ manifest ship repo patch -y           # also fine with no Cloud installed
 There is a `cloud.skip` setting listed in the configuration map, but **no code reads it
 today** — setting it changes nothing. Do not rely on it to disable Cloud; simply not
 installing the plugins is what disables Cloud. (Tracked as part of the dead-config-key
-sweep in [TRACKER.md](TRACKER.md), item §8.4d.)
+sweep in [TRACKER.md](TRACKER.md), item §9.)

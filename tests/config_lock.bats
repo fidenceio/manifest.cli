@@ -2,7 +2,7 @@
 # §5.10 smoke tier (safety-contract suite)
 # bats file_tags=smoke
 
-# Coverage for the config write lock (TRACKER §8.2 / §9.20 Block C; audit rows
+# Coverage for the config write lock (TRACKER §14 / §5 Block C; audit rows
 # ATOM-006 and ATOM-CFGLOCK — one defect filed twice).
 #
 # The lock was a bare `mkdir` spin: no trap, no holder identity, no stale

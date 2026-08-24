@@ -2905,7 +2905,7 @@ _fleet_lock_dir_path() {
 # The lock mechanism lives in system/manifest-lock.sh and is shared with the
 # config lock. These thin wrappers keep the fleet-specific names and messages;
 # holder identity, PID-reuse detection, cross-host safety and stale reclaim are
-# the shared implementation. Keeping one copy is the point — see TRACKER §9.15
+# the shared implementation. Keeping one copy is the point — see TRACKER §6
 # on duplicated derivations that agree only until they don't.
 #
 # manifest-core.sh sources manifest-lock.sh before this module, but this module
@@ -3095,7 +3095,7 @@ _fleet_root_release() {
     # everything else is left to the allowlist.
     # Record what the caller already had staged BEFORE this run touches the
     # index, so the abort path below can undo exactly what this run added and
-    # nothing else (TRACKER §9.23 — it used to run a pathspec-less `git reset`,
+    # nothing else (TRACKER §3 — it used to run a pathspec-less `git reset`,
     # which discarded the user's entire staged set on refusal).
     local line
     local -A preexisting_staged=()

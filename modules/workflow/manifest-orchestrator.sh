@@ -186,7 +186,7 @@ emit_ship_failure_report() {
             ;;
         no-destructive)
             # §9.10 fail-safe: an unverifiable commit count must not authorize a
-            # destructive command (§9.15: absence is not a value).
+            # destructive command (§6: absence is not a value).
             echo "   (rollback advice suppressed: the commits-created count is unverifiable, so no destructive command is advised)"
             ;;
     esac
@@ -290,7 +290,7 @@ _manifest_ci_row_parse() {
 #   concluded success                                -> proceed, stating it
 #   anything neutral (cancelled, skipped, ...)       -> announced skip; proceed
 #
-# Every degradation is ANNOUNCED, never silent (§9.15: absence is not a
+# Every degradation is ANNOUNCED, never silent (§6: absence is not a
 # verdict): no gh on PATH, gh unauthenticated, gh errors (no network, workflow
 # never registered), and no completed run yet each print exactly one line
 # stating which condition, then proceed. An announced skip is NOT a pass — the

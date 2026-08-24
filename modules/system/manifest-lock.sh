@@ -10,7 +10,7 @@
 # stayed a bare `mkdir` spin with no trap and no reclaim, so a config writer
 # killed mid-write wedged every later write to that file permanently. Copying
 # the fleet logic into the config module would have made a second copy of a
-# ~90-line derivation, which is the defect class TRACKER §9.15 exists to remove
+# ~90-line derivation, which is the defect class TRACKER §6 exists to remove
 # (§9.13 found five copies of one version calculation that agreed only by
 # luck). Both callers now share these primitives; only their messages differ.
 #

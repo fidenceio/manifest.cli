@@ -253,7 +253,7 @@ manifest_ship_preview_summary_from_bullets() {
 # name the command that can rather than failing dirty.
 #
 # NB: a fleet root is not itself a release target today — fleet-root tagging and
-# CHANGELOG_FLEET.md generation are deferred (TRACKER §9.7). `ship fleet` releases
+# CHANGELOG_FLEET.md generation are deferred (TRACKER §39). `ship fleet` releases
 # the *members*. This guard therefore points at the command that does something,
 # and does not imply the root itself gets tagged.
 #

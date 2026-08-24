@@ -492,7 +492,7 @@ _manifest_config_lock_trap_install() {
     [ -n "${_MANIFEST_CLI_CONFIG_LOCK_TRAP_SET:-}" ] && return 0
     # INT/TERM re-raise after cleanup so the caller still sees a signal death
     # rather than a plain exit code — the install lock's missing-SIGINT gap
-    # (§8.2b) is the same bug seen from the other side.
+    # (§14a) is the same bug seen from the other side.
     trap '_manifest_config_locks_release_all' EXIT
     trap '_manifest_config_locks_release_all; trap - INT; kill -INT $$' INT
     trap '_manifest_config_locks_release_all; trap - TERM; kill -TERM $$' TERM
@@ -986,7 +986,7 @@ set_default_configuration() {
     # host's OS only; CI proves the other leg). false keeps the pre-flight and
     # its printed finding but never refuses. Degraded states (no gh, no run yet,
     # gh errors) are announced as "unverified" and proceed — absence is not a
-    # verdict (§9.15).
+    # verdict (§6).
     export MANIFEST_CLI_RELEASE_REQUIRE_CI_GREEN="${MANIFEST_CLI_RELEASE_REQUIRE_CI_GREEN:-true}"
     # How long a green test run stays reusable before run-tests.sh re-runs it
     # (§5.10 TTL'd cache). English-reading duration: 4h / 30m / 90s / 2d, or

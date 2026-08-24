@@ -203,7 +203,7 @@ One caveat worth knowing: there is a `files.version` setting for naming a differ
 canonical file, and the detection side honours it. But repo release, the main version
 field in `status`, `resume`, and fleet release all still write `VERSION`. Until that is
 finished, treat `files.version` as incomplete — it is tracked in
-[TRACKER §8.12](TRACKER.md#8--enterprise-readiness-audit-2026-06-05).
+[TRACKER §18](TRACKER.md#8--enterprise-readiness-audit-2026-06-05).
 
 ## Fleet Workflow
 

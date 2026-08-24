@@ -8,12 +8,6 @@ waits for you to say yes.
 
 [![tests](https://github.com/fidenceio/manifest.cli/actions/workflows/test.yml/badge.svg)](https://github.com/fidenceio/manifest.cli/actions/workflows/test.yml)
 
-<!-- Keep the version line below FIRST among any `x.y.z` in backticks. At release
-     time Manifest finds the first backticked version string in this file and
-     replaces every copy of it (manifest-documentation.sh, update_readme_version).
-     Adding another backticked bare version above this line would retarget that
-     rewrite at the wrong string. -->
-**Version:** `59.4.3`
 **Platforms:** macOS, Linux
 **Primary interface:** `manifest <verb> <scope> [options]`
 
@@ -99,8 +93,8 @@ to pipe code off the internet straight into a shell:
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/fidenceio/manifest.cli/main/bootstrap.sh
 # read bootstrap.sh, then:
-bash bootstrap.sh                                      # newest published release
-MANIFEST_CLI_INSTALL_VERSION=v59.3.0 bash bootstrap.sh # or pin an exact one
+bash bootstrap.sh                                            # newest published release
+MANIFEST_CLI_INSTALL_VERSION=<release-tag> bash bootstrap.sh # or pin an exact one
 ```
 
 `bootstrap.sh` downloads the release archive, checks its SHA-256 checksum against the

@@ -317,7 +317,7 @@ cloud:
   # a value for it and look like it works. Cloud is optional anyway: not installing
   # the plugins is what disables it. Kept here only so the shape stays visible while
   # the dead-config-key sweep decides whether to implement or delete it
-  # (docs/TRACKER.md §8.4d).
+  # (docs/TRACKER.md §9).
   skip: false
   api_key_env: "MANIFEST_CLI_CLOUD_API_KEY"  # Name of env var that holds the secret.
 

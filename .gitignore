@@ -3,6 +3,17 @@ manifest.config
 .manifest_last_update
 .last_update_check
 
+# Manifest CLI — per-repo machine-local state (release-gate pass ledger, etc).
+# This is the same entry create_default_gitignore writes into every repo
+# Manifest scaffolds (modules/core/manifest-init.sh). It was missing HERE, so
+# the gate wrote .manifest-cli/release-gate-pass.epoch mid-ship, the bare
+# `git add .` auto-commit swept it, and every release carried a junk commit
+# containing the ship's own artifact — 31 of them before anyone noticed. The
+# module comment on _manifest_gate_pass_ledger_file says this file is "never
+# committed"; that is true again now. Guarded by tests/gitignore_self_apply.bats.
+.manifest-cli/
+*.manifest-cli.log
+
 # Manifest CLI — TTL'd green-run test cache (run-tests.sh, never commit)
 .test-cache/
 
@@ -143,7 +154,7 @@ Thumbs.db
 # It was sanitized by hand once (63a8ed5) and re-polluted by three auto-commits;
 # 16 of its 19 rules were one-off command strings, so it never functioned as
 # curated team config. Agent/command definitions above ARE still shared — those
-# are authored, not machine-generated. See TRACKER §9.11.
+# are authored, not machine-generated. See TRACKER §7.
 .codeium/
 .continue/
 .cursor/*

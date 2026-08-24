@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# Guards docs/TRACKER.md §9.26.
+# Guards docs/TRACKER.md §11.
 #
 # The command set is stated in four places: the dispatch `case` in
 # modules/core/manifest-core.sh (the only authority), display_help, the three
@@ -148,7 +148,7 @@ _dispatch_arms() {
     help_text="$(NO_COLOR=1 bash "$TEST_REPO_ROOT/scripts/manifest-cli.sh" --help 2>/dev/null)"
     [ -n "$help_text" ]
 
-    # A deprecated spelling reappearing in help is the exact defect §9.26
+    # A deprecated spelling reappearing in help is the exact defect §11
     # records: 'refresh fleet' was advertised under "Core workflow" while
     # manifest-refresh.sh called log_deprecated on it. Guard the listing
     # against the marked names returning.

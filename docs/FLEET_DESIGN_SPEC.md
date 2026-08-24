@@ -103,8 +103,8 @@ Outward actions — push, GitHub Release, create-remote — gate on `verified`, 
 | Verb | Moves | Idempotent | Safety | Available as |
 | ---- | ----- | ---------- | ------ | ------------ |
 | select / unselect | membership flag (`SELECT`) | yes | default benched; reversible | `SELECT` toggle in `manifest.fleet.tsv` |
-| clone | Local `absent` → `repo` | yes (skip if present) | read-only on remote | no user-facing verb — see [TRACKER §9.25](TRACKER.md) |
-| verify | Remote `declared` → `verified` | yes (pure read) | grants outward trust | internal `git ls-remote` primitive only; no user-facing sweep — see [TRACKER §9.25](TRACKER.md) |
+| clone | Local `absent` → `repo` | yes (skip if present) | read-only on remote | no user-facing verb — see [TRACKER §34](TRACKER.md) |
+| verify | Remote `declared` → `verified` | yes (pure read) | grants outward trust | internal `git ls-remote` primitive only; no user-facing sweep — see [TRACKER §34](TRACKER.md) |
 | create-remote | Remote → `verified` | yes (create-if-absent, never clobber) | irreversible — dry-run first | `manifest init repo\|fleet --create-repo-private\|public` |
 
 The last column states what a caller can invoke **today**, not what is planned. Gaps

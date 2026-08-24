@@ -117,7 +117,7 @@ manifest_refresh_repo() {
         echo "Would perform:"
         echo "  • Regenerate documentation (release notes for v$current_version)"
         echo "  • Archive previous documentation under docs/zArchive/"
-        # The archive step also deletes temporary files, so name them (§9.23).
+        # The archive step also deletes temporary files, so name them (§3).
         echo "  • Remove these temporary files:"
         cleanup_temp_files preview
         echo "  • Validate markdown across the project"

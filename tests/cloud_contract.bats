@@ -1,14 +1,14 @@
 #!/usr/bin/env bats
-# §3.1 smoke tier (safety-contract suite)
+# §38 smoke tier (safety-contract suite)
 # bats file_tags=smoke
 #
-# Cloud apply-intent contract (workspace §1.1, CLI §3.1): a Cloud-backed
+# Cloud apply-intent contract (workspace §1.1, CLI §38): a Cloud-backed
 # mutation must carry an explicit execution_mode=apply. Requests that omit the
 # field, or declare a non-apply mode, are rejected by the contract guard BEFORE
 # any provider or analyzer runs. The guard fails closed.
 #
 # Cloud is a no-op stub today (modules/stubs/manifest-cloud-stub.sh); this file
-# pins the contract on the stub now, so it is already enforced when §3.1 wires
+# pins the contract on the stub now, so it is already enforced when §38 wires
 # real Cloud calls. The "provider/analyzer" step is modeled by overriding the
 # post-guard path (_manifest_cloud_not_available) with a sentinel, so each test
 # can prove whether anything past the guard was reached.
@@ -37,7 +37,7 @@ setup() {
         return 1
     }
 
-    # The CLI execution mode the request declares; §3.1 will populate this from
+    # The CLI execution mode the request declares; §38 will populate this from
     # the parsed CLI execution mode. Start with it unset (missing field).
     unset MANIFEST_CLI_CLOUD_EXECUTION_MODE
 }

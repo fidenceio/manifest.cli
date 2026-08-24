@@ -53,7 +53,7 @@ _manifest_time_maybe_cleanup_cache() {
 
 # Report a refused (malformed) cache. Absence of a cache is an ordinary miss and
 # stays at debug level; a cache that exists but cannot be trusted is a PROBLEM,
-# and §9.15 forbids letting absent-or-malformed input read as a value — so it is
+# and §6 forbids letting absent-or-malformed input read as a value — so it is
 # announced at warning level instead of being silently coerced into "no cache".
 _manifest_time_cache_refuse() {
     local reason="$1" cache_file="$2"
@@ -76,7 +76,7 @@ _manifest_time_cache_refuse() {
 # The cache is PARSED, never sourced. `. "$cache_file"` (the previous
 # implementation) meant anything able to write that file — a squatted cache dir,
 # a MANIFEST_CLI_CACHE_DIR pointed somewhere hostile — ran arbitrary code inside
-# the CLI's own process (§9.22). Parsing is strictly weaker: only the six keys
+# the CLI's own process (§21b). Parsing is strictly weaker: only the six keys
 # the writer emits are accepted, each value must match its declared shape, and
 # ANY other line refuses the whole file. Refusing whole-file rather than
 # per-line is deliberate: a cache with an unexplained line is a cache of unknown
@@ -191,7 +191,7 @@ _manifest_time_write_cache_data() {
     mkdir -p "$cache_dir" 2>/dev/null || return 1
     now=$(date -u +%s)
     # umask 077 goes INSIDE a subshell so the tight mode applies to this write
-    # and nothing else. At function scope (§9.22) it leaked process-wide: every
+    # and nothing else. At function scope (§21b) it leaked process-wide: every
     # file the same manifest process created afterwards — generated docs, the
     # CHANGELOG, user-facing output — inherited 0600. Same subshell pattern as
     # the audit log in manifest-shared-utils.sh; the cache itself must stay

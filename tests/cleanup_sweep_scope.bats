@@ -1,13 +1,13 @@
 #!/usr/bin/env bats
 
-# TRACKER §9.23 — the temporary-file sweep must not run wider than the caller
+# TRACKER §3 — the temporary-file sweep must not run wider than the caller
 # asked for. It executes as the `archive_sweep` ship step, so anything it
 # deletes is deleted on every release; before 2026-08-23 it walked the whole
 # project root and removed every pattern hit, which took out git-tracked user
 # files and files inside `.git/`.
 #
 # These assert file state (created / provably not created), not log lines, per
-# the §9.27(d) test-policy ratchet.
+# the §12b test-policy ratchet.
 
 load 'helpers/setup'
 
@@ -147,7 +147,7 @@ teardown() {
 
 @test "the sweep refuses entirely when git cannot answer what is tracked" {
     # An unreadable index must mean "refuse to delete", not "nothing is
-    # tracked" — the absent-input-read-as-a-value shape of §9.15.
+    # tracked" — the absent-input-read-as-a-value shape of §6.
     local nogit
     nogit="$(mk_scratch)"
     mkdir -p "$nogit/docs"

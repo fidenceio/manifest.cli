@@ -70,15 +70,15 @@ from the verified files:
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/fidenceio/manifest.cli/main/bootstrap.sh
 # read bootstrap.sh, then run it:
-bash bootstrap.sh                                      # newest published release
-MANIFEST_CLI_INSTALL_VERSION=v59.3.0 bash bootstrap.sh # or pin an exact release
+bash bootstrap.sh                                            # newest published release
+MANIFEST_CLI_INSTALL_VERSION=<release-tag> bash bootstrap.sh # or pin an exact release
 ```
 
 For the strongest guarantee, supply the checksum you expect as well. The install then
 stops if anything differs:
 
 ```bash
-MANIFEST_CLI_INSTALL_VERSION=v59.3.0 \
+MANIFEST_CLI_INSTALL_VERSION=<release-tag> \
 MANIFEST_CLI_INSTALL_SHA256=<sha256-of-the-source-tarball> \
   bash bootstrap.sh
 ```

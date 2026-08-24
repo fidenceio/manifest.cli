@@ -200,7 +200,7 @@ is_owned_binary() {
 # sandbox tripwire blocks empty paths, exact system roots, $HOME itself and
 # out-of-sandbox targets — it has no ownership and no marker check, so
 # `MANIFEST_CLI_INSTALL_DIR=/opt/homebrew ./uninstall-cli.sh -y` would have
-# removed all of Homebrew (SEC-009 / §9.23).
+# removed all of Homebrew (SEC-009 / §3).
 #
 # Evidence is the shipped payload, in the same spirit as is_owned_binary's
 # marker grep: no extra sentinel file is used, because a sentinel would only
@@ -354,7 +354,7 @@ print_plan() {
             echo "  remove dir:        $f"
         else
             # Announce the refusal in the preview instead of promising a
-            # removal that apply_plan will decline (SEC-009 / §9.23).
+            # removal that apply_plan will decline (SEC-009 / §3).
             echo "  REFUSE dir:        $f (not a Manifest CLI install directory)"
         fi
         found=1

@@ -84,7 +84,7 @@ EOF
     grep -q '^## \[46\.13\.6\]' "${SCRATCH}/CHANGELOG.md"
 }
 
-@test "prepend: writes via temp+rename and leaves no temp behind (TRACKER §9.23)" {
+@test "prepend: writes via temp+rename and leaves no temp behind (TRACKER §3)" {
     local changes="${SCRATCH}/changes.md"
     seed_changes_file "$changes" "46.13.6"
 
@@ -96,7 +96,7 @@ EOF
     [ -z "$output" ]
 }
 
-@test "prepend: an existing CHANGELOG.md keeps its permission bits (TRACKER §9.23)" {
+@test "prepend: an existing CHANGELOG.md keeps its permission bits (TRACKER §3)" {
     # mktemp creates 0600. Switching from an in-place redirect to temp+rename
     # must not quietly make a published, tracked file owner-readable only.
     local changes="${SCRATCH}/changes.md"
@@ -111,7 +111,7 @@ EOF
     grep -q '^## \[46\.13\.6\]' "${SCRATCH}/CHANGELOG.md"
 }
 
-@test "prepend: a new CHANGELOG.md is created readable, not 0600 (TRACKER §9.23)" {
+@test "prepend: a new CHANGELOG.md is created readable, not 0600 (TRACKER §3)" {
     local changes="${SCRATCH}/changes.md"
     seed_changes_file "$changes" "46.13.6"
 
@@ -152,21 +152,6 @@ EOF
     [ "$(grep -c '^## \[46\.13\.6\]' "${SCRATCH}/CHANGELOG.md")" -eq 1 ]
     grep -q "Updated body" "${SCRATCH}/CHANGELOG.md"
     refute grep -q "First take" "${SCRATCH}/CHANGELOG.md"
-}
-
-@test "docs index: inline version and updated metadata are both refreshed" {
-    mkdir -p "${SCRATCH}/docs"
-    cat > "${SCRATCH}/docs/INDEX.md" <<'EOF'
-# Manifest CLI Documentation
-
-**Version:** 1.0.0 | **Updated:** 2026-05-08
-EOF
-    manifest_is_canonical_repo() { return 0; }
-
-    run generate_docs_index "1.2.3"
-
-    [ "$status" -eq 0 ]
-    grep -qxF "**Version:** 1.2.3 | **Updated:** $(date -u '+%Y-%m-%d')" "${SCRATCH}/docs/INDEX.md"
 }
 
 @test "prepend: legacy auto-generated content is replaced, not preserved" {
@@ -272,42 +257,6 @@ EOF
     grep -q '^## \[2\.0\.0\]' "${SCRATCH}/CHANGELOG.md"
     run grep -q '^## \[1\.0\.0\]' "${SCRATCH}/CHANGELOG.md"
     [ "$status" -ne 0 ]
-}
-
-@test "docs index: a revision version refreshes the inline reference" {
-    mkdir -p "${SCRATCH}/docs"
-    cat > "${SCRATCH}/docs/INDEX.md" <<'EOF'
-# Manifest CLI Documentation
-
-**Version:** 20.1.0 | **Updated:** 2026-05-08
-
-Current release is `20.1.0`.
-EOF
-    manifest_is_canonical_repo() { return 0; }
-
-    run generate_docs_index "20.1.0.1"
-
-    [ "$status" -eq 0 ]
-    grep -qF 'Current release is `20.1.0.1`.' "${SCRATCH}/docs/INDEX.md"
-}
-
-@test "docs index: an inline reference already at a revision version is refreshed again" {
-    # The regression that motivated this: once the file carried X.Y.Z.R, the
-    # three-segment scan stopped matching it and every later ship was a no-op.
-    mkdir -p "${SCRATCH}/docs"
-    cat > "${SCRATCH}/docs/INDEX.md" <<'EOF'
-# Manifest CLI Documentation
-
-**Version:** 20.1.0.1 | **Updated:** 2026-05-08
-
-Current release is `20.1.0.1`.
-EOF
-    manifest_is_canonical_repo() { return 0; }
-
-    run generate_docs_index "20.1.0.2"
-
-    [ "$status" -eq 0 ]
-    grep -qF 'Current release is `20.1.0.2`.' "${SCRATCH}/docs/INDEX.md"
 }
 
 @test "prune: 'off' keeps every entry" {

@@ -1,9 +1,8 @@
 # Manifest CLI Documentation
 
 Find what you need by what you are trying to do. The [README](../README.md) is the place
-to start; the documents here go into detail.
-
-**Version:** 59.4.3 | **Updated:** 2026-08-24
+to start; the documents here go into detail. For the current version, see
+[CHANGELOG.md](../CHANGELOG.md) — its newest entry always states it.
 
 ## Start
 

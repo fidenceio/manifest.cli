@@ -11,8 +11,8 @@
 #   curl -fsSLO https://raw.githubusercontent.com/fidenceio/manifest.cli/main/bootstrap.sh
 #   # inspect bootstrap.sh, then:
 #   bash bootstrap.sh                       # installs the latest published tag
-#   MANIFEST_CLI_INSTALL_VERSION=v55.2.1 bash bootstrap.sh   # pin an exact version
-#   MANIFEST_CLI_INSTALL_SHA256=<digest> MANIFEST_CLI_INSTALL_VERSION=v55.2.1 bash bootstrap.sh  # strict pin
+#   MANIFEST_CLI_INSTALL_VERSION=<release-tag> bash bootstrap.sh   # pin an exact version
+#   MANIFEST_CLI_INSTALL_SHA256=<digest> MANIFEST_CLI_INSTALL_VERSION=<release-tag> bash bootstrap.sh  # strict pin
 #
 # Environment:
 #   MANIFEST_CLI_INSTALL_VERSION   release tag to install (default: latest published tag)

@@ -113,7 +113,7 @@ YAML
     [ "$status" -ne 0 ]
 }
 
-@test "_fleet_root_release abort leaves the user's own staged set intact (TRACKER §9.23)" {
+@test "_fleet_root_release abort leaves the user's own staged set intact (TRACKER §3)" {
     # The abort path used to run a pathspec-less `git reset`, which threw away
     # everything the user had staged — not just what this run added. Refusing to
     # commit is this function's job; reversing the user's staging decision is not.

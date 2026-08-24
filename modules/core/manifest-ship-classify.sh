@@ -13,7 +13,7 @@
 # of whether a commit even existed: with commits_created=0 the report printed
 # `git reset --hard <start_sha>`, which would have erased uncommitted work
 # unrecoverably (TRACKER §9.10 — nothing committed means no reflog, no stash).
-# This is the defect class TRACKER §9.15 exists to remove: duplicated
+# This is the defect class TRACKER §6 exists to remove: duplicated
 # derivations that agree only until they don't. Both call sites now share
 # these functions; only their messages differ.
 #
@@ -29,7 +29,7 @@
 #                   a hard reset would destroy uncommitted work; only the
 #                   ship-generated files should be reverted.
 #   no-destructive  the commits-created count is unverifiable — fail safe and
-#                   advise nothing destructive (§9.15: absence is not a value,
+#                   advise nothing destructive (§6: absence is not a value,
 #                   and an unverifiable count must not authorize destruction).
 # -----------------------------------------------------------------------------
 
