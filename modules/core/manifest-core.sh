@@ -1544,6 +1544,10 @@ Run 'git switch -' to go back to the branch you came from." \
                     if [[ "$execution_mode" == "preview" ]]; then
                         manifest_execution_preview_header "manifest docs cleanup"
                         echo "Would move historical documentation to zArchive for v$cleanup_version."
+                        # The sweep deletes files, so it is named here rather than
+                        # left to be discovered on apply (TRACKER §9.23).
+                        echo "Would remove these temporary files:"
+                        cleanup_temp_files preview
                         manifest_execution_footer "manifest docs cleanup -y"
                         return 0
                     fi
@@ -1600,6 +1604,10 @@ Run 'git switch -' to go back to the branch you came from." \
             if [[ "$execution_mode" == "preview" ]]; then
                 manifest_execution_preview_header "manifest cleanup"
                 echo "Would move historical documentation to zArchive for v${current_version:-unknown}."
+                # The sweep deletes files, so it is named here rather than
+                # left to be discovered on apply (TRACKER §9.23).
+                echo "Would remove these temporary files:"
+                cleanup_temp_files preview
                 manifest_execution_footer "manifest cleanup -y"
                 return 0
             fi

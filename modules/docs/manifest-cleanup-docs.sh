@@ -21,54 +21,188 @@ ensure_zarchive_dir() {
 }
 
 
-# Clean up temporary files (enhanced version)
+# ---------------------------------------------------------------------------
+# Temporary-file sweep (TRACKER §9.23)
+#
+# This runs as the `archive_sweep` ship step, so it deletes files on every
+# release, and until 2026-08-23 it walked the whole project root removing every
+# hit for `*.tmp *.temp *.bak *.backup *~ .DS_Store Thumbs.db`. That took out a
+# user's *tracked* `notes.bak` and anything matching inside `.git/` — from a
+# step whose stated job is documentation cleanup, and which no preview
+# mentioned. Three rules now bound it:
+#
+#   1. `.git` is pruned. Nothing in git's own store is a temporary file; a
+#      swept `*.tmp` in there is repository damage, not tidiness.
+#   2. A git-TRACKED file is never deleted. A tracked `notes.bak` is content
+#      somebody committed on purpose, and the release commit's `git add .`
+#      would then record the sweep's deletion as an intended change.
+#   3. Patterns a person plausibly authored are scoped to where this module's
+#      own generators write. Only unambiguous machine droppings sweep tree-wide.
+#
+# Skips are reported rather than silent: a caller learns nothing from a step
+# that quietly decided not to act.
+# ---------------------------------------------------------------------------
+
+# Never user content under any name — safe to sweep anywhere in the work tree.
+_MANIFEST_CLI_CLEANUP_TREEWIDE_PATTERNS=(".DS_Store" "Thumbs.db")
+
+# Plausibly hand-authored (an editor backup, a deliberately kept `.bak`).
+# Swept only under the docs tree, which is what this module generates into.
+_MANIFEST_CLI_CLEANUP_SCOPED_PATTERNS=("*.tmp" "*.temp" "*.bak" "*.backup" "*~")
+
+# Every path git tracks, keyed by repo-relative path.
+declare -gA _MANIFEST_CLI_CLEANUP_TRACKED=()
+
+# Load the tracked-file set for $1. Returns non-zero when git cannot answer,
+# which the caller must treat as "refuse to delete" — reading an unavailable
+# index as "nothing is tracked" is exactly the absent-input-as-a-value shape
+# that TRACKER §9.15 exists to remove.
+_manifest_cleanup_load_tracked() {
+    local root="$1" path
+    _MANIFEST_CLI_CLEANUP_TRACKED=()
+    git -C "$root" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 1
+    while IFS= read -r -d '' path; do
+        [[ -n "$path" ]] && _MANIFEST_CLI_CLEANUP_TRACKED["$path"]=1
+    done < <(git -C "$root" ls-files -z 2>/dev/null)
+    return 0
+}
+
+# find(1) with `.git` pruned, NUL-delimited so a newline in a filename cannot
+# split one path into two.
+_manifest_cleanup_find() {
+    local base="$1" pattern="$2"
+    [[ -d "$base" ]] || return 0
+    find "$base" -name .git -type d -prune -o -type f -name "$pattern" -print0 2>/dev/null
+}
+
+# Physical path of an existing directory (symlinks resolved), or non-zero.
+# `cd`+`pwd -P` rather than realpath(1), which is absent on older macOS.
+_manifest_cleanup_realdir() {
+    ( cd "$1" 2>/dev/null && pwd -P ) || return 1
+}
+
+# True when $2 is $1 itself or lives underneath it. Both must already be
+# physical paths, or a symlink makes the string compare lie.
+_manifest_cleanup_is_inside() {
+    local base="$1" candidate="$2"
+    [[ "$candidate" == "$base" || "$candidate" == "$base"/* ]]
+}
+
+# Sweep temporary files. $1 = "apply" (default, deletes) or "preview" (lists
+# only) — preview is what the mutating verbs' plan output calls.
+#
+# shellcheck disable=SC2120  # "preview" is passed by callers in other files
+# (manifest-core.sh's `cleanup`/`docs cleanup` preview arms and
+# manifest-refresh.sh's plan output); shellcheck only sees this file.
 cleanup_temp_files() {
-    log_info "Cleaning up temporary files..."
-    
-    local cleaned_count=0
-    
-    # Remove common temporary files
-    local temp_patterns=(
-        "*.tmp"
-        "*.temp"
-        "*.bak"
-        "*.backup"
-        "*~"
-        ".DS_Store"
-        "Thumbs.db"
-    )
-    
-    for pattern in "${temp_patterns[@]}"; do
-        while IFS= read -r file; do
-            if [[ -f "$file" ]]; then
-                rm -f "$file"
-                cleaned_count=$((cleaned_count + 1))
-            fi
-        done < <(find "$MANIFEST_CLI_PROJECT_ROOT" -name "$pattern" -type f 2>/dev/null || true)
+    local mode="${1:-apply}"
+    local root="${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
+    # Resolve the root physically, and use that same value for both the find
+    # bases and the "${file#$root/}" strip below, so the two can never disagree
+    # about where the project starts.
+    root="$(_manifest_cleanup_realdir "$root")" || {
+        log_warning "Skipping the temporary-file sweep — project root is not a readable directory."
+        return 0
+    }
+
+    # `docs.folder` is user-settable and gets no path validation at load, so it
+    # can point outside the repo ("../elsewhere"). Scoping the sweep to the docs
+    # tree therefore has to prove containment first — otherwise a config value
+    # steers `rm -f` at a directory the caller never named. Measured: without
+    # this, `docs.folder: ../outside` deleted a file outside the project root.
+    local docs_dir docs_real=""
+    docs_dir="$(get_docs_folder "$root")"
+    if [[ -d "$docs_dir" ]]; then
+        docs_real="$(_manifest_cleanup_realdir "$docs_dir")" || docs_real=""
+        if [[ -n "$docs_real" ]] && ! _manifest_cleanup_is_inside "$root" "$docs_real"; then
+            log_warning "Not sweeping the docs folder — it resolves outside the project root:"
+            log_warning "  docs.folder → $docs_real"
+            docs_real=""
+        fi
+    fi
+
+    if ! _manifest_cleanup_load_tracked "$root"; then
+        log_warning "Skipping the temporary-file sweep — cannot read the git index."
+        log_warning "  Without the tracked-file list this step cannot tell a throwaway from committed content."
+        return 0
+    fi
+
+    local -a candidates=()
+    local pattern file
+    for pattern in "${_MANIFEST_CLI_CLEANUP_TREEWIDE_PATTERNS[@]}"; do
+        while IFS= read -r -d '' file; do
+            candidates+=("$file")
+        done < <(_manifest_cleanup_find "$root" "$pattern")
     done
-    
-    if [[ $cleaned_count -gt 0 ]]; then
-        log_success "Cleaned up $cleaned_count temporary files"
+    if [[ -n "$docs_real" ]]; then
+        for pattern in "${_MANIFEST_CLI_CLEANUP_SCOPED_PATTERNS[@]}"; do
+            while IFS= read -r -d '' file; do
+                candidates+=("$file")
+            done < <(_manifest_cleanup_find "$docs_real" "$pattern")
+        done
+    fi
+
+    local swept=0 rel
+    local -a kept=()
+    for file in "${candidates[@]}"; do
+        [[ -f "$file" ]] || continue
+        rel="${file#"$root"/}"
+        # If the path did not reduce to a repo-relative one, the tracked-file
+        # lookup cannot be trusted, so refuse rather than delete on a miss.
+        if [[ "$rel" == /* ]]; then
+            log_warning "Not sweeping $file — cannot place it inside the project root."
+            continue
+        fi
+        if [[ -n "${_MANIFEST_CLI_CLEANUP_TRACKED[$rel]+set}" ]]; then
+            kept+=("$rel")
+            continue
+        fi
+        if [[ "$mode" == "preview" ]]; then
+            echo "  • $rel"
+            swept=$((swept + 1))
+            continue
+        fi
+        if rm -f "$file"; then
+            swept=$((swept + 1))
+        else
+            log_warning "Could not remove $rel"
+        fi
+    done
+
+    if [[ "$mode" == "preview" ]]; then
+        [[ $swept -eq 0 ]] && echo "  • (none)"
+    elif [[ $swept -gt 0 ]]; then
+        log_success "Cleaned up $swept temporary files"
     else
         log_info "No temporary files found"
     fi
+
+    if [[ ${#kept[@]} -gt 0 ]]; then
+        # Tense-neutral: this line prints in both preview and apply, and "left"
+        # would read as past tense in a plan that has not run yet.
+        log_info "Keeping ${#kept[@]} tracked file(s) (committed content, not temporary):"
+        for rel in "${kept[@]}"; do
+            log_info "  $rel"
+        done
+    fi
 }
 
-# Clean up empty directories
+# Clean up empty directories. `.git` is pruned for the same reason as the file
+# sweep above: the old exact-match guard skipped `$root/.git` itself while
+# happily removing `.git/refs/tags` and its siblings.
 cleanup_empty_dirs() {
     log_info "Cleaning up empty directories..."
-    
-    local cleaned_count=0
-    
-    # Find and remove empty directories (except important ones)
-    while IFS= read -r dir; do
-        if [[ -d "$dir" && "$dir" != "$MANIFEST_CLI_PROJECT_ROOT" && "$dir" != "$MANIFEST_CLI_PROJECT_ROOT/.git" ]]; then
-            if [[ -z "$(ls -A "$dir" 2>/dev/null)" ]]; then
-                rmdir "$dir" 2>/dev/null && cleaned_count=$((cleaned_count + 1))
-            fi
-        fi
-    done < <(find "$MANIFEST_CLI_PROJECT_ROOT" -type d -empty 2>/dev/null || true)
-    
+
+    local root="${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
+    local cleaned_count=0 dir
+
+    while IFS= read -r -d '' dir; do
+        [[ -d "$dir" ]] || continue
+        [[ "$dir" == "$root" ]] && continue
+        [[ -z "$(ls -A "$dir" 2>/dev/null)" ]] || continue
+        rmdir "$dir" 2>/dev/null && cleaned_count=$((cleaned_count + 1))
+    done < <(find "$root" -name .git -type d -prune -o -type d -empty -print0 2>/dev/null)
+
     if [[ $cleaned_count -gt 0 ]]; then
         log_success "Removed $cleaned_count empty directories"
     else
