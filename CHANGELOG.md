@@ -1,5 +1,18 @@
 # Changelog
 
+## [59.5.0] - 2026-08-24
+
+**Release Type:** Minor
+
+### Changes
+
+- Add GitHub Release publishing support
+- Add smart ship preview summaries
+- Update documentation and examples
+- Wire first-class CLI commands to inspectable built-in recipe definitions
+- Add regression coverage for the changed CLI workflow
+
+
 ## [59.4.3] - 2026-08-24
 
 **Release Type:** Patch
@@ -114,13 +127,3 @@
 
 - Update release copy and configuration examples
 - Add regression coverage for the changed CLI workflow
-
-
-## [59.0.1] - 2026-08-12
-
-**Release Type:** Patch
-
-### Changes
-
-- Add GitHub Release publishing support
-- Update release copy and configuration examples
