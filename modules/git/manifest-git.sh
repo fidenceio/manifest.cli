@@ -62,31 +62,85 @@ manifest_git_timeout_command() {
     return 1
 }
 
-# Shared retry function for git operations
+# Refuse a ref name that git would read as an option, or that is not a legal
+# ref at all (TRACKER §43).
+#
+# Both checks are load-bearing and neither subsumes the other:
+#
+#   --upload-pack=<script> / --exec=<script>  git parses these as OPTIONS even
+#       when they arrive in argument position, and both name a program git then
+#       runs. The leading-dash test must come FIRST: `git check-ref-format`
+#       would consume the leading dash as a flag to ITSELF.
+#       Measured caveat, so the next reader is not misled: check-ref-format does
+#       currently reject these anyway, by erroring on the unknown flag -- which
+#       means a mutation test that disables only this branch still passes. That
+#       rejection is incidental to git's argument parsing, not a documented
+#       contract, so this explicit test stays as the principled guard. Treat the
+#       two as deliberately redundant, not as one being dead code.
+#
+#   "main --delete"  a legal-looking value carrying a second word. Passing argv
+#       already reduces this to one literal refspec that simply fails to match,
+#       but check-ref-format rejects it outright and says why, which is a better
+#       error than "does not match any".
+#
+# Not a general-purpose validator: it guards the boundary where a config-derived
+# string becomes a git argument. The load-time value-validation table (§8) is
+# still owed and would catch this earlier, at `config set` rather than at use.
+manifest_git_assert_safe_ref_name() {
+    local ref="$1"
+    local label="${2:-branch}"
+
+    if [[ -z "$ref" ]]; then
+        echo "   ❌ Refusing to run git: $label is empty."
+        return 1
+    fi
+
+    # MUST precede check-ref-format -- see the comment above.
+    if [[ "$ref" == -* ]]; then
+        echo "   ❌ Refusing to run git: $label '$ref' starts with '-', which git"
+        echo "      would read as an option rather than a ref name."
+        echo "      Set git.default_branch to a plain branch name (e.g. main)."
+        return 1
+    fi
+
+    if ! git check-ref-format --branch "$ref" >/dev/null 2>&1; then
+        echo "   ❌ Refusing to run git: $label '$ref' is not a valid ref name."
+        echo "      Set git.default_branch to a plain branch name (e.g. main)."
+        return 1
+    fi
+
+    return 0
+}
+
+# Shared retry function for git operations.
+#
+# Takes the command as ARGV, not as a string: git_retry "desc" git push a b
+#
+# It used to take one string and re-split it on spaces, which meant any value
+# interpolated into that string could introduce additional arguments. The
+# comments here said "prevent injection" and were true for SHELL injection and
+# false for ARGUMENT injection -- see TRACKER §43. Callers must pass each
+# argument separately and quote every expansion; the array is executed as-is.
 git_retry() {
     local description="$1"
-    local command="$2"
+    shift
+    local cmd_array=("$@")
     local timeout="${MANIFEST_CLI_GIT_TIMEOUT:-300}"  # 5 minutes default timeout
     local max_retries="${MANIFEST_CLI_GIT_RETRIES:-3}"  # 3 retries default
     local success=false
     local timeout_cmd=""
-    
-    # Validate command input to prevent injection
-    if [[ -z "$command" ]]; then
+
+    if [[ ${#cmd_array[@]} -eq 0 ]]; then
         echo "   ❌ Error: No command provided"
         return 1
     fi
-    
-    # Parse command into array to prevent injection
-    local cmd_array=()
-    IFS=' ' read -ra cmd_array <<< "$command"
-    
+
     # Validate that it's a git command
     if [[ "${cmd_array[0]}" != "git" ]]; then
         echo "   ❌ Error: Only git commands are allowed"
         return 1
     fi
-    
+
     # Configure git to use SSH connection multiplexing to reduce connection overhead
     local git_ssh_command="ssh -o ControlMaster=auto -o ControlPersist=60s -o ControlPath=~/.ssh/control-%r@%h:%p"
 
@@ -956,6 +1010,9 @@ manifest_assert_release_branch() {
     local repo="${1:-.}"
     local prefix="${2:-   }"
     local default_branch="${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}"
+    # Guarded here too, though this function only compares: an unsafe value made
+    # the refusal message hand the user `git checkout --force` as remediation.
+    manifest_git_assert_safe_ref_name "$default_branch" "git.default_branch" || return 1
     local current
     current="$(git -C "$repo" branch --show-current 2>/dev/null)"
 
@@ -1051,6 +1108,8 @@ push_changes() {
     local tag_name
     tag_name="$(manifest_release_tag_name "$version")"
     local default_branch="${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}"
+    # Config-derived, and it becomes a git argument below (TRACKER §43).
+    manifest_git_assert_safe_ref_name "$default_branch" "git.default_branch" || return 1
 
     # Reset the ledger before anything can fail, so a caller never reads a
     # previous invocation's verdict.
@@ -1081,7 +1140,8 @@ push_changes() {
         echo "   Pushing to $remote..."
 
         # Push branch and the exact release tag together in one operation.
-        if git_retry "📤 Pushing $default_branch branch and $tag_name to $remote" "git push --progress $remote $default_branch $tag_name"; then
+        if git_retry "📤 Pushing $default_branch branch and $tag_name to $remote" \
+                git push --progress "$remote" "$default_branch" "$tag_name"; then
             _MANIFEST_CLI_GIT_PUSH_REMOTE_RESULTS+=("${remote}|success")
             pushed_any="true"
         else
@@ -1112,7 +1172,9 @@ push_changes() {
 sync_repository() {
     echo "🔄 Syncing with remote..."
     local default_branch="${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}"
-    
+    # Config-derived, and it becomes a git argument below (TRACKER §43).
+    manifest_git_assert_safe_ref_name "$default_branch" "git.default_branch" || return 1
+
     # Change to project root directory
     cd "$MANIFEST_CLI_PROJECT_ROOT" || {
         echo "❌ Failed to change to project root: $MANIFEST_CLI_PROJECT_ROOT"
@@ -1127,7 +1189,8 @@ sync_repository() {
         
         # Use git pull directly (which does fetch + merge in one operation)
         # This reduces SSH connections from 2 to 1 per remote
-        if ! git_retry "📥 Syncing with $remote/$default_branch" "git pull $remote $default_branch"; then
+        if ! git_retry "📥 Syncing with $remote/$default_branch" \
+                git pull "$remote" "$default_branch"; then
             echo "   ⚠️  All sync attempts failed for $remote, continuing with local state"
         else
             echo "   ✅ Successfully synced with $remote"
