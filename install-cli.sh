@@ -1343,7 +1343,9 @@ display_post_install_info() {
    Command catalog:   $MANIFEST_CLI_IDE_SUPPORT_DIR/manifest-cli-commands.md
    Assistant hints:   $MANIFEST_CLI_IDE_SUPPORT_DIR/AGENTS.md and CLAUDE.md
 EOF
-    if [ -f ".git/hooks/pre-commit" ] && grep -q "Manifest CLI Pre-Commit Hook" ".git/hooks/pre-commit" 2>/dev/null; then
+    local active_hook
+    active_hook="$(manifest_pre_commit_hook_target)"
+    if [ -f "$active_hook" ] && grep -q "Manifest CLI Pre-Commit Hook" "$active_hook" 2>/dev/null; then
         echo
         print_status "🔒 Pre-commit security hook installed (see docs/USER_GUIDE.md, Git Hooks section)"
     fi
@@ -1354,20 +1356,43 @@ EOF
 # Git Hooks Installation
 # =============================================================================
 
+# Path of the pre-commit hook git will ACTUALLY run in the current repo.
+#
+# core.hooksPath, when set, REPLACES .git/hooks entirely — git never looks in
+# .git/hooks again. That is exactly the setup .git-hooks/README.md and
+# CONTRIBUTING.md tell contributors to use, so a hook copied into .git/hooks is
+# dead weight git will never execute, and reporting it as installed is a false
+# assurance: the user believes commits are being scanned when nothing is.
+# Prints the effective path (relative, like the rest of this function's paths);
+# callers test it themselves.
+manifest_pre_commit_hook_target() {
+    local hooks_dir
+    hooks_dir="$(git config --get core.hooksPath 2>/dev/null || true)"
+    [ -n "$hooks_dir" ] || hooks_dir=".git/hooks"
+    printf '%s/pre-commit\n' "$hooks_dir"
+}
+
 install_git_hooks() {
     print_subheader "🔒 Installing Git Hooks"
 
     # Check if we're in a git repository
     if [ ! -d ".git" ]; then
         print_warning "⚠️  Not in a Git repository, skipping git hooks installation"
-        print_warning "   Run './install-git-hooks.sh' manually when in a git repository"
+        # There is no install-git-hooks.sh in this repo — the documented setup
+        # (.git-hooks/README.md, CONTRIBUTING.md) is core.hooksPath.
+        print_warning "   From a git repository, activate it with:"
+        print_warning "     git config core.hooksPath .git-hooks"
         return 0
     fi
 
     local GIT_HOOKS_SOURCE_DIR=".git-hooks"
-    local GIT_HOOKS_TARGET_DIR=".git/hooks"
     local PRE_COMMIT_SOURCE="$GIT_HOOKS_SOURCE_DIR/pre-commit"
-    local PRE_COMMIT_TARGET="$GIT_HOOKS_TARGET_DIR/pre-commit"
+    # Install where git actually looks, not where it used to look.
+    local CONFIGURED_HOOKS_PATH
+    CONFIGURED_HOOKS_PATH="$(git config --get core.hooksPath 2>/dev/null || true)"
+    local PRE_COMMIT_TARGET
+    PRE_COMMIT_TARGET="$(manifest_pre_commit_hook_target)"
+    local GIT_HOOKS_TARGET_DIR="${PRE_COMMIT_TARGET%/pre-commit}"
 
     # Check if git hooks source directory exists
     if [ ! -d "$GIT_HOOKS_SOURCE_DIR" ]; then
@@ -1376,17 +1401,53 @@ install_git_hooks() {
         return 0
     fi
 
-    # Create hooks directory if it doesn't exist
-    if [ ! -d "$GIT_HOOKS_TARGET_DIR" ]; then
-        mkdir -p "$GIT_HOOKS_TARGET_DIR"
-        print_success "✅ Created git hooks directory"
-    fi
-
     # Check if pre-commit hook source exists
     if [ ! -f "$PRE_COMMIT_SOURCE" ]; then
         print_warning "⚠️  Pre-commit hook source not found: $PRE_COMMIT_SOURCE"
         print_warning "   Skipping git hooks installation"
         return 0
+    fi
+
+    # core.hooksPath already points AT the shipped hook (the documented
+    # contributor setup): git runs it directly, so there is nothing to copy —
+    # and a cp/backup here would write into the tracked source directory.
+    if [ "$PRE_COMMIT_TARGET" -ef "$PRE_COMMIT_SOURCE" ]; then
+        print_success "✅ Git hooks already active via core.hooksPath=$GIT_HOOKS_TARGET_DIR"
+        echo
+        return 0
+    fi
+
+    # Only ever WRITE inside this repo. A core.hooksPath that is absolute or
+    # escapes the repo is usually a user-wide hooks directory shared by every
+    # repo they own — installing into it is far more than "install the hook for
+    # this project" asked for. Say where git actually looks and stop; staying
+    # silent here would just be the false assurance in another form. (Checked
+    # after the -ef guard so an absolute path that already points AT the shipped
+    # hook is reported as active rather than refused.)
+    case "$CONFIGURED_HOOKS_PATH" in
+        "") ;;
+        /*|*..*)
+            print_warning "⚠️  core.hooksPath points outside this repo: $CONFIGURED_HOOKS_PATH"
+            print_warning "   git runs hooks from there and ignores .git/hooks, so nothing was installed"
+            print_warning "   Install it there yourself, or use: git config core.hooksPath .git-hooks"
+            echo
+            return 0
+            ;;
+    esac
+
+    # Create the hooks directory — but only at the DEFAULT location. An
+    # installer has no business conjuring directories at a path the user
+    # configured but has not created.
+    if [ ! -d "$GIT_HOOKS_TARGET_DIR" ]; then
+        if [ -n "$CONFIGURED_HOOKS_PATH" ]; then
+            print_warning "⚠️  core.hooksPath is set to '$CONFIGURED_HOOKS_PATH', which does not exist"
+            print_warning "   git runs hooks from there and ignores .git/hooks, so nothing was installed"
+            print_warning "   Fix it with: git config core.hooksPath .git-hooks"
+            echo
+            return 0
+        fi
+        mkdir -p "$GIT_HOOKS_TARGET_DIR"
+        print_success "✅ Created git hooks directory"
     fi
 
     # Backup existing hook if it exists
@@ -1404,7 +1465,7 @@ install_git_hooks() {
     # Verify installation
     if [ -f "$PRE_COMMIT_TARGET" ] && [ -x "$PRE_COMMIT_TARGET" ]; then
         if grep -q "Manifest CLI Pre-Commit Hook" "$PRE_COMMIT_TARGET" 2>/dev/null; then
-            print_success "✅ Git hooks installed successfully"
+            print_success "✅ Git hooks installed successfully → $PRE_COMMIT_TARGET"
             echo
             print_success "🔒 Security features enabled:"
             print_success "   • Blocks commits with private environment files"

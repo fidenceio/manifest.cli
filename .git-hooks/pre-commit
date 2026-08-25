@@ -199,12 +199,26 @@ echo -e "${BLUE}[6/6] Checking for absolute home paths...${NC}"
 HOME_PATH_HITS=0
 ALLOWED_PLACEHOLDERS='/(Users|home)/(you|user|username|realuser|nobody-here|somebody-who-does-not-exist|runner|linuxbrew|\$|<|\{)'
 
+# The leading (^|[^A-Za-z0-9._~-]) anchors the match to the START of an absolute
+# path. Unanchored, any path merely CONTAINING a segment named `home` or `Users`
+# read as a developer's home directory — "$SCRATCH/home/.manifest-cli" in a bats
+# fixture blocked a legitimate commit. This cannot hide a real leak: an absolute
+# path's leading slash is never preceded by a path-segment character, and every
+# other boundary still matches — quote, space, `=`, `:`, `(`, and `/` itself, so
+# `file:///Users/<name>` is still caught. A brace-delimited expansion in front of
+# such a segment still trips it, because `}` is a boundary too: deliberately
+# fail-closed — write the expansion bare (`$SCRATCH/home/x`) or use a placeholder.
+HOME_PATH_PATTERN='(^|[^A-Za-z0-9._~-])/(Users|home)/[A-Za-z0-9._-]+'
+
 if [ -n "$STAGED_FILES" ]; then
     while IFS= read -r file; do
         [ -f "$MANIFEST_CLI_PROJECT_ROOT/$file" ] || continue
         # Scan the STAGED blob, not the worktree copy — they can differ.
+        # `-o` filters per MATCH, not per line: without it one allowed
+        # placeholder anywhere on a line exempted every other path on that
+        # line, so `/Users/you/ok` next to `/Users/<realname>/leak` passed clean.
         matches="$(git show ":$file" 2>/dev/null \
-            | grep -nE '/(Users|home)/[A-Za-z0-9._-]+' \
+            | grep -noE "$HOME_PATH_PATTERN" \
             | grep -vE "$ALLOWED_PLACEHOLDERS" || true)"
         if [ -n "$matches" ]; then
             if [ $HOME_PATH_HITS -eq 0 ]; then
