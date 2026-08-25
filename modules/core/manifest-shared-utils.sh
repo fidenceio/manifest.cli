@@ -1081,18 +1081,60 @@ manifest_repo_scope_target_unambiguous() {
     return 0
 }
 
-# True only when auto-confirm consent came from the process environment.
+# True when apply consent for an AMBIGUOUS target reached this process from an
+# origin the operator actually controls. There are exactly TWO such origins, and
+# they are deliberately kept distinct rather than collapsed into one variable:
 #
-# The pre-load snapshot lives in manifest-config.sh, which manifest-core.sh
-# sources AFTER this module (:56 vs :38), so this probes for the predicate at
-# CALL time rather than depending on source order -- the same shape as the
-# declare -F probes already used in this file (:579, :647) and in
+#  (1) MANIFEST_CLI_AUTO_CONFIRM=1 present in the PROCESS ENVIRONMENT AT PROCESS
+#      START. Read only through manifest-config.sh's source-time snapshot, never
+#      live: `automation.auto_confirm` is a MAPPED key, so reading the variable
+#      live let a CLONED REPO's committed manifest.config.yaml take this branch
+#      and authorize an apply in exactly the states this gate exists to refuse
+#      -- a detached HEAD, or no origin remote (TRACKER §46).
+#
+#  (2) _MANIFEST_CLI_DELEGATED_APPLY_CONSENT=1 -- fleet's IN-PROCESS delegation.
+#      `manifest fleet ship -y` is operator consent given at the fleet level;
+#      manifest-fleet.sh then calls manifest_ship_repo / manifest_ship_repo_resume
+#      in the SAME process image (a subshell, modules already sourced), so that
+#      consent can never appear in this process's start environment and origin
+#      (1) cannot see it. §46 routed this gate through the process-start snapshot
+#      alone, which refused every fleet member sitting on a detached HEAD or
+#      without an origin -- the very cases `fleet ship -y` exists to carry
+#      through. This is a THIRD provenance, not a loophole in the other two:
+#      _confirm_global_config_write does NOT consult it, which is what
+#      manifest-fleet.sh's own comment promises ("fleet consent cannot authorize
+#      incidental config migration").
+#
+# Why (2) cannot be forged by a config file -- verified, not assumed. Every
+# YAML->env assignment in this CLI funnels through
+# _manifest_yaml_export_mapped_value (manifest-yaml.sh), and the variable NAME it
+# exports comes from the static _MANIFEST_YAML_TO_ENV table (manifest-yaml.sh:50),
+# never from the config file's own key text: the batch reader skips any dot-path
+# absent from that table and the per-key reader iterates the table's keys. The
+# table is written once by its literal `declare -gA` and is never assigned to
+# anywhere in the tree; every one of its targets begins with `MANIFEST_CLI_` and
+# none begins with an underscore. The single config key that holds a variable
+# NAME -- cloud.api_key_env -- only READS the named variable
+# (_manifest_config_apply_secret_env_refs) and writes solely to the fixed
+# MANIFEST_CLI_CLOUD_API_KEY. And _manifest_config_capture_process_env_overrides
+# admits a name only when it is ALREADY in the process environment AND matches
+# `MANIFEST_CLI_*` AND is a mapped key -- three conditions a leading-underscore,
+# unmapped, never-exported-by-config name fails. Pinned by
+# tests/fleet_delegated_apply_consent.bats.
+#
+# The declare -F probe: the pre-load snapshot lives in manifest-config.sh, which
+# manifest-core.sh sources AFTER this module (:56 vs :38), so this resolves the
+# predicate at CALL time rather than depending on source order -- the same shape
+# as the declare -F probes already used in this file (:579, :647) and in
 # manifest-execution-policy.sh (:87, :121).
 #
 # The fallback is safe rather than a residual hole: if manifest-config.sh is not
 # loaded then no YAML layer has been read either, so the live variable can only
 # have come from the process environment in the first place.
 _manifest_repo_scope_auto_confirm_authorized() {
+    if [ "${_MANIFEST_CLI_DELEGATED_APPLY_CONSENT:-0}" = "1" ]; then
+        return 0
+    fi
     if declare -F _manifest_config_auto_confirm_authorized >/dev/null 2>&1; then
         _manifest_config_auto_confirm_authorized
         return $?
@@ -1139,13 +1181,25 @@ manifest_repo_scope_confirm_apply() {
     # Explicit override: authorize even an ambiguous target. The escape hatch
     # for a detached HEAD / no-origin apply.
     #
-    # Consent must come from the PROCESS ENVIRONMENT, never from a config file
-    # (TRACKER §46). `automation.auto_confirm` is a mapped key, so reading the
-    # variable live let a CLONED REPO's committed manifest.config.yaml take this
-    # branch and authorize an apply in exactly the states this function exists to
-    # refuse -- a detached HEAD, or no origin remote.
+    # Consent must come from the OPERATOR -- either the process environment at
+    # process start, or a fleet run that already holds -y and is delegating this
+    # apply in-process -- and never from a config file (TRACKER §46).
+    # `automation.auto_confirm` is a mapped key, so reading the variable live let
+    # a CLONED REPO's committed manifest.config.yaml take this branch and
+    # authorize an apply in exactly the states this function exists to refuse --
+    # a detached HEAD, or no origin remote. See
+    # _manifest_repo_scope_auto_confirm_authorized for both origins and for why
+    # the delegation flag is closed to config data.
+    #
+    # The two origins are reported separately: a fleet member's log must say the
+    # consent came from `fleet ship -y`, not name an environment variable the
+    # operator never set in their shell.
     if _manifest_repo_scope_auto_confirm_authorized; then
-        echo "Auto-confirmed repository target (MANIFEST_CLI_AUTO_CONFIRM=1): $git_root"
+        if [ "${_MANIFEST_CLI_DELEGATED_APPLY_CONSENT:-0}" = "1" ]; then
+            echo "Auto-confirmed repository target (delegated by fleet -y): $git_root"
+        else
+            echo "Auto-confirmed repository target (MANIFEST_CLI_AUTO_CONFIRM=1): $git_root"
+        fi
         manifest_git_preflight_write_access "$git_root" "$replay_command"
         return $?
     fi

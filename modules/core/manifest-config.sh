@@ -43,11 +43,22 @@ _manifest_config_capture_auto_confirm_env() {
 }
 
 # The single predicate for "the operator authorized unattended writes to the
-# user's global config". Literal "1" — matching manifest_repo_scope_confirm_apply
-# (manifest-shared-utils.sh:1122) and manifest-shared-functions.sh:588 — so one
-# spelling can no longer bypass one safety gate while another refuses it.
+# user's global config". Literal "1" — matching the two other sites that read
+# this consent, _manifest_repo_scope_auto_confirm_authorized
+# (manifest-shared-utils.sh) and manifest_resolve_github_owner
+# (manifest-shared-functions.sh) — so one spelling can no longer bypass one
+# safety gate while another refuses it. Named rather than numbered: the previous
+# form cited manifest-shared-utils.sh:1122, which was already the wrong line when
+# it was written (the comparison was at :1100) and moves on every edit above it.
 # is_truthy is deliberately NOT used: this is a consent check, not a config-value
 # coercion, and `true`/`yes`/`on` were only ever reachable from a config file.
+#
+# This predicate is the NARROWER of the two consent predicates and must stay
+# that way. The apply-target gate additionally honors fleet's in-process
+# delegation (_MANIFEST_CLI_DELEGATED_APPLY_CONSENT); this one must not, because
+# the global config lives OUTSIDE every repo in the fleet — which is exactly what
+# manifest-fleet.sh's own comment promises ("fleet consent cannot authorize
+# incidental config migration"). Pinned by tests/fleet_delegated_apply_consent.bats.
 _manifest_config_auto_confirm_authorized() {
     [ "${_MANIFEST_CLI_AUTO_CONFIRM_FROM_ENV:-0}" = "1" ]
 }

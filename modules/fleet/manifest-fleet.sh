@@ -3391,6 +3391,18 @@ EOF
             # after config resolution so member config cannot revoke that consent,
             # and fleet consent cannot authorize incidental config migration.
             export MANIFEST_CLI_AUTO_CONFIRM=1
+            # The apply-target gate reads MANIFEST_CLI_AUTO_CONFIRM only through
+            # manifest-config.sh's PROCESS-START snapshot (TRACKER §46), and the
+            # line above is an in-process export made long after that snapshot --
+            # so on its own it authorizes nothing, and every member on a detached
+            # HEAD or without an origin was refused. This flag is the delegation
+            # record the gate accepts instead: a name that is NOT a mapped config
+            # key, so no repo's committed manifest.config.yaml can forge it. See
+            # _manifest_repo_scope_auto_confirm_authorized (manifest-shared-utils.sh).
+            # Deliberately narrower than the line above: the global-config safety
+            # gate never consults it, which is what "fleet consent cannot authorize
+            # incidental config migration" above actually requires.
+            export _MANIFEST_CLI_DELEGATED_APPLY_CONSENT=1
             # Forced members must carry --force-bump into the per-member ship, or
             # the repo-level gate (Commit 1) would re-skip a clean, at-tag member.
             member_ship_args=("$increment_type" "-y")
@@ -3651,7 +3663,12 @@ EOF
                 log_error "Could not load configuration for fleet member: $svc ($spath)"
                 exit 1
             fi
+            # Same pair as the delegated ship above: fleet -y is the consent
+            # authority, and the apply-target gate accepts it only through the
+            # delegation flag, because the export below lands long after
+            # manifest-config.sh took its process-start snapshot (TRACKER §46).
             export MANIFEST_CLI_AUTO_CONFIRM=1
+            export _MANIFEST_CLI_DELEGATED_APPLY_CONSENT=1
             manifest_ship_repo_resume
         )
         rc=$?
