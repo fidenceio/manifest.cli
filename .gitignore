@@ -32,7 +32,15 @@ manifest.config.local.yaml
 .env.manifest.local
 
 # Private Environment Files (NEVER commit these!)
+#
+# The literal list below was the whole rule until 2026-08-24, which meant
+# `.env.dev` and `.env.ci` — shapes the Manifest .gitignore template ignores in
+# every repo it scaffolds — were unignored HERE. Same self-application gap as
+# the .manifest-cli/ one above: the tool wrote the rule into other people's
+# repos and not its own. The wildcard now leads and the literals are kept only
+# because they document intent. Escape hatch: `git add -f <path>`.
 .env
+.env.*
 .env.local
 .env.development
 .env.test
@@ -43,6 +51,36 @@ manifest.config.local.yaml
 .env.*.tmp
 *.env
 *.env.local
+
+# Re-included: these are templates, not secrets, and MUST stay after `.env.*`.
+!.env.example
+!.env.template
+
+# Local overrides and secret-shaped files of any format.
+# `manifest.config.local.yaml` is listed separately above; these cover the
+# shapes this CLI itself defines but never ignored here — notably
+# `manifest.fleet.config.local.yaml` (see modules/core/manifest-config.sh).
+*.local.yaml
+*.local.yml
+*.local.json
+*.local.toml
+*.secret.yaml
+*.secret.yml
+*.secret.json
+*.secret.*
+
+# Editor/tool temp and merge artifacts.
+# These are in the template but were absent here, and since the ship-time
+# cleanup sweep was correctly narrowed to the docs tree, nothing deletes them
+# tree-wide either — so a stray one was both unignored AND unswept, and the
+# release commit's bare `git add .` would take it. Neither half covered it.
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+tmp/
+temp/
 
 # User-specific configuration
 .manifestrc
