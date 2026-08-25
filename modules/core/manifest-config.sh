@@ -14,6 +14,44 @@ MANIFEST_CLI_CONFIG_SCHEMA_VERSION_CURRENT=2
 
 declare -gA _MANIFEST_CONFIG_PROCESS_ENV_OVERRIDES=()
 
+# -----------------------------------------------------------------------------
+# §46: MANIFEST_CLI_AUTO_CONFIRM as it stood in the PROCESS ENVIRONMENT, snapshot
+# at module-source time — before any YAML layer can assign it.
+#
+# `automation.auto_confirm` is a mapped key (manifest-yaml.sh), so EVERY config
+# file the CLI loads can set MANIFEST_CLI_AUTO_CONFIRM — including Layer 2, the
+# repo's own committed manifest.config.yaml, and Layer 1.5, a fleet root's. The
+# global-config safety gate below must never read that variable directly: a
+# cloned repo carrying three lines of YAML would otherwise authorize a rewrite of
+# $HOME/.manifest-cli/manifest.config.global.yaml (plus a .bak and a migration
+# marker) on a plain `manifest config get` — a write OUTSIDE the repo that
+# supplied the consent, with no -y, no flag and no prompt. Repo-scope data does
+# not get to authorize an out-of-repo write.
+#
+# This is the same ordering rule manifest-fleet.sh already applies in the other
+# direction ("Set it after config resolution so member config cannot revoke that
+# consent, and fleet consent cannot authorize incidental config migration").
+#
+# Deliberately NOT exported: a child `manifest` process takes its own snapshot
+# from its own environment, and an in-process `export MANIFEST_CLI_AUTO_CONFIRM=1`
+# (which is what the fleet ship path does) must not retroactively become
+# process-start consent.
+declare -g _MANIFEST_CLI_AUTO_CONFIRM_FROM_ENV=""
+
+_manifest_config_capture_auto_confirm_env() {
+    _MANIFEST_CLI_AUTO_CONFIRM_FROM_ENV="${MANIFEST_CLI_AUTO_CONFIRM:-}"
+}
+
+# The single predicate for "the operator authorized unattended writes to the
+# user's global config". Literal "1" — matching manifest_repo_scope_confirm_apply
+# (manifest-shared-utils.sh:1122) and manifest-shared-functions.sh:588 — so one
+# spelling can no longer bypass one safety gate while another refuses it.
+# is_truthy is deliberately NOT used: this is a consent check, not a config-value
+# coercion, and `true`/`yes`/`on` were only ever reachable from a config file.
+_manifest_config_auto_confirm_authorized() {
+    [ "${_MANIFEST_CLI_AUTO_CONFIRM_FROM_ENV:-0}" = "1" ]
+}
+
 _manifest_config_capture_process_env_overrides() {
     local entry env_var env_value
     local mapping_decl
@@ -71,6 +109,7 @@ _manifest_config_apply_secret_env_refs() {
 }
 
 _manifest_config_capture_process_env_overrides
+_manifest_config_capture_auto_confirm_env
 
 _manifest_config_warn() {
     local message="$1"
@@ -131,7 +170,11 @@ _manifest_config_backup_before_migration() {
 # RETURNS: 0 if approved, non-zero if denied
 #
 # ENV:
-#   MANIFEST_CLI_AUTO_CONFIRM=1            bypass prompt (CI / scripted)
+#   MANIFEST_CLI_AUTO_CONFIRM=1            bypass prompt (CI / scripted). Read
+#       from the PROCESS ENVIRONMENT ONLY, via the source-time snapshot above —
+#       a value assigned by any loaded config file (`automation.auto_confirm`)
+#       is NOT consent to write a file outside the repo that supplied it. See
+#       §46 and the comment on _MANIFEST_CLI_AUTO_CONFIRM_FROM_ENV.
 #   MANIFEST_CLI_GLOBAL_CONFIG_AUTHORIZED=1   session-cached approval (modify only)
 # -----------------------------------------------------------------------------
 _confirm_global_config_write() {
@@ -139,8 +182,8 @@ _confirm_global_config_write() {
     local target="$2"
     local reason="$3"
 
-    if is_truthy "${MANIFEST_CLI_AUTO_CONFIRM:-0}"; then
-        _manifest_config_warn "Auto-confirming $action of $target ($reason) [MANIFEST_CLI_AUTO_CONFIRM=${MANIFEST_CLI_AUTO_CONFIRM}]"
+    if _manifest_config_auto_confirm_authorized; then
+        _manifest_config_warn "Auto-confirming $action of $target ($reason) [MANIFEST_CLI_AUTO_CONFIRM=${_MANIFEST_CLI_AUTO_CONFIRM_FROM_ENV}]"
         export MANIFEST_CLI_GLOBAL_CONFIG_AUTHORIZED=1
         return 0
     fi
@@ -639,7 +682,13 @@ auto_migrate_user_global_configuration() {
     # That violates the "no silent modifications" rule. Default behavior is
     # now WARN-ONLY; users opt in to silent migration with MANIFEST_CLI_AUTO_CONFIRM=1
     # or run `manifest config doctor --fix` explicitly.
-    if ! is_truthy "${MANIFEST_CLI_AUTO_CONFIRM:-0}"; then
+    #
+    # §46: the opt-in must come from the PROCESS ENVIRONMENT. This gate is tested
+    # with the same predicate as _confirm_global_config_write below, not a looser
+    # one — otherwise a config-file `automation.auto_confirm` would skip the drift
+    # WARNING here and then be refused at the gate, replacing the notice the user
+    # is supposed to see with an error about missing confirmation.
+    if ! _manifest_config_auto_confirm_authorized; then
         _manifest_config_warn "Configuration drift detected in $config_file."
         _manifest_config_warn "Run 'manifest config doctor --dry-run' to review, then '--fix' to apply."
         # Marker: the apply hook advances config-migration.last only if this

@@ -283,7 +283,22 @@ fleet:
 # Automation
 # -----------------------------------------------------------------------------
 automation:
-  auto_confirm: false                # Prompt automation only; does not imply -y.
+  # Does NOT imply -y: it never turns a preview into an apply
+  # (manifest-execution-policy.sh). What it does grant, when the OPERATOR sets
+  # MANIFEST_CLI_AUTO_CONFIRM=1 in the environment, is unattended consent to two
+  # things a prompt would otherwise gate: (1) auto-migrating the user's GLOBAL
+  # config at ~/.manifest-cli/manifest.config.global.yaml — a write outside this
+  # repo, which also leaves a .bak.<stamp> beside it; (2) applying to an ambiguous
+  # repository target (detached HEAD, or no `origin` when one is required), which
+  # the CLI otherwise refuses outright.
+  #
+  # Setting it HERE, in a config file, does NOT grant (1): the global-config gate
+  # reads MANIFEST_CLI_AUTO_CONFIRM only from the process environment, snapshot
+  # before any config file loads, so a cloned repo cannot rewrite your global
+  # config (§46). It still reaches (2) — that gate lives in manifest-shared-utils.sh
+  # and reads the variable live. Prefer the environment variable; treat this key
+  # as a declared preference, not as the thing that grants the consent.
+  auto_confirm: false
 
 # -----------------------------------------------------------------------------
 # Preview

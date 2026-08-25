@@ -1081,6 +1081,25 @@ manifest_repo_scope_target_unambiguous() {
     return 0
 }
 
+# True only when auto-confirm consent came from the process environment.
+#
+# The pre-load snapshot lives in manifest-config.sh, which manifest-core.sh
+# sources AFTER this module (:56 vs :38), so this probes for the predicate at
+# CALL time rather than depending on source order -- the same shape as the
+# declare -F probes already used in this file (:579, :647) and in
+# manifest-execution-policy.sh (:87, :121).
+#
+# The fallback is safe rather than a residual hole: if manifest-config.sh is not
+# loaded then no YAML layer has been read either, so the live variable can only
+# have come from the process environment in the first place.
+_manifest_repo_scope_auto_confirm_authorized() {
+    if declare -F _manifest_config_auto_confirm_authorized >/dev/null 2>&1; then
+        _manifest_config_auto_confirm_authorized
+        return $?
+    fi
+    [[ "${MANIFEST_CLI_AUTO_CONFIRM:-0}" == "1" ]]
+}
+
 manifest_repo_scope_confirm_apply() {
     local project_root="${1:-${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}}"
     local replay_command="${2:-manifest command -y}"
@@ -1119,7 +1138,13 @@ manifest_repo_scope_confirm_apply() {
 
     # Explicit override: authorize even an ambiguous target. The escape hatch
     # for a detached HEAD / no-origin apply.
-    if [[ "${MANIFEST_CLI_AUTO_CONFIRM:-0}" == "1" ]]; then
+    #
+    # Consent must come from the PROCESS ENVIRONMENT, never from a config file
+    # (TRACKER §46). `automation.auto_confirm` is a mapped key, so reading the
+    # variable live let a CLONED REPO's committed manifest.config.yaml take this
+    # branch and authorize an apply in exactly the states this function exists to
+    # refuse -- a detached HEAD, or no origin remote.
+    if _manifest_repo_scope_auto_confirm_authorized; then
         echo "Auto-confirmed repository target (MANIFEST_CLI_AUTO_CONFIRM=1): $git_root"
         manifest_git_preflight_write_access "$git_root" "$replay_command"
         return $?

@@ -210,7 +210,17 @@ teardown() {
 }
 
 @test "config set -y --layer global: AUTO_CONFIRM=1 authorizes and writes" {
+    # §46: the gate reads MANIFEST_CLI_AUTO_CONFIRM only through the module's
+    # source-time snapshot of the PROCESS ENVIRONMENT, so a config *file* can no
+    # longer authorize a write outside the repo that supplied it. Exporting the
+    # variable here — after setup() sourced the module — is what a config file
+    # does, not what an operator does, so the snapshot has to be re-taken to
+    # simulate `MANIFEST_CLI_AUTO_CONFIRM=1 manifest config set --layer global`.
+    # Verified against the real entrypoint: that command line still writes, and
+    # the same command in a repo whose committed config sets auto_confirm: 1 is
+    # refused. config_global_write_consent.bats pins both ends.
     export MANIFEST_CLI_AUTO_CONFIRM=1
+    _manifest_config_capture_auto_confirm_env
     run manifest_config_set --layer global brew.tap_repo example/homebrew-tap -y < /dev/null
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Auto-confirming modify"
