@@ -103,7 +103,7 @@ manifest_prep_repo() {
     # retrofit surface: existing repos gain the scaffold here (no-clobber).
     if [[ "$dry_run" == "true" ]]; then
         if [[ ! -f "$project_root/.env.example" ]]; then
-            echo "  would create: .env.example   (your env var names, no values)"
+            echo "  would create: .env.example   (your env var names; non-secrets carry their spec default, secrets are commented out)"
             echo ""
         fi
     else

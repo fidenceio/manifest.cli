@@ -209,7 +209,9 @@ names live in one place instead of being retyped per deployment target." \
                     "Options" "  --dry-run    Explicit preview; no writes (default)
   --check      Exit 1 if any generated file is out of date (for CI)
   -y, --yes    Write the files" \
-                    "Files written" "  .env.example                  the variable names, with no values
+                    "Files written" "  .env.example                  every variable name; non-secrets carry their
+                                spec default (blank when the spec sets none),
+                                secrets are commented out and left valueless
   k8s/env/configmap.yaml        Kubernetes non-secret values (if k8s/ exists)
   k8s/env/external-secret.yaml  Kubernetes secret refs, via External Secrets
                                 Operator (if k8s/ exists)

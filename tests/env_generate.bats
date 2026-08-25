@@ -161,3 +161,48 @@ YAML
     [ "$status" -ne 0 ]
     [[ "$output" == *"stale artifacts"* ]]
 }
+
+# --- help text vs. what the renderer actually emits ---------------------------------
+#
+# `env generate --help` shipped ".env.example  the variable names, with no values"
+# while _manifest_env_render_example emitted `NAME=<default>` for every non-secret
+# entry — only secrets are valueless. The claim was self-consistent and simply
+# false, so a test that pinned the help string alone would have passed against the
+# wrong text; it took a reader trusting the help into a wrong root cause instead.
+#
+# This test therefore measures the rendered artifact first and makes the help
+# answer to it. Both halves have to stay true: if the renderer stops emitting
+# defaults, (a)/(c) fail; if the help regains a "no values" claim, (d) fails.
+@test "env generate: .env.example carries non-secret defaults, and the help says so" {
+    write_spec
+    run manifest_env_generate -y
+    [ "$status" -eq 0 ]
+    [ -f "$PROJ/.env.example" ]
+
+    # (a) BEHAVIOUR — a non-secret entry renders NAME=<default>, value included.
+    grep -qx 'FIDENCE_APP_DEMO_LOG_LEVEL=info' "$PROJ/.env.example"
+    grep -qx 'FIDENCE_APP_DEMO_SITE_URL=https://demo.fidence.io' "$PROJ/.env.example"
+
+    # (b) BEHAVIOUR — a secret is commented out and left valueless, and never
+    #     appears as a live assignment (D-ENV-3: no secret literal in any .env).
+    grep -qx '# FIDENCE_APP_DEMO_DB_PASSWORD=' "$PROJ/.env.example"
+    refute grep -qE '^FIDENCE_APP_DEMO_DB_PASSWORD=' "$PROJ/.env.example"
+
+    # (c) Measure, rather than assume, that a value is present. This is the fact
+    #     the help text has to agree with. `grep -c` exits 1 when it counts zero,
+    #     so it is captured as a number and compared — never used as a boolean.
+    local valued
+    valued="$(grep -cE '^[A-Z][A-Z0-9_]*=.+$' "$PROJ/.env.example" || true)"
+    [ "$valued" -ge 1 ]
+
+    # (d) TEXT — given (c), the help must not tell the reader the file has no
+    #     values. Matched as a family of phrasings, not the one string that was
+    #     wrong, so a reworded version of the same false claim is still caught.
+    run manifest_env_generate --help
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Files written"* ]]   # positive control: the block rendered
+    local claim
+    claim="$(printf '%s\n' "$output" \
+        | grep -icE 'no values|without values|with no value|names only|names, not values' || true)"
+    [ "$claim" -eq 0 ]
+}
