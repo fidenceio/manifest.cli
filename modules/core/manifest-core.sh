@@ -1709,11 +1709,13 @@ changes. A few use their own word instead: 'plan fleet --apply' and
 
   Settings:
     config                              Setup wizard, or print the settings
+    config show|setup                   Print the settings, or force the wizard
     config list                         Every setting and where it came from
     config get|set|unset <key>          Read or change one setting
     config describe <key>               Its value at every layer. Start here
                                         when a setting is not taking effect
     config doctor                       Find and fix config problems
+    config time                         Time servers used for timestamps
 
   Maintenance:
     security                            Audit for tracked secrets and PII
