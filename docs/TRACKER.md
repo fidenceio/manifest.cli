@@ -78,13 +78,37 @@ Ranked by four questions, in order:
 
 ### Release state as of 2026-08-25 — READ THIS FIRST
 
-**Four commits are local and unpushed. `origin/main` is `37c53dd`.** In order: `464ddf7` (tracker — files Class B, and **contains exploit detail for §43/§44/§45**), `4bd922f` (§43 fix), `d63b39a` (§46 fix), `1691c83` (§2(c) fix).
+**15 commits are local and unpushed. `origin/main` is `37c53dd`.** Nothing from the 2026-08-25 session has been published.
 
-- **This repo's remote is PUBLIC.** `464ddf7` documents three unfixed-at-the-time vulnerabilities in reproducible detail. It must not reach the remote ahead of the fixes — push the fix commits together with it, or not at all.
-- **§49 is now FIXED (`3bd8846`), so the fleet blocker is cleared.** The remaining hold is publication order, not correctness.
-- **Target is v59.6.0** (minor — §43 changes `git_retry`'s signature from a command *string* to *argv*, which is a breaking change for any out-of-tree caller, but no such caller exists in this repo).
-- **Fixed and unreleased:** §43, §46 (with §49 outstanding), §2(c). **Filed and deliberately held:** §44, §45 — §45 needs a design decision first, because the redacted URL it would write is not clone-able and that column feeds `git clone`.
-- **Open from the 2026-08-25 verification pass:** §52 (the `docs` half only), §56, §57, §59, §60. **Closed:** §49 (`3bd8846`), §50 + §55 (`ce32fa0`), §51 (`85ee241`), §52 config half (`e171385`), §53 (`9197da7`), §54 + §6(16) (`705c4a3`), §58 (`8b9c0f0`).
+| # | commit | carries |
+| --- | --- | --- |
+| 1 | `464ddf7` | tracker — Class B filings, **and reproducible exploit detail for §43/§44/§45** |
+| 2 | `4bd922f` | §43 fix — argv + ref-name validation |
+| 3 | `d63b39a` | §46 fix — consent from the process env (**introduced §49**) |
+| 4 | `1691c83` | §2(c) fix — loader + consumer (**introduced §58**) |
+| 5 | `642b535` | tracker — the verification pass, §49–§55 |
+| 6 | `ce32fa0` | §50 + §55 — hook anchor, per-match exemptions, hooksPath |
+| 7 | `ba71cd9` | tracker — §50/§55 closed, §56/§57 filed |
+| 8 | `e171385` | §52 — help/dispatch parity (`config` half) |
+| 9 | `9197da7` | §53 — yq dialect guard |
+| 10 | `27f73db` | tracker — §53 closed, §54 narrowed |
+| 11 | `705c4a3` | §6(16) + §54 — one derivation, nonce sentinel |
+| 12 | `3bd8846` | §49 — fleet delegated consent (**release blocker, cleared**) |
+| 13 | `85ee241` | §51 — `.env.example` contract text |
+| 14 | `8b9c0f0` | §58 — `_MANIFEST_CLI_` namespace rename |
+| 15 | *(this)* | tracker — §49/§51/§54/§6(16) closed, §58/§59/§60 filed |
+
+**PUBLICATION ORDER IS THE ONLY REMAINING HOLD.** This repo's remote is **PUBLIC**, and commit 1 documents three then-unfixed vulnerabilities in reproducible detail. Push the fix commits **together with it or not at all** — never commit 1 alone.
+
+- **Target: v59.6.0** (minor). §43 changes `git_retry`'s signature from a command *string* to *argv* — a breaking change for any out-of-tree caller, though none exists in this repo.
+- **Ready to ship:** §43, §46, §2(c), §49, §50, §51, §52 (`config` half), §53, §54, §55, §6(16), §58.
+- **Filed and deliberately held, NOT in this release:** §44, §45. §45 needs a design decision first — the redacted URL it would write is not clone-able, and that column feeds `git clone`.
+- **Open, all found *during* the 2026-08-25 verification pass:** §52 (`docs` half), §56, §57, §59, §60. **§59 is the one to do next** — it is T2 and it partially un-does §46 in an exec'd child.
+- **Verification status:** every commit above was A/B'd and mutation-tested, and each agent-produced change was re-verified independently before staging. A full-suite run (1774 tests) was in progress when the session ended; the last recorded state was 431 ran / 0 failed. **Re-run `bats tests/*.bats` before shipping** — that is the one outstanding check.
+
+**Session artifacts, so nothing is hunted for later.** The six agent worktrees under `.claude/worktrees/` are **fully merged and hold nothing unique** — verified file-by-file: every changed file is byte-identical to `main` except the four touched by the §58 rename, and those were proven to differ *only* by that rename (with a positive control on a file that legitimately differs). None is ahead of `main` by any commit. They are covered by `.gitignore:184` (`.claude/*`), so they cannot pollute a commit, and they are safe to delete with `git worktree remove --force` whenever convenient. The scratchpad patches are redundant with the commits.
+
+**Three regressions were introduced and fixed inside this same session** — §49 (`d63b39a`→`3bd8846`), §56 (`ebced8a`, still open), §58 (`1691c83`→`8b9c0f0`). All three surfaced only by checking an agent's "pre-existing" claim against `git log -S` rather than accepting it. **`git log -S '<symbol>'` names the commit that introduced a symbol; "which working tree currently fails" does not.**
 
 **Three items were added at the head of this tier on 2026-08-25**, ahead of everything previously filed. §43, §44 and §45 share one shape — **a repo's own committed `manifest.config.yaml` steers the CLI toward the machine running it** — and two of them reach arbitrary code execution with no operator action beyond a normal command. That outranks §2 and §3 on question 1 (can it destroy or irreversibly publish on a normal run) and on question 0 (whose machine): every one executes on whatever host clones the repo. All three were reproduced against the real entrypoint with positive controls; none is a lead.
 
