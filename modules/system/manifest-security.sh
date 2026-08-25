@@ -11,6 +11,25 @@ source "$(dirname "${BASH_SOURCE[0]}")/manifest-env-naming.sh"
 MANIFEST_CLI_SECURITY_CONFIG_FILE="manifest.config"
 MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES=(".env" ".env.development" ".env.test" ".env.production" ".env.staging" "manifest.config.local.yaml")
 
+# Emit one private-file name per line. Accepts a bash array or a comma-separated
+# string; unset/empty means the built-in list above.
+#
+# RETURNS 1 — printing nothing — when the configured value is not something this
+# splitter can read (§2(c)). A security control that cannot parse its own
+# configuration must FAIL, not narrow: `IFS=',' read -r -a` stops at the first
+# newline, so a multi-line value used to yield ONE entry — the literal string
+# "- .env", a filename that cannot exist — and every caller then reported a
+# clean scan over tracked private files. Callers MUST check the status; a bare
+# `done < <(_manifest_security_private_env_files)` cannot see it, because a
+# process substitution's exit status is not observable, which is precisely how
+# this stayed silent.
+#
+# The loader now joins YAML sequences into the comma form before they reach any
+# env var (_MANIFEST_YAML_SEQ_JOIN_EXPR, manifest-yaml.sh), so a config file can
+# no longer produce these shapes. This guard covers the route that never touches
+# the loader at all: a MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES exported into the
+# process, which _manifest_config_apply_process_env_overrides re-applies on top
+# of every YAML layer as the highest-precedence source.
 _manifest_security_private_env_files() {
     local decl
     decl="$(declare -p MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES 2>/dev/null || true)"
@@ -28,7 +47,28 @@ _manifest_security_private_env_files() {
         return 0
     fi
 
+    # Refuse anything that is not a flat comma string. A newline is the fatal
+    # one (read stops there); the "- " / "[" / "]" tokens are the residue of a
+    # YAML list that reached here unjoined, and a bare "-" opener means the same
+    # thing. None of these can be a real private-file name.
+    local malformed=""
+    case "$raw" in
+        *$'\n'*) malformed="it spans multiple lines (a YAML list, not a comma-separated string)" ;;
+        '- '*|'-') malformed="it begins with a YAML block-sequence marker (\"- \")" ;;
+        '['*)      malformed="it begins with \"[\" (a YAML flow sequence, not a comma-separated string)" ;;
+        *']')      malformed="it ends with \"]\" (a YAML flow sequence, not a comma-separated string)" ;;
+    esac
+    if [ -n "$malformed" ]; then
+        printf '%s\n' \
+            "❌ security.private_files (MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES) cannot be read: $malformed." \
+            "   Value: ${raw//$'\n'/\\n}" \
+            "   Expected a comma-separated string, e.g. \".env,mysecret.txt\"." \
+            "   Refusing to scan: a partial private-file list would report a clean repository over tracked secrets." >&2
+        return 1
+    fi
+
     local item
+    local -a _manifest_security_files=()
     IFS=',' read -r -a _manifest_security_files <<< "$raw"
     for item in "${_manifest_security_files[@]}"; do
         item="${item#"${item%%[![:space:]]*}"}"
@@ -174,16 +214,27 @@ check_git_tracking() {
         return 0
     fi
     
+    # Resolve the list into a variable FIRST. `done < <(...)` hides the
+    # producer's exit status, so a refusal there would arrive as an empty list
+    # and be reported as "no private files tracked" — the same silent narrowing
+    # this check exists to prevent (§2(c)).
+    local private_files
+    if ! private_files="$(_manifest_security_private_env_files)"; then
+        echo "      ❌ Cannot determine the private-file list; scan NOT performed"
+        return 1
+    fi
+
     # Check if any private files are tracked
     while IFS= read -r env_file; do
+        [ -n "$env_file" ] || continue
         if [ -f "$project_root/$env_file" ]; then
             if git -C "$project_root" ls-files --error-unmatch -- "$env_file" >/dev/null 2>&1; then
                 echo "      ❌ $env_file is tracked by Git (SECURITY RISK!)"
                 return 1
             fi
         fi
-    done < <(_manifest_security_private_env_files)
-    
+    done <<< "$private_files"
+
     return 0
 }
 
@@ -252,10 +303,19 @@ check_environment_file_security() {
         return 0
     fi
     
+    # Same as check_git_tracking: resolve the list before the loop so a refusal
+    # is a failure here rather than an empty scan reported as clean (§2(c)).
+    local private_files
+    if ! private_files="$(_manifest_security_private_env_files)"; then
+        echo "      ❌ Cannot determine the private-file list; scan NOT performed"
+        return 1
+    fi
+
     # Check if .env files exist and are properly ignored
     local security_issues=0
-    
+
     while IFS= read -r env_file; do
+        [ -n "$env_file" ] || continue
         if [ -f "$project_root/$env_file" ]; then
             # Check if file is properly ignored by Git
             if ! git -C "$project_root" check-ignore "$env_file" >/dev/null 2>&1; then
@@ -263,8 +323,8 @@ check_environment_file_security() {
                 security_issues=$((security_issues + 1))
             fi
         fi
-    done < <(_manifest_security_private_env_files)
-    
+    done <<< "$private_files"
+
     [ $security_issues -eq 0 ]
 }
 

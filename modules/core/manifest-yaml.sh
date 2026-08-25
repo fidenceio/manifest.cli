@@ -668,6 +668,82 @@ write_full_yaml() {
 # =============================================================================
 
 # -----------------------------------------------------------------------------
+# Sequence rendering — one rule, shared verbatim by both loader paths (§2(c))
+# -----------------------------------------------------------------------------
+# Every list-valued mapped key is consumed as a COMMA STRING, never as a bash
+# array. Re-verified 2026-08-25 by enumerating every `IFS=',' read -r -a` in
+# modules/ — there are exactly five, and each line below is the SPLIT itself,
+# not the function header or the env-var read:
+#   security.private_files        -> _manifest_security_private_env_files
+#                                    (manifest-security.sh:72)
+#   version.components            -> _manifest_version_component_names
+#                                    (manifest-shared-functions.sh:149).
+#                                    manifest_version_components (:162) and
+#                                    manifest_version_level (:223) consume its
+#                                    output; neither splits on its own.
+#   release.canonical_repo_slugs  -> manifest_is_canonical_repo
+#                                    (manifest-shared-functions.sh:360)
+#   version.sync                  -> _manifest_version_sync_targets
+#                                    (manifest-git.sh:281)
+#   env.naming_allow              -> _manifest_env_name_allowed
+#                                    (manifest-env-naming.sh:90)
+# and the shipped examples/manifest.config.yaml.example writes every one of
+# them as a comma string.
+#
+# Anchors in this block are the ones that drift (TRACKER §5: "budget for
+# locating the behaviour, not for reading the cited line"). Grep for the split,
+# not for the line number.
+#
+# The loader used to hand those consumers yq's rendering of the SEQUENCE node
+# instead — "- .env\n- mysecret.txt" for a block list, "[\".env\", \"b\"]" for
+# a flow list — and `read` stops at the first newline. A user who wrote the key
+# as a YAML list therefore got ONE entry, the literal string "- .env", a
+# filename that cannot exist, with no error anywhere. In the security scan that
+# printed "✅ No private files are being tracked by Git" over tracked private
+# files; in the bump arithmetic it feeds "- major" as a segment name.
+#
+# JOIN rather than refuse: a list is the natural way to write a list, the
+# config CRUD already accepts and round-trips one (tests/config_crud.bats:229
+# blesses exactly this shape for security.private_files), and joining makes the
+# three spellings — comma string, block list, flow list — mean the same thing,
+# which is what a reader expects. Refusing would be safe but would break a form
+# the tool itself blesses, and would push users back to the comma string for no
+# reason. Safety does not rest on the join alone: the security consumer keeps
+# its own refusal for values that never pass through here at all (a malformed
+# MANIFEST_CLI_* exported into the process, which
+# _manifest_config_apply_process_env_overrides re-applies on top of every YAML
+# layer), so nothing narrows silently on either route.
+#
+# A sequence containing a map or a nested sequence has no comma encoding at
+# all; it renders as the sentinel below and the caller refuses loudly, naming
+# the key and the file (§6: malformed input must not be treated as a value).
+# The sentinel is only ever compared against the output of the !!seq branch, so
+# the only value that could be mistaken for it is a one-element list whose sole
+# element is this exact string — and the consequence of that mistake is a loud
+# refusal, never a silent narrowing.
+#
+# Shape cannot substitute for the tag here. Measured with yq 4.53.6: for the
+# SAME text, a !!str and a !!seq render byte-for-byte identically under both
+# `yq e -r` and `@yaml` — the scalar string "- .env" and the block list
+# `- .env` are both `2d202e656e760a`, and the scalar '[".env"]' and the flow
+# list [".env"] are both `5b222e656e76225d0a`. Only the node's tag separates
+# them, which is why the join is applied by the yq expression that already knows
+# the tag, and never by pattern-matching the rendered text. (The rendered text is
+# still usable as a cheap PRE-FILTER, which is all the per-key path uses it for:
+# a value like "- chore: thing" gets the tag probe and is then left alone.)
+#
+# WRITTEN IN yq's OWN DIALECT, NOT jq's. mikefarah yq v4 has no
+# `if/then/else/end` — that spelling is a LEXER error, and because yq lexes the
+# expression before it looks at the document it fails on EVERY file, sequences
+# or not. The ternary is therefore built from `select` plus the alternative
+# operator `//`: `select(cond)` yields nothing when cond is false, and `//`
+# supplies the sentinel in that case. Empty string is NOT falsy to `//`
+# (measured: `"" // "x"` is `""`), so an empty list still joins to "" and is
+# treated as absent by _manifest_yaml_export_mapped_value rather than refused.
+_MANIFEST_YAML_SEQ_UNREPRESENTABLE='!!manifest:unrepresentable-sequence'
+_MANIFEST_YAML_SEQ_JOIN_EXPR="((select(([.[] | select(tag == \"!!map\" or tag == \"!!seq\")] | length) == 0) | join(\",\")) // \"${_MANIFEST_YAML_SEQ_UNREPRESENTABLE}\")"
+
+# -----------------------------------------------------------------------------
 # Function: _manifest_yaml_expand_home_prefix
 # -----------------------------------------------------------------------------
 # Internal helper. Expands a leading "~/" or leading "$HOME/" in a YAML-sourced
@@ -701,6 +777,12 @@ _manifest_yaml_expand_home_prefix() {
 # Internal helper shared by both load_yaml_to_env read paths. Trims, expands,
 # and exports one mapped value. Kept as the single implementation so the batch
 # and per-key paths can never drift apart semantically.
+#
+# This function sees only a name and a string, so it cannot tell a sequence
+# from a string that looks like one — that verdict needs the YAML node's tag,
+# which only the two callers hold. Sequences are therefore already normalized
+# to the comma encoding (_MANIFEST_YAML_SEQ_JOIN_EXPR) before they arrive here;
+# do not add shape-based list handling below (§2(c)).
 #
 # ARGUMENTS:
 #   $1 - env var name
@@ -747,10 +829,14 @@ _manifest_yaml_export_mapped_value() {
 # Fast path for load_yaml_to_env (§8.4f): ONE yq walk per file instead of one
 # yq per mapped key (~130 spawns → 1). Emits every non-map leaf as a
 # NUL-terminated "path\npath-depth\nvalue" record; NUL framing is what makes
-# multi-line values (sequences, block scalars) safe to carry. Rendering is
+# multi-line values (block scalars) safe to carry. Rendering is
 # per-key-equivalent by construction: to_string for scalars matches `yq e -r`
-# (comments stripped, styles unwrapped), @yaml for sequences matches how `-r`
-# prints a sequence node (block/flow style preserved).
+# (comments stripped, styles unwrapped), and sequences go through
+# _MANIFEST_YAML_SEQ_JOIN_EXPR — the same expression the per-key fallback
+# applies once it has confirmed a node is a !!seq — so both paths agree that a
+# list means the comma string its consumers actually parse (§2(c)). That
+# replaced a bare @yaml, which reproduced yq's block/flow rendering faithfully
+# and was exactly the defect: faithful to YAML, unreadable to every consumer.
 #
 # The path-depth field guards a flat dotted key ("git.tag_prefix": v at the
 # document root): its joined path collides with a real mapped path, but the
@@ -765,6 +851,10 @@ _manifest_yaml_export_mapped_value() {
 #       ("<<" path component) — merge keys resolve through per-key traversal
 #       but are invisible to a document walk, so the walk would silently load
 #       LESS config than v59 did. Nothing is exported on return 1.
+#   2 - a MAPPED key holds a sequence with no comma encoding (an element is a
+#       map or a nested sequence). Falling back would re-read the same file and
+#       reach the same verdict, so the caller must NOT fall back — it must
+#       propagate. Nothing is exported on return 2 either.
 # -----------------------------------------------------------------------------
 _load_yaml_to_env_batch() {
     local yaml_file="$1"
@@ -773,7 +863,7 @@ _load_yaml_to_env_batch() {
     tmp_out=$(mktemp "$(manifest_make_scratch_path yaml)/tmp.XXXXXXXX" 2>/dev/null) || return 1
     if ! yq e -0 -r '
         (.. | select(tag == "!!seq")
-            | (path | join(".")) + "\n" + (path | length) + "\n" + @yaml),
+            | (path | join(".")) + "\n" + (path | length) + "\n" + '"$_MANIFEST_YAML_SEQ_JOIN_EXPR"'),
         (.. | select(tag != "!!map" and tag != "!!seq" and tag != "!!null")
             | (path | join(".")) + "\n" + (path | length) + "\n" + to_string)
         ' "$yaml_file" > "$tmp_out" 2>/dev/null; then
@@ -807,6 +897,16 @@ _load_yaml_to_env_batch() {
         # a value rendering exactly "null" was always treated as absent.
         while [[ "$value" == *$'\n' ]]; do value="${value%$'\n'}"; done
         [[ "$value" == "null" ]] && continue
+        # §2(c): a sequence that has no comma encoding at all. Refuse loudly,
+        # naming the key and the file, rather than exporting something a
+        # consumer would silently mis-split. Checked only for MAPPED keys —
+        # unmapped lists of maps (fleet repo tables and the like) are none of
+        # this loader's business and were skipped two lines above.
+        if [[ "$value" == "$_MANIFEST_YAML_SEQ_UNREPRESENTABLE" ]]; then
+            rm -f "$tmp_out" 2>/dev/null
+            log_error "load_yaml_to_env: ${yaml_path} in ${yaml_file} is a list containing maps or nested lists; this key takes a scalar or a flat list of scalars"
+            return 2
+        fi
         pending+=( "${_MANIFEST_YAML_TO_ENV[$yaml_path]}" "$value" )
     done < "$tmp_out"
     rm -f "$tmp_out" 2>/dev/null
@@ -893,8 +993,14 @@ load_yaml_to_env() {
     # §8.4f fast path: one yq walk for the whole file. Falls through to the
     # per-key loop when the walk can't guarantee per-key-equivalent results
     # (old yq without -0/to_string, YAML merge keys, no scratch space).
-    if _load_yaml_to_env_batch "$yaml_file"; then
+    # Status 2 is NOT a fall-through: it is a verdict on the file's content
+    # (§2(c)), and the per-key loop would only reach the same one.
+    local batch_status=0
+    _load_yaml_to_env_batch "$yaml_file" || batch_status=$?
+    if [[ "$batch_status" -eq 0 ]]; then
         return 0
+    elif [[ "$batch_status" -ne 1 ]]; then
+        return "$batch_status"
     fi
 
     local yaml_path env_var value
@@ -905,6 +1011,24 @@ load_yaml_to_env() {
 
         # get_yaml_value handles parser detection and caching internally
         if value=$(get_yaml_value "$yaml_file" ".${yaml_path}" "" 2>/dev/null); then
+            # §2(c): normalize a sequence to the comma string its consumers
+            # parse, exactly as the batch walk above does. The rendered text is
+            # only a cheap PRE-FILTER — "- chore: x" is a plain string that
+            # renders identically to a one-element list — so yq's own tag casts
+            # the deciding vote, and the join is the shared expression. Costs at
+            # most two extra yq calls, only on this fallback path, and only for
+            # a value that could possibly be a list.
+            case "$value" in
+                '-'*|'['*)
+                    if [[ "$(yq e -r ".${yaml_path} | tag" "$yaml_file" 2>/dev/null)" == "!!seq" ]]; then
+                        value="$(yq e -r ".${yaml_path} | ${_MANIFEST_YAML_SEQ_JOIN_EXPR}" "$yaml_file" 2>/dev/null)" || value=""
+                        if [[ "$value" == "$_MANIFEST_YAML_SEQ_UNREPRESENTABLE" ]]; then
+                            log_error "load_yaml_to_env: ${yaml_path} in ${yaml_file} is a list containing maps or nested lists; this key takes a scalar or a flat list of scalars"
+                            return 2
+                        fi
+                    fi
+                    ;;
+            esac
             if _manifest_yaml_export_mapped_value "$env_var" "$value"; then
                 loaded_count=$((loaded_count + 1))
             fi
@@ -929,4 +1053,9 @@ export -f load_yaml_to_env
 export -f _load_yaml_to_env_batch
 export -f _manifest_yaml_export_mapped_value
 export -f yaml_path_to_env_var
+# _load_yaml_to_env_batch is exported, so the sequence rule it splices into its
+# yq expression has to travel with it — a child bash that inherits the function
+# but not these would splice an empty expression.
+export _MANIFEST_YAML_SEQ_UNREPRESENTABLE
+export _MANIFEST_YAML_SEQ_JOIN_EXPR
 export -f env_var_to_yaml_path
