@@ -736,7 +736,7 @@ write_full_yaml() {
 #      inherited value. The expression below is spliced into a yq program
 #      inside a double-quoted string, so an attacker-supplied nonce is an
 #      expression injection, and MEASURED (yq 4.53.6) the injection does not
-#      merely break the program: `_MANIFEST_YAML_SEQ_NONCE='"; .a) | ("x'`
+#      merely break the program: `_MANIFEST_CLI_YAML_SEQ_NONCE='"; .a) | ("x'`
 #      makes yq exit 0 returning "x", which would rewrite EVERY list-valued
 #      mapped key to an attacker-chosen value. Generating it here means no
 #      external input ever reaches the expression. `$RANDOM` and `$$` are both
@@ -775,9 +775,9 @@ write_full_yaml() {
 # treated as absent by _manifest_yaml_export_mapped_value rather than refused.
 # Digits only: the value is spliced into a yq double-quoted string literal, so
 # anything carrying a quote, a backslash or a newline would break the program.
-_MANIFEST_YAML_SEQ_NONCE="$$${RANDOM}${RANDOM}${RANDOM}"
-_MANIFEST_YAML_SEQ_UNREPRESENTABLE="!!manifest:unrepresentable-sequence:${_MANIFEST_YAML_SEQ_NONCE}"
-_MANIFEST_YAML_SEQ_JOIN_EXPR="((select(([.[] | select(tag == \"!!map\" or tag == \"!!seq\")] | length) == 0) | join(\",\")) // \"${_MANIFEST_YAML_SEQ_UNREPRESENTABLE}\")"
+_MANIFEST_CLI_YAML_SEQ_NONCE="$$${RANDOM}${RANDOM}${RANDOM}"
+_MANIFEST_CLI_YAML_SEQ_UNREPRESENTABLE="!!manifest:unrepresentable-sequence:${_MANIFEST_CLI_YAML_SEQ_NONCE}"
+_MANIFEST_CLI_YAML_SEQ_JOIN_EXPR="((select(([.[] | select(tag == \"!!map\" or tag == \"!!seq\")] | length) == 0) | join(\",\")) // \"${_MANIFEST_CLI_YAML_SEQ_UNREPRESENTABLE}\")"
 
 # -----------------------------------------------------------------------------
 # Function: _manifest_yaml_expand_home_prefix
@@ -817,7 +817,7 @@ _manifest_yaml_expand_home_prefix() {
 # This function sees only a name and a string, so it cannot tell a sequence
 # from a string that looks like one — that verdict needs the YAML node's tag,
 # which only the two callers hold. Sequences are therefore already normalized
-# to the comma encoding (_MANIFEST_YAML_SEQ_JOIN_EXPR) before they arrive here;
+# to the comma encoding (_MANIFEST_CLI_YAML_SEQ_JOIN_EXPR) before they arrive here;
 # do not add shape-based list handling below (§2(c)).
 #
 # ARGUMENTS:
@@ -868,7 +868,7 @@ _manifest_yaml_export_mapped_value() {
 # multi-line values (block scalars) safe to carry. Rendering is
 # per-key-equivalent by construction: to_string for scalars matches `yq e -r`
 # (comments stripped, styles unwrapped), and sequences go through
-# _MANIFEST_YAML_SEQ_JOIN_EXPR — the same expression the per-key fallback
+# _MANIFEST_CLI_YAML_SEQ_JOIN_EXPR — the same expression the per-key fallback
 # applies once it has confirmed a node is a !!seq — so both paths agree that a
 # list means the comma string its consumers actually parse (§2(c)). That
 # replaced a bare @yaml, which reproduced yq's block/flow rendering faithfully
@@ -899,7 +899,7 @@ _load_yaml_to_env_batch() {
     tmp_out=$(mktemp "$(manifest_make_scratch_path yaml)/tmp.XXXXXXXX" 2>/dev/null) || return 1
     if ! yq e -0 -r '
         (.. | select(tag == "!!seq")
-            | (path | join(".")) + "\n" + (path | length) + "\n" + '"$_MANIFEST_YAML_SEQ_JOIN_EXPR"'),
+            | (path | join(".")) + "\n" + (path | length) + "\n" + '"$_MANIFEST_CLI_YAML_SEQ_JOIN_EXPR"'),
         (.. | select(tag != "!!map" and tag != "!!seq" and tag != "!!null")
             | (path | join(".")) + "\n" + (path | length) + "\n" + to_string)
         ' "$yaml_file" > "$tmp_out" 2>/dev/null; then
@@ -938,7 +938,7 @@ _load_yaml_to_env_batch() {
         # consumer would silently mis-split. Checked only for MAPPED keys —
         # unmapped lists of maps (fleet repo tables and the like) are none of
         # this loader's business and were skipped two lines above.
-        if [[ "$value" == "$_MANIFEST_YAML_SEQ_UNREPRESENTABLE" ]]; then
+        if [[ "$value" == "$_MANIFEST_CLI_YAML_SEQ_UNREPRESENTABLE" ]]; then
             rm -f "$tmp_out" 2>/dev/null
             log_error "load_yaml_to_env: ${yaml_path} in ${yaml_file} is a list containing maps or nested lists; this key takes a scalar or a flat list of scalars"
             return 2
@@ -1057,8 +1057,8 @@ load_yaml_to_env() {
             case "$value" in
                 '-'*|'['*)
                     if [[ "$(yq e -r ".${yaml_path} | tag" "$yaml_file" 2>/dev/null)" == "!!seq" ]]; then
-                        value="$(yq e -r ".${yaml_path} | ${_MANIFEST_YAML_SEQ_JOIN_EXPR}" "$yaml_file" 2>/dev/null)" || value=""
-                        if [[ "$value" == "$_MANIFEST_YAML_SEQ_UNREPRESENTABLE" ]]; then
+                        value="$(yq e -r ".${yaml_path} | ${_MANIFEST_CLI_YAML_SEQ_JOIN_EXPR}" "$yaml_file" 2>/dev/null)" || value=""
+                        if [[ "$value" == "$_MANIFEST_CLI_YAML_SEQ_UNREPRESENTABLE" ]]; then
                             log_error "load_yaml_to_env: ${yaml_path} in ${yaml_file} is a list containing maps or nested lists; this key takes a scalar or a flat list of scalars"
                             return 2
                         fi
@@ -1092,6 +1092,6 @@ export -f yaml_path_to_env_var
 # _load_yaml_to_env_batch is exported, so the sequence rule it splices into its
 # yq expression has to travel with it — a child bash that inherits the function
 # but not these would splice an empty expression.
-export _MANIFEST_YAML_SEQ_UNREPRESENTABLE
-export _MANIFEST_YAML_SEQ_JOIN_EXPR
+export _MANIFEST_CLI_YAML_SEQ_UNREPRESENTABLE
+export _MANIFEST_CLI_YAML_SEQ_JOIN_EXPR
 export -f env_var_to_yaml_path

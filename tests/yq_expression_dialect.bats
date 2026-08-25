@@ -69,7 +69,7 @@
 #   own rules, after seeding the referenced names:
 #     * an ALL-CAPS $NAME that is set once the modules are loaded expands to its
 #       REAL value. This is what makes the check meaningful rather than
-#       decorative: _MANIFEST_YAML_SEQ_JOIN_EXPR — the constant that carried the
+#       decorative: _MANIFEST_CLI_YAML_SEQ_JOIN_EXPR — the constant that carried the
 #       original bug — is a module-level ALL-CAPS constant, so the composed
 #       program at manifest-yaml.sh:1024 is parsed with the genuine text in it.
 #     * $NAME written as an array subscript, `[$NAME]`, becomes 0.
@@ -535,7 +535,7 @@ yq_scan_tree() {
     # The exact shape of the shipped defect.
     local jq_dialect
     jq_dialect='if ([.[] | select(tag == "!!map" or tag == "!!seq")] | length) == 0'
-    jq_dialect="$jq_dialect then join(\",\") else \"${_MANIFEST_YAML_SEQ_UNREPRESENTABLE}\" end"
+    jq_dialect="$jq_dialect then join(\",\") else \"${_MANIFEST_CLI_YAML_SEQ_UNREPRESENTABLE}\" end"
 
     refute yq_expr_parses "$jq_dialect"
 
@@ -610,7 +610,7 @@ yq_scan_tree() {
 }
 
 # ===========================================================================
-# D. _MANIFEST_YAML_SEQ_JOIN_EXPR — behaviour, not only syntax
+# D. _MANIFEST_CLI_YAML_SEQ_JOIN_EXPR — behaviour, not only syntax
 #
 # This is the expression that carried the original defect. A parse check alone
 # would have caught the shipped bug, but it would not catch a rewrite that
@@ -621,21 +621,21 @@ yq_scan_tree() {
 # load_yaml_to_env's per-key path does (manifest-yaml.sh:1024).
 seq_join() {
     printf '%s' "$1" > "$SCRATCH/seq.yaml"
-    yq e -r ".k | ${_MANIFEST_YAML_SEQ_JOIN_EXPR}" "$SCRATCH/seq.yaml"
+    yq e -r ".k | ${_MANIFEST_CLI_YAML_SEQ_JOIN_EXPR}" "$SCRATCH/seq.yaml"
 }
 
-@test "_MANIFEST_YAML_SEQ_JOIN_EXPR is defined and parses under the real yq" {
-    [ -n "$_MANIFEST_YAML_SEQ_JOIN_EXPR" ]
-    [ -n "$_MANIFEST_YAML_SEQ_UNREPRESENTABLE" ]
-    yq_expr_parses "$_MANIFEST_YAML_SEQ_JOIN_EXPR"
+@test "_MANIFEST_CLI_YAML_SEQ_JOIN_EXPR is defined and parses under the real yq" {
+    [ -n "$_MANIFEST_CLI_YAML_SEQ_JOIN_EXPR" ]
+    [ -n "$_MANIFEST_CLI_YAML_SEQ_UNREPRESENTABLE" ]
+    yq_expr_parses "$_MANIFEST_CLI_YAML_SEQ_JOIN_EXPR"
     # It is a yq ternary built from select + the alternative operator, which is
     # the whole point: there is no if/then/else to reach for.
-    [[ "$_MANIFEST_YAML_SEQ_JOIN_EXPR" == *"select("* ]]
-    [[ "$_MANIFEST_YAML_SEQ_JOIN_EXPR" == *"//"* ]]
-    refute grep -q "then" <<<"$_MANIFEST_YAML_SEQ_JOIN_EXPR"
+    [[ "$_MANIFEST_CLI_YAML_SEQ_JOIN_EXPR" == *"select("* ]]
+    [[ "$_MANIFEST_CLI_YAML_SEQ_JOIN_EXPR" == *"//"* ]]
+    refute grep -q "then" <<<"$_MANIFEST_CLI_YAML_SEQ_JOIN_EXPR"
 }
 
-@test "_MANIFEST_YAML_SEQ_JOIN_EXPR joins a flat scalar list to the comma form" {
+@test "_MANIFEST_CLI_YAML_SEQ_JOIN_EXPR joins a flat scalar list to the comma form" {
     run seq_join $'k:\n  - .env\n  - mysecret.txt\n  - third\n'
     [ "$status" -eq 0 ]
     [ "$output" = ".env,mysecret.txt,third" ]
@@ -651,34 +651,34 @@ seq_join() {
     [ "$output" = "only" ]
 }
 
-@test "_MANIFEST_YAML_SEQ_JOIN_EXPR yields the sentinel for a list containing a map" {
+@test "_MANIFEST_CLI_YAML_SEQ_JOIN_EXPR yields the sentinel for a list containing a map" {
     run seq_join $'k:\n  - .env\n  - name: nested\n'
     [ "$status" -eq 0 ]
-    [ "$output" = "$_MANIFEST_YAML_SEQ_UNREPRESENTABLE" ]
+    [ "$output" = "$_MANIFEST_CLI_YAML_SEQ_UNREPRESENTABLE" ]
 
     run seq_join $'k:\n  - a: 1\n  - b: 2\n'
     [ "$status" -eq 0 ]
-    [ "$output" = "$_MANIFEST_YAML_SEQ_UNREPRESENTABLE" ]
+    [ "$output" = "$_MANIFEST_CLI_YAML_SEQ_UNREPRESENTABLE" ]
 }
 
-@test "_MANIFEST_YAML_SEQ_JOIN_EXPR yields the sentinel for a list containing a nested list" {
+@test "_MANIFEST_CLI_YAML_SEQ_JOIN_EXPR yields the sentinel for a list containing a nested list" {
     run seq_join $'k:\n  - .env\n  - - nested_a\n    - nested_b\n'
     [ "$status" -eq 0 ]
-    [ "$output" = "$_MANIFEST_YAML_SEQ_UNREPRESENTABLE" ]
+    [ "$output" = "$_MANIFEST_CLI_YAML_SEQ_UNREPRESENTABLE" ]
 
     run seq_join $'k: [a, [b, c]]\n'
     [ "$status" -eq 0 ]
-    [ "$output" = "$_MANIFEST_YAML_SEQ_UNREPRESENTABLE" ]
+    [ "$output" = "$_MANIFEST_CLI_YAML_SEQ_UNREPRESENTABLE" ]
 }
 
-@test "_MANIFEST_YAML_SEQ_JOIN_EXPR yields empty — NOT the sentinel — for an empty list" {
+@test "_MANIFEST_CLI_YAML_SEQ_JOIN_EXPR yields empty — NOT the sentinel — for an empty list" {
     # The edge case the alternative operator is chosen for. An empty list HAS a
     # comma encoding (the empty string), so it must join to "" and be treated as
     # absent by _manifest_yaml_export_mapped_value, not refused as malformed.
     run seq_join $'k: []\n'
     [ "$status" -eq 0 ]
     [ -z "$output" ]
-    [ "$output" != "$_MANIFEST_YAML_SEQ_UNREPRESENTABLE" ]
+    [ "$output" != "$_MANIFEST_CLI_YAML_SEQ_UNREPRESENTABLE" ]
 }
 
 @test "yq's alternative operator treats empty string as a value, which the empty-list case rests on" {
@@ -701,17 +701,17 @@ seq_join() {
     # whose consequence is a loud refusal rather than a silent narrowing.
     run seq_join $'k:\n  - a\n  - b\n'
     [ "$status" -eq 0 ]
-    [ "$output" != "$_MANIFEST_YAML_SEQ_UNREPRESENTABLE" ]
+    [ "$output" != "$_MANIFEST_CLI_YAML_SEQ_UNREPRESENTABLE" ]
 
     # The sentinel has to be QUOTED to be a value at all: unquoted, `!!...` is
     # YAML tag syntax, so the only way a user can even write the colliding
     # document is the quoted form.
-    printf 'k:\n  - "%s"\n' "$_MANIFEST_YAML_SEQ_UNREPRESENTABLE" > "$SCRATCH/collide.yaml"
+    printf 'k:\n  - "%s"\n' "$_MANIFEST_CLI_YAML_SEQ_UNREPRESENTABLE" > "$SCRATCH/collide.yaml"
     run yq e -r '.k[0] | tag' "$SCRATCH/collide.yaml"
     [ "$status" -eq 0 ]
     [ "$output" = "!!str" ]
 
-    run yq e -r ".k | ${_MANIFEST_YAML_SEQ_JOIN_EXPR}" "$SCRATCH/collide.yaml"
+    run yq e -r ".k | ${_MANIFEST_CLI_YAML_SEQ_JOIN_EXPR}" "$SCRATCH/collide.yaml"
     [ "$status" -eq 0 ]
-    [ "$output" = "$_MANIFEST_YAML_SEQ_UNREPRESENTABLE" ]
+    [ "$output" = "$_MANIFEST_CLI_YAML_SEQ_UNREPRESENTABLE" ]
 }

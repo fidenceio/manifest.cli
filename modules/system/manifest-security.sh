@@ -26,7 +26,7 @@ MANIFEST_CLI_SECURITY_CONFIG_FILE="manifest.config"
 # that prefix AND present in _MANIFEST_ENV_TO_YAML are re-applied over every
 # config layer by _manifest_config_apply_process_env_overrides, which is
 # exactly the mechanism that overwrites the public array below.
-_MANIFEST_SECURITY_DEFAULT_PRIVATE_ENV_FILES=(".env" ".env.development" ".env.test" ".env.production" ".env.staging" "manifest.config.local.yaml")
+_MANIFEST_CLI_SECURITY_DEFAULT_PRIVATE_ENV_FILES=(".env" ".env.development" ".env.test" ".env.production" ".env.staging" "manifest.config.local.yaml")
 
 # Array-typed on purpose, and that is load-bearing: `export VAR=x` on an
 # array-declared name assigns element 0 and leaves the name array-typed, so the
@@ -34,7 +34,7 @@ _MANIFEST_SECURITY_DEFAULT_PRIVATE_ENV_FILES=(".env" ".env.development" ".env.te
 # reach the comma path. _manifest_config_apply_process_env_overrides
 # (manifest-config.sh:79-83) unsets an array before exporting for that reason.
 # A plain array assignment keeps that contract exactly as a literal did.
-MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES=("${_MANIFEST_SECURITY_DEFAULT_PRIVATE_ENV_FILES[@]}")
+MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES=("${_MANIFEST_CLI_SECURITY_DEFAULT_PRIVATE_ENV_FILES[@]}")
 
 # Emit one private-file name per line. Accepts a bash array or a comma-separated
 # string; unset/empty means the built-in list above.
@@ -50,7 +50,7 @@ MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES=("${_MANIFEST_SECURITY_DEFAULT_PRIVATE_E
 # this stayed silent.
 #
 # The loader now joins YAML sequences into the comma form before they reach any
-# env var (_MANIFEST_YAML_SEQ_JOIN_EXPR, manifest-yaml.sh), so a config file can
+# env var (_MANIFEST_CLI_YAML_SEQ_JOIN_EXPR, manifest-yaml.sh), so a config file can
 # no longer produce these shapes. This guard covers the route that never touches
 # the loader at all: a MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES exported into the
 # process, which _manifest_config_apply_process_env_overrides re-applies on top
@@ -73,13 +73,13 @@ _manifest_security_private_env_files() {
         # nothing, and every caller would then scan no files and report a clean
         # repository: the same fail-open this function refuses configuration
         # over. It must fail instead, for the same reason.
-        if [ "${#_MANIFEST_SECURITY_DEFAULT_PRIVATE_ENV_FILES[@]}" -eq 0 ]; then
+        if [ "${#_MANIFEST_CLI_SECURITY_DEFAULT_PRIVATE_ENV_FILES[@]}" -eq 0 ]; then
             printf '%s\n' \
                 "❌ security.private_files: the built-in default list is empty." \
                 "   Refusing to scan: an empty private-file list would report a clean repository over tracked secrets." >&2
             return 1
         fi
-        printf '%s\n' "${_MANIFEST_SECURITY_DEFAULT_PRIVATE_ENV_FILES[@]}"
+        printf '%s\n' "${_MANIFEST_CLI_SECURITY_DEFAULT_PRIVATE_ENV_FILES[@]}"
         return 0
     fi
 

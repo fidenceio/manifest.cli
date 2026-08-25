@@ -34,7 +34,7 @@
 # that reads as a pass.
 #
 # 1. Every regression test scans for `mysecret.txt`, which is NOT in the
-#    module's built-in default list (_MANIFEST_SECURITY_DEFAULT_PRIVATE_ENV_FILES
+#    module's built-in default list (_MANIFEST_CLI_SECURITY_DEFAULT_PRIVATE_ENV_FILES
 #    in manifest-security.sh — `.env`,
 #    `.env.development`, `.env.test`, `.env.production`, `.env.staging`,
 #    `manifest.config.local.yaml`). If the loader exported nothing at all, the
@@ -567,7 +567,7 @@ staged_default_list() {
 # ===========================================================================
 # The sentinel's forgeability.
 #
-# _MANIFEST_YAML_SEQ_UNREPRESENTABLE is the token the join expression yields
+# _MANIFEST_CLI_YAML_SEQ_UNREPRESENTABLE is the token the join expression yields
 # for a sequence that has no comma encoding, and both loader paths recognise a
 # refusal by comparing the joined value against it by exact equality. The join
 # separator is ",", which the token does not contain, so the only list that can
@@ -587,12 +587,12 @@ staged_default_list() {
     # the expression built from one and the comparison made against the other.
     # That failure would NOT be loud: the refusal would stop matching and the
     # raw token would be exported as a config value.
-    [[ "$_MANIFEST_YAML_SEQ_UNREPRESENTABLE" == '!!manifest:unrepresentable-sequence:'* ]]
-    [[ "$_MANIFEST_YAML_SEQ_JOIN_EXPR" == *"\"$_MANIFEST_YAML_SEQ_UNREPRESENTABLE\""* ]]
+    [[ "$_MANIFEST_CLI_YAML_SEQ_UNREPRESENTABLE" == '!!manifest:unrepresentable-sequence:'* ]]
+    [[ "$_MANIFEST_CLI_YAML_SEQ_JOIN_EXPR" == *"\"$_MANIFEST_CLI_YAML_SEQ_UNREPRESENTABLE\""* ]]
 
     # Digits only. The token is spliced into a yq double-quoted string literal,
     # so a quote, backslash or newline here is an expression injection.
-    local nonce="${_MANIFEST_YAML_SEQ_UNREPRESENTABLE#'!!manifest:unrepresentable-sequence:'}"
+    local nonce="${_MANIFEST_CLI_YAML_SEQ_UNREPRESENTABLE#'!!manifest:unrepresentable-sequence:'}"
     [[ "$nonce" =~ ^[0-9]+$ ]]
 }
 
@@ -646,7 +646,7 @@ staged_default_list() {
 @test "sentinel: an exported nonce cannot reach the yq expression" {
     # The nonce is generated unconditionally and never read from the
     # environment, and this pins that. MEASURED with yq 4.53.6: splicing
-    # _MANIFEST_YAML_SEQ_NONCE='"; .a) | ("x' into the expression does not make
+    # _MANIFEST_CLI_YAML_SEQ_NONCE='"; .a) | ("x' into the expression does not make
     # yq fail — it makes yq exit 0 returning "x", which would rewrite EVERY
     # list-valued mapped key to an attacker-chosen value. A future `:=` on the
     # nonce would reopen exactly that.
@@ -656,7 +656,7 @@ staged_default_list() {
     - mysecret.txt
 '
     run env HOME="$SCRATCH/home" MANIFEST_CLI_PROJECT_ROOT="$PROJ" \
-        _MANIFEST_YAML_SEQ_NONCE='"; .a) | ("x' \
+        _MANIFEST_CLI_YAML_SEQ_NONCE='"; .a) | ("x' \
         bash -c 'source "$1/tests/helpers/setup.bash"
                  load_modules >/dev/null 2>&1
                  unset MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES
