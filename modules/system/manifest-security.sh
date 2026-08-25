@@ -9,7 +9,32 @@ source "$(dirname "${BASH_SOURCE[0]}")/manifest-env-naming.sh"
 
 # Security configuration
 MANIFEST_CLI_SECURITY_CONFIG_FILE="manifest.config"
-MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES=(".env" ".env.development" ".env.test" ".env.production" ".env.staging" "manifest.config.local.yaml")
+
+# THE default private-file list — written ONCE (§6: one fact, one derivation).
+# This used to be two literals: this array, and a second copy hardcoded in the
+# `printf` of the splitter's unset/empty branch below. Both are live — the
+# array is what an unconfigured process scans, the branch is what a process
+# scans once _manifest_config_apply_process_env_overrides has unset the array
+# and exported an empty scalar over it — so they were two derivations of one
+# fact, and nothing compared them. Adding a filename to the array alone (the
+# obvious edit) left the second route scanning the OLD list, which for a
+# security control means a private file the maintainer had just declared went
+# unscanned on one of the two routes, silently. Both derivations below now read
+# this array; there is no second literal left to drift.
+#
+# Not exported, and it must not become MANIFEST_CLI_*-named: names matching
+# that prefix AND present in _MANIFEST_ENV_TO_YAML are re-applied over every
+# config layer by _manifest_config_apply_process_env_overrides, which is
+# exactly the mechanism that overwrites the public array below.
+_MANIFEST_SECURITY_DEFAULT_PRIVATE_ENV_FILES=(".env" ".env.development" ".env.test" ".env.production" ".env.staging" "manifest.config.local.yaml")
+
+# Array-typed on purpose, and that is load-bearing: `export VAR=x` on an
+# array-declared name assigns element 0 and leaves the name array-typed, so the
+# splitter's `declare -a` branch would swallow a process-env override and never
+# reach the comma path. _manifest_config_apply_process_env_overrides
+# (manifest-config.sh:79-83) unsets an array before exporting for that reason.
+# A plain array assignment keeps that contract exactly as a literal did.
+MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES=("${_MANIFEST_SECURITY_DEFAULT_PRIVATE_ENV_FILES[@]}")
 
 # Emit one private-file name per line. Accepts a bash array or a comma-separated
 # string; unset/empty means the built-in list above.
@@ -43,7 +68,18 @@ _manifest_security_private_env_files() {
 
     local raw="${MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES:-}"
     if [ -z "$raw" ]; then
-        printf '%s\n' ".env" ".env.development" ".env.test" ".env.production" ".env.staging" "manifest.config.local.yaml"
+        # Same array the module declares at the top — not a second copy of the
+        # list. An EMPTY defaults array here would return 0 having printed
+        # nothing, and every caller would then scan no files and report a clean
+        # repository: the same fail-open this function refuses configuration
+        # over. It must fail instead, for the same reason.
+        if [ "${#_MANIFEST_SECURITY_DEFAULT_PRIVATE_ENV_FILES[@]}" -eq 0 ]; then
+            printf '%s\n' \
+                "❌ security.private_files: the built-in default list is empty." \
+                "   Refusing to scan: an empty private-file list would report a clean repository over tracked secrets." >&2
+            return 1
+        fi
+        printf '%s\n' "${_MANIFEST_SECURITY_DEFAULT_PRIVATE_ENV_FILES[@]}"
         return 0
     fi
 

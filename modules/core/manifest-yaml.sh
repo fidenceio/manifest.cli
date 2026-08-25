@@ -717,10 +717,43 @@ write_full_yaml() {
 # A sequence containing a map or a nested sequence has no comma encoding at
 # all; it renders as the sentinel below and the caller refuses loudly, naming
 # the key and the file (§6: malformed input must not be treated as a value).
-# The sentinel is only ever compared against the output of the !!seq branch, so
-# the only value that could be mistaken for it is a one-element list whose sole
-# element is this exact string — and the consequence of that mistake is a loud
-# refusal, never a silent narrowing.
+#
+# THE SENTINEL CARRIES A PER-PROCESS NONCE, so that no config file can spell
+# it. The sentinel is only ever compared against the output of the !!seq
+# branch, and the branch joins with "," — a separator the token does not
+# contain — so the ONLY list that can render as the sentinel is a one-element
+# list whose sole element is the sentinel string verbatim. With a fixed token
+# that was writable: `private_files: ["!!manifest:unrepresentable-sequence"]`
+# was refused as "a list containing maps or nested lists", which it is not.
+# Low severity (it failed CLOSED — log_error + return 2, never a bypass) but
+# the input is no longer spellable, because the nonce is not knowable when the
+# YAML is written.
+#
+# TWO INVARIANTS THIS DEPENDS ON. Both are one-line mistakes away.
+#
+#   1. THE NONCE IS NEVER READ FROM THE ENVIRONMENT. It is generated
+#      unconditionally on every source — no `: "${NONCE:=...}"`, no reuse of an
+#      inherited value. The expression below is spliced into a yq program
+#      inside a double-quoted string, so an attacker-supplied nonce is an
+#      expression injection, and MEASURED (yq 4.53.6) the injection does not
+#      merely break the program: `_MANIFEST_YAML_SEQ_NONCE='"; .a) | ("x'`
+#      makes yq exit 0 returning "x", which would rewrite EVERY list-valued
+#      mapped key to an attacker-chosen value. Generating it here means no
+#      external input ever reaches the expression. `$RANDOM` and `$$` are both
+#      shell builtins, so this stays fork-free at module-load time.
+#
+#   2. THE SENTINEL AND THE EXPRESSION ARE DERIVED TOGETHER, UNCONDITIONALLY.
+#      Both comparison sites (_load_yaml_to_env_batch and the per-key fallback
+#      in load_yaml_to_env) dereference the SAME variable, so they cannot
+#      disagree about the token — the only way to break that is to have two
+#      NONCE GENERATIONS live in one process, i.e. the expression built from
+#      one nonce and the comparison made against another. Three assignments in
+#      a row with no guard on any of them is what rules that out: whether this
+#      module is sourced fresh, re-sourced, or inherited whole through the
+#      exports at the foot of this file, a process always holds one matched
+#      pair. Do not add a "don't regenerate if already set" guard to any of the
+#      three lines. If the refusal ever stopped matching on ONE path it would
+#      not fail loudly — it would export the raw sentinel as a config value.
 #
 # Shape cannot substitute for the tag here. Measured with yq 4.53.6: for the
 # SAME text, a !!str and a !!seq render byte-for-byte identically under both
@@ -740,7 +773,10 @@ write_full_yaml() {
 # supplies the sentinel in that case. Empty string is NOT falsy to `//`
 # (measured: `"" // "x"` is `""`), so an empty list still joins to "" and is
 # treated as absent by _manifest_yaml_export_mapped_value rather than refused.
-_MANIFEST_YAML_SEQ_UNREPRESENTABLE='!!manifest:unrepresentable-sequence'
+# Digits only: the value is spliced into a yq double-quoted string literal, so
+# anything carrying a quote, a backslash or a newline would break the program.
+_MANIFEST_YAML_SEQ_NONCE="$$${RANDOM}${RANDOM}${RANDOM}"
+_MANIFEST_YAML_SEQ_UNREPRESENTABLE="!!manifest:unrepresentable-sequence:${_MANIFEST_YAML_SEQ_NONCE}"
 _MANIFEST_YAML_SEQ_JOIN_EXPR="((select(([.[] | select(tag == \"!!map\" or tag == \"!!seq\")] | length) == 0) | join(\",\")) // \"${_MANIFEST_YAML_SEQ_UNREPRESENTABLE}\")"
 
 # -----------------------------------------------------------------------------

@@ -9,7 +9,7 @@
 # consumers as yq's rendering of the SEQUENCE node — "- .env\n- mysecret.txt"
 # for a block list, "[\".env\", \"mysecret.txt\"]" for a flow one. Every
 # consumer of those keys parses a COMMA STRING with `IFS=',' read -r -a`
-# (manifest-security.sh:72, manifest-shared-functions.sh:149 and :360,
+# (manifest-security.sh:108, manifest-shared-functions.sh:149 and :360,
 # manifest-git.sh:281), and `read` stops at the first newline. A user who wrote
 # the key as a YAML list therefore got ONE entry — the literal string "- .env",
 # a filename that cannot exist — and `manifest security` printed
@@ -34,7 +34,8 @@
 # that reads as a pass.
 #
 # 1. Every regression test scans for `mysecret.txt`, which is NOT in the
-#    module's built-in default list (manifest-security.sh:12/:46 — `.env`,
+#    module's built-in default list (_MANIFEST_SECURITY_DEFAULT_PRIVATE_ENV_FILES
+#    in manifest-security.sh — `.env`,
 #    `.env.development`, `.env.test`, `.env.production`, `.env.staging`,
 #    `manifest.config.local.yaml`). If the loader exported nothing at all, the
 #    built-in array would still be in force and a scan for `.env` would catch a
@@ -90,7 +91,7 @@ write_project_config() {
 
 # Put a SCALAR value in MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES.
 #
-# The unset is load-bearing, not tidiness. manifest-security.sh:12 declares the
+# The unset is load-bearing, not tidiness. manifest-security.sh:37 declares the
 # variable as a bash ARRAY at source time, and `export VAR=x` on an
 # array-declared name assigns element 0 and leaves the name array-typed — so a
 # bare export would take the splitter's `declare -a` branch and never reach the
@@ -425,4 +426,245 @@ git:
 
     run check_environment_file_security "$PROJ"
     [ "$status" -eq 0 ]
+}
+
+# ===========================================================================
+# §6 — the default private-file list must have ONE derivation.
+#
+# The module declared the list twice: as the array the splitter returns when
+# nothing has overridden it, and as a second literal in the `printf` of the
+# unset/empty branch. BOTH are live routes. The array is what an unconfigured
+# process scans; the branch is what a process scans once
+# _manifest_config_apply_process_env_overrides has unset the array and exported
+# an empty scalar over it — which is exactly what happens when
+# `MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES=` is present in the environment.
+#
+# Nothing compared the two, and the 20 tests above all pass with them in
+# disagreement (measured). So the failure was silent AND unguarded: adding a
+# filename to the array — the obvious edit, and the only one a reader would
+# make — left the second route scanning the old list, meaning a private file
+# the maintainer had just declared went unscanned on one of two routes.
+#
+# These tests edit the declaration and check that BOTH routes follow. That is
+# the only formulation that can fail: asserting the two routes agree *today*
+# passes on the duplicated code too, because the two copies started identical.
+# ===========================================================================
+
+# Copy the security module into scratch so its declaration can be edited
+# without touching the repo. manifest-env-naming.sh comes along because
+# manifest-security.sh sources it relative to its own BASH_SOURCE directory.
+stage_security_module() {
+    local dest="$SCRATCH/staged"
+    mkdir -p "$dest"
+    cp "$TEST_REPO_ROOT/modules/system/manifest-security.sh" "$dest/"
+    cp "$TEST_REPO_ROOT/modules/system/manifest-env-naming.sh" "$dest/"
+    echo "$dest"
+}
+
+# Rewrite the FIRST line that declares a default private-file array, and only
+# that one. awk rather than `sed -i` / `sed '0,/re/'`: BSD sed has no line-zero
+# address and no portable in-place flag, and this suite also runs in an Alpine
+# container.
+#
+# Editing only the first occurrence is the whole point. A global edit would
+# "fix" both copies of a duplicated list and the drift would go unobserved.
+patch_first_default_declaration() {
+    local file="$1" awk_body="$2"
+    awk "$awk_body" "$file" > "$file.patched"
+    mv "$file.patched" "$file"
+}
+
+# Print the default list as seen through ONE of the two routes.
+#   array   - the module's array is intact (an unconfigured process)
+#   default - the array has been unset and an empty scalar exported over it,
+#             which is what _manifest_config_apply_process_env_overrides does
+staged_default_list() {
+    local dir="$1" route="$2"
+    env HOME="$SCRATCH/home" bash -c '
+        source "$1/manifest-security.sh" >/dev/null 2>&1
+        if [ "$2" = "default" ]; then
+            unset MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES
+            export MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES=""
+        fi
+        _manifest_security_private_env_files
+    ' _ "$dir" "$route"
+}
+
+@test "positive control: both default-list routes are reachable and return the built-in list" {
+    # Without this, the drift test below cannot tell "the routes agree" from
+    # "neither route produced anything". Also pins that the empty-scalar route
+    # really does reach the unset/empty branch rather than the array branch.
+    local dir
+    dir="$(stage_security_module)"
+
+    run staged_default_list "$dir" array
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q '^\.env\.staging$'
+
+    run staged_default_list "$dir" default
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q '^\.env\.staging$'
+}
+
+@test "§6: adding a filename to the declared default list changes BOTH routes" {
+    local dir
+    dir="$(stage_security_module)"
+
+    # Append ".env.drift" beside the first ".env.staging" in the file.
+    patch_first_default_declaration "$dir/manifest-security.sh" '
+        BEGIN { done = 0 }
+        done == 0 && sub(/"\.env\.staging"/, "\".env.staging\" \".env.drift\"") { done = 1 }
+        { print }'
+
+    # Verify the edit landed, and landed EXACTLY once — checking content, not
+    # awk'"'"'s exit status, which is 0 whether or not anything matched. If a
+    # future refactor renames or reflows the declaration this fails here, as a
+    # broken fixture, instead of passing vacuously.
+    local edits
+    edits="$(awk '/\.env\.drift/ { c++ } END { print c + 0 }' "$dir/manifest-security.sh")"
+    [ "$edits" -eq 1 ]
+
+    # The array route must see it: proves the edit is live, not just present.
+    run staged_default_list "$dir" array
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q '^\.env\.drift$'
+
+    # The empty-scalar route must see it too. THIS is the assertion that fails
+    # on a duplicated list: the second copy is untouched by the edit above, so
+    # the file the maintainer just declared private is not scanned here.
+    run staged_default_list "$dir" default
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q '^\.env\.drift$'
+}
+
+@test "§6: emptying the declared default list makes the empty-scalar route REFUSE, not report clean" {
+    # The fail-open this collapse could have introduced. Once the branch prints
+    # from an array instead of a literal, an empty array means "return 0 having
+    # printed nothing" — and every caller then scans no files at all and reports
+    # a clean repository. Same failure this function already refuses malformed
+    # configuration over, so it has to fail the same way.
+    #
+    # On a duplicated list this fails for the honest reason: the second literal
+    # is still there and still prints the old six names.
+    local dir
+    dir="$(stage_security_module)"
+
+    patch_first_default_declaration "$dir/manifest-security.sh" '
+        BEGIN { done = 0 }
+        done == 0 && /PRIVATE_ENV_FILES=\(/ { sub(/=\(.*\)/, "=()"); done = 1 }
+        { print }'
+
+    local emptied
+    emptied="$(awk '/PRIVATE_ENV_FILES=\(\)/ { c++ } END { print c + 0 }' "$dir/manifest-security.sh")"
+    [ "$emptied" -eq 1 ]
+
+    run staged_default_list "$dir" default
+    [ "$status" -eq 1 ]
+    # Nothing may be emitted that a caller would read as a filename to scan.
+    [ -z "${output// /}" ] || echo "$output" | grep -qv '^\.'
+}
+
+# ===========================================================================
+# The sentinel's forgeability.
+#
+# _MANIFEST_YAML_SEQ_UNREPRESENTABLE is the token the join expression yields
+# for a sequence that has no comma encoding, and both loader paths recognise a
+# refusal by comparing the joined value against it by exact equality. The join
+# separator is ",", which the token does not contain, so the only list that can
+# render as the token is a one-element list holding the token verbatim — which
+# with a fixed token was writable, and was refused with a message ("a list
+# containing maps or nested lists") describing something the config was not.
+#
+# It failed CLOSED, so this is a false refusal on absurd input, not a hole. The
+# nonce removes it without touching the expression's structure, the record
+# framing, or the control flow.
+# ===========================================================================
+
+@test "sentinel: the token and the expression are ONE nonce generation" {
+    # The invariant the whole design rests on. The two comparison sites
+    # dereference the same variable, so they cannot disagree about the token —
+    # the only way to break that is two nonce generations live in one process,
+    # the expression built from one and the comparison made against the other.
+    # That failure would NOT be loud: the refusal would stop matching and the
+    # raw token would be exported as a config value.
+    [[ "$_MANIFEST_YAML_SEQ_UNREPRESENTABLE" == '!!manifest:unrepresentable-sequence:'* ]]
+    [[ "$_MANIFEST_YAML_SEQ_JOIN_EXPR" == *"\"$_MANIFEST_YAML_SEQ_UNREPRESENTABLE\""* ]]
+
+    # Digits only. The token is spliced into a yq double-quoted string literal,
+    # so a quote, backslash or newline here is an expression injection.
+    local nonce="${_MANIFEST_YAML_SEQ_UNREPRESENTABLE#'!!manifest:unrepresentable-sequence:'}"
+    [[ "$nonce" =~ ^[0-9]+$ ]]
+}
+
+@test "sentinel: a list holding the token verbatim is a VALUE, not a refusal (batch path)" {
+    write_project_config "security:
+  private_files:
+    - '!!manifest:unrepresentable-sequence'
+"
+    unset MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES
+    local rc=0
+    load_yaml_to_env "$PROJ/manifest.config.yaml" >/dev/null 2>&1 || rc=$?
+    [ "$rc" -eq 0 ]
+    [ "$MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES" = '!!manifest:unrepresentable-sequence' ]
+}
+
+@test "sentinel: a list holding the token verbatim is a VALUE on the per-key fallback too" {
+    # Both paths must agree. If only one had been hardened, a config would be
+    # accepted or refused depending on whether the file happens to contain a
+    # YAML merge key — the one thing that decides which path runs.
+    write_project_config "security:
+  private_files:
+    - '!!manifest:unrepresentable-sequence'
+"
+    _load_yaml_to_env_batch() { return 1; }
+
+    unset MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES
+    local rc=0
+    load_yaml_to_env "$PROJ/manifest.config.yaml" >/dev/null 2>&1 || rc=$?
+    [ "$rc" -eq 0 ]
+    [ "$MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES" = '!!manifest:unrepresentable-sequence' ]
+}
+
+@test "sentinel: control — a genuinely unrepresentable list still refuses on BOTH paths" {
+    # The discriminator for the two tests above. Without it, deleting the
+    # refusal outright would satisfy them both.
+    write_project_config 'security:
+  private_files:
+    - name: .env
+      why: secret
+'
+    run load_yaml_to_env "$PROJ/manifest.config.yaml"
+    [ "$status" -eq 2 ]
+    echo "$output" | grep -q "list containing maps or nested lists"
+
+    _load_yaml_to_env_batch() { return 1; }
+    run load_yaml_to_env "$PROJ/manifest.config.yaml"
+    [ "$status" -eq 2 ]
+    echo "$output" | grep -q "list containing maps or nested lists"
+}
+
+@test "sentinel: an exported nonce cannot reach the yq expression" {
+    # The nonce is generated unconditionally and never read from the
+    # environment, and this pins that. MEASURED with yq 4.53.6: splicing
+    # _MANIFEST_YAML_SEQ_NONCE='"; .a) | ("x' into the expression does not make
+    # yq fail — it makes yq exit 0 returning "x", which would rewrite EVERY
+    # list-valued mapped key to an attacker-chosen value. A future `:=` on the
+    # nonce would reopen exactly that.
+    write_project_config 'security:
+  private_files:
+    - .env
+    - mysecret.txt
+'
+    run env HOME="$SCRATCH/home" MANIFEST_CLI_PROJECT_ROOT="$PROJ" \
+        _MANIFEST_YAML_SEQ_NONCE='"; .a) | ("x' \
+        bash -c 'source "$1/tests/helpers/setup.bash"
+                 load_modules >/dev/null 2>&1
+                 unset MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES
+                 set +e
+                 load_yaml_to_env "$2" >/dev/null 2>&1
+                 echo "rc=$?"
+                 echo "value=[${MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES}]"' _ "$TEST_REPO_ROOT" "$PROJ/manifest.config.yaml"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q '^rc=0$'
+    echo "$output" | grep -qF 'value=[.env,mysecret.txt]'
 }
