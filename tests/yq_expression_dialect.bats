@@ -107,7 +107,15 @@ yq_expr_parses() {
 }
 
 yq_expr_error() {
-    yq -n "select(false) | ( $1 )" 2>&1 | head -1 || true
+    # Capture whole, then slice the first line. A pipeline into `head` lets
+    # head's early exit SIGPIPE yq mid-write — measured as a 1-in-8 flake
+    # elsewhere in this suite, and forbidden by the portability guard in
+    # suite_shell_options.bats, which this function violated (TRACKER §62).
+    # Two statements, not one: folding the capture into the herestring would
+    # discard yq's exit status.
+    local _out
+    _out="$(yq -n "select(false) | ( $1 )" 2>&1)" || true
+    printf '%s\n' "${_out%%$'\n'*}"
 }
 
 # ===========================================================================

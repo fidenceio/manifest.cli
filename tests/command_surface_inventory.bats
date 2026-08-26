@@ -1,4 +1,10 @@
 #!/usr/bin/env bats
+# bats file_tags=smoke
+#
+# Tagged smoke because this is a WHOLE-TREE invariant, not a test of one module.
+# `--changed` selects by path and always unions the smoke tier; a per-path map
+# cannot express "this test compares every command surface at once", so without
+# the tag no code change selects it (TRACKER §48).
 
 load 'helpers/setup'
 

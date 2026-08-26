@@ -1,4 +1,10 @@
 #!/usr/bin/env bats
+# bats file_tags=smoke
+#
+# Tagged smoke because this is a WHOLE-TREE invariant, not a test of one module.
+# `--changed` selects by path and always unions the smoke tier; without the tag
+# no code change selects this file, which is why §58's four out-of-namespace
+# globals reached main (TRACKER §48).
 #
 # Extended namespace audits — covers four gaps the existing audit
 # ("Manifest-owned environment variables use MANIFEST_CLI namespace" in

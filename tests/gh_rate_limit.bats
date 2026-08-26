@@ -186,8 +186,17 @@ gate_state_file() { echo "$HOME/.manifest-cli/gh-rate/mutation-epochs"; }
     f="$(gate_state_file)"
     mkdir -p "${f%/*}"
     now="$(date +%s)"
-    local i
-    for (( i = 0; i < 60; i++ )); do printf '%s\n' "$(( now - 59 ))" >> "$f"; done
+    # Seed at now-58, not now-59, and write once rather than appending 60 times.
+    # The gate admits a timestamp only while `now - ts < 60`, and it reads its
+    # OWN clock after this seeding runs — so at now-59 the margin is exactly one
+    # second, and a single tick between the two `date` calls ages the entries out
+    # of the window. The gate then correctly does not sleep and the assertion
+    # below fails: measured ~33% (2 of 6 isolated runs). Two seconds of margin
+    # plus a single write makes the race unreachable without weakening the
+    # assertion — a 1s floor is still what is being proven. (TRACKER §64)
+    local i seeded=""
+    for (( i = 0; i < 60; i++ )); do seeded+="$(( now - 58 ))"$'\n'; done
+    printf '%s' "$seeded" >> "$f"
 
     local start end out
     start="$(date +%s)"

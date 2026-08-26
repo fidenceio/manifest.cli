@@ -143,7 +143,13 @@ TSV
     # The guard exists because push_changes pushes $default_branch, not HEAD.
     # If a refactor makes the push branch-aware, this trips and the guard's
     # rationale must be re-evaluated.
-    grep -E 'git push .*\$default_branch .*\$tag_name' \
+    #
+    # `"?[[:space:]]` tolerates BOTH spellings of the same invariant: the argv
+    # form `git push … "$default_branch" "$tag_name"` (current, since the §43
+    # fix) and the older command-string form with the words unquoted. What it
+    # must NOT tolerate is the branch becoming HEAD — that is the actual
+    # invariant, and this pattern is mutation-checked against it (TRACKER §61).
+    grep -E 'git push .*\$default_branch"?[[:space:]].*\$tag_name' \
         "$TEST_REPO_ROOT/modules/git/manifest-git.sh" >/dev/null
 }
 

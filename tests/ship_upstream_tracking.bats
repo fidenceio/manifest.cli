@@ -79,7 +79,12 @@ teardown() {
 @test "push_changes: still pushes the literal branch+tag refspec (no -u added)" {
     # The guard in ship_release_branch_guard.bats depends on push_changes pushing
     # the literal default-branch ref. Setting upstream must not have relaxed that.
-    grep -E 'git push .*\$default_branch .*\$tag_name' \
+    # Quote-tolerant for the same reason given there — the invariant is "not
+    # HEAD", not "not quoted" (TRACKER §61). NOTE: this regex is deliberately a
+    # second copy of that file's, because this test asserts the *coupling*; both
+    # copies went stale together on the §43 refactor, which is §6's
+    # duplicated-derivation shape living in the suite.
+    grep -E 'git push .*\$default_branch"?[[:space:]].*\$tag_name' \
         "$TEST_REPO_ROOT/modules/git/manifest-git.sh" >/dev/null
     # Upstream is set by a separate `git branch --set-upstream-to` afterwards,
     # never by relaxing the release push itself into `git push -u`.
