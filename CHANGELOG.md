@@ -1,5 +1,17 @@
 # Changelog
 
+## [59.6.1] - 2026-08-27
+
+**Release Type:** Patch
+
+### Changes
+
+- Docs(tracker): close two redaction leaks the v59.6.0 publish shipped, and why
+- Test(tracker): guard §-citation resolution before the rebuild that breaks it
+- Fix(security)!: unexport the consent gate rather than complete its closure
+- Docs(tracker): retire the 15 items v59.6.0 shipped, file §65/§66/§67, anchor by symbol
+
+
 ## [59.6.0] - 2026-08-26
 
 **Release Type:** Minor
@@ -138,12 +150,3 @@
 - Add smart ship preview summaries
 - Update release copy and configuration examples
 - Add regression coverage for the changed CLI workflow
-
-
-## [59.1.1] - 2026-08-16
-
-**Release Type:** Patch
-
-### Changes
-
-- Update release copy and configuration examples
