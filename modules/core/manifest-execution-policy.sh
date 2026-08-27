@@ -147,4 +147,16 @@ export -f manifest_execution_preview_header
 export -f manifest_execution_apply_header
 export -f manifest_execution_footer
 export -f manifest_execution_replay_hint
-export -f manifest_execution_require_apply
+# manifest_execution_require_apply is deliberately NOT exported (TRACKER §59).
+# It hard-calls manifest_repo_scope_confirm_apply at :112 and returns that call's
+# status as its own verdict, so exporting it without the gate hands an exec'd
+# child a `command not found` 127 dressed up as "apply declined" -- and
+# exporting it WITH the gate reopens §46 (see the export list in
+# manifest-shared-utils.sh for why the gate's closure cannot leave this process).
+# Nothing execs a child that CALLS it. There are two `bash -c` sites in modules/:
+# the release gate (manifest-orchestrator.sh, _manifest_release_gate_exec) runs
+# under `env -i`, which strips BASH_FUNC_* along with everything else; and the
+# Homebrew bootstrap (manifest-core.sh) is NOT under env -i and so does inherit
+# exported functions, but it runs a third-party installer that calls none of
+# ours. Stated as two rather than one on purpose -- the earlier wording said
+# "the only bash -c" and was wrong, even though the conclusion held.

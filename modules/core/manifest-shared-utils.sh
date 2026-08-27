@@ -1128,9 +1128,19 @@ manifest_repo_scope_target_unambiguous() {
 # as the declare -F probes already used in this file (:579, :647) and in
 # manifest-execution-policy.sh (:87, :121).
 #
-# The fallback is safe rather than a residual hole: if manifest-config.sh is not
-# loaded then no YAML layer has been read either, so the live variable can only
-# have come from the process environment in the first place.
+# The fallback is safe rather than a residual hole IN THIS PROCESS: if
+# manifest-config.sh is not loaded then no YAML layer has been read either, so
+# the live variable can only have come from the process environment.
+#
+# That reasoning does NOT survive an exec'd child, and the scope limit is the
+# point (TRACKER §59). A child inherits environment variables but not shell
+# functions, so the YAML loader can have exported MANIFEST_CLI_AUTO_CONFIRM
+# from a repo's committed config while the probe below still misses -- and the
+# fallback would then read a config-sourced value as if the operator had set it,
+# i.e. §46 verbatim. The protection is that neither this predicate nor
+# manifest_repo_scope_confirm_apply is exported, so a child cannot reach this
+# line at all; see the export list at the foot of this file. Do not add either
+# function to it.
 _manifest_repo_scope_auto_confirm_authorized() {
     if [ "${_MANIFEST_CLI_DELEGATED_APPLY_CONSENT:-0}" = "1" ]; then
         return 0
@@ -1393,7 +1403,18 @@ export -f manifest_ship_log_end manifest_ship_log_rotate
 export -f manifest_ship_log_latest manifest_ship_log_last_step
 export -f get_script_dir get_script_parent_dir get_project_root get_modules_dir
 export -f is_installation_directory validate_repository_root ensure_repository_root
-export -f manifest_repo_scope_require_git manifest_git_preflight_write_access manifest_repo_scope_confirm_apply manifest_repo_scope_target_unambiguous
+# manifest_repo_scope_confirm_apply is deliberately NOT exported (TRACKER §59).
+# It hard-calls _manifest_repo_scope_auto_confirm_authorized, which is not
+# exported and must not be: in an exec'd child the config predicate's own
+# declare -F probe misses (manifest-config.sh exports no such function) and the
+# provenance snapshot _MANIFEST_CLI_AUTO_CONFIRM_FROM_ENV is `declare -g`, not
+# -gx, so the predicate would fall through to a live read of
+# MANIFEST_CLI_AUTO_CONFIRM -- which manifest-yaml.sh's mapped-value export
+# writes from a repo's COMMITTED config. Exporting the gate's closure is
+# therefore how §46 reopens. The other three are export-safe: they depend only
+# on log_error/manifest_redact (exported above) and on declare -F-probed
+# optionals. Pinned by tests/consent_gate_not_exported.bats.
+export -f manifest_repo_scope_require_git manifest_git_preflight_write_access manifest_repo_scope_target_unambiguous
 export -f show_file_error show_git_error show_config_error
 export -f show_validation_error show_permission_error show_dependency_error
 export -f sanitize_filename sanitize_version sanitize_path validate_version_format
