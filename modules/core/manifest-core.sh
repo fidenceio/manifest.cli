@@ -1673,8 +1673,12 @@ changes. A few use their own word instead: 'plan fleet --apply' and
 'reconcile fleet --do'. [Cloud] marks a feature that needs a Cloud plugin.
 
   Getting started:
-    first                               Inspect this folder and set Manifest up
-    init repo|fleet                     Create the files a repo or fleet needs
+    first                               Inspect this folder and set Manifest up.
+                                        Start here — it works out whether you are
+                                        in a repo or a fleet and runs the right
+                                        one. Takes no repo|fleet scope.
+    init repo|fleet                     Create the files a repo or fleet needs.
+                                        Writes files; never touches the network
     doctor                              Check tools, config, repo health
     status                              Show what would happen next (read-only)
 
@@ -1694,7 +1698,9 @@ changes. A few use their own word instead: 'plan fleet --apply' and
     plan fleet                          Write a plan of proposed repairs
     reconcile fleet                     Carry out that plan
     topics fleet                        Set GitHub topics from repo names
-    prep repo|fleet                     Add missing remotes, clone, pull
+    prep repo|fleet                     Add missing remotes, clone, pull.
+                                        The only one that uses the network; it
+                                        scaffolds nothing but .env.example
 
   Documentation:
     docs [fleet]                        Regenerate docs for a repo or fleet

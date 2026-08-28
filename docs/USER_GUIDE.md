@@ -83,8 +83,38 @@ manifest init repo
 manifest init repo -y
 ```
 
-`manifest init repo` creates the files a Manifest-managed project needs: `VERSION`,
-`CHANGELOG.md`, a docs folder, and ignore rules.
+`manifest init repo` creates the files a Manifest-managed project needs. It writes each
+one only if it is absent — an existing file is always preserved, even under `--force`.
+
+| File | What it is for |
+| --- | --- |
+| `VERSION` | The version Manifest reads and bumps on ship. |
+| `README.md` | Project entry point. Ship maintains a version block inside it. |
+| `CHANGELOG.md` | Release history; every ship appends an entry. |
+| `.gitignore` | Ignore rules, **chosen for your project's ecosystem** — see below. |
+| `docs/` | The documentation folder Manifest generates into. |
+| `scripts/run-tests.sh` | The release gate. `manifest ship` runs it and refuses a failing release. |
+| `.env.example` | Env schema template, kept trackable while real `.env` files are ignored. |
+| `robots.txt` | Crawl privacy: disallows search and AI crawlers by default. |
+| `ai.txt` | Crawl privacy: declares no crawling, training, or indexing. |
+| `manifest.config.local.yaml` | Per-repo settings. Git-ignored, and the only file `--force` recreates. |
+
+`manifest init repo --dry-run` prints this same list for your repo, marking each file
+as *would create* or *exists (preserved)*, and names what each one is for.
+
+**Why `robots.txt` and `ai.txt`.** Manifest is private-by-default for anything that might
+be served over HTTP, so a repo that is ever deployed from its root starts out declining
+search indexing and AI training rather than opting out after the fact. If your repo is a
+library or a CLI that is never served, they are inert — delete them, and note that a
+subsequent `manifest init` will offer to re-create them.
+
+**The `.gitignore` is scaffolded for your stack, not for every stack.** Manifest reads the
+marker files at your repo root — `go.mod`, `package.json`, `Cargo.toml`, `pyproject.toml`,
+`pom.xml`, `Gemfile`, `*.tf`, `Dockerfile` — and emits the ecosystem rules that match,
+beneath a set of universal rules every repo gets (OS and editor noise, agent workspaces,
+env files, and a deny-by-default `KEY MATERIAL` block). A Go repo does not receive
+`node_modules/` or `__pycache__/`. When no marker is recognised, every ecosystem's rules
+are emitted, since more advice is the safe direction for an unknown stack.
 
 ## Repository Release Workflow
 

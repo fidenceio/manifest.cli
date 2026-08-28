@@ -94,9 +94,27 @@ manifest init repo [--dry-run] [-y|--yes] [--create-repo-private|--create-repo-p
 manifest init fleet [--dry-run] [-y|--yes] [--depth N] [--all-folders] [--name NAME] [--force] [--create-repo-private|--create-repo-public]
 ```
 
-`init repo` creates the files a Manifest project needs.
+`init repo` creates the files a Manifest project needs: `VERSION`, `README.md`,
+`CHANGELOG.md`, `.gitignore`, `docs/`, `scripts/run-tests.sh`, `.env.example`,
+`robots.txt`, `ai.txt`, and `manifest.config.local.yaml`. Each is written only if absent.
+`--dry-run` lists them with a one-line purpose for each; the
+[User Guide](USER_GUIDE.md#first-time-setup) has the same table in full, including why the
+two crawl-privacy files are there.
 
-**How it treats an existing `.gitignore`.** It never overwrites it. Instead it *adds*
+**`first` vs `init` vs `prep` — which one you want.** They share a flag vocabulary and
+their previews look alike, so the split is worth stating plainly:
+
+| Command | What it does | Writes files? | Touches the network? |
+| --- | --- | --- | --- |
+| `manifest first` | Inspects the directory, reports what it found, and delegates to the right initializer. Takes no `repo`/`fleet` scope — it works out which you are in. | No, not itself | No |
+| `manifest init` | Scaffolds the files above, and `git init`s if needed. | Yes | No |
+| `manifest prep` | Adds a missing `origin` and pulls from every remote. | Only `.env.example` | Yes |
+
+`first` on an uninitialized repo runs the same scaffolding `init repo` does — the
+difference is that `first` resolves and confirms the apply target first and records an
+audit event. **If you are unsure which to run, run `manifest first`.**
+
+**How `init` treats an existing `.gitignore`.** It never overwrites it. Instead it *adds*
 missing recommended rules under a marked header and tells you how many it added. This is
 how a `.gitignore` written by an older version of Manifest picks up rules added since —
 notably the `KEY MATERIAL` block that refuses to commit private keys.

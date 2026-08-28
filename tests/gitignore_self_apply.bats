@@ -60,14 +60,20 @@ teardown() {
     rm -rf "$SCRATCH"
 }
 
-# Patterns from the template's "# Manifest CLI" section: everything between that
-# header (and its ==== divider) and the next comment line.
+# Patterns from the template's "# Manifest CLI" section: the rules between that
+# header and the next comment line AFTER them.
+#
+# Leading comment lines inside the section are skipped rather than treated as the
+# end of it, because the template documents each block with a one-line rationale
+# beneath its divider (the style the AI-agent and secrets blocks already use).
+# Stopping at the first comment made the extraction return empty the moment that
+# rationale was added — caught by the control below, which is why it is there.
 manifest_section_patterns() {
     local rendered="$SCRATCH/gitignore.rendered"
     create_default_gitignore "$rendered" >/dev/null 2>&1
     awk '/^# Manifest CLI$/ {f=1; next}
-         f && /^# =+$/ && started==0 {next}
-         f && /^#/ {exit}
+         f && started==0 && /^#/ {next}
+         f && started==1 && /^#/ {exit}
          f && NF {started=1; print}' "$rendered"
 }
 

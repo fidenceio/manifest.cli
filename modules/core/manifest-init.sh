@@ -98,16 +98,142 @@ write_scaffold_no_clobber() {
     return 0
 }
 
+# Which language/tool ecosystems does this project declare?
+#
+# Keyed on marker files, and deliberately coarse — one label per ecosystem, never
+# per tool. A label says what the repo *is*; it never implies a command. Consumers
+# map a label to their own content.
+#
+# Extracted so the .gitignore template and the release-gate script agree about the
+# same repo. They did not before: the gate detected Go and wrote `go build ./...`
+# while the .gitignore writer took no project argument at all, so one
+# `manifest init` run produced a Go-shaped run-tests.sh beside a 184-rule
+# .gitignore covering nine ecosystems. 70 of those 184 rules were ecosystem-specific
+# and, for a Go repo, none of them applied.
+#
+# Written with `if` blocks rather than `[[ … ]] && echo` chains on purpose: the
+# && form makes the last test's failure the function's exit status, which under
+# errexit aborts the caller for the ordinary case of "this ecosystem is absent".
+#
+# ARGUMENTS:
+#   $1 - project root
+# Output (stdout): zero or more labels, one per line, from
+#   go node rust python dotnet java ruby terraform docker
+# RETURNS: 0 always, including when nothing is recognised (absence is not an error).
+manifest_detect_project_ecosystems() {
+    local project_root="${1:-}"
+    [[ -n "$project_root" && -d "$project_root" ]] || return 0
+
+    if [[ -f "$project_root/go.mod" ]]; then echo go; fi
+    if [[ -f "$project_root/package.json" ]]; then echo node; fi
+    if [[ -f "$project_root/Cargo.toml" ]]; then echo rust; fi
+    if [[ -f "$project_root/Gemfile" ]]; then echo ruby; fi
+
+    if [[ -f "$project_root/pyproject.toml" || -f "$project_root/setup.py" \
+        || -f "$project_root/requirements.txt" || -f "$project_root/tox.ini" ]]; then
+        echo python
+    fi
+
+    if [[ -f "$project_root/pom.xml" || -f "$project_root/build.gradle" \
+        || -f "$project_root/build.gradle.kts" ]]; then
+        echo java
+    fi
+
+    # .NET project files conventionally sit under src/, so this is not a root-only
+    # test — it mirrors the release gate's own long-standing -maxdepth 3 search.
+    if [[ -n "$(find "$project_root" -maxdepth 3 \( -name '*.sln' -o -name '*.csproj' \) \
+        -print 2>/dev/null | head -1)" ]]; then
+        echo dotnet
+    fi
+
+    local candidate
+    for candidate in "$project_root"/*.tf; do
+        if [[ -e "$candidate" ]]; then
+            echo terraform
+            break
+        fi
+    done
+
+    if [[ -f "$project_root/Dockerfile" ]]; then
+        echo docker
+    else
+        for candidate in "$project_root"/docker-compose*.yml "$project_root"/docker-compose*.yaml \
+                         "$project_root"/compose*.yml "$project_root"/compose*.yaml; do
+            if [[ -e "$candidate" ]]; then
+                echo docker
+                break
+            fi
+        done
+    fi
+
+    return 0
+}
+
+# True when ecosystem $1 should contribute rules to the rendered .gitignore.
+#
+# ARGUMENTS:
+#   $1 - ecosystem label to test
+#   $2 - detected labels, newline-separated (may be empty)
+#   $3 - "true" to emit the whole superset regardless of $2
+_manifest_gitignore_wants() {
+    [[ "$3" == "true" ]] && return 0
+    [[ -n "$2" ]] || return 1
+    printf '%s\n' "$2" | grep -qxF -- "$1"
+}
+
+# One line saying what a scaffolded file is FOR, for the init preview.
+#
+# `manifest init repo --dry-run` used to name six files with no explanation and
+# two with one, and the two undescribed outliers were robots.txt and ai.txt —
+# the same two a user reported finding in their repo without being able to say
+# why they were there. A preview that lists a filename and nothing else asks the
+# reader to consent to something it has not described.
+#
+# This is the single place that answers "what is this file", so the preview and
+# the docs cannot drift into two different answers.
+#
+# ARGUMENTS:
+#   $1 - scaffolded path, as the preview prints it
+# Output (stdout): a short purpose phrase, never empty.
+_manifest_scaffold_purpose() {
+    case "$1" in
+        VERSION)      echo "the version Manifest reads and bumps on ship" ;;
+        README.md)    echo "project entry point; ship maintains a version block in it" ;;
+        CHANGELOG.md) echo "release history; every ship appends an entry" ;;
+        .gitignore)   echo "ignore rules, chosen for this project's ecosystem" ;;
+        robots.txt)   echo "crawl privacy — disallows search and AI crawlers by default" ;;
+        ai.txt)       echo "crawl privacy — declares no crawling, training, or indexing" ;;
+        docs/)        echo "documentation folder Manifest generates into" ;;
+        scripts/run-tests.sh) echo "release gate — 'manifest ship' runs it" ;;
+        .env.example) echo "env schema template" ;;
+        manifest.config.local.yaml) echo "per-repo settings; git-ignored" ;;
+        *)            echo "scaffolded by manifest init" ;;
+    esac
+}
+
 # Advised .gitignore rules that a real .gitignore does not already carry.
 # Prints one missing rule per line (nothing when the file satisfies the advice).
 # Comments and blank lines are ignored on both sides — only real rules count.
+#
+# The advice is rendered for the SAME project as the file being checked. That is
+# load-bearing, not a refinement: render the superset here and the upgrade path
+# would append every ecosystem's rules to a repo that declares one, re-creating
+# the bloat that project-aware generation exists to remove — through a different
+# door, on any repo that already had a .gitignore.
+#
+# ARGUMENTS:
+#   $1 - path to the .gitignore(-style) file to check
+#   $2 - project root (default: the file's own directory, which is where a real
+#        .gitignore always lives; a caller rendering to a temp path must pass it)
 manifest_gitignore_missing_rules() {
     local real_file="$1"
+    local project_root="${2:-}"
     local advised
     [[ -f "$real_file" ]] || return 0
+    [[ -n "$project_root" ]] || project_root="$(dirname "$real_file")"
 
     advised="$(mktemp)" || return 0
-    if ! create_default_gitignore "$advised"; then
+    if ! create_default_gitignore "$advised" "$project_root"; then
         rm -f "$advised"
         return 0
     fi
@@ -405,11 +531,30 @@ create_default_run_tests() {
     # never baked in here).
     local checks=""
 
-    if [[ -f "$project_root/Cargo.toml" ]]; then
+    local ecosystems label
+    ecosystems="$(manifest_detect_project_ecosystems "$project_root")"
+
+    # The shared detector drives the four toolchains whose gate condition is
+    # exactly "the marker file exists". The rest stay inline below, because their
+    # condition is finer than a label can express: pytest additionally requires a
+    # tests directory, and Make/Compose are fallbacks keyed on "nothing has been
+    # emitted yet" rather than on the absence of an ecosystem. A label says what
+    # the repo IS; it deliberately never says what verifies it.
+    local eco_rust=false eco_node=false eco_go=false eco_dotnet=false
+    while IFS= read -r label; do
+        case "$label" in
+            rust) eco_rust=true ;;
+            node) eco_node=true ;;
+            go) eco_go=true ;;
+            dotnet) eco_dotnet=true ;;
+        esac
+    done <<< "$ecosystems"
+
+    if [[ "$eco_rust" == "true" ]]; then
         checks+='    run_check cargo test'$'\n'
     fi
 
-    if [[ -f "$project_root/package.json" ]]; then
+    if [[ "$eco_node" == "true" ]]; then
         local pm s
         # Corepack's declared package manager wins; otherwise infer from lockfile.
         pm="$(sed -n 's/.*"packageManager"[[:space:]]*:[[:space:]]*"\([a-z]*\)@.*/\1/p' "$project_root/package.json" 2>/dev/null | head -1)"
@@ -434,14 +579,14 @@ create_default_run_tests() {
         done
     fi
 
-    # .NET: a solution or project file (often nested under src/), no manifest of
-    # its own on the JS/Rust side.
-    if [[ -n "$(find "$project_root" -maxdepth 3 \( -name '*.sln' -o -name '*.csproj' \) -print 2>/dev/null | head -1)" ]]; then
+    # .NET: a solution or project file, often nested under src/ — which is why the
+    # detector searches to -maxdepth 3 for this one and at the root for the others.
+    if [[ "$eco_dotnet" == "true" ]]; then
         checks+='    run_check dotnet build'$'\n'
         checks+='    run_check dotnet test'$'\n'
     fi
 
-    if [[ -f "$project_root/go.mod" ]]; then
+    if [[ "$eco_go" == "true" ]]; then
         checks+='    run_check go build ./...'$'\n'
         checks+='    run_check go test ./...'$'\n'
     fi
@@ -972,7 +1117,7 @@ ensure_gitignore_smart() {
     if [[ ! -f "$gitignore_file" ]]; then
         # No .gitignore at all — create one
         log_info "Creating .gitignore file..."
-        if ! create_default_gitignore "$gitignore_file"; then
+        if ! create_default_gitignore "$gitignore_file" "$project_root"; then
             log_error "Failed to create .gitignore in $project_root"
             return 1
         fi
@@ -995,7 +1140,7 @@ ensure_gitignore_smart() {
     if [[ "$entry_count" -eq 0 ]]; then
         # .gitignore exists but has no real entries — overwrite
         log_info "Existing .gitignore has no entries, overwriting with defaults..."
-        if ! create_default_gitignore "$gitignore_file"; then
+        if ! create_default_gitignore "$gitignore_file" "$project_root"; then
             log_error "Failed to overwrite .gitignore in $project_root"
             return 1
         fi
@@ -1045,17 +1190,42 @@ ensure_gitignore_smart() {
 # Create default .gitignore content
 create_default_gitignore() {
     local gitignore_file="$1"
+    local project_root="${2:-}"
+
+    local detected=""
+    if [[ -n "$project_root" ]]; then
+        detected="$(manifest_detect_project_ecosystems "$project_root")"
+    fi
+
+    # No project root given, or none of its ecosystems recognised: emit every
+    # block. This is what keeps every existing single-argument caller byte-identical
+    # to the historical template, and it is the safe direction — an unrecognised
+    # stack gets more advice than it needs, never less than it needs.
+    local emit_all=false
+    [[ -z "$detected" ]] && emit_all=true
 
     cat > "$gitignore_file" << 'EOF'
+# .gitignore — scaffolded by Manifest CLI (`manifest init`).
+#
+# The blocks above the ECOSYSTEM divider apply to every repository. The blocks
+# below it are chosen from the marker files at this repo's root (go.mod,
+# package.json, Cargo.toml, …), so this file describes THIS project rather than
+# every project. Delete anything that does not apply — `manifest init` never
+# rewrites an existing .gitignore, it only reports or appends.
+
 # =============================================================================
 # Manifest CLI
 # =============================================================================
+# Release-gate scratch and logs. Manifest's release commit stages with a bare
+# `git add .`, so anything the CLI writes mid-run has to be ignored here.
 .manifest-cli/
 *.manifest-cli.log
 
 # =============================================================================
-# OS generated files
+# Your machine — OS, editors, and IDEs
 # =============================================================================
+# Per-developer noise. None of it describes the project, so none of it belongs
+# in shared history.
 .DS_Store
 .DS_Store?
 ._*
@@ -1065,10 +1235,6 @@ ehthumbs.db
 Thumbs.db
 Desktop.ini
 $RECYCLE.BIN/
-
-# =============================================================================
-# Editor and IDE files
-# =============================================================================
 .vscode/
 .idea/
 *.swp
@@ -1122,6 +1288,8 @@ nbproject/
 # =============================================================================
 # Environment, secrets, and local/generated config
 # =============================================================================
+# Deny the value files, re-include the authoring templates. Order matters:
+# .gitignore is last-match-wins, so every negation has to follow its rule.
 .env
 .env.*
 *.local.yaml
@@ -1195,27 +1363,78 @@ secring.*
 !chain.pem
 
 # =============================================================================
-# Logs and runtime data
+# Logs, temporary files, and archives
 # =============================================================================
+# Runtime output and scratch: regenerated on demand, never reviewed in a diff.
 *.log
 logs/
 pids/
 *.pid
 *.seed
 *.pid.lock
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+zArchive/
+archive/
 
 # =============================================================================
-# Dependencies
+# Build output and native artifacts
 # =============================================================================
+# Generic across toolchains. Language-specific build directories are added in
+# the ECOSYSTEM section below, only for what this repo actually declares.
+dist/
+build/
+out/
+*.o
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+*.app
+*.com
+
+# =============================================================================
+# Local data and caches
+# =============================================================================
+*.sqlite
+*.db
+.cache/
+coverage/
+EOF
+
+    # -------------------------------------------------------------------------
+    # ECOSYSTEM blocks — emitted per detected marker file, or all of them when
+    # the project could not be classified. Appended, so the universal rules above
+    # (and the KEY MATERIAL negations in particular) keep their position.
+    # -------------------------------------------------------------------------
+    printf '\n# %s\n# ECOSYSTEM — chosen for this repository\n# %s\n' \
+        '=============================================================================' \
+        '=============================================================================' \
+        >> "$gitignore_file" || return 1
+
+    if _manifest_gitignore_wants go "$detected" "$emit_all"; then
+        cat >> "$gitignore_file" << 'EOF'
+
+# --- Go (go.mod) ---
+*.test
+go.work
+go.work.sum
+EOF
+    fi
+
+    if _manifest_gitignore_wants node "$detected" "$emit_all"; then
+        cat >> "$gitignore_file" << 'EOF'
+
+# --- Node / JavaScript (package.json) ---
 node_modules/
 bower_components/
-vendor/
-.bundle/
 jspm_packages/
-
-# =============================================================================
-# Package manager caches and artifacts
-# =============================================================================
 .npm
 .yarn/
 !.yarn/patches
@@ -1227,27 +1446,26 @@ jspm_packages/
 .node_repl_history
 *.tgz
 .yarn-integrity
+.nyc_output/
+.parcel-cache/
+.turbo/
+.next/
+.nuxt/
+.output/
+.svelte-kit/
+EOF
+    fi
 
-# =============================================================================
-# Build outputs
-# =============================================================================
-dist/
-build/
-out/
-target/
+    if _manifest_gitignore_wants python "$detected" "$emit_all"; then
+        cat >> "$gitignore_file" << 'EOF'
+
+# --- Python (pyproject.toml / setup.py / requirements.txt / tox.ini) ---
+__pycache__/
+*.py[cod]
+*$py.class
 *.egg-info/
 *.egg
 *.whl
-*.class
-*.jar
-*.war
-*.ear
-
-# =============================================================================
-# Test and coverage
-# =============================================================================
-coverage/
-.nyc_output/
 .coverage
 htmlcov/
 .pytest_cache/
@@ -1257,43 +1475,44 @@ nosetests.xml
 coverage.xml
 *.cover
 *.py,cover
+EOF
+    fi
 
-# =============================================================================
-# Compiled and generated files
-# =============================================================================
-*.o
-*.so
-*.dylib
-*.dll
-*.exe
-*.out
-*.app
-*.com
-__pycache__/
-*.py[cod]
-*$py.class
+    # `target/` is Cargo's build dir and also Maven's, so it is emitted once for
+    # either rather than duplicated in both blocks.
+    if _manifest_gitignore_wants rust "$detected" "$emit_all" \
+        || _manifest_gitignore_wants java "$detected" "$emit_all"; then
+        cat >> "$gitignore_file" << 'EOF'
+
+# --- Rust / JVM build directory (Cargo.toml / pom.xml / build.gradle) ---
+target/
+EOF
+    fi
+
+    if _manifest_gitignore_wants java "$detected" "$emit_all"; then
+        cat >> "$gitignore_file" << 'EOF'
+
+# --- JVM (pom.xml / build.gradle) ---
 *.class
+*.jar
+*.war
+*.ear
+EOF
+    fi
 
-# =============================================================================
-# Temporary files
-# =============================================================================
-tmp/
-temp/
-*.tmp
-*.temp
-*.bak
-*.orig
-*.rej
+    if _manifest_gitignore_wants ruby "$detected" "$emit_all"; then
+        cat >> "$gitignore_file" << 'EOF'
 
-# =============================================================================
-# Archive directories
-# =============================================================================
-zArchive/
-archive/
+# --- Ruby (Gemfile) ---
+vendor/
+.bundle/
+EOF
+    fi
 
-# =============================================================================
-# Terraform
-# =============================================================================
+    if _manifest_gitignore_wants terraform "$detected" "$emit_all"; then
+        cat >> "$gitignore_file" << 'EOF'
+
+# --- Terraform (*.tf) ---
 .terraform/
 *.tfstate
 *.tfstate.*
@@ -1304,25 +1523,18 @@ override.tf.json
 *_override.tf.json
 .terraformrc
 terraform.rc
-
-# =============================================================================
-# Docker
-# =============================================================================
-.docker/
-
-# =============================================================================
-# Miscellaneous
-# =============================================================================
-*.sqlite
-*.db
-.cache/
-.parcel-cache/
-.turbo/
-.next/
-.nuxt/
-.output/
-.svelte-kit/
 EOF
+    fi
+
+    if _manifest_gitignore_wants docker "$detected" "$emit_all"; then
+        cat >> "$gitignore_file" << 'EOF'
+
+# --- Docker (Dockerfile / compose file) ---
+.docker/
+EOF
+    fi
+
+    return 0
 }
 
 # Crawl-privacy defaults — private/safe by default for anything that might be
@@ -1517,23 +1729,23 @@ Idempotent — safe to re-run. Optionally creates a GitHub repo via 'gh repo cre
                     echo "  exists:          $f   (preserved)"
                 fi
             else
-                echo "  would create:    $f"
+                echo "  would create:    $f   ($(_manifest_scaffold_purpose "$f"))"
             fi
         done
         if [[ -d "$project_root/docs" ]]; then
             echo "  exists:          docs/"
         else
-            echo "  would create:    docs/"
+            echo "  would create:    docs/   ($(_manifest_scaffold_purpose "docs/"))"
         fi
         if [[ -f "$project_root/scripts/run-tests.sh" ]]; then
             echo "  exists:          scripts/run-tests.sh   (preserved)"
         else
-            echo "  would create:    scripts/run-tests.sh   (release gate — 'manifest ship' runs it)"
+            echo "  would create:    scripts/run-tests.sh   ($(_manifest_scaffold_purpose "scripts/run-tests.sh"))"
         fi
         if [[ -f "$project_root/.env.example" ]]; then
             echo "  exists:          .env.example   (preserved)"
         else
-            echo "  would create:    .env.example   (env schema template)"
+            echo "  would create:    .env.example   ($(_manifest_scaffold_purpose ".env.example"))"
         fi
         if [[ -f "$project_root/manifest.config.local.yaml" && "$force" != "true" ]]; then
             echo "  exists:          manifest.config.local.yaml"
@@ -1541,7 +1753,7 @@ Idempotent — safe to re-run. Optionally creates a GitHub repo via 'gh repo cre
             if [[ -f "$project_root/manifest.config.local.yaml" && "$force" == "true" ]]; then
                 echo "  would recreate:  manifest.config.local.yaml   (--force)"
             else
-                echo "  would create:    manifest.config.local.yaml"
+                echo "  would create:    manifest.config.local.yaml   ($(_manifest_scaffold_purpose "manifest.config.local.yaml"))"
             fi
         fi
         if [[ -n "$create_repo_visibility" ]]; then
@@ -2073,6 +2285,7 @@ export -f manifest_init_dispatch
 # Scaffolding helpers (used by orchestrator, documentation, fleet)
 export -f ensure_required_files create_default_readme create_default_changelog
 export -f create_default_gitignore ensure_gitignore_smart manifest_gitignore_missing_rules
+export -f manifest_detect_project_ecosystems _manifest_gitignore_wants _manifest_scaffold_purpose
 export -f manifest_gitignore_upgrade
 export -f ensure_release_gate_script create_default_run_tests
 export -f ensure_env_files create_default_env_example _manifest_env_prefix_for_repo _manifest_env_spec_file _manifest_env_render_example
