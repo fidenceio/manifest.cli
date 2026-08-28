@@ -1,5 +1,18 @@
 # Changelog
 
+## [59.6.2] - 2026-08-28
+
+**Release Type:** Patch
+
+### Changes
+
+- Docs(tracker): make the resume block describe v59.6.1, and retire §59 as shipped
+- Docs(tracker): file §68 — main's branch protection binds nobody who ships
+- Update documentation and examples
+- Wire first-class CLI commands to inspectable built-in recipe definitions
+- Add regression coverage for the changed CLI workflow
+
+
 ## [59.6.1] - 2026-08-27
 
 **Release Type:** Patch
@@ -136,17 +149,5 @@
 ### Changes
 
 - Add GitHub Release publishing support
-- Update release copy and configuration examples
-- Add regression coverage for the changed CLI workflow
-
-
-## [59.2.0] - 2026-08-16
-
-**Release Type:** Minor
-
-### Changes
-
-- Add GitHub Release publishing support
-- Add smart ship preview summaries
 - Update release copy and configuration examples
 - Add regression coverage for the changed CLI workflow
