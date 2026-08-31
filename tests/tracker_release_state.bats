@@ -104,11 +104,112 @@ banned_ref_equals_sha='=.*`[0-9a-f]{7,40}`'
     # The recipe block names origin/main and @{upstream} on purpose. If fence
     # stripping broke, the section would still pass the three checks above — so
     # this asserts the stripping happened rather than assuming it.
+    # The probe must be a WHOLE command line that only ever appears inside the
+    # fence. A bare `git rev-parse` is not fence-unique — the prose above the
+    # recipe quotes it while explaining the broken upstream line, which turned
+    # this control red the moment that explanation was written.
+    local fenced_only='git ls-tree -r --name-only HEAD | grep -c CODEX_AUDIT'
     local prose
     prose="$(release_state_prose)"
-    refute grep -qF 'git rev-parse' <<<"$prose"
+    refute grep -qF -- "$fenced_only" <<<"$prose"
     # ...and the fence really is present in the unstripped section.
     run awk '/^### Release state/ {f=1; next} f && /^#{2,3} / {exit} f' "$(TRACKER)"
     [ "$status" -eq 0 ]
-    grep -qF 'git rev-parse' <<<"$output"
+    grep -qF -- "$fenced_only" <<<"$output"
+}
+
+# --- the recipe must RUN, not merely read well -------------------------------
+#
+# Replacing recorded facts with commands only pays off if the commands work. The
+# upstream line shipped as `git rev-parse --short HEAD @{upstream}` and was
+# broken from the day it was written — `--short` accepts a single revision, so
+# the two-argument form fails with "Needed a single revision" in every shell. It
+# survived because nothing ever executed it; it was found by running the recipe
+# by hand after a release (see TRACKER §69's release note for which one — naming
+# it here would restate the current version, which version_single_source.bats
+# forbids in any tracked file outside the release record, and which this file
+# tripped on its first run). Prose is reviewed, commands are run, and
+# this block had been getting the former treatment while claiming the latter.
+#
+# Only the `git` lines are executed here. `manifest --version` depends on what is
+# INSTALLED rather than on this tree, and every `gh` line needs the network and a
+# credential — running those would make the suite depend on both.
+
+# The git command lines from the release-state recipe, comments stripped.
+release_state_git_commands() {
+    awk '/^### Release state/ {f=1; next}
+         f && /^#{2,3} / {exit}
+         f' "$(TRACKER)" \
+    | awk '/^```/ {fence = !fence; next} fence' \
+    | sed 's/[[:space:]]*#[^"'"'"']*$//' \
+    | grep -E '^git ' \
+    | sed 's/[[:space:]]*$//'
+}
+
+@test "release state: every git command in the recipe actually runs" {
+    local cmds
+    cmds="$(release_state_git_commands)"
+
+    # Control: the extractor found commands at all. Without this the loop below
+    # iterates zero times and reports a pass — the absent-input-reads-as-green
+    # shape the control at the top of this file exists for.
+    [ -n "$cmds" ]
+    [ "$(printf '%s\n' "$cmds" | grep -c .)" -ge 3 ]
+
+    # NOT an exit-code check, deliberately. `git ls-tree … | grep -c CODEX_AUDIT`
+    # exits 1 when the count is zero, and zero is the answer the recipe WANTS —
+    # so a non-zero status is a legitimate result here, not a broken command.
+    # What this guards against is a command git itself refuses to parse, which is
+    # what the upstream line did for its whole life. git announces that on stderr
+    # with a `fatal:`/`usage:`/`error:` prefix.
+    local cmd out failed=""
+    while IFS= read -r cmd; do
+        [ -n "$cmd" ] || continue
+        # `|| true` is load-bearing: a command substitution carries its exit
+        # status to the ASSIGNMENT, and bats fails a test on any non-zero
+        # command. Without it, the `grep -c` line whose correct answer is a
+        # non-zero exit would kill this test at the assignment — the same
+        # confusion between "exited non-zero" and "is broken" that this test was
+        # rewritten to avoid, reappearing one line lower.
+        out="$( ( cd "$TEST_REPO_ROOT" && eval "$cmd" ) 2>&1 >/dev/null || true )"
+        if grep -qE '^(fatal|usage|error):' <<<"$out"; then
+            failed+="  $cmd"$'\n'"      -> $(grep -m1 -E '^(fatal|usage|error):' <<<"$out")"$'\n'
+        fi
+    done <<<"$cmds"
+
+    if [ -n "$failed" ]; then
+        printf 'release-state recipe commands git refuses to run:\n%s' "$failed" >&2
+        return 1
+    fi
+}
+
+@test "positive control: the recipe runner fails on a command that cannot run" {
+    # Proves the loop above can go red, using the exact historical defect as the
+    # probe — so this also documents what broke: --short takes one revision.
+    run bash -c "cd '$TEST_REPO_ROOT' && git rev-parse --short HEAD '@{upstream}'"
+    [ "$status" -ne 0 ]
+    grep -qF 'Needed a single revision' <<<"$output"
+    # ...and it is caught by the detector the loop above uses, not merely by
+    # being non-zero. Without this the control would pass against a runner that
+    # had stopped looking at stderr entirely.
+    grep -qE '^(fatal|usage|error):' <<<"$output"
+}
+
+@test "positive control: a non-zero exit that is a real ANSWER is not flagged" {
+    # The counterpart, and the reason this guard reads stderr instead of $?.
+    # `grep -c` exits 1 on a count of zero, and zero is what the recipe requires.
+    # A runner keyed on exit status would call the correct answer a broken
+    # command and go permanently red.
+    run bash -c "cd '$TEST_REPO_ROOT' && git ls-tree -r --name-only HEAD | grep -c CODEX_AUDIT"
+    [ "$status" -ne 0 ]
+    [ "$output" = "0" ]
+    refute grep -qE '^(fatal|usage|error):' <<<"$output"
+}
+
+@test "positive control: the replacement upstream command does run" {
+    # The other direction: the form now in the recipe must succeed and answer the
+    # question, so the fix is not merely 'a command that exits 0'.
+    run bash -c "cd '$TEST_REPO_ROOT' && git rev-list --left-right --count 'HEAD...@{upstream}'"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ ^[0-9]+[[:space:]]+[0-9]+$ ]]
 }
