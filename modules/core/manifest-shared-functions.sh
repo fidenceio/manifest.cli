@@ -293,22 +293,16 @@ manifest_version_segments_into() {
 # Get latest version from GitHub API with OS-dependent timeout
 get_latest_version() {
     local repo_url="${MANIFEST_CLI_REPO_URL:-https://api.github.com/repos/fidenceio/fidenceio.manifest.cli/releases/latest}"
-    
-    # Use OS-dependent timeout strategy
-    local timeout_cmd=""
-    case "${MANIFEST_CLI_OS:-Unknown}" in
-        "macOS")
-            if command -v gtimeout >/dev/null 2>&1; then
-                timeout_cmd="gtimeout"
-            fi
-            ;;
-        "Linux"|"FreeBSD"|"OpenBSD"|"NetBSD")
-            if command -v timeout >/dev/null 2>&1; then
-                timeout_cmd="timeout"
-            fi
-            ;;
-    esac
-    
+
+    # No timeout wrapper is selected here on purpose. This function used to
+    # compute one from the OS and then never read it — the variable was assigned
+    # in both platform arms and referenced nowhere else in the body, because the
+    # request below goes through `secure_curl_request`, which carries its own
+    # `$timeout_seconds`. The dead block also branched on `MANIFEST_CLI_OS`, a
+    # name nothing assigns, so neither arm could run in the first place.
+    # `check_network_connectivity` has the same shape but genuinely uses the
+    # wrapper, and is fixed rather than deleted.
+
     # Try to get latest version from GitHub API with timeout
     if command -v curl >/dev/null 2>&1; then
         local latest_version=""
@@ -937,9 +931,18 @@ secure_curl_request() {
 
 # Check network connectivity with OS-dependent timeout
 check_network_connectivity() {
-    # Use OS-dependent timeout strategy
+    # Use OS-dependent timeout strategy.
+    #
+    # Reads `MANIFEST_CLI_OS_OS` — the name `manifest-os.sh` actually assigns.
+    # This branched on `MANIFEST_CLI_OS` (no `_OS` suffix) until 2026-08-31, a
+    # name assigned nowhere in the product, so the `:-Unknown` default fired on
+    # every platform, no arm was ever taken, and `timeout_cmd` stayed empty —
+    # meaning the `else` fallback below ran everywhere and the ping was never
+    # bounded by a timeout wrapper. A doppelganger name, not a missing
+    # assignment: the producer and the consumer were one suffix apart, and the
+    # `:-Unknown` default made the mismatch look like a supported case.
     local timeout_cmd=""
-    case "${MANIFEST_CLI_OS:-Unknown}" in
+    case "${MANIFEST_CLI_OS_OS:-Unknown}" in
         "macOS")
             if command -v gtimeout >/dev/null 2>&1; then
                 timeout_cmd="gtimeout"

@@ -8,12 +8,25 @@ MANIFEST_CLI_OS_OS=""
 MANIFEST_CLI_OS_FAMILY=""
 MANIFEST_CLI_OS_VERSION=""
 
-# Bash compatibility variables
+# Bash version, recorded for display only.
+#
+# There are deliberately NO capability flags here. The runtime floor is Bash 5+
+# and it is enforced before any module loads: `ensure_bash5_or_reexec` in both
+# entry points re-execs into a Bash 5 if the current shell is older and exits
+# with "requires Bash ${MANIFEST_CLI_REQUIRED_BASH_VERSION}+" when it cannot
+# find one. So `[[ ]]` (2.02+) and associative arrays (4.0+) are guaranteed, not
+# contingent, and a flag asking whether they are available can only ever hold
+# one value.
+#
+# This module used to carry `..._SUPPORTS_DOUBLE_BRACKETS` and
+# `..._SUPPORTS_ASSOCIATIVE_ARRAYS`, both computed per run and both structurally
+# `true`. They are gone rather than pinned to true: a constant dressed as a
+# probe invites callers to branch on it, and every such branch is unreachable
+# code that tests can only reach by falsifying the variable — which is what
+# `tests/os_helpers.bats` was doing.
 MANIFEST_CLI_OS_BASH_VERSION=""
 MANIFEST_CLI_OS_BASH_MAJOR=""
 MANIFEST_CLI_OS_BASH_MINOR=""
-MANIFEST_CLI_OS_BASH_SUPPORTS_DOUBLE_BRACKETS=false
-MANIFEST_CLI_OS_BASH_SUPPORTS_ASSOCIATIVE_ARRAYS=false
 
 # Platform-specific command variables
 MANIFEST_CLI_OS_DATE_CMD=""
@@ -27,20 +40,30 @@ detect_bash_version() {
         MANIFEST_CLI_OS_BASH_VERSION="${BASH_VERSION%%[^0-9.]*}"
         MANIFEST_CLI_OS_BASH_MAJOR="${BASH_VERSINFO[0]:-0}"
         MANIFEST_CLI_OS_BASH_MINOR="${BASH_VERSINFO[1]:-0}"
-
-        # Check for double bracket support (bash 2.02+)
-        if [ "$MANIFEST_CLI_OS_BASH_MAJOR" -gt 2 ] || ([ "$MANIFEST_CLI_OS_BASH_MAJOR" -eq 2 ] && [ "$MANIFEST_CLI_OS_BASH_MINOR" -ge 2 ]); then
-            MANIFEST_CLI_OS_BASH_SUPPORTS_DOUBLE_BRACKETS=true
-        fi
-
-        # Check for associative arrays (bash 4.0+)
-        if [ "$MANIFEST_CLI_OS_BASH_MAJOR" -ge 4 ]; then
-            MANIFEST_CLI_OS_BASH_SUPPORTS_ASSOCIATIVE_ARRAYS=true
-        fi
     else
         MANIFEST_CLI_OS_BASH_VERSION="Unknown"
         MANIFEST_CLI_OS_BASH_MAJOR="0"
         MANIFEST_CLI_OS_BASH_MINOR="0"
+    fi
+}
+
+# Advisory output from the platform setup below.
+#
+# Routed through one helper for two reasons. It goes to STDERR, because this
+# module runs at source time — `detect_os` is called on load — so anything on
+# stdout prepends itself to whatever the invoked command was asked to print,
+# including machine-readable output. And it respects the same verbose gate as
+# `detect_os`'s own banner, because the module's stated contract is to be
+# silent by default; `tests/os_detection_preamble.bats` asserts exactly that.
+#
+# These advisories used to be unconditional `echo`s. They were invisible on any
+# machine that had the tools — a developer host, and CI — and appeared only on
+# the machines that did not, which is the population the advice is for and the
+# one nobody tests on. `manifest doctor` is the surface that reports a missing
+# coreutils; this stays a verbose-mode detail.
+_manifest_os_advise() {
+    if [ "${MANIFEST_CLI_VERBOSE:-0}" = "1" ] || [ "${MANIFEST_CLI_DEBUG:-0}" = "1" ]; then
+        printf '%s\n' "$1" >&2
     fi
 }
 
@@ -116,7 +139,7 @@ detect_os() {
 
     # Detect bash version and capabilities
     detect_bash_version
-    [ "$verbose" = "1" ] && echo "   🐍 Bash: $MANIFEST_CLI_OS_BASH_VERSION ([[ ]]: $MANIFEST_CLI_OS_BASH_SUPPORTS_DOUBLE_BRACKETS, Arrays: $MANIFEST_CLI_OS_BASH_SUPPORTS_ASSOCIATIVE_ARRAYS)"
+    [ "$verbose" = "1" ] && echo "   🐍 Bash: $MANIFEST_CLI_OS_BASH_VERSION (required: ${MANIFEST_CLI_REQUIRED_BASH_VERSION:-5}+)"
 
     MANIFEST_CLI_OS_DETECTED=1
 }
@@ -132,8 +155,8 @@ setup_macos_commands() {
 
     # Check if coreutils is installed for timeout
     if ! command -v gtimeout &> /dev/null; then
-        echo "   ⚠️  gtimeout not found, using fallback timeout method"
-        echo "   ℹ️  Install coreutils for the supported macOS timeout command"
+        _manifest_os_advise "   ⚠️  gtimeout not found, using fallback timeout method"
+        _manifest_os_advise "   ℹ️  Install coreutils for the supported macOS timeout command"
         MANIFEST_CLI_OS_TIMEOUT_CMD="timeout_fallback"
     fi
 }
@@ -157,7 +180,7 @@ setup_bsd_commands() {
     
     # Check if timeout is available
     if ! command -v timeout &> /dev/null; then
-        echo "   ⚠️  timeout not available, using fallback method"
+        _manifest_os_advise "   ⚠️  timeout not available, using fallback method"
         MANIFEST_CLI_OS_TIMEOUT_CMD="timeout_fallback"
     fi
 }
@@ -172,7 +195,7 @@ setup_windows_commands() {
 
 # Fallback command setup for unknown platforms
 setup_fallback_commands() {
-    echo "   ⚠️  Unknown platform, using fallback commands"
+    _manifest_os_advise "   ⚠️  Unknown platform, using fallback commands"
     MANIFEST_CLI_OS_DATE_CMD="date -u"
     MANIFEST_CLI_OS_TIMEOUT_CMD="timeout_fallback"
     MANIFEST_CLI_OS_GREP_CMD="grep"
@@ -284,24 +307,20 @@ compare_strings() {
     esac
 }
 
+# Both of these carried a `[[ ]]`-vs-`[ ]` version branch until the Bash 5+ floor
+# made it unreachable — see the note on the removed capability flags above. The
+# branch was doubly empty: for a single `-z`/`-d` test on a quoted operand the two
+# forms are exactly equivalent, so each arm did the same thing. `compare_strings`
+# below had already been collapsed for that reason and says so; these two were
+# missed, and a test kept the dead arm alive by setting the flag to false by hand.
 check_string_empty() {
     local str="$1"
-    
-    if [ "$MANIFEST_CLI_OS_BASH_SUPPORTS_DOUBLE_BRACKETS" = "true" ]; then
-        [[ -z "$str" ]]
-    else
-        [ -z "$str" ]
-    fi
+    [[ -z "$str" ]]
 }
 
 check_directory_exists() {
     local dir="$1"
-    
-    if [ "$MANIFEST_CLI_OS_BASH_SUPPORTS_DOUBLE_BRACKETS" = "true" ]; then
-        [[ -d "$dir" ]]
-    else
-        [ -d "$dir" ]
-    fi
+    [[ -d "$dir" ]]
 }
 
 # Pure classifier: does an Apple build identifier denote a pre-release seed?

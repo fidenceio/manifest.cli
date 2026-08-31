@@ -61,12 +61,21 @@ tier_rows() {
           # circular here: a bracket saying T2 under section T3 is still
           # selected, and still reported as the mismatch it is.
           #
-          # Two constraints on comments in THIS block, both learned by breaking
-          # them: no apostrophe (the awk program sits inside a single-quoted
-          # shell string, so one closes it and bash reports a syntax error many
-          # lines away), and ASCII only (macOS awk fails to parse a multi-byte
-          # character inside a comment, while handling one inside a regex
-          # literal without complaint).
+          # One constraint on comments in THIS block: no apostrophe. The awk
+          # program sits inside a single-quoted shell string, so an apostrophe
+          # closes it and bash reports `unexpected EOF while looking for
+          # matching quote` many lines away. That is a SHELL quoting rule, not
+          # an awk one, and it behaves identically everywhere.
+          #
+          # A previous version of this comment also claimed macOS awk cannot
+          # parse a multi-byte character (§, en dash) inside a comment. That was
+          # wrong and is recorded here because the wrong version was committed:
+          # the same program with `# §73 was filed – note the en dash` runs
+          # clean under BWK awk on macOS, BusyBox awk on Alpine and mawk on
+          # Ubuntu. The original failure was the apostrophe above; the
+          # multi-byte character happened to be on a nearby line and got the
+          # blame. A misdiagnosis written down as a lesson is worse than no
+          # lesson, because the next reader obeys it.
           rest = $0;
           while (tag == "" && match(rest, /\*\*[[:space:]]*\[[^]]*\]/)) {
               cand = substr(rest, RSTART, RLENGTH);
@@ -148,16 +157,27 @@ tier_rows() {
 @test "positive control: the check fires on an item filed in the wrong section" {
     # Reproduces the §73 incident against a fixture, so the test above is known
     # to be capable of failing without having to mutate the real tracker.
+    #
+    # The section marker is assembled at RUNTIME rather than written literally,
+    # so the two fabricated IDs never appear as text in this tracked file. The
+    # first version hardcoded them and broke tracker_citation_resolution.bats,
+    # which runs `git grep -E '<marker>[0-9]'` over tracked files and correctly
+    # reported them as citations resolving to nothing. Two lessons, both paid
+    # for: fixture IDs that look like citations ARE citations to any repo-wide
+    # scanner, and **a new test file passes the suite while untracked and can
+    # only break a git-scoped guard once committed** — so a green run on an
+    # untracked file is not a green run.
+    local S; S="$(printf '\302\247')"
     local fixture="$BATS_TEST_TMPDIR/wrong.md"
-    cat > "$fixture" <<'EOF'
+    cat > "$fixture" <<EOF
 ## T2 — contract integrity
 
-- **§900 A correctly filed T2 item.** [T2 — with rationale]  ·  *Radius: PRODUCT*
+- **${S}900 A correctly filed T2 item.** [T2 — with rationale]  ·  *Radius: PRODUCT*
   - detail
 
 ## T3 — coverage, audit, docs
 
-- **§901 A T2 item mis-filed under T3, which is the §73 incident.** [T2]  ·  *Radius: PRODUCT*
+- **${S}901 A T2 item mis-filed under T3, reproducing the incident.** [T2]  ·  *Radius: PRODUCT*
   - detail
 EOF
 
@@ -173,10 +193,12 @@ EOF
     ' "$fixture"
 
     [ "$status" -eq 0 ]
-    # §901 is caught, §900 is not — both halves, so the detector is neither
-    # blind nor indiscriminate.
-    grep -qF '§901' <<<"$output"
-    refute grep -qF '§900' <<<"$output"
+    # The mis-filed item is caught and the correctly-filed one is not — both
+    # halves, so the detector is neither blind nor indiscriminate. IDs are built
+    # from $S for the same reason as the fixture above: a literal here would be
+    # a citation to any repo-wide scanner.
+    grep -qF "${S}901" <<<"$output"
+    refute grep -qF "${S}900" <<<"$output"
 }
 
 @test "positive control: a deliberate hold is NOT reported as a mismatch" {

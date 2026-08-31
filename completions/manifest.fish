@@ -73,7 +73,11 @@ complete -c manifest -n '__manifest_token_count 1' -a help        -d 'Show help'
 # --- subcommands (token 2) ---------------------------------------------------
 
 # Commands that take a repo|fleet scope.
-set -l __manifest_scoped 'first init plan reconcile discover update add validate prep refresh docs ship'
+# `status` belongs here: manifest-status.sh documents `manifest status
+# [repo|fleet]` and manifest-core.sh lists it alongside prep/refresh/ship in
+# _manifest_cli_is_existing_repo_scope_request. All three completion files
+# omitted it identically, so this is one shared gap rather than drift.
+set -l __manifest_scoped 'first init plan reconcile discover update add validate prep refresh docs ship status'
 for cmd in (string split ' ' $__manifest_scoped)
     complete -c manifest -n "__manifest_token_count 2; and __manifest_path $cmd" -a repo  -d 'Single-repo scope'
     complete -c manifest -n "__manifest_token_count 2; and __manifest_path $cmd" -a fleet -d 'Fleet scope'

@@ -38,11 +38,36 @@ teardown() {
     [ "$status" -eq 1 ]
 }
 
-@test "os: check_string_empty legacy single-bracket branch behaves identically" {
-    MANIFEST_CLI_OS_BASH_SUPPORTS_DOUBLE_BRACKETS=false
-    check_string_empty ""
-    run check_string_empty "non-empty"
-    [ "$status" -eq 1 ]
+# The former "legacy single-bracket branch behaves identically" test is gone with
+# the branch it exercised. It set MANIFEST_CLI_OS_BASH_SUPPORTS_DOUBLE_BRACKETS
+# to false by hand to reach an arm the Bash 5+ runtime floor made unreachable —
+# so the only thing keeping the dead code alive was a test falsifying a variable
+# that could not be false in production. Its assertion was also self-defeating:
+# it asserted the two arms behave identically, which is the argument for having
+# one arm.
+@test "os: the removed bash capability flags stay removed" {
+    # A flag that can hold only one value invites callers to branch on it. This
+    # asserts the module exposes no such probe, so the dead-branch pattern
+    # cannot quietly return.
+    #
+    # `declare -p <name>`, not `set | grep <name>`. The first version grepped
+    # `set` output and failed, because `set` prints BASH_EXECUTION_STRING — which
+    # contains the grep's own pattern. The probe matched itself and reported the
+    # variable as present. Asking about one name at a time cannot self-match.
+    local flag
+    for flag in MANIFEST_CLI_OS_BASH_SUPPORTS_DOUBLE_BRACKETS \
+                MANIFEST_CLI_OS_BASH_SUPPORTS_ASSOCIATIVE_ARRAYS; do
+        run bash -c "source '$TEST_REPO_ROOT/modules/system/manifest-os.sh' >/dev/null 2>&1; \
+                     declare -p $flag >/dev/null 2>&1 && echo SET || echo UNSET"
+        [ "$output" = "UNSET" ]
+    done
+
+    # Control, and it is load-bearing: the same probe must report SET for a
+    # variable the module DOES still define, otherwise UNSET above would also be
+    # what a failed source, a typo, or a broken `declare` looks like.
+    run bash -c "source '$TEST_REPO_ROOT/modules/system/manifest-os.sh' >/dev/null 2>&1; \
+                 declare -p MANIFEST_CLI_OS_BASH_MAJOR >/dev/null 2>&1 && echo SET || echo UNSET"
+    [ "$output" = "SET" ]
 }
 
 @test "os: check_directory_exists true for dirs, false for files and missing paths" {
@@ -122,7 +147,10 @@ teardown() {
     chmod +x "$SCRATCH/bin/gtimeout"
 
     PATH="$SCRATCH/bin:$PATH"
-    setup_macos_commands > "$SCRATCH/macos-setup.out"
+    # Advisories go to stderr now, so both streams are captured — otherwise this
+    # would assert absence against a file the message never had a chance to
+    # reach, and pass no matter what the function printed.
+    setup_macos_commands > "$SCRATCH/macos-setup.out" 2>&1
     PATH="$saved_path"
 
     [ "$MANIFEST_CLI_OS_DATE_CMD" = "date -u -d" ]
@@ -134,14 +162,27 @@ teardown() {
     local saved_path="$PATH"
     mkdir -p "$SCRATCH/empty-bin"
 
+    # Verbose is required to see the advisory at all now: the module's contract
+    # is silence by default, and this advisory used to breach it (see the
+    # stdout-silence test in os_detection_preamble.bats). The fallback SELECTION
+    # is unconditional — only the message is gated — which is what the two
+    # command assertions below pin.
     PATH="$SCRATCH/empty-bin"
-    setup_macos_commands > "$SCRATCH/macos-setup.out"
+    MANIFEST_CLI_VERBOSE=1 setup_macos_commands > "$SCRATCH/macos-setup.out" 2>&1
     PATH="$saved_path"
 
     [ "$MANIFEST_CLI_OS_DATE_CMD" = "date -u -d" ]
     [ "$MANIFEST_CLI_OS_TIMEOUT_CMD" = "timeout_fallback" ]
     grep -q "gtimeout not found" "$SCRATCH/macos-setup.out"
     grep -q "Install coreutils" "$SCRATCH/macos-setup.out"
+
+    # The advisory must be on stderr, not stdout: this module runs at source
+    # time, so a byte on stdout prepends itself to the invoked command's output.
+    local saved2="$PATH"
+    PATH="$SCRATCH/empty-bin"
+    MANIFEST_CLI_VERBOSE=1 setup_macos_commands > "$SCRATCH/stdout-only.out" 2>/dev/null
+    PATH="$saved2"
+    refute grep -q "gtimeout not found" "$SCRATCH/stdout-only.out"
 }
 
 @test "os: detect_os dispatches Linux command setup under a stubbed uname" {

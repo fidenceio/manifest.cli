@@ -27,7 +27,12 @@ _manifest_complete() {
             ;;
         2)
             case "${words[1]}" in
-                first|init|plan|reconcile|discover|update|add|validate|prep|refresh|docs|ship)
+                # `status` takes repo|fleet too — manifest-status.sh documents
+                # `manifest status [repo|fleet]` and manifest-core.sh lists it in
+                # _manifest_cli_is_existing_repo_scope_request alongside
+                # prep/refresh/ship — but it was missing here, so the one scoped
+                # command users reach for most often offered no completion.
+                first|init|plan|reconcile|discover|update|add|validate|prep|refresh|docs|ship|status)
                     COMPREPLY=( $(compgen -W "$scopes" -- "$cur") )
                     return 0
                     ;;

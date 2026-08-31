@@ -69,7 +69,10 @@ _manifest() {
             ;;
         subcommand)
             case $words[2] in
-                first|init|plan|reconcile|discover|update|add|validate|prep|refresh|docs|ship)
+                # `status` takes repo|fleet too (manifest-status.sh:7, and
+                # manifest-core.sh's _manifest_cli_is_existing_repo_scope_request).
+                # All three completion files omitted it identically.
+                first|init|plan|reconcile|discover|update|add|validate|prep|refresh|docs|ship|status)
                     _values 'scope' "${scopes[@]}"
                     ;;
                 topics)
