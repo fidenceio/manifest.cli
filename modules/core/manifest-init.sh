@@ -1201,6 +1201,14 @@ create_default_gitignore() {
     # block. This is what keeps every existing single-argument caller byte-identical
     # to the historical template, and it is the safe direction — an unrecognised
     # stack gets more advice than it needs, never less than it needs.
+    #
+    # "Every block" HAS TWO DELIBERATE EXCEPTIONS — see the .NET block below.
+    # `TestResults/` and `*.user` are withheld from the fallback, and `bin/`/`obj/`
+    # are never emitted bare at all. "More advice is safe" holds only while the
+    # advice cannot match a path an unrelated repo is committing on purpose; a
+    # plain directory name breaks that, and the upgrade path APPENDS advice to a
+    # file Manifest does not own. If you are adding the tenth ecosystem block,
+    # this is the invariant to check your new rules against — not to restore.
     local emit_all=false
     [[ -z "$detected" ]] && emit_all=true
 
@@ -1498,6 +1506,81 @@ EOF
 *.war
 *.ear
 EOF
+    fi
+
+    # .NET was a detector label with NO renderer block until 2026-08-29, so
+    # detecting a .NET repo changed its .gitignore by exactly nothing: measured
+    # at 129 rules, the universal core alone. See TRACKER §69(a).
+    # Only the rules that cannot mean anything but .NET go in the superset.
+    if _manifest_gitignore_wants dotnet "$detected" "$emit_all"; then
+        cat >> "$gitignore_file" << 'EOF'
+
+# --- .NET (*.sln / *.csproj) ---
+*.suo
+*.userprefs
+*.nupkg
+*.snupkg
+.vs/
+project.lock.json
+EOF
+    fi
+
+    # The rest is gated on ACTUAL detection — note the literal `false` passed as
+    # emit_all, which is the whole point of this second call.
+    #
+    # Every other block is safe in the unclassified superset because more advice
+    # than needed costs nothing. These are not. `manifest_gitignore_upgrade`
+    # APPENDS advised rules to a user's existing file, and a repo Manifest cannot
+    # classify receives the superset — so a bash, C or PHP repo would be told to
+    # ignore paths it may be committing on purpose. Already-tracked files survive
+    # a new ignore rule, so the loss is NEW files only, which is what makes it
+    # quiet rather than loud. `TestResults/` is a plain directory name and
+    # `*.user` a bare glob; neither is self-evidently .NET.
+    if _manifest_gitignore_wants dotnet "$detected" false; then
+        cat >> "$gitignore_file" << 'EOF'
+*.user
+TestResults/
+EOF
+
+        # `bin/` and `obj/` are anchored to the directory holding each project
+        # file rather than emitted bare, and detection alone is NOT enough to
+        # justify the bare form.
+        #
+        # .NET is the only label found below the root (-maxdepth 3; every other
+        # is a root -f test or root glob), so it is the easiest label to acquire
+        # by accident: one `tools/helper/x.csproj` in an otherwise-bash repo
+        # classifies the whole repo as dotnet. A bare `bin/` would then ignore
+        # that repo's committed `bin/` of scripts — the same quiet loss the
+        # superset gating above prevents, arriving through classification
+        # instead. Anchoring also matches .NET's own layout: bin/ and obj/ are
+        # build output adjacent to the project file, never repo-wide.
+        # NOTE: `dirname` yields an ABSOLUTE path, so stripping $project_root
+        # leaves the EMPTY string for a project file at the repo root. Empty is
+        # therefore a real value meaning "root" and must not be skipped — doing
+        # so silently gave a root-level .csproj no bin/obj rules at all.
+        local proj_dir proj_dirs=()
+        while IFS= read -r proj_dir; do
+            proj_dir="${proj_dir#"$project_root"}"
+            proj_dir="${proj_dir#/}"
+            proj_dirs+=("$proj_dir")
+        done < <(find "$project_root" -maxdepth 3 \( -name '*.sln' -o -name '*.csproj' \) \
+                     -print 2>/dev/null \
+                 | while IFS= read -r proj_file; do dirname "$proj_file"; done \
+                 | sort -u)
+
+        if [[ ${#proj_dirs[@]} -gt 0 ]]; then
+            for proj_dir in "${proj_dirs[@]}"; do
+                # A leading slash anchors to the .gitignore's own directory,
+                # which is the repo root — without it `/src/bin/` would also
+                # match `vendor/src/bin/`.
+                if [[ -z "$proj_dir" ]]; then
+                    printf '/bin/\n/obj/\n' >> "$gitignore_file" || return 1
+                else
+                    printf '/%s/bin/\n/%s/obj/\n' "$proj_dir" "$proj_dir" \
+                        >> "$gitignore_file" || return 1
+                fi
+            done
+        fi
     fi
 
     if _manifest_gitignore_wants ruby "$detected" "$emit_all"; then

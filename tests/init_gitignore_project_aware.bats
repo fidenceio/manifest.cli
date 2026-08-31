@@ -31,9 +31,13 @@ setup() {
     GO_PROJ="$SCRATCH/goproj"
     NODE_PROJ="$SCRATCH/nodeproj"
     BARE_PROJ="$SCRATCH/bareproj"
-    mkdir -p "$GO_PROJ" "$NODE_PROJ" "$BARE_PROJ"
+    DOTNET_PROJ="$SCRATCH/dotnetproj"
+    mkdir -p "$GO_PROJ" "$NODE_PROJ" "$BARE_PROJ" "$DOTNET_PROJ/src"
     printf 'module example.com/x\n\ngo 1.24\n' > "$GO_PROJ/go.mod"
     printf '{"name":"x","version":"1.0.0"}\n' > "$NODE_PROJ/package.json"
+    # Nested under src/, which is where .NET project files conventionally live
+    # and why the detector searches to -maxdepth 3 for this one label.
+    printf '<Project Sdk="Microsoft.NET.Sdk"></Project>\n' > "$DOTNET_PROJ/src/App.csproj"
 
     rules() { grep -cvE '^\s*$|^\s*#' "$1"; }
 }
@@ -144,6 +148,157 @@ teardown() {
             return 1
         }
     done
+}
+
+# --- .NET: a label that rendered nothing, and the rules that are NOT bare ------
+#
+# Two separate protections are pinned below, and conflating them is how one of
+# them gets removed:
+#
+#   1. `*.user` and `TestResults/` are withheld from the unclassified SUPERSET,
+#      because a repo Manifest cannot classify would otherwise be advised to
+#      ignore paths it may be committing on purpose.
+#   2. `bin/` and `obj/` are never emitted BARE at all — they are anchored to the
+#      directory holding each project file. Withholding from the superset is not
+#      enough for these two, because .NET is the only label found BELOW the root
+#      (-maxdepth 3), so one stray `tools/helper/x.csproj` classifies an
+#      otherwise-bash repo as dotnet and a bare `bin/` would then reach it
+#      through classification rather than through the superset.
+
+@test "gitignore: a .NET repo actually receives .NET rules" {
+    # The regression: `dotnet` was emitted by the detector and consumed by
+    # create_default_run_tests, but had NO block in the renderer, so a .NET repo
+    # measured 129 rules — the universal core exactly, ecosystem contribution
+    # zero. TRACKER §69(a).
+    local gi="$DOTNET_PROJ/.gitignore"
+    create_default_gitignore "$gi" "$DOTNET_PROJ"
+
+    local pattern
+    for pattern in '*.user' '*.suo' '.vs/' 'TestResults/' '*.nupkg' \
+                   '/src/bin/' '/src/obj/'; do
+        grep -qxF -- "$pattern" "$gi" || {
+            echo ".NET repo did not receive: $pattern" >&2
+            return 1
+        }
+    done
+}
+
+@test "gitignore: the .NET block contributes rules, counted in its own section" {
+    # Counts the ECOSYSTEM section directly rather than comparing two whole
+    # renders. The earlier form of this test was named "exceeds the universal
+    # core" but actually compared .NET against a GO render, so a .NET block
+    # shrunk to four rules would still have passed a test promising > 129.
+    local gi="$SCRATCH/dotnet.rendered"
+    create_default_gitignore "$gi" "$DOTNET_PROJ"
+
+    local eco
+    eco="$(sed -n '/^# ECOSYSTEM — chosen for this repository$/,$p' "$gi" \
+           | grep -cvE '^[[:space:]]*$|^[[:space:]]*#')"
+
+    # Control: prove the extractor found the section at all, so a zero below
+    # means "no rules" rather than "no section matched".
+    [ -n "$eco" ]
+    [ "$eco" -ge 8 ]
+}
+
+@test "gitignore: the ambiguous .NET rules are withheld from the superset" {
+    # The upgrade path APPENDS advised rules to a user's existing file, and a
+    # repo Manifest cannot classify receives the superset. `TestResults/` is a
+    # plain directory name and `*.user` a bare glob; neither is self-evidently
+    # .NET, so neither belongs in advice given to an unrecognised stack.
+    local gi="$BARE_PROJ/.gitignore"
+    create_default_gitignore "$gi" "$BARE_PROJ"
+
+    # Control FIRST: prove the superset really rendered, or the refutes below
+    # pass against an empty file and assert nothing.
+    grep -qxF -- 'node_modules/' "$gi"
+    grep -qxF -- '.terraform/' "$gi"
+    # The unambiguous half of the .NET block IS in the superset.
+    grep -qxF -- '*.suo' "$gi"
+    grep -qxF -- '.vs/' "$gi"
+
+    refute grep -qxF -- 'bin/' "$gi"
+    refute grep -qxF -- 'obj/' "$gi"
+    refute grep -qxF -- 'TestResults/' "$gi"
+    refute grep -qxF -- '*.user' "$gi"
+}
+
+@test "gitignore: bin/ and obj/ are anchored, never bare, even for a .NET repo" {
+    # Withholding from the superset does not cover this: the repo below IS
+    # classified dotnet. Only anchoring keeps a bare `bin/` out.
+    local gi="$DOTNET_PROJ/.gitignore"
+    create_default_gitignore "$gi" "$DOTNET_PROJ"
+
+    grep -qxF -- '/src/bin/' "$gi"      # control: the anchored form is present
+    refute grep -qxF -- 'bin/' "$gi"
+    refute grep -qxF -- 'obj/' "$gi"
+}
+
+@test "gitignore: a project file at the repo ROOT anchors to /bin/ and /obj/" {
+    # dirname yields an absolute path, so stripping the project root leaves the
+    # EMPTY string for a root-level .csproj. Skipping empty as though it were
+    # "no match" gave a root-level project no bin/obj rules at all — which this
+    # catches and the src/-nested fixture above cannot.
+    local root_proj="$SCRATCH/rootdotnet"
+    mkdir -p "$root_proj"
+    printf '<Project Sdk="Microsoft.NET.Sdk"></Project>\n' > "$root_proj/App.csproj"
+
+    create_default_gitignore "$root_proj/.gitignore" "$root_proj"
+
+    grep -qxF -- '/bin/' "$root_proj/.gitignore"
+    grep -qxF -- '/obj/' "$root_proj/.gitignore"
+}
+
+@test "gitignore: a polyglot repo's committed bin/ survives an incidental .csproj" {
+    # The shape the anchoring exists for, stated as a user meets it: a bash repo
+    # with scripts in bin/ and one stray project file three levels down. It
+    # classifies as dotnet — that is not the bug — but its bin/ must not be
+    # ignored. Already-tracked files survive a new ignore rule, so the loss
+    # would be NEW files only, which is what makes it quiet rather than loud.
+    local poly="$SCRATCH/polyglot"
+    mkdir -p "$poly/bin" "$poly/tools/helper"
+    printf '#!/usr/bin/env bash\necho deploy\n' > "$poly/bin/deploy.sh"
+    printf '<Project Sdk="Microsoft.NET.Sdk"></Project>\n' > "$poly/tools/helper/x.csproj"
+
+    # Control: it really is classified dotnet, so the refute below is about
+    # anchoring and not about the detector quietly returning nothing.
+    run manifest_detect_project_ecosystems "$poly"
+    [ "$output" = "dotnet" ]
+
+    create_default_gitignore "$poly/.gitignore" "$poly"
+
+    grep -qxF -- '/tools/helper/bin/' "$poly/.gitignore"
+    refute grep -qxF -- 'bin/' "$poly/.gitignore"
+}
+
+@test "advice: an unclassifiable repo is never advised to ignore bin/" {
+    # The hazard stated as the user experiences it: upgrade appends, and a repo
+    # with a committed bin/ of scripts must not be told to ignore it.
+    printf '.DS_Store\n' > "$BARE_PROJ/.gitignore"
+
+    run manifest_gitignore_missing_rules "$BARE_PROJ/.gitignore"
+    [ "$status" -eq 0 ]
+
+    # Control: this minimal file IS missing most of the advice, so an empty
+    # refute below means "not advised", not "nothing was computed".
+    [ -n "$output" ]
+    grep -qxF -- 'node_modules/' <<<"$output"
+
+    refute grep -qxF -- 'bin/' <<<"$output"
+    refute grep -qxF -- 'obj/' <<<"$output"
+}
+
+@test "advice: a .NET repo IS advised to ignore its anchored bin/" {
+    # The other direction of the same asymmetry. Without this, the anchoring
+    # could be tightened all the way to "never emitted" and every refute above
+    # would still pass.
+    printf '.DS_Store\n' > "$DOTNET_PROJ/.gitignore"
+
+    run manifest_gitignore_missing_rules "$DOTNET_PROJ/.gitignore"
+    [ "$status" -eq 0 ]
+
+    grep -qxF -- '/src/bin/' <<<"$output"
+    grep -qxF -- '/src/obj/' <<<"$output"
 }
 
 @test "gitignore: omitting the project root renders exactly the superset" {

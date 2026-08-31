@@ -110,11 +110,21 @@ subsequent `manifest init` will offer to re-create them.
 
 **The `.gitignore` is scaffolded for your stack, not for every stack.** Manifest reads the
 marker files at your repo root — `go.mod`, `package.json`, `Cargo.toml`, `pyproject.toml`,
-`pom.xml`, `Gemfile`, `*.tf`, `Dockerfile` — and emits the ecosystem rules that match,
-beneath a set of universal rules every repo gets (OS and editor noise, agent workspaces,
-env files, and a deny-by-default `KEY MATERIAL` block). A Go repo does not receive
-`node_modules/` or `__pycache__/`. When no marker is recognised, every ecosystem's rules
-are emitted, since more advice is the safe direction for an unknown stack.
+`pom.xml`, `build.gradle`, `Gemfile`, `*.tf`, `Dockerfile` — plus `*.sln` / `*.csproj`,
+which is the one marker searched a few directories deep rather than at the root, because
+.NET project files conventionally sit under `src/`. It emits the ecosystem rules that
+match, beneath a set of universal rules every repo gets (OS and editor noise, agent
+workspaces, env files, and a deny-by-default `KEY MATERIAL` block). A Go repo does not
+receive `node_modules/` or `__pycache__/`.
+
+When no marker is recognised, nearly every ecosystem's rules are emitted, since more
+advice is the safe direction for an unknown stack. **Two kinds of rule are held back from
+that fallback**, because "more advice" stops being safe when the advice is a plain
+directory name: rules that only make sense once your stack is known (`TestResults/`,
+`*.user`) are emitted only on a real match, and .NET's `bin/` and `obj/` are always
+written anchored to the directory holding each project file — `/src/bin/`, never a bare
+`bin/`. A repo of shell scripts that keeps them in a committed `bin/` is therefore never
+advised to ignore it, even if a stray `.csproj` somewhere causes the repo to match .NET.
 
 ## Repository Release Workflow
 
