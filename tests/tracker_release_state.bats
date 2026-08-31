@@ -162,9 +162,33 @@ release_state_git_commands() {
     # What this guards against is a command git itself refuses to parse, which is
     # what the upstream line did for its whole life. git announces that on stderr
     # with a `fatal:`/`usage:`/`error:` prefix.
+    # Tag-dependent operands are resolved to a revision this clone actually has.
+    #
+    # This is not a convenience — it is the difference between the two failures
+    # this test exists to tell apart. `actions/checkout` fetches with
+    # fetch-depth:1 and NO TAGS, so in CI `v$(cat VERSION)` does not exist and
+    # git reports `fatal: Needed a single revision` — **the exact message the
+    # malformed two-revision form produces**, which is what the positive control
+    # below plants. So the guard read "the tag is absent from this clone" as "git
+    # refuses to parse this command" and went red on both CI legs while passing
+    # on every developer machine, where the tag is present. It was committed red
+    # in 27b8de1 and stayed red for two commits.
+    #
+    # Substituting HEAD leaves the command SHAPE — flags, operand count, quoting
+    # — entirely intact, and the shape is the whole subject of this test. A
+    # command git cannot parse still cannot be parsed with HEAD in it, which the
+    # substitution control below pins.
+    local tag_operand='"v$(cat VERSION)"'
+    local have_tag=1
+    git -C "$TEST_REPO_ROOT" rev-parse -q --verify \
+        "refs/tags/v$(cat "$TEST_REPO_ROOT/VERSION")" >/dev/null 2>&1 || have_tag=0
+
     local cmd out failed=""
     while IFS= read -r cmd; do
         [ -n "$cmd" ] || continue
+        if [ "$have_tag" -eq 0 ]; then
+            cmd="${cmd//"$tag_operand"/HEAD}"
+        fi
         # `|| true` is load-bearing: a command substitution carries its exit
         # status to the ASSIGNMENT, and bats fails a test on any non-zero
         # command. Without it, the `grep -c` line whose correct answer is a
@@ -204,6 +228,42 @@ release_state_git_commands() {
     [ "$status" -ne 0 ]
     [ "$output" = "0" ]
     refute grep -qE '^(fatal|usage|error):' <<<"$output"
+}
+
+@test "positive control: the HEAD substitution still catches a malformed command" {
+    # The substitution above must not be a way for a broken command to pass. The
+    # historical defect was `--short` with TWO revisions; with the tag operand
+    # replaced by HEAD it is still two revisions, so it must still be refused.
+    run bash -c "cd '$TEST_REPO_ROOT' && git rev-parse --short HEAD '@{upstream}'"
+    [ "$status" -ne 0 ]
+    grep -qE '^(fatal|usage|error):' <<<"$output"
+}
+
+@test "positive control: a tagless clone does not fail the recipe runner" {
+    # Reproduces the CI environment directly rather than trusting the reasoning
+    # above: a clone with no tags at all. Before the substitution this made the
+    # runner report two commands as broken; now it must report none.
+    local bare="$BATS_TEST_TMPDIR/notags"
+    git clone --quiet --no-tags --depth 1 "file://$TEST_REPO_ROOT" "$bare" 2>/dev/null \
+        || skip "cannot clone this working tree (shallow-clone restrictions)"
+
+    # Control: the clone really has no tags, so this is not passing vacuously.
+    [ -z "$(git -C "$bare" tag -l)" ]
+
+    local tag_operand='"v$(cat VERSION)"'
+    local cmd out failed=""
+    while IFS= read -r cmd; do
+        [ -n "$cmd" ] || continue
+        cmd="${cmd//"$tag_operand"/HEAD}"
+        out="$( ( cd "$bare" && eval "$cmd" ) 2>&1 >/dev/null || true )"
+        grep -qE '^(fatal|usage|error):' <<<"$out" \
+            && failed+="  $cmd -> $(grep -m1 -E '^(fatal|usage|error):' <<<"$out")"$'\n'
+    done <<<"$(release_state_git_commands)"
+
+    if [ -n "$failed" ]; then
+        printf 'recipe commands still failing in a tagless clone:\n%s' "$failed" >&2
+        return 1
+    fi
 }
 
 @test "positive control: the replacement upstream command does run" {
