@@ -1,5 +1,18 @@
 # Changelog
 
+## [59.7.0] - 2026-08-31
+
+**Release Type:** Minor
+
+### Changes
+
+- Docs(tracker): record v59.6.2 as released, and stop the post-release loop here
+- Docs(tracker),test: end the per-release docs commit, and guard it shut
+- Docs(tracker): sequence the user-feedback line, and record v59.6.2's increment
+- Fix(init): give .NET the renderer block it never had, and anchor bin/ instead of emitting it bare
+- Docs(tracker): close §69(a) at v59.7.0 and state why the increment is minor
+
+
 ## [59.6.2] - 2026-08-28
 
 **Release Type:** Patch
@@ -139,15 +152,4 @@
 - Add GitHub Release publishing support
 - Update release copy and configuration examples
 - Wire first-class CLI commands to inspectable built-in recipe definitions
-- Add regression coverage for the changed CLI workflow
-
-
-## [59.2.1] - 2026-08-17
-
-**Release Type:** Patch
-
-### Changes
-
-- Add GitHub Release publishing support
-- Update release copy and configuration examples
 - Add regression coverage for the changed CLI workflow
