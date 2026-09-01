@@ -79,15 +79,14 @@ teardown() {
     [ "$status" -eq 1 ]
 }
 
-@test "os: timeout_fallback returns 0 when the command completes before the deadline" {
-    run timeout_fallback 1 true
-    [ "$status" -eq 0 ]
-}
-
-@test "os: timeout_fallback kills an overrunning command and returns 124" {
-    run timeout_fallback 1 sleep 10
-    [ "$status" -eq 124 ]
-}
+# The two `timeout_fallback` tests are gone with the function (TRACKER §65(3)).
+# They were the only callers it ever had: it existed solely as the value
+# MANIFEST_CLI_OS_TIMEOUT_CMD took when `gtimeout` was absent, and that variable
+# had no consumer in the product. The pair also cost ~11s of wall clock per run
+# sleeping against a deadline, to exercise a code path nothing reached.
+#
+# Absence is asserted in os_detection_preamble.bats rather than here, alongside
+# the setup_*_commands functions removed in the same change.
 
 @test "os: get_timezone_display returns UTC by default" {
     run get_timezone_display 1700000000
@@ -122,70 +121,26 @@ teardown() {
     [ "$output" = "../../etc/passwd" ]
 }
 
-@test "os: setup_linux_commands selects GNU date form and plain timeout" {
-    setup_linux_commands
-    [ "$MANIFEST_CLI_OS_DATE_CMD" = "date -u -d" ]
-    [ "$MANIFEST_CLI_OS_TIMEOUT_CMD" = "timeout" ]
-    [ "$MANIFEST_CLI_OS_GREP_CMD" = "grep" ]
-    [ "$MANIFEST_CLI_OS_SED_CMD" = "sed" ]
-}
+# The three setup_*_commands tests that stood here are gone with the functions
+# (TRACKER §65(3)). They are worth a note because of WHY they were misleading.
+#
+# Each one called a setup function and then asserted the four variables that
+# function had just assigned — a closed loop that could not fail for any reason
+# a user would care about. They reported the shims as covered, which is how the
+# layer survived two audits: §21a saw "no consumers" and said delete, §65 saw
+# the same and said wire up, and both times the test file said "but it is
+# tested." A test that reads only what the code under test just wrote measures
+# nothing except that assignment happened.
+#
+# What replaced them is not a like-for-like: `os_detection_preamble.bats` asserts
+# the functions are ABSENT, and `os_var_name_agreement.bats` asserts the one OS
+# variable that does have a consumer is spelled the same at both ends. That is
+# the property that was actually broken for months.
 
-# Both macOS branches are pinned by constructing the PATH each one needs. The
-# earlier single test derived its own expectation from whether the host had
-# gtimeout, so it asserted a different contract on every machine and could not
-# fail on either: a broken probe still "matched" whatever the host produced.
-
-# PATH is swapped by explicit save/restore rather than a `VAR=x func` prefix:
-# whether such an assignment survives a shell-function call differs between
-# bash versions and POSIX mode, which is the very kind of ambient dependence
-# these tests exist to remove.
-
-@test "os: setup_macos_commands selects gtimeout when coreutils IS present" {
-    local saved_path="$PATH"
-    mkdir -p "$SCRATCH/bin"
-    printf '#!/usr/bin/env bash\nexit 0\n' > "$SCRATCH/bin/gtimeout"
-    chmod +x "$SCRATCH/bin/gtimeout"
-
-    PATH="$SCRATCH/bin:$PATH"
-    # Advisories go to stderr now, so both streams are captured — otherwise this
-    # would assert absence against a file the message never had a chance to
-    # reach, and pass no matter what the function printed.
-    setup_macos_commands > "$SCRATCH/macos-setup.out" 2>&1
-    PATH="$saved_path"
-
-    [ "$MANIFEST_CLI_OS_DATE_CMD" = "date -u -d" ]
-    [ "$MANIFEST_CLI_OS_TIMEOUT_CMD" = "gtimeout" ]
-    refute grep -q "gtimeout not found" "$SCRATCH/macos-setup.out"
-}
-
-@test "os: setup_macos_commands falls back and warns when coreutils is ABSENT" {
-    local saved_path="$PATH"
-    mkdir -p "$SCRATCH/empty-bin"
-
-    # Verbose is required to see the advisory at all now: the module's contract
-    # is silence by default, and this advisory used to breach it (see the
-    # stdout-silence test in os_detection_preamble.bats). The fallback SELECTION
-    # is unconditional — only the message is gated — which is what the two
-    # command assertions below pin.
-    PATH="$SCRATCH/empty-bin"
-    MANIFEST_CLI_VERBOSE=1 setup_macos_commands > "$SCRATCH/macos-setup.out" 2>&1
-    PATH="$saved_path"
-
-    [ "$MANIFEST_CLI_OS_DATE_CMD" = "date -u -d" ]
-    [ "$MANIFEST_CLI_OS_TIMEOUT_CMD" = "timeout_fallback" ]
-    grep -q "gtimeout not found" "$SCRATCH/macos-setup.out"
-    grep -q "Install coreutils" "$SCRATCH/macos-setup.out"
-
-    # The advisory must be on stderr, not stdout: this module runs at source
-    # time, so a byte on stdout prepends itself to the invoked command's output.
-    local saved2="$PATH"
-    PATH="$SCRATCH/empty-bin"
-    MANIFEST_CLI_VERBOSE=1 setup_macos_commands > "$SCRATCH/stdout-only.out" 2>/dev/null
-    PATH="$saved2"
-    refute grep -q "gtimeout not found" "$SCRATCH/stdout-only.out"
-}
-
-@test "os: detect_os dispatches Linux command setup under a stubbed uname" {
+@test "os: detect_os records the platform under a stubbed uname" {
+    # The surviving half of the old dispatch test. It used to also assert the
+    # per-platform command variables; now it pins only what detect_os still
+    # produces — which is what a consumer can actually read.
     mkdir -p "$SCRATCH/bin"
     cat > "$SCRATCH/bin/uname" <<'EOF'
 #!/usr/bin/env bash
@@ -199,10 +154,8 @@ EOF
         export PATH=\"$SCRATCH/bin:\$PATH\"
         unset MANIFEST_CLI_OS_DETECTED MANIFEST_CLI_VERBOSE MANIFEST_CLI_DEBUG
         source \"$TEST_REPO_ROOT/modules/system/manifest-os.sh\"
-        echo \"os=\$MANIFEST_CLI_OS_OS family=\$MANIFEST_CLI_OS_FAMILY version=\$MANIFEST_CLI_OS_VERSION\"
-        echo \"timeout=\$MANIFEST_CLI_OS_TIMEOUT_CMD date=\$MANIFEST_CLI_OS_DATE_CMD\"
+        echo \"os=\$MANIFEST_CLI_OS_NAME family=\$MANIFEST_CLI_OS_FAMILY version=\$MANIFEST_CLI_OS_VERSION\"
     "
     [ "$status" -eq 0 ]
     [[ "$output" == *"os=Linux family=unix version=6.1.0-test"* ]]
-    [[ "$output" == *"timeout=timeout date=date -u -d"* ]]
 }

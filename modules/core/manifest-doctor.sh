@@ -104,7 +104,15 @@ manifest_doctor() {
     if manifest_requirement_coreutils_timeout_command; then
         _doctor_ok "coreutils" "${MANIFEST_CLI_REQUIRED_COREUTILS_LABEL}"
     else
-        _doctor_fail "coreutils" "missing ${MANIFEST_CLI_REQUIRED_COREUTILS_LABEL}"
+        # Carries the remediation, matching the `yq` and `gnu-sed` rows above and
+        # below. It did not until 2026-08-31, when manifest-os.sh's own
+        # "Install coreutils for the supported macOS timeout command" advisory
+        # was deleted with the command shims (TRACKER §65(3)): that line was the
+        # only place telling the user HOW to fix this, so removing it left
+        # doctor reporting a problem with no next step. Advice belongs on the
+        # diagnostic surface, not in a module's load path — but it does have to
+        # actually arrive there.
+        _doctor_fail "coreutils" "missing ${MANIFEST_CLI_REQUIRED_COREUTILS_LABEL} — brew install coreutils"
     fi
 
     if manifest_requirement_current_bash_is_supported; then

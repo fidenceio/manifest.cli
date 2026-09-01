@@ -933,7 +933,7 @@ secure_curl_request() {
 check_network_connectivity() {
     # Use OS-dependent timeout strategy.
     #
-    # Reads `MANIFEST_CLI_OS_OS` — the name `manifest-os.sh` actually assigns.
+    # Reads `MANIFEST_CLI_OS_NAME` — the name `manifest-os.sh` actually assigns.
     # This branched on `MANIFEST_CLI_OS` (no `_OS` suffix) until 2026-08-31, a
     # name assigned nowhere in the product, so the `:-Unknown` default fired on
     # every platform, no arm was ever taken, and `timeout_cmd` stayed empty —
@@ -942,7 +942,7 @@ check_network_connectivity() {
     # assignment: the producer and the consumer were one suffix apart, and the
     # `:-Unknown` default made the mismatch look like a supported case.
     local timeout_cmd=""
-    case "${MANIFEST_CLI_OS_OS:-Unknown}" in
+    case "${MANIFEST_CLI_OS_NAME:-Unknown}" in
         "macOS")
             if command -v gtimeout >/dev/null 2>&1; then
                 timeout_cmd="gtimeout"

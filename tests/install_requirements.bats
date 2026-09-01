@@ -173,9 +173,43 @@ EOF
 }
 
 @test "OS detection never installs host dependencies during runtime setup" {
-    refute grep -F 'brew install coreutils' "$TEST_REPO_ROOT/modules/system/manifest-os.sh" >/dev/null
-    grep -F 'using fallback timeout method' "$TEST_REPO_ROOT/modules/system/manifest-os.sh" >/dev/null
-    grep -F 'Install coreutils for the supported macOS timeout command' "$TEST_REPO_ROOT/modules/system/manifest-os.sh" >/dev/null
+    # The property: a module that runs at SOURCE time must never install
+    # anything, and must never be the thing that advises either — it has no
+    # business printing at all (see os_detection_preamble.bats).
+    refute grep -F 'brew install' "$TEST_REPO_ROOT/modules/system/manifest-os.sh" >/dev/null
+
+    # The positive half used to grep manifest-os.sh for its own two coreutils
+    # advisories, as evidence it advised rather than installed. Those advisories
+    # were deleted 2026-08-31 with the command shims (TRACKER §65(3)), so the
+    # assertion is re-pointed at the surface that owns advice rather than
+    # dropped — otherwise this test would only forbid, and a release that
+    # advised nowhere at all would pass it.
+    grep -F 'brew install coreutils' "$TEST_REPO_ROOT/modules/core/manifest-doctor.sh" >/dev/null
+    grep -F "_doctor_fail \"coreutils\"" "$TEST_REPO_ROOT/modules/core/manifest-doctor.sh" >/dev/null
+}
+
+@test "the OS module prints nothing at source time in any code path" {
+    # Companion to the above, and the generalization of it: the two advisories
+    # deleted in §65(3) were plain `echo`s reached on load. Rather than name the
+    # strings that once existed, this forbids the SHAPE — an unconditional echo
+    # or printf at the top level of a module that self-executes on source.
+    #
+    # Only top-level statements are examined; output from inside a function is
+    # fine, because functions here are called deliberately by their consumers.
+    local offenders
+    offenders="$(awk '
+        /^[a-zA-Z_][a-zA-Z0-9_]*\(\) *\{/ { depth = 1; next }
+        depth > 0 {
+            depth += gsub(/\{/, "{") - gsub(/\}/, "}")
+            next
+        }
+        /^[[:space:]]*(echo|printf)[[:space:]]/ { printf "  %d: %s\n", NR, $0 }
+    ' "$TEST_REPO_ROOT/modules/system/manifest-os.sh")"
+
+    if [ -n "$offenders" ]; then
+        printf 'manifest-os.sh prints at source time:\n%s' "$offenders" >&2
+        return 1
+    fi
 }
 
 @test "CI and git retry use the supported coreutils timeout command" {

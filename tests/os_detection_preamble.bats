@@ -25,22 +25,26 @@ source_os_module() {
     [ -z "$output" ]
 }
 
-# The test above passed for the whole life of the defect below, because it
-# inherits the developer's PATH — and on a machine with Homebrew coreutils the
-# advisory it needed to catch never fires. "Silent by default" was asserted only
-# for the one platform configuration that had nothing to say.
+# The test above passed for the whole life of a defect it was written to catch,
+# because it inherits the developer's PATH — and on a machine with Homebrew
+# coreutils the advisory never fired. "Silent by default" was asserted only for
+# the one platform configuration that had nothing to say. Until 2026-08-31 the
+# platform setup emitted unconditional `echo`s on STDOUT at module-source time
+# (two on a macOS host without gtimeout, one on any unmatched `uname -s`), and
+# because detect_os runs on load they prepended themselves to the output of
+# whatever command the user actually ran.
 #
-# The three tests here strip PATH to the base system, or stub `uname`, so the
-# advisory paths are actually entered. Before the fix each of these produced
-# output on STDOUT at module-source time: two lines on a macOS host without
-# gtimeout, one on any platform `uname -s` does not match. Since detect_os is
-# called on load, that output prepends itself to whatever the invoked command
-# was asked to print — including JSON and anything a caller parses.
-
+# Those advisories are now gone entirely, along with the per-platform command
+# shims that produced them (TRACKER §65(3)) — the silence is structural rather
+# than gated. **These tests are kept anyway**, and are stronger for it: they now
+# assert that nothing in the arm-selection path prints, on arms the developer's
+# own host never takes. A future arm that announces itself fails here.
+#
 # `uname` is stubbed rather than trusted, so these run identically on macOS and
-# on the ubuntu CI leg. Stubbing is required, not tidiness: the macOS advisory
-# is unreachable on Linux, so a test that merely stripped PATH would assert the
-# contract on exactly one platform — the mistake described above, repeated.
+# on the ubuntu CI leg. Stubbing is required, not tidiness: an assertion about
+# the Darwin arm is unreachable on Linux, so a test that merely stripped PATH
+# would assert the contract on exactly one platform — the mistake above,
+# repeated.
 stub_uname() {
     local os_name="$1" dir="$BATS_TEST_TMPDIR/stub-$os_name"
     mkdir -p "$dir"
@@ -55,46 +59,67 @@ EOF
     printf '%s\n' "$dir"
 }
 
-@test "detect_os: silent by default when the macOS platform tools are ABSENT" {
-    # Darwin arm, PATH with no gtimeout: setup_macos_commands takes its fallback
-    # and previously announced it on stdout, twice.
+@test "detect_os: silent by default on the Darwin arm with no platform tools" {
+    # Darwin arm reached on any host, with a PATH that has no gtimeout — the
+    # configuration that used to print two lines on stdout.
     local stub; stub="$(stub_uname Darwin)"
     run source_os_module \
         "export PATH=\"$stub:/usr/bin:/bin:/usr/sbin:/sbin\"; unset MANIFEST_CLI_VERBOSE; unset MANIFEST_CLI_DEBUG" \
-        "printf 'TIMEOUT=%s' \"\$MANIFEST_CLI_OS_TIMEOUT_CMD\""
+        "printf 'OS=%s' \"\$MANIFEST_CLI_OS_NAME\""
     [ "$status" -eq 0 ]
-    # Exact match asserts BOTH halves at once: nothing was advised, and the
-    # fallback arm really was entered — so silence is not from missing the path.
-    [ "$output" = "TIMEOUT=timeout_fallback" ]
+    # Exact match asserts BOTH halves at once: nothing was printed, and the
+    # Darwin arm really was entered — so silence is not from missing the path.
+    [ "$output" = "OS=macOS" ]
 }
 
 @test "detect_os: silent by default on an unrecognized platform" {
-    # setup_fallback_commands' advisory was unconditional, so EVERY invocation
-    # on a platform outside the five known arms emitted a line.
+    # The unmatched-uname arm, which used to announce itself unconditionally on
+    # EVERY invocation for anyone outside the five known platforms.
     local stub; stub="$(stub_uname SunOS)"
     run source_os_module \
         "export PATH=\"$stub:\$PATH\"; unset MANIFEST_CLI_VERBOSE; unset MANIFEST_CLI_DEBUG" \
-        "printf 'OS=%s' \"\$MANIFEST_CLI_OS_OS\""
+        "printf 'OS=%s' \"\$MANIFEST_CLI_OS_NAME\""
     [ "$status" -eq 0 ]
     [ "$output" = "OS=Unknown" ]
 }
 
-@test "positive control: the macOS advisory IS still reachable under verbose" {
-    # Without this, the silence assertions above would all pass against a module
-    # that had simply stopped advising — absent output reading as a pass.
-    local stub; stub="$(stub_uname Darwin)"
-    run source_os_module \
-        "export PATH=\"$stub:/usr/bin:/bin:/usr/sbin:/sbin\"; export MANIFEST_CLI_VERBOSE=1"
-    [ "$status" -eq 0 ]
-    [[ "$output" == *"gtimeout not found"* ]]
-}
-
-@test "positive control: the unknown-platform advisory IS still reachable" {
+@test "positive control: a stubbed arm DOES produce output under verbose" {
+    # Without this, both silence assertions above would pass against a module
+    # that had stopped detecting anything at all — absent output reading as a
+    # pass. Proves the stubbed path is live and can still speak when asked.
+    #
+    # This replaces two earlier controls that asserted the platform advisories
+    # were reachable. Those advisories no longer exist, so asserting their
+    # reachability would now pin behaviour the module deliberately dropped. The
+    # banner is the output that remains, and it names the stubbed platform —
+    # which is a stronger control than the advisories were, because it proves
+    # the STUB took effect rather than merely that some text appeared.
     local stub; stub="$(stub_uname SunOS)"
     run source_os_module \
         "export PATH=\"$stub:\$PATH\"; export MANIFEST_CLI_VERBOSE=1"
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Unknown platform"* ]]
+    [[ "$output" == *"Detecting operating system"* ]]
+    [[ "$output" == *"Detected: Unknown"* ]]
+}
+
+@test "the deleted platform-setup functions stay deleted" {
+    # §65(3): the five setup_*_commands functions and timeout_fallback were
+    # removed with the command shims they existed to populate. A test asserting
+    # values nothing reads is what kept them alive through two prior audits, so
+    # this asserts their ABSENCE instead.
+    local fn
+    for fn in setup_macos_commands setup_linux_commands setup_bsd_commands \
+              setup_windows_commands setup_fallback_commands timeout_fallback; do
+        run bash -c "source '$TEST_REPO_ROOT/modules/system/manifest-os.sh' >/dev/null 2>&1; \
+                     declare -F $fn >/dev/null 2>&1 && echo PRESENT || echo ABSENT"
+        [ "$output" = "ABSENT" ]
+    done
+
+    # Control: the same probe reports PRESENT for a function the module keeps,
+    # so ABSENT above cannot be what a failed source looks like.
+    run bash -c "source '$TEST_REPO_ROOT/modules/system/manifest-os.sh' >/dev/null 2>&1; \
+                 declare -F format_timestamp_cross_platform >/dev/null 2>&1 && echo PRESENT || echo ABSENT"
+    [ "$output" = "PRESENT" ]
 }
 
 @test "detect_os: emits banner under MANIFEST_CLI_DEBUG=1" {

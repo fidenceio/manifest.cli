@@ -295,7 +295,7 @@ EOF
     run display_time_config
     [ "$status" -eq 0 ]
     [[ "$output" == *"⚙️  Manifest Timestamp Configuration"* ]]
-    [[ "$output" == *"🖥️  OS: $MANIFEST_CLI_OS_OS"* ]]
+    [[ "$output" == *"🖥️  OS: $MANIFEST_CLI_OS_NAME"* ]]
     [[ "$output" == *"⏱️  Timeout: ${MANIFEST_CLI_TIME_TIMEOUT}s"* ]]
     [[ "$output" == *"🔄 Retries: ${MANIFEST_CLI_TIME_RETRIES}"* ]]
     [[ "$output" == *"• https://www.cloudflare.com/cdn-cgi/trace (Cloudflare)"* ]]

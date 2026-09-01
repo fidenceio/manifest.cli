@@ -273,3 +273,95 @@ release_state_git_commands() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ ^[0-9]+[[:space:]]+[0-9]+$ ]]
 }
+
+# --- the resume block carries ORDER, never per-item progress ------------------
+#
+# The second half of the same loop, and the one that cost a maintainer's patience
+# rather than a commit. The block at the head of T1 that says what to work on next
+# had begun restating each item's progress — "§65 is largely done… what remains is
+# the decision whether the shims get deleted" — while §65 itself, twenty lines
+# below, read "all parts resolved". One fact, two places, one of them wrong; the
+# §36 shape inside the register that polices §36.
+#
+# The rule is now: **this block carries the ORDER to work in and nothing else.**
+# An order is stable — it changes when priorities change, which is a deliberate
+# act — whereas progress changes every time work lands, so a block carrying
+# progress must be corrected after every unit of work. That correction is the
+# loop. Removing the vocabulary removes the loop.
+#
+# SCOPE IS THE PROSE BLOCK ONLY, and getting this wrong once is why it is spelled
+# out. `release_state_prose()` above runs from `### Release state` to the next
+# `##`/`###` heading — but the next heading after it is `## T2`, so that extractor
+# spans **every T1 item as well**. Applying a progress-vocabulary ban with it
+# flagged 13 lines inside §44, §45, §3 and §5, where recording what is fixed and
+# what shipped is exactly the item's job. The prose block ends at the first
+# top-level item (`^- **§`), and that boundary is asserted below rather than
+# assumed.
+resume_prose() {
+    awk '/^### Release state/ {f=1; next}
+         f && /^- \*\*§/ {exit}
+         f && /^#{2,3} / {exit}
+         f' "$(TRACKER)" \
+    | awk '/^```/ {fence = !fence; next} !fence'
+}
+
+# Deliberately TIGHT. A bare `fixed`/`shipped` ban is unusable here: the standing
+# lessons in this same block legitimately say "three regressions were introduced
+# and fixed inside the v59.6.0 cycle" and "what could NOT have been fixed", and a
+# guard that flags those gets switched off within a week. What is banned is the
+# vocabulary of *current progress on a named item* — the phrasings that actually
+# produced the drift.
+banned_progress_vocab='unfixed|fully resolved|largely done|what remains|still open|remains open|is (now )?done|is complete|retire (it )?on the next ship|ready to ship|shipped in v'
+
+@test "control: the resume prose block is non-empty and stops before the items" {
+    # Three assertions, because each failure mode empties the scan differently
+    # and every one of them reads as a pass.
+    local prose
+    prose="$(resume_prose)"
+    [ -n "$prose" ]
+    [ "$(printf '%s\n' "$prose" | grep -c .)" -ge 5 ]
+
+    # The boundary itself: the block must NOT reach the first item. Asserting the
+    # line count alone would not catch an extractor that swallowed all of T1.
+    refute grep -qE '^- \*\*§' <<<"$prose"
+
+    # ...and the wider extractor genuinely does reach them, so the narrowing is
+    # load-bearing rather than a distinction without a difference.
+    run release_state_prose
+    [ "$status" -eq 0 ]
+    grep -qE '^- \*\*§' <<<"$output"
+}
+
+@test "resume block: states no per-item progress, only the order" {
+    local hits
+    hits="$(grep -niE "$banned_progress_vocab" <<<"$(resume_prose)" || true)"
+    if [ -n "$hits" ]; then
+        printf 'the resume block must carry the ORDER only; an item%s state lives in the item:\n%s\n' \
+            "'s" "$hits" >&2
+        return 1
+    fi
+}
+
+@test "positive control: the progress detector fires on the exact phrasing that drifted" {
+    # Not an invented probe — this is the sentence that stood in the tracker for a
+    # day while the item it described said the opposite.
+    run grep -cEi "$banned_progress_vocab" \
+        <<<'**§65 is largely done as of 2026-08-31** — what remains is the single decision in §65(3).'
+    [ "$status" -eq 0 ]
+    [ "$output" = "1" ]
+}
+
+@test "positive control: the progress detector spares the lessons that must stay" {
+    # The narrow half. Each of these lines is in or near the block and must remain
+    # legal, or the guard is one that gets deleted rather than obeyed.
+    local line
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        refute grep -qEi "$banned_progress_vocab" <<<"$line"
+    done <<'LEGAL'
+Three regressions were introduced and fixed inside the v59.6.0 cycle — §49, §56, §58.
+**What could NOT have been fixed, for the record.** Had a credential already been pushed…
+**Restore each embargoed bullet in the same change that ships its fix.**
+2. **§70 → §69 → §71**, in that order, and the order is a constraint.
+LEGAL
+}

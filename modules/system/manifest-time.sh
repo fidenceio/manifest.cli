@@ -418,7 +418,7 @@ display_time_info() {
 display_time_config() {
     echo "⚙️  Manifest Timestamp Configuration"
     echo "===================================="
-    echo "   🖥️  OS: $MANIFEST_CLI_OS_OS"
+    echo "   🖥️  OS: $MANIFEST_CLI_OS_NAME"
     echo "   ⏱️  Timeout: ${MANIFEST_CLI_TIME_TIMEOUT}s"
     echo "   🔄 Retries: ${MANIFEST_CLI_TIME_RETRIES}"
     echo "   🌐 Servers (HTTPS):"

@@ -1,10 +1,13 @@
 #!/bin/bash
 
 # Manifest OS Detection Module
-# Handles OS detection and platform-specific command setup
+#
+# Records what the host platform is, and provides the cross-platform date and
+# timezone helpers. It does NOT select per-platform binaries: see the note below
+# on why the command shims were deleted rather than wired up.
 
 # OS Detection Variables
-MANIFEST_CLI_OS_OS=""
+MANIFEST_CLI_OS_NAME=""
 MANIFEST_CLI_OS_FAMILY=""
 MANIFEST_CLI_OS_VERSION=""
 
@@ -28,11 +31,36 @@ MANIFEST_CLI_OS_BASH_VERSION=""
 MANIFEST_CLI_OS_BASH_MAJOR=""
 MANIFEST_CLI_OS_BASH_MINOR=""
 
-# Platform-specific command variables
-MANIFEST_CLI_OS_DATE_CMD=""
-MANIFEST_CLI_OS_TIMEOUT_CMD=""
-MANIFEST_CLI_OS_GREP_CMD=""
-MANIFEST_CLI_OS_SED_CMD=""
+# There are deliberately NO per-platform command variables here.
+#
+# This module used to assign MANIFEST_CLI_OS_{DATE,TIMEOUT,GREP,SED}_CMD across
+# five platform arms. They were removed 2026-08-31 (TRACKER §65(3)) after
+# measuring zero consumers anywhere in the product — every reference was in
+# tests/os_helpers.bats, which asserted the assignments the module had just
+# made. A test that only checks a value nothing reads keeps dead code alive and
+# reports it as covered.
+#
+# Deleted rather than wired up, for three reasons, in order of weight:
+#
+#   1. **The production idiom already exists and works.** Where a real BSD/GNU
+#      divergence had to be handled, the code does GNU-first with a BSD
+#      fallback: `format_timestamp_cross_platform` below tries `date -u -d
+#      @<epoch>` then `date -u -r <epoch>`. That needs no platform detection at
+#      all, degrades correctly on a platform nobody anticipated, and cannot
+#      drift out of agreement with a detection table.
+#   2. **Two of the four carried no platform information even in principle.**
+#      GREP_CMD and SED_CMD were the bare strings `grep` and `sed` in all five
+#      arms. "Wiring them up" would have meant first inventing values that
+#      differ per platform.
+#   3. **Selecting a binary per platform is the wrong containment for the tool
+#      that actually diverges.** The product's least-portable dependency is
+#      `awk` (46 raw call sites), and awk differences are extensions —
+#      `gensub`, `asort`, `length(array)` — where the fix is to not use them,
+#      checkable by a lint, not to pick an implementation at runtime. See §74.
+#
+# `timeout_fallback` went with them: it existed only as the value TIMEOUT_CMD
+# took when `gtimeout` was absent, and had no caller outside its own tests.
+# `manifest doctor` is the surface that reports a missing coreutils.
 
 # Bash version detection function
 detect_bash_version() {
@@ -47,25 +75,19 @@ detect_bash_version() {
     fi
 }
 
-# Advisory output from the platform setup below.
+# There is no advisory helper here any more either.
 #
-# Routed through one helper for two reasons. It goes to STDERR, because this
-# module runs at source time — `detect_os` is called on load — so anything on
-# stdout prepends itself to whatever the invoked command was asked to print,
-# including machine-readable output. And it respects the same verbose gate as
-# `detect_os`'s own banner, because the module's stated contract is to be
-# silent by default; `tests/os_detection_preamble.bats` asserts exactly that.
+# A `_manifest_os_advise` was added earlier the same day to route the platform
+# setup's warnings to stderr behind the verbose gate, fixing a real defect: they
+# were unconditional `echo`s on stdout, emitted at module-source time, and so
+# prepended themselves to the output of whatever command the user actually ran.
+# Deleting the setup functions removed every caller, and the warnings themselves
+# were about which timeout binary had been selected — a selection that no longer
+# happens. `manifest doctor` reports a missing coreutils, which is the part the
+# user could act on.
 #
-# These advisories used to be unconditional `echo`s. They were invisible on any
-# machine that had the tools — a developer host, and CI — and appeared only on
-# the machines that did not, which is the population the advice is for and the
-# one nobody tests on. `manifest doctor` is the surface that reports a missing
-# coreutils; this stays a verbose-mode detail.
-_manifest_os_advise() {
-    if [ "${MANIFEST_CLI_VERBOSE:-0}" = "1" ] || [ "${MANIFEST_CLI_DEBUG:-0}" = "1" ]; then
-        printf '%s\n' "$1" >&2
-    fi
-}
+# Noting it because the helper was correct and still went: the fix that survives
+# is the one that deletes the code needing the fix.
 
 # OS Detection function. Idempotent: re-sourcing the module or calling
 # detect_os a second time is a no-op. Output is gated behind verbose
@@ -87,53 +109,37 @@ detect_os() {
     local os_name=$(uname -s)
     local os_version=$(uname -r)
 
+    # Each arm records WHAT the platform is and nothing more. The arms used to
+    # end in a setup_*_commands call that selected per-platform binaries; those
+    # are gone (see the note at the top of this file). MANIFEST_CLI_OS_NAME is the
+    # one value here with a real consumer, so getting its spelling right matters
+    # more than the table's breadth — see tests/os_var_name_agreement.bats.
+    MANIFEST_CLI_OS_VERSION="$os_version"
     case "$os_name" in
         "Darwin")
-            MANIFEST_CLI_OS_OS="macOS"
+            MANIFEST_CLI_OS_NAME="macOS"
             MANIFEST_CLI_OS_FAMILY="unix"
-            MANIFEST_CLI_OS_VERSION="$os_version"
-            setup_macos_commands
             ;;
         "Linux")
-            MANIFEST_CLI_OS_OS="Linux"
+            MANIFEST_CLI_OS_NAME="Linux"
             MANIFEST_CLI_OS_FAMILY="unix"
-            MANIFEST_CLI_OS_VERSION="$os_version"
-            setup_linux_commands
             ;;
-        "FreeBSD")
-            MANIFEST_CLI_OS_OS="FreeBSD"
+        "FreeBSD"|"OpenBSD"|"NetBSD")
+            MANIFEST_CLI_OS_NAME="$os_name"
             MANIFEST_CLI_OS_FAMILY="unix"
-            MANIFEST_CLI_OS_VERSION="$os_version"
-            setup_bsd_commands
-            ;;
-        "OpenBSD")
-            MANIFEST_CLI_OS_OS="OpenBSD"
-            MANIFEST_CLI_OS_FAMILY="unix"
-            MANIFEST_CLI_OS_VERSION="$os_version"
-            setup_bsd_commands
-            ;;
-        "NetBSD")
-            MANIFEST_CLI_OS_OS="NetBSD"
-            MANIFEST_CLI_OS_FAMILY="unix"
-            MANIFEST_CLI_OS_VERSION="$os_version"
-            setup_bsd_commands
             ;;
         "CYGWIN"*|"MSYS"*|"MINGW"*)
-            MANIFEST_CLI_OS_OS="Windows"
+            MANIFEST_CLI_OS_NAME="Windows"
             MANIFEST_CLI_OS_FAMILY="windows"
-            MANIFEST_CLI_OS_VERSION="$os_version"
-            setup_windows_commands
             ;;
         *)
-            MANIFEST_CLI_OS_OS="Unknown"
+            MANIFEST_CLI_OS_NAME="Unknown"
             MANIFEST_CLI_OS_FAMILY="unknown"
-            MANIFEST_CLI_OS_VERSION="$os_version"
-            setup_fallback_commands
             ;;
     esac
 
     if [ "$verbose" = "1" ]; then
-        echo "   ✅ Detected: $MANIFEST_CLI_OS_OS ($MANIFEST_CLI_OS_VERSION)"
+        echo "   ✅ Detected: $MANIFEST_CLI_OS_NAME ($MANIFEST_CLI_OS_VERSION)"
         echo "   🔧 Platform: $MANIFEST_CLI_OS_FAMILY"
     fi
 
@@ -142,85 +148,6 @@ detect_os() {
     [ "$verbose" = "1" ] && echo "   🐍 Bash: $MANIFEST_CLI_OS_BASH_VERSION (required: ${MANIFEST_CLI_REQUIRED_BASH_VERSION:-5}+)"
 
     MANIFEST_CLI_OS_DETECTED=1
-}
-
-# macOS-specific command setup
-setup_macos_commands() {
-    # GNU userland is forced onto PATH (coreutils + gnu-sed gnubin), so date
-    # takes the GNU `-d @<epoch>` form here too — same as Linux.
-    MANIFEST_CLI_OS_DATE_CMD="date -u -d"
-    MANIFEST_CLI_OS_TIMEOUT_CMD="gtimeout"  # Requires coreutils installation
-    MANIFEST_CLI_OS_GREP_CMD="grep"
-    MANIFEST_CLI_OS_SED_CMD="sed"
-
-    # Check if coreutils is installed for timeout
-    if ! command -v gtimeout &> /dev/null; then
-        _manifest_os_advise "   ⚠️  gtimeout not found, using fallback timeout method"
-        _manifest_os_advise "   ℹ️  Install coreutils for the supported macOS timeout command"
-        MANIFEST_CLI_OS_TIMEOUT_CMD="timeout_fallback"
-    fi
-}
-
-# Linux-specific command setup
-setup_linux_commands() {
-    MANIFEST_CLI_OS_DATE_CMD="date -u -d"
-    MANIFEST_CLI_OS_TIMEOUT_CMD="timeout"
-    MANIFEST_CLI_OS_GREP_CMD="grep"
-    MANIFEST_CLI_OS_SED_CMD="sed"
-}
-
-# BSD-specific command setup
-setup_bsd_commands() {
-    # Non-macOS BSDs have no Homebrew gnubin to force onto PATH, so the native
-    # BSD date keeps the `-r <epoch>` form. (macOS is handled in setup_macos_commands.)
-    MANIFEST_CLI_OS_DATE_CMD="date -u -r"
-    MANIFEST_CLI_OS_TIMEOUT_CMD="timeout"  # May not be available on all BSDs
-    MANIFEST_CLI_OS_GREP_CMD="grep"
-    MANIFEST_CLI_OS_SED_CMD="sed"
-    
-    # Check if timeout is available
-    if ! command -v timeout &> /dev/null; then
-        _manifest_os_advise "   ⚠️  timeout not available, using fallback method"
-        MANIFEST_CLI_OS_TIMEOUT_CMD="timeout_fallback"
-    fi
-}
-
-# Windows-specific command setup (Cygwin/MSYS)
-setup_windows_commands() {
-    MANIFEST_CLI_OS_DATE_CMD="date -u -d"
-    MANIFEST_CLI_OS_TIMEOUT_CMD="timeout"
-    MANIFEST_CLI_OS_GREP_CMD="grep"
-    MANIFEST_CLI_OS_SED_CMD="sed"
-}
-
-# Fallback command setup for unknown platforms
-setup_fallback_commands() {
-    _manifest_os_advise "   ⚠️  Unknown platform, using fallback commands"
-    MANIFEST_CLI_OS_DATE_CMD="date -u"
-    MANIFEST_CLI_OS_TIMEOUT_CMD="timeout_fallback"
-    MANIFEST_CLI_OS_GREP_CMD="grep"
-    MANIFEST_CLI_OS_SED_CMD="sed"
-}
-
-# Fallback timeout function for platforms without timeout command
-timeout_fallback() {
-    local timeout_seconds="$1"
-    shift
-    
-    # Start the command in background
-    "$@" &
-    local cmd_pid=$!
-    
-    # Wait for specified timeout
-    sleep "$timeout_seconds"
-    
-    # Check if process is still running
-    if kill -0 "$cmd_pid" 2>/dev/null; then
-        kill "$cmd_pid" 2>/dev/null
-        return 124  # Exit code for timeout
-    fi
-    
-    return 0
 }
 
 # Cross-platform date formatting function
