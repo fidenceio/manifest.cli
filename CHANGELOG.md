@@ -1,5 +1,19 @@
 # Changelog
 
+## [59.8.0] - 2026-09-01
+
+**Release Type:** Minor
+
+### Changes
+
+- Fix(docs,test): make the release-state recipe runnable, and run it in the guard
+- Test(tracker): guard tier-tag/section agreement, and move §73 to T2
+- Fix(os): repair the OS layer's doppelganger, stdout leak and dead Bash-3.2 branches
+- Fix(test): stop the release-state guard failing on a tagless CI checkout
+- Refactor(os),docs(tracker): delete the dead OS shims, and cut four registers to one
+- Update documentation and examples
+
+
 ## [59.7.0] - 2026-08-31
 
 **Release Type:** Minor
@@ -131,25 +145,3 @@
 - Make the CLI's own help agree with the CLI, and document recovery
 - Guard the command surfaces against each other (TRACKER §9.26)
 - Update 1 file before release
-
-
-## [59.3.0] - 2026-08-20
-
-**Release Type:** Minor
-
-### Changes
-
-- File the input-shape sweep that the shipped entries took with them
-- Record that the audit is 9/13 phases unrun where a clone can see it
-- File the 13-phase audit results: 3 P0, 34 P1, 35 P2
-- Run the suite under the shipped shell options (pipefail was missing)
-- Stop repository config from reaching shell execution (SEC-017)
-- Withdraw two of the audit's three P0s; they did not survive reproduction
-- Declare status/doctor read-only at the entry point (ATOM-003)
-- Record the fix-campaign state in §9.20 so it can be resumed cold
-- Correct the suite count: 1508, not 1507
-- Reconcile the P1 count with the register: 32 remaining, not 33
-- Add GitHub Release publishing support
-- Update release copy and configuration examples
-- Wire first-class CLI commands to inspectable built-in recipe definitions
-- Add regression coverage for the changed CLI workflow
