@@ -1578,11 +1578,26 @@ Run 'git switch -' to go back to the branch you came from." \
             esac
             ;;
 
-        # Old "manifest cleanup" — plumbing, absorbed into "refresh".
-        # main_cleanup() moves doc files and prunes empty dirs, so this
-        # deprecated alias is mutating and must obey the same safe-by-default
-        # contract as its replacement: preview unless -y is given.
-        "cleanup")  # manifest:hidden
+        # "manifest cleanup" — remove Manifest's OWN leftovers.
+        #
+        # This arm used to be a hidden, deprecated alias for the documentation
+        # archiving that `refresh repo` absorbed. That job stays where it is
+        # (`docs cleanup` / `refresh repo`); this verb now owns a different and
+        # previously unreachable one: the junk Manifest itself leaves behind.
+        #
+        # Three scopes. `repo` and `fleet` follow the `manifest <verb> <scope>`
+        # grammar; `state` is deliberately a third word rather than a scope,
+        # because host state is orthogonal to repo/fleet and pretending it fits
+        # the scope vocabulary would make the help text lie.
+        #
+        # Preview by default and `-y` applies without a prompt, both inherited
+        # from manifest_execution_parse. The apply gate is called with
+        # origin_required=false AND head_required=false: cleanup deletes local,
+        # untracked, regenerable files and publishes nothing, so neither a
+        # missing origin nor a detached HEAD makes its target ambiguous. Without
+        # that, `manifest revert` (which leaves a detached HEAD) followed by
+        # `cleanup -y` would be refused.
+        "cleanup")
             local execution_mode="preview"
             local _local_only=false
             local cleanup_args=()
@@ -1592,30 +1607,24 @@ Run 'git switch -' to go back to the branch you came from." \
             set -- "${cleanup_args[@]}"
             if _manifest_cli_has_help_token "$@"; then
                 _render_help \
-                    "manifest cleanup [-y|--yes] [--dry-run]" \
-                    "Deprecated documentation cleanup plumbing. Prefer manifest refresh repo."
+                    "manifest cleanup [repo|fleet|state] [-y|--yes] [--dry-run]" \
+                    "Remove Manifest's own leftovers. Previews by default; -y applies with no prompt." \
+                    "Scopes" "  repo    This repository (default)
+  fleet   Every member of the fleet
+  state   This machine's Manifest caches — not repo-specific" \
+                    "What it removes" "  Retired scaffold sidecars (*.manifest) left by Manifest < v58.0.0
+  Manifest's own temporary files
+  Stale git worktree records (git worktree prune)
+  Stale runtime cache files under TMPDIR, and ship logs past the keep window" \
+                    "What it never removes" "  A git-tracked file — it is named with the exact 'git rm' instead
+  Your build output (node_modules, target, dist, vendor, .venv, ...)
+  A git worktree directory, or anything inside one
+  manifest.config.global.yaml, the audit log, or the GitHub rate-limit ledger" \
+                    "Options" "  --dry-run   Explicit preview; no writes
+  -y, --yes   Apply"
                 return 0
             fi
-            log_deprecated "manifest cleanup" "manifest refresh repo"
-            local current_version=""
-            if [ -f "$MANIFEST_CLI_VERSION_FILE" ]; then
-                current_version=$(cat "$MANIFEST_CLI_VERSION_FILE")
-            fi
-            if [[ "$execution_mode" == "preview" ]]; then
-                manifest_execution_preview_header "manifest cleanup"
-                echo "Would move historical documentation to zArchive for v${current_version:-unknown}."
-                # The sweep deletes files, so it is named here rather than
-                # left to be discovered on apply (TRACKER §3).
-                echo "Would remove these temporary files:"
-                cleanup_temp_files preview
-                manifest_execution_footer "manifest cleanup -y"
-                return 0
-            fi
-            manifest_execution_apply_header
-            echo "Repository cleanup operations..."
-            get_time_timestamp >/dev/null
-            local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
-            main_cleanup "$current_version" "$timestamp"
+            manifest_cleanup_dispatch "$execution_mode" "$@"
             ;;
 
         # =====================================================================
@@ -1724,6 +1733,12 @@ changes. A few use their own word instead: 'plan fleet --apply' and
     config time                         Time servers used for timestamps
 
   Maintenance:
+    cleanup repo|fleet                  Remove Manifest's own leftovers from a
+                                        repo: stale scaffold sidecars, temp
+                                        files, stale git worktree records
+    cleanup state                       Clear this machine's Manifest caches
+                                        (never your config, audit log, or
+                                        GitHub rate-limit ledger)
     security                            Audit for tracked secrets and PII
     env generate|validate               Build .env.example from your spec, or
                                         check env names, drift, and gitignore

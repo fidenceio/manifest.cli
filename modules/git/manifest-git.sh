@@ -1249,4 +1249,108 @@ revert_version() {
     fi
 }
 
+# ---------------------------------------------------------------------------
+# Worktree hygiene — prune records, never remove directories
+#
+# `git worktree prune` deletes only ADMINISTRATIVE records under .git/worktrees
+# for worktrees whose directories are already gone. It removes no directory and
+# touches no file, so it is safe to run unconditionally and saves the user a
+# second cleanup pass.
+#
+# `git worktree remove` is the opposite and is deliberately NOT called here, at
+# any flag, ever. Measured on the canonical repo: prune had zero stale records
+# to collect, while 23 MB sat in six LIVE worktrees whose directories all
+# existed — every one of them dirty, 18 uncommitted files in total. Reclaiming
+# that space therefore requires --force, which destroys those 18 files.
+# Deleting a directory another tool is actively using, on someone else's
+# machine, to reclaim disk nobody asked about, is precisely the class of action
+# TRACKER §3 exists to prevent. So: prune the records, REPORT the directories,
+# and let the operator run the removal themselves if they want it.
+#
+# tests/cleanup_command_scope.bats asserts this file contains no `worktree
+# remove` and no `--force`, because this is the one behaviour that must not be
+# added later by accident.
+# ---------------------------------------------------------------------------
+
+# Count of stale worktree records that a prune would collect. Echoes an integer.
+#
+# `git worktree prune --verbose` reports on STDERR, not stdout, so `2>/dev/null`
+# here silently discarded the entire answer and this always returned 0. Verified
+# both ways: with `2>/dev/null` the command substitution is empty even when a
+# stale record exists; with `2>&1` it yields the "Removing worktrees/<name>"
+# line. Redirect stderr INTO the pipe, never away from it.
+manifest_worktree_stale_count() {
+    local root="$1"
+    local n
+    n="$(git -C "$root" worktree prune --dry-run --verbose 2>&1 | grep -c 'Removing' || true)"
+    [[ "$n" =~ ^[0-9]+$ ]] || n=0
+    printf '%s' "$n"
+}
+
+# Prune stale worktree records. Best-effort: a failure here must never abort a
+# cleanup whose other scopes succeeded.
+manifest_worktree_prune() {
+    local root="$1"
+    git -C "$root" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+    git -C "$root" worktree prune 2>/dev/null || true
+    return 0
+}
+
+# Report LIVE worktrees (excluding the main one) into the shared summary as
+# `skip` rows — they are found, sized, and explicitly left alone.
+#
+# Each dirty worktree carries the exact `git worktree remove` command as its
+# note, so the operator can act on it deliberately. We never run it.
+manifest_worktree_report() {
+    local root="$1"
+    local group="Git worktrees"
+    local main_root line wt_path dirty bytes n_live=0 n_dirty_total=0
+
+    git -C "$root" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+    main_root="$(git -C "$root" rev-parse --show-toplevel 2>/dev/null)" || return 0
+
+    while IFS= read -r line; do
+        case "$line" in
+            worktree\ *) wt_path="${line#worktree }" ;;
+            *) continue ;;
+        esac
+        [[ -n "$wt_path" ]] || continue
+        [[ "$wt_path" == "$main_root" ]] && continue
+        [[ -d "$wt_path" ]] || continue
+        n_live=$((n_live + 1))
+
+        dirty="$(git -C "$wt_path" status --porcelain 2>/dev/null | wc -l | tr -d '[:space:]')"
+        [[ "$dirty" =~ ^[0-9]+$ ]] || dirty=0
+        # du -sk is portable across BSD and GNU; -sb is GNU-only.
+        bytes="$(du -sk "$wt_path" 2>/dev/null | awk '{print $1 * 1024}')"
+        [[ "$bytes" =~ ^[0-9]+$ ]] || bytes=""
+
+        n_dirty_total=$((n_dirty_total + dirty))
+        if [[ "$dirty" -gt 0 ]]; then
+            manifest_execution_summary_add skip "$group" \
+                "${wt_path#"$main_root"/} ($dirty uncommitted)" "$bytes"
+        else
+            manifest_execution_summary_add skip "$group" \
+                "${wt_path#"$main_root"/}" "$bytes"
+        fi
+    done < <(git -C "$root" worktree list --porcelain 2>/dev/null)
+
+    local stale
+    stale="$(manifest_worktree_stale_count "$root")"
+    manifest_execution_summary_note "$group" "$stale stale record(s) to prune"
+    if [[ "$n_live" -gt 0 ]]; then
+        # One guidance line, not one per worktree: the operator needs to know
+        # cleanup will not do this and which command does, not to read the same
+        # sentence six times. The command is named in prose rather than emitted
+        # per-row so nothing here resembles a call site.
+        manifest_execution_summary_note "$group" \
+            "$n_live live worktree(s) above are never deleted by cleanup — $n_dirty_total uncommitted file(s) in them"
+        manifest_execution_summary_note "$group" \
+            "to reclaim that space yourself, see: git worktree list, then git help worktree"
+    fi
+    return 0
+}
+
+export -f manifest_worktree_stale_count manifest_worktree_prune manifest_worktree_report
+
 # PR workflows moved to modules/pr/manifest-pr.sh

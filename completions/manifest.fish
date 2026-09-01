@@ -58,6 +58,7 @@ complete -c manifest -n '__manifest_token_count 1' -a topics      -d 'Add GitHub
 complete -c manifest -n '__manifest_token_count 1' -a ship        -d 'Publish a release (version + tag + push)'
 complete -c manifest -n '__manifest_token_count 1' -a pr          -d 'Pull-request operations (gh wrapper)'
 complete -c manifest -n '__manifest_token_count 1' -a doctor      -d 'Health check'
+complete -c manifest -n '__manifest_token_count 1' -a cleanup     -d "Remove Manifest's own leftovers"
 complete -c manifest -n '__manifest_token_count 1' -a security    -d 'Security audit'
 complete -c manifest -n '__manifest_token_count 1' -a env         -d 'Generate or check environment-variable files'
 complete -c manifest -n '__manifest_token_count 1' -a upgrade     -d 'Update Manifest CLI'
@@ -85,6 +86,10 @@ end
 
 # topics is fleet-scoped only (no repo scope).
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path topics' -a fleet -d 'Fleet scope'
+# `state` is host-level, deliberately not a repo/fleet scope.
+complete -c manifest -n '__manifest_token_count 2; and __manifest_path cleanup' -a repo  -d 'Single-repo scope'
+complete -c manifest -n '__manifest_token_count 2; and __manifest_path cleanup' -a fleet -d 'Fleet scope'
+complete -c manifest -n '__manifest_token_count 2; and __manifest_path cleanup' -a state -d "This machine's Manifest caches"
 
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path config' -a 'show list get set unset describe doctor setup time'
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path recipe' -a 'list show explain help'

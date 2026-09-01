@@ -64,45 +64,82 @@ assert_preview_clean() {
 }
 
 # -----------------------------------------------------------------------------
-# Deprecated alias: manifest cleanup (-> manifest refresh repo)
+# manifest cleanup
 #
-# This is the §2.3 regression: cleanup must not mutate the doc tree without
-# consent, and must still apply when -y is given.
+# This is the §2.3 regression: cleanup must not mutate without consent, and must
+# still apply when -y is given.
+#
+# `cleanup` was a hidden, DEPRECATED alias for the documentation archiving that
+# `refresh repo` absorbed. It is now a current command with its own job —
+# removing Manifest's own leftovers (retired scaffold sidecars, temp files,
+# stale worktree records). The safe-by-default property these tests guard is
+# unchanged and is the reason they stay; only the mutation they provoke is
+# different, so the apply test now asserts FILE STATE rather than a log line,
+# per the §12b ratchet.
 # -----------------------------------------------------------------------------
 
-@test "cleanup alias: default invocation previews and makes no writes" {
+@test "cleanup: default invocation previews and makes no writes" {
     setup_repo_with_archivable_docs
     assert_preview_clean cleanup
     [ ! -e "$SCRATCH/work/docs/zArchive" ]
 }
 
-@test "cleanup alias: --dry-run previews and makes no writes" {
+@test "cleanup: --dry-run previews and makes no writes" {
     setup_repo_with_archivable_docs
     assert_preview_clean cleanup --dry-run
     [ ! -e "$SCRATCH/work/docs/zArchive" ]
 }
 
-@test "cleanup alias: AUTO_CONFIRM=1 default still previews and makes no writes" {
+@test "cleanup: AUTO_CONFIRM=1 default still previews and makes no writes" {
     setup_repo_with_archivable_docs
     export MANIFEST_CLI_AUTO_CONFIRM=1
     assert_preview_clean cleanup
     [ ! -e "$SCRATCH/work/docs/zArchive" ]
 }
 
-@test "cleanup alias: default invocation emits the deprecation warning" {
+# The inverse of the test this replaces. `cleanup` is no longer deprecated, and
+# advertising a replacement for a command that is now the replacement would send
+# users to `refresh repo` for a job it does not do.
+@test "cleanup: no longer emits a deprecation warning" {
     setup_repo_with_archivable_docs
     run_manifest cleanup
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "deprecated"
-    echo "$output" | grep -q "manifest refresh repo"
+    ! echo "$output" | grep -qi "deprecated"
 }
 
-@test "cleanup alias: -y applies (cleanup actually runs)" {
+@test "cleanup: a preview names the leftovers and still writes nothing" {
     setup_repo_with_archivable_docs
+    echo stale > "$SCRATCH/work/.gitignore.manifest"
+
+    run_manifest cleanup
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q ".gitignore.manifest"
+    echo "$output" | grep -q "No changes written"
+    # Named, not removed.
+    [ -f "$SCRATCH/work/.gitignore.manifest" ]
+}
+
+@test "cleanup: -y applies and removes an untracked retired sidecar" {
+    setup_repo_with_archivable_docs
+    echo stale > "$SCRATCH/work/.gitignore.manifest"
+
     run_manifest cleanup -y
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Applying because -y/--yes was provided."
-    echo "$output" | grep -qi "Repository cleanup completed"
+    [ ! -f "$SCRATCH/work/.gitignore.manifest" ]
+}
+
+# The `-y` contract is "no prompt, TTY or not". A prompt would block or fail on
+# closed stdin, so this is the only assertion that actually proves its absence
+# rather than restating the intent.
+@test "cleanup: -y completes with stdin closed and no controlling TTY" {
+    setup_repo_with_archivable_docs
+    echo stale > "$SCRATCH/work/.gitignore.manifest"
+
+    cd "$SCRATCH/work"
+    run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" cleanup repo -y < /dev/null
+    [ "$status" -eq 0 ]
+    [ ! -f "$SCRATCH/work/.gitignore.manifest" ]
 }
 
 # -----------------------------------------------------------------------------

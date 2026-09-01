@@ -33,6 +33,7 @@ _manifest() {
         'ship:Publish a release (version + tag + push)'
         'pr:Pull-request operations (gh wrapper)'
         'doctor:Health check'
+        'cleanup:Remove Manifest'"'"'s own leftovers (repo, fleet, or this machine)'
         'security:Security audit'
         'env:Generate or check environment-variable files'
         'upgrade:Update Manifest CLI'
@@ -74,6 +75,11 @@ _manifest() {
                 # All three completion files omitted it identically.
                 first|init|plan|reconcile|discover|update|add|validate|prep|refresh|docs|ship|status)
                     _values 'scope' "${scopes[@]}"
+                    ;;
+                # cleanup takes repo|fleet plus `state`, a host-level word that
+                # is deliberately not a repo/fleet scope.
+                cleanup)
+                    _values 'cleanup scope' repo fleet state
                     ;;
                 topics)
                     _values 'scope' fleet

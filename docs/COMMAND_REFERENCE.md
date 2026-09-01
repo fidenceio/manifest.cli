@@ -401,12 +401,53 @@ still find a commit you have moved away from.
 ## Maintenance
 
 ```bash
+manifest cleanup [repo|fleet|state] [--dry-run] [-y|--yes]
 manifest upgrade
 manifest uninstall [--dry-run] [-y|--yes]
 manifest reinstall [--dry-run] [-y|--yes]
 manifest security [--write]
 manifest test [suite]
 ```
+
+### `manifest cleanup`
+
+Removes **Manifest's own leftovers** — never your work. Previews by default like every
+other mutating command; `-y` applies with no prompt.
+
+| Scope | What it covers |
+| --- | --- |
+| `repo` (default) | This repository |
+| `fleet` | Every member of the fleet roster |
+| `state` | This machine's Manifest caches — not repo-specific, so it is deliberately a third word rather than a repo/fleet scope |
+
+**What it removes**
+
+- Retired scaffold sidecars: `.gitignore.manifest`, `robots.txt.manifest`,
+  `ai.txt.manifest`, `scripts/run-tests.sh.manifest`, `.env.example.manifest`. Manifest
+  wrote these beside an existing file as a merge reference until v58.0.0, when the
+  mechanism was removed for drifting from the CLI that generated them. The writer went;
+  the files did not, so any repo scaffolded by an older CLI still carries them.
+- Manifest's own temporary files (the same sweep `refresh repo` runs).
+- Stale `git worktree` records, via `git worktree prune`.
+- `state` only: stale runtime cache files under `TMPDIR`, empty scratch directories, and
+  ship logs past the keep-last-N window.
+
+**What it never removes**
+
+- **A git-tracked file.** A committed sidecar is named in the summary with the exact
+  `git rm` command instead, so removing it stays a reviewable commit you make.
+- Your build output — `node_modules/`, `target/`, `dist/`, `build/`, `vendor/`, `.venv/`.
+  Those belong to your build system.
+- A git worktree directory or anything inside one. `prune` only drops records for
+  directories that are already gone; reclaiming a live worktree's space needs
+  `git worktree remove --force`, which would destroy uncommitted work, so `cleanup`
+  reports those directories and stops.
+- `manifest.config.global.yaml`, the `audit/` compliance log, live locks, and `gh-rate/`
+  — the last is not a cache despite the name: it paces GitHub mutations, and clearing it
+  removes the protection that keeps you under the rate limit.
+
+Because it publishes nothing, `cleanup -y` applies even on a detached HEAD or in a repo
+with no `origin` remote, where release commands correctly refuse.
 
 `security` is **read-only by default**. It reports private files that are tracked in git,
 anything that looks like personal data, and environment-file hygiene — and writes

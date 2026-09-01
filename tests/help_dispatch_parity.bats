@@ -164,19 +164,26 @@ _help_sub_tokens() {
     echo "$output" | grep -qx "reconcile"
     echo "$output" | grep -qx "revert"
 
+    # `cleanup` is deliberately in the VISIBLE set as of the change that gave it
+    # its own job (removing Manifest's own leftovers) instead of being a
+    # deprecated alias for the doc archiving that `refresh repo` absorbed. It is
+    # asserted here alongside the other known-current commands so that un-hiding
+    # it stays a decision this control records, rather than drift.
+    echo "$output" | grep -qx "cleanup"
+
     # The hidden aliases must NOT show up in the visible set — if they did, the
     # "every dispatched command is listed in help" test would demand help lines
     # for deprecated spellings, and the marker would be decorative.
     local alias_name
-    for alias_name in fleet sync time commit bump-version cleanup; do
+    for alias_name in fleet sync time commit bump-version; do
         refute grep -qx "$alias_name" <<< "$output"
     done
 
     # And that the marker is doing its job in the other direction.
     run _dispatch_arms hidden
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 6 ]
-    for alias_name in fleet sync time commit bump-version cleanup; do
+    [ "${#lines[@]}" -eq 5 ]
+    for alias_name in fleet sync time commit bump-version; do
         echo "$output" | grep -qx "$alias_name"
     done
 }

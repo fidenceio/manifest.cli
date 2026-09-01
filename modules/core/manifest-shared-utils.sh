@@ -1059,26 +1059,67 @@ manifest_git_preflight_write_access() {
 
 # Consent model C: is the apply target unambiguous enough to auto-confirm in a
 # non-interactive context (after apply intent was given via -y)? Returns 0 iff:
-#   * HEAD is a NAMED branch (not detached). `symbolic-ref --short -q HEAD`
-#     prints the branch name even for an unborn branch on a fresh `git init`
-#     (e.g. "main" with no commits) — that counts as unambiguous. Detached HEAD
-#     prints nothing → ambiguous.
+#   * if head_required is true: HEAD is a NAMED branch (not detached).
+#     `symbolic-ref --short -q HEAD` prints the branch name even for an unborn
+#     branch on a fresh `git init` (e.g. "main" with no commits) — that counts as
+#     unambiguous. Detached HEAD prints nothing → ambiguous.
 #   * if origin_required is true: `git remote get-url origin` succeeds (a
 #     non-empty origin remote exists).
 # git-root existence is guaranteed by the manifest_repo_scope_require_git call
 # at the top of the gate, so it is not re-checked here.
+#
+# Both requirements default to TRUE, so every existing caller (ship, prep,
+# refresh, pr) keeps byte-identical semantics. They are relaxable only by an
+# operation that PUBLISHES NOTHING: what makes a target "ambiguous" is not
+# knowing where a change will land, and that question is meaningless for an
+# operation which only deletes local, untracked, regenerable files. `cleanup`
+# is the sole such caller today and passes false for both — see
+# manifest_cleanup_dispatch. Do not relax either one for an operation that
+# commits, tags, pushes or publishes.
 manifest_repo_scope_target_unambiguous() {
     local git_root="$1"
     local origin_required="${2:-true}"
+    local head_required="${3:-true}"
     local head_ref
 
-    head_ref="$(git -C "$git_root" symbolic-ref --short -q HEAD 2>/dev/null)"
-    [[ -n "$head_ref" ]] || return 1
+    if [[ "$head_required" == "true" ]]; then
+        head_ref="$(git -C "$git_root" symbolic-ref --short -q HEAD 2>/dev/null)"
+        [[ -n "$head_ref" ]] || return 1
+    fi
 
     if [[ "$origin_required" == "true" ]]; then
         git -C "$git_root" remote get-url origin >/dev/null 2>&1 || return 1
     fi
     return 0
+}
+
+# Human-readable byte count. Single implementation on purpose: before this there
+# was none, and every size that reached a user was either raw bytes or a hand-run
+# `du -sh`, which disagree. Integer-only (no bc/awk dependency), rounds to one
+# decimal from KB up, and keeps whole bytes below 1024 so a small file never
+# reads as "0.0 KB".
+manifest_format_bytes() {
+    local bytes="${1:-0}"
+    [[ "$bytes" =~ ^[0-9]+$ ]] || bytes=0
+
+    if [ "$bytes" -lt 1024 ]; then
+        printf '%s B' "$bytes"
+        return 0
+    fi
+
+    local -a units=("KB" "MB" "GB" "TB")
+    local idx=0
+    local scaled="$bytes"
+    # Scale by 1024 while the next unit still applies. Track tenths separately so
+    # the result carries one decimal without floating point.
+    while [ "$scaled" -ge 1048576 ] && [ "$idx" -lt 3 ]; do
+        scaled=$((scaled / 1024))
+        idx=$((idx + 1))
+    done
+    # $scaled is now in [1024, 1048576) and units[$idx] is its unit.
+    local whole=$((scaled / 1024))
+    local tenths=$(((scaled % 1024) * 10 / 1024))
+    printf '%s.%s %s' "$whole" "$tenths" "${units[$idx]}"
 }
 
 # True when apply consent for an AMBIGUOUS target reached this process from an
@@ -1156,6 +1197,10 @@ manifest_repo_scope_confirm_apply() {
     local project_root="${1:-${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}}"
     local replay_command="${2:-manifest command -y}"
     local origin_required="${3:-true}"
+    # See manifest_repo_scope_target_unambiguous for why this is relaxable only
+    # by an operation that publishes nothing. Default true keeps every existing
+    # caller unchanged.
+    local head_required="${4:-true}"
     local git_root branch origin
 
     # Validate the repository this call is actually about. The gate receives an
@@ -1219,7 +1264,7 @@ manifest_repo_scope_confirm_apply() {
     # branch + origin when required) applies on the strength of -y alone; an
     # ambiguous one is refused (not prompted) — fix the repo, or set
     # MANIFEST_CLI_AUTO_CONFIRM=1 to authorize it explicitly.
-    if manifest_repo_scope_target_unambiguous "$git_root" "$origin_required"; then
+    if manifest_repo_scope_target_unambiguous "$git_root" "$origin_required" "$head_required"; then
         echo "Auto-confirmed unambiguous target (apply via -y): $git_root"
         manifest_git_preflight_write_access "$git_root" "$replay_command"
         return $?
@@ -1415,6 +1460,7 @@ export -f is_installation_directory validate_repository_root ensure_repository_r
 # on log_error/manifest_redact (exported above) and on declare -F-probed
 # optionals. Pinned by tests/consent_gate_not_exported.bats.
 export -f manifest_repo_scope_require_git manifest_git_preflight_write_access manifest_repo_scope_target_unambiguous
+export -f manifest_format_bytes
 export -f show_file_error show_git_error show_config_error
 export -f show_validation_error show_permission_error show_dependency_error
 export -f sanitize_filename sanitize_version sanitize_path validate_version_format
