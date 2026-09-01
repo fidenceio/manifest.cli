@@ -1,5 +1,17 @@
 # Changelog
 
+## [59.9.0] - 2026-09-01
+
+**Release Type:** Minor
+
+### Changes
+
+- Update documentation and examples
+- Wire first-class CLI commands to inspectable built-in recipe definitions
+- Update shell completions for new command options
+- Add regression coverage for the changed CLI workflow
+
+
 ## [59.8.0] - 2026-09-01
 
 **Release Type:** Minor
@@ -132,16 +144,3 @@
 - Fix(fleet)!: preview announces the workspace policy gate instead of running it
 - Update release copy and configuration examples
 - Add regression coverage for the changed CLI workflow
-
-
-## [59.4.0] - 2026-08-21
-
-**Release Type:** Minor
-
-### Changes
-
-- Record the v59.3.0 release in §9.20 and add a cold-start resume point
-- Rewrite the user-facing docs for readability, and fix three untruths found doing it
-- Make the CLI's own help agree with the CLI, and document recovery
-- Guard the command surfaces against each other (TRACKER §9.26)
-- Update 1 file before release
