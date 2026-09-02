@@ -594,12 +594,47 @@ cleanup_empty_dirs() {
     log_info "Cleaning up empty directories..."
 
     local root="${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
-    local cleaned_count=0 dir
+    local cleaned_count=0 dir wt
+
+    # Resolve the root PHYSICALLY before walking it, for the same reason
+    # cleanup_temp_files does: the worktree paths below are physical (realdir
+    # resolves symlinks), so an unresolved root makes `find` emit logical paths
+    # and the containment compare silently never matches. On macOS `/tmp` is a
+    # symlink to `/private/tmp`, so this is the default case in tests and in any
+    # repo reached through a symlinked path — not an edge case. Caught by the
+    # exclusion test failing identically with and without the exclusion, which
+    # is the signature of a guard that cannot fire.
+    local resolved
+    resolved="$(_manifest_cleanup_realdir "$root")" || {
+        log_warning "Skipping the empty-directory sweep — project root is not a readable directory."
+        return 0
+    }
+    root="$resolved"
+
+    # Linked worktrees are excluded here for the same reason as in the file
+    # sweep, and this function needed saying separately because it carries its
+    # OWN `find` — the exclusion added to _manifest_cleanup_find never reached
+    # it, and the first write-up of that fix wrongly described the behaviour as
+    # fully repaired (TRACKER §3(f2)). Reproduced before fixing: a deliberate
+    # `output/` placeholder inside a live worktree was removed, on every ship.
+    local -a wt_roots=()
+    mapfile -t wt_roots < <(_manifest_cleanup_worktree_roots "$root")
 
     while IFS= read -r -d '' dir; do
         [[ -d "$dir" ]] || continue
         [[ "$dir" == "$root" ]] && continue
         [[ -z "$(ls -A "$dir" 2>/dev/null)" ]] || continue
+
+        local in_worktree=false
+        for wt in "${wt_roots[@]}"; do
+            [[ -n "$wt" ]] || continue
+            if _manifest_cleanup_is_inside "$wt" "$dir"; then
+                in_worktree=true
+                break
+            fi
+        done
+        [[ "$in_worktree" == "true" ]] && continue
+
         rmdir "$dir" 2>/dev/null && cleaned_count=$((cleaned_count + 1))
     done < <(find "$root" -name .git -type d -prune -o -type d -empty -print0 2>/dev/null)
 

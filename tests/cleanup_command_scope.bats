@@ -165,6 +165,23 @@ _seed_all_five() {
     [ ! -f ".DS_Store" ]
 }
 
+# The empty-directory sweep carries its own `find`, so the exclusion added to
+# _manifest_cleanup_find did not reach it. Both directions asserted: a
+# placeholder inside a live worktree survives, and a main-tree placeholder is
+# still removed — without the second assertion this would pass against a sweep
+# that had simply stopped working.
+@test "no empty directory inside a linked git worktree is removed" {
+    git worktree add -q -b wt "$SCRATCH/wt" >/dev/null 2>&1 || skip "git worktree unavailable"
+    mkdir -p "$SCRATCH/wt/output"
+    mkdir -p "$SCRATCH/mine/placeholder"
+
+    run cleanup_empty_dirs
+    [ "$status" -eq 0 ]
+
+    [ -d "$SCRATCH/wt/output" ]
+    [ ! -d "$SCRATCH/mine/placeholder" ]
+}
+
 @test "cleanup prunes stale worktree records but never removes a live worktree" {
     git worktree add -q -b wt "$SCRATCH/wt" >/dev/null 2>&1 || skip "git worktree unavailable"
     git worktree add -q -b gone "$SCRATCH/gone" >/dev/null 2>&1 || skip "git worktree unavailable"
