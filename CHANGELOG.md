@@ -1,5 +1,15 @@
 # Changelog
 
+## [59.9.1] - 2026-09-02
+
+**Release Type:** Patch
+
+### Changes
+
+- Fix(cleanup): stop the empty-dir sweep reaching into linked worktrees
+- Update documentation and examples
+
+
 ## [59.9.0] - 2026-09-01
 
 **Release Type:** Minor
@@ -130,17 +140,4 @@
 - Add GitHub Release publishing support
 - Update documentation and examples
 - Wire first-class CLI commands to inspectable built-in recipe definitions
-- Add regression coverage for the changed CLI workflow
-
-
-## [59.4.1] - 2026-08-21
-
-**Release Type:** Patch
-
-### Changes
-
-- Fix(fleet): preview runs the workspace policy gate and withdraws -y when it would refuse
-- Fix(tests): portable file hashing, and stop the grep|head SIGPIPE flakes
-- Fix(fleet)!: preview announces the workspace policy gate instead of running it
-- Update release copy and configuration examples
 - Add regression coverage for the changed CLI workflow
