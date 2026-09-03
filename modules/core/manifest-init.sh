@@ -257,6 +257,16 @@ manifest_gitignore_missing_rules() {
 # hand-maintained .gitignore, though on one that diverges from the template it
 # will append a lot; the count is always announced before it is written.
 #
+# That last clause is load-bearing — it is the property that makes appending to
+# a file Manifest does not own defensible — and it was FALSE on the fleet path
+# for as long as that path existed (§73): `ensure_repo_scaffold` defaults this
+# mode to `upgrade`, and fleet init called it with stdout and stderr both sent
+# to /dev/null, so N members were appended to with the announcement discarded.
+# Fixed by passing `report` there explicitly, not by softening this sentence:
+# the sentence describes the contract, so a caller that cannot honour it must
+# not use this mode. Any NEW caller of upgrade mode owes the same check —
+# announce, or pass `report`.
+#
 # This does not violate the module's no-clobber contract. Nothing existing is
 # rewritten, reordered, or removed — rules are appended under a marked header,
 # and .gitignore is last-match-wins, so appended negations still re-include.

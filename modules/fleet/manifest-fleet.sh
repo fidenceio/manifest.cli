@@ -993,6 +993,25 @@ EOF
             # members still get no-clobber backfill of whatever is missing.
             # Run only when directory init succeeded (rc 0 / 2); skip rc 1/3.
             # NO commit (files land uncommitted, parity with `init repo`).
+            #
+            # `report` is passed EXPLICITLY, and the explicitness is the fix
+            # (§73). ensure_repo_scaffold defaults its gitignore mode to
+            # `upgrade`, and this call sends both stdout and stderr to
+            # /dev/null — so a fleet init used to APPEND advised rules to every
+            # incomplete member's existing .gitignore with the count
+            # announcement discarded. That falsified the sentence in
+            # manifest-init.sh that makes appending to a file Manifest does not
+            # own defensible at all: "the count is always announced before it is
+            # written". True on `init repo`, false here, and here is the path
+            # that touches N repos at once.
+            #
+            # The mode governs ONE branch: an existing .gitignore that already
+            # has real entries. A member with no .gitignore, or an empty one,
+            # still gets a full generated file in `report` mode — so no member
+            # is left unprotected by this change; what stops is the silent
+            # mutation of a file the user maintains. Ship and refresh already
+            # behave this way, which is what makes this the consistent choice
+            # rather than a new policy.
             if [[ ( "$_init_rc" -eq 0 || "$_init_rc" -eq 2 ) ]] \
                 && declare -F ensure_repo_scaffold >/dev/null 2>&1; then
                 if declare -F manifest_repo_scaffold_is_complete >/dev/null 2>&1 \
@@ -1003,7 +1022,7 @@ EOF
                     (
                         cd "$abs_path" || exit 0
                         export MANIFEST_CLI_PROJECT_ROOT="$abs_path"
-                        ensure_repo_scaffold "$abs_path" >/dev/null 2>&1
+                        ensure_repo_scaffold "$abs_path" report >/dev/null 2>&1
                     ) || true
                     scaffold_count=$((scaffold_count + 1))
                 fi
