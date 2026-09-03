@@ -121,15 +121,22 @@ plain_url() { printf 'https://example.com/x/y.git'; }
 
 # --- sites 2 + 4: the fleet roster remote (status --json, bootstrap preview) -
 
-# TSV-only fleet: member `plain` carries an ordinary remote (positive control),
-# member `creds` carries the credentialed one. `creds` is deliberately absent on
-# disk so the SAME row also drives the bootstrap preview site.
+# Member `plain` carries an ordinary remote (positive control), member `creds`
+# the credentialed one. `creds` is deliberately absent on disk so the SAME member
+# also drives the bootstrap preview site.
+#
+# The URLs live in the two places a remote can now be DERIVED from, because §45
+# removed the roster's REMOTE_URL column: `plain` is cloned, so its own `origin`
+# answers; `creds` is not, so the fleet config answers. A credential can still
+# reach the config by hand — which is exactly what this fixture does, and why
+# display redaction is still the contract under test.
 _mk_cred_fleet() {
     local root="$1"
     mkdir -p "$root/svc/plain"
     git -C "$root/svc/plain" init -q
     git -C "$root/svc/plain" config user.email t@example.com
     git -C "$root/svc/plain" config user.name t
+    git -C "$root/svc/plain" remote add origin "$(plain_url)"
     echo "1.0.0" > "$root/svc/plain/VERSION"
     git -C "$root/svc/plain" add VERSION
     git -C "$root/svc/plain" commit -qm "init plain"
@@ -137,15 +144,33 @@ _mk_cred_fleet() {
         echo "# MANIFEST FLEET — Directory Inventory"
         echo "# Root: $root"
         echo "# Depth: 2"
-        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
-        printf "true\tplain\tsvc/plain\ttrue\t%s\tmain\n" "$(plain_url)"
-        printf "true\tcreds\tsvc/creds\ttrue\t%s\tmain\n" "$(cred_url)"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tBRANCH\n"
+        printf "true\tplain\tsvc/plain\ttrue\tmain\n"
+        printf "true\tcreds\tsvc/creds\ttrue\tmain\n"
     } > "$root/manifest.fleet.tsv"
-    cat > "$root/manifest.fleet.config.yaml" <<'YAML'
-fleet:
-  name: cred-fleet
-services: {}
-YAML
+    {
+        echo "fleet:"
+        echo "  name: cred-fleet"
+        echo "services:"
+        echo "  creds:"
+        echo "    path: \"./svc/creds\""
+        printf '    url: "%s"\n' "$(cred_url)"
+    } > "$root/manifest.fleet.config.yaml"
+}
+
+# §45: the roster must carry no remote URL, so a credential cannot be persisted
+# into the one fleet file that is committed and pushed by design.
+@test "fleet roster: no writer can put a credentialed URL in manifest.fleet.tsv" {
+    load_modules "fleet/manifest-fleet-detect.sh"
+    run _manifest_fleet_tsv_write_row "true" "creds" "svc/creds" "true" "$(cred_url)"
+    [ "$status" -ne 0 ]
+    refute grep -Fq "$(cred_needle)" <<<"$output"
+
+    # Positive control: the same writer accepts an ordinary row, so the refusal
+    # above is the credential and not the writer simply always failing.
+    run _manifest_fleet_tsv_write_row "true" "plain" "svc/plain" "true" "main"
+    [ "$status" -eq 0 ]
+    [ "$output" = "$(printf 'true\tplain\tsvc/plain\ttrue\tmain')" ]
 }
 
 @test "status fleet --json: remote_url is redacted, plain remote untouched" {

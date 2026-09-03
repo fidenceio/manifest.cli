@@ -265,10 +265,10 @@ SCRIPT
 @test "depth profile: uniform buckets report no mixed-depth health issue" {
     {
         echo "# Depth: 2"
-        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
-        printf "true\tws\tworkspaces\ttrue\tx\tmain\n"
-        printf "true\tfe\tfrontend/fe\ttrue\tx\tmain\n"
-        printf "true\tdbx\tdb/dbx\ttrue\tx\tmain\n"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tBRANCH\n"
+        printf "true\tws\tworkspaces\ttrue\tmain\n"
+        printf "true\tfe\tfrontend/fe\ttrue\tmain\n"
+        printf "true\tdbx\tdb/dbx\ttrue\tmain\n"
     } > "$SCRATCH/manifest.fleet.tsv"
 
     run _status_fleet_depth_profile_report "$SCRATCH"
@@ -281,9 +281,9 @@ SCRIPT
 @test "depth profile: a bucket spanning two depths is flagged MIXED" {
     {
         echo "# Depth: 3"
-        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
-        printf "true\ta\tapps/a\ttrue\tx\tmain\n"
-        printf "true\tb\tapps/b/nested\ttrue\tx\tmain\n"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tBRANCH\n"
+        printf "true\ta\tapps/a\ttrue\tmain\n"
+        printf "true\tb\tapps/b/nested\ttrue\tmain\n"
     } > "$SCRATCH/manifest.fleet.tsv"
 
     run _status_fleet_depth_profile_report "$SCRATCH"
@@ -295,9 +295,9 @@ SCRIPT
 @test "depth profile: only git rows count; non-git scenery is excluded" {
     {
         echo "# Depth: 2"
-        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
-        printf "true\tfe\tfrontend/fe\ttrue\tx\tmain\n"
-        printf "false\tholding\tsecure/_holding\tfalse\t\t\n"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tBRANCH\n"
+        printf "true\tfe\tfrontend/fe\ttrue\tmain\n"
+        printf "false\tholding\tsecure/_holding\tfalse\t\n"
     } > "$SCRATCH/manifest.fleet.tsv"
 
     run _status_fleet_depth_profile_report "$SCRATCH"
@@ -324,17 +324,21 @@ _mk_tsv_only_fleet() {
         echo "# MANIFEST FLEET — Directory Inventory"
         echo "# Root: $root"
         echo "# Depth: 2"
-        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tBRANCH\n"
         local i
         for ((i = 1; i <= present_count; i++)); do
             mkdir -p "$root/svc/m$i"
             git -C "$root/svc/m$i" init -q
             git -C "$root/svc/m$i" config user.email t@e.com
             git -C "$root/svc/m$i" config user.name t
+            # The remote lives on the member itself now: §45 removed the roster's
+            # REMOTE_URL column, so a cloned member's own `origin` is what status
+            # derives from.
+            git -C "$root/svc/m$i" remote add origin "git@github.com:acme/m$i.git"
             echo "1.0.$i" > "$root/svc/m$i/VERSION"
             git -C "$root/svc/m$i" add VERSION
             git -C "$root/svc/m$i" commit -qm "init m$i"
-            printf "true\tm%s\tsvc/m%s\ttrue\tgit@github.com:acme/m%s.git\tmain\n" "$i" "$i" "$i"
+            printf "true\tm%s\tsvc/m%s\ttrue\tmain\n" "$i" "$i"
         done
     } > "$root/manifest.fleet.tsv"
     # Config exists but declares no services (the buggy state).
@@ -411,6 +415,29 @@ YAML
     echo "$output" | grep -q "Fleet member:.*m2"
 }
 
+# Declare an absent member's remote in the fleet config.
+#
+# §45 removed the roster's REMOTE_URL column, so a member that is not on disk has
+# no `origin` to derive from and the config is the only place its URL can live —
+# which is exactly the bootstrap case: the member Manifest is about to clone is by
+# definition the one it cannot ask. Rewrites the `services: {}` stanza that
+# _mk_tsv_only_fleet writes, then appends. No `sed -i` (BSD and GNU disagree on
+# its argument, and both platforms run this suite).
+_declare_member_remote() {
+    local root="$1" name="$2" path="$3" url="$4"
+    local cfg="$root/manifest.fleet.config.yaml"
+    local line
+    while IFS= read -r line; do
+        if [ "$line" = "services: {}" ]; then printf 'services:\n'; else printf '%s\n' "$line"; fi
+    done < "$cfg" > "$cfg.tmp"
+    mv "$cfg.tmp" "$cfg"
+    {
+        printf '  %s:\n' "$name"
+        printf '    path: "./%s"\n' "$path"
+        printf '    url: "%s"\n' "$url"
+    } >> "$cfg"
+}
+
 # -- Bootstrap preview (declared-but-absent members) --------------------------
 
 @test "status fleet --bootstrap: lists absent members WITHOUT cloning" {
@@ -420,8 +447,12 @@ YAML
     _mk_tsv_only_fleet "$SCRATCH" 2
     # Declare a third member that exists in the roster but is absent on disk,
     # plus a fourth that is absent with no remote (Lost).
-    printf "true\tghost\tsvc/ghost\ttrue\tgit@github.com:acme/ghost.git\tmain\n" >> "$SCRATCH/manifest.fleet.tsv"
-    printf "true\tlostone\tsvc/lostone\ttrue\t\tmain\n" >> "$SCRATCH/manifest.fleet.tsv"
+    printf "true\tghost\tsvc/ghost\ttrue\tmain\n" >> "$SCRATCH/manifest.fleet.tsv"
+    printf "true\tlostone\tsvc/lostone\ttrue\tmain\n" >> "$SCRATCH/manifest.fleet.tsv"
+    # ghost has a declared remote (Uncloned); lostone deliberately has none, so
+    # it stays Lost — that contrast is what the "1 clone, 1 unrecoverable" plan
+    # line below is asserting.
+    _declare_member_remote "$SCRATCH" ghost svc/ghost "git@github.com:acme/ghost.git"
 
     [ ! -d "$SCRATCH/svc/ghost" ]
 
@@ -443,7 +474,8 @@ YAML
         skip "yq not installed"
     fi
     _mk_tsv_only_fleet "$SCRATCH" 1
-    printf "true\tghost\tsvc/ghost\ttrue\tgit@github.com:acme/ghost.git\tmain\n" >> "$SCRATCH/manifest.fleet.tsv"
+    printf "true\tghost\tsvc/ghost\ttrue\tmain\n" >> "$SCRATCH/manifest.fleet.tsv"
+    _declare_member_remote "$SCRATCH" ghost svc/ghost "git@github.com:acme/ghost.git"
 
     run _manifest_status_fleet "$SCRATCH" "false" "off"
     [ "$status" -eq 0 ]
@@ -470,7 +502,8 @@ YAML
         skip "yq not installed"
     fi
     _mk_tsv_only_fleet "$SCRATCH" 1
-    printf "true\tghost\tsvc/ghost\ttrue\tgit@github.com:acme/ghost.git\tmain\n" >> "$SCRATCH/manifest.fleet.tsv"
+    printf "true\tghost\tsvc/ghost\ttrue\tmain\n" >> "$SCRATCH/manifest.fleet.tsv"
+    _declare_member_remote "$SCRATCH" ghost svc/ghost "git@github.com:acme/ghost.git"
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_status --bootstrap
     [ "$status" -eq 0 ]
@@ -499,6 +532,7 @@ _mk_vocab_fleet() {
     git -C "$root/svc/declared" init -q
     git -C "$root/svc/declared" config user.email t@e.com
     git -C "$root/svc/declared" config user.name t
+    git -C "$root/svc/declared" remote add origin "git@github.com:acme/declared.git"
     echo "2.0.0" > "$root/svc/declared/VERSION"
     git -C "$root/svc/declared" add VERSION
     git -C "$root/svc/declared" commit -qm init
@@ -506,19 +540,31 @@ _mk_vocab_fleet() {
     mkdir -p "$root/svc/present-norepo"
     {
         echo "# Depth: 2"
-        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
-        printf "true\tstranded\tsvc/stranded\ttrue\t\tmain\n"
-        printf "true\tdeclared\tsvc/declared\ttrue\tgit@github.com:acme/declared.git\tmain\n"
-        printf "true\tpresentnorepo\tsvc/present-norepo\tfalse\tgit@github.com:acme/p.git\tmain\n"
-        printf "true\tuncloned\tsvc/uncloned\ttrue\tgit@github.com:acme/uncloned.git\tmain\n"
-        printf "true\tlost\tsvc/lost\ttrue\t\tmain\n"
-        printf "false\tcand\tbench/cand\ttrue\t\tmain\n"
-        printf "false\tholding\tsecure/_holding\tfalse\t\t\n"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tBRANCH\n"
+        printf "true\tstranded\tsvc/stranded\ttrue\tmain\n"
+        printf "true\tdeclared\tsvc/declared\ttrue\tmain\n"
+        printf "true\tpresentnorepo\tsvc/present-norepo\tfalse\tmain\n"
+        printf "true\tuncloned\tsvc/uncloned\ttrue\tmain\n"
+        printf "true\tlost\tsvc/lost\ttrue\tmain\n"
+        printf "false\tcand\tbench/cand\ttrue\tmain\n"
+        printf "false\tholding\tsecure/_holding\tfalse\t\n"
     } > "$root/manifest.fleet.tsv"
+    # §45 removed the roster's REMOTE_URL column, so each member's remote now
+    # comes from one of the two places it can be DERIVED from. `declared` has its
+    # own `origin` (above). `presentnorepo` and `uncloned` have no git dir to ask,
+    # so the fleet config is their only source — which is precisely the case that
+    # kept a URL in this file rather than dropping it everywhere. `stranded` and
+    # `lost` are declared in neither, which is what makes them stranded and lost.
     cat > "$root/manifest.fleet.config.yaml" <<'YAML'
 fleet:
   name: vocab-fleet
-services: {}
+services:
+  presentnorepo:
+    path: "./svc/present-norepo"
+    url: "git@github.com:acme/p.git"
+  uncloned:
+    path: "./svc/uncloned"
+    url: "git@github.com:acme/uncloned.git"
 YAML
 }
 
@@ -594,11 +640,24 @@ YAML
     git -C "$SCRATCH/svc/backed" commit -qm init
     git -C "$SCRATCH/svc/backed" push -q "file://$SCRATCH/origin-backed.git" HEAD:refs/heads/main
 
+    # `unreachable` needs its OWN checkout now: the remote is derived from the
+    # member's `origin`, so two roster rows sharing one path would derive the
+    # same URL and the unreachable case would silently become the backed one.
+    mkdir -p "$SCRATCH/svc/unreachable"
+    git -C "$SCRATCH/svc/unreachable" init -q
+    git -C "$SCRATCH/svc/unreachable" config user.email t@e.com
+    git -C "$SCRATCH/svc/unreachable" config user.name t
+    git -C "$SCRATCH/svc/unreachable" remote add origin "file://$SCRATCH/missing.git"
+    echo "1.0.0" > "$SCRATCH/svc/unreachable/VERSION"
+    git -C "$SCRATCH/svc/unreachable" add VERSION
+    git -C "$SCRATCH/svc/unreachable" commit -qm init
+    git -C "$SCRATCH/svc/backed" remote add origin "file://$SCRATCH/origin-backed.git"
+
     {
         echo "# Depth: 2"
-        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
-        printf "true\tbacked\tsvc/backed\ttrue\tfile://%s/origin-backed.git\tmain\n" "$SCRATCH"
-        printf "true\tunreachable\tsvc/backed\ttrue\tfile://%s/missing.git\tmain\n" "$SCRATCH"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tBRANCH\n"
+        printf "true\tbacked\tsvc/backed\ttrue\tmain\n"
+        printf "true\tunreachable\tsvc/unreachable\ttrue\tmain\n"
     } > "$SCRATCH/manifest.fleet.tsv"
     cat > "$SCRATCH/manifest.fleet.config.yaml" <<'YAML'
 fleet:
@@ -633,7 +692,7 @@ YAML
 
     {
         echo "# Depth: 2"
-        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tBRANCH\n"
         printf "true\tbacked\tsvc/backed\ttrue\tfile://%s/origin-backed.git\tmain\n" "$SCRATCH"
     } > "$SCRATCH/manifest.fleet.tsv"
 

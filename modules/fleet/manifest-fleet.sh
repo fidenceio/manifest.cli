@@ -961,7 +961,8 @@ EOF
         echo ""
         echo "Initializing selected directories..."
 
-        while IFS=$'\t' read -r name path has_git url branch version; do
+        # parse_start_tsv emits NAME PATH HAS_GIT BRANCH — no remote URL since §45.
+        while IFS=$'\t' read -r name path has_git branch; do
             [[ -z "$name" ]] && continue
             local abs_path="$target_dir/${path#./}"
 
@@ -1443,7 +1444,11 @@ _fleet_sync_service() {
         # Safe to create parent directory now that path is validated.
         mkdir -p "$MANIFEST_CLI_FLEET_ROOT/$(dirname "$path")"
 
-        echo "  $service: → Cloning from $url..."
+        # Redacted on the way out: both URL sources strip credentials before
+        # storing (§45), so this is defence in depth rather than the barrier —
+        # but it is a bare echo, and §2's class is precisely the bare echoes that
+        # never reach manifest_redact.
+        echo "  $service: → Cloning from $(manifest_redact "$url")..."
         # Clone without --branch and checkout afterward — tolerates remotes
         # whose default branch differs from the configured branch.
         local clone_out
@@ -2292,10 +2297,13 @@ _fleet_preflight_on_default_branch() {
 # A non-local ship of such a member commits + tags locally but silently skips the
 # push and GitHub Release, stranding the release on disk — what stranded the
 # D-IDENT-17 members. For each offender we first try to REPAIR it from the fleet
-# TSV: the declared REMOTE_URL is the structure-of-record, so when it holds a
-# well-formed git URL we wire it up with `git remote add origin <url>` (a local
-# config write, no network). Only a member that still has no usable remote after
-# that — no local origin AND no adoptable TSV URL — is an offender, and any
+# config: `services.<name>.url` is the declared structure-of-record, so when it
+# holds a well-formed git URL we wire it up with `git remote add origin <url>` (a
+# local config write, no network). That declaration used to live in the roster's
+# REMOTE_URL column; §45 removed it, because the roster is committed and pushed
+# and a credentialed URL in it is published irrecoverably. Only a member that
+# still has no usable remote after that — no local origin AND no declared URL to
+# adopt — is an offender, and any
 # offender refuses the whole apply before the release mutations run. Mirrors the
 # fail-closed shape of _fleet_preflight_on_default_branch. Not called for --local
 # ships, which never push and so can never strand.
@@ -2314,13 +2322,13 @@ _fleet_preflight_no_empty_remote() {
             continue
         fi
         url=$(get_fleet_service_property "$service" "url")
-        # Adopt the TSV URL only when it actually parses as a git remote. This
-        # guards against a blank or (via a tab-collapsed row) garbled REMOTE_URL
-        # column — a stray branch name like "main" never matches and is refused
-        # rather than wired up as a bogus remote.
+        # Adopt the declared URL only when it actually parses as a git remote.
+        # This guards against a blank or garbled declaration — a stray branch
+        # name like "main" never matches and is refused rather than wired up as
+        # a bogus remote.
         if [[ "$url" =~ ^(git@|https://|ssh://|file://) ]] \
             && git -C "$path" remote add origin "$url" 2>/dev/null; then
-            repaired+=("$(_fleet_plan_service_display_name "$service" "$path") → $url")
+            repaired+=("$(_fleet_plan_service_display_name "$service" "$path") → $(manifest_redact "$url")")
             continue
         fi
         offenders+=("$(_fleet_plan_service_display_name "$service" "$path") ($path)")
@@ -2328,7 +2336,7 @@ _fleet_preflight_no_empty_remote() {
 
     if [[ ${#repaired[@]} -gt 0 ]]; then
         echo ""
-        echo "Wired up 'origin' for ${#repaired[@]} member(s) from the fleet TSV (local only, no push yet):"
+        echo "Wired up 'origin' for ${#repaired[@]} member(s) from the fleet config (local only, no push yet):"
         local r
         for r in "${repaired[@]}"; do
             echo "  - $r"
@@ -2337,7 +2345,7 @@ _fleet_preflight_no_empty_remote() {
 
     [[ ${#offenders[@]} -eq 0 ]] && return 0
 
-    log_error "Pre-flight: ${#offenders[@]} releaseable fleet member(s) have no 'origin' remote and no usable REMOTE_URL in the fleet TSV:"
+    log_error "Pre-flight: ${#offenders[@]} releaseable fleet member(s) have no 'origin' remote and no usable url declared in the fleet config:"
     local entry
     for entry in "${offenders[@]}"; do
         echo "  - $entry"
@@ -2345,8 +2353,9 @@ _fleet_preflight_no_empty_remote() {
     echo ""
     echo "Reason:      a non-local ship would commit + tag locally but cannot push or cut a"
     echo "             GitHub Release — the release would strand on disk."
-    echo "Fix:         add a remote ('git remote add origin <url>'), set the member's REMOTE_URL"
-    echo "             in manifest.fleet.tsv, or run with --local to ship local-only on purpose."
+    echo "Fix:         add a remote ('git remote add origin <url>'), declare the member's url"
+    echo "             under services.<name>.url in manifest.fleet.config.yaml, or run with"
+    echo "             --local to ship local-only on purpose."
     echo "Pre-flight refused before the release mutations; no fleet member was shipped."
     return 1
 }
@@ -3806,6 +3815,21 @@ fleet_add() {
     local is_url=false
     if [[ "$path_or_url" == git@* ]] || [[ "$path_or_url" == https://* ]] || [[ "$path_or_url" == http://* ]]; then
         is_url=true
+        # §45: this argument lands in manifest.fleet.config.yaml, which is on the
+        # fleet allowlist and staged by name on a root release — so a credential
+        # in it is committed and pushed. Strip it once, HERE, before the value is
+        # printed or stored: the stripped URL is still clone-able and git's
+        # credential helper supplies the secret. Announced rather than silent,
+        # because the user typed the credential and needs to know it was not kept.
+        if manifest_url_has_credentials "$path_or_url"; then
+            path_or_url="$(manifest_url_strip_credentials "$path_or_url")"
+            log_warning "Removed the embedded credential from the URL before recording it."
+            echo "        manifest.fleet.config.yaml is committed and pushed, and a credential"
+            echo "        pushed to a remote cannot be recovered. The URL is stored as:"
+            echo "          $path_or_url"
+            echo "        Git will resolve authentication through your credential helper."
+            echo ""
+        fi
     fi
 
     echo ""
@@ -3847,6 +3871,9 @@ fleet_add() {
     local yaml_content=""
     yaml_content+="  $safe_name:"$'\n'
     if [[ "$is_url" == "true" ]]; then
+        # Defence in depth behind the strip above: a future edit that reaches
+        # this builder by another route refuses rather than writes (§45).
+        manifest_assert_no_embedded_credential "$path_or_url" "manifest.fleet.config.yaml" || return 1
         yaml_content+="    url: \"${path_or_url//\"/\\\"}\""$'\n'
         yaml_content+="    path: \"./$safe_name\""$'\n'
     else

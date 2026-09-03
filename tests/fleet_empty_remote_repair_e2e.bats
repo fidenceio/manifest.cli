@@ -1,13 +1,13 @@
 #!/usr/bin/env bats
 
-# End-to-end coverage for the REPAIR-AND-PROCEED half of the empty-REMOTE_URL
+# End-to-end coverage for the REPAIR-AND-PROCEED half of the undeclared-remote
 # ship gate (_fleet_preflight_no_empty_remote).
 #
 # fleet_empty_remote_gate.bats proves the refusal end-to-end and the repair in
 # isolation (direct gate call). This file proves the repair END-TO-END: a
 # `ship fleet patch -y` through the entry script, where the member has NO
-# local 'origin' but the fleet TSV declares a valid file:// REMOTE_URL. The
-# gate must wire up origin from the TSV and the apply must continue PAST the
+# local 'origin' but the fleet config declares a valid file:// url. The
+# gate must wire up origin from that declaration and the apply must continue PAST the
 # refusal into the release mutations — in this all-local fixture the whole
 # ship completes: version bumped, tagged, and pushed to the wired origin.
 #
@@ -49,7 +49,7 @@ run_manifest() {
 
 # One-member fleet whose member svc-a has a commit history that EXISTS on the
 # bare origin (seeded by an initial push) but whose local 'origin' remote has
-# been removed — exactly the stranded shape the gate repairs from the TSV.
+# been removed — exactly the stranded shape the gate repairs from the fleet config.
 write_repairable_fleet() {
     git -C "$SCRATCH/work" init -q -b main
     git -C "$SCRATCH/work" config user.email t@e.com
@@ -70,20 +70,24 @@ write_repairable_fleet() {
     git -C "$repo" push -q origin main
     git -C "$repo" remote remove origin
 
-    cat > "$SCRATCH/work/manifest.fleet.config.yaml" <<'YAML'
-fleet:
-  name: "test-fleet"
-  versioning: "none"
-services:
-  svca:
-    path: "./svc-a"
-    branch: "main"
-YAML
-    printf 'true\tsvca\t./svc-a\ttrue\tfile://%s\tmain\n' "$BARE" \
-        > "$SCRATCH/work/manifest.fleet.tsv"
+    # The url is declared in the fleet config, not the roster: §45 removed the
+    # roster's REMOTE_URL column, since that file is committed and pushed by
+    # design and a credentialed URL in it is published irrecoverably.
+    {
+        echo 'fleet:'
+        echo '  name: "test-fleet"'
+        echo '  versioning: "none"'
+        echo 'services:'
+        echo '  svca:'
+        echo '    path: "./svc-a"'
+        echo '    branch: "main"'
+        printf '    url: "file://%s"\n' "$BARE"
+    } > "$SCRATCH/work/manifest.fleet.config.yaml"
+    printf '# SELECT\tNAME\tPATH\tHAS_GIT\tBRANCH\n' > "$SCRATCH/work/manifest.fleet.tsv"
+    printf 'true\tsvca\t./svc-a\ttrue\tmain\n' >> "$SCRATCH/work/manifest.fleet.tsv"
 }
 
-@test "ship fleet -y repairs origin from the TSV and proceeds past the empty-remote gate to a full release" {
+@test "ship fleet -y repairs origin from the fleet config and proceeds past the empty-remote gate to a full release" {
     write_repairable_fleet
     # Fixture sanity: the member really starts with no origin.
     run git -C "$SCRATCH/work/svc-a" remote get-url origin
@@ -92,12 +96,12 @@ YAML
     run_manifest ship fleet patch -y
 
     # The gate REPAIRED instead of refusing...
-    [[ "$output" == *"Wired up 'origin' for 1 member(s) from the fleet TSV"* ]]
+    [[ "$output" == *"Wired up 'origin' for 1 member(s) from the fleet config"* ]]
     [[ "$output" == *"svc-a → file://$BARE"* ]]
     # ... so the refusal never fired.
-    [[ "$output" != *"no 'origin' remote and no usable REMOTE_URL"* ]]
+    [[ "$output" != *"no 'origin' remote and no usable url declared in the fleet config"* ]]
     [[ "$output" != *"no fleet member was shipped"* ]]
-    # The repair is real on disk: origin now points at the TSV REMOTE_URL.
+    # The repair is real on disk: origin now points at the declared url.
     run git -C "$SCRATCH/work/svc-a" remote get-url origin
     [ "$status" -eq 0 ]
     [ "$output" = "file://$BARE" ]

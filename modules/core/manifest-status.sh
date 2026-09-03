@@ -123,13 +123,20 @@ _status_tsv_split() {
     IFS="$sep" read -r -a _ref <<< "$line"
 }
 
-# Emit the selected fleet roster as tab-separated rows: NAME PATH HAS_GIT
-# REMOTE_URL BRANCH. Prefers the TSV (declared roster); each emitted name is the
-# member identity used by every status/identity reader. parse_start_tsv is the
-# canonical TSV reader (modules/fleet/manifest-fleet-detect.sh); a self-contained
-# parser keeps this readable when the fleet module is not loaded (e.g. unit tests
-# sourcing manifest-status.sh alone). Falls back to the YAML `.services` map when
-# no TSV exists.
+# Emit the selected fleet roster as tab-separated rows: NAME PATH HAS_GIT BRANCH.
+# Prefers the TSV (declared roster); each emitted name is the member identity
+# used by every status/identity reader. parse_start_tsv is the canonical TSV
+# reader (modules/fleet/manifest-fleet-detect.sh); a self-contained parser keeps
+# this readable when the fleet module is not loaded (e.g. unit tests sourcing
+# manifest-status.sh alone). Falls back to the YAML `.services` map when no TSV
+# exists.
+#
+# There is deliberately NO remote-URL column here. The roster stopped storing one
+# in §45 (it is a committed file, and a credentialed URL in it is published
+# irrecoverably); a consumer that needs the URL derives it per member through
+# _status_member_remote_url. The self-contained parser below therefore reads its
+# column positions from the file's own header, so a roster written before that
+# change is not silently misread one column to the left.
 _status_fleet_roster_rows() {
     local proj="$1"
     local tsv config
@@ -140,6 +147,19 @@ _status_fleet_roster_rows() {
             parse_start_tsv "$tsv"
             return 0
         fi
+        # Header-driven column map, mirroring _manifest_fleet_tsv_column_index.
+        # A roster written before §45 has REMOTE_URL between HAS_GIT and BRANCH,
+        # so a fixed index would emit that URL as the branch.
+        local i_branch=4 hdr_fields hdr_line idx
+        while IFS= read -r hdr_line; do
+            case "$hdr_line" in '# SELECT'*) ;; *) continue ;; esac
+            hdr_fields=()
+            _status_tsv_split "${hdr_line#\# }" hdr_fields
+            for idx in "${!hdr_fields[@]}"; do
+                [[ "${hdr_fields[$idx]}" == "BRANCH" ]] && i_branch="$idx"
+            done
+            break
+        done < "$tsv"
         local line fields
         while IFS= read -r line; do
             local fields=()
@@ -148,8 +168,8 @@ _status_fleet_roster_rows() {
             [[ "$select" == \#* ]] && continue
             [[ -z "$select" ]] && continue
             [[ "$select" == "true" ]] || continue
-            printf '%s\t%s\t%s\t%s\t%s\n' \
-                "${fields[1]:-}" "${fields[2]:-}" "${fields[3]:-}" "${fields[4]:-}" "${fields[5]:-}"
+            printf '%s\t%s\t%s\t%s\n' \
+                "${fields[1]:-}" "${fields[2]:-}" "${fields[3]:-}" "${fields[$i_branch]:-}"
         done < "$tsv"
         return 0
     fi
@@ -162,8 +182,38 @@ _status_fleet_roster_rows() {
         [[ -z "$service" ]] && continue
         raw_path="$(SERVICE="$service" yq e '.services[strenv(SERVICE)].path // ""' "$config" 2>/dev/null)"
         branch="$(SERVICE="$service" yq e '.services[strenv(SERVICE)].branch // ""' "$config" 2>/dev/null)"
-        printf '%s\t%s\t%s\t%s\t%s\n' "$service" "$raw_path" "" "" "${branch:-}"
+        printf '%s\t%s\t%s\t%s\n' "$service" "$raw_path" "" "${branch:-}"
     done < <(yq e '.services | keys | .[]' "$config" 2>/dev/null)
+}
+
+# A member's remote URL, derived rather than read from the roster (§45 dropped
+# that column — see _status_fleet_roster_rows). _fleet_member_remote_url in
+# modules/fleet/manifest-fleet-config.sh is the canonical derivation and is used
+# whenever the fleet module is loaded; the inline fallback exists for the same
+# reason the self-contained TSV parser above does — `manifest status` must work
+# with only this module sourced. Change the two together.
+_status_member_remote_url() {
+    local proj="$1"
+    local path="$2"
+    local service="$3"
+    local config url=""
+
+    config="$(_status_fleet_config_file "$proj")"
+    if declare -F _fleet_member_remote_url >/dev/null 2>&1; then
+        _fleet_member_remote_url "$path" "$service" "$config"
+        return 0
+    fi
+
+    if [[ -n "$path" && -d "$path" ]]; then
+        url="$(git -C "$path" remote get-url origin 2>/dev/null || echo "")"
+    fi
+    if [[ -z "$url" && -n "$config" && -n "$service" ]] && command -v yq >/dev/null 2>&1; then
+        url="$(SERVICE="$service" yq e '.services[strenv(SERVICE)].url // ""' "$config" 2>/dev/null || echo "")"
+        [[ "$url" == "null" ]] && url=""
+    fi
+    # Verbatim — every consumer here already redacts at the point of print, and
+    # a user whose fleet config carries a credential needs to see that it does.
+    printf '%s' "$url"
 }
 
 # Count of declared members, sourced from the same roster the tables render.
@@ -714,12 +764,12 @@ _manifest_status_fleet_json() {
         _status_tsv_split "$roster_line" fields
         service="${fields[0]:-}"
         raw_path="${fields[1]:-}"
-        remote_url="${fields[3]:-}"
-        expected_branch="${fields[4]:-}"
+        expected_branch="${fields[3]:-}"
         [[ -z "$service" ]] && continue
         local path branch state version commit commit_timestamp surfaces_json
         local local_axis remote_axis fleet_state probe=""
         path="$(_status_resolve_member_path "$proj" "$raw_path")"
+        remote_url="$(_status_member_remote_url "$proj" "$path" "$service")"
         if [[ -d "$path" ]] && git -C "$path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
             branch="$(_status_repo_branch "$path")"
         else
@@ -812,12 +862,12 @@ _manifest_status_fleet() {
         _status_tsv_split "$roster_line" fields
         service="${fields[0]:-}"
         raw_path="${fields[1]:-}"
-        remote_url="${fields[3]:-}"
-        expected_branch="${fields[4]:-}"
+        expected_branch="${fields[3]:-}"
         [[ -z "$service" ]] && continue
         local path branch state version commit commit_timestamp
         local local_axis remote_axis fleet_state probe=""
         path="$(_status_resolve_member_path "$proj" "$raw_path")"
+        remote_url="$(_status_member_remote_url "$proj" "$path" "$service")"
         if [[ -d "$path" ]] && git -C "$path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
             branch="$(_status_repo_branch "$path")"
         else

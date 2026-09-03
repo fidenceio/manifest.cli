@@ -30,9 +30,15 @@ teardown() {
 
 mkrepo() { mkdir -p "$1" && git init -q "$1"; }
 
-# A curated TSV in the canonical format, with a deliberately hand-edited
-# REMOTE_URL on the first row (mirrors the real marketing.fidence case where
-# the on-disk slug was renamed but the GitHub remote intentionally kept).
+# A curated TSV in the canonical format, with a deliberately hand-edited BRANCH
+# on the first row: the scan reports `main` for it, so anything that re-derived
+# the row from scan metadata would overwrite `release` and fail the assertion.
+#
+# That column used to be a hand-edited REMOTE_URL. §45 removed the column from
+# the schema entirely (the roster is committed and pushed, so a credentialed URL
+# in it is published irrecoverably) — the "curated column survives a rescan"
+# property is unchanged, it is just demonstrated on a column that still exists.
+# The legacy shape is exercised by its own migration test below.
 write_curated_tsv() {
     {
         echo "# MANIFEST FLEET — Directory Inventory"
@@ -41,9 +47,35 @@ write_curated_tsv() {
         echo "# Last scanned: 2026-01-01T00:00:00Z"
         echo "# Canonical config: manifest.fleet.config.yaml"
         echo "# Toggle the SELECT column (true/false) — update/ship/status honor it directly. (manifest init fleet is the first-time scaffold step only.)"
+        printf "# SELECT\tNAME\tPATH\tHAS_GIT\tBRANCH\n"
+        printf "true\talpha\tapps/alpha\ttrue\trelease\n"
+        printf "true\tbeta\tdb/beta\ttrue\t\n"
+    } > "$WS/manifest.fleet.tsv"
+}
+
+# A credentialed URL and its token, assembled at runtime from harmless parts.
+#
+# Same convention as credential_url_redaction.bats, and it is not cosmetic: the
+# pre-commit hook's §45 backstop refuses to stage ANY file containing the
+# `scheme://<user>:<pass>@` shape, and it deliberately has no test-fixture
+# exemption. A guard with a carve-out for the files most likely to carry the
+# forbidden thing is a hiding place — so the fixtures assemble instead, and the
+# guard keeps exactly one rule for every file in the tree.
+cred_token() { printf 'tok%s' "1234567890"; }
+cred_url()   { printf 'https://%s:%s@github.com/org/alpha.git' "ci-bot" "$(cred_token)"; }
+
+# The same roster as it was written by a CLI older than the §45 fix: one extra
+# column, carrying a credential on the first row.
+write_legacy_tsv() {
+    {
+        echo "# MANIFEST FLEET — Directory Inventory"
+        echo "# Root: $WS"
+        echo "# Depth: 2"
+        echo "# Last scanned: 2026-01-01T00:00:00Z"
+        echo "# Canonical config: manifest.fleet.config.yaml"
         printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
-        printf "true\talpha\tapps/alpha\ttrue\tgit@github.com:org/keep-this-url.git\tmain\n"
-        printf "true\tbeta\tdb/beta\ttrue\t\tmain\n"
+        printf "true\talpha\tapps/alpha\ttrue\t%s\trelease\n" "$(cred_url)"
+        printf "false\tbeta\tdb/beta\ttrue\t\tmain\n"
     } > "$WS/manifest.fleet.tsv"
 }
 
@@ -69,15 +101,16 @@ disc_row() {
     local err
     err="$(merge_update_tsv "$discovered" "$WS/manifest.fleet.tsv" "$WS" 2 append 2>&1 > "$WS/out.tsv")"
 
-    # The hand-edited URL on alpha survives — scan metadata must NOT clobber it.
-    grep -q $'\talpha\tapps/alpha\ttrue\tgit@github.com:org/keep-this-url.git\tmain' "$WS/out.tsv"
+    # The hand-edited branch on alpha survives — the scan says `main` for it, so
+    # a row re-derived from scan metadata would read `main` here and fail.
+    grep -q $'\talpha\tapps/alpha\ttrue\trelease' "$WS/out.tsv"
     refute grep -q "SCANNED-OTHER" "$WS/out.tsv"
 
     # beta was NOT in the discovered set but must be preserved (not dropped).
     grep -q $'\tbeta\tdb/beta\t' "$WS/out.tsv"
 
     # gamma is appended as a new row.
-    grep -q $'\tgamma\tdb/gamma\ttrue\tgit@github.com:org/gamma.git\tmain' "$WS/out.tsv"
+    grep -q $'\tgamma\tdb/gamma\ttrue\tmain' "$WS/out.tsv"
 
     # alpha appears exactly once (no duplicate from the re-discovery).
     [ "$(grep -c $'\talpha\tapps/alpha\t' "$WS/out.tsv")" -eq 1 ]
@@ -113,6 +146,49 @@ disc_row() {
     [[ "$err" == *"NEW:0"* ]]
     # Every line except the refreshed timestamp is unchanged.
     [ "$(grep -v '^# Last scanned:' "$WS/out.tsv")" = "$before" ]
+}
+
+# =============================================================================
+# (2b) LEGACY MIGRATION — §45
+# =============================================================================
+# Append mode preserves every existing line byte-for-byte, which is exactly why
+# it needed an exception: a credential committed before the fix would otherwise
+# be re-emitted, re-staged and re-pushed by every subsequent `manifest update`.
+# Verbatim preservation would have preserved the leak.
+
+@test "append: migrates a legacy roster off the REMOTE_URL column" {
+    write_legacy_tsv
+    local discovered; discovered="$(disc_row gamma db/gamma)"
+
+    local err
+    err="$(merge_update_tsv "$discovered" "$WS/manifest.fleet.tsv" "$WS" 2 append 2>&1 > "$WS/out.tsv")"
+
+    # The header is rewritten to the current schema...
+    grep -q $'^# SELECT\tNAME\tPATH\tHAS_GIT\tBRANCH$' "$WS/out.tsv"
+    # ...and the credential is gone from the file entirely.
+    refute grep -q "$(cred_token)" "$WS/out.tsv"
+    refute grep -q 'REMOTE_URL' "$WS/out.tsv"
+
+    # Everything the migration is NOT allowed to touch. Without these the test
+    # would pass against a migration that simply emptied the file.
+    grep -q $'^true\talpha\tapps/alpha\ttrue\trelease$' "$WS/out.tsv"
+    grep -q $'^false\tbeta\tdb/beta\ttrue\tmain$' "$WS/out.tsv"
+    grep -q "^# Depth: 2$" "$WS/out.tsv"
+    [[ "$err" == *"NEW:1"* ]]
+    [[ "$err" == *"MIGRATED:2"* ]]
+}
+
+@test "append: reports no migration for a roster already on the current schema" {
+    # The negative control for the test above: MIGRATED must not be emitted for
+    # every append, or it says nothing when it IS emitted.
+    write_curated_tsv
+    local discovered; discovered="$(disc_row gamma db/gamma)"
+
+    local err
+    err="$(merge_update_tsv "$discovered" "$WS/manifest.fleet.tsv" "$WS" 2 append 2>&1 > "$WS/out.tsv")"
+
+    [[ "$err" == *"NEW:1"* ]]
+    [[ "$err" != *"MIGRATED"* ]]
 }
 
 # =============================================================================

@@ -292,8 +292,11 @@ manifest_fleet_topics_run() {
     local member_rows
     member_rows=$(parse_start_tsv "$tsv_file")
 
-    local name path has_git _url _branch
-    while IFS=$'\t' read -r name path has_git _url _branch; do
+    # parse_start_tsv emits NAME PATH HAS_GIT BRANCH — no remote URL since §45,
+    # which this loop never used anyway: it re-derives from the member's own
+    # `origin` a few lines down, and that precedent is why the column went.
+    local name path has_git _branch
+    while IFS=$'\t' read -r name path has_git _branch; do
         [[ -z "$name" ]] && continue
         [[ "$has_git" != "true" ]] && continue
 

@@ -2016,7 +2016,8 @@ _manifest_init_fleet_dry_run_phase2() {
     local selected_count=0 existing_count=0 missing_count=0 needs_git_count=0
     local scaffold_count=0 already_complete_count=0
     local create_targets=()
-    while IFS=$'\t' read -r name path has_git _url _branch _version; do
+    # parse_start_tsv emits NAME PATH HAS_GIT BRANCH — no remote URL since §45.
+    while IFS=$'\t' read -r name path has_git _branch; do
         [[ -z "$name" ]] && continue
         ((selected_count += 1))
         local abs_path="$root_dir/${path#./}"

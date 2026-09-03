@@ -66,6 +66,26 @@ if [ -n "$STAGED_FILES" ]; then
         'gh[ps]_[a-zA-Z0-9]{36,}'  # GitHub token
         'sk-[a-zA-Z0-9]{48}'  # OpenAI API key
         'eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*'  # JWT token (loose)
+        # Credential embedded in a remote URL (§45). Catches ANY staged file,
+        # which is the point: manifest.fleet.tsv and manifest.fleet.config.yaml
+        # are deliberately committed — the fleet allowlist re-includes them by
+        # name — so the usual "keep it out of git" defence does not apply to
+        # them and this is the last gate before a push that cannot be undone.
+        #
+        # Three narrowings, each load-bearing:
+        #   - the userinfo must contain a ':', so SSH remotes (git@host:path,
+        #     ssh://git@host/path) carry a USERNAME and do not match;
+        #   - the password class excludes '/', because RFC 3986 forbids it
+        #     unencoded in userinfo and git ends the authority at the first '/',
+        #     so http://host:8443/p@v1 is not mistaken for a credential;
+        #   - both classes exclude % $ < >, so a format string, a shell
+        #     expansion or a prose placeholder is not a credential:
+        #     `printf 'https://%s:%s@host'` and `https://<user>:<token>@host`
+        #     are how this repo's tests and docs are REQUIRED to write the shape
+        #     (see credential_url_redaction.bats), and a check that fires on its
+        #     own documentation gets disabled by the next person it blocks.
+        #     A real secret contains none of those four characters.
+        '[a-zA-Z][a-zA-Z0-9+.-]*://[^:/@[:space:]%$<>]+:[^/@[:space:]%$<>]+@'
     )
 
     FOUND_SENSITIVE=0

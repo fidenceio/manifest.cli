@@ -526,10 +526,71 @@ load_fleet_config() {
 }
 
 # -----------------------------------------------------------------------------
+# Function: _fleet_member_remote_url (internal)
+# -----------------------------------------------------------------------------
+# A member's remote URL, DERIVED rather than stored. The roster used to carry it
+# in a REMOTE_URL column; that column was dropped in §45 because the roster is
+# deliberately committed and pushed, so a member added on
+# `https://<user>:<token>@host/…` had its credential published irrecoverably.
+#
+# Two sources, in this order, and the order is the whole design:
+#   1. the member's own `origin` — authoritative once the member is cloned, and
+#      free of any credential (see _get_repo_remote_url, which strips one);
+#   2. the fleet config's `services.<name>.url` — the ONLY answer for a member
+#      that has not been cloned yet, which is exactly the case `fleet clone`
+#      exists to serve. That file is committed too, so its writers strip the
+#      credential at the point of write instead.
+#
+# Empty output means "no remote known", which callers already handle: the
+# pre-flight refuses such a member before any release mutation, and the clone
+# path reports "no URL specified" rather than guessing.
+#
+# ARGUMENTS:
+#   $1 - Absolute path to the member
+#   $2 - Member (service) name, for the config lookup
+#   $3 - Fleet config file (optional; defaults to MANIFEST_CLI_FLEET_CONFIG_FILE).
+#        Passed explicitly by callers outside the fleet command path — status
+#        resolves its own config file and must not depend on that global being
+#        set. Taking it as an argument is what lets this stay the ONE derivation
+#        rather than growing a second copy in manifest-status.sh.
+# -----------------------------------------------------------------------------
+_fleet_member_remote_url() {
+    local abs_path="$1"
+    local name="$2"
+    local config_file="${3:-${MANIFEST_CLI_FLEET_CONFIG_FILE:-}}"
+    local url=""
+
+    if [[ -n "$abs_path" && -d "$abs_path" ]]; then
+        if declare -F _get_repo_remote_url >/dev/null 2>&1; then
+            url="$(_get_repo_remote_url "$abs_path" 2>/dev/null || echo "")"
+        else
+            url="$(git -C "$abs_path" remote get-url origin 2>/dev/null || echo "")"
+        fi
+        [[ -n "$url" ]] && { printf '%s' "$url"; return 0; }
+    fi
+
+    # Not cloned (or no origin): fall back to the declared URL in the fleet
+    # config. Reached only when the cheap git read above found nothing, so a
+    # fully-cloned fleet pays no yq fork per member for this.
+    if [[ -n "$name" && -n "$config_file" && -f "$config_file" ]] \
+        && command -v yq >/dev/null 2>&1; then
+        url=$(SERVICE_NAME="$name" yq e '.services[strenv(SERVICE_NAME)].url // ""' \
+            "$config_file" 2>/dev/null || echo "")
+        [[ "$url" == "null" ]] && url=""
+    fi
+
+    # Returned verbatim on purpose — see the READ/WRITE/PRINT split documented at
+    # _get_repo_remote_url. A credential can still reach this from a hand-edited
+    # fleet config, and a caller that PRINTS this value redacts it there.
+    printf '%s' "$url"
+}
+
+# -----------------------------------------------------------------------------
 # Function: _load_all_service_configs (internal)
 # -----------------------------------------------------------------------------
 # Loads configuration for all selected services from manifest.fleet.tsv.
-# Reads base properties (path, url, branch) from TSV, then applies
+# Reads base properties (path, branch) from the TSV and derives the remote URL
+# (see _fleet_member_remote_url — the roster no longer stores one), then applies
 # optional per-service overrides from the YAML config (team, excluded, etc.).
 #
 # ARGUMENTS:
@@ -561,7 +622,31 @@ _load_all_service_configs() {
     # Refuse loudly instead of merging.
     local -A _seen_name_for_key=()
 
-    while IFS=$'\t' read -r selected name path has_git url branch version; do
+    # Column positions come from the roster's own header, because a file written
+    # before §45 still carries the dropped REMOTE_URL column and a positional
+    # read would take that URL for the branch — a wrong value, not an error.
+    # This also retires the bare `IFS=$'\t' read` that used to destructure the
+    # row here: tab IS whitespace to `read`, so a run of tabs collapses and an
+    # empty column shifted every field after it one to the left. The x1f split
+    # in _manifest_fleet_tsv_read_line is what every other reader already uses,
+    # and the inline fallback keeps this loader working when the detect module
+    # is not loaded (unit tests source this file alone).
+    local i_select i_name i_path i_branch
+    if declare -F _manifest_fleet_tsv_column_index >/dev/null 2>&1; then
+        i_select="$(_manifest_fleet_tsv_column_index "$tsv_file" "SELECT")"
+        i_name="$(_manifest_fleet_tsv_column_index "$tsv_file" "NAME")"
+        i_path="$(_manifest_fleet_tsv_column_index "$tsv_file" "PATH")"
+        i_branch="$(_manifest_fleet_tsv_column_index "$tsv_file" "BRANCH")"
+    fi
+
+    local _row
+    while IFS= read -r _row || [[ -n "$_row" ]]; do
+        local _fields=() _sep=$'\x1f'
+        IFS="$_sep" read -r -a _fields <<< "${_row//$'\t'/$_sep}"
+        local selected="${_fields[${i_select:-0}]:-}"
+        local name="${_fields[${i_name:-1}]:-}"
+        local path="${_fields[${i_path:-2}]:-}"
+        local branch="${_fields[${i_branch:-4}]:-}"
         [[ "$selected" =~ ^#.*$ ]] && continue
         [[ -z "$selected" ]] && continue
         [[ "$selected" != "true" ]] && continue
@@ -585,7 +670,8 @@ _load_all_service_configs() {
 
         # Base properties from TSV (inventory)
         printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_PATH" '%s' "$abs_path"
-        printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_URL" '%s' "$url"
+        printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_URL" '%s' \
+            "$(_fleet_member_remote_url "$abs_path" "$name" "$MANIFEST_CLI_FLEET_CONFIG_FILE")"
         printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_BRANCH" '%s' "${branch:-${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}}"
         printf -v "MANIFEST_CLI_FLEET_SERVICE_${var_name}_SUBMODULE" '%s' "false"
 

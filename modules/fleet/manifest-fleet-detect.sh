@@ -68,6 +68,93 @@ _manifest_fleet_tsv_read_line() {
     IFS="$separator" read -r -a _fields_ref <<< "$line"
 }
 
+# -----------------------------------------------------------------------------
+# manifest.fleet.tsv schema
+# -----------------------------------------------------------------------------
+# The roster carries NO remote URL. It used to (a REMOTE_URL column between
+# HAS_GIT and BRANCH) and that was §45: the TSV is deliberately committed —
+# `_fleet_write_allowlist_gitignore` re-includes it by name and `_fleet_root_release`
+# stages it by name — so a member added on `https://<user>:<token>@host/…` had its
+# credential persisted and pushed, and a credential on a remote cannot be
+# recovered by any local action.
+#
+# The column was DROPPED rather than redacted, because a redacted URL is not
+# clone-able and this value feeds `git clone`. The URL is derived on demand
+# instead (see _fleet_member_remote_url): the member's own `origin` is the
+# authority once it is cloned, and the fleet config YAML answers for one that is
+# not. That is not a new idea in this codebase — manifest-fleet-topics.sh already
+# ignored the stored column and re-derived from `origin`, calling it "the source
+# of truth for its slug".
+#
+# Readers must not hard-code a column index. A v1 file (with REMOTE_URL) and a
+# v2 file (without) differ by one column, so a positional reader silently reads
+# v1's URL as v2's BRANCH — a wrong value, not an error. Every reader below maps
+# columns through _manifest_fleet_tsv_column_index, which reads the file's own
+# header row, so both schemas parse correctly and neither needs to be guessed.
+_manifest_fleet_tsv_header_line() {
+    printf "# SELECT\tNAME\tPATH\tHAS_GIT\tBRANCH\n"
+}
+
+# The single write boundary for a roster data row. Every writer goes through it
+# so the fail-closed check below has one place to stand: per-writer stripping
+# cannot bound a set that grows, and §45 was filed against four writers that had
+# already become ten. A fifth writer added later either calls this and is
+# checked, or does not and is visible as a bare printf in review.
+#
+# Refuses rather than sanitizes. A credential reaching this point means a field
+# is carrying a URL the schema says it should not carry, so the value is not the
+# only thing wrong — silently cleaning it would hide the writer that produced it.
+_manifest_fleet_tsv_write_row() {
+    local field
+    for field in "$@"; do
+        manifest_assert_no_embedded_credential "$field" "manifest.fleet.tsv" || return 1
+    done
+    printf "%s\t%s\t%s\t%s\t%s\n" "$1" "$2" "$3" "$4" "$5"
+}
+
+# Index of column $2 in the TSV at $1; empty output when the file names no such
+# column (which is the correct answer for REMOTE_URL in a v2 file). Falls back
+# to the v1 layout only when the file carries no header row at all, because a
+# headerless roster predates this function and can only be the old shape.
+_manifest_fleet_tsv_column_index() {
+    local tsv_file="$1"
+    local want="$2"
+    local line idx
+    local -a header_fields=()
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        case "$line" in
+            '# SELECT'*) ;;
+            *) continue ;;
+        esac
+        _manifest_fleet_tsv_read_line "${line#\# }" header_fields
+        for idx in "${!header_fields[@]}"; do
+            if [[ "${header_fields[$idx]}" == "$want" ]]; then
+                printf '%s' "$idx"
+                return 0
+            fi
+        done
+        return 0
+    done < "$tsv_file"
+
+    # No header row: the legacy positional layout, REMOTE_URL included.
+    case "$want" in
+        SELECT) printf '0' ;;
+        NAME) printf '1' ;;
+        PATH) printf '2' ;;
+        HAS_GIT) printf '3' ;;
+        REMOTE_URL) printf '4' ;;
+        BRANCH) printf '5' ;;
+    esac
+    return 0
+}
+
+# True when the roster at $1 still carries the dropped REMOTE_URL column, i.e.
+# it was written by a CLI older than the §45 fix and may hold a credential.
+_manifest_fleet_tsv_is_legacy() {
+    [[ -n "$(_manifest_fleet_tsv_column_index "$1" "REMOTE_URL")" ]]
+}
+
 # =============================================================================
 # DETECTION CONFIGURATION
 # =============================================================================
@@ -324,7 +411,18 @@ _is_git_submodule() {
 #   $1 - Repository directory path
 #
 # RETURNS:
-#   Echoes the remote URL or empty string if not found
+#   Echoes the remote URL or empty string if not found.
+#
+# Deliberately returns the value VERBATIM, credential included. The three
+# boundaries are separate and each is handled where it belongs (§45):
+#   - READ  — honest. Stripping here would hide from the user that their own git
+#             config carries a credential, which is information they need.
+#   - WRITE — strips and then refuses: manifest_url_strip_credentials plus
+#             manifest_assert_no_embedded_credential at every site that persists
+#             a URL into a committed file.
+#   - PRINT — redacts, so the line still says WHICH remote it is
+#             (`https://[REDACTED]@host/p`) and that a credential was present.
+# Collapsing any two of those into one is what makes a leak or a lie.
 # -----------------------------------------------------------------------------
 _get_repo_remote_url() {
     local repo_dir="$1"
@@ -873,16 +971,17 @@ generate_start_tsv() {
     if [[ "$fingerprint_mode" != "trusted" ]]; then
         echo "# DEFAULT-SELECT-HASH: ${default_hash}"
     fi
-    printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
+    _manifest_fleet_tsv_header_line
 
-    # Data rows
+    # Data rows. The discovery stream still carries a URL at index 4 — it is the
+    # in-memory inventory, which never reaches disk — and this writer drops it on
+    # the floor deliberately. See the schema note above.
     while IFS= read -r line; do
         local fields=()
         _manifest_fleet_tsv_read_line "$line" fields
         local name="${fields[0]:-}"
         local path="${fields[1]:-}"
         local branch="${fields[2]:-}"
-        local url="${fields[4]:-}"
         local has_git="${fields[6]:-}"
         [[ -z "$name" ]] && continue
 
@@ -890,8 +989,7 @@ generate_start_tsv() {
         local selected
         selected=$(_fleet_start_selected_for_row "$has_git" "$select_mode")
 
-        printf "%s\t%s\t%s\t%s\t%s\t%s\n" \
-            "$selected" "$name" "$path" "$has_git" "$url" "${branch:-}"
+        _manifest_fleet_tsv_write_row "$selected" "$name" "$path" "$has_git" "${branch:-}" || return 1
     done <<< "$discovered"
     return 0
 }
@@ -906,7 +1004,12 @@ generate_start_tsv() {
 #   $1 - Path to manifest.fleet.tsv
 #
 # OUTPUT FORMAT (per line, tab-separated):
-#   NAME  PATH  HAS_GIT  REMOTE_URL  BRANCH
+#   NAME  PATH  HAS_GIT  BRANCH
+#
+# The REMOTE_URL that used to sit between HAS_GIT and BRANCH is gone (§45); a
+# consumer needing one calls _fleet_member_remote_url. Column positions are read
+# from the file's own header, so a v1 roster written before that change still
+# parses — its URL column is skipped rather than mistaken for the branch.
 # -----------------------------------------------------------------------------
 parse_start_tsv() {
     local tsv_file="$1"
@@ -916,16 +1019,22 @@ parse_start_tsv() {
         return 1
     fi
 
+    local i_select i_name i_path i_has_git i_branch
+    i_select="$(_manifest_fleet_tsv_column_index "$tsv_file" "SELECT")"
+    i_name="$(_manifest_fleet_tsv_column_index "$tsv_file" "NAME")"
+    i_path="$(_manifest_fleet_tsv_column_index "$tsv_file" "PATH")"
+    i_has_git="$(_manifest_fleet_tsv_column_index "$tsv_file" "HAS_GIT")"
+    i_branch="$(_manifest_fleet_tsv_column_index "$tsv_file" "BRANCH")"
+
     local line
     while IFS= read -r line; do
         local fields=()
         _manifest_fleet_tsv_read_line "$line" fields
-        local selected="${fields[0]:-}"
-        local name="${fields[1]:-}"
-        local path="${fields[2]:-}"
-        local has_git="${fields[3]:-}"
-        local url="${fields[4]:-}"
-        local branch="${fields[5]:-}"
+        local selected="${fields[${i_select:-0}]:-}"
+        local name="${fields[${i_name:-1}]:-}"
+        local path="${fields[${i_path:-2}]:-}"
+        local has_git="${fields[${i_has_git:-3}]:-}"
+        local branch="${fields[${i_branch:-4}]:-}"
         # Skip comments and blank lines
         [[ "$selected" =~ ^#.*$ ]] && continue
         [[ -z "$selected" ]] && continue
@@ -934,7 +1043,7 @@ parse_start_tsv() {
         # trailing VERSION column for backward compatibility, but the TSV no
         # longer treats per-repo versions as inventory truth.
         if [[ "$selected" == "true" ]]; then
-            printf "%s\t%s\t%s\t%s\t%s\n" "$name" "$path" "$has_git" "$url" "${branch:-}"
+            printf "%s\t%s\t%s\t%s\n" "$name" "$path" "$has_git" "${branch:-}"
         fi
     done < "$tsv_file"
 }
@@ -983,9 +1092,15 @@ _fleet_tsv_header_depth() {
 #     discovered paths not already listed; the sole in-place edit is the
 #     "# Last scanned:" timestamp. Used by `update`/`refresh fleet` so an update
 #     never drops a curated row the (shallower or transiently-missing) scan
-#     fails to re-find, and never clobbers a manual edit to an existing row
-#     (e.g. a deliberately preserved REMOTE_URL). With no existing TSV there is
-#     nothing to edit in place, so append falls through to regenerate.
+#     fails to re-find, and never clobbers a manual edit to an existing row.
+#     With no existing TSV there is nothing to edit in place, so append falls
+#     through to regenerate.
+#
+#     ONE exception to verbatim, added with §45: a roster still carrying the
+#     dropped REMOTE_URL column is migrated to the current schema as it is
+#     re-emitted, and the count is reported as "MIGRATED:<n>" on stderr. Without
+#     it, a credential committed before that fix would be re-staged and re-pushed
+#     by every subsequent update — verbatim preservation would preserve the leak.
 #
 # ARGUMENTS:
 #   $1 - Output of discover_all_directories (multi-line, tab-separated)
@@ -1021,12 +1136,53 @@ merge_update_tsv() {
             [[ -n "$key" ]] && existing_paths["$key"]="1"
         done < "$existing_tsv"
 
-        # Emit the existing file verbatim, refreshing only the scan timestamp.
+        # A legacy roster still carries the dropped REMOTE_URL column, and this
+        # is the ONE path that would otherwise preserve a credential forever:
+        # append mode re-emits every existing line byte-for-byte, so a token
+        # committed before the §45 fix would be re-staged and re-pushed by every
+        # subsequent update. Migrating here is a deliberate, announced exception
+        # to verbatim preservation — the SELECT toggles, row order, comments and
+        # any other manual edit still survive; only the column that must not
+        # exist is removed.
+        local legacy=false migrated_count=0
+        local i_select i_name i_path i_has_git i_branch
+        if _manifest_fleet_tsv_is_legacy "$existing_tsv"; then
+            legacy=true
+            i_select="$(_manifest_fleet_tsv_column_index "$existing_tsv" "SELECT")"
+            i_name="$(_manifest_fleet_tsv_column_index "$existing_tsv" "NAME")"
+            i_path="$(_manifest_fleet_tsv_column_index "$existing_tsv" "PATH")"
+            i_has_git="$(_manifest_fleet_tsv_column_index "$existing_tsv" "HAS_GIT")"
+            i_branch="$(_manifest_fleet_tsv_column_index "$existing_tsv" "BRANCH")"
+        fi
+
+        # Emit the existing file, refreshing only the scan timestamp (and, on a
+        # legacy roster, dropping the REMOTE_URL column).
         while IFS= read -r line || [[ -n "$line" ]]; do
             case "$line" in
-                "# Last scanned: "*) echo "# Last scanned: $scan_date" ;;
-                *) printf '%s\n' "$line" ;;
+                "# Last scanned: "*) echo "# Last scanned: $scan_date"; continue ;;
+                '# SELECT'*)
+                    if [[ "$legacy" == "true" ]]; then
+                        _manifest_fleet_tsv_header_line
+                    else
+                        printf '%s\n' "$line"
+                    fi
+                    continue
+                    ;;
+                '#'*|'') printf '%s\n' "$line"; continue ;;
             esac
+            if [[ "$legacy" == "true" ]]; then
+                local old_fields=()
+                _manifest_fleet_tsv_read_line "$line" old_fields
+                printf "%s\t%s\t%s\t%s\t%s\n" \
+                    "${old_fields[${i_select:-0}]:-}" \
+                    "${old_fields[${i_name:-1}]:-}" \
+                    "${old_fields[${i_path:-2}]:-}" \
+                    "${old_fields[${i_has_git:-3}]:-}" \
+                    "${old_fields[${i_branch:-5}]:-}"
+                ((migrated_count += 1))
+            else
+                printf '%s\n' "$line"
+            fi
         done < "$existing_tsv"
 
         # Append discovered paths not already listed.
@@ -1038,7 +1194,6 @@ merge_update_tsv() {
             local name="${fields[0]:-}"
             local path="${fields[1]:-}"
             local branch="${fields[2]:-}"
-            local url="${fields[4]:-}"
             local has_git="${fields[6]:-}"
             [[ -z "$name" ]] && continue
             local key
@@ -1047,30 +1202,39 @@ merge_update_tsv() {
             existing_paths["$key"]="1"
             local selected
             [[ "$has_git" == "true" ]] && selected="true" || selected="false"
-            printf "%s\t%s\t%s\t%s\t%s\t%s\n" \
-                "$selected" "$name" "$path" "$has_git" "$url" "${branch:-}"
+            _manifest_fleet_tsv_write_row "$selected" "$name" "$path" "$has_git" "${branch:-}" || return 1
             ((new_count += 1))
         done <<< "$discovered"
 
         echo "NEW:$new_count" >&2
+        [[ "$migrated_count" -gt 0 ]] && echo "MIGRATED:$migrated_count" >&2
         return 0
     fi
 
     # --- regenerate mode (default): rebuild the TSV from the scan -------------
     # Build lookup of existing selections keyed by path
     declare -A existing_selections
-    declare -A existing_names existing_has_git existing_urls existing_branches
+    declare -A existing_names existing_has_git existing_branches
     if [[ -f "$existing_tsv" ]]; then
+        # Column positions come from the file's own header, so a legacy roster
+        # (REMOTE_URL still present) is read correctly rather than having its URL
+        # mistaken for a branch. Regenerating drops that column on its own — this
+        # branch rebuilds every row from the scan.
+        local i_select i_name i_path i_has_git i_branch
+        i_select="$(_manifest_fleet_tsv_column_index "$existing_tsv" "SELECT")"
+        i_name="$(_manifest_fleet_tsv_column_index "$existing_tsv" "NAME")"
+        i_path="$(_manifest_fleet_tsv_column_index "$existing_tsv" "PATH")"
+        i_has_git="$(_manifest_fleet_tsv_column_index "$existing_tsv" "HAS_GIT")"
+        i_branch="$(_manifest_fleet_tsv_column_index "$existing_tsv" "BRANCH")"
         local line
         while IFS= read -r line; do
             local fields=()
             _manifest_fleet_tsv_read_line "$line" fields
-            local selected="${fields[0]:-}"
-            local name="${fields[1]:-}"
-            local path="${fields[2]:-}"
-            local has_git="${fields[3]:-}"
-            local url="${fields[4]:-}"
-            local branch="${fields[5]:-}"
+            local selected="${fields[${i_select:-0}]:-}"
+            local name="${fields[${i_name:-1}]:-}"
+            local path="${fields[${i_path:-2}]:-}"
+            local has_git="${fields[${i_has_git:-3}]:-}"
+            local branch="${fields[${i_branch:-4}]:-}"
             [[ "$selected" =~ ^#.*$ ]] && continue
             [[ -z "$selected" ]] && continue
             local key
@@ -1078,7 +1242,6 @@ merge_update_tsv() {
             existing_selections["$key"]="$selected"
             existing_names["$key"]="$name"
             existing_has_git["$key"]="$has_git"
-            existing_urls["$key"]="$url"
             existing_branches["$key"]="$branch"
         done < "$existing_tsv"
     fi
@@ -1090,19 +1253,18 @@ merge_update_tsv() {
     echo "# Last scanned: $scan_date"
     echo "# Canonical config: manifest.fleet.config.yaml"
     echo "# Toggle the SELECT column (true/false) — update/ship/status honor it directly. (manifest init fleet is the first-time scaffold step only.)"
-    printf "# SELECT\tNAME\tPATH\tHAS_GIT\tREMOTE_URL\tBRANCH\n"
+    _manifest_fleet_tsv_header_line
 
     # Write data rows, preserving existing selections
     local new_count=0
     declare -A emitted_paths
     if [[ -n "${existing_selections[.]+_}" ]]; then
-        printf "%s\t%s\t%s\t%s\t%s\t%s\n" \
+        _manifest_fleet_tsv_write_row \
             "${existing_selections[.]}" \
             "${existing_names[.]}" \
             "." \
             "${existing_has_git[.]:-true}" \
-            "${existing_urls[.]}" \
-            "${existing_branches[.]:-${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}}"
+            "${existing_branches[.]:-${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}}" || return 1
         emitted_paths["."]="true"
     fi
 
@@ -1113,7 +1275,6 @@ merge_update_tsv() {
         local name="${fields[0]:-}"
         local path="${fields[1]:-}"
         local branch="${fields[2]:-}"
-        local url="${fields[4]:-}"
         local has_git="${fields[6]:-}"
         [[ -z "$name" ]] && continue
         local key
@@ -1130,8 +1291,7 @@ merge_update_tsv() {
             ((new_count += 1))
         fi
 
-        printf "%s\t%s\t%s\t%s\t%s\t%s\n" \
-            "$selected" "$name" "$path" "$has_git" "$url" "${branch:-}"
+        _manifest_fleet_tsv_write_row "$selected" "$name" "$path" "$has_git" "${branch:-}" || return 1
         emitted_paths["$key"]="true"
     done <<< "$discovered"
 
@@ -1330,6 +1490,16 @@ generate_service_yaml() {
     echo "    path: \"./$path\""
 
     if [[ -n "$url" ]]; then
+        # manifest.fleet.config.yaml is committed and pushed on a root release,
+        # exactly like the roster (§45). Unlike the roster this file KEEPS the
+        # URL — it is the only answer for a member that has not been cloned yet,
+        # so `git clone` has somewhere to read it from — which makes stripping
+        # the credential, rather than dropping the field, the fix here. What is
+        # left is a perfectly clone-able URL; git's credential helper supplies
+        # the secret, and an SSH remote (`git@host:p`, `ssh://git@host/p`) is
+        # untouched because its userinfo is a username, not a credential.
+        url="$(manifest_url_strip_credentials "$url")"
+        manifest_assert_no_embedded_credential "$url" "manifest.fleet.config.yaml" || return 1
         echo "    url: \"$url\""
     fi
 

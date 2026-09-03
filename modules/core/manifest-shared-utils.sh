@@ -453,6 +453,60 @@ manifest_redact() {
 }
 
 # -----------------------------------------------------------------------------
+# Credentials embedded in a remote URL: detect, and strip without breaking it.
+#
+# These are the WRITE-side counterpart to manifest_redact, which is a DISPLAY
+# redactor: it rewrites `scheme://<user>:<pass>@host/p` to `scheme://[REDACTED]@host/p`
+# so a log line still says which remote it is. That output is deliberately NOT
+# clone-able, which is exactly wrong for a value being persisted into a file the
+# CLI later feeds to `git clone` — redacting a stored URL converts a credential
+# leak into a broken clone. Stripping keeps the URL usable and lets git's own
+# credential helper supply the secret, which is where a secret belongs.
+#
+# The pattern is deliberately the same narrow one manifest_redact uses, and the
+# narrowing is load-bearing in BOTH directions:
+#   - the userinfo must contain a `:` — `ssh://git@host/p` and the scp-like
+#     `git@host:p` carry a USERNAME, not a credential, and stripping those
+#     breaks every SSH remote in a fleet;
+#   - the password class excludes `/` because RFC 3986 forbids it unencoded in
+#     userinfo and git's parser ends the authority at the first `/`, so the
+#     obvious `[^@[:space:]]+` would swallow path text and mangle a URL like
+#     `http://host:8443/p@v1` that carries no credential at all.
+# -----------------------------------------------------------------------------
+manifest_url_has_credentials() {
+    case "${1-}" in
+        *://*:*@*) ;;
+        *) return 1 ;;
+    esac
+    # The case glob above is only a cheap prefilter — `http://host:8443/p@v1`
+    # matches it and carries no credential. The regex is the actual decision.
+    [[ "${1-}" =~ ^[A-Za-z][A-Za-z0-9+.-]*://[^:/@[:space:]]+:[^/@[:space:]]+@ ]]
+}
+
+manifest_url_strip_credentials() {
+    local url="${1-}"
+    manifest_url_has_credentials "$url" || { printf '%s' "$url"; return 0; }
+    printf '%s' "$(printf '%s' "$url" | sed -E \
+        's#^([A-Za-z][A-Za-z0-9+.-]*://)[^:/@[:space:]]+:[^/@[:space:]]+@#\1#')"
+}
+
+# Fail-closed write boundary. Refuses a value carrying an embedded credential
+# and names where it was about to be written, so a NEW writer added later to a
+# persisted surface cannot reintroduce the leak silently — per-writer stripping
+# cannot bound a set that grows. Callers must treat a non-zero return as fatal.
+manifest_assert_no_embedded_credential() {
+    local value="${1-}"
+    local context="${2:-<unknown>}"
+    manifest_url_has_credentials "$value" || return 0
+    log_error "Refusing to write a credentialed URL into $context."
+    log_error "  Value: $(manifest_redact "$value")"
+    log_error "  A credential in a committed file is published the moment it is pushed and"
+    log_error "  cannot be recovered by any local action. Store the URL without credentials"
+    log_error "  and let git's credential helper supply the secret at clone time."
+    return 1
+}
+
+# -----------------------------------------------------------------------------
 # Permission bits of an existing file as an octal string (e.g. "644").
 # Empty + non-zero when the path is absent or neither stat dialect answers.
 #
