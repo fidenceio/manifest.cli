@@ -1,5 +1,16 @@
 # Changelog
 
+## [59.10.0] - 2026-09-03
+
+**Release Type:** Minor
+
+### Changes
+
+- Fix(fleet): drop the roster's REMOTE_URL column so a credential cannot be committed
+- Fix(fleet): stop fleet init silently rewriting each member's own .gitignore
+- Update documentation and examples
+
+
 ## [59.9.1] - 2026-09-02
 
 **Release Type:** Patch
@@ -129,15 +140,3 @@
 - Fix(fleet): a refused fleet-root commit unstages only what the run staged
 - Docs(tracker): file §9.30 and §6.5 from the Fidence plan; record §9.23 progress
 - Update 1 file before release
-
-
-## [59.4.2] - 2026-08-21
-
-**Release Type:** Patch
-
-### Changes
-
-- Add GitHub Release publishing support
-- Update documentation and examples
-- Wire first-class CLI commands to inspectable built-in recipe definitions
-- Add regression coverage for the changed CLI workflow
