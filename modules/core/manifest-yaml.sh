@@ -827,6 +827,164 @@ _manifest_yaml_expand_home_prefix() {
 # RETURNS:
 #   0 if the value was exported, 1 if it was empty after trimming (skipped)
 # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# §44 — config keys that name a PROGRAM the CLI executes during a ship.
+# -----------------------------------------------------------------------------
+# These five are not ordinary settings. Three name an executable outright and two
+# select `command` as a provider, which is what makes the other two reachable:
+#
+#   release.gate_command        docs.review.command      docs.release_notes.command
+#   docs.review.provider        docs.release_notes.provider
+#
+# The value is executed as argv (never spliced into a shell — see
+# _manifest_release_gate_test_command), so the shell-metacharacter half of
+# SEC-002 was closed in v55.3.0. The half that stayed open is the one that
+# matters more: **a repo's own committed manifest.config.yaml can name the
+# program**, and a repo is a thing you clone from someone else. Worse, the
+# project layer loads AFTER the user's global layer and therefore overrides it —
+# so a user could not defend by configuring safely.
+#
+# The rule: an execution key is honoured only from a layer its OWNER controls.
+#   honoured  — global (~/.manifest-cli/…), any *.local.yaml (gitignored by the
+#               scaffold), and the process environment, which is the invoking
+#               user by definition.
+#   refused   — manifest.config.yaml, in the project OR at the fleet root. Those
+#               are committed files that travel with a clone.
+#
+# Refusal is announced, never silent: a user whose committed config stops taking
+# effect must be told why, or the fix reads as a bug. Opt back in per repo with
+# MANIFEST_CLI_TRUST_REPO_COMMANDS=1 — an environment variable on purpose,
+# because a committed file must not be able to grant itself trust.
+_MANIFEST_CLI_YAML_EXECUTION_KEYS=(
+    MANIFEST_CLI_RELEASE_GATE_COMMAND
+    MANIFEST_CLI_DOC_REVIEW_COMMAND
+    MANIFEST_CLI_RELEASE_NOTES_COMMAND
+    MANIFEST_CLI_DOC_REVIEW_PROVIDER
+    MANIFEST_CLI_RELEASE_NOTES_PROVIDER
+)
+
+# Layer currently being loaded, set by load_configuration around each
+# load_yaml_to_env call. Empty means "not loading a file layer" — the per-key
+# CRUD writers and direct callers — which is treated as user-owned, because
+# reaching those requires already being the user at a terminal.
+_MANIFEST_CLI_YAML_LOADING_LAYER=""
+
+# Which layer supplied each honoured execution key, for disclosure. Keyed by env
+# var name. This is the ONLY record of provenance the plan/dry-run needs, so it
+# is populated at the single point that honours a value rather than re-derived
+# later from the files (§36: one fact, one place).
+declare -gA _MANIFEST_CLI_YAML_EXECUTION_KEY_LAYER=()
+
+# Refusals, so the announcement can be made once at the end of loading rather
+# than mid-file where it interleaves with the loader's own progress output.
+declare -ga _MANIFEST_CLI_YAML_EXECUTION_REFUSALS=()
+
+_manifest_cli_yaml_layer_is_user_owned() {
+    case "${1:-}" in
+        # A committed file that travels with a clone. Everything else — global,
+        # *.local.yaml, the process env, and the empty "not a file layer" case —
+        # is the invoking user's own.
+        project-shared|fleet-shared) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
+_manifest_cli_yaml_is_execution_key() {
+    local candidate="${1:-}" key
+    for key in "${_MANIFEST_CLI_YAML_EXECUTION_KEYS[@]}"; do
+        [[ "$candidate" == "$key" ]] && return 0
+    done
+    return 1
+}
+
+# True when the repo layer has been explicitly trusted for this run.
+manifest_trusts_repo_commands() {
+    case "${MANIFEST_CLI_TRUST_REPO_COMMANDS:-}" in
+        1|true|yes) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# Which layer supplied an honoured execution key; empty when it was not supplied
+# by a file layer (the process environment, or not set at all).
+#
+# An ACCESSOR rather than a bare array read, because callers live in modules that
+# may load without this one. Referencing `${assoc[NAME]}` when the array has not
+# been declared associative makes bash evaluate the subscript as ARITHMETIC —
+# `MANIFEST_CLI_RELEASE_GATE_COMMAND` becomes an unset arithmetic variable, and
+# under the suite's shell options that is an error, not an empty string. The
+# release-gate tests found this by failing in a context that never sources this
+# file; the accessor keeps the array's declaration and its readers together.
+manifest_config_execution_key_layer() {
+    local env_var="${1:-}"
+    [[ -n "$env_var" ]] || return 0
+    case "$(declare -p _MANIFEST_CLI_YAML_EXECUTION_KEY_LAYER 2>/dev/null)" in
+        *"declare -A"*) ;;
+        *) return 0 ;;
+    esac
+    printf '%s' "${_MANIFEST_CLI_YAML_EXECUTION_KEY_LAYER[$env_var]:-}"
+    return 0
+}
+
+# Announce refusals once, after the layer chain has loaded. Values are redacted:
+# a refused command is attacker-supplied text and this line is printed, logged,
+# and pasted into issues.
+manifest_config_announce_execution_refusals() {
+    [[ ${#_MANIFEST_CLI_YAML_EXECUTION_REFUSALS[@]} -gt 0 ]] || return 0
+    local entry env_var layer value
+    log_warning "Ignored ${#_MANIFEST_CLI_YAML_EXECUTION_REFUSALS[@]} config key(s) that name a program to execute, because they came from a committed file (§44)."
+    for entry in "${_MANIFEST_CLI_YAML_EXECUTION_REFUSALS[@]}"; do
+        env_var="${entry%%|*}"
+        layer="${entry#*|}"; layer="${layer%%|*}"
+        value="${entry##*|}"
+        echo "  - ${env_var} from ${layer}: $(manifest_redact "$value")" >&2
+    done
+    echo "  A committed config travels with a clone, so honouring it would let a repository" >&2
+    echo "  choose what runs on your machine during a ship. Set the key in your global config" >&2
+    echo "  or a .local.yaml instead, or trust this repo for one run:" >&2
+    echo "    MANIFEST_CLI_TRUST_REPO_COMMANDS=1 manifest ship …" >&2
+    return 0
+}
+
+# The config-supplied programs that WILL run, as "env_var<TAB>layer<TAB>value"
+# rows — the disclosure half of §44. Emitted by the plan and by --dry-run, which
+# were both previously silent about the fact that a config-named program runs at
+# all. Reads the provenance recorded when each value was honoured, so this can
+# never disagree with what actually executes.
+#
+# Only PROGRAMS are emitted, never the provider selectors. A provider is the
+# switch that makes its command reachable, not a thing that runs — listing
+# `command` beside a path reads as if a program named "command" would execute.
+# The pairing is the point: a *_COMMAND whose provider is not `command` is
+# configured but unreachable, and disclosing it would over-report; a provider
+# set to `command` with no command set runs nothing, and disclosing that would
+# over-report too. Both are excluded by requiring the pair.
+manifest_config_execution_disclosure() {
+    local layer value provider
+
+    # The release gate has no provider switch — a non-empty command IS the gate.
+    value="${MANIFEST_CLI_RELEASE_GATE_COMMAND-}"
+    if [[ -n "${value//[[:space:]]/}" ]]; then
+        layer="${_MANIFEST_CLI_YAML_EXECUTION_KEY_LAYER[MANIFEST_CLI_RELEASE_GATE_COMMAND]:-env}"
+        printf '%s\t%s\t%s\n' "MANIFEST_CLI_RELEASE_GATE_COMMAND" "$layer" "$value"
+    fi
+
+    # The two provider-gated commands: disclose only when the pair is complete.
+    local pair
+    for pair in "MANIFEST_CLI_DOC_REVIEW_PROVIDER:MANIFEST_CLI_DOC_REVIEW_COMMAND" \
+                "MANIFEST_CLI_RELEASE_NOTES_PROVIDER:MANIFEST_CLI_RELEASE_NOTES_COMMAND"; do
+        local provider_var="${pair%%:*}"
+        local command_var="${pair##*:}"
+        provider="${!provider_var-}"
+        value="${!command_var-}"
+        [[ "$provider" == "command" ]] || continue
+        [[ -n "${value//[[:space:]]/}" ]] || continue
+        layer="${_MANIFEST_CLI_YAML_EXECUTION_KEY_LAYER[$command_var]:-env}"
+        printf '%s\t%s\t%s\n' "$command_var" "$layer" "$value"
+    done
+    return 0
+}
+
 _manifest_yaml_export_mapped_value() {
     local env_var="$1"
     local value="$2"
@@ -848,6 +1006,21 @@ _manifest_yaml_export_mapped_value() {
         '$HOME/'*) value="$HOME/${value#'$HOME/'}" ;;
     esac
     [[ -n "$value" ]] || return 1
+
+    # §44: fail-closed on an execution key from a committed layer. Enforced HERE
+    # because this is the single point both load_yaml_to_env read paths funnel
+    # through (§8) — a check at any consumer would have to be repeated at every
+    # consumer, and the doc-review provider alone fires twice per ship from
+    # inside commit_changes. Refusing at load means the hostile value never
+    # reaches any consumer's environment at all.
+    if _manifest_cli_yaml_is_execution_key "$env_var" \
+        && ! _manifest_cli_yaml_layer_is_user_owned "$_MANIFEST_CLI_YAML_LOADING_LAYER" \
+        && ! manifest_trusts_repo_commands; then
+        _MANIFEST_CLI_YAML_EXECUTION_REFUSALS+=("${env_var}|${_MANIFEST_CLI_YAML_LOADING_LAYER}|${value}")
+        log_debug "load_yaml_to_env: REFUSED ${env_var} from ${_MANIFEST_CLI_YAML_LOADING_LAYER} (§44)"
+        return 1
+    fi
+
     # ${!env_var@a}: attribute probe without the $(declare -p) fork.
     case "${!env_var@a}" in
         *[aA]*)
@@ -855,6 +1028,11 @@ _manifest_yaml_export_mapped_value() {
             ;;
     esac
     export "$env_var"="$value"
+    if _manifest_cli_yaml_is_execution_key "$env_var"; then
+        # Provenance for the disclosure half of §44. Recorded at the point the
+        # value is honoured, so the plan cannot disagree with what will run.
+        _MANIFEST_CLI_YAML_EXECUTION_KEY_LAYER["$env_var"]="${_MANIFEST_CLI_YAML_LOADING_LAYER:-env}"
+    fi
     log_debug "load_yaml_to_env: ${env_var}=${value}"
     return 0
 }

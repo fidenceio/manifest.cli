@@ -73,13 +73,53 @@ manifest_execution_parse() {
     remaining_ref=("${remaining[@]}")
 }
 
+# §44(1) — name every config-supplied program that will run, and which layer
+# supplied it.
+#
+# The gap this closes is narrow and specific: the CLI executes programs named by
+# configuration (the release gate, the doc-review provider, the release-notes
+# provider), and NOTHING said so. `--dry-run` executed none of them and did not
+# disclose that an applied run would. That silence is the whole difference
+# between an accepted trust boundary and an undisclosed one — a user cannot
+# accept a boundary they were never shown.
+#
+# Emitted from BOTH the preview and apply headers on purpose. Disclosure is not
+# a dry-run feature: an applied ship is exactly when the programs actually run,
+# so that is when the operator most needs to see them.
+#
+# Provenance comes from the loader's own record of what it honoured, so this can
+# never drift from what executes (§36).
+manifest_execution_disclose_programs() {
+    declare -F manifest_config_execution_disclosure >/dev/null 2>&1 || return 0
+    local rows
+    rows="$(manifest_config_execution_disclosure 2>/dev/null)" || return 0
+    [[ -n "$rows" ]] || return 0
+
+    echo ""
+    echo "Programs this run may execute, named by configuration:"
+    local env_var layer value
+    while IFS=$'\t' read -r env_var layer value; do
+        [[ -n "$env_var" ]] || continue
+        if declare -F manifest_redact >/dev/null 2>&1; then
+            value="$(manifest_redact "$value")"
+        fi
+        echo "  - ${value}"
+        echo "      from ${env_var} (${layer} layer)"
+    done <<< "$rows"
+    echo "  These run on THIS machine during the ship. A committed manifest.config.yaml"
+    echo "  cannot supply them unless MANIFEST_CLI_TRUST_REPO_COMMANDS=1 is set (§44)."
+    return 0
+}
+
 manifest_execution_preview_header() {
     local label="$1"
     echo "Preview - no changes written: $label"
+    manifest_execution_disclose_programs
 }
 
 manifest_execution_apply_header() {
     echo "Applying because -y/--yes was provided."
+    manifest_execution_disclose_programs
     # Lazy hook: modules loaded after execution-policy (e.g. manifest-config.sh)
     # can register _manifest_execution_apply_hook to perform apply-only writes
     # at the apply boundary — keeping preview commands side-effect-free without

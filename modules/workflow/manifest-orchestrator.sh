@@ -739,10 +739,45 @@ manifest_release_gate_run() {
                         return 1
                     fi
                     local cmd_display="${MANIFEST_CLI_RELEASE_GATE_ARGV[*]}"
-                    echo "🧪 Release gate: running tests before release (${cmd_display})..."
+                    # §44(1): say WHERE the gate command came from, not just what
+                    # it is. A config-supplied gate is a different claim from the
+                    # auto-detected ./scripts/run-tests.sh, and the two used to
+                    # print identically.
+                    local gate_layer=""
+                    if declare -F manifest_config_execution_key_layer >/dev/null 2>&1; then
+                        gate_layer="$(manifest_config_execution_key_layer MANIFEST_CLI_RELEASE_GATE_COMMAND)"
+                    fi
+                    local gate_origin="auto-detected"
+                    if [[ -n "${MANIFEST_CLI_RELEASE_GATE_COMMAND//[[:space:]]/}" ]]; then
+                        gate_origin="config: ${gate_layer:-env} layer"
+                    fi
+                    echo "🧪 Release gate: running tests before release (${cmd_display}) [${gate_origin}]..."
                     if ( _manifest_release_gate_exec "$gate_root" "${MANIFEST_CLI_RELEASE_GATE_ARGV[@]}" ); then
                         echo "✅ Release gate: tests passed."
-                        _MANIFEST_CLI_SHIP_LAST_GATE_STATUS="verified-local"
+                        # §44(4): a REPO-supplied gate reports distinguishably.
+                        # Otherwise a command the repository chose, which need
+                        # only `exit 0`, produces the identical "verified-local"
+                        # a real test run produces — the gate meant to constrain
+                        # the repo, silently satisfied by the repo.
+                        #
+                        # Deliberately keyed on the LAYER, not on "was a command
+                        # configured at all". A gate the user set in their own
+                        # global config or a .local.yaml carries exactly the
+                        # trust of the auto-detected suite — the user chose both
+                        # — so widening this to every configured gate would
+                        # redefine a recorded status value for legitimate users
+                        # while saying nothing extra about the case §44 is
+                        # about. Reachable only under
+                        # MANIFEST_CLI_TRUST_REPO_COMMANDS=1, since the loader
+                        # otherwise refuses a committed value outright.
+                        case "$gate_layer" in
+                            project-shared|fleet-shared)
+                                _MANIFEST_CLI_SHIP_LAST_GATE_STATUS="verified-local-repo-command"
+                                ;;
+                            *)
+                                _MANIFEST_CLI_SHIP_LAST_GATE_STATUS="verified-local"
+                                ;;
+                        esac
                         # Advance the freshness clock — only here, on a real pass —
                         # so a later no-delta stamp-only ship may skip until the
                         # window lapses (_manifest_gate_pass_is_fresh).

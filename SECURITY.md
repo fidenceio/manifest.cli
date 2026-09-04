@@ -72,7 +72,29 @@ Manifest CLI ships several defensive controls you can rely on and audit:
 
 - **Preview by default.** Mutating commands preview unless `-y` / `--yes` is given.
 - **Release gate.** `release.gate` (`local-tests` by default) blocks publishing a
-  release unless tests pass; `none` is loud and audited.
+  release unless tests pass; `none` is loud and audited. The gate command itself is
+  configurable, so see **Configuration that names a program** below for who is
+  allowed to set it — a gate a repository could choose would not be a gate.
+- **Configuration that names a program.** Five config keys name something the CLI
+  executes during a ship: `release.gate_command`, `docs.review.command`,
+  `docs.release_notes.command`, and the `docs.review.provider` /
+  `docs.release_notes.provider` selectors that make the commands reachable.
+  - They are executed as **argv, never through a shell** — no `eval`, no `bash -c`
+    interpolation — so a value cannot inject shell metacharacters.
+  - They are honoured **only from layers you own**: your global config, any
+    `*.local.yaml` (which the scaffold gitignores), and the process environment.
+    A **committed `manifest.config.yaml` is refused**, in the project and at the
+    fleet root, because that file travels with a clone — otherwise cloning a
+    repository and shipping it would let the repository choose what runs on your
+    machine, and the project layer overrides your global one, so configuring
+    safely would not have protected you.
+  - The refusal is **announced**, never silent, and names the key and the layer.
+  - Opt in per run with `MANIFEST_CLI_TRUST_REPO_COMMANDS=1`. It is an environment
+    variable deliberately: a committed file must not be able to grant itself trust.
+  - Both the preview and the applied run **disclose every config-named program that
+    may execute and the layer that supplied it**, and a gate supplied by
+    configuration reports a distinct status (`verified-local-config-command`) so it
+    cannot be mistaken for the auto-detected suite.
 - **Destructive-op guards.** Removal and global `brew` operations are gated; under a
   sandbox/test `HOME` they protectively skip rather than touch the real system.
 - **Secret scanning.** A pre-commit hook (`.git-hooks/pre-commit`) blocks committing

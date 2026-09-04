@@ -915,6 +915,7 @@ load_configuration() {
         # configuration before emitting, so anything on stdout here lands inside
         # the JSON document and makes it unparseable.
         echo "🔧 Loading user global configuration from: $MANIFEST_CLI_GLOBAL_CONFIG" >&2
+        _MANIFEST_CLI_YAML_LOADING_LAYER="global"
         if ! load_yaml_to_env "$MANIFEST_CLI_GLOBAL_CONFIG"; then
             log_error "Refusing to continue: user global configuration is present but could not be parsed: $MANIFEST_CLI_GLOBAL_CONFIG"
             return 1
@@ -940,6 +941,7 @@ load_configuration() {
         local fleet_shared="$fleet_root/manifest.config.yaml"
         if [ -f "$fleet_shared" ]; then
             echo "🔧 Inheriting fleet configuration from: manifest.config.yaml (Fleet: $fleet_root)" >&2
+            _MANIFEST_CLI_YAML_LOADING_LAYER="fleet-shared"
             if ! load_yaml_to_env "$fleet_shared"; then
                 log_error "Refusing to continue: fleet configuration is present but could not be parsed: $fleet_shared"
                 return 1
@@ -948,6 +950,7 @@ load_configuration() {
         local fleet_local="$fleet_root/manifest.config.local.yaml"
         if [ -f "$fleet_local" ]; then
             echo "🔧 Inheriting fleet local configuration from: manifest.config.local.yaml (Fleet: $fleet_root)" >&2
+            _MANIFEST_CLI_YAML_LOADING_LAYER="fleet-local"
             if ! load_yaml_to_env "$fleet_local"; then
                 log_error "Refusing to continue: fleet local configuration is present but could not be parsed: $fleet_local"
                 return 1
@@ -959,6 +962,7 @@ load_configuration() {
     local project_shared="$project_root/manifest.config.yaml"
     if [ -f "$project_shared" ]; then
         echo "🔧 Loading project configuration from: manifest.config.yaml (Project: $project_root)" >&2
+        _MANIFEST_CLI_YAML_LOADING_LAYER="project-shared"
         if ! load_yaml_to_env "$project_shared"; then
             log_error "Refusing to continue: project configuration is present but could not be parsed: $project_shared"
             return 1
@@ -970,11 +974,25 @@ load_configuration() {
         local project_local="$project_root/manifest.config.local.yaml"
         if [ -f "$project_local" ]; then
             echo "🔧 Loading project local configuration from: manifest.config.local.yaml (Project: $project_root)" >&2
+            _MANIFEST_CLI_YAML_LOADING_LAYER="project-local"
             if ! load_yaml_to_env "$project_local"; then
                 log_error "Refusing to continue: project local configuration is present but could not be parsed: $project_local"
                 return 1
             fi
         fi
+    fi
+
+    # Back to "no file layer" before the env overrides: the process environment
+    # is the invoking user by definition, and leaving the last file's label set
+    # would misattribute it (§44).
+    _MANIFEST_CLI_YAML_LOADING_LAYER=""
+
+    # Announce any execution key refused from a committed layer. Announced once,
+    # here, rather than mid-file where it would interleave with the loader's own
+    # progress output — and announced at all because a user whose committed
+    # config silently stopped taking effect would read the fix as a bug.
+    if declare -F manifest_config_announce_execution_refusals >/dev/null 2>&1; then
+        manifest_config_announce_execution_refusals
     fi
 
     # Exported MANIFEST_CLI_* values supplied at process startup are the

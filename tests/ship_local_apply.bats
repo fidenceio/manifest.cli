@@ -273,14 +273,29 @@ YAML
         "$REAL_GIT" -C "$work/$repo" remote add origin "https://example.invalid/$repo.git"
     done
 
+    # The gate POLICY is per-member committed config — that is the isolation
+    # under test, and release.gate is an ordinary key that stays honoured there.
+    #
+    # The gate COMMAND is in each member's .local.yaml instead. §44 refuses an
+    # execution key from a committed manifest.config.yaml, member repos included:
+    # a fleet member is the clone-from-elsewhere case in its purest form, since
+    # members are cloned from URLs the fleet config supplies. Left committed, the
+    # command would be refused and this test would silently stop exercising
+    # per-member gate resolution — which is what it is actually for.
     cat > "$work/bypass-svc/manifest.config.yaml" <<'YAML'
 release:
   gate: "none"
+YAML
+    cat > "$work/bypass-svc/manifest.config.local.yaml" <<'YAML'
+release:
   gate_command: "false"
 YAML
     cat > "$work/gated-svc/manifest.config.yaml" <<'YAML'
 release:
   gate: "local-tests"
+YAML
+    cat > "$work/gated-svc/manifest.config.local.yaml" <<'YAML'
+release:
   gate_command: "false"
 YAML
     echo "$work"
