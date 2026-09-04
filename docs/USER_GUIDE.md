@@ -386,6 +386,24 @@ A setting's value is worked out from six layers. **Lower in this table wins.**
 | 5 | `local` | `./manifest.config.local.yaml` | Always (and git-ignored) | Yes, the default target |
 | 6 | `env` | Exported `MANIFEST_CLI_*` variables, read when the process starts | Always | n/a |
 
+**Five keys are the one exception to "lower wins", and it is deliberate.**
+`release.gate_command`, `docs.review.command`, `docs.release_notes.command`,
+`docs.review.provider` and `docs.release_notes.provider` each name a program Manifest
+executes during a ship. They are honoured from layers **you** own — `global`, either
+`*.local.yaml`, and `env` — and **refused from layers 3 and 4**, the committed
+`manifest.config.yaml` at a fleet root or in a project, because those files travel with a
+clone. Without that rule, cloning a repository and shipping it would let the repository
+choose what runs on your machine, and layer 4 overriding layer 2 means configuring
+safely would not have saved you.
+
+The refusal is printed, never silent, and names the key and the layer it came from. To
+use one of these keys, move it to `manifest.config.local.yaml`; to trust one repository
+for a single run without editing anything, set `MANIFEST_CLI_TRUST_REPO_COMMANDS=1` in
+the environment. That is an environment variable on purpose — a committed file must not
+be able to grant itself trust, so there is no config key for it. See
+[Migration Guide](MIGRATION.md#a-committed-config-can-no-longer-name-a-program-to-run)
+for what to change, and [SECURITY.md](../SECURITY.md) for the full boundary.
+
 ### The fleet layer
 
 A repository inside a fleet inherits the fleet root's settings as a starting point, so

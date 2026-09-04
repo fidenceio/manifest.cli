@@ -94,6 +94,56 @@ without running tests and you are not ready to change that, set `release.gate: n
 explicitly. It is logged and recorded in the ship status file, so the choice is visible
 rather than implied. When you are ready, point `release.gate_command` at your tests.
 
+## A committed config can no longer name a program to run
+
+This one changes behaviour for repositories that already worked, so it is worth reading
+even if nothing else here applies to you.
+
+Five config keys name something Manifest executes during a ship:
+
+| Key | What it names |
+| --- | --- |
+| `release.gate_command` | the test command the release gate runs |
+| `docs.review.command` | the documentation-review program |
+| `docs.release_notes.command` | the release-notes program |
+| `docs.review.provider` | the selector that makes the review command reachable |
+| `docs.release_notes.provider` | the selector that makes the notes command reachable |
+
+These five are now honoured **only from a layer you own** — your global config under
+`~/.manifest-cli/`, any `*.local.yaml` (which the scaffold gitignores), or the process
+environment. Set in a **committed `manifest.config.yaml`**, in a project or at a fleet
+root, they are ignored, and the refusal is printed with the key and the layer it came
+from. It is never silent.
+
+The reason is that a committed config travels with a clone, and the project layer loads
+*after* your global one and overrides it — so a repository you cloned could choose what
+runs on your machine during a ship, and configuring safely would not have protected you.
+[SECURITY.md](../SECURITY.md) states the full boundary.
+
+**What to change.** Move the key out of the committed file:
+
+```yaml
+# manifest.config.local.yaml — gitignored, yours, honoured
+release:
+  gate_command: "pytest -q"
+```
+
+Leave the policy key `release.gate` where it is; only the five keys above are affected.
+Or trust one repository for a single run, without editing anything:
+
+```bash
+MANIFEST_CLI_TRUST_REPO_COMMANDS=1 manifest ship patch -y
+```
+
+The variable is an environment variable on purpose. A committed file must not be able to
+grant itself trust, so there is deliberately no config key for it.
+
+**Fleets are the case most likely to be affected.** Members are cloned from URLs the
+fleet config supplies, so a member's committed `manifest.config.yaml` is the
+clone-from-elsewhere case exactly. A fleet whose members declare their own gate commands
+in committed config must move each one to that member's `manifest.config.local.yaml`, or
+run with the trust variable set.
+
 ## Versions are independent across a fleet
 
 Each repository counts up from its own `VERSION` file. Manifest never aligns versions
