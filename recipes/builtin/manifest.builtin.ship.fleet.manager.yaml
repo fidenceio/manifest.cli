@@ -1,0 +1,45 @@
+id: manifest.builtin.ship.fleet.manager
+title: Ship Fleet Manager
+kind: builtin
+command: manifest ship fleet manager
+scope: fleet
+summary: Commit and push the fleet coordination root only — the fleet config, roster (manifest.fleet.tsv), allowlist .gitignore, CHANGELOG_FLEET.md and the fleet version file — without walking members and without the repo release treatment (no VERSION bump, tag, GitHub release or Homebrew). Staging is by allowlist name, so nothing else at the root can be committed.
+entrypoint: manifest_ship_fleet
+execution:
+  default_mode: preview
+  requires_yes_for: [local-write, remote-write]
+inputs:
+  release_type:
+    type: enum
+    values: [patch, minor, major, revision]
+    default: patch
+    required: false
+  local:
+    type: boolean
+    default: false
+steps:
+  - id: load-fleet
+    uses: manifest.fleet.load
+    effect: read
+  - id: render-fleet-scope
+    uses: manifest.fleet.scope_block
+    effect: read
+  - id: plan-coordination-root
+    uses: manifest.fleet.manager_plan
+    effect: read
+  - id: ensure-coordination-repo
+    uses: manifest.fleet.root_ensure_repo
+    effect: local-write
+    when: apply
+  - id: stamp-fleet-version
+    uses: manifest.fleet.root_version_stamp
+    effect: local-write
+    when: apply
+  - id: commit-coordination-root
+    uses: manifest.fleet.root_commit_coordination
+    effect: local-write
+    when: apply
+  - id: push-coordination-root
+    uses: manifest.fleet.root_push
+    effect: remote-write
+    when: apply && publish_release

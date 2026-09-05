@@ -644,6 +644,34 @@ _fleet_init_directory() {
 }
 
 # -----------------------------------------------------------------------------
+# The coordination files — ONE source (TRACKER §77(c))
+# -----------------------------------------------------------------------------
+# The set of files a fleet coordination root may carry used to be stated three
+# times: the .gitignore writer's re-include list, the stager's `for f in …`, and
+# the staged-set verifier's `case`. They had already diverged — the .gitignore
+# re-included the literal /FLEET_VERSION while the stager force-added whatever
+# fleet.version_file named, so a custom version file was tracked by the stager
+# and ignored by the .gitignore at the same time. §36's shape, one fact in three
+# places. All three now read this list.
+#
+# The version file's NAME comes from fleet.version_file via
+# _fleet_root_version_name (manifest-fleet-config.sh — the loader reads the same
+# function, so the file the loader reads and the file the stager commits are one
+# fact). Every other entry is fixed. Widening this set is a design decision
+# recorded in TRACKER §77(a) — it is an ALLOWLIST and must stay one: a dirty root
+# must never be able to sweep member repos or secrets into the coordination
+# commit.
+# -----------------------------------------------------------------------------
+
+# One name per line, in the order the .gitignore lists them.
+_fleet_coordination_files() {
+    local root="$1"
+    local version_name
+    version_name="$(_fleet_root_version_name "$root")"
+    printf '%s\n' .gitignore manifest.fleet.config.yaml manifest.fleet.tsv "$version_name" CHANGELOG_FLEET.md
+}
+
+# -----------------------------------------------------------------------------
 # Function: create_fleet_gitignore (internal)
 # -----------------------------------------------------------------------------
 # Writes an ALLOWLIST .gitignore for a fleet coordination root: ignore everything,
@@ -659,10 +687,15 @@ _fleet_init_directory() {
 # -----------------------------------------------------------------------------
 _fleet_write_allowlist_gitignore() {
     local dest="$1"
+    local root
+    root="$(dirname "$dest")"
     local tmp="${dest}.tmp.$$"
     # Write to a sibling temp then atomically rename, so an interrupted write
     # never leaves a truncated .gitignore (pattern: _manifest_config_atomic_write_timestamp).
-    if ! cat > "$tmp" << 'EOF'
+    # The re-include lines are rendered from _fleet_coordination_files, the same
+    # list the stager and its verifier read (§77(c)).
+    if ! {
+        cat << 'EOF'
 # =============================================================================
 # Manifest fleet — coordination repo .gitignore (ALLOWLIST model)
 # =============================================================================
@@ -678,18 +711,45 @@ _fleet_write_allowlist_gitignore() {
 /*
 
 # …then re-include only the coordination files (all at the fleet root).
-!/.gitignore
-!/manifest.fleet.config.yaml
-!/manifest.fleet.tsv
-!/FLEET_VERSION
-!/CHANGELOG_FLEET.md
 EOF
+        local f
+        while IFS= read -r f; do
+            [[ -n "$f" ]] && printf '!/%s\n' "$f"
+        done < <(_fleet_coordination_files "$root")
+    } > "$tmp" 2>/dev/null
     then
         rm -f "$tmp" 2>/dev/null
         return 1
     fi
     mv -f "$tmp" "$dest" 2>/dev/null || { rm -f "$tmp" 2>/dev/null; return 1; }
     return 0
+}
+
+# The decision create_fleet_gitignore will take for ROOT, without taking it —
+# so a preview can say what an apply would write and the two cannot disagree
+# (the decision lives here and nowhere else).
+#   create | empty-overwrite | current | preserved
+_fleet_gitignore_decision() {
+    local fleet_root="$1"
+    local gitignore_file="$fleet_root/.gitignore"
+
+    [[ -f "$gitignore_file" ]] || { echo "create"; return 0; }
+
+    if grep -q 'coordination repo .gitignore (ALLOWLIST model)' "$gitignore_file" 2>/dev/null \
+       && grep -qxF '/*' "$gitignore_file" 2>/dev/null; then
+        echo "current"; return 0
+    fi
+
+    local entry_count
+    entry_count=$(grep -cvE '^\s*$|^\s*#' "$gitignore_file" 2>/dev/null || true)
+    entry_count="${entry_count:-0}"
+    entry_count="${entry_count//$'\n'/}"
+    entry_count="${entry_count//[[:space:]]/}"
+    [[ "$entry_count" =~ ^[0-9]+$ ]] || entry_count=0
+    if [[ "$entry_count" -eq 0 ]]; then
+        echo "empty-overwrite"; return 0
+    fi
+    echo "preserved"
 }
 
 # True when DIR is itself the root of a git work tree (has its own .git), as
@@ -711,27 +771,20 @@ create_fleet_gitignore() {
     local fleet_root="$1"
     local gitignore_file="$fleet_root/.gitignore"
 
-    if [[ ! -f "$gitignore_file" ]]; then
-        _fleet_write_allowlist_gitignore "$gitignore_file" || return 1
-        echo ".gitignore"; return 0
-    fi
-
-    # Idempotent: an existing allowlist is already correct — clean no-op.
-    if grep -q 'coordination repo .gitignore (ALLOWLIST model)' "$gitignore_file" 2>/dev/null \
-       && grep -qxF '/*' "$gitignore_file" 2>/dev/null; then
-        return 0
-    fi
-
-    local entry_count
-    entry_count=$(grep -cvE '^\s*$|^\s*#' "$gitignore_file" 2>/dev/null || true)
-    entry_count="${entry_count:-0}"
-    entry_count="${entry_count//$'\n'/}"
-    entry_count="${entry_count//[[:space:]]/}"
-    [[ "$entry_count" =~ ^[0-9]+$ ]] || entry_count=0
-    if [[ "$entry_count" -eq 0 ]]; then
-        _fleet_write_allowlist_gitignore "$gitignore_file" || return 1
-        echo ".gitignore:empty-overwrite"; return 0
-    fi
+    case "$(_fleet_gitignore_decision "$fleet_root")" in
+        create)
+            _fleet_write_allowlist_gitignore "$gitignore_file" || return 1
+            echo ".gitignore"; return 0
+            ;;
+        # Idempotent: an existing allowlist is already correct — clean no-op.
+        current)
+            return 0
+            ;;
+        empty-overwrite)
+            _fleet_write_allowlist_gitignore "$gitignore_file" || return 1
+            echo ".gitignore:empty-overwrite"; return 0
+            ;;
+    esac
 
     # A curated .gitignore is already here and is not the allowlist. Never touch
     # it, and never write beside it — the coordination-repo allowlist is short
@@ -3060,6 +3113,151 @@ _fleet_root_has_unpushed_commits() {
 }
 
 # -----------------------------------------------------------------------------
+# Fleet-root write primitives (internal)
+# -----------------------------------------------------------------------------
+# Shared by _fleet_root_release (the tail step of `ship fleet`) and
+# fleet_ship_manager (`ship fleet manager`, the root-only scope). Two writers to
+# the same repo must be the SAME writer, or the security property below holds
+# for one of them and is re-implemented — a little differently — for the other.
+# -----------------------------------------------------------------------------
+
+# Make ROOT a coordination git repo with the allowlist .gitignore in place.
+# Idempotent.
+_fleet_root_ensure_repo() {
+    local root="$1"
+    if ! _fleet_dir_is_own_git_repo "$root"; then
+        git init -b main "$root" >/dev/null 2>&1 || git init "$root" >/dev/null 2>&1 || {
+            log_error "Fleet root: could not git init $root"; return 1; }
+    fi
+    create_fleet_gitignore "$root" >/dev/null || {
+        log_error "Fleet root: could not write allowlist .gitignore"; return 1; }
+    return 0
+}
+
+# Write the fleet version file atomically (sibling temp + rename).
+#   $1 root   $2 version_name   $3 value
+_fleet_root_write_version_file() {
+    local root="$1" version_name="$2" value="$3"
+    local version_file="$root/$version_name"
+    local tmp="${version_file}.tmp.$$"
+    if ! printf '%s\n' "$value" > "$tmp" 2>/dev/null; then
+        rm -f "$tmp" 2>/dev/null
+        log_error "Fleet root: could not write $version_name"; return 1
+    fi
+    mv -f "$tmp" "$version_file" 2>/dev/null || {
+        rm -f "$tmp" 2>/dev/null; log_error "Fleet root: rename of $version_name failed"; return 1; }
+    return 0
+}
+
+# Stage ONLY the coordination files, by name; refuse the commit if ANYTHING else
+# is staged; commit with MESSAGE.
+#
+# SECURITY: never `git add .`/-A. The allowlist is _fleet_coordination_files, the
+# same list the .gitignore re-includes, so a dirty root can never sweep member
+# repos, source, or secrets into the coordination repo — and a file outside the
+# list that the USER staged by hand is refused rather than committed.
+#
+#   $1 root   $2 commit message
+# stdout: "committed" when a commit was made; "nothing" when the staged set was
+# empty (idempotent). Returns 1 on refusal or a failed commit.
+_fleet_root_commit_coordination() {
+    local root="$1" message="$2"
+    local version_name
+    version_name="$(_fleet_root_version_name "$root")"
+    local f
+    local -a allowlist=()
+    while IFS= read -r f; do
+        [[ -n "$f" ]] && allowlist+=("$f")
+    done < <(_fleet_coordination_files "$root")
+
+    # Record what the caller already had staged BEFORE this run touches the
+    # index, so the abort path below can undo exactly what this run added and
+    # nothing else (TRACKER §3 — it used to run a pathspec-less `git reset`,
+    # which discarded the user's entire staged set on refusal).
+    local line
+    local -A preexisting_staged=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && preexisting_staged["$line"]=1
+    done < <(git -C "$root" diff --cached --name-only 2>/dev/null)
+
+    local -a staged_by_run=()
+    for f in "${allowlist[@]}"; do
+        [[ -f "$root/$f" ]] || continue
+        if [[ "$f" == "$version_name" ]]; then
+            # Force-added: coordination by definition, even under a custom name
+            # that a preserved (non-allowlist) .gitignore happens to ignore.
+            git -C "$root" add -f -- "$f" 2>/dev/null || continue
+        else
+            git -C "$root" add -- "$f" 2>/dev/null || continue
+        fi
+        [[ -n "${preexisting_staged[$f]+set}" ]] || staged_by_run+=("$f")
+    done
+
+    # Defense-in-depth: refuse to commit if ANYTHING outside the allowlist is staged.
+    local staged bad="" allowed
+    staged="$(git -C "$root" diff --cached --name-only 2>/dev/null)"
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        allowed=false
+        for f in "${allowlist[@]}"; do
+            [[ "$line" == "$f" ]] && { allowed=true; break; }
+        done
+        [[ "$allowed" == "true" ]] || bad="$bad $line"
+    done <<< "$staged"
+    if [[ -n "$bad" ]]; then
+        log_error "Fleet-root commit ABORTED: non-coordination files staged at the root:$bad"
+        log_error "Refusing to commit — this would leak workspace content into the coordination repo."
+        # Unstage only what this run staged. The offending paths were staged by
+        # the user, and unstaging those would reverse a staging decision this
+        # code has no business touching.
+        if [[ ${#staged_by_run[@]} -gt 0 ]]; then
+            git -C "$root" reset -q -- "${staged_by_run[@]}" >/dev/null 2>&1 || true
+        fi
+        return 1
+    fi
+
+    # Nothing staged -> idempotent skip.
+    if [[ -z "$staged" ]]; then
+        echo "nothing"
+        return 0
+    fi
+
+    if ! git -C "$root" commit -q -m "$message" >/dev/null 2>&1; then
+        log_error "Fleet root: commit failed (is git user.name/user.email configured?)"
+        return 1
+    fi
+    echo "committed"
+    return 0
+}
+
+# Push ROOT's current branch to origin. A silent no-op (0) when local_only or
+# when no origin is configured. Returns 1 when the push cannot happen or fails;
+# the CALLER decides whether that is a warning (the root release: members have
+# already shipped) or an error (the manager: the push is the point).
+#   $1 root   $2 local_only
+_fleet_root_push() {
+    local root="$1" local_only="$2"
+    [[ "$local_only" != "true" ]] || return 0
+    git -C "$root" remote get-url origin >/dev/null 2>&1 || return 0
+    local branch
+    if ! branch="$(git -C "$root" symbolic-ref --short -q HEAD 2>/dev/null)" || [[ -z "$branch" ]]; then
+        # Pushing "main" from a detached HEAD would publish a branch the user is
+        # not on; the old fallback did exactly that.
+        log_error "Fleet root: HEAD is detached; nothing pushed."
+        return 1
+    fi
+    # Set the upstream on the first push so _fleet_root_has_unpushed_commits can
+    # answer next time; never rewrite an upstream that already exists.
+    local -a push_args=(push)
+    git -C "$root" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1 || push_args+=(-u)
+    if git -C "$root" "${push_args[@]}" origin "$branch" >/dev/null 2>&1; then
+        echo "  - fleet root: pushed $branch"
+        return 0
+    fi
+    return 1
+}
+
+# -----------------------------------------------------------------------------
 # Function: _fleet_root_release (internal)
 # -----------------------------------------------------------------------------
 # After a fleet ship, bump + commit the fleet-level version file at the
@@ -3075,6 +3273,9 @@ _fleet_root_has_unpushed_commits() {
 # lands the pending root commits). Idempotent: no-op when scheme=none, neither
 # trigger holds, or the version is unchanged. Returns non-zero on real failure
 # (caller treats it as a warning — members have already shipped).
+#
+# For a change to the coordination files THEMSELVES — no member shipped, nothing
+# committed yet — the scope is `manifest ship fleet manager` (fleet_ship_manager).
 # -----------------------------------------------------------------------------
 _fleet_root_release() {
     local increment_type="$1" execution_mode="$2" local_only="$3" completed_count="${4:-0}"
@@ -3088,9 +3289,8 @@ _fleet_root_release() {
         return 0
     fi
 
-    local version_name version_file current next
-    version_name="$(get_yaml_value "${MANIFEST_CLI_FLEET_CONFIG_FILE:-$root/manifest.fleet.config.yaml}" ".fleet.version_file" "${MANIFEST_CLI_FLEET_DEFAULT_VERSION_FILE:-FLEET_VERSION}")"
-    version_file="$root/$version_name"
+    local version_name current next
+    version_name="$(_fleet_root_version_name "$root")"
     current="${MANIFEST_CLI_FLEET_VERSION:-}"
     next="$(_fleet_next_version "$scheme" "$current" "$increment_type")"
 
@@ -3101,88 +3301,338 @@ _fleet_root_release() {
         return 0
     fi
 
-    # Ensure the root is a coordination git repo with the allowlist in place.
-    if ! _fleet_dir_is_own_git_repo "$root"; then
-        git init -b main "$root" >/dev/null 2>&1 || git init "$root" >/dev/null 2>&1 || {
-            log_error "Fleet-root release: could not git init $root"; return 1; }
-    fi
-    create_fleet_gitignore "$root" >/dev/null || {
-        log_error "Fleet-root release: could not write allowlist .gitignore"; return 1; }
+    _fleet_root_ensure_repo "$root" || return 1
+    _fleet_root_write_version_file "$root" "$version_name" "$next" || return 1
 
-    # Write the version file atomically (temp + rename).
-    local tmp="${version_file}.tmp.$$"
-    if ! printf '%s\n' "$next" > "$tmp" 2>/dev/null; then
-        rm -f "$tmp" 2>/dev/null
-        log_error "Fleet-root release: could not write $version_name"; return 1
-    fi
-    mv -f "$tmp" "$version_file" 2>/dev/null || {
-        rm -f "$tmp" 2>/dev/null; log_error "Fleet-root release: rename of $version_name failed"; return 1; }
-
-    # SECURITY: stage ONLY coordination files, by name. The version file is
-    # force-added (it is coordination by definition, even under a custom name);
-    # everything else is left to the allowlist.
-    # Record what the caller already had staged BEFORE this run touches the
-    # index, so the abort path below can undo exactly what this run added and
-    # nothing else (TRACKER §3 — it used to run a pathspec-less `git reset`,
-    # which discarded the user's entire staged set on refusal).
-    local line
-    local -A preexisting_staged=()
-    while IFS= read -r line; do
-        [[ -n "$line" ]] && preexisting_staged["$line"]=1
-    done < <(git -C "$root" diff --cached --name-only 2>/dev/null)
-
-    local f
-    local -a staged_by_run=()
-    for f in .gitignore manifest.fleet.config.yaml manifest.fleet.tsv CHANGELOG_FLEET.md; do
-        [[ -f "$root/$f" ]] || continue
-        git -C "$root" add -- "$f" 2>/dev/null || continue
-        [[ -n "${preexisting_staged[$f]+set}" ]] || staged_by_run+=("$f")
-    done
-    if [[ -f "$version_file" ]] && git -C "$root" add -f -- "$version_name" 2>/dev/null; then
-        [[ -n "${preexisting_staged[$version_name]+set}" ]] || staged_by_run+=("$version_name")
-    fi
-
-    # Defense-in-depth: refuse to commit if ANYTHING outside the allowlist is staged.
-    local staged bad=""
-    staged="$(git -C "$root" diff --cached --name-only 2>/dev/null)"
-    while IFS= read -r line; do
-        [[ -n "$line" ]] || continue
-        case "$line" in
-            .gitignore|"$version_name"|manifest.fleet.config.yaml|manifest.fleet.tsv|CHANGELOG_FLEET.md) ;;
-            *) bad="$bad $line" ;;
-        esac
-    done <<< "$staged"
-    if [[ -n "$bad" ]]; then
-        log_error "Fleet-root release ABORTED: non-coordination files staged at the root:$bad"
-        log_error "Refusing to commit — this would leak workspace content into the coordination repo."
-        # Unstage only what this run staged. The offending paths were staged by
-        # the user, and unstaging those would reverse a staging decision this
-        # code has no business touching.
-        if [[ ${#staged_by_run[@]} -gt 0 ]]; then
-            git -C "$root" reset -q -- "${staged_by_run[@]}" >/dev/null 2>&1 || true
-        fi
-        return 1
-    fi
-
-    # Nothing staged (version file unchanged on disk) -> idempotent skip.
-    [[ -n "$staged" ]] || return 0
-
-    if ! git -C "$root" commit -q -m "Bump fleet version to $next" >/dev/null 2>&1; then
-        log_error "Fleet-root release: commit failed (is git user.name/user.email configured?)"
-        return 1
-    fi
+    local outcome
+    outcome="$(_fleet_root_commit_coordination "$root" "Bump fleet version to $next")" || return 1
+    # Version file unchanged on disk -> nothing staged -> idempotent skip.
+    [[ "$outcome" == "committed" ]] || return 0
     echo "  - fleet root: committed fleet version $next"
 
-    # Push only on a non-local ship, and only when a remote is configured.
-    if [[ "$local_only" != "true" ]] && git -C "$root" remote get-url origin >/dev/null 2>&1; then
-        local branch
-        branch="$(git -C "$root" symbolic-ref --short HEAD 2>/dev/null || echo main)"
-        if git -C "$root" push origin "$branch" >/dev/null 2>&1; then
-            echo "  - fleet root: pushed $branch"
+    # Push only on a non-local ship, and only when a remote is configured. A
+    # failed push is a warning here: members have already shipped, and the
+    # fleet version commit is safely local.
+    if ! _fleet_root_push "$root" "$local_only"; then
+        log_warning "Fleet-root release: push failed; the fleet version commit is local."
+    fi
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# COMMAND: ship fleet manager
+# -----------------------------------------------------------------------------
+# Commit and push the fleet COORDINATION ROOT only (TRACKER §77(b)).
+#
+# The root is a git repo carrying the coordination files — fleet config, roster
+# TSV, allowlist .gitignore, fleet changelog, fleet version file. `ship fleet`
+# walks every member and reaches the root only as a tail step, and that step
+# fires only when a member shipped or the root already carried unpushed
+# commits — so a change to the coordination files themselves had no way to land
+# except a full fleet ship in which every member was a no-op. This verb is the
+# missing scope.
+#
+# The root does NOT get the repo release treatment: no VERSION bump, no tag, no
+# GitHub release, no Homebrew. It is not a product. When the fleet has a
+# versioning scheme, the fleet version file is stamped alongside the commit —
+# the same stamp the root-only release makes — so the fleet state stays marked.
+#
+# Writes go through the primitives above: staging by allowlist name with the
+# staged-set verifier, so a dirty root can never sweep member repos or secrets
+# into the coordination repo. Members are never touched.
+#
+#   manifest ship fleet manager [patch|minor|major|revision] [-y|--yes] [--dry-run] [--local]
+# -----------------------------------------------------------------------------
+_fleet_manager_scope_block() {
+    local root="$1"
+    echo ""
+    echo "Fleet scope"
+    echo "-----------"
+    printf "  %-10s %s\n" "Fleet:" "${MANIFEST_CLI_FLEET_NAME:-unnamed-fleet}"
+    printf "  %-10s %s\n" "Root:" "$root"
+    printf "  %-10s %s\n" "Config:" "${MANIFEST_CLI_FLEET_CONFIG_FILE:-manifest.fleet.config.yaml}"
+    printf "  %-10s %s\n" "Scope:" "fleet manager"
+    printf "  %-10s %s\n" "Mutation:" "the coordination root only — members are not touched"
+}
+
+# True when NAME is already in the array named by $1 (nameref).
+_fleet_manager_list_has() {
+    local -n _list_ref="$1"
+    local needle="$2" item
+    for item in "${_list_ref[@]}"; do
+        [[ "$item" == "$needle" ]] && return 0
+    done
+    return 1
+}
+
+fleet_ship_manager() {
+    local execution_mode="preview"
+    local local_only=false
+    local remaining_args=()
+    if ! manifest_execution_parse execution_mode local_only remaining_args "$@"; then
+        return 1
+    fi
+    set -- "${remaining_args[@]}"
+
+    local increment_type="patch" bump_requested=false
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            patch|minor|major|revision)
+                increment_type="$1"; bump_requested=true; shift ;;
+            -h|--help)
+                cat << 'EOF'
+Usage: manifest ship fleet manager [patch|minor|major|revision] [-y|--yes] [--dry-run] [--local]
+
+Commit and push the fleet coordination root ONLY — the fleet config, the roster
+(manifest.fleet.tsv), the allowlist .gitignore, CHANGELOG_FLEET.md and the fleet
+version file. Members are not touched, and the root gets no release treatment
+(no VERSION bump, tag, GitHub release or Homebrew).
+
+Options:
+  --dry-run                 Explicit preview; no writes, commits, or pushes
+  -y, --yes                 Apply: commit the coordination files and push
+  --local                   With -y, commit only — no push
+  patch|minor|major|revision
+                            Stamp the fleet version file even when nothing else
+                            changed. Only fleet.versioning: semver reads the
+                            word; the date and increment schemes ignore it.
+                            Without it, a stamp accompanies a commit and is
+                            never made on its own.
+
+Flow:
+  preview: name the files that would be committed, the stamp, and the push
+  -y:      allowlist .gitignore -> stamp (if fleet.versioning != none) -> commit -> push
+
+Nothing outside the coordination allowlist is ever staged. A root with other
+files already staged is refused before any commit.
+EOF
+                return 0 ;;
+            *)
+                log_error "Unknown option for 'manifest ship fleet manager': $1"
+                return 1 ;;
+        esac
+    done
+
+    if ! _fleet_require_initialized "ship fleet manager"; then
+        return 1
+    fi
+
+    local root="${MANIFEST_CLI_FLEET_ROOT:-$PWD}"
+    local scheme="${MANIFEST_CLI_FLEET_VERSIONING:-none}"
+    local version_name
+    version_name="$(_fleet_root_version_name "$root")"
+    local is_repo=true
+    _fleet_dir_is_own_git_repo "$root" || is_repo=false
+
+    # ---- plan (read-only; the apply below acts on exactly this) -------------
+    local f line allowed
+    local -a allowlist=() to_commit=() staged_bad=()
+    while IFS= read -r f; do
+        [[ -n "$f" ]] && allowlist+=("$f")
+    done < <(_fleet_coordination_files "$root")
+
+    if [[ "$is_repo" == "true" ]]; then
+        # Already staged: what a commit would carry, and what would make it refuse.
+        while IFS= read -r line; do
+            [[ -n "$line" ]] || continue
+            allowed=false
+            for f in "${allowlist[@]}"; do
+                [[ "$line" == "$f" ]] && { allowed=true; break; }
+            done
+            if [[ "$allowed" == "true" ]]; then
+                to_commit+=("$line")
+            else
+                staged_bad+=("$line")
+            fi
+        done < <(git -C "$root" diff --cached --name-only 2>/dev/null)
+        # Not yet staged: exactly what the stager's `git add` would pick up. The
+        # dry-run add is the truthful predictor — it answers "would adding this
+        # change the index" for modified and untracked alike, and stays silent
+        # for a clean file — so the preview cannot disagree with the apply.
+        for f in "${allowlist[@]}"; do
+            [[ -f "$root/$f" ]] || continue
+            _fleet_manager_list_has to_commit "$f" && continue
+            if [[ "$f" == "$version_name" ]]; then
+                git -C "$root" add -f --dry-run -- "$f" 2>/dev/null | grep -q . && to_commit+=("$f")
+            else
+                git -C "$root" add --dry-run -- "$f" 2>/dev/null | grep -q . && to_commit+=("$f")
+            fi
+        done
+    else
+        for f in "${allowlist[@]}"; do
+            [[ -f "$root/$f" ]] && to_commit+=("$f")
+        done
+    fi
+
+    local gitignore_decision
+    gitignore_decision="$(_fleet_gitignore_decision "$root")"
+    case "$gitignore_decision" in
+        create|empty-overwrite)
+            # The allowlist write is itself a coordination change.
+            _fleet_manager_list_has to_commit ".gitignore" || to_commit+=(".gitignore")
+            ;;
+    esac
+
+    # Stamp the fleet version alongside a commit when the fleet has a scheme, or
+    # on explicit request (a bump word given). Never speculatively.
+    local current="${MANIFEST_CLI_FLEET_VERSION:-}" next=""
+    if [[ "$scheme" != "none" ]] && { [[ ${#to_commit[@]} -gt 0 ]] || [[ "$bump_requested" == "true" ]]; }; then
+        next="$(_fleet_next_version "$scheme" "$current" "$increment_type")"
+        [[ -n "$next" && "$next" != "$current" ]] || next=""
+    fi
+    if [[ -n "$next" ]]; then
+        _fleet_manager_list_has to_commit "$version_name" || to_commit+=("$version_name")
+    fi
+
+    # Push: something to push, somewhere to push it, and permission to.
+    local has_origin=false branch="" push_note=""
+    if [[ "$is_repo" == "true" ]]; then
+        git -C "$root" remote get-url origin >/dev/null 2>&1 && has_origin=true
+        branch="$(git -C "$root" symbolic-ref --short -q HEAD 2>/dev/null || true)"
+    else
+        branch="main"
+    fi
+    local will_commit=false will_push=false
+    [[ ${#to_commit[@]} -gt 0 ]] && will_commit=true
+    if [[ "$local_only" == "true" ]]; then
+        push_note="--local: nothing pushed"
+    elif [[ "$has_origin" != "true" ]]; then
+        push_note="no origin remote on the coordination root; nothing to push"
+    elif [[ "$will_commit" == "true" ]] || _fleet_root_has_unpushed_commits "$root"; then
+        will_push=true
+    elif git -C "$root" rev-parse -q --verify HEAD >/dev/null 2>&1 \
+         && ! git -C "$root" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+        # Commits exist and origin exists but no upstream was ever set: unpushed
+        # by definition, and _fleet_root_has_unpushed_commits cannot see it.
+        will_push=true
+    fi
+
+    # Commit message: say what the commit is, in the order a reader cares about.
+    local -a changed_files=()
+    for f in "${to_commit[@]}"; do
+        [[ "$f" == "$version_name" && -n "$next" ]] && continue
+        changed_files+=("$f")
+    done
+    local message="Fleet manager: update coordination files"
+    if [[ -n "$next" && ${#changed_files[@]} -gt 0 ]]; then
+        message="Fleet manager: bump fleet version to $next (updates: $(IFS=', '; echo "${changed_files[*]}"))"
+    elif [[ -n "$next" ]]; then
+        message="Fleet manager: bump fleet version to $next"
+    elif [[ ${#changed_files[@]} -gt 0 ]]; then
+        message="Fleet manager: update $(IFS=', '; echo "${changed_files[*]}")"
+    fi
+
+    _fleet_manager_scope_block "$root"
+
+    # The two refusals, decided ONCE so the preview and the apply cannot read
+    # the same root differently: the preview names them and withholds the
+    # replay hint; the apply stops before any write.
+    local -a refusals=()
+    if [[ ${#staged_bad[@]} -gt 0 ]]; then
+        refusals+=("non-coordination files are staged at the root: ${staged_bad[*]} — unstage them first: git -C \"$root\" reset -- <path>")
+    fi
+    if [[ "$is_repo" == "true" && -z "$branch" ]]; then
+        refusals+=("the coordination root is on a detached HEAD — check out a branch first")
+    fi
+
+    # ---- preview ------------------------------------------------------------
+    if [[ "$execution_mode" == "preview" ]]; then
+        echo ""
+        echo "Fleet manager plan"
+        if [[ "$will_commit" != "true" && "$will_push" != "true" ]]; then
+            echo "  - fleet root: nothing to commit or push"
+            [[ -n "$push_note" ]] && echo "    ($push_note)"
+            echo ""
+            echo "No changes written."
+            return "$(manifest_preview_exit_code)"
+        fi
+        [[ "$is_repo" == "true" ]] || echo "  - fleet root: would git init the coordination root (branch main)"
+        case "$gitignore_decision" in
+            create)          echo "  - fleet root: would write the allowlist .gitignore" ;;
+            empty-overwrite) echo "  - fleet root: would replace the empty .gitignore with the allowlist" ;;
+        esac
+        [[ -n "$next" ]] && echo "  - fleet root: would stamp fleet version ${current:-(unset)} → $next ($version_name)"
+        if [[ "$will_commit" == "true" ]]; then
+            echo "  - fleet root: would commit $(IFS=', '; echo "${to_commit[*]}")"
+            echo "      \"$message\""
+        fi
+        if [[ "$will_push" == "true" ]]; then
+            echo "  - fleet root: would push ${branch:-HEAD} to origin"
+        elif [[ -n "$push_note" ]]; then
+            echo "  - fleet root: $push_note"
+        fi
+        if [[ ${#refusals[@]} -gt 0 ]]; then
+            local r
+            for r in "${refusals[@]}"; do
+                log_warning "'-y' would REFUSE before any commit: $r"
+            done
+            echo ""
+            echo "No changes written."
+            return "$(manifest_preview_exit_code)"
+        fi
+        local replay_command="manifest ship fleet manager"
+        [[ "$bump_requested" == "true" ]] && replay_command="$replay_command $increment_type"
+        [[ "$local_only" == "true" ]] && replay_command="$replay_command --local"
+        manifest_execution_footer "$replay_command -y"
+        return "$(manifest_preview_exit_code)"
+    fi
+
+    # ---- apply --------------------------------------------------------------
+    if [[ ${#refusals[@]} -gt 0 ]]; then
+        local r
+        for r in "${refusals[@]}"; do
+            log_error "Fleet manager REFUSED: $r"
+        done
+        log_error "Nothing was written."
+        return 1
+    fi
+    if [[ "$will_commit" != "true" && "$will_push" != "true" ]]; then
+        echo ""
+        echo "Fleet root: nothing to commit or push."
+        [[ -n "$push_note" ]] && echo "  ($push_note)"
+        return 0
+    fi
+
+    # Single-flight with `ship fleet`, whose tail step writes the same root.
+    local fleet_lock
+    fleet_lock="$(_fleet_lock_dir_path)"
+    if ! _fleet_lock_acquire "$fleet_lock"; then
+        return 1
+    fi
+    trap '_fleet_lock_release "${fleet_lock:-}"' RETURN
+    trap '_fleet_lock_release "${fleet_lock:-}"; trap - INT; kill -INT $$' INT
+    trap '_fleet_lock_release "${fleet_lock:-}"; trap - TERM; kill -TERM $$' TERM
+    trap '_fleet_lock_release "${fleet_lock:-}"; trap - HUP; kill -HUP $$' HUP
+
+    echo ""
+    echo "Fleet manager"
+    _fleet_root_ensure_repo "$root" || return 1
+    case "$gitignore_decision" in
+        create)          echo "  - fleet root: wrote the allowlist .gitignore" ;;
+        empty-overwrite) echo "  - fleet root: replaced the empty .gitignore with the allowlist" ;;
+    esac
+    if [[ -n "$next" ]]; then
+        _fleet_root_write_version_file "$root" "$version_name" "$next" || return 1
+        echo "  - fleet root: stamped fleet version ${current:-(unset)} → $next ($version_name)"
+    fi
+    if [[ "$will_commit" == "true" ]]; then
+        local outcome
+        outcome="$(_fleet_root_commit_coordination "$root" "$message")" || return 1
+        if [[ "$outcome" == "committed" ]]; then
+            echo "  - fleet root: committed $(IFS=', '; echo "${to_commit[*]}")"
         else
-            log_warning "Fleet-root release: push failed; the fleet version commit is local."
+            echo "  - fleet root: nothing to commit after staging (already current)"
         fi
     fi
+    if [[ "$will_push" == "true" ]]; then
+        if ! _fleet_root_push "$root" "$local_only"; then
+            log_error "Fleet manager: push failed; the commit is local. Re-run 'manifest ship fleet manager -y' to retry the push."
+            return 1
+        fi
+    elif [[ -n "$push_note" ]]; then
+        echo "  - fleet root: $push_note"
+    fi
+    echo "✅ Fleet manager complete."
     return 0
 }
 

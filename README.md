@@ -168,6 +168,7 @@ manifest init fleet --create-repo-private      # show which members have no remo
 manifest status fleet           # inspect the selected repositories
 manifest ship fleet patch       # show which members would be released
 manifest ship fleet patch -y    # release them
+manifest ship fleet manager -y  # commit + push the fleet coordination root only
 ```
 
 **A fleet release skips members with nothing to release.** Being release-enabled only

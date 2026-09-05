@@ -280,8 +280,15 @@ manifest_ship_require_version_file() {
     local fleet_config="$repo_root/${MANIFEST_CLI_FLEET_CONFIG_FILENAME:-manifest.fleet.config.yaml}"
     if [[ -f "$fleet_config" ]]; then
         local fleet_version_file="" fleet_scheme=""
-        if declare -F get_yaml_value >/dev/null 2>&1; then
+        if declare -F _fleet_root_version_name >/dev/null 2>&1; then
+            # The one reader of fleet.version_file (§77(c)); this is a message,
+            # but a message that names a different file than the loader reads
+            # is how the two-readers shape starts.
+            fleet_version_file="$(MANIFEST_CLI_FLEET_CONFIG_FILE="$fleet_config" _fleet_root_version_name "$repo_root" 2>/dev/null || echo "FLEET_VERSION")"
+        elif declare -F get_yaml_value >/dev/null 2>&1; then
             fleet_version_file="$(get_yaml_value "$fleet_config" ".fleet.version_file" "FLEET_VERSION" 2>/dev/null || echo "FLEET_VERSION")"
+        fi
+        if declare -F get_yaml_value >/dev/null 2>&1; then
             fleet_scheme="$(get_yaml_value "$fleet_config" ".fleet.versioning" "" 2>/dev/null || echo "")"
         fi
         log_error "ship repo: this is a fleet root, not a single repo."
@@ -661,20 +668,28 @@ manifest_ship_fleet() {
         case "$1" in
             resume)
                 subcommand="resume"; shift ;;
+            manager)
+                subcommand="manager"; shift ;;
             --explain) explain=true; shift ;;
             -h|--help)
                 if [[ "$subcommand" == "resume" ]]; then
                     fleet_resume "--help"
                     return $?
                 fi
+                if [[ "$subcommand" == "manager" ]]; then
+                    fleet_ship_manager "--help"
+                    return $?
+                fi
                 _render_help \
-                    "manifest ship fleet <patch|minor|major|revision>|resume [-y|--yes] [--dry-run] [--local] [fleet options]" \
+                    "manifest ship fleet <patch|minor|major|revision>|resume|manager [-y|--yes] [--dry-run] [--local] [fleet options]" \
                     "Preview or publish a coordinated fleet release across eligible services." \
                     "Options" "  patch | minor | major | revision   Release type
   resume                   Resume stranded fleet members (push tag + tap formula for each eligible repo)
+  manager                  Commit + push the fleet coordination root ONLY — no members, no release
+                           treatment (manifest ship fleet manager --help)
   --dry-run                Explicit preview; no writes, commits, tags, pushes, or PRs
   -y, --yes                Apply the fleet release plan
-  --local                  With -y, local only — no push, no tags (ship only; not valid for resume)
+  --local                  With -y, local only — no push, no tags (ship and manager; not valid for resume)
   --explain                Show the built-in recipe definition without running it
   --noprep                 Skip per-service prep step (requires clean trees)
   --force-bump             Ship every release-eligible member even with no changes since its tag
@@ -684,18 +699,48 @@ manifest_ship_fleet() {
             MANIFEST_CLI_FLEET_PREVIEW_POLICY_GATE=run executes it and shows the verdict)
   apply:    load fleet -> pre-flights (policy gate among them) -> ship release-enabled services
   resume:   load fleet -> per-member eligibility probe -> delegate to repo resume
+  manager:  load fleet -> commit the coordination files at the root (allowlist only) -> push
   PR work:  use manifest pr fleet ... explicitly" \
                     "Examples" "  manifest ship fleet patch
   manifest ship fleet patch -y
   manifest ship fleet minor --local -y
   manifest ship fleet resume
-  manifest ship fleet resume -y"
+  manifest ship fleet resume -y
+  manifest ship fleet manager
+  manifest ship fleet manager -y"
                 return 0
                 ;;
             *)
                 fleet_args+=("$1"); shift ;;
         esac
     done
+
+    if [[ "$subcommand" == "manager" ]]; then
+        # The root-only scope (TRACKER §77(b)). The bump word, when given, is
+        # the fleet version stamp's increment — it never names a member release.
+        local manager_args=()
+        [[ -n "$increment_type" ]] && manager_args+=("$increment_type")
+        if [[ "$explain" == "true" ]]; then
+            manifest_recipe_explain_command "ship" "fleet" "manager"
+            return $?
+        fi
+        local manager_publish="true"
+        [[ "$local_only" == "true" ]] && manager_publish="false"
+        if ! manifest_recipe_validate_command_effects \
+            "ship" "fleet" "manager" "$execution_mode" "$local_only" "$manager_publish"; then
+            return 1
+        fi
+        [[ "$local_only" == "true" ]] && manager_args+=("--local")
+        if [[ "$execution_mode" == "preview" ]]; then
+            echo "Ship fleet manager preview — no changes written"
+            fleet_ship_manager "--dry-run" "${manager_args[@]}" "${fleet_args[@]}"
+        else
+            manifest_execution_apply_header
+            echo "Ship fleet manager"
+            fleet_ship_manager "-y" "${manager_args[@]}" "${fleet_args[@]}"
+        fi
+        return $?
+    fi
 
     if [[ "$subcommand" == "resume" ]]; then
         if [[ "$local_only" == "true" ]]; then
@@ -780,12 +825,14 @@ manifest_ship_dispatch() {
             _render_help \
                 "manifest ship <repo|fleet> <patch|minor|major|revision> [--local] [-i]" \
                 "Publish a release. Highest consequence command." \
-                "Scopes" "  repo    Single repo: version + docs + commit + tag + push
-  fleet   Coordinated fleet release across all services" \
+                "Scopes" "  repo           Single repo: version + docs + commit + tag + push
+  fleet          Coordinated fleet release across all services
+  fleet manager  Commit + push the fleet coordination root only (no members, no release)" \
                 "Options" "  --local             Local only — no tag, push, Homebrew, PRs
   -i, --interactive   Enable interactive safety prompts" \
-                "More" "  manifest ship repo --help    Per-repo options + bump short flags
-  manifest ship fleet --help   Fleet-specific flags (--noprep, --safe, --method, ...)"
+                "More" "  manifest ship repo --help           Per-repo options + bump short flags
+  manifest ship fleet --help          Fleet-specific flags (--noprep, --safe, --method, ...)
+  manifest ship fleet manager --help  The coordination-root scope"
             ;;
         # Legacy support: old "ship <patch|minor|major|revision>" routes to ship repo
         patch|minor|major|revision)

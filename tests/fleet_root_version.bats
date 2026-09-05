@@ -179,6 +179,52 @@ YAML
     [ "$output" = "0" ]                 # remote received nothing
 }
 
+@test "_fleet_root_push refuses on a detached HEAD and pushes nothing (it used to push 'main' regardless)" {
+    mk_fleet_root date ""
+    git init -q --bare "$SCRATCH-remote.git"
+    git -C "$SCRATCH" remote add origin "$SCRATCH-remote.git"
+    git -C "$SCRATCH" commit -q --allow-empty -m "base"
+    git -C "$SCRATCH" push -q -u origin main
+    git -C "$SCRATCH" commit -q --allow-empty -m "on main, not yet pushed"
+    local main_head; main_head="$(git -C "$SCRATCH" rev-parse HEAD)"
+    local remote_before; remote_before="$(git -C "$SCRATCH-remote.git" rev-parse refs/heads/main)"
+
+    git -C "$SCRATCH" checkout -q --detach
+    run _fleet_root_push "$SCRATCH" false
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"detached"* ]]
+    # The remote did not receive main's unpushed commit from a HEAD that was not on main.
+    [ "$(git -C "$SCRATCH-remote.git" rev-parse refs/heads/main)" = "$remote_before" ]
+
+    # Positive control: back on the branch, the same call pushes.
+    git -C "$SCRATCH" checkout -q main
+    run _fleet_root_push "$SCRATCH" false
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"pushed main"* ]]
+    [ "$(git -C "$SCRATCH-remote.git" rev-parse refs/heads/main)" = "$main_head" ]
+}
+
+@test "_fleet_root_release's first push sets the upstream, so later root-only commits become visible" {
+    mk_fleet_root date ""
+    git init -q --bare "$SCRATCH-remote.git"
+    git -C "$SCRATCH" remote add origin "$SCRATCH-remote.git"   # origin, but NO upstream yet
+    run git -C "$SCRATCH" rev-parse --abbrev-ref --symbolic-full-name '@{u}'
+    [ "$status" -ne 0 ]
+
+    run _fleet_root_release patch apply false 1
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"pushed main"* ]]
+    # Upstream now exists and the root is in sync with it...
+    [ "$(git -C "$SCRATCH" rev-parse --abbrev-ref --symbolic-full-name '@{u}')" = "origin/main" ]
+    run _fleet_root_has_unpushed_commits "$SCRATCH"
+    [ "$status" -ne 0 ]
+    # ...so the root-only trigger can fire on the next commit. Before, a root
+    # first pushed by the CLI had no upstream and this always answered false.
+    git -C "$SCRATCH" commit -q --allow-empty -m "root-only change"
+    run _fleet_root_has_unpushed_commits "$SCRATCH"
+    [ "$status" -eq 0 ]
+}
+
 @test "_fleet_root_has_unpushed_commits: false without upstream / in sync, true when ahead" {
     mk_fleet_root date ""
     git -C "$SCRATCH" commit -q --allow-empty -m "c1"

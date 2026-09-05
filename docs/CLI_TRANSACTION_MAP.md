@@ -49,6 +49,21 @@ Preview mode stops before local and remote writes. `--local -y` allows local wri
 
 Fleet output must make skipped and failed services explicit.
 
+## Fleet Manager Transaction
+
+`manifest ship fleet manager -y` commits and pushes the fleet **coordination root** only. No member is touched, and the root receives none of the repo release steps (no `VERSION` bump, tag, GitHub release, or Homebrew).
+
+1. Resolve fleet root and config.
+2. Plan, read-only: the coordination files that are new or modified, whether the allowlist `.gitignore` must be written, whether the fleet version file will be stamped (only when `fleet.versioning` is not `none`), and whether there is anything to push.
+3. Refuse before any write if a file outside the coordination allowlist is already staged at the root, or if the root is on a detached `HEAD`.
+4. Take the fleet lock (the same single-flight lock `ship fleet` holds, since its tail step writes the same root).
+5. Ensure the root is a git repository with the allowlist `.gitignore`.
+6. Stamp the fleet version file when the plan said so.
+7. Stage the coordination files **by name**, verify nothing else is staged, commit.
+8. Push the current branch to `origin` unless `--local`; a failed push is an error here, not a warning, because the push is the point of the command.
+
+The allowlist is one list — `_fleet_coordination_files` — read by the `.gitignore` writer, the stager, and the staged-set verifier.
+
 ## Homebrew Tap Transaction
 
 The canonical CLI release may publish an updated `fidenceio.homebrew.tap/Formula/manifest.rb` after the CLI release artifact is available. Manifest generates the tap formula from the CLI repo's tracked `formula/manifest.rb` template, but it does not commit a release-time formula change back into the CLI repo.

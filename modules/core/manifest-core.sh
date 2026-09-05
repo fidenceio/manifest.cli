@@ -1695,6 +1695,8 @@ changes. A few use their own word instead: 'plan fleet --apply' and
     ship repo|fleet <patch|minor|major> Release: version, tag, push, publish
          --local                        All of that except tag, push, publish
                                         — it still commits
+    ship fleet manager                  Commit + push the fleet coordination
+                                        root only (no members, no release)
     recipe list|show|explain            See the exact steps a command runs
     revert                              Check out an older tag; leaves you in
                                         detached HEAD (no branch)

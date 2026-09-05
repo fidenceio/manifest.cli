@@ -107,10 +107,20 @@ run_manifest_from_plain_dir() {
 }
 
 @test "built-in fleet ship recipes describe scope and releaseable-service plan" {
-    local file offenders
+    local file offenders excluded
     offenders=""
+    excluded=0
 
     while IFS= read -r file; do
+        # `ship fleet manager` is the one fleet ship recipe with NO release plan:
+        # it commits the coordination root and never walks a member, so a
+        # release-plan step would describe something it does not do (TRACKER
+        # §77(b)). Excluded by name, counted, and given its own assertions
+        # below — a guard that must exempt something exempts exactly one path
+        # and says why, so the exemption cannot widen into a hiding place.
+        case "$file" in
+            */manifest.builtin.ship.fleet.manager.yaml) excluded=$((excluded + 1)); continue ;;
+        esac
         if [ "$(yq e '[.steps[] | select(.id == "render-fleet-scope" and .uses == "manifest.fleet.scope_block" and .effect == "read")] | length' "$file")" != "1" ]; then
             offenders="$offenders $file:scope"
         fi
@@ -123,6 +133,21 @@ run_manifest_from_plain_dir() {
     done < <(find "$TEST_REPO_ROOT/recipes/builtin" -type f -name 'manifest.builtin.ship.fleet.*.yaml' | sort)
 
     [ -z "$offenders" ]
+    [ "$excluded" -eq 1 ]
+}
+
+@test "the fleet manager recipe describes the root-only commit and push, and no member release" {
+    local file="$TEST_REPO_ROOT/recipes/builtin/manifest.builtin.ship.fleet.manager.yaml"
+    [ -f "$file" ]
+    [ "$(yq e '[.steps[] | select(.id == "render-fleet-scope" and .uses == "manifest.fleet.scope_block" and .effect == "read")] | length' "$file")" = "1" ]
+    [ "$(yq e '[.steps[] | select(.id == "commit-coordination-root" and .effect == "local-write" and .when == "apply")] | length' "$file")" = "1" ]
+    [ "$(yq e '[.steps[] | select(.id == "push-coordination-root" and .effect == "remote-write" and .when == "apply && publish_release")] | length' "$file")" = "1" ]
+    # Never a member release: no release plan, no per-service ship step.
+    [ "$(yq e '[.steps[] | select(.uses == "manifest.fleet.release_plan" or .uses == "manifest.fleet.ship_releaseable_services")] | length' "$file")" = "0" ]
+    # The command maps to the recipe, so --explain and the effects validator find it.
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/recipe/manifest-recipe.sh"
+    [ "$(manifest_recipe_id_for_command ship fleet manager)" = "manifest.builtin.ship.fleet.manager" ]
 }
 
 @test "non-patch repo ship recipes include guarded follow-up patch" {

@@ -53,6 +53,62 @@ run_manifest() {
     refute grep -q 'manifest.config.local.yaml' "$SCRATCH/.gitignore"
 }
 
+@test "create_fleet_gitignore re-includes the CONFIGURED version file, not the literal default (TRACKER §77(c))" {
+    # The allowlist used to be stated three times — the .gitignore writer, the
+    # stager, the staged-set verifier — and the .gitignore's copy hard-coded
+    # /FLEET_VERSION while the stager force-added whatever fleet.version_file
+    # named. All three now render one list; this is the case where they used to
+    # disagree.
+    unset MANIFEST_CLI_FLEET_CONFIG_FILE
+    cat > "$SCRATCH/manifest.fleet.config.yaml" <<'YAML'
+fleet:
+  name: "custom"
+  versioning: "date"
+  version_file: "FLEET.stamp"
+YAML
+    run create_fleet_gitignore "$SCRATCH"
+    [ "$status" -eq 0 ]
+    grep -q '^!/FLEET.stamp$' "$SCRATCH/.gitignore"
+    refute grep -q '^!/FLEET_VERSION$' "$SCRATCH/.gitignore"
+    # The stager reads the same list, so it names the same file.
+    run _fleet_coordination_files "$SCRATCH"
+    [[ "$output" == *"FLEET.stamp"* ]]
+    refute grep -qx 'FLEET_VERSION' <<<"$output"
+    # Positive control for the refutations: without the key, the default is back.
+    rm -f "$SCRATCH/.gitignore" "$SCRATCH/manifest.fleet.config.yaml"
+    run create_fleet_gitignore "$SCRATCH"
+    grep -q '^!/FLEET_VERSION$' "$SCRATCH/.gitignore"
+}
+
+@test "a version_file that is not a plain name falls back to the default rather than widening the allowlist" {
+    # `!/*` would un-ignore every root entry, member directories included, for
+    # the user's own `git add .`; a `/` could never be re-included past `/*`.
+    # Both are refused at the one reader, so the .gitignore, the stager and the
+    # loader all see the default name.
+    unset MANIFEST_CLI_FLEET_CONFIG_FILE
+    local bad
+    for bad in '*' 'sub/FLEET_VERSION' 'a b'; do
+        rm -f "$SCRATCH/.gitignore"
+        printf 'fleet:\n  name: "x"\n  versioning: "date"\n  version_file: "%s"\n' "$bad" \
+            > "$SCRATCH/manifest.fleet.config.yaml"
+        # stdout only: the fallback is announced on stderr, and that warning is
+        # part of the contract (a silently-substituted name reads as a bug).
+        [ "$(_fleet_root_version_name "$SCRATCH" 2>/dev/null)" = "FLEET_VERSION" ]
+        run _fleet_root_version_name "$SCRATCH"
+        [[ "$output" == *"not a plain file name"* ]]
+        run create_fleet_gitignore "$SCRATCH"
+        [ "$status" -eq 0 ]
+        refute grep -qF "!/$bad" "$SCRATCH/.gitignore"
+        grep -q '^!/FLEET_VERSION$' "$SCRATCH/.gitignore"
+    done
+    # Positive control: a plain custom name is honoured verbatim, silently.
+    rm -f "$SCRATCH/.gitignore"
+    printf 'fleet:\n  name: "x"\n  versioning: "date"\n  version_file: "FLEET.stamp"\n' \
+        > "$SCRATCH/manifest.fleet.config.yaml"
+    run _fleet_root_version_name "$SCRATCH"
+    [ "$output" = "FLEET.stamp" ]
+}
+
 @test "create_fleet_gitignore preserves a populated .gitignore (no clobber)" {
     printf 'node_modules/\n*.log\n' > "$SCRATCH/.gitignore"
     run create_fleet_gitignore "$SCRATCH"

@@ -100,6 +100,40 @@ readonly MANIFEST_CLI_FLEET_DEFAULT_VERSIONING="date"
 readonly MANIFEST_CLI_FLEET_DEFAULT_VERSION_FILE="FLEET_VERSION"
 
 # -----------------------------------------------------------------------------
+# Function: _fleet_root_version_name
+# -----------------------------------------------------------------------------
+# The fleet version file's NAME, relative to the root, from fleet.version_file.
+# The ONE reader of that key (TRACKER §77(c)): the loader below, the
+# coordination-file allowlist, the fleet-root stager and `ship fleet manager`
+# all call this, so they cannot disagree about which file is the version file.
+#
+# A version file is a single name at the root, never a path and never a glob:
+# the allowlist .gitignore re-includes it as `!/<name>`, so a `/` could not be
+# re-included past `/*`, and a `*` would un-ignore every root entry — member
+# directories included — for the user's own `git add .`. Anything outside
+# [A-Za-z0-9._-] falls back to the default, loudly, rather than being written
+# into a .gitignore whose whole job is to be narrow.
+#
+#   $1 fleet root (its manifest.fleet.config.yaml is read unless
+#      MANIFEST_CLI_FLEET_CONFIG_FILE names another)
+# -----------------------------------------------------------------------------
+_fleet_root_version_name() {
+    local root="${1:-${MANIFEST_CLI_FLEET_ROOT:-$PWD}}"
+    local config="${MANIFEST_CLI_FLEET_CONFIG_FILE:-$root/manifest.fleet.config.yaml}"
+    local name=""
+    if [[ -f "$config" ]] && declare -F get_yaml_value >/dev/null 2>&1; then
+        name="$(get_yaml_value "$config" ".fleet.version_file" "" 2>/dev/null)"
+    fi
+    if [[ -n "$name" && ! "$name" =~ ^[A-Za-z0-9._-]+$ ]]; then
+        if declare -F log_warning >/dev/null 2>&1; then
+            log_warning "fleet.version_file '$name' is not a plain file name; using '$MANIFEST_CLI_FLEET_DEFAULT_VERSION_FILE'."
+        fi
+        name=""
+    fi
+    printf '%s' "${name:-$MANIFEST_CLI_FLEET_DEFAULT_VERSION_FILE}"
+}
+
+# -----------------------------------------------------------------------------
 # Fleet Operations Defaults
 # -----------------------------------------------------------------------------
 
@@ -501,7 +535,7 @@ load_fleet_config() {
 
     # Load fleet version if versioning is enabled
     if [[ "$MANIFEST_CLI_FLEET_VERSIONING" != "none" ]]; then
-        local version_file="${MANIFEST_CLI_FLEET_ROOT}/$(get_yaml_value "$MANIFEST_CLI_FLEET_CONFIG_FILE" ".fleet.version_file" "$MANIFEST_CLI_FLEET_DEFAULT_VERSION_FILE")"
+        local version_file="${MANIFEST_CLI_FLEET_ROOT}/$(_fleet_root_version_name "$MANIFEST_CLI_FLEET_ROOT")"
         if [[ -f "$version_file" ]]; then
             MANIFEST_CLI_FLEET_VERSION=$(cat "$version_file" 2>/dev/null)
         fi

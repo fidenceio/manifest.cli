@@ -108,7 +108,7 @@ complete -c manifest -n '__manifest_path init fleet' \
 complete -c manifest -n '__manifest_path ship repo' \
     -a 'patch minor major revision resume -y --yes --local --dry-run --explain --force-bump -i --interactive'
 complete -c manifest -n '__manifest_path ship fleet' \
-    -a 'patch minor major revision resume -y --yes --local --dry-run --explain --force-bump --noprep'
+    -a 'patch minor major revision resume manager -y --yes --local --dry-run --explain --force-bump --noprep'
 complete -c manifest -n '__manifest_path topics fleet' \
     -a '-y --yes --dry-run --help'
 complete -c manifest -n '__manifest_path plan fleet' \

@@ -75,6 +75,7 @@ manifest_recipe_id_for_command() {
         "ship fleet minor") echo "manifest.builtin.ship.fleet.minor" ;;
         "ship fleet major") echo "manifest.builtin.ship.fleet.major" ;;
         "ship fleet revision") echo "manifest.builtin.ship.fleet.revision" ;;
+        "ship fleet manager") echo "manifest.builtin.ship.fleet.manager" ;;
         *) return 1 ;;
     esac
 }

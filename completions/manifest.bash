@@ -92,7 +92,7 @@ _manifest_complete() {
                     return 0
                     ;;
                 "ship fleet")
-                    COMPREPLY=( $(compgen -W "$bumps resume -y --yes --local --dry-run --explain --force-bump --noprep" -- "$cur") )
+                    COMPREPLY=( $(compgen -W "$bumps resume manager -y --yes --local --dry-run --explain --force-bump --noprep" -- "$cur") )
                     return 0
                     ;;
                 "topics fleet")

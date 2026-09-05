@@ -311,11 +311,37 @@ manifest update fleet          # re-scan which repos are members (once called 'r
 manifest ship fleet patch
 manifest ship fleet patch -y
 manifest ship fleet patch --local -y
+manifest ship fleet manager            # preview: what would be committed and pushed at the fleet root
+manifest ship fleet manager -y         # commit + push the coordination root only
 ```
 
 Members with releases turned off are listed and skipped. Members with releases turned
 **on** are also skipped when there is nothing to release — meaning a clean working copy
 whose latest commit is already the one the current `VERSION` tag points at.
+
+#### The coordination root on its own: `ship fleet manager`
+
+The fleet root is a small git repository of its own. It carries the **coordination
+files** — `manifest.fleet.config.yaml`, the roster `manifest.fleet.tsv`, the allowlist
+`.gitignore`, `CHANGELOG_FLEET.md` and the fleet version file — and nothing else: its
+`.gitignore` ignores everything and re-includes only those names, so member repos,
+source and secrets can never be tracked there.
+
+`manifest ship fleet <type>` reaches that root only as the last step of a member
+release. When the coordination files themselves change — you edited the fleet config,
+`manifest update fleet` rewrote the roster — there was no way to publish that without
+a full fleet ship in which every member was a no-op. `manifest ship fleet manager` is
+that missing scope:
+
+- It **stages by allowlist name** through the same writer the fleet release uses. A
+  file outside the allowlist that is already staged makes it refuse before any commit.
+- It does **not** give the root the repo treatment: no `VERSION` bump, no tag, no GitHub
+  release, no Homebrew. The root is not a product.
+- When `fleet.versioning` is not `none`, it stamps the fleet version file alongside the
+  commit, exactly as the root-only release does. A bump word (`patch`, `minor`, …)
+  stamps even when nothing else changed, and is read only by the `semver` scheme.
+- `--local -y` commits without pushing. With nothing to commit or push it says so and
+  writes nothing.
 
 ### Project Repo Names Onto GitHub Topics
 

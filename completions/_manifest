@@ -119,7 +119,7 @@ _manifest() {
                     _values 'release type / option' "${bumps[@]}" resume -y --yes --local --dry-run --explain --force-bump -i --interactive
                     ;;
                 "ship fleet")
-                    _values 'release type / option' "${bumps[@]}" resume -y --yes --local --dry-run --explain --force-bump --noprep
+                    _values 'release type / option' "${bumps[@]}" resume manager -y --yes --local --dry-run --explain --force-bump --noprep
                     ;;
                 "topics fleet")
                     _values 'option' -y --yes --dry-run --help
