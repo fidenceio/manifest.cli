@@ -1,5 +1,16 @@
 # Changelog
 
+## [59.10.1] - 2026-09-05
+
+**Release Type:** Patch
+
+### Changes
+
+- Fix(config): refuse execution-naming config keys from committed layers (§44)
+- Docs(config): document that a committed config cannot name a program (§44)
+- Update documentation and examples
+
+
 ## [59.10.0] - 2026-09-03
 
 **Release Type:** Minor
@@ -126,17 +137,3 @@
 - Update documentation and examples
 - Wire first-class CLI commands to inspectable built-in recipe definitions
 - Add regression coverage for the changed CLI workflow
-
-
-## [59.4.3] - 2026-08-24
-
-**Release Type:** Patch
-
-### Changes
-
-- Docs(tracker): consolidate after v59.4.2 — delete shipped items, fold 17 adjudications
-- Fix(cleanup)!: bound the ship-time temp sweep to what the caller asked for
-- Fix(docs): write CHANGELOG.md through temp+rename, preserving its mode
-- Fix(fleet): a refused fleet-root commit unstages only what the run staged
-- Docs(tracker): file §9.30 and §6.5 from the Fidence plan; record §9.23 progress
-- Update 1 file before release
