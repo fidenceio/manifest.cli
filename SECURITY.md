@@ -92,9 +92,12 @@ Manifest CLI ships several defensive controls you can rely on and audit:
   - Opt in per run with `MANIFEST_CLI_TRUST_REPO_COMMANDS=1`. It is an environment
     variable deliberately: a committed file must not be able to grant itself trust.
   - Both the preview and the applied run **disclose every config-named program that
-    may execute and the layer that supplied it**, and a gate supplied by
-    configuration reports a distinct status (`verified-local-config-command`) so it
-    cannot be mistaken for the auto-detected suite.
+    may execute and the layer that supplied it**. A gate command you set in your own
+    global config or a `*.local.yaml` carries the same trust as the auto-detected
+    suite and reports the ordinary `verified-local` status; a gate command taken
+    from a committed config under the opt-in reports the distinct
+    `verified-local-repo-command`, so a gate the repository chose cannot be mistaken
+    for one you chose.
 - **Destructive-op guards.** Removal and global `brew` operations are gated; under a
   sandbox/test `HOME` they protectively skip rather than touch the real system.
 - **Secret scanning.** A pre-commit hook (`.git-hooks/pre-commit`) blocks committing
