@@ -135,8 +135,28 @@ Or trust one repository for a single run, without editing anything:
 MANIFEST_CLI_TRUST_REPO_COMMANDS=1 manifest ship patch -y
 ```
 
+Or trust it once and have Manifest remember that decision:
+
+```bash
+MANIFEST_CLI_TRUST_REPO_COMMANDS=remember manifest ship patch -y
+```
+
+`remember` honours the committed keys for this run **and** records them in
+`~/.manifest-cli/trusted-repo-commands.tsv`, keyed on the repository's remote and on a
+digest of exactly the values you accepted. Later runs honour them with no variable set.
+The record stays on your machine and follows the repository, not the clone, so a fresh
+clone of the same remote is still trusted. If any of the five values changes in the
+committed file, the record no longer matches: the keys are refused again, the refusal says
+they changed since you trusted them, and reviewing and re-running with `remember` records
+the new values. `MANIFEST_CLI_TRUST_REPO_COMMANDS=forget` deletes the repository's row.
+The preview and the applied run both say, beside each committed program, whether it is
+trusted for this run or by your record. The record is written when the configuration
+loads, so `remember` on a preview records too — read the preview's program list first,
+then run it with `remember` once you agree with what it names.
+
 The variable is an environment variable on purpose. A committed file must not be able to
-grant itself trust, so there is deliberately no config key for it.
+grant itself trust, so there is deliberately no config key for it — and none for the
+record's location either.
 
 **Fleets are the case most likely to be affected.** Members are cloned from URLs the
 fleet config supplies, so a member's committed `manifest.config.yaml` is the

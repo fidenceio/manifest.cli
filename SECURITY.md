@@ -89,8 +89,12 @@ Manifest CLI ships several defensive controls you can rely on and audit:
     machine, and the project layer overrides your global one, so configuring
     safely would not have protected you.
   - The refusal is **announced**, never silent, and names the key and the layer.
-  - Opt in per run with `MANIFEST_CLI_TRUST_REPO_COMMANDS=1`. It is an environment
-    variable deliberately: a committed file must not be able to grant itself trust.
+  - Opt in per run with `MANIFEST_CLI_TRUST_REPO_COMMANDS=1`, or once with `=remember`,
+    which records the decision in `~/.manifest-cli/trusted-repo-commands.tsv` keyed on
+    the repository's remote and a digest of the exact values accepted — a changed value
+    is refused again until it is re-reviewed, and `=forget` revokes the record. It is an
+    environment variable deliberately, and the record lives outside every repository: a
+    committed file must not be able to grant itself trust.
   - Both the preview and the applied run **disclose every config-named program that
     may execute and the layer that supplied it**. A gate command you set in your own
     global config or a `*.local.yaml` carries the same trust as the auto-detected

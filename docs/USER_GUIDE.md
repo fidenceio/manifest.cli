@@ -425,8 +425,14 @@ safely would not have saved you.
 The refusal is printed, never silent, and names the key and the layer it came from. To
 use one of these keys, move it to `manifest.config.local.yaml`; to trust one repository
 for a single run without editing anything, set `MANIFEST_CLI_TRUST_REPO_COMMANDS=1` in
-the environment. That is an environment variable on purpose — a committed file must not
-be able to grant itself trust, so there is no config key for it. See
+the environment; to trust it once and have that remembered, set it to `remember`. The
+decision is recorded in `~/.manifest-cli/trusted-repo-commands.tsv`, keyed on the
+repository's remote and a digest of the exact values you accepted — a fresh clone of the
+same remote is still trusted, a changed value is refused again until you re-review it,
+and `forget` revokes the row. The preview says, beside each committed program, whether it
+is trusted for this run or by your record. That is an environment variable on purpose — a
+committed file must not be able to grant itself trust, so there is no config key for it,
+nor for where the record lives. See
 [Migration Guide](MIGRATION.md#a-committed-config-can-no-longer-name-a-program-to-run)
 for what to change, and [SECURITY.md](../SECURITY.md) for the full boundary.
 
