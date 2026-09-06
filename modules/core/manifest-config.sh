@@ -93,6 +93,17 @@ _manifest_config_apply_process_env_overrides() {
         esac
         export "$env_var"="${_MANIFEST_CONFIG_PROCESS_ENV_OVERRIDES[$env_var]}"
         log_debug "load_configuration: process env override ${env_var}"
+        # §44 provenance: the environment is the invoking user's own and it just
+        # won, so the disclosure must say "env layer" — not the file layer that
+        # set the key earlier in the chain, and not "trusted by your record",
+        # which described a value that no longer runs. Left unset, the first
+        # cut labelled an env-overridden gate with the committed layer's name
+        # and trust source.
+        if declare -F _manifest_cli_yaml_is_execution_key >/dev/null 2>&1 \
+           && _manifest_cli_yaml_is_execution_key "$env_var"; then
+            _MANIFEST_CLI_YAML_EXECUTION_KEY_LAYER["$env_var"]="env"
+            unset '_MANIFEST_CLI_YAML_EXECUTION_KEY_TRUST[$env_var]'
+        fi
     done
 }
 
@@ -904,6 +915,13 @@ load_configuration() {
     # Baseline defaults first (so YAML layers override them)
     set_default_configuration
 
+    # §44's per-load state (provenance, refusals, what committed layers
+    # supplied). Nothing reset it before, so a second load_configuration in
+    # one process appended to the first and announced its refusals twice.
+    if declare -F _manifest_cli_yaml_execution_reset >/dev/null 2>&1; then
+        _manifest_cli_yaml_execution_reset
+    fi
+
     # §8.4a: a config file that is PRESENT but unparseable is FATAL. Silently
     # reverting to defaults on a malformed file (the old behavior) would let a
     # ship proceed with the wrong branch/gate/policy. An ABSENT file stays
@@ -986,6 +1004,15 @@ load_configuration() {
     # is the invoking user by definition, and leaving the last file's label set
     # would misattribute it (§44).
     _MANIFEST_CLI_YAML_LOADING_LAYER=""
+
+    # §44(3): a durable trust record may honour what the committed layers had
+    # refused (or, with the trust variable set to `remember`/`forget`, be written
+    # or cleared). BEFORE the announcement, so what it honours is not announced
+    # as refused; BEFORE the env overrides, so the process environment still
+    # wins over anything it restores.
+    if declare -F manifest_config_apply_trust_record >/dev/null 2>&1; then
+        manifest_config_apply_trust_record "$project_root" "${fleet_root:-}"
+    fi
 
     # Announce any execution key refused from a committed layer. Announced once,
     # here, rather than mid-file where it would interleave with the loader's own

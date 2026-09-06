@@ -875,9 +875,39 @@ _MANIFEST_CLI_YAML_LOADING_LAYER=""
 # later from the files (§36: one fact, one place).
 declare -gA _MANIFEST_CLI_YAML_EXECUTION_KEY_LAYER=()
 
+# Field separator for the records in the two arrays below: env_var FS layer FS
+# value. 0x1f (ASCII unit separator) rather than a printable character, because
+# a command line is a value here and any printable delimiter is a character a
+# command line can contain — the first cut used `|`, and a gate command with a
+# pipe in it was recorded and restored as the text after its last pipe.
+declare -g _MANIFEST_CLI_YAML_EXECUTION_FS=$'\x1f'
+
 # Refusals, so the announcement can be made once at the end of loading rather
 # than mid-file where it interleaves with the loader's own progress output.
 declare -ga _MANIFEST_CLI_YAML_EXECUTION_REFUSALS=()
+
+# Every execution key a COMMITTED layer supplied, honoured or refused, as
+# "env_var|layer|value" — the set the durable trust record digests (§44(3)).
+# Kept apart from the refusals because under a trust grant nothing is refused,
+# and apart from the provenance map because a later user-owned layer may
+# override a committed value without changing what the committed file says.
+declare -ga _MANIFEST_CLI_YAML_EXECUTION_SUPPLIED=()
+
+# How a committed value came to be honoured, keyed by env var: "env" (the trust
+# variable was set for this run) or "record" (the durable record matched).
+# Absent for values from user-owned layers, which need no trust at all.
+declare -gA _MANIFEST_CLI_YAML_EXECUTION_KEY_TRUST=()
+
+# Per-load reset, called at the top of load_configuration. Nothing reset these
+# before, so a second load in one process appended to the first and announced
+# the same refusals twice.
+_manifest_cli_yaml_execution_reset() {
+    _MANIFEST_CLI_YAML_EXECUTION_KEY_LAYER=()
+    _MANIFEST_CLI_YAML_EXECUTION_REFUSALS=()
+    _MANIFEST_CLI_YAML_EXECUTION_SUPPLIED=()
+    _MANIFEST_CLI_YAML_EXECUTION_KEY_TRUST=()
+    _MANIFEST_CLI_YAML_TRUST_STALE_LAYERS=()
+}
 
 _manifest_cli_yaml_layer_is_user_owned() {
     case "${1:-}" in
@@ -897,10 +927,13 @@ _manifest_cli_yaml_is_execution_key() {
     return 1
 }
 
-# True when the repo layer has been explicitly trusted for this run.
+# True when the repo layer has been explicitly trusted for this run — for one
+# run (1|true|yes, the contract as first shipped) or for this run and onward
+# (remember, which also writes the durable record; see
+# manifest_config_apply_trust_record). `forget` is deliberately NOT trust.
 manifest_trusts_repo_commands() {
     case "${MANIFEST_CLI_TRUST_REPO_COMMANDS:-}" in
-        1|true|yes) return 0 ;;
+        1|true|yes|remember) return 0 ;;
         *) return 1 ;;
     esac
 }
@@ -926,6 +959,345 @@ manifest_config_execution_key_layer() {
     return 0
 }
 
+# How an honoured committed value came to be trusted — "env" or "record" — or
+# empty for a value from a layer the user owns. An accessor for the same reason
+# as manifest_config_execution_key_layer.
+manifest_config_execution_key_trust() {
+    local env_var="${1:-}"
+    [[ -n "$env_var" ]] || return 0
+    case "$(declare -p _MANIFEST_CLI_YAML_EXECUTION_KEY_TRUST 2>/dev/null)" in
+        *"declare -A"*) ;;
+        *) return 0 ;;
+    esac
+    printf '%s' "${_MANIFEST_CLI_YAML_EXECUTION_KEY_TRUST[$env_var]:-}"
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# §44(3) — the durable trust record
+# -----------------------------------------------------------------------------
+# A per-run environment variable stood in for this: trust was all-or-nothing per
+# invocation, and a user who had reviewed a repository's committed gate command
+# once had to say so again on every ship. The record makes a reviewed decision
+# stick — and stick ONLY to what was reviewed. It is keyed on the repository's
+# remote, so a fresh clone of the same repository is still trusted, and on a
+# digest of exactly the execution-key values the committed file supplied, so a
+# changed command is refused again until someone looks at it.
+#
+# It lives in the user's own state directory, never inside any repository, so a
+# committed file cannot forge it — the property the environment variable has,
+# kept. Nothing in the YAML map names the file or the variable (guarded by
+# tests/config_execution_keys.bats).
+#
+#   ~/.manifest-cli/trusted-repo-commands.tsv
+#   repo_key TAB digest TAB granted_epoch TAB layer TAB keys,csv
+#
+# The variable now has three spellings, and the first is unchanged from when the
+# restriction shipped:
+#   1|true|yes  trust for THIS run only; nothing is recorded
+#   remember    trust for this run AND record it, so later runs need no variable
+#   forget      delete this repository's record; this run is untrusted
+# -----------------------------------------------------------------------------
+manifest_trust_record_file() {
+    local dir
+    if declare -F manifest_install_paths_global_state_dir >/dev/null 2>&1; then
+        dir="$(manifest_install_paths_global_state_dir)"
+    else
+        dir="$HOME/.manifest-cli"
+    fi
+    printf '%s/trusted-repo-commands.tsv' "$dir"
+}
+
+# The key a repository is trusted under: its origin, normalised so the same
+# repository reached over ssh or https, with or without `.git`, keys one row.
+# The credential is stripped FIRST, so a token can never land in a state file
+# (§45). A repository with no origin keys on its physical path — that trust does
+# not travel, which is right: nothing identifies it but where it is.
+_manifest_trust_repo_key() {
+    local root="$1" url
+    url="$(git -C "$root" remote get-url origin 2>/dev/null || true)"
+    if [[ -z "$url" ]]; then
+        printf 'path:%s' "$(cd "$root" 2>/dev/null && pwd -P || printf '%s' "$root")"
+        return 0
+    fi
+    if declare -F manifest_url_strip_credentials >/dev/null 2>&1; then
+        url="$(manifest_url_strip_credentials "$url")"
+    fi
+    if [[ "$url" =~ ^[^/@:]+@([^:/]+):(.+)$ ]]; then
+        # scp-like: git@host:owner/repo(.git)
+        url="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+    else
+        url="${url#*://}"   # scheme
+        url="${url#*@}"     # ssh://git@host/… user (credentials were stripped above)
+    fi
+    url="${url%/}"
+    url="${url%.git}"
+    printf 'remote:%s' "$(printf '%s' "$url" | tr '[:upper:]' '[:lower:]')"
+}
+
+# Split one "env_var FS layer FS value" record. The value is everything after
+# the SECOND separator — never `${entry##*FS}`, which would keep only the text
+# after the LAST one. The separator is 0x1f, which cannot occur in a key or a
+# layer name and does not occur in any value a shell command line can carry
+# without being deliberately smuggled in; the first cut used `|` and a
+# committed `sh -c "make test | tee gate.log"` was digested AND restored as
+# ` tee gate.log"` — a truncated, always-passing gate. Found by review.
+_manifest_cli_yaml_execution_record_split() {
+    local entry="$1" fs="$_MANIFEST_CLI_YAML_EXECUTION_FS"
+    local -n _env_ref="$2" _layer_ref="$3" _value_ref="$4"
+    _env_ref="${entry%%"$fs"*}"
+    local rest="${entry#*"$fs"}"
+    _layer_ref="${rest%%"$fs"*}"
+    _value_ref="${rest#*"$fs"}"
+}
+
+# Digest of what a committed layer supplies. Canonical and unambiguous by
+# construction: keys are emitted in the fixed order of
+# _MANIFEST_CLI_YAML_EXECUTION_KEYS (no `sort`, so a value with an embedded
+# newline cannot be split into two records), and every field is
+# length-prefixed, so a single value that CONTAINS "\nOTHER_KEY=…" cannot
+# serialise identically to two keys — the first cut joined `KEY=VALUE` lines
+# with newlines and a one-key file could forge the digest of a trusted three-key
+# set. sha256 where the host has it: the party who controls the committed file
+# is exactly the party who must not be able to craft a different command that
+# matches a digest the user already accepted. The short fingerprint is a
+# fallback for a host with neither sha tool, and is labelled in the row so it
+# is never mistaken for the other.
+#   $1 layer
+_manifest_trust_layer_digest() {
+    local layer="$1" key entry env_var entry_layer value serialised=""
+    for key in "${_MANIFEST_CLI_YAML_EXECUTION_KEYS[@]}"; do
+        for entry in "${_MANIFEST_CLI_YAML_EXECUTION_SUPPLIED[@]}"; do
+            _manifest_cli_yaml_execution_record_split "$entry" env_var entry_layer value
+            [[ "$entry_layer" == "$layer" && "$env_var" == "$key" ]] || continue
+            serialised+="${#env_var}:${env_var},${#value}:${value};"
+        done
+    done
+    if command -v shasum >/dev/null 2>&1; then
+        printf 'sha256:%s' "$(printf '%s' "$serialised" | shasum -a 256 | awk '{print $1}')"
+    elif command -v sha256sum >/dev/null 2>&1; then
+        printf 'sha256:%s' "$(printf '%s' "$serialised" | sha256sum | awk '{print $1}')"
+    else
+        printf 'short:%s' "$(printf '%s' "$serialised" | _manifest_hash_short)"
+    fi
+}
+
+# The keys a committed layer supplied, comma-joined in canonical order (for the
+# record row's last column — informational).
+_manifest_trust_layer_keys() {
+    local layer="$1" key entry env_var entry_layer value keys=""
+    for key in "${_MANIFEST_CLI_YAML_EXECUTION_KEYS[@]}"; do
+        for entry in "${_MANIFEST_CLI_YAML_EXECUTION_SUPPLIED[@]}"; do
+            _manifest_cli_yaml_execution_record_split "$entry" env_var entry_layer value
+            [[ "$entry_layer" == "$layer" && "$env_var" == "$key" ]] || continue
+            keys="${keys:+$keys,}$env_var"
+        done
+    done
+    printf '%s' "$keys"
+}
+
+# The distinct committed layers that supplied at least one execution key.
+_manifest_trust_supplying_layers() {
+    local entry env_var layer value seen=""
+    for entry in "${_MANIFEST_CLI_YAML_EXECUTION_SUPPLIED[@]}"; do
+        _manifest_cli_yaml_execution_record_split "$entry" env_var layer value
+        case " $seen " in *" $layer "*) continue ;; esac
+        seen="${seen:+$seen }$layer"
+        printf '%s\n' "$layer"
+    done
+}
+
+# Read-only loads (status, doctor, first) promise no disk writes; honour the
+# same spellings the rest of the config module accepts for the flag.
+_manifest_trust_skip_writes() {
+    case "${MANIFEST_CLI_CONFIG_SKIP_WRITES:-}" in
+        1|true|yes|on) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# Print the row for REPO_KEY without its key column ("digest TAB granted TAB
+# layer TAB keys"), or return 1 when there is none.
+_manifest_trust_record_lookup() {
+    local repo_key="$1" file line
+    file="$(manifest_trust_record_file)"
+    [[ -f "$file" ]] || return 1
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ -n "$line" && "${line:0:1}" != "#" ]] || continue
+        if [[ "${line%%$'\t'*}" == "$repo_key" ]]; then
+            printf '%s' "${line#*$'\t'}"
+            return 0
+        fi
+    done < "$file"
+    return 1
+}
+
+# Replace the row for REPO_KEY with ROW, or remove it when ROW is empty. Every
+# other row is carried over byte for byte. Sibling temp + rename, 0600.
+_manifest_trust_record_write() {
+    local repo_key="$1" row="${2:-}"
+    local file dir tmp line
+    file="$(manifest_trust_record_file)"
+    dir="$(dirname "$file")"
+    mkdir -p "$dir" 2>/dev/null || return 1
+    tmp="${file}.tmp.$$"
+    if ! {
+        printf '# Manifest — committed execution keys you have trusted (§44). One row per repository.\n'
+        printf '# repo_key\tdigest\tgranted_epoch\tlayer\tkeys\n'
+        if [[ -f "$file" ]]; then
+            while IFS= read -r line || [[ -n "$line" ]]; do
+                [[ -n "$line" && "${line:0:1}" != "#" ]] || continue
+                [[ "${line%%$'\t'*}" == "$repo_key" ]] && continue
+                printf '%s\n' "$line"
+            done < "$file"
+        fi
+        if [[ -n "$row" ]]; then
+            printf '%s\t%s\n' "$repo_key" "$row"
+        fi
+    } > "$tmp" 2>/dev/null; then
+        rm -f "$tmp" 2>/dev/null
+        return 1
+    fi
+    chmod 600 "$tmp" 2>/dev/null
+    mv -f "$tmp" "$file" 2>/dev/null || { rm -f "$tmp" 2>/dev/null; return 1; }
+    return 0
+}
+
+# Where a layer sits in the chain, so a restored committed value can tell a
+# layer that loaded BEFORE it (which it rightly overrides) from one that loaded
+# AFTER it (which rightly overrides it).
+_manifest_cli_yaml_layer_rank() {
+    case "${1:-}" in
+        global) echo 1 ;; fleet-shared) echo 2 ;; fleet-local) echo 3 ;;
+        project-shared) echo 4 ;; project-local) echo 5 ;; env) echo 9 ;;
+        *) echo 0 ;;
+    esac
+}
+
+# Stale-record layers, for the announcement: a record exists for the repository
+# but the committed values changed since it was granted.
+declare -ga _MANIFEST_CLI_YAML_TRUST_STALE_LAYERS=()
+
+_manifest_trust_format_epoch() {
+    local epoch="${1:-}"
+    [[ "$epoch" =~ ^[0-9]+$ ]] || { printf '%s' "$epoch"; return 0; }
+    date -u -r "$epoch" '+%Y-%m-%d' 2>/dev/null \
+        || date -u -d "@$epoch" '+%Y-%m-%d' 2>/dev/null \
+        || printf '%s' "$epoch"
+}
+
+# Apply the record to this load. Called by load_configuration after the file
+# layers and BEFORE the process-environment overrides, with the roots whose
+# committed files were read.
+#   $1 project_root   $2 fleet_root (empty when the project is not in a fleet)
+manifest_config_apply_trust_record() {
+    local project_root="${1:-}" fleet_root="${2:-}"
+    local mode
+    case "${MANIFEST_CLI_TRUST_REPO_COMMANDS:-}" in
+        remember) mode=remember ;;
+        forget)   mode=forget ;;
+        1|true|yes) mode=once ;;
+        *) mode=none ;;
+    esac
+
+    local -A layer_root=()
+    [[ -n "$project_root" ]] && layer_root[project-shared]="$project_root"
+    [[ -n "$fleet_root" ]] && layer_root[fleet-shared]="$fleet_root"
+
+    local layer root repo_key digest keys row
+    case "$mode" in
+        once)
+            return 0
+            ;;
+        remember)
+            if _manifest_trust_skip_writes; then
+                log_debug "trust record: read-only load, nothing recorded"
+                return 0
+            fi
+            while IFS= read -r layer; do
+                [[ -n "$layer" ]] || continue
+                root="${layer_root[$layer]:-}"
+                [[ -n "$root" ]] || continue
+                digest="$(_manifest_trust_layer_digest "$layer")"
+                keys="$(_manifest_trust_layer_keys "$layer")"
+                repo_key="$(_manifest_trust_repo_key "$root")"
+                if _manifest_trust_record_write "$repo_key" "$(printf '%s\t%s\t%s\t%s' "$digest" "$(date +%s)" "$layer" "$keys")"; then
+                    echo "🔐 Recorded your trust in the ${layer} execution keys of ${repo_key#*:}: $(manifest_trust_record_file)" >&2
+                    echo "   Later runs honour them without the variable until a value changes. Revoke with MANIFEST_CLI_TRUST_REPO_COMMANDS=forget." >&2
+                else
+                    log_warning "Could not write the trust record at $(manifest_trust_record_file); this run is trusted, later ones are not."
+                fi
+            done < <(_manifest_trust_supplying_layers)
+            return 0
+            ;;
+        forget)
+            _manifest_trust_skip_writes && return 0
+            for layer in project-shared fleet-shared; do
+                root="${layer_root[$layer]:-}"
+                [[ -n "$root" ]] || continue
+                repo_key="$(_manifest_trust_repo_key "$root")"
+                if _manifest_trust_record_lookup "$repo_key" >/dev/null; then
+                    if _manifest_trust_record_write "$repo_key" ""; then
+                        echo "🔐 Forgot the recorded trust for ${repo_key#*:} (${layer}); its committed execution keys are refused again." >&2
+                    fi
+                fi
+            done
+            return 0
+            ;;
+    esac
+
+    # mode=none: does a record cover what was refused?
+    [[ ${#_MANIFEST_CLI_YAML_EXECUTION_REFUSALS[@]} -gt 0 ]] || return 0
+    local -A honoured=()
+    while IFS= read -r layer; do
+        [[ -n "$layer" ]] || continue
+        root="${layer_root[$layer]:-}"
+        [[ -n "$root" ]] || continue
+        repo_key="$(_manifest_trust_repo_key "$root")"
+        row="$(_manifest_trust_record_lookup "$repo_key")" || continue
+        digest="$(_manifest_trust_layer_digest "$layer")"
+        if [[ "${row%%$'\t'*}" == "$digest" ]]; then
+            honoured["$layer"]="$row"
+        else
+            _MANIFEST_CLI_YAML_TRUST_STALE_LAYERS+=("$layer")
+        fi
+    done < <(_manifest_trust_supplying_layers)
+    [[ ${#honoured[@]} -gt 0 ]] || return 0
+
+    local -a kept=()
+    local entry env_var value current_layer
+    for entry in "${_MANIFEST_CLI_YAML_EXECUTION_REFUSALS[@]}"; do
+        _manifest_cli_yaml_execution_record_split "$entry" env_var layer value
+        if [[ -z "${honoured[$layer]+set}" ]]; then
+            kept+=("$entry")
+            continue
+        fi
+        # A layer that loaded AFTER this one and set the key still wins; the
+        # record restores only what nothing later has decided. A layer that
+        # loaded BEFORE it is overridden, exactly as the layer order says.
+        current_layer="${_MANIFEST_CLI_YAML_EXECUTION_KEY_LAYER[$env_var]:-}"
+        if [[ -n "$current_layer" ]] \
+           && [[ "$(_manifest_cli_yaml_layer_rank "$current_layer")" -gt "$(_manifest_cli_yaml_layer_rank "$layer")" ]]; then
+            continue
+        fi
+        case "${!env_var@a}" in
+            *[aA]*) unset "$env_var" ;;
+        esac
+        export "$env_var"="$value"
+        _MANIFEST_CLI_YAML_EXECUTION_KEY_LAYER["$env_var"]="$layer"
+        _MANIFEST_CLI_YAML_EXECUTION_KEY_TRUST["$env_var"]="record"
+    done
+    _MANIFEST_CLI_YAML_EXECUTION_REFUSALS=()
+    [[ ${#kept[@]} -gt 0 ]] && _MANIFEST_CLI_YAML_EXECUTION_REFUSALS=("${kept[@]}")
+
+    local granted
+    for layer in "${!honoured[@]}"; do
+        granted="$(printf '%s' "${honoured[$layer]}" | cut -f2)"
+        echo "🔐 Honouring the ${layer} execution keys: trusted by your record on $(_manifest_trust_format_epoch "$granted") ($(manifest_trust_record_file))." >&2
+    done
+    return 0
+}
+
 # Announce refusals once, after the layer chain has loaded. Values are redacted:
 # a refused command is attacker-supplied text and this line is printed, logged,
 # and pasted into issues.
@@ -934,23 +1306,30 @@ manifest_config_announce_execution_refusals() {
     local entry env_var layer value
     log_warning "Ignored ${#_MANIFEST_CLI_YAML_EXECUTION_REFUSALS[@]} config key(s) that name a program to execute, because they came from a committed file (§44)."
     for entry in "${_MANIFEST_CLI_YAML_EXECUTION_REFUSALS[@]}"; do
-        env_var="${entry%%|*}"
-        layer="${entry#*|}"; layer="${layer%%|*}"
-        value="${entry##*|}"
+        _manifest_cli_yaml_execution_record_split "$entry" env_var layer value
         echo "  - ${env_var} from ${layer}: $(manifest_redact "$value")" >&2
     done
+    if [[ ${#_MANIFEST_CLI_YAML_TRUST_STALE_LAYERS[@]} -gt 0 ]]; then
+        echo "  You trusted this repository's committed execution keys before, but their values have" >&2
+        echo "  CHANGED since. Review the new values; accepting them re-records the trust." >&2
+    fi
     echo "  A committed config travels with a clone, so honouring it would let a repository" >&2
     echo "  choose what runs on your machine during a ship. Set the key in your global config" >&2
     echo "  or a .local.yaml instead, or trust this repo for one run:" >&2
     echo "    MANIFEST_CLI_TRUST_REPO_COMMANDS=1 manifest ship …" >&2
+    echo "  or once, and remember it for this repository until the values change:" >&2
+    echo "    MANIFEST_CLI_TRUST_REPO_COMMANDS=remember manifest ship …" >&2
     return 0
 }
 
-# The config-supplied programs that WILL run, as "env_var<TAB>layer<TAB>value"
-# rows — the disclosure half of §44. Emitted by the plan and by --dry-run, which
-# were both previously silent about the fact that a config-named program runs at
-# all. Reads the provenance recorded when each value was honoured, so this can
-# never disagree with what actually executes.
+# The config-supplied programs that WILL run, as
+# "env_var<TAB>layer<TAB>value<TAB>trust" rows — the disclosure half of §44.
+# Emitted by the plan and by --dry-run, which were both previously silent about
+# the fact that a config-named program runs at all. Reads the provenance
+# recorded when each value was honoured, so this can never disagree with what
+# actually executes. The trust column is "env", "record", or empty (a layer the
+# user owns needs no trust), so the disclosure can say HOW a committed program
+# came to be allowed.
 #
 # Only PROGRAMS are emitted, never the provider selectors. A provider is the
 # switch that makes its command reachable, not a thing that runs — listing
@@ -960,13 +1339,14 @@ manifest_config_announce_execution_refusals() {
 # set to `command` with no command set runs nothing, and disclosing that would
 # over-report too. Both are excluded by requiring the pair.
 manifest_config_execution_disclosure() {
-    local layer value provider
+    local layer value provider trust
 
     # The release gate has no provider switch — a non-empty command IS the gate.
     value="${MANIFEST_CLI_RELEASE_GATE_COMMAND-}"
     if [[ -n "${value//[[:space:]]/}" ]]; then
         layer="${_MANIFEST_CLI_YAML_EXECUTION_KEY_LAYER[MANIFEST_CLI_RELEASE_GATE_COMMAND]:-env}"
-        printf '%s\t%s\t%s\n' "MANIFEST_CLI_RELEASE_GATE_COMMAND" "$layer" "$value"
+        trust="$(manifest_config_execution_key_trust MANIFEST_CLI_RELEASE_GATE_COMMAND)"
+        printf '%s\t%s\t%s\t%s\n' "MANIFEST_CLI_RELEASE_GATE_COMMAND" "$layer" "$value" "$trust"
     fi
 
     # The two provider-gated commands: disclose only when the pair is complete.
@@ -980,7 +1360,8 @@ manifest_config_execution_disclosure() {
         [[ "$provider" == "command" ]] || continue
         [[ -n "${value//[[:space:]]/}" ]] || continue
         layer="${_MANIFEST_CLI_YAML_EXECUTION_KEY_LAYER[$command_var]:-env}"
-        printf '%s\t%s\t%s\n' "$command_var" "$layer" "$value"
+        trust="$(manifest_config_execution_key_trust "$command_var")"
+        printf '%s\t%s\t%s\t%s\n' "$command_var" "$layer" "$value" "$trust"
     done
     return 0
 }
@@ -1013,12 +1394,20 @@ _manifest_yaml_export_mapped_value() {
     # consumer, and the doc-review provider alone fires twice per ship from
     # inside commit_changes. Refusing at load means the hostile value never
     # reaches any consumer's environment at all.
+    local committed_execution_key=false
     if _manifest_cli_yaml_is_execution_key "$env_var" \
-        && ! _manifest_cli_yaml_layer_is_user_owned "$_MANIFEST_CLI_YAML_LOADING_LAYER" \
-        && ! manifest_trusts_repo_commands; then
-        _MANIFEST_CLI_YAML_EXECUTION_REFUSALS+=("${env_var}|${_MANIFEST_CLI_YAML_LOADING_LAYER}|${value}")
-        log_debug "load_yaml_to_env: REFUSED ${env_var} from ${_MANIFEST_CLI_YAML_LOADING_LAYER} (§44)"
-        return 1
+        && ! _manifest_cli_yaml_layer_is_user_owned "$_MANIFEST_CLI_YAML_LOADING_LAYER"; then
+        committed_execution_key=true
+        # What the committed file supplies, honoured or not: the durable trust
+        # record digests exactly this set (§44(3)). Records are FS-separated
+        # (0x1f), never `|` — see _manifest_cli_yaml_execution_record_split.
+        local fs="$_MANIFEST_CLI_YAML_EXECUTION_FS"
+        _MANIFEST_CLI_YAML_EXECUTION_SUPPLIED+=("${env_var}${fs}${_MANIFEST_CLI_YAML_LOADING_LAYER}${fs}${value}")
+        if ! manifest_trusts_repo_commands; then
+            _MANIFEST_CLI_YAML_EXECUTION_REFUSALS+=("${env_var}${fs}${_MANIFEST_CLI_YAML_LOADING_LAYER}${fs}${value}")
+            log_debug "load_yaml_to_env: REFUSED ${env_var} from ${_MANIFEST_CLI_YAML_LOADING_LAYER} (§44)"
+            return 1
+        fi
     fi
 
     # ${!env_var@a}: attribute probe without the $(declare -p) fork.
@@ -1032,6 +1421,13 @@ _manifest_yaml_export_mapped_value() {
         # Provenance for the disclosure half of §44. Recorded at the point the
         # value is honoured, so the plan cannot disagree with what will run.
         _MANIFEST_CLI_YAML_EXECUTION_KEY_LAYER["$env_var"]="${_MANIFEST_CLI_YAML_LOADING_LAYER:-env}"
+        if [[ "$committed_execution_key" == "true" ]]; then
+            _MANIFEST_CLI_YAML_EXECUTION_KEY_TRUST["$env_var"]="env"
+        else
+            # A user-owned layer now holds the key; whatever trust a committed
+            # value had is no longer what runs.
+            unset '_MANIFEST_CLI_YAML_EXECUTION_KEY_TRUST[$env_var]'
+        fi
     fi
     log_debug "load_yaml_to_env: ${env_var}=${value}"
     return 0

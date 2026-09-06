@@ -268,3 +268,300 @@ YAML
     # every run is one users learn to skip.
     refute grep -q "Programs this run may execute" <<<"$output"
 }
+
+# --- §44(3): the durable trust record ------------------------------------------
+#
+# The per-run variable made trust all-or-nothing per invocation. The record
+# makes a reviewed decision stick, and stick only to what was reviewed: keyed on
+# the repository's remote and a digest of exactly the committed values accepted.
+# Every "still honoured" assertion below is paired with the refusal that proves
+# the record, not a broken restriction, is what honours it.
+
+trust_file() { echo "$HOME/.manifest-cli/trusted-repo-commands.tsv"; }
+
+@test "§44(3): =remember honours the committed values AND records them; the next load needs no variable" {
+    local repo="$SCRATCH/cloned"
+    mk_repo_with_committed_commands "$repo"
+    git -C "$repo" remote add origin https://example.invalid/acme/cloned.git
+
+    MANIFEST_CLI_TRUST_REPO_COMMANDS=remember run load_and_report "$repo"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"gate=[/tmp/attacker-gate.sh]"* ]]
+    [ -f "$(trust_file)" ]
+    # Keyed on the remote, normalised: scheme and .git dropped, credential-free.
+    grep -q "^remote:example.invalid/acme/cloned"$'\t' "$(trust_file)"
+    grep -q $'\t''project-shared'$'\t' "$(trust_file)"
+
+    # The next load, WITHOUT the variable: the record carries the decision.
+    unset MANIFEST_CLI_TRUST_REPO_COMMANDS
+    run load_and_report "$repo"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"gate=[/tmp/attacker-gate.sh]"* ]]
+    [[ "$output" == *"review=[/tmp/attacker-review.sh]"* ]]
+    [[ "$output" == *"review_provider=[command]"* ]]
+}
+
+@test "§44(3): =1 stays a one-run grant and records nothing (the first-shipped contract is unchanged)" {
+    local repo="$SCRATCH/cloned"
+    mk_repo_with_committed_commands "$repo"
+
+    MANIFEST_CLI_TRUST_REPO_COMMANDS=1 run load_and_report "$repo"
+    [[ "$output" == *"gate=[/tmp/attacker-gate.sh]"* ]]
+    [ ! -f "$(trust_file)" ]
+
+    unset MANIFEST_CLI_TRUST_REPO_COMMANDS
+    run load_and_report "$repo"
+    [[ "$output" == *"gate=[<unset>]"* ]]
+}
+
+@test "§44(3): the record follows the REPOSITORY — same remote over ssh is trusted, a different repo is not" {
+    local a="$SCRATCH/clone-a" b="$SCRATCH/clone-b" other="$SCRATCH/other"
+    mk_repo_with_committed_commands "$a"
+    git -C "$a" remote add origin https://example.invalid/acme/cloned.git
+    mk_repo_with_committed_commands "$b"
+    git -C "$b" remote add origin git@example.invalid:acme/cloned
+    mk_repo_with_committed_commands "$other"
+    git -C "$other" remote add origin https://example.invalid/acme/other.git
+
+    MANIFEST_CLI_TRUST_REPO_COMMANDS=remember run load_and_report "$a"
+    unset MANIFEST_CLI_TRUST_REPO_COMMANDS
+
+    # A second clone of the same repository, reached differently: trusted.
+    run load_and_report "$b"
+    [[ "$output" == *"gate=[/tmp/attacker-gate.sh]"* ]]
+    # A different repository with byte-identical committed values: refused.
+    run load_and_report "$other"
+    [[ "$output" == *"gate=[<unset>]"* ]]
+}
+
+@test "§44(3): a changed committed value is refused again, the refusal says why, and re-reviewing re-records" {
+    local repo="$SCRATCH/cloned"
+    mk_repo_with_committed_commands "$repo"
+    git -C "$repo" remote add origin https://example.invalid/acme/cloned.git
+    MANIFEST_CLI_TRUST_REPO_COMMANDS=remember run load_and_report "$repo"
+    unset MANIFEST_CLI_TRUST_REPO_COMMANDS
+
+    sed -i.bak 's#/tmp/attacker-gate.sh#/tmp/attacker-gate-v2.sh#' "$repo/manifest.config.yaml"
+
+    run load_configuration "$repo" true
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"CHANGED since"* ]]
+    run load_and_report "$repo"
+    [[ "$output" == *"gate=[<unset>]"* ]]
+    # Every key from that layer is refused, not only the one that changed: the
+    # digest covers the set, because a review covers the set.
+    [[ "$output" == *"review=[<unset>]"* ]]
+
+    # Positive control: accepting the new values re-arms the record.
+    MANIFEST_CLI_TRUST_REPO_COMMANDS=remember run load_and_report "$repo"
+    unset MANIFEST_CLI_TRUST_REPO_COMMANDS
+    run load_and_report "$repo"
+    [[ "$output" == *"gate=[/tmp/attacker-gate-v2.sh]"* ]]
+}
+
+@test "§44(3): =forget deletes the record and the values are refused again" {
+    local repo="$SCRATCH/cloned"
+    mk_repo_with_committed_commands "$repo"
+    git -C "$repo" remote add origin https://example.invalid/acme/cloned.git
+    MANIFEST_CLI_TRUST_REPO_COMMANDS=remember run load_and_report "$repo"
+
+    MANIFEST_CLI_TRUST_REPO_COMMANDS=forget run load_configuration "$repo" true
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Forgot the recorded trust"* ]]
+    refute grep -q "^remote:example.invalid/acme/cloned" "$(trust_file)"
+
+    unset MANIFEST_CLI_TRUST_REPO_COMMANDS
+    run load_and_report "$repo"
+    [[ "$output" == *"gate=[<unset>]"* ]]
+}
+
+@test "§44(3): a record-trusted committed value still loses to the user's own .local.yaml" {
+    local repo="$SCRATCH/cloned"
+    mk_repo_with_committed_commands "$repo"
+    git -C "$repo" remote add origin https://example.invalid/acme/cloned.git
+    cat > "$repo/manifest.config.local.yaml" <<'YAML'
+release:
+  gate_command: "/tmp/my-gate.sh"
+YAML
+    MANIFEST_CLI_TRUST_REPO_COMMANDS=remember run load_and_report "$repo"
+    unset MANIFEST_CLI_TRUST_REPO_COMMANDS
+
+    run load_and_report "$repo"
+    [[ "$output" == *"gate=[/tmp/my-gate.sh]"* ]]              # the later layer wins
+    [[ "$output" == *"review=[/tmp/attacker-review.sh]"* ]]    # the un-overridden key is restored
+}
+
+@test "§44(3): a record-trusted committed value DOES override the user's global value, as the layer order says" {
+    local repo="$SCRATCH/cloned"
+    mk_repo_with_committed_commands "$repo"
+    git -C "$repo" remote add origin https://example.invalid/acme/cloned.git
+    mkdir -p "$SCRATCH/home/.manifest-cli"
+    MANIFEST_CLI_GLOBAL_CONFIG="$SCRATCH/home/.manifest-cli/manifest.config.global.yaml"
+    export MANIFEST_CLI_GLOBAL_CONFIG
+    cat > "$MANIFEST_CLI_GLOBAL_CONFIG" <<'YAML'
+release:
+  gate_command: "/tmp/global-gate.sh"
+YAML
+    # Control: untrusted, the global value survives (the §44 restriction).
+    run load_and_report "$repo"
+    [[ "$output" == *"gate=[/tmp/global-gate.sh]"* ]]
+
+    MANIFEST_CLI_TRUST_REPO_COMMANDS=remember run load_and_report "$repo"
+    unset MANIFEST_CLI_TRUST_REPO_COMMANDS
+    run load_and_report "$repo"
+    [[ "$output" == *"gate=[/tmp/attacker-gate.sh]"* ]]
+}
+
+@test "§44(3): the disclosure says HOW a committed program came to be allowed" {
+    local repo="$SCRATCH/cloned"
+    mk_repo_with_committed_commands "$repo"
+    git -C "$repo" remote add origin https://example.invalid/acme/cloned.git
+
+    MANIFEST_CLI_TRUST_REPO_COMMANDS=1 load_configuration "$repo" true >/dev/null 2>&1
+    run manifest_execution_preview_header "manifest ship repo patch"
+    [[ "$output" == *"/tmp/attacker-gate.sh"* ]]
+    [[ "$output" == *"project-shared layer — a committed file, trusted for this run"* ]]
+
+    MANIFEST_CLI_TRUST_REPO_COMMANDS=remember load_configuration "$repo" true >/dev/null 2>&1
+    unset MANIFEST_CLI_TRUST_REPO_COMMANDS
+    load_configuration "$repo" true >/dev/null 2>&1
+    run manifest_execution_preview_header "manifest ship repo patch"
+    [[ "$output" == *"project-shared layer — a committed file, trusted by your record"* ]]
+}
+
+@test "§44(3): a fleet root's committed config is trusted under the FLEET root's key, from a member" {
+    local fleet="$SCRATCH/fleet" member="$SCRATCH/fleet/member"
+    mkdir -p "$member"
+    git -C "$member" init -q
+    printf 'fleet:\n  name: "f"\n  versioning: "none"\n' > "$fleet/manifest.fleet.config.yaml"
+    cat > "$fleet/manifest.config.yaml" <<'YAML'
+release:
+  gate_command: "/tmp/fleet-gate.sh"
+YAML
+    run load_and_report "$member"
+    [[ "$output" == *"gate=[<unset>]"* ]]                      # refused from fleet-shared
+
+    MANIFEST_CLI_TRUST_REPO_COMMANDS=remember run load_and_report "$member"
+    [[ "$output" == *"gate=[/tmp/fleet-gate.sh]"* ]]
+    grep -q $'\t''fleet-shared'$'\t' "$(trust_file)"
+    # No origin on the fleet root: keyed on its physical path.
+    grep -q "^path:" "$(trust_file)"
+
+    unset MANIFEST_CLI_TRUST_REPO_COMMANDS
+    run load_and_report "$member"
+    [[ "$output" == *"gate=[/tmp/fleet-gate.sh]"* ]]
+}
+
+@test "§44(3): a read-only load never writes the record, even with =remember" {
+    local repo="$SCRATCH/cloned"
+    mk_repo_with_committed_commands "$repo"
+    MANIFEST_CLI_CONFIG_SKIP_WRITES=1 MANIFEST_CLI_TRUST_REPO_COMMANDS=remember run load_and_report "$repo"
+    [[ "$output" == *"gate=[/tmp/attacker-gate.sh]"* ]]       # trusted for the run
+    [ ! -f "$(trust_file)" ]                                    # but nothing recorded
+}
+
+@test "§44(3): neither the trust variable nor the record's location is a config key a committed file could set" {
+    refute grep -qE '\]="MANIFEST_CLI_TRUST_' "$TEST_REPO_ROOT/modules/core/manifest-yaml.sh"
+    # Positive control for the refutation: the table maps other keys.
+    grep -qE '\]="MANIFEST_CLI_RELEASE_GATE_COMMAND"' "$TEST_REPO_ROOT/modules/core/manifest-yaml.sh"
+    # And the record lives under HOME, never under the repository.
+    [[ "$(manifest_trust_record_file)" == "$HOME/"* ]]
+}
+
+@test "§44(3): a value containing '|' is digested and restored WHOLE, and a change before the '|' is caught" {
+    # The first cut used '|' as the record delimiter and took the value as the
+    # text after the LAST one: this gate was digested and restored as
+    # ' tee gate.log"' — a truncated command that exits 0 with stdin closed, so
+    # the release gate passed vacuously, and any change before the '|' went
+    # unnoticed. Found by the commit steward's read and reproduced.
+    local repo="$SCRATCH/cloned"
+    mkdir -p "$repo"
+    git -C "$repo" init -q
+    git -C "$repo" remote add origin https://example.invalid/acme/pipe.git
+    cat > "$repo/manifest.config.yaml" <<'YAML'
+release:
+  gate_command: 'sh -c "make test | tee gate.log"'
+YAML
+    MANIFEST_CLI_TRUST_REPO_COMMANDS=remember run load_and_report "$repo"
+    [[ "$output" == *'gate=[sh -c "make test | tee gate.log"]'* ]]
+    unset MANIFEST_CLI_TRUST_REPO_COMMANDS
+
+    run load_and_report "$repo"
+    [[ "$output" == *'gate=[sh -c "make test | tee gate.log"]'* ]]
+
+    sed -i.bak 's#make test#rm -rf ./build \&\& make test#' "$repo/manifest.config.yaml"
+    run load_configuration "$repo" true
+    [[ "$output" == *"CHANGED since"* ]]
+    run load_and_report "$repo"
+    [[ "$output" == *"gate=[<unset>]"* ]]
+}
+
+@test "§44(3): one value with embedded newlines cannot forge the digest of a trusted multi-key set" {
+    # The first cut digested sorted KEY=VALUE lines joined by newlines. A single
+    # gate_command whose VALUE spelled out the other keys' lines therefore
+    # produced the trusted five-key digest from a one-key file, and was honoured
+    # with the other four keys silently absent. Length-prefixed fields in a
+    # fixed key order make that impossible: the count of records is part of the
+    # digest. Found by the commit steward's read and reproduced.
+    local repo="$SCRATCH/cloned"
+    mk_repo_with_committed_commands "$repo"
+    git -C "$repo" remote add origin https://example.invalid/acme/cloned.git
+    MANIFEST_CLI_TRUST_REPO_COMMANDS=remember run load_and_report "$repo"
+    unset MANIFEST_CLI_TRUST_REPO_COMMANDS
+
+    cat > "$repo/manifest.config.yaml" <<'YAML'
+version:
+  separator: "."
+release:
+  gate_command: "/tmp/attacker-gate.sh\nMANIFEST_CLI_DOC_REVIEW_COMMAND=/tmp/attacker-review.sh\nMANIFEST_CLI_DOC_REVIEW_PROVIDER=command\nMANIFEST_CLI_RELEASE_NOTES_COMMAND=/tmp/attacker-notes.sh\nMANIFEST_CLI_RELEASE_NOTES_PROVIDER=command"
+YAML
+    run load_and_report "$repo"
+    [[ "$output" == *"gate=[<unset>]"* ]]
+    [[ "$output" == *"review=[<unset>]"* ]]
+    run load_configuration "$repo" true
+    [[ "$output" == *"CHANGED since"* ]]
+}
+
+@test "§44: a process-environment override is disclosed as the env layer, never as the file it overrode" {
+    # The environment is the highest layer and the user's own. Before this fix
+    # the disclosure kept the provenance of the layer the env value replaced —
+    # a record-trusted committed gate overridden from the environment was
+    # printed as "project-shared layer, trusted by your record", false twice.
+    local repo="$SCRATCH/cloned"
+    mk_repo_with_committed_commands "$repo"
+    git -C "$repo" remote add origin https://example.invalid/acme/cloned.git
+    # In a subshell (`run`), so the values that load exports do not linger in
+    # this shell's environment and get captured below as "process-start"
+    # overrides themselves — which would relabel every key as env.
+    MANIFEST_CLI_TRUST_REPO_COMMANDS=remember run load_and_report "$repo"
+    [[ "$output" == *"gate=[/tmp/attacker-gate.sh]"* ]]
+    unset MANIFEST_CLI_TRUST_REPO_COMMANDS
+
+    # Process-start overrides are captured when manifest-config.sh is sourced;
+    # re-capture after exporting so this test's value counts as one of them.
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND=/tmp/env-gate.sh
+    _manifest_config_capture_process_env_overrides
+    load_configuration "$repo" true >/dev/null 2>&1
+    [ "$MANIFEST_CLI_RELEASE_GATE_COMMAND" = "/tmp/env-gate.sh" ]          # env wins over the record
+
+    run manifest_execution_preview_header "manifest ship repo patch"
+    [[ "$output" == *"/tmp/env-gate.sh"* ]]
+    [[ "$output" == *"from MANIFEST_CLI_RELEASE_GATE_COMMAND (env layer)"* ]]
+    refute grep -q "trusted by your record" <<<"$(grep -A1 'env-gate' <<<"$output")"
+    # The record-trusted review command, which nothing overrode, keeps its label.
+    [[ "$output" == *"/tmp/attacker-review.sh"* ]]
+    [[ "$output" == *"project-shared layer — a committed file, trusted by your record"* ]]
+    unset MANIFEST_CLI_RELEASE_GATE_COMMAND
+}
+
+@test "§44: a second load_configuration in one process announces each refusal once, not cumulatively" {
+    local repo="$SCRATCH/cloned"
+    mk_repo_with_committed_commands "$repo"
+    twice() { load_configuration "$1" true; load_configuration "$1" true; }
+    run twice "$repo"
+    [ "$status" -eq 0 ]
+    # Five keys refused per load. Before the per-load reset the second header
+    # read "Ignored 10" — the first load's refusals announced again.
+    [ "$(grep -c 'Ignored 5 config key' <<<"$output")" -eq 2 ]
+    refute grep -q 'Ignored 10 config key' <<<"$output"
+}

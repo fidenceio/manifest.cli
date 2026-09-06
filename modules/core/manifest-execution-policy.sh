@@ -89,7 +89,10 @@ manifest_execution_parse() {
 #
 # Provenance comes from the loader's own record of what it honoured, so this can
 # never drift from what executes (§36).
+#   $1  optional extra note, printed after the standard ones — the fleet preview
+#       uses it to say that each member re-resolves its own configuration.
 manifest_execution_disclose_programs() {
+    local extra_note="${1:-}"
     declare -F manifest_config_execution_disclosure >/dev/null 2>&1 || return 0
     local rows
     rows="$(manifest_config_execution_disclosure 2>/dev/null)" || return 0
@@ -97,17 +100,25 @@ manifest_execution_disclose_programs() {
 
     echo ""
     echo "Programs this run may execute, named by configuration:"
-    local env_var layer value
-    while IFS=$'\t' read -r env_var layer value; do
+    local env_var layer value trust
+    while IFS=$'\t' read -r env_var layer value trust; do
         [[ -n "$env_var" ]] || continue
         if declare -F manifest_redact >/dev/null 2>&1; then
             value="$(manifest_redact "$value")"
         fi
         echo "  - ${value}"
-        echo "      from ${env_var} (${layer} layer)"
+        # A committed file's program is allowed only because the user said so;
+        # say which way they said it (§44(3)), so a stale grant is visible here.
+        case "${trust:-}" in
+            record) echo "      from ${env_var} (${layer} layer — a committed file, trusted by your record)" ;;
+            env)    echo "      from ${env_var} (${layer} layer — a committed file, trusted for this run)" ;;
+            *)      echo "      from ${env_var} (${layer} layer)" ;;
+        esac
     done <<< "$rows"
     echo "  These run on THIS machine during the ship. A committed manifest.config.yaml"
-    echo "  cannot supply them unless MANIFEST_CLI_TRUST_REPO_COMMANDS=1 is set (§44)."
+    echo "  cannot supply them unless you trust it: MANIFEST_CLI_TRUST_REPO_COMMANDS=1 for"
+    echo "  one run, =remember to record it for this repository (§44)."
+    [[ -n "$extra_note" ]] && echo "  ${extra_note}"
     return 0
 }
 
