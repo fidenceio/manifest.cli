@@ -154,6 +154,17 @@ manifest_recipe_explain() {
             echo "  - $step_id -> $uses$suffix"
         fi
     done
+    # The recipe is the same for every repository; what THIS repository's
+    # configuration adds — programs named by release.gate_command and the
+    # doc-review / release-notes providers (§44) — is not part of it and is
+    # deliberately not listed here, because an explanation is loaded without the
+    # repository's local layer and would name a different set than the one that
+    # runs. The preview loads every layer and names them all.
+    if [[ -n "$command" ]]; then
+        echo ""
+        echo "Programs named by this repository's configuration (release gate, doc review,"
+        echo "release notes) are shown by the preview, not here:  $command"
+    fi
 }
 
 manifest_recipe_explain_command() {

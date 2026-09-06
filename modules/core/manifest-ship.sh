@@ -363,6 +363,12 @@ manifest_ship_preview_plan() {
     # Stash the fingerprint the user is reading so a later apply can warn if the
     # plan drifted between this preview and that apply (CLI tracker §2.2).
     manifest_plan_fingerprint_persist "ship-repo" "$plan_fingerprint" "$repo_root"
+    # §44(1): the programs configuration names — the release gate, the doc-review
+    # and release-notes providers — disclosed HERE, in the preview of the one
+    # command that runs them. The apply header disclosed them; this preview
+    # renders its own plan block and never called the disclosure, so the
+    # dry-run stayed silent about exactly what §44(1) set out to disclose.
+    manifest_execution_disclose_programs
     echo ""
 
     echo "What's new"
@@ -784,9 +790,14 @@ manifest_ship_fleet() {
         return 1
     fi
 
+    # §44(1): the preview discloses what the apply header discloses. The fleet
+    # command loaded the coordination root's layers; each member re-resolves its
+    # own before its ship, so the note says this list is the root's.
+    local fleet_disclosure_note="Each member re-resolves its own configuration before its ship, so a member's own .local.yaml may add to this list."
     if [[ "$local_only" == "true" ]]; then
         if [[ "$execution_mode" == "preview" ]]; then
             echo "Ship fleet preview (local): $increment_type — no changes written"
+            manifest_execution_disclose_programs "$fleet_disclosure_note"
             fleet_ship "$increment_type" "--dry-run" "--local" "${fleet_args[@]}"
         else
             manifest_execution_apply_header
@@ -796,6 +807,7 @@ manifest_ship_fleet() {
     else
         if [[ "$execution_mode" == "preview" ]]; then
             echo "Ship fleet preview: $increment_type — no changes written"
+            manifest_execution_disclose_programs "$fleet_disclosure_note"
             fleet_ship "$increment_type" "--dry-run" "${fleet_args[@]}"
         else
             manifest_execution_apply_header
