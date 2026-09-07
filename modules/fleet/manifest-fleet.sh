@@ -1142,6 +1142,12 @@ EOF
             .gitignore) echo "✓ Created: $target_dir/.gitignore (coordination allowlist)" ;;
             .gitignore:empty-overwrite) echo "✓ Wrote coordination allowlist into empty $target_dir/.gitignore" ;;
             .gitignore:preserved) echo "✓ Preserved: $target_dir/.gitignore (existing file kept — coordination allowlist not applied)" ;;
+            # The two §77(c) answers. Without arms here this path reported
+            # nothing for a file it had just rewritten — the log_warning still
+            # reaches the operator on stderr, but the ✓ summary silently
+            # skipped a line, which is the surface-drift class §11 covers.
+            .gitignore:stale-updated) echo "✓ Updated: $target_dir/.gitignore (re-include added for the configured version file; existing rules kept)" ;;
+            .gitignore:preserved-stale) echo "✓ Preserved: $target_dir/.gitignore (locally edited — see the warning above for the one line to add)" ;;
         esac
     else
         log_error "Could not write fleet-root .gitignore in $target_dir"

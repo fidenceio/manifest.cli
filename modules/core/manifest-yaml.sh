@@ -942,7 +942,7 @@ _manifest_cli_yaml_is_execution_key() {
 # the reader where to look. Deliberately NOT restricted the way an execution key
 # is: a policy value naming no program is ordinary config, and refusing it from
 # a committed layer would break every fleet that sets its own gate policy.
-_MANIFEST_CLI_YAML_DISCLOSED_POLICY_KEYS=(
+declare -ga _MANIFEST_CLI_YAML_DISCLOSED_POLICY_KEYS=(
     MANIFEST_CLI_RELEASE_GATE
     MANIFEST_CLI_RELEASE_GATE_REASON
 )
