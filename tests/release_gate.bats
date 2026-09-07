@@ -337,11 +337,142 @@ YAML
 
     # CONTROL: the same value from the environment is attributed to `env`, so
     # the assertion above is about provenance and not about the string existing.
-    unset MANIFEST_CLI_RELEASE_GATE
-    _MANIFEST_CLI_YAML_EXECUTION_KEY_LAYER=()
+    #
+    # THIS CONTROL WAS WRONG AND HID A REAL DEFECT. Its first cut did
+    # `_MANIFEST_CLI_YAML_EXECUTION_KEY_LAYER=()` by hand before exporting the
+    # variable — clearing the map is precisely the step the product has to
+    # perform and did not, so the control asserted its own setup. With the
+    # committed file left in place and the loader re-run, the notice read
+    # "Set by: project-shared" for a bypass the OPERATOR chose from the
+    # environment: it blamed a cloned repository, in the one case the layer
+    # disclosure exists to disambiguate. The relabel now covers disclosed
+    # policy keys, not just execution keys.
+}
+
+@test "release_gate: an ENV override of the gate is attributed to env, not to the file it beat" {
+    # The other half of the pair above, and the case that was broken: the
+    # relabel-to-env on a process override covered execution keys only, so a
+    # bypass the OPERATOR chose was announced as coming from the committed
+    # file — blaming a cloned repository, in the one case the layer disclosure
+    # exists to disambiguate.
+    #
+    # The committed file must DISAGREE with the environment or the override is
+    # a no-op and this proves nothing, and the env var must exist before
+    # manifest-config.sh captures the process environment — that capture runs
+    # at source time, which is right for the product (a real override is set
+    # before the CLI starts) and is the reason a naive ordering here failed.
     export MANIFEST_CLI_RELEASE_GATE="none"
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/core/manifest-shared-functions.sh"
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/core/manifest-yaml.sh"
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/core/manifest-config.sh"
+    export MANIFEST_CLI_GLOBAL_CONFIG="$SCRATCH/home/nonexistent.global.yaml"
+
+    cat > "$MANIFEST_CLI_PROJECT_ROOT/manifest.config.yaml" <<'YAML'
+release:
+  gate: "all"
+YAML
+    cd "$MANIFEST_CLI_PROJECT_ROOT"
+    load_configuration "$MANIFEST_CLI_PROJECT_ROOT" >/dev/null 2>&1 || true
+    # The override must actually have won, or the rest asserts nothing.
+    [ "$(manifest_release_gate_policy)" = "none" ]
+
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
+    grep -q "Set by: env" "$SCRATCH/out"
+    refute grep -q "Set by: project-shared" "$SCRATCH/out"
+}
+
+@test "release_gate: the bypass reason and layer reach the DURABLE audit record" {
+    # This was claimed in five places before it was true — the pair reached the
+    # per-run status file only, while examples/manifest.config.yaml.example told
+    # operators their justification lands in the compliance log, where it did
+    # not. A bypass is the one gate disposition an auditor must be able to
+    # JUDGE rather than count, and "who turned it off and why" is that
+    # judgement, so the claim was worth making true rather than deleting.
+    export MANIFEST_CLI_RELEASE_GATE="none"
+    export MANIFEST_CLI_RELEASE_GATE_REASON='ship.sh ran the suite on this "exact" tree'
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
+
+    manifest_audit_apply_event "cli" "manifest ship repo patch -y" "$MANIFEST_CLI_PROJECT_ROOT" \
+        "h" "0" "completed" "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS" \
+        "$_MANIFEST_CLI_SHIP_LAST_GATE_LAYER" "$_MANIFEST_CLI_SHIP_LAST_GATE_REASON"
+    local audit; audit="$(_audit_file)"
+    [[ "$(cat "$audit")" == *'"gate_status":"bypassed"'* ]]
+    [[ "$(cat "$audit")" == *'"gate_reason":'* ]]
+    [[ "$(cat "$audit")" == *'ship.sh ran the suite'* ]]
+    # The embedded quotes must be JSON-escaped, not emitted raw — the record is
+    # NDJSON and one unescaped quote breaks the line for every consumer.
+    [[ "$(cat "$audit")" == *'\"exact\"'* ]]
+    # CONTROL: a run with no reason emits no gate_reason key at all, so the
+    # field's presence means something.
+    : > "$audit"
+    manifest_audit_apply_event "cli" "c" "$MANIFEST_CLI_PROJECT_ROOT" "h" "0" "completed" "verified-local"
+    [[ "$(cat "$audit")" == *'"gate_status":"verified-local"'* ]]
+    refute grep -q 'gate_reason' "$audit"
+}
+
+@test "release_gate: the reason and layer do not leak into a LATER run under another policy" {
+    # They are assigned only in the `none` arm, so without a reset beside the
+    # policy a second call reports the first call's pair next to its own
+    # status. A fleet ship calls this once per member in one process, so the
+    # stale pair would be attributed to the wrong repository.
+    export MANIFEST_CLI_RELEASE_GATE="none"
+    export MANIFEST_CLI_RELEASE_GATE_REASON="verified out of band"
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
+    [ "$_MANIFEST_CLI_SHIP_LAST_GATE_REASON" = "verified out of band" ]
+
+    export MANIFEST_CLI_RELEASE_GATE="local-tests"
+    export MANIFEST_CLI_RELEASE_GATE_COMMAND="true"
     manifest_release_gate_run "pre-bump" >"$SCRATCH/out2" 2>&1
-    refute grep -q "Set by: project-shared" "$SCRATCH/out2"
+    [ "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS" = "verified-local" ]
+    [ -z "$_MANIFEST_CLI_SHIP_LAST_GATE_REASON" ]
+    [ -z "$_MANIFEST_CLI_SHIP_LAST_GATE_LAYER" ]
+}
+
+@test "release_gate: a gate_reason cannot smuggle terminal escapes into the notice" {
+    # A COMMITTED config in a cloned repo can set this with no trust prompt, so
+    # the value is attacker-reachable. The first cut translated only
+    # \n\r\t\f\v while its comment claimed every control character: ESC passed
+    # through, and \033[1A\033[2K\r overwrites the line above — which is the
+    # "publishing without test verification" warning itself.
+    export MANIFEST_CLI_RELEASE_GATE="none"
+    export MANIFEST_CLI_RELEASE_GATE_REASON="$(printf 'ok\033[1A\033[2K\rEverything verified\007')"
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
+    # NOT "no ESC anywhere": log_warning wraps its own output in colour codes,
+    # so a blanket ESC assertion fails on the notice's own formatting and says
+    # nothing about the payload. Nor "no '[1A' anywhere" — stripping the ESC
+    # leaves those three bytes as ORDINARY PRINTABLE TEXT, which is the fix
+    # working, not the attack surviving. What must be absent is the escape
+    # SEQUENCE: ESC immediately followed by the cursor command.
+    refute grep -qF "$(printf '\033[1A')" "$SCRATCH/out"
+    refute grep -qF "$(printf '\033[2K')" "$SCRATCH/out"
+    # And the stored value — which reaches the status file and audit record
+    # with no colour wrapper — carries no control byte at all.
+    [ -z "$(printf '%s' "$_MANIFEST_CLI_SHIP_LAST_GATE_REASON" | tr -d '[:print:]')" ]
+    # The warning it was trying to erase is still there.
+    grep -q "publishing without test verification" "$SCRATCH/out"
+    # CONTROL: the printable text is kept, so this strips controls rather than
+    # dropping the value.
+    [[ "$_MANIFEST_CLI_SHIP_LAST_GATE_REASON" == *"Everything verified"* ]]
+}
+
+@test "release_gate: a credential in gate_reason is redacted BEFORE truncation" {
+    # Truncating first lets a token straddling the cut leak its prefix, because
+    # the redactor never sees the whole shape.
+    #
+    # The PADDING LENGTH is the whole test. At 295 the cut leaves only "ghp_0"
+    # and the assertion below passes against the broken order too — a vacuous
+    # green. 291 leaves exactly the 9 characters "ghp_01234" straddling the
+    # boundary, which is what the wrong order actually emitted.
+    export MANIFEST_CLI_RELEASE_GATE="none"
+    export MANIFEST_CLI_RELEASE_GATE_REASON="$(printf 'x%.0s' $(seq 1 291))ghp_0123456789abcdefghij"
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
+    refute grep -q "ghp_01234" "$SCRATCH/out"
+    refute grep -q "ghp_01234" <<<"$_MANIFEST_CLI_SHIP_LAST_GATE_REASON"
+    # CONTROL: the reason is still present and redacted, not merely emptied.
+    [[ "$_MANIFEST_CLI_SHIP_LAST_GATE_REASON" == *"xxx"* ]]
 }
 
 @test "release_gate: a multi-line gate_reason cannot inject a key into the status file" {

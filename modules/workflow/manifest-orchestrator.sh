@@ -686,6 +686,14 @@ manifest_release_gate_run() {
     local policy
     policy="$(manifest_release_gate_policy)" || return 1
     _MANIFEST_CLI_SHIP_LAST_GATE_POLICY="$policy"
+    # Reset beside the policy, not inside the `none` arm: these are only ever
+    # ASSIGNED there, so without this a later run under a different policy
+    # reported the earlier run's reason and layer next to its own status —
+    # gate_status=verified-local carrying "bypassed because …". A fleet ship
+    # calls this once per member in one process, so the stale pair would be
+    # attributed to the wrong repository.
+    _MANIFEST_CLI_SHIP_LAST_GATE_REASON=""
+    _MANIFEST_CLI_SHIP_LAST_GATE_LAYER=""
 
     case "$phase" in
         pre-bump)
@@ -710,24 +718,38 @@ manifest_release_gate_run() {
                     if declare -F manifest_config_execution_key_layer >/dev/null 2>&1; then
                         gate_layer="$(manifest_config_execution_key_layer MANIFEST_CLI_RELEASE_GATE 2>/dev/null)"
                     fi
-                    # Operator free text, and it lands in a key=value status
-                    # file and a JSON audit event. A newline in it would inject
-                    # a line — i.e. a fake key — into the status file, which is
-                    # the same class of defect as §44's delimiter instances:
-                    # collapse every control character to a space at capture,
-                    # once, rather than at each of the three places it is
-                    # printed. Truncated because a notice is a notice.
+                    # Operator free text that a COMMITTED config in a cloned
+                    # repository can set with no trust prompt (a policy key is
+                    # deliberately not restricted the way an execution key is),
+                    # and it is printed to a terminal and written to a
+                    # key=value status file. Three properties, each learned by
+                    # getting it wrong:
+                    #
+                    #   1. ALL control characters go, not just the line
+                    #      breaks. The first cut listed \n\r\t\f\v and its
+                    #      comment claimed "every control character" — ESC, BS
+                    #      and BEL passed straight through, so a hostile repo
+                    #      could send \033[1A\033[2K\r and overwrite the
+                    #      "publishing without test verification" line above
+                    #      with text of its choosing. `[:cntrl:]` is the class.
+                    #   2. REDACT BEFORE TRUNCATING. The other order lets a
+                    #      token straddling the cut leak its prefix, because
+                    #      the redactor never sees the whole thing.
+                    #   3. Bash substring, not `cut -c`, which is BYTE-based on
+                    #      GNU coreutils and BusyBox and split a multi-byte
+                    #      character mid-sequence.
+                    # Control characters become SPACES rather than being
+                    # deleted, so collapsing a line break cannot fuse two words
+                    # into one; runs are then squeezed.
                     gate_reason="$(printf '%s' "${MANIFEST_CLI_RELEASE_GATE_REASON-}" \
-                        | tr '\n\r\t\f\v' '     ' | cut -c1-300)"
+                        | tr '[:cntrl:]' ' ' | tr -s ' ')"
+                    if declare -F manifest_redact >/dev/null 2>&1; then
+                        gate_reason="$(manifest_redact "$gate_reason")"
+                    fi
+                    gate_reason="${gate_reason:0:300}"
                     local notice="Release gate disabled (release_gate=none) — publishing without test verification."
                     [[ -n "$gate_layer" ]] && notice+=" Set by: ${gate_layer}."
                     if [[ -n "${gate_reason//[[:space:]]/}" ]]; then
-                        # Config is attacker-reachable and this string is
-                        # printed, so route it through the redactor like any
-                        # other pass-through (§27's class).
-                        if declare -F manifest_redact >/dev/null 2>&1; then
-                            gate_reason="$(manifest_redact "$gate_reason")"
-                        fi
                         notice+=" Reason given: ${gate_reason}"
                     else
                         notice+=" No release.gate_reason is set — record why verification is not needed here, or the next reader cannot tell this from a mistake."

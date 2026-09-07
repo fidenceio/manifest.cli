@@ -616,15 +616,24 @@ _json_value() {
 # fail-open or env-var bypass is observable in the durable log.
 #
 # Usage: manifest_audit_apply_event SOURCE COMMAND SCOPE PLAN_HASH EXIT_STATUS \
-#                                   [EVENT] [GATE_STATUS]
+#                                   [EVENT] [GATE_STATUS] [GATE_LAYER] [GATE_REASON]
 #   EVENT       defaults to "authorized" (the pre-apply guard event); the
 #               completion path passes "completed".
 #   GATE_STATUS optional release-gate disposition; emitted only when non-empty.
-# Existing 5-arg callers are unchanged: EVENT/GATE_STATUS are trailing optionals.
+#   GATE_LAYER  which config layer set release.gate, and
+#   GATE_REASON the operator's release.gate_reason — both optional, both emitted
+#               only when non-empty (§81). A bypass is the one gate disposition
+#               an auditor has to be able to JUDGE rather than merely count, and
+#               "who turned it off and why" is that judgement. Free text reaches
+#               _json_escape here like every other field, which C0-escapes and
+#               quotes it; the caller has separately stripped control characters
+#               so the same value is safe in the plain key=value status file.
+# Existing 5-arg callers are unchanged: all four are trailing optionals.
 # -----------------------------------------------------------------------------
 manifest_audit_apply_event() {
     local event_source="$1" command="$2" scope="$3" plan_hash="$4" exit_status="$5"
     local event="${6:-authorized}" gate_status="${7:-}"
+    local gate_layer="${8:-}" gate_reason="${9:-}"
     local actor ts state_dir audit_dir audit_file line
 
     actor="${MANIFEST_CLI_ACTOR:-${USER:-$(id -un 2>/dev/null || echo unknown)}}"
@@ -661,6 +670,12 @@ manifest_audit_apply_event() {
     # so the authorization event's shape is unchanged for existing consumers.
     if [ -n "$gate_status" ]; then
         line+="$(_json_kv_str "gate_status" "$(manifest_redact "$gate_status")"),"
+    fi
+    if [ -n "$gate_layer" ]; then
+        line+="$(_json_kv_str "gate_layer" "$(manifest_redact "$gate_layer")"),"
+    fi
+    if [ -n "$gate_reason" ]; then
+        line+="$(_json_kv_str "gate_reason" "$(manifest_redact "$gate_reason")"),"
     fi
     line+="$(_json_kv_raw "exit_status" "$(_json_value "$exit_status")")}"
 

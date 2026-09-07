@@ -631,7 +631,9 @@ manifest_ship_repo() {
             "$plan_fingerprint" \
             "$workflow_rc" \
             "completed" \
-            "${_MANIFEST_CLI_SHIP_LAST_GATE_STATUS:-not-run}"
+            "${_MANIFEST_CLI_SHIP_LAST_GATE_STATUS:-not-run}" \
+            "${_MANIFEST_CLI_SHIP_LAST_GATE_LAYER:-}" \
+            "${_MANIFEST_CLI_SHIP_LAST_GATE_REASON:-}"
     fi
 
     return "$workflow_rc"

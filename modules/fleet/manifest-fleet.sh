@@ -691,8 +691,13 @@ _fleet_coordination_files() {
 # second set of greps — that second derivation is what let §77(c) ship fixed for
 # the create path and broken for every existing root (§36, and §6's duplicated
 # derivation).
+#   $1        fleet root
+#   $2..$n    extra names to re-include after the coordination set. Used by the
+#             `stale` convergence to CARRY FORWARD re-include lines the file
+#             already had, so converging a root can only ever ADD.
 _fleet_render_allowlist_gitignore() {
-    local root="$1"
+    local root="$1"; shift
+    local -a extra=("$@")
     cat << 'EOF'
 # =============================================================================
 # Manifest fleet — coordination repo .gitignore (ALLOWLIST model)
@@ -711,13 +716,31 @@ _fleet_render_allowlist_gitignore() {
 # …then re-include only the coordination files (all at the fleet root).
 EOF
     local f
+    local -a emitted=()
     while IFS= read -r f; do
-        [[ -n "$f" ]] && printf '!/%s\n' "$f"
+        [[ -n "$f" ]] || continue
+        printf '!/%s\n' "$f"
+        emitted+=("$f")
     done < <(_fleet_coordination_files "$root")
+    # Carried-forward names, de-duplicated against what the coordination set
+    # already emitted so a preserved line cannot appear twice.
+    local e keep
+    for e in ${extra[@]+"${extra[@]}"}; do
+        [[ -n "$e" ]] || continue
+        keep=true
+        for f in ${emitted[@]+"${emitted[@]}"}; do
+            [[ "$e" == "$f" ]] && { keep=false; break; }
+        done
+        [[ "$keep" == "true" ]] || continue
+        printf '!/%s\n' "$e"
+        emitted+=("$e")
+    done
 }
 
+#   $1        destination .gitignore path
+#   $2..$n    extra names to preserve (see the renderer)
 _fleet_write_allowlist_gitignore() {
-    local dest="$1"
+    local dest="$1"; shift
     local root
     root="$(dirname "$dest")"
     local tmp="${dest}.tmp.$$"
@@ -725,7 +748,7 @@ _fleet_write_allowlist_gitignore() {
     # never leaves a truncated .gitignore (pattern: _manifest_config_atomic_write_timestamp).
     # The re-include lines are rendered from _fleet_coordination_files, the same
     # list the stager and its verifier read (§77(c)).
-    if ! _fleet_render_allowlist_gitignore "$root" > "$tmp" 2>/dev/null; then
+    if ! _fleet_render_allowlist_gitignore "$root" "$@" > "$tmp" 2>/dev/null; then
         rm -f "$tmp" 2>/dev/null
         return 1
     fi
@@ -755,31 +778,32 @@ _fleet_gitignore_normalize() {
     '
 }
 
-# How many re-include lines name something outside the fixed four. The CLI has
-# only ever written exactly ONE (the version file), so a count above one means
-# the operator added a line, and the file is theirs rather than ours.
-# The variable re-include names a file currently carries, comma-joined, for the
-# announcement. Names what is being replaced rather than just saying "updated",
-# so the operator can tell a rename they made from one they did not.
-_fleet_gitignore_stale_names() {
+# The re-include names a file carries that are OUTSIDE the fixed four, one per
+# line. These are the lines a convergence must carry forward: one of them may be
+# a superseded version-file name, and any of them may be the operator's.
+#
+# There is deliberately no attempt to tell those two apart. The first cut tried,
+# by counting: "the CLI has only ever written one variable line, so a count above
+# one means the operator added it." That is true and useless — it says nothing
+# about a count of exactly one, and a root where the operator deleted the
+# re-include for a version file their scheme never creates and added one of their
+# own has a count of one, normalizes identically to canonical, and was therefore
+# classified as ours and REWRITTEN. Reproduced: `!/RUNBOOK.md` lost, and the
+# announcement told the operator it had been their version file. The count was a
+# proxy for authorship, and authorship is not recoverable from this file.
+#
+# So the write is additive instead and the question stops mattering: preserve
+# every variable line, add whatever the coordination set is missing. A stale
+# re-include for a file that does not exist is inert in git; a dropped operator
+# line is not.
+_fleet_gitignore_variable_include_names() {
     local file="$1"
     local fixed_pat
     fixed_pat="$(_fleet_fixed_coordination_files | paste -sd'|' -)"
     awk -v fixed="$fixed_pat" '
         BEGIN { n = split(fixed, a, "|"); for (i = 1; i <= n; i++) keep["!/" a[i]] = 1 }
-        /^!\// { if (!($0 in keep)) { sub(/^!\//, ""); out = (out == "" ? $0 : out ", " $0) } }
-        END { print out }
+        /^!\// { if (!($0 in keep)) { sub(/^!\//, ""); if (!($0 in seen)) { seen[$0] = 1; print } } }
     ' "$file"
-}
-
-_fleet_gitignore_variable_include_count() {
-    local fixed_pat
-    fixed_pat="$(_fleet_fixed_coordination_files | paste -sd'|' -)"
-    awk -v fixed="$fixed_pat" '
-        BEGIN { n = split(fixed, a, "|"); for (i = 1; i <= n; i++) keep["!/" a[i]] = 1 }
-        /^!\// { if (!($0 in keep)) c++ }
-        END { print c + 0 }
-    ' "$1"
 }
 
 # The decision create_fleet_gitignore will take for ROOT, without taking it —
@@ -794,21 +818,16 @@ _fleet_gitignore_variable_include_count() {
 # .gitignore kept re-including the old name while the stager force-added the new
 # one, leaving the new version file invisible to the operator's own `git add .`.
 #
-# The two stale answers exist because "is this file ours to rewrite?" has to be
-# decided EXACTLY, not guessed. The test is byte equality after normalization:
-# strip the one re-include line that varies by configuration and every remaining
-# byte is identical across all fleets. So
-#
-#   normalized(file) == normalized(canonical) AND file has <= 1 variable
-#   re-include line
-#
-# means the file is precisely what some version of this writer produced for some
-# version-file name, and can carry nothing the operator added — which is what
-# makes rewriting it safe. Anything else is `preserved-stale`: diverged, but not
-# provably ours, so it is announced and NOT written. The `<= 1` clause is
-# load-bearing and not defensive padding: an operator-added `!/RUNBOOK.md`
-# beside the version line normalizes away too, and without the count that file
-# would be classified ours and its line silently dropped. Verified on a fixture.
+# `stale` means the MANAGED BLOCK is intact — every line outside the re-include
+# set is byte-identical to what the writer produces — so the file can be
+# regenerated without losing anything the operator wrote in it. It does NOT mean
+# the re-include lines are all ours, and the first cut's attempt to claim that is
+# recorded on _fleet_gitignore_variable_include_names above: authorship of a
+# re-include line is not recoverable from the file, and the count-based proxy
+# lost an operator's line on a fixture. The convergence is therefore ADDITIVE —
+# it carries every existing variable line forward — which removes the need to
+# know. Anything whose managed block has been edited is `preserved-stale`:
+# announced, never written, because regenerating it would discard those edits.
 _fleet_gitignore_decision() {
     local fleet_root="$1"
     local gitignore_file="$fleet_root/.gitignore"
@@ -817,16 +836,25 @@ _fleet_gitignore_decision() {
 
     if grep -q 'coordination repo .gitignore (ALLOWLIST model)' "$gitignore_file" 2>/dev/null \
        && grep -qxF '/*' "$gitignore_file" 2>/dev/null; then
+        # BOTH comparisons are against canonical rendered WITH the names the
+        # file already carries. Using the bare canonical for the `current` test
+        # made convergence non-idempotent: an additively converged file carries
+        # an extra re-include forever, so it could never be byte-equal to the
+        # bare rendering and every subsequent run answered `stale` and rewrote
+        # it again. Caught by asserting a second decision reads `current`, which
+        # is the only reason the test suite noticed.
+        local -a carried=()
+        local n
+        while IFS= read -r n; do [[ -n "$n" ]] && carried+=("$n"); done \
+            < <(_fleet_gitignore_variable_include_names "$gitignore_file")
         local canonical
-        canonical="$(_fleet_render_allowlist_gitignore "$fleet_root" 2>/dev/null)"
+        canonical="$(_fleet_render_allowlist_gitignore "$fleet_root" \
+            ${carried[@]+"${carried[@]}"} 2>/dev/null)"
         if [[ "$(cat "$gitignore_file" 2>/dev/null)" == "$canonical" ]]; then
             echo "current"; return 0
         fi
-        local variable_includes
-        variable_includes="$(_fleet_gitignore_variable_include_count "$gitignore_file")"
-        if [[ "$variable_includes" -le 1 ]] \
-           && [[ "$(_fleet_gitignore_normalize < "$gitignore_file")" \
-                 == "$(printf '%s\n' "$canonical" | _fleet_gitignore_normalize)" ]]; then
+        if [[ "$(_fleet_gitignore_normalize < "$gitignore_file")" \
+              == "$(printf '%s\n' "$canonical" | _fleet_gitignore_normalize)" ]]; then
             echo "stale"; return 0
         fi
         echo "preserved-stale"; return 0
@@ -882,11 +910,22 @@ create_fleet_gitignore() {
         # because rewriting a tracked file the operator did not ask about is
         # exactly the silent-write class §73 was filed for.
         stale)
-            local previous
-            previous="$(_fleet_gitignore_stale_names "$gitignore_file" "$fleet_root")"
-            _fleet_write_allowlist_gitignore "$gitignore_file" || return 1
+            # ADDITIVE: carry every existing variable re-include forward. One of
+            # them may be a superseded version-file name and any of them may be
+            # the operator's, and this file cannot tell them apart — so it keeps
+            # both rather than guessing, and the announcement says only what it
+            # ADDED. The first cut named the carried line as the outgoing
+            # version file, which on an operator's line was simply false.
+            local -a carry=()
+            local n
+            while IFS= read -r n; do [[ -n "$n" ]] && carry+=("$n"); done \
+                < <(_fleet_gitignore_variable_include_names "$gitignore_file")
+            local want
+            want="$(_fleet_root_version_name "$fleet_root")"
+            _fleet_write_allowlist_gitignore "$gitignore_file" \
+                ${carry[@]+"${carry[@]}"} || return 1
             if declare -F log_warning >/dev/null 2>&1; then
-                log_warning "Fleet root .gitignore re-included ${previous:-a different version file}; updated to match fleet.version_file. Commit it with the coordination files."
+                log_warning "Fleet root .gitignore did not re-include '${want}' (fleet.version_file); added it and kept every existing rule. Commit it with the coordination files."
             fi
             echo ".gitignore:stale-updated"; return 0
             ;;

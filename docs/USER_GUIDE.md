@@ -351,17 +351,27 @@ stager read the config key, and the allowlist `.gitignore` re-includes the name 
 can see it past the `/*` rule.
 
 **Change the key on an already-initialised fleet and the next fleet command reconciles
-the `.gitignore` for you**, announcing what it replaced:
+the `.gitignore` for you:**
 
 ```text
-⚠️  Fleet root .gitignore re-included FLEET_VERSION; updated to match
-    fleet.version_file. Commit it with the coordination files.
+⚠️  Fleet root .gitignore did not re-include 'FLEET.stamp' (fleet.version_file);
+    added it and kept every existing rule. Commit it with the coordination files.
 ```
 
 Commit that `.gitignore` along with the other coordination files — it is one of them.
 
-**If you have edited the root `.gitignore` yourself, Manifest will not rewrite it.** It
-says so and names the exact line to add:
+**The reconcile only ever adds.** Any `!/` line already in the file is carried through,
+including one you added yourself and the re-include for a previous version file. Manifest
+cannot tell those two apart — nothing in the file records who wrote a line — so it keeps
+both rather than guessing. A re-include for a file that no longer exists does nothing in
+git; a dropped rule of yours would.
+
+So after a rename you may see the old name still listed. That is deliberate, and you can
+delete the line yourself if you want the file tidy.
+
+**If you have edited the surrounding block — the header comments, the `/*` rule, or any
+non-`!/` line — Manifest will not rewrite the file at all.** Regenerating it would discard
+those edits, so it says so and names the exact line to add:
 
 ```text
 ⚠️  Fleet root .gitignore does not re-include 'FLEET.stamp' (fleet.version_file)
@@ -371,8 +381,7 @@ says so and names the exact line to add:
 
 Add that one line by hand and commit it. Do **not** delete the file to make Manifest
 regenerate it: regenerating produces the canonical allowlist and discards whatever you
-added, and your lines are there precisely because Manifest never rewrites a `.gitignore`
-it does not recognise as its own.
+added.
 
 The symptom, if this is ever missed: the version file is ignored by `/*`, so it stays
 invisible to your own `git add .`. The release itself is unaffected — the stager
@@ -386,7 +395,16 @@ git check-ignore -q "$(grep -E '^[[:space:]]*version_file:' manifest.fleet.confi
 
 A name that is not a plain filename is refused and the default is used instead, loudly —
 paths and globs (a `*` in the allowlist would un-ignore every root entry, member
-directories included), and also `.`, `..` and `.git`.
+directories included). Four kinds of well-formed name are refused too, because the version
+file is written with `mv -f` and would destroy what it lands on:
+
+| Refused | Why |
+| --- | --- |
+| `.`, `..` | A directory reference, not a file name |
+| `.git`, `.gitmodules`, `.gitattributes` | Git metadata. Where `.git` is a *file* — a linked worktree or a submodule — it would be overwritten and the root detached from its repository |
+| `manifest.fleet.tsv`, `manifest.fleet.config.yaml`, `.gitignore`, `CHANGELOG_FLEET.md` | A coordination file. The roster is the fleet's structure-of-record, and the config case erases the file that named it |
+
+The check is case-insensitive, because macOS resolves `.GIT` to `.git`.
 
 ### Project Repo Names Onto GitHub Topics
 

@@ -129,6 +129,44 @@ YAML
     done
 }
 
+@test "the .git refusal folds case, because macOS resolves .GIT to .git" {
+    # The refusal compared case-SENSITIVELY at first, and APFS is
+    # case-insensitive by default — so `.GIT` passed the check and `mv -f`
+    # clobbered the gitfile, with the directory entry still reading `.git`
+    # because APFS is also case-preserving. A check that decides whether a path
+    # is dangerous has to fold, or it is correct only on Linux.
+    unset MANIFEST_CLI_FLEET_CONFIG_FILE
+    local bad
+    for bad in '.GIT' '.Git' '.gIt' '.GITMODULES'; do
+        printf 'fleet:\n  name: "x"\n  versioning: "date"\n  version_file: "%s"\n' "$bad" \
+            > "$SCRATCH/manifest.fleet.config.yaml"
+        [ "$(_fleet_root_version_name "$SCRATCH" 2>/dev/null)" = "FLEET_VERSION" ]
+    done
+}
+
+@test "a version_file colliding with a coordination file is refused (it would destroy it)" {
+    # `mv -f "$tmp" "$root/$name"` on manifest.fleet.tsv overwrites the fleet's
+    # structure-of-record; on manifest.fleet.config.yaml it erases the file that
+    # named it. The collision also makes _fleet_coordination_files emit a
+    # duplicate, which pinned the root at preserved-stale with a
+    # self-contradicting warning.
+    unset MANIFEST_CLI_FLEET_CONFIG_FILE
+    local bad
+    for bad in 'manifest.fleet.tsv' 'manifest.fleet.config.yaml' '.gitignore' \
+               'CHANGELOG_FLEET.md' 'MANIFEST.FLEET.TSV'; do
+        printf 'fleet:\n  name: "x"\n  versioning: "date"\n  version_file: "%s"\n' "$bad" \
+            > "$SCRATCH/manifest.fleet.config.yaml"
+        [ "$(_fleet_root_version_name "$SCRATCH" 2>/dev/null)" = "FLEET_VERSION" ]
+        run _fleet_root_version_name "$SCRATCH"
+        [[ "$output" == *"collides with the coordination file"* || "$output" == *"is git metadata"* ]]
+    done
+    # CONTROL: a name that merely RESEMBLES one is still honoured, so the check
+    # is a collision test and not a substring ban.
+    printf 'fleet:\n  name: "x"\n  versioning: "date"\n  version_file: "manifest.fleet.tsv.version"\n' \
+        > "$SCRATCH/manifest.fleet.config.yaml"
+    [ "$(_fleet_root_version_name "$SCRATCH" 2>/dev/null)" = "manifest.fleet.tsv.version" ]
+}
+
 @test "POSITIVE CONTROL: a gitfile .git is exactly the shape mv -f would clobber" {
     # Without this, the test above asserts a refusal against a hazard nobody
     # has shown to exist. A linked worktree's .git is a FILE, and `mv -f` over a
@@ -188,19 +226,70 @@ YAML
     [ "$output" = "current" ]
 }
 
-@test "create_fleet_gitignore CONVERGES a stale root, announces it, and names the file it replaced" {
+@test "create_fleet_gitignore CONVERGES a stale root by ADDING the configured name" {
     mk_initialised_root
     run create_fleet_gitignore "$SCRATCH"
     [ "$status" -eq 0 ]
     [[ "$output" == *".gitignore:stale-updated"* ]]
     # The announcement is the point: a silent rewrite of a tracked file is the
-    # class §73 was filed for.
-    [[ "$output" == *"FLEET_VERSION"* ]]
+    # class §73 was filed for. It names what was ADDED — never the carried
+    # line, which the first cut announced as the outgoing version file even
+    # when it was the operator's own.
+    [[ "$output" == *"FLEET.stamp"* ]]
+    [[ "$output" == *"kept every existing rule"* ]]
     grep -q '^!/FLEET.stamp$' "$SCRATCH/.gitignore"
-    refute grep -q '^!/FLEET_VERSION$' "$SCRATCH/.gitignore"
     # Converged means converged: a second run is a clean no-op.
     run _fleet_gitignore_decision "$SCRATCH"
     [ "$output" = "current" ]
+}
+
+@test "convergence is ADDITIVE: an operator's only variable re-include survives (§77(c))" {
+    # THE REGRESSION THIS REPLACES A COUNT GUARD WITH.
+    #
+    # The first cut classified a file as ours to rewrite when it normalized to
+    # canonical AND carried at most one variable re-include line, on the theory
+    # that the CLI only ever writes one. The theory says nothing about WHICH
+    # name that one line holds. An operator who deletes the re-include for a
+    # version file their scheme never creates and adds one of their own has a
+    # count of exactly one — so the file classified as ours and the line was
+    # dropped, with the warning naming it as the outgoing version file.
+    #
+    # Reproduced before the fix: count=1, decision=stale, !/RUNBOOK.md LOST.
+    # Authorship of a re-include line is not recoverable from the file, so the
+    # write is additive and the question no longer has to be answered.
+    mk_initialised_root
+    grep -v '^!/FLEET_VERSION$' "$SCRATCH/.gitignore" > "$SCRATCH/.gi.tmp"
+    mv "$SCRATCH/.gi.tmp" "$SCRATCH/.gitignore"
+    printf '!/RUNBOOK.md\n' >> "$SCRATCH/.gitignore"
+
+    run _fleet_gitignore_decision "$SCRATCH"
+    [ "$output" = "stale" ]
+
+    run create_fleet_gitignore "$SCRATCH"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *".gitignore:stale-updated"* ]]
+    # Both survive: the operator's line kept, the configured name added.
+    grep -q '^!/RUNBOOK.md$' "$SCRATCH/.gitignore"
+    grep -q '^!/FLEET.stamp$' "$SCRATCH/.gitignore"
+    # And it settles — a carried line must not keep the root perpetually stale.
+    run _fleet_gitignore_decision "$SCRATCH"
+    [ "$output" = "current" ]
+}
+
+@test "convergence carries a superseded version name forward too, and does not duplicate it" {
+    # The other kind of variable line: genuinely ours, now superseded. Kept for
+    # the same reason — the file cannot prove which kind it is — and a stale
+    # re-include for an absent file is inert in git.
+    mk_initialised_root
+    run create_fleet_gitignore "$SCRATCH"
+    [ "$status" -eq 0 ]
+    grep -q '^!/FLEET_VERSION$' "$SCRATCH/.gitignore"
+    grep -q '^!/FLEET.stamp$' "$SCRATCH/.gitignore"
+    # No name appears twice, however many times convergence runs.
+    create_fleet_gitignore "$SCRATCH" >/dev/null
+    [ "$(grep -c '^!/FLEET.stamp$' "$SCRATCH/.gitignore")" -eq 1 ]
+    [ "$(grep -c '^!/FLEET_VERSION$' "$SCRATCH/.gitignore")" -eq 1 ]
+    [ "$(grep -c '^!/.gitignore$' "$SCRATCH/.gitignore")" -eq 1 ]
 }
 
 @test "the converged allowlist makes the new version file visible to git, without widening" {
@@ -217,41 +306,38 @@ YAML
     [ "$status" -eq 0 ]
 }
 
-@test "a stale root the OPERATOR has edited is preserved-stale: announced, never written" {
+@test "an operator re-include BESIDE the version line also survives convergence" {
+    # The same additive property with the version line still present. Under the
+    # original count guard this file was refused outright (count == 2), which
+    # was safe but left the root diverged forever; it now converges and keeps
+    # the operator's line, so safety no longer costs the fix.
     mk_initialised_root
     printf '!/RUNBOOK.md\n' >> "$SCRATCH/.gitignore"
+
+    run _fleet_gitignore_decision "$SCRATCH"
+    [ "$output" = "stale" ]
+
+    run create_fleet_gitignore "$SCRATCH"
+    [ "$status" -eq 0 ]
+    grep -q '^!/RUNBOOK.md$' "$SCRATCH/.gitignore"
+    grep -q '^!/FLEET.stamp$' "$SCRATCH/.gitignore"
+    run _fleet_gitignore_decision "$SCRATCH"
+    [ "$output" = "current" ]
+}
+
+@test "an EDITED managed block stays preserved-stale — only the re-include set may be regenerated" {
+    # The line between the two stale answers. A carried re-include is safe to
+    # regenerate because it is re-emitted; an edit anywhere else in the block
+    # is not recoverable, so that file is never written.
+    mk_initialised_root
+    printf '\n# my own rule\n!secrets.env\n' >> "$SCRATCH/.gitignore"
     local before; before="$(cat "$SCRATCH/.gitignore")"
 
     run _fleet_gitignore_decision "$SCRATCH"
     [ "$output" = "preserved-stale" ]
-
     run create_fleet_gitignore "$SCRATCH"
-    [ "$status" -eq 0 ]
     [[ "$output" == *".gitignore:preserved-stale"* ]]
-    # Names the exact repair.
-    [[ "$output" == *"!/FLEET.stamp"* ]]
-    # Byte-for-byte untouched — the operator's line is why this file is theirs.
     [ "$(cat "$SCRATCH/.gitignore")" = "$before" ]
-    grep -q '^!/RUNBOOK.md$' "$SCRATCH/.gitignore"
-}
-
-@test "POSITIVE CONTROL: without the count guard an operator line would be silently dropped" {
-    # Proves the `<= 1 variable re-include` clause is load-bearing rather than
-    # defensive padding. The operator-edited file normalizes IDENTICALLY to the
-    # canonical text (both lose all non-fixed re-includes), so normalization
-    # alone would classify it `stale` and the rewrite would drop !/RUNBOOK.md.
-    mk_initialised_root
-    printf '!/RUNBOOK.md\n' >> "$SCRATCH/.gitignore"
-
-    run _fleet_gitignore_variable_include_count "$SCRATCH/.gitignore"
-    [ "$output" -eq 2 ]
-
-    local canonical normalized_file normalized_canonical
-    canonical="$(_fleet_render_allowlist_gitignore "$SCRATCH")"
-    normalized_file="$(_fleet_gitignore_normalize < "$SCRATCH/.gitignore")"
-    normalized_canonical="$(printf '%s\n' "$canonical" | _fleet_gitignore_normalize)"
-    # The normalized texts MATCH, which is precisely why the count is needed.
-    [ "$normalized_file" = "$normalized_canonical" ]
 }
 
 @test "create_fleet_gitignore preserves a populated .gitignore (no clobber)" {

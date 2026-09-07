@@ -99,10 +99,21 @@ _manifest_config_apply_process_env_overrides() {
         # which described a value that no longer runs. Left unset, the first
         # cut labelled an env-overridden gate with the committed layer's name
         # and trust source.
+        # Must cover the DISCLOSED POLICY keys too, not only execution keys.
+        # Missing them reintroduced this exact defect for release.gate: a
+        # committed file said `gate: all`, the operator's environment said
+        # `none`, and the bypass notice read "Set by: project-shared" — blaming
+        # a cloned repository for a bypass the operator chose, in the one case
+        # the layer disclosure exists to disambiguate. The trust clearing stays
+        # execution-key-only: a policy key is never refused, so it holds no
+        # trust state.
         if declare -F _manifest_cli_yaml_is_execution_key >/dev/null 2>&1 \
            && _manifest_cli_yaml_is_execution_key "$env_var"; then
             _MANIFEST_CLI_YAML_EXECUTION_KEY_LAYER["$env_var"]="env"
             unset '_MANIFEST_CLI_YAML_EXECUTION_KEY_TRUST[$env_var]'
+        elif declare -F _manifest_cli_yaml_is_disclosed_policy_key >/dev/null 2>&1 \
+           && _manifest_cli_yaml_is_disclosed_policy_key "$env_var"; then
+            _MANIFEST_CLI_YAML_EXECUTION_KEY_LAYER["$env_var"]="env"
         fi
     done
 }

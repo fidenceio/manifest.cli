@@ -140,11 +140,39 @@ _fleet_root_version_name() {
         if [[ ! "$name" =~ ^[A-Za-z0-9._-]+$ ]]; then
             reject="is not a plain file name"
         else
-            case "$name" in
+            # Case-FOLDED, because the writer's `mv -f` resolves on the
+            # filesystem and macOS APFS is case-insensitive by default: `.GIT`
+            # passed the first cut of this check and clobbered the gitfile on
+            # this very host, with the directory entry still reading `.git`
+            # because APFS is also case-preserving. Anything that decides
+            # whether a path is dangerous has to fold, or it is correct only on
+            # Linux — and macOS is the primary platform here.
+            local folded="${name,,}"
+            case "$folded" in
                 # Not a shape problem — these are well-formed names that must
                 # never be written to. `.git` is the dangerous one: see above.
                 .|..) reject="is a directory reference, not a file name" ;;
                 .git) reject="would overwrite the repository's own .git" ;;
+                .gitmodules|.gitattributes)
+                    reject="is git metadata, not a version file" ;;
+                *)
+                    # A name colliding with a coordination file destroys that
+                    # file: the writer does `mv -f "$tmp" "$root/$name"`, and
+                    # `manifest.fleet.tsv` is the fleet's structure-of-record
+                    # while `manifest.fleet.config.yaml` is the file that named
+                    # it, so that case is self-erasing. The collision also makes
+                    # _fleet_coordination_files emit a duplicate, which pins the
+                    # root at `preserved-stale` with a self-contradicting
+                    # warning. Checked against the fixed set, folded.
+                    local fixed
+                    for fixed in .gitignore manifest.fleet.config.yaml \
+                                 manifest.fleet.tsv CHANGELOG_FLEET.md; do
+                        if [[ "$folded" == "${fixed,,}" ]]; then
+                            reject="collides with the coordination file '$fixed'"
+                            break
+                        fi
+                    done
+                    ;;
             esac
         fi
         if [[ -n "$reject" ]]; then
