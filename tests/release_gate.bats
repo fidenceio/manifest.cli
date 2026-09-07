@@ -32,6 +32,7 @@ setup() {
     export MANIFEST_CLI_GITHUB_ACTIONS_TIMEOUT_SECONDS=1
     export MANIFEST_CLI_GITHUB_ACTIONS_POLL_SECONDS=1
     unset MANIFEST_CLI_RELEASE_GATE MANIFEST_CLI_RELEASE_GATE_COMMAND
+    unset MANIFEST_CLI_RELEASE_GATE_REASON
     unset MANIFEST_CLI_SHIP_STATUS_FILE
 }
 
@@ -270,6 +271,92 @@ _audit_file() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
     [ -f "$audit" ]
     [[ "$(cat "$audit")" == *'"gate_status":"bypassed"'* ]]
     [[ "$(cat "$audit")" == *'"event":"completed"'* ]]
+}
+
+# ---------------------------------------------------------------------------
+# `gate: none` has to explain itself (2026-09-07).
+#
+# The value is correct in some repositories and reckless in others, and the
+# difference is never visible in the value. So the notice answers the two
+# questions a reader has — who turned it off, and why — and both reach the
+# durable record, because a YAML comment reaches neither the ship log nor the
+# audit trail.
+# ---------------------------------------------------------------------------
+
+@test "release_gate: a none bypass with no reason SAYS there is no reason" {
+    export MANIFEST_CLI_RELEASE_GATE="none"
+    unset MANIFEST_CLI_RELEASE_GATE_REASON
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
+    grep -q "Release gate disabled" "$SCRATCH/out"
+    grep -q "No release.gate_reason is set" "$SCRATCH/out"
+    [ "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS" = "bypassed" ]
+}
+
+@test "release_gate: a none bypass PRINTS the configured reason instead of the nag" {
+    export MANIFEST_CLI_RELEASE_GATE="none"
+    export MANIFEST_CLI_RELEASE_GATE_REASON="ship.sh runs the full suite on this tree first; CI re-runs it on the pushed commit."
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
+    grep -q "Reason given: ship.sh runs the full suite" "$SCRATCH/out"
+    # The nag and the reason are mutually exclusive — otherwise the notice
+    # reads as if a reason both was and was not supplied.
+    refute grep -q "No release.gate_reason is set" "$SCRATCH/out"
+    [ "$_MANIFEST_CLI_SHIP_LAST_GATE_REASON" = "$MANIFEST_CLI_RELEASE_GATE_REASON" ]
+}
+
+@test "release_gate: the bypass notice names the LAYER that turned the gate off" {
+    # "the gate is off" and "the gate is off because a committed file in a repo
+    # you cloned said so" are different facts, and only the second says where to
+    # look. Provenance is recorded by the loader when it honours the value, so
+    # this test needs the yaml module the rest of this file does without.
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/core/manifest-shared-functions.sh"
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/core/manifest-yaml.sh"
+    # load_configuration lives HERE, not in manifest-yaml.sh. Omitting it left
+    # the call undefined and `|| true` swallowed it, so the loader never ran —
+    # caught only by the precondition below, which is why it is here.
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/core/manifest-config.sh"
+    export MANIFEST_CLI_GLOBAL_CONFIG="$SCRATCH/home/nonexistent.global.yaml"
+
+    cat > "$MANIFEST_CLI_PROJECT_ROOT/manifest.config.yaml" <<'YAML'
+release:
+  gate: "none"
+YAML
+    cd "$MANIFEST_CLI_PROJECT_ROOT"
+    unset MANIFEST_CLI_RELEASE_GATE
+    load_configuration "$MANIFEST_CLI_PROJECT_ROOT" >/dev/null 2>&1 || true
+    # If the loader did not honour the file, the rest of this test would assert
+    # nothing — so establish that first.
+    [ "$(manifest_release_gate_policy)" = "none" ]
+
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
+    grep -q "Set by:" "$SCRATCH/out"
+    # It must name a FILE layer, not the process environment.
+    refute grep -q "Set by: env" "$SCRATCH/out"
+
+    # CONTROL: the same value from the environment is attributed to `env`, so
+    # the assertion above is about provenance and not about the string existing.
+    unset MANIFEST_CLI_RELEASE_GATE
+    _MANIFEST_CLI_YAML_EXECUTION_KEY_LAYER=()
+    export MANIFEST_CLI_RELEASE_GATE="none"
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out2" 2>&1
+    refute grep -q "Set by: project-shared" "$SCRATCH/out2"
+}
+
+@test "release_gate: a multi-line gate_reason cannot inject a key into the status file" {
+    # The reason is operator free text and lands in a key=value status file. A
+    # newline would add a line, i.e. a fake key — the same class as §44's
+    # delimiter defects, so it is collapsed once at capture.
+    export MANIFEST_CLI_RELEASE_GATE="none"
+    export MANIFEST_CLI_RELEASE_GATE_REASON="legit reason
+gate_status=verified-local"
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
+    # One line, and the injected key is now inert text inside the value.
+    [ "$(printf '%s' "$_MANIFEST_CLI_SHIP_LAST_GATE_REASON" | wc -l | tr -d ' ')" = "0" ]
+    [[ "$_MANIFEST_CLI_SHIP_LAST_GATE_REASON" == *"legit reason gate_status=verified-local"* ]]
+    # The real disposition is untouched.
+    [ "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS" = "bypassed" ]
 }
 
 @test "release_gate: a blocked (no test command) ship records gate_status=blocked-no-command and does NOT release" {

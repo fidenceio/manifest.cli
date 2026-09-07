@@ -97,6 +97,27 @@ release:
   # Tolerant of surrounding whitespace and case.
   gate: "local-tests"
 
+  # gate_reason — why verification is not needed here. Only meaningful with
+  # gate: "none", and you should not set that without setting this.
+  #
+  # `gate: "none"` reads as a safety feature being switched off, because out of
+  # context that is exactly what it is. It is only ever correct because
+  # something else already verified this exact tree — a wrapper script that runs
+  # the suite moments earlier, CI that runs it again on the pushed commit. That
+  # reasoning has to reach whoever meets the switch, and a YAML comment does
+  # not: comments are invisible to the ship log, to the audit record, and to
+  # `manifest config get`. A bare `none` with nothing beside it is the kind of
+  # thing the next reader quietly "fixes" back — or worse, leaves alone while
+  # assuming somebody had a reason.
+  #
+  # Set it and the bypass notice prints it, alongside which config layer turned
+  # the gate off; both are written into the ship status file and the audit
+  # record. Leave it empty with gate: "none" and the notice says so.
+  #
+  #   gate_reason: "ship.sh runs the full suite on this tree first; CI re-runs
+  #                 it on the pushed commit."
+  gate_reason: ""
+
   # gate_command — command run for the local-tests phase. Empty auto-detects
   # ./scripts/run-tests.sh. Set this to your project's test entrypoint, e.g.
   # "pytest -q", "go test ./...", "npm test", "make test".

@@ -691,8 +691,51 @@ manifest_release_gate_run() {
         pre-bump)
             case "$policy" in
                 none)
-                    log_warning "Release gate disabled (release_gate=none) — publishing without test verification."
+                    # `none` is the one sanctioned way past verification, so the
+                    # notice has to answer the two questions a reader actually
+                    # has: WHO turned the gate off, and WHY. Neither was here
+                    # before. Without the layer, a gate disabled by a committed
+                    # file in a cloned repository looks identical to one the
+                    # operator disabled themselves. Without the reason, a bare
+                    # `none` reads as a safety feature switched off — which out
+                    # of context it is — and is the kind of thing the next
+                    # reader "fixes" back, or worse, leaves alone while assuming
+                    # someone had a reason.
+                    local gate_layer gate_reason
+                    # Guarded: this module is sourced in contexts where the yaml
+                    # loader is not (and an unguarded call exits 127 mid-gate,
+                    # which a pre-existing test caught immediately). No layer
+                    # recorded simply means the notice omits that clause.
+                    gate_layer=""
+                    if declare -F manifest_config_execution_key_layer >/dev/null 2>&1; then
+                        gate_layer="$(manifest_config_execution_key_layer MANIFEST_CLI_RELEASE_GATE 2>/dev/null)"
+                    fi
+                    # Operator free text, and it lands in a key=value status
+                    # file and a JSON audit event. A newline in it would inject
+                    # a line — i.e. a fake key — into the status file, which is
+                    # the same class of defect as §44's delimiter instances:
+                    # collapse every control character to a space at capture,
+                    # once, rather than at each of the three places it is
+                    # printed. Truncated because a notice is a notice.
+                    gate_reason="$(printf '%s' "${MANIFEST_CLI_RELEASE_GATE_REASON-}" \
+                        | tr '\n\r\t\f\v' '     ' | cut -c1-300)"
+                    local notice="Release gate disabled (release_gate=none) — publishing without test verification."
+                    [[ -n "$gate_layer" ]] && notice+=" Set by: ${gate_layer}."
+                    if [[ -n "${gate_reason//[[:space:]]/}" ]]; then
+                        # Config is attacker-reachable and this string is
+                        # printed, so route it through the redactor like any
+                        # other pass-through (§27's class).
+                        if declare -F manifest_redact >/dev/null 2>&1; then
+                            gate_reason="$(manifest_redact "$gate_reason")"
+                        fi
+                        notice+=" Reason given: ${gate_reason}"
+                    else
+                        notice+=" No release.gate_reason is set — record why verification is not needed here, or the next reader cannot tell this from a mistake."
+                    fi
+                    log_warning "$notice"
                     _MANIFEST_CLI_SHIP_LAST_GATE_STATUS="bypassed"
+                    _MANIFEST_CLI_SHIP_LAST_GATE_REASON="$gate_reason"
+                    _MANIFEST_CLI_SHIP_LAST_GATE_LAYER="$gate_layer"
                     ;;
                 local-tests|all)
                     # A --force-bump version stamp on a clean, at-tag tree has no
@@ -2071,7 +2114,9 @@ manifest_ship_workflow() {
         push_status "${workflow_push_status:-skipped}" \
         homebrew_status "${workflow_homebrew_status:-skipped}" \
         gate_status "${_MANIFEST_CLI_SHIP_LAST_GATE_STATUS:-not-run}" \
-        gate_policy "${_MANIFEST_CLI_SHIP_LAST_GATE_POLICY:-}"
+        gate_policy "${_MANIFEST_CLI_SHIP_LAST_GATE_POLICY:-}" \
+        gate_layer "${_MANIFEST_CLI_SHIP_LAST_GATE_LAYER:-}" \
+        gate_reason "${_MANIFEST_CLI_SHIP_LAST_GATE_REASON:-}"
 
     # Close the per-run diagnostic log (§5.6) on the success path.
     manifest_ship_log_end "success" "${_MANIFEST_CLI_SHIP_LAST_STEP:-}"

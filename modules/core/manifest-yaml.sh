@@ -86,6 +86,14 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     ["release.canonical_repo_slugs"]="MANIFEST_CLI_CANONICAL_REPO_SLUGS"
     ["release.tag_target"]="MANIFEST_CLI_RELEASE_TAG_TARGET"
     ["release.gate"]="MANIFEST_CLI_RELEASE_GATE"
+    # Free text, printed by the gate bypass notice and carried into the audit
+    # record. `gate: none` reads as a safety feature switched off, because out
+    # of context that is what it is — it is only ever correct because something
+    # else verified this exact tree. That reasoning has to travel to where a
+    # reader meets the switch, and a YAML comment does not: it is invisible to
+    # the ship log, the audit trail and anyone reading `config get`. Without it
+    # a bare `none` is the kind of thing the next person "fixes" back.
+    ["release.gate_reason"]="MANIFEST_CLI_RELEASE_GATE_REASON"
     ["release.gate_command"]="MANIFEST_CLI_RELEASE_GATE_COMMAND"
     ["release.gate_tier"]="MANIFEST_CLI_RELEASE_GATE_TIER"
     ["release.gate_freshness_days"]="MANIFEST_CLI_RELEASE_GATE_FRESHNESS_DAYS"
@@ -927,6 +935,26 @@ _manifest_cli_yaml_is_execution_key() {
     return 1
 }
 
+# Keys whose LAYER is disclosed but which are not execution keys — so they get
+# provenance recording without the §44 refusal semantics. `release.gate` is here
+# because "the gate is off" and "the gate is off because a committed file in a
+# repository you cloned said so" are different facts, and only the second tells
+# the reader where to look. Deliberately NOT restricted the way an execution key
+# is: a policy value naming no program is ordinary config, and refusing it from
+# a committed layer would break every fleet that sets its own gate policy.
+_MANIFEST_CLI_YAML_DISCLOSED_POLICY_KEYS=(
+    MANIFEST_CLI_RELEASE_GATE
+    MANIFEST_CLI_RELEASE_GATE_REASON
+)
+
+_manifest_cli_yaml_is_disclosed_policy_key() {
+    local candidate="${1:-}" key
+    for key in "${_MANIFEST_CLI_YAML_DISCLOSED_POLICY_KEYS[@]}"; do
+        [[ "$candidate" == "$key" ]] && return 0
+    done
+    return 1
+}
+
 # True when the repo layer has been explicitly trusted for this run — for one
 # run (1|true|yes, the contract as first shipped) or for this run and onward
 # (remember, which also writes the durable record; see
@@ -1435,10 +1463,16 @@ _manifest_yaml_export_mapped_value() {
             ;;
     esac
     export "$env_var"="$value"
-    if _manifest_cli_yaml_is_execution_key "$env_var"; then
-        # Provenance for the disclosure half of §44. Recorded at the point the
-        # value is honoured, so the plan cannot disagree with what will run.
+    if _manifest_cli_yaml_is_execution_key "$env_var" \
+        || _manifest_cli_yaml_is_disclosed_policy_key "$env_var"; then
+        # Provenance for the disclosure half of §44, and for the gate bypass
+        # notice. Recorded at the point the value is honoured, so the plan
+        # cannot disagree with what will run. The trust bookkeeping below stays
+        # inside the execution-key branch: a disclosed policy key is never
+        # refused, so it has no trust state to carry.
         _MANIFEST_CLI_YAML_EXECUTION_KEY_LAYER["$env_var"]="${_MANIFEST_CLI_YAML_LOADING_LAYER:-env}"
+    fi
+    if _manifest_cli_yaml_is_execution_key "$env_var"; then
         if [[ "$committed_execution_key" == "true" ]]; then
             _MANIFEST_CLI_YAML_EXECUTION_KEY_TRUST["$env_var"]="env"
         else
