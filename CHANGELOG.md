@@ -1,5 +1,18 @@
 # Changelog
 
+## [60.1.0] - 2026-09-07
+
+**Release Type:** Minor
+
+### Changes
+
+- Docs(tracker): correct §77(c)'s scope — the symptom needs a changed version_file, not every fleet root (§77)
+- Fix(fleet): converge an existing root's allowlist when version_file changes, and refuse '.', '..' and '.git' (§77)
+- Feat(config): make release.gate=none explain itself with a reason and its layer (§81)
+- Fix(fleet,config): repair four defects the pre-ship review found in yesterday's two fixes (§77, §81)
+- Fix(fleet): report the two new .gitignore outcomes in init fleet's summary (§77)
+
+
 ## [60.0.0] - 2026-09-07
 
 **Release Type:** Major
@@ -110,33 +123,3 @@
 - Test(tracker): guard §-citation resolution before the rebuild that breaks it
 - Fix(security)!: unexport the consent gate rather than complete its closure
 - Docs(tracker): retire the 15 items v59.6.0 shipped, file §65/§66/§67, anchor by symbol
-
-
-## [59.6.0] - 2026-08-26
-
-**Release Type:** Minor
-
-### Changes
-
-- Fix(gitignore): apply the template's own secret- and temp-file rules to this repo
-- Docs(tracker): rank by blast radius; tag all 42 items CANONICAL-ONLY/PRODUCT/BOTH
-- Chore(claude): add the manifest-commit-steward agent
-- Test(gitignore): guard the self-application fix, ordering included
-- Docs(tracker): file Class B's six real findings; cut three; correct two entries
-- Fix(git)!: pass git argv instead of re-splitting a string, and validate ref names
-- Fix(config): take auto-confirm consent from the process env, never a config file
-- Fix(yaml,security)!: refuse YAML lists that have no comma encoding, in yq's dialect
-- Docs(tracker): record the 2026-08-25 verification pass, incl. a regression I shipped
-- Fix(hooks): anchor the home-path check, apply exemptions per match, resolve hooksPath
-- Docs(tracker): close §50/§55, file §56 and §57 from verifying an agent's claim
-- Fix(help): document config show|setup|time, and guard help/dispatch parity
-- Test(yaml): guard every yq program in modules/ against jq dialect drift
-- Docs(tracker): close §53, close §52's config half, narrow §54
-- Fix(security,yaml): one derivation for the private-file default, unforgeable sentinel
-- Fix(fleet): restore delegated apply consent without reopening §46
-- Docs(env): make the .env.example contract text say what the generator does
-- Refactor(yaml,security): move four private globals into the _MANIFEST_CLI_ namespace
-- Docs(tracker): close §49/§51/§54/§6(16), file §58/§59/§60, clear the fleet blocker
-- Docs(tracker): make the release-state block a complete resume point
-- Test(guards): un-stale four guards, close the selection gap that hid them, fix a 1s race
-- Docs(tracker): re-evaluate every item; retire §19, file §63/§64; embargo unfixed detail
