@@ -685,17 +685,15 @@ _fleet_coordination_files() {
 # Output (stdout): ".gitignore" | ".gitignore:empty-overwrite" | ".gitignore:preserved" | ""
 # Returns 0 on success, 1 on write failure.
 # -----------------------------------------------------------------------------
-_fleet_write_allowlist_gitignore() {
-    local dest="$1"
-    local root
-    root="$(dirname "$dest")"
-    local tmp="${dest}.tmp.$$"
-    # Write to a sibling temp then atomically rename, so an interrupted write
-    # never leaves a truncated .gitignore (pattern: _manifest_config_atomic_write_timestamp).
-    # The re-include lines are rendered from _fleet_coordination_files, the same
-    # list the stager and its verifier read (§77(c)).
-    if ! {
-        cat << 'EOF'
+# The canonical allowlist .gitignore for ROOT, on stdout. Rendering is separate
+# from writing so the DECISION function can compare a file on disk against what
+# an apply would produce, instead of re-deriving the expected shape with a
+# second set of greps — that second derivation is what let §77(c) ship fixed for
+# the create path and broken for every existing root (§36, and §6's duplicated
+# derivation).
+_fleet_render_allowlist_gitignore() {
+    local root="$1"
+    cat << 'EOF'
 # =============================================================================
 # Manifest fleet — coordination repo .gitignore (ALLOWLIST model)
 # =============================================================================
@@ -712,12 +710,22 @@ _fleet_write_allowlist_gitignore() {
 
 # …then re-include only the coordination files (all at the fleet root).
 EOF
-        local f
-        while IFS= read -r f; do
-            [[ -n "$f" ]] && printf '!/%s\n' "$f"
-        done < <(_fleet_coordination_files "$root")
-    } > "$tmp" 2>/dev/null
-    then
+    local f
+    while IFS= read -r f; do
+        [[ -n "$f" ]] && printf '!/%s\n' "$f"
+    done < <(_fleet_coordination_files "$root")
+}
+
+_fleet_write_allowlist_gitignore() {
+    local dest="$1"
+    local root
+    root="$(dirname "$dest")"
+    local tmp="${dest}.tmp.$$"
+    # Write to a sibling temp then atomically rename, so an interrupted write
+    # never leaves a truncated .gitignore (pattern: _manifest_config_atomic_write_timestamp).
+    # The re-include lines are rendered from _fleet_coordination_files, the same
+    # list the stager and its verifier read (§77(c)).
+    if ! _fleet_render_allowlist_gitignore "$root" > "$tmp" 2>/dev/null; then
         rm -f "$tmp" 2>/dev/null
         return 1
     fi
@@ -725,10 +733,82 @@ EOF
     return 0
 }
 
+# The coordination names that are FIXED for every fleet, i.e. every entry of
+# _fleet_coordination_files except the configurable version file. Kept as its
+# own function so the staleness test below can say "the re-include set differs
+# only in the version-file line" without hardcoding a second copy of the list.
+_fleet_fixed_coordination_files() {
+    printf '%s\n' .gitignore manifest.fleet.config.yaml manifest.fleet.tsv CHANGELOG_FLEET.md
+}
+
+# Drop the re-include line for any name that is NOT one of the fixed four. What
+# remains is byte-identical across every fleet regardless of fleet.version_file,
+# so two normalized texts being equal means the two files differ ONLY in which
+# version file they re-include.
+_fleet_gitignore_normalize() {
+    local fixed_pat
+    fixed_pat="$(_fleet_fixed_coordination_files | paste -sd'|' -)"
+    awk -v fixed="$fixed_pat" '
+        BEGIN { n = split(fixed, a, "|"); for (i = 1; i <= n; i++) keep["!/" a[i]] = 1 }
+        /^!\// { if (!($0 in keep)) next }
+        { print }
+    '
+}
+
+# How many re-include lines name something outside the fixed four. The CLI has
+# only ever written exactly ONE (the version file), so a count above one means
+# the operator added a line, and the file is theirs rather than ours.
+# The variable re-include names a file currently carries, comma-joined, for the
+# announcement. Names what is being replaced rather than just saying "updated",
+# so the operator can tell a rename they made from one they did not.
+_fleet_gitignore_stale_names() {
+    local file="$1"
+    local fixed_pat
+    fixed_pat="$(_fleet_fixed_coordination_files | paste -sd'|' -)"
+    awk -v fixed="$fixed_pat" '
+        BEGIN { n = split(fixed, a, "|"); for (i = 1; i <= n; i++) keep["!/" a[i]] = 1 }
+        /^!\// { if (!($0 in keep)) { sub(/^!\//, ""); out = (out == "" ? $0 : out ", " $0) } }
+        END { print out }
+    ' "$file"
+}
+
+_fleet_gitignore_variable_include_count() {
+    local fixed_pat
+    fixed_pat="$(_fleet_fixed_coordination_files | paste -sd'|' -)"
+    awk -v fixed="$fixed_pat" '
+        BEGIN { n = split(fixed, a, "|"); for (i = 1; i <= n; i++) keep["!/" a[i]] = 1 }
+        /^!\// { if (!($0 in keep)) c++ }
+        END { print c + 0 }
+    ' "$1"
+}
+
 # The decision create_fleet_gitignore will take for ROOT, without taking it —
 # so a preview can say what an apply would write and the two cannot disagree
 # (the decision lives here and nowhere else).
-#   create | empty-overwrite | current | preserved
+#   create | empty-overwrite | current | stale | preserved-stale | preserved
+#
+# `stale` and `preserved-stale` were added 2026-09-07 (§77(c)). Before them this
+# function answered `current` on the header + `/*` check ALONE and never looked
+# at the re-include lines, so §77(c)'s one-list fix reached freshly created roots
+# and no existing one: rename fleet.version_file on an initialised root and the
+# .gitignore kept re-including the old name while the stager force-added the new
+# one, leaving the new version file invisible to the operator's own `git add .`.
+#
+# The two stale answers exist because "is this file ours to rewrite?" has to be
+# decided EXACTLY, not guessed. The test is byte equality after normalization:
+# strip the one re-include line that varies by configuration and every remaining
+# byte is identical across all fleets. So
+#
+#   normalized(file) == normalized(canonical) AND file has <= 1 variable
+#   re-include line
+#
+# means the file is precisely what some version of this writer produced for some
+# version-file name, and can carry nothing the operator added — which is what
+# makes rewriting it safe. Anything else is `preserved-stale`: diverged, but not
+# provably ours, so it is announced and NOT written. The `<= 1` clause is
+# load-bearing and not defensive padding: an operator-added `!/RUNBOOK.md`
+# beside the version line normalizes away too, and without the count that file
+# would be classified ours and its line silently dropped. Verified on a fixture.
 _fleet_gitignore_decision() {
     local fleet_root="$1"
     local gitignore_file="$fleet_root/.gitignore"
@@ -737,7 +817,19 @@ _fleet_gitignore_decision() {
 
     if grep -q 'coordination repo .gitignore (ALLOWLIST model)' "$gitignore_file" 2>/dev/null \
        && grep -qxF '/*' "$gitignore_file" 2>/dev/null; then
-        echo "current"; return 0
+        local canonical
+        canonical="$(_fleet_render_allowlist_gitignore "$fleet_root" 2>/dev/null)"
+        if [[ "$(cat "$gitignore_file" 2>/dev/null)" == "$canonical" ]]; then
+            echo "current"; return 0
+        fi
+        local variable_includes
+        variable_includes="$(_fleet_gitignore_variable_include_count "$gitignore_file")"
+        if [[ "$variable_includes" -le 1 ]] \
+           && [[ "$(_fleet_gitignore_normalize < "$gitignore_file")" \
+                 == "$(printf '%s\n' "$canonical" | _fleet_gitignore_normalize)" ]]; then
+            echo "stale"; return 0
+        fi
+        echo "preserved-stale"; return 0
     fi
 
     local entry_count
@@ -783,6 +875,31 @@ create_fleet_gitignore() {
         empty-overwrite)
             _fleet_write_allowlist_gitignore "$gitignore_file" || return 1
             echo ".gitignore:empty-overwrite"; return 0
+            ;;
+        # Ours, and out of date: the re-include set no longer matches
+        # _fleet_coordination_files. Provably carries nothing the operator
+        # wrote (see the decision function), so converge it — announced,
+        # because rewriting a tracked file the operator did not ask about is
+        # exactly the silent-write class §73 was filed for.
+        stale)
+            local previous
+            previous="$(_fleet_gitignore_stale_names "$gitignore_file" "$fleet_root")"
+            _fleet_write_allowlist_gitignore "$gitignore_file" || return 1
+            if declare -F log_warning >/dev/null 2>&1; then
+                log_warning "Fleet root .gitignore re-included ${previous:-a different version file}; updated to match fleet.version_file. Commit it with the coordination files."
+            fi
+            echo ".gitignore:stale-updated"; return 0
+            ;;
+        # Diverged, but not provably ours. Never written — the operator's lines
+        # exist BECAUSE Manifest has never rewritten this file. Say precisely
+        # what is wrong so the one-line repair is obvious.
+        preserved-stale)
+            local want
+            want="$(_fleet_root_version_name "$fleet_root")"
+            if declare -F log_warning >/dev/null 2>&1; then
+                log_warning "Fleet root .gitignore does not re-include '${want}' (fleet.version_file) and has local edits, so it was left alone. Add the line '!/${want}' to keep that file visible to git."
+            fi
+            echo ".gitignore:preserved-stale"; return 0
             ;;
     esac
 
@@ -3467,7 +3584,12 @@ EOF
     local gitignore_decision
     gitignore_decision="$(_fleet_gitignore_decision "$root")"
     case "$gitignore_decision" in
-        create|empty-overwrite)
+        # Every decision that WRITES belongs here — `stale` converges an
+        # existing root's re-include set (§77(c)) and is a coordination change
+        # exactly like the other two. `preserved-stale` is deliberately absent:
+        # it announces and writes nothing, so listing it would promise a commit
+        # the apply will not make.
+        create|empty-overwrite|stale)
             # The allowlist write is itself a coordination change.
             _fleet_manager_list_has to_commit ".gitignore" || to_commit+=(".gitignore")
             ;;

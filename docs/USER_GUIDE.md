@@ -343,6 +343,51 @@ that missing scope:
 - `--local -y` commits without pushing. With nothing to commit or push it says so and
   writes nothing.
 
+#### Renaming the fleet version file
+
+`fleet.version_file` sets which file at the root carries the fleet version (default
+`FLEET_VERSION`). The name appears in two places that have to agree: the loader and
+stager read the config key, and the allowlist `.gitignore` re-includes the name so git
+can see it past the `/*` rule.
+
+**Change the key on an already-initialised fleet and the next fleet command reconciles
+the `.gitignore` for you**, announcing what it replaced:
+
+```text
+⚠️  Fleet root .gitignore re-included FLEET_VERSION; updated to match
+    fleet.version_file. Commit it with the coordination files.
+```
+
+Commit that `.gitignore` along with the other coordination files — it is one of them.
+
+**If you have edited the root `.gitignore` yourself, Manifest will not rewrite it.** It
+says so and names the exact line to add:
+
+```text
+⚠️  Fleet root .gitignore does not re-include 'FLEET.stamp' (fleet.version_file)
+    and has local edits, so it was left alone. Add the line '!/FLEET.stamp' to
+    keep that file visible to git.
+```
+
+Add that one line by hand and commit it. Do **not** delete the file to make Manifest
+regenerate it: regenerating produces the canonical allowlist and discards whatever you
+added, and your lines are there precisely because Manifest never rewrites a `.gitignore`
+it does not recognise as its own.
+
+The symptom, if this is ever missed: the version file is ignored by `/*`, so it stays
+invisible to your own `git add .`. The release itself is unaffected — the stager
+force-adds coordination files by name — so this shows up as a file that will not stage
+rather than as a failed ship. To check a root by hand:
+
+```bash
+git check-ignore -q "$(grep -E '^[[:space:]]*version_file:' manifest.fleet.config.yaml \
+  | sed -E 's/.*version_file:[[:space:]]*"?([^"]*)"?.*/\1/')" ; echo "exit=$? (want 1)"
+```
+
+A name that is not a plain filename is refused and the default is used instead, loudly —
+paths and globs (a `*` in the allowlist would un-ignore every root entry, member
+directories included), and also `.`, `..` and `.git`.
+
 ### Project Repo Names Onto GitHub Topics
 
 If your repository names follow a dotted convention, Manifest can mirror that structure

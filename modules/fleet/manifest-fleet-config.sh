@@ -114,6 +114,17 @@ readonly MANIFEST_CLI_FLEET_DEFAULT_VERSION_FILE="FLEET_VERSION"
 # [A-Za-z0-9._-] falls back to the default, loudly, rather than being written
 # into a .gitignore whose whole job is to be narrow.
 #
+# THREE NAMES PASS THAT SHAPE CHECK AND MUST STILL BE REFUSED, added after a
+# review found them admitted: `.`, `..` and `.git`. The shape check was written
+# against the two shapes its comment names (a path, a glob) and a dot-name is
+# neither. `.` and `..` are contained downstream by the `[[ -f ]]` guards, but
+# `.git` is NOT: _fleet_root_write_version_file does `mv -f "$tmp" "$root/.git"`,
+# and where `.git` is a GITFILE — a linked worktree or a submodule — rather than
+# a directory, `mv -f` overwrites it and detaches the root from its repository.
+# Only reachable if the operator writes that name into their own fleet config,
+# so this is hardening; it is refused here because a name this function returns
+# is a name three writers will act on.
+#
 #   $1 fleet root (its manifest.fleet.config.yaml is read unless
 #      MANIFEST_CLI_FLEET_CONFIG_FILE names another)
 # -----------------------------------------------------------------------------
@@ -124,11 +135,24 @@ _fleet_root_version_name() {
     if [[ -f "$config" ]] && declare -F get_yaml_value >/dev/null 2>&1; then
         name="$(get_yaml_value "$config" ".fleet.version_file" "" 2>/dev/null)"
     fi
-    if [[ -n "$name" && ! "$name" =~ ^[A-Za-z0-9._-]+$ ]]; then
-        if declare -F log_warning >/dev/null 2>&1; then
-            log_warning "fleet.version_file '$name' is not a plain file name; using '$MANIFEST_CLI_FLEET_DEFAULT_VERSION_FILE'."
+    if [[ -n "$name" ]]; then
+        local reject=""
+        if [[ ! "$name" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            reject="is not a plain file name"
+        else
+            case "$name" in
+                # Not a shape problem — these are well-formed names that must
+                # never be written to. `.git` is the dangerous one: see above.
+                .|..) reject="is a directory reference, not a file name" ;;
+                .git) reject="would overwrite the repository's own .git" ;;
+            esac
         fi
-        name=""
+        if [[ -n "$reject" ]]; then
+            if declare -F log_warning >/dev/null 2>&1; then
+                log_warning "fleet.version_file '$name' $reject; using '$MANIFEST_CLI_FLEET_DEFAULT_VERSION_FILE'."
+            fi
+            name=""
+        fi
     fi
     printf '%s' "${name:-$MANIFEST_CLI_FLEET_DEFAULT_VERSION_FILE}"
 }

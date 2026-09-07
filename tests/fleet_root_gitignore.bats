@@ -109,6 +109,151 @@ YAML
     [ "$output" = "FLEET.stamp" ]
 }
 
+@test "the three well-formed names that must still be refused: '.', '..' and '.git'" {
+    # These PASS the [A-Za-z0-9._-] shape check — the check was written against
+    # the two shapes its own comment names (a path, a glob) and a dot-name is
+    # neither. `.git` is the one that bites: _fleet_root_write_version_file does
+    # `mv -f "$tmp" "$root/.git"`, and where .git is a GITFILE (linked worktree
+    # or submodule) rather than a directory, mv -f overwrites it and detaches
+    # the root from its repository.
+    unset MANIFEST_CLI_FLEET_CONFIG_FILE
+    local bad
+    for bad in '.' '..' '.git'; do
+        printf 'fleet:\n  name: "x"\n  versioning: "date"\n  version_file: "%s"\n' "$bad" \
+            > "$SCRATCH/manifest.fleet.config.yaml"
+        [ "$(_fleet_root_version_name "$SCRATCH" 2>/dev/null)" = "FLEET_VERSION" ]
+        run _fleet_root_version_name "$SCRATCH"
+        # Announced, and NOT as a shape problem — these are well-formed names,
+        # so the old "not a plain file name" wording would have been misleading.
+        [[ "$output" == *"directory reference"* || "$output" == *"overwrite the repository's own .git"* ]]
+    done
+}
+
+@test "POSITIVE CONTROL: a gitfile .git is exactly the shape mv -f would clobber" {
+    # Without this, the test above asserts a refusal against a hazard nobody
+    # has shown to exist. A linked worktree's .git is a FILE, and `mv -f` over a
+    # file succeeds silently — which is the whole reason the name is refused.
+    printf 'gitdir: /somewhere/real\n' > "$SCRATCH/.git"
+    [ -f "$SCRATCH/.git" ]
+    printf 'clobbered\n' > "$SCRATCH/tmp-stamp"
+    mv -f "$SCRATCH/tmp-stamp" "$SCRATCH/.git"
+    [ "$(cat "$SCRATCH/.git")" = "clobbered" ]
+    rm -f "$SCRATCH/.git"
+}
+
+# ---------------------------------------------------------------------------
+# The CHANGE path (TRACKER §77(c), 2026-09-07).
+#
+# Everything above this block exercises CREATE. That is exactly why §77(c)
+# shipped half-fixed: the decision function answered `current` on a header +
+# `/*` check alone, so a root created before fleet.version_file changed kept
+# re-including the old name forever, and no test could see it because no test
+# ever ran the function against an ALREADY-CORRECT-LOOKING file whose config
+# had moved on.
+#
+# Each branch is paired with the control that distinguishes it, because the
+# whole difficulty here is telling a file that is ours to rewrite from one the
+# operator has edited.
+# ---------------------------------------------------------------------------
+
+# An initialised root: allowlist written for the DEFAULT version file, then the
+# config moves to a different name. This is the reported shape.
+mk_initialised_root() {
+    unset MANIFEST_CLI_FLEET_CONFIG_FILE
+    rm -f "$SCRATCH/manifest.fleet.config.yaml"
+    create_fleet_gitignore "$SCRATCH" >/dev/null
+    cat > "$SCRATCH/manifest.fleet.config.yaml" <<'YAML'
+fleet:
+  name: "custom"
+  versioning: "date"
+  version_file: "FLEET.stamp"
+YAML
+}
+
+@test "an existing root whose version_file changed is STALE, not current (§77(c))" {
+    mk_initialised_root
+    # Pre-state: the old name is what is re-included.
+    grep -q '^!/FLEET_VERSION$' "$SCRATCH/.gitignore"
+    run _fleet_gitignore_decision "$SCRATCH"
+    [ "$status" -eq 0 ]
+    [ "$output" = "stale" ]
+}
+
+@test "CONTROL: an existing root whose version_file did NOT change is current" {
+    unset MANIFEST_CLI_FLEET_CONFIG_FILE
+    rm -f "$SCRATCH/manifest.fleet.config.yaml"
+    create_fleet_gitignore "$SCRATCH" >/dev/null
+    run _fleet_gitignore_decision "$SCRATCH"
+    [ "$status" -eq 0 ]
+    [ "$output" = "current" ]
+}
+
+@test "create_fleet_gitignore CONVERGES a stale root, announces it, and names the file it replaced" {
+    mk_initialised_root
+    run create_fleet_gitignore "$SCRATCH"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *".gitignore:stale-updated"* ]]
+    # The announcement is the point: a silent rewrite of a tracked file is the
+    # class §73 was filed for.
+    [[ "$output" == *"FLEET_VERSION"* ]]
+    grep -q '^!/FLEET.stamp$' "$SCRATCH/.gitignore"
+    refute grep -q '^!/FLEET_VERSION$' "$SCRATCH/.gitignore"
+    # Converged means converged: a second run is a clean no-op.
+    run _fleet_gitignore_decision "$SCRATCH"
+    [ "$output" = "current" ]
+}
+
+@test "the converged allowlist makes the new version file visible to git, without widening" {
+    mk_initialised_root
+    create_fleet_gitignore "$SCRATCH" >/dev/null
+    git -C "$SCRATCH" init -q
+    echo "2026.09.07" > "$SCRATCH/FLEET.stamp"
+    mkdir -p "$SCRATCH/member"; echo x > "$SCRATCH/member/code.txt"
+    # The symptom, gone: check-ignore exits 1 for a re-included file.
+    run git -C "$SCRATCH" check-ignore -q FLEET.stamp
+    [ "$status" -eq 1 ]
+    # The control that the repair did not widen the allowlist.
+    run git -C "$SCRATCH" check-ignore -q member/code.txt
+    [ "$status" -eq 0 ]
+}
+
+@test "a stale root the OPERATOR has edited is preserved-stale: announced, never written" {
+    mk_initialised_root
+    printf '!/RUNBOOK.md\n' >> "$SCRATCH/.gitignore"
+    local before; before="$(cat "$SCRATCH/.gitignore")"
+
+    run _fleet_gitignore_decision "$SCRATCH"
+    [ "$output" = "preserved-stale" ]
+
+    run create_fleet_gitignore "$SCRATCH"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *".gitignore:preserved-stale"* ]]
+    # Names the exact repair.
+    [[ "$output" == *"!/FLEET.stamp"* ]]
+    # Byte-for-byte untouched — the operator's line is why this file is theirs.
+    [ "$(cat "$SCRATCH/.gitignore")" = "$before" ]
+    grep -q '^!/RUNBOOK.md$' "$SCRATCH/.gitignore"
+}
+
+@test "POSITIVE CONTROL: without the count guard an operator line would be silently dropped" {
+    # Proves the `<= 1 variable re-include` clause is load-bearing rather than
+    # defensive padding. The operator-edited file normalizes IDENTICALLY to the
+    # canonical text (both lose all non-fixed re-includes), so normalization
+    # alone would classify it `stale` and the rewrite would drop !/RUNBOOK.md.
+    mk_initialised_root
+    printf '!/RUNBOOK.md\n' >> "$SCRATCH/.gitignore"
+
+    run _fleet_gitignore_variable_include_count "$SCRATCH/.gitignore"
+    [ "$output" -eq 2 ]
+
+    local canonical normalized_file normalized_canonical
+    canonical="$(_fleet_render_allowlist_gitignore "$SCRATCH")"
+    normalized_file="$(_fleet_gitignore_normalize < "$SCRATCH/.gitignore")"
+    normalized_canonical="$(printf '%s\n' "$canonical" | _fleet_gitignore_normalize)"
+    # The normalized texts MATCH, which is precisely why the count is needed.
+    [ "$normalized_file" = "$normalized_canonical" ]
+}
+
 @test "create_fleet_gitignore preserves a populated .gitignore (no clobber)" {
     printf 'node_modules/\n*.log\n' > "$SCRATCH/.gitignore"
     run create_fleet_gitignore "$SCRATCH"

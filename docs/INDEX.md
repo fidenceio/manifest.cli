@@ -27,6 +27,7 @@ rule that shapes everything else: nothing changes until you pass `-y`.
 | Open, check, or merge pull requests | [User Guide: Pull request workflow](USER_GUIDE.md#pull-request-workflow) |
 | Change a setting, or find out why one is what it is | [User Guide: Configuration](USER_GUIDE.md#configuration) |
 | Find out why a setting that names a command was ignored | [Migration Guide: A committed config can no longer name a program to run](MIGRATION.md#a-committed-config-can-no-longer-name-a-program-to-run) |
+| Find out why my fleet version file will not `git add` | [User Guide: Renaming the fleet version file](USER_GUIDE.md#renaming-the-fleet-version-file) |
 | Recover from a release that stopped partway | [User Guide: When a release goes wrong](USER_GUIDE.md#when-a-release-goes-wrong) |
 | Publish a documentation website | [Docs site generation](DOCS_SITE.md) |
 | Copy a working command for a common job | [Examples](EXAMPLES.md) |
