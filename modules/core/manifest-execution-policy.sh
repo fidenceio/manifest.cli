@@ -101,7 +101,13 @@ manifest_execution_disclose_programs() {
     echo ""
     echo "Programs this run may execute, named by configuration:"
     local env_var layer value trust
-    while IFS=$'\t' read -r env_var layer value trust; do
+    # Field order and separator are the producer's contract — see
+    # manifest_config_execution_disclosure. VALUE IS LAST and the separator is
+    # 0x1f, not a tab: the value is a command line and may contain a tab, and
+    # `trust` is empty for a layer the user owns, so a whitespace IFS would both
+    # truncate the command and shift the trust column onto it.
+    local fs="${_MANIFEST_CLI_YAML_EXECUTION_FS:-$'\x1f'}"
+    while IFS="$fs" read -r env_var layer trust value; do
         [[ -n "$env_var" ]] || continue
         if declare -F manifest_redact >/dev/null 2>&1; then
             value="$(manifest_redact "$value")"

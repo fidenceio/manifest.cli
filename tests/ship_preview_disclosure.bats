@@ -148,3 +148,52 @@ run_cli_in() {
     [ "$status" -eq 0 ]
     refute grep -q "Programs this run may execute" <<<"$output"
 }
+
+# --------------------------------------------------------------------------
+# The disclosure row survives a value that contains the separator's old byte.
+#
+# The trust column (§44(3)) was first appended AFTER the value on a TAB-joined
+# row, so a committed `make<TAB>test` disclosed as `make` and fell through to
+# the untrusted arm — under-reporting what runs AND dropping the "a committed
+# file" annotation, both in the unsafe direction. A value that is a command line
+# can contain any printable byte; this is the same generating pattern as the `|`
+# record delimiter and the newline-joined digest, and its third instance in this
+# one feature.
+#
+# The discriminating control is the SPACE variant, not the absent-key variant:
+# a space passed on the broken code, so only the pair proves the tab is what is
+# being handled rather than the disclosure working at all.
+# --------------------------------------------------------------------------
+
+# A repo whose COMMITTED config names a gate. Committed is what makes the trust
+# annotation reachable — a .local.yaml is a layer the user owns and needs none.
+mk_repo_committed_gate() {
+    local repo="$1" cmd="$2"
+    printf 'release:\n  gate_command: "%s"\n' "$cmd" > "$repo/manifest.config.yaml"
+    git -C "$repo" add -- manifest.config.yaml
+    git -C "$repo" commit -q -m "committed gate"
+}
+
+@test "disclosure keeps a TAB inside a config-named command, and keeps its trust annotation" {
+    local repo; repo="$(mk_repo)"
+    mk_repo_committed_gate "$repo" "$(printf 'make\ttest')"
+
+    MANIFEST_CLI_TRUST_REPO_COMMANDS=1 run_cli_in "$repo" ship repo patch
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Programs this run may execute"* ]]
+    # The whole command, not just the text before the tab.
+    [[ "$output" == *"$(printf 'make\ttest')"* ]]
+    # The annotation the trust column exists to print.
+    [[ "$output" == *"a committed file, trusted for this run"* ]]
+}
+
+@test "CONTROL: the same disclosure with a SPACE in the command (passed on the broken row format)" {
+    local repo; repo="$(mk_repo)"
+    mk_repo_committed_gate "$repo" "make test"
+
+    MANIFEST_CLI_TRUST_REPO_COMMANDS=1 run_cli_in "$repo" ship repo patch
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Programs this run may execute"* ]]
+    [[ "$output" == *"make test"* ]]
+    [[ "$output" == *"a committed file, trusted for this run"* ]]
+}

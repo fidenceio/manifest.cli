@@ -1323,13 +1323,30 @@ manifest_config_announce_execution_refusals() {
 }
 
 # The config-supplied programs that WILL run, as
-# "env_var<TAB>layer<TAB>value<TAB>trust" rows — the disclosure half of §44.
-# Emitted by the plan and by --dry-run, which were both previously silent about
-# the fact that a config-named program runs at all. Reads the provenance
-# recorded when each value was honoured, so this can never disagree with what
-# actually executes. The trust column is "env", "record", or empty (a layer the
-# user owns needs no trust), so the disclosure can say HOW a committed program
-# came to be allowed.
+# "env_var FS layer FS trust FS value" rows (FS = 0x1f) — the disclosure half
+# of §44. Emitted by the plan and by --dry-run, which were both previously
+# silent about the fact that a config-named program runs at all. Reads the
+# provenance recorded when each value was honoured, so this can never disagree
+# with what actually executes. The trust column is "env", "record", or empty (a
+# layer the user owns needs no trust), so the disclosure can say HOW a committed
+# program came to be allowed.
+#
+# TWO properties of this row format are load-bearing, and the first cut of the
+# trust column broke both by appending `trust` after `value` on a TAB-separated
+# row. The value is a command line, so it can contain any printable byte:
+#
+#   1. The VALUE IS LAST, so whatever it contains cannot shift a later field.
+#   2. The SEPARATOR IS NOT WHITESPACE. `IFS=$'\t' read` treats tab as IFS
+#      whitespace: a run of tabs collapses and an EMPTY field disappears — and
+#      `trust` is empty for a layer the user owns, which is the common case. So
+#      moving `value` last on a TAB row would have traded a truncated command
+#      for a trust column that eats the value outright.
+#
+# Measured on the broken form: a committed `make<TAB>test` disclosed as `make`
+# and lost its "a committed file, trusted for this run" annotation — under-
+# reporting what runs AND hiding that it came from a committed file, both in the
+# unsafe direction. Same generating pattern as the `|` delimiter and the
+# newline-joined digest above; this is its third instance in one feature.
 #
 # Only PROGRAMS are emitted, never the provider selectors. A provider is the
 # switch that makes its command reachable, not a thing that runs — listing
@@ -1340,13 +1357,14 @@ manifest_config_announce_execution_refusals() {
 # over-report too. Both are excluded by requiring the pair.
 manifest_config_execution_disclosure() {
     local layer value provider trust
+    local fs="$_MANIFEST_CLI_YAML_EXECUTION_FS"
 
     # The release gate has no provider switch — a non-empty command IS the gate.
     value="${MANIFEST_CLI_RELEASE_GATE_COMMAND-}"
     if [[ -n "${value//[[:space:]]/}" ]]; then
         layer="${_MANIFEST_CLI_YAML_EXECUTION_KEY_LAYER[MANIFEST_CLI_RELEASE_GATE_COMMAND]:-env}"
         trust="$(manifest_config_execution_key_trust MANIFEST_CLI_RELEASE_GATE_COMMAND)"
-        printf '%s\t%s\t%s\t%s\n' "MANIFEST_CLI_RELEASE_GATE_COMMAND" "$layer" "$value" "$trust"
+        printf '%s%s%s%s%s%s%s\n' "MANIFEST_CLI_RELEASE_GATE_COMMAND" "$fs" "$layer" "$fs" "$trust" "$fs" "$value"
     fi
 
     # The two provider-gated commands: disclose only when the pair is complete.
@@ -1361,7 +1379,7 @@ manifest_config_execution_disclosure() {
         [[ -n "${value//[[:space:]]/}" ]] || continue
         layer="${_MANIFEST_CLI_YAML_EXECUTION_KEY_LAYER[$command_var]:-env}"
         trust="$(manifest_config_execution_key_trust "$command_var")"
-        printf '%s\t%s\t%s\t%s\n' "$command_var" "$layer" "$value" "$trust"
+        printf '%s%s%s%s%s%s%s\n' "$command_var" "$fs" "$layer" "$fs" "$trust" "$fs" "$value"
     done
     return 0
 }
