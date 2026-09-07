@@ -1,5 +1,21 @@
 # Changelog
 
+## [60.0.0] - 2026-09-07
+
+**Release Type:** Major
+
+### Changes
+
+- Feat(fleet): add 'ship fleet manager' to commit and push the coordination root only (§77)
+- Docs(tracker): record §77(b) decided as 'ship fleet manager' and (c) fixed; (a) stays open (§77)
+- Feat(config): make repo-command trust durable with MANIFEST_CLI_TRUST_REPO_COMMANDS=remember|forget (§44)
+- Fix(ship): disclose config-named programs in the ship repo and ship fleet previews; --explain points at the preview (§44)
+- Docs(config): document remember/forget and the trust record (§44)
+- Docs(tracker): §44(3) landed and the --explain lead reproduced; file §6(19) and the §79 nested-ship lead (§44)
+- Docs(tracker): file §80 — a gate that hangs on docker stalls a fleet ship silently (§80)
+- Fix(config): keep the whole command and its trust annotation in the execution disclosure (§44)
+
+
 ## [59.10.1] - 2026-09-05
 
 **Release Type:** Patch
@@ -124,16 +140,3 @@
 - Docs(tracker): make the release-state block a complete resume point
 - Test(guards): un-stale four guards, close the selection gap that hid them, fix a 1s race
 - Docs(tracker): re-evaluate every item; retire §19, file §63/§64; embargo unfixed detail
-
-
-## [59.5.0] - 2026-08-24
-
-**Release Type:** Minor
-
-### Changes
-
-- Add GitHub Release publishing support
-- Add smart ship preview summaries
-- Update documentation and examples
-- Wire first-class CLI commands to inspectable built-in recipe definitions
-- Add regression coverage for the changed CLI workflow
