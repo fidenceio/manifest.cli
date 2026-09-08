@@ -761,26 +761,44 @@ manifest_release_gate_run() {
                     #      what is printable inverts the burden: a control
                     #      character nobody has thought of yet is already out.
                     #
-                    # Bash's own pattern matching is locale-aware, so this is
-                    # ONE expansion with no fork, no `tr`/`sed` implementation
-                    # divergence, and no multi-byte corruption — verified to
-                    # strip ESC, DEL and the C1 pair while preserving `€` and
-                    # `é`. There is no library for this in bash and the shell
-                    # toolbox alternatives are all worse here: perl's
-                    # `\p{Cc}` would be correct but adds a runtime dependency
-                    # to a CLI installed on machines we do not control, and
-                    # `iconv -c` repairs invalid UTF-8 without touching C1.
+                    # Bash's own pattern matching is locale-aware, so the
+                    # sanitising is ONE expansion — no `tr`/`sed` implementation
+                    # divergence, no multi-byte corruption; the `tr -s` below
+                    # only squeezes the spaces it leaves. Under a UTF-8 locale
+                    # it strips ESC, DEL and the C1 pair while preserving `€`
+                    # and `é` — measured on macOS /bin/bash 3.2, brew bash 5.3,
+                    # glibc bash 5.2 (ubuntu:24.04) and musl bash 5.2. There is
+                    # no library for this in bash and the shell toolbox
+                    # alternatives are all worse here: perl's `\p{Cc}` would be
+                    # correct but adds a runtime dependency to a CLI installed
+                    # on machines we do not control, and `iconv -c` repairs
+                    # invalid UTF-8 without touching C1.
                     #
-                    # KNOWN RESIDUE, stated rather than papered over: under
-                    # LC_ALL=C the same expansion keeps bytes >= 0x80, C1
-                    # included. Nothing in the CLI sets that locale, and the
-                    # JSON sink escapes independently (_json_escape), so the
-                    # exposure is a plain-C-locale terminal. Named here so the
-                    # next reader does not have to rediscover it — the previous
-                    # three comments each claimed the class was closed.
+                    # KNOWN RESIDUE, measured — and the first version of this
+                    # paragraph had it BACKWARDS, which made it the fourth wrong
+                    # claim about this one sanitiser. It said that under
+                    # LC_ALL=C the expansion keeps bytes >= 0x80, C1 included.
+                    # On macOS /bin/bash 3.2 and glibc bash 5.2 the opposite
+                    # holds: with LC_ALL=C, POSIX or no locale at all, bytes
+                    # >= 0x80 are NOT printable and are replaced, so C1 goes
+                    # too (no escape exposure) but every non-ASCII character in
+                    # the reason goes with it — `café €` prints as `caf`. That
+                    # is a text-fidelity regression against the `tr '[:cntrl:]'`
+                    # this replaced, confined to processes that run under the
+                    # C/POSIX locale or none (minimal container images, some
+                    # cron, an explicit LC_ALL=C). musl bash decodes UTF-8 even
+                    # under C, so there it behaves as the UTF-8 case — which
+                    # means NO platform measured lets C1 through in either
+                    # locale family measured (C/POSIX and UTF-8; no single-byte
+                    # codeset such as Latin-1 was tried); the residue is text
+                    # loss, not an escape. Nothing in the CLI sets the locale
+                    # this expansion runs under, and the JSON sink escapes
+                    # independently (_json_escape).
+                    #   Repro: LC_ALL=C /bin/bash -c 'v="café €"; printf "%s\n" "${v//[![:print:]]/ }"'
                     #
-                    # Removed rather than replaced with a space, then runs are
-                    # squeezed, so a collapsed line break cannot fuse two words.
+                    # Replaced with a space rather than removed — removal WOULD
+                    # fuse the two words around a collapsed line break — then
+                    # runs of spaces are squeezed.
                     gate_reason="${MANIFEST_CLI_RELEASE_GATE_REASON-}"
                     gate_reason="${gate_reason//[![:print:]]/ }"
                     gate_reason="$(printf '%s' "$gate_reason" | tr -s ' ')"
