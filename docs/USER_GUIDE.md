@@ -371,7 +371,18 @@ delete the line yourself if you want the file tidy.
 
 **If you have edited the surrounding block — the header comments, the `/*` rule, or any
 non-`!/` line — Manifest will not rewrite the file at all.** Regenerating it would discard
-those edits, so it says so and names the exact line to add:
+those edits. What it says then depends on whether anything is actually wrong.
+
+If the version file is still re-included correctly, it tells you so and asks nothing of
+you:
+
+```text
+⚠️  Fleet root .gitignore has local edits to the managed block, so it was left
+    alone. Its re-include for 'FLEET.stamp' is present and correct; no action
+    needed unless you want Manifest to manage this file again.
+```
+
+If the re-include really is missing, it names the exact line:
 
 ```text
 ⚠️  Fleet root .gitignore does not re-include 'FLEET.stamp' (fleet.version_file)
@@ -389,9 +400,14 @@ force-adds coordination files by name — so this shows up as a file that will n
 rather than as a failed ship. To check a root by hand:
 
 ```bash
-git check-ignore -q "$(grep -E '^[[:space:]]*version_file:' manifest.fleet.config.yaml \
-  | sed -E 's/.*version_file:[[:space:]]*"?([^"]*)"?.*/\1/')" ; echo "exit=$? (want 1)"
+name=$(grep -E '^[[:space:]]*version_file:' manifest.fleet.config.yaml 2>/dev/null \
+       | sed -E 's/.*version_file:[[:space:]]*"?([^"]*)"?.*/\1/')
+git check-ignore -q "${name:-FLEET_VERSION}"; echo "exit=$? (want 1)"
 ```
+
+The `${name:-FLEET_VERSION}` default matters: on a fleet that never set the key —
+the common case — the `grep` matches nothing and `git check-ignore` fails with
+*"empty string is not a valid pathspec"* rather than answering the question.
 
 A name that is not a plain filename is refused and the default is used instead, loudly —
 paths and globs (a `*` in the allowlist would un-ignore every root entry, member

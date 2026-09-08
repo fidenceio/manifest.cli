@@ -164,9 +164,22 @@ _fleet_root_version_name() {
                     # _fleet_coordination_files emit a duplicate, which pins the
                     # root at `preserved-stale` with a self-contradicting
                     # warning. Checked against the fixed set, folded.
+                    # The four coordination files PLUS the two config layers
+                    # Manifest itself reads at a fleet root. Those two were
+                    # missed by the first list and are the worse case:
+                    # <root>/manifest.config.yaml is the FLEET-SHARED layer
+                    # every member inherits, so overwriting it with a bare
+                    # version string silently changes resolved policy —
+                    # release.gate included — for every repo in the fleet, not
+                    # just the root. <root>/manifest.config.local.yaml is
+                    # deliberately untracked, and naming it would additionally
+                    # pull a host-local file into the allowlist, defeating the
+                    # assertion in fleet_root_gitignore.bats that it never
+                    # appears there.
                     local fixed
                     for fixed in .gitignore manifest.fleet.config.yaml \
-                                 manifest.fleet.tsv CHANGELOG_FLEET.md; do
+                                 manifest.fleet.tsv CHANGELOG_FLEET.md \
+                                 manifest.config.yaml manifest.config.local.yaml; do
                         if [[ "$folded" == "${fixed,,}" ]]; then
                             reject="collides with the coordination file '$fixed'"
                             break

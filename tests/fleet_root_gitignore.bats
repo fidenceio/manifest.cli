@@ -167,6 +167,53 @@ YAML
     [ "$(_fleet_root_version_name "$SCRATCH" 2>/dev/null)" = "manifest.fleet.tsv.version" ]
 }
 
+@test "a version_file naming a fleet CONFIG LAYER is refused (it would rewrite every member's policy)" {
+    # Missed by the first collision list, and worse than the coordination-file
+    # cases it did cover: <root>/manifest.config.yaml is the FLEET-SHARED layer
+    # every member inherits, so replacing it with a bare version string
+    # silently changes resolved policy — release.gate included — across the
+    # whole fleet. manifest.config.local.yaml is deliberately untracked, and
+    # naming it would also pull a host-local file into the allowlist, which
+    # test "create_fleet_gitignore writes an allowlist on a fresh root"
+    # explicitly asserts never happens.
+    unset MANIFEST_CLI_FLEET_CONFIG_FILE
+    local bad
+    for bad in 'manifest.config.yaml' 'manifest.config.local.yaml' 'MANIFEST.CONFIG.YAML'; do
+        printf 'fleet:\n  name: "x"\n  versioning: "date"\n  version_file: "%s"\n' "$bad" \
+            > "$SCRATCH/manifest.fleet.config.yaml"
+        [ "$(_fleet_root_version_name "$SCRATCH" 2>/dev/null)" = "FLEET_VERSION" ]
+        run _fleet_root_version_name "$SCRATCH"
+        [[ "$output" == *"collides with the coordination file"* ]]
+    done
+}
+
+@test "the two .gitignore warnings do not claim a re-include is missing when it is present" {
+    # Both arms asserted "does not re-include '<name>'" without testing it.
+    # preserved-stale fires for ANY managed-block edit, so an operator whose
+    # version line was already correct was told to add a line that was already
+    # there — following the advice appends a duplicate and the warning returns
+    # on the next run, with no way to clear it by doing as instructed.
+    mk_initialised_root
+    create_fleet_gitignore "$SCRATCH" >/dev/null          # converge, so !/FLEET.stamp is present
+    grep -q '^!/FLEET.stamp$' "$SCRATCH/.gitignore"
+    printf '/secrets\n' >> "$SCRATCH/.gitignore"          # an ordinary rule, in the managed block
+
+    run _fleet_gitignore_decision "$SCRATCH"
+    [ "$output" = "preserved-stale" ]
+
+    run create_fleet_gitignore "$SCRATCH"
+    [ "$status" -eq 0 ]
+    refute grep -q "does not re-include" <<<"$output"
+    [[ "$output" == *"is present and correct"* ]]
+
+    # CONTROL: when it genuinely IS missing, the actionable wording is back.
+    grep -v '^!/FLEET.stamp$' "$SCRATCH/.gitignore" > "$SCRATCH/.gi.tmp"
+    mv "$SCRATCH/.gi.tmp" "$SCRATCH/.gitignore"
+    run create_fleet_gitignore "$SCRATCH"
+    [[ "$output" == *"does not re-include 'FLEET.stamp'"* ]]
+    [[ "$output" == *"!/FLEET.stamp"* ]]
+}
+
 @test "POSITIVE CONTROL: a gitfile .git is exactly the shape mv -f would clobber" {
     # Without this, the test above asserts a refusal against a hazard nobody
     # has shown to exist. A linked worktree's .git is a FILE, and `mv -f` over a

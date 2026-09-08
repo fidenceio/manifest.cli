@@ -796,6 +796,14 @@ _fleet_gitignore_normalize() {
 # every variable line, add whatever the coordination set is missing. A stale
 # re-include for a file that does not exist is inert in git; a dropped operator
 # line is not.
+# True when FILE already re-includes NAME. Used so the two warnings state what
+# is actually wrong instead of asserting it — a remediation that is already
+# satisfied is worse than none, because following it changes nothing and the
+# warning returns.
+_fleet_gitignore_has_include() {
+    grep -qxF "!/$2" "$1" 2>/dev/null
+}
+
 _fleet_gitignore_variable_include_names() {
     local file="$1"
     local fixed_pat
@@ -922,10 +930,24 @@ create_fleet_gitignore() {
                 < <(_fleet_gitignore_variable_include_names "$gitignore_file")
             local want
             want="$(_fleet_root_version_name "$fleet_root")"
+            # Sample BEFORE the write. The write is what adds the line, so
+            # asking afterwards always answers "present" and the message would
+            # never take the branch it exists for.
+            local had_want=false
+            _fleet_gitignore_has_include "$gitignore_file" "$want" && had_want=true
             _fleet_write_allowlist_gitignore "$gitignore_file" \
                 ${carry[@]+"${carry[@]}"} || return 1
             if declare -F log_warning >/dev/null 2>&1; then
-                log_warning "Fleet root .gitignore did not re-include '${want}' (fleet.version_file); added it and kept every existing rule. Commit it with the coordination files."
+                # Only CLAIM the version line was missing when it actually was.
+                # Both arms used to assert it unconditionally, and neither
+                # tested it: `stale` also fires when the set merely needs
+                # reordering, and then the message named a line that was
+                # already present.
+                if [[ "$had_want" == "true" ]]; then
+                    log_warning "Fleet root .gitignore was out of step with the coordination file list; rewrote it and kept every existing rule. Commit it with the coordination files."
+                else
+                    log_warning "Fleet root .gitignore did not re-include '${want}' (fleet.version_file); added it and kept every existing rule. Commit it with the coordination files."
+                fi
             fi
             echo ".gitignore:stale-updated"; return 0
             ;;
@@ -936,7 +958,18 @@ create_fleet_gitignore() {
             local want
             want="$(_fleet_root_version_name "$fleet_root")"
             if declare -F log_warning >/dev/null 2>&1; then
-                log_warning "Fleet root .gitignore does not re-include '${want}' (fleet.version_file) and has local edits, so it was left alone. Add the line '!/${want}' to keep that file visible to git."
+                # `preserved-stale` means "the managed block was edited", which
+                # is NOT the same as "the version line is missing" — the first
+                # cut said the latter unconditionally. An operator who appended
+                # one ordinary rule to an otherwise-correct root was told to add
+                # a line that was already there: following the advice appends a
+                # duplicate and the warning fires again next run, with no way to
+                # clear it by doing as instructed.
+                if _fleet_gitignore_has_include "$gitignore_file" "$want"; then
+                    log_warning "Fleet root .gitignore has local edits to the managed block, so it was left alone. Its re-include for '${want}' is present and correct; no action needed unless you want Manifest to manage this file again."
+                else
+                    log_warning "Fleet root .gitignore does not re-include '${want}' (fleet.version_file) and has local edits, so it was left alone. Add the line '!/${want}' to keep that file visible to git."
+                fi
             fi
             echo ".gitignore:preserved-stale"; return 0
             ;;

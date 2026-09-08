@@ -413,6 +413,31 @@ YAML
     refute grep -q 'gate_reason' "$audit"
 }
 
+@test "release_gate: the reason SURVIVES post-push, which is when a publishing ship reads it" {
+    # THE TEST THAT WAS MISSING, and the reason a repair broke the feature.
+    #
+    # Every other gate test calls pre-bump and then invokes the audit event BY
+    # HAND with the variables. None ran the real pre-bump -> post-push -> read
+    # sequence, so when the reset for defect (iv) was placed above the `case`
+    # it also ran for post-push: on a publishing ship the durable record said
+    # gate_status=bypassed with an empty reason — a bypass that refuses to say
+    # why, the exact inverse of the feature. _GATE_STATUS was not reset, so
+    # nothing looked wrong.
+    #
+    # This is the same anti-pattern the previous round diagnosed: a test that
+    # performs the product's sequence itself cannot observe the product getting
+    # that sequence wrong.
+    export MANIFEST_CLI_RELEASE_GATE="none"
+    export MANIFEST_CLI_RELEASE_GATE_REASON="verified by ship.sh moments earlier"
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
+    [ "$_MANIFEST_CLI_SHIP_LAST_GATE_REASON" = "verified by ship.sh moments earlier" ]
+
+    # A publishing ship calls this second; both consumers read AFTER it.
+    manifest_release_gate_run "post-push" >"$SCRATCH/out2" 2>&1
+    [ "$_MANIFEST_CLI_SHIP_LAST_GATE_STATUS" = "bypassed" ]
+    [ "$_MANIFEST_CLI_SHIP_LAST_GATE_REASON" = "verified by ship.sh moments earlier" ]
+}
+
 @test "release_gate: the reason and layer do not leak into a LATER run under another policy" {
     # They are assigned only in the `none` arm, so without a reset beside the
     # policy a second call reports the first call's pair next to its own
@@ -456,6 +481,73 @@ YAML
     # CONTROL: the printable text is kept, so this strips controls rather than
     # dropping the value.
     [[ "$_MANIFEST_CLI_SHIP_LAST_GATE_REASON" == *"Everything verified"* ]]
+}
+
+@test "release_gate: C1 controls are stripped too, not just the ASCII ones" {
+    # U+009B IS the CSI that `ESC [` stands in for, so leaving the C1 range
+    # leaves the escape hole open under any terminal that maps it. The previous
+    # sanitiser used `tr '[:cntrl:]'`, which covers C1 on macOS BSD tr and NOT
+    # on GNU coreutils or BusyBox — closed on the dev machine, open on the
+    # platform most users run. A printable WHITELIST removes the whole class
+    # rather than the members of it someone remembered.
+    #
+    # THIS TEST DOES NOT DISCRIMINATE ON macOS: the old `tr '[:cntrl:]'` passes
+    # it here, because BSD tr already stripped C1. It goes red only on the
+    # GNU/BusyBox userland — i.e. in CI's ubuntu leg, which is exactly the
+    # matrix hole §74 is filed for. Stated so nobody reads a local green as
+    # evidence the guard is live everywhere.
+    export MANIFEST_CLI_RELEASE_GATE="none"
+    export MANIFEST_CLI_RELEASE_GATE_REASON="$(printf 'ok\302\2332K done\302\205x')"
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
+    refute grep -qF "$(printf '\302\233')" <<<"$_MANIFEST_CLI_SHIP_LAST_GATE_REASON"
+    refute grep -qF "$(printf '\302\205')" <<<"$_MANIFEST_CLI_SHIP_LAST_GATE_REASON"
+    # The printable remainder is kept, so this strips rather than empties.
+    [[ "$_MANIFEST_CLI_SHIP_LAST_GATE_REASON" == *"done"* ]]
+    # CONTROL: multi-byte PRINTABLE characters must survive — a byte-level
+    # strip would corrupt them, and '€' has 0x82 as a continuation byte, which
+    # sits inside the C1 byte range.
+    export MANIFEST_CLI_RELEASE_GATE_REASON="cost is 5€ and café"
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
+    [ "$_MANIFEST_CLI_SHIP_LAST_GATE_REASON" = "cost is 5€ and café" ]
+}
+
+@test "release_gate: a reason from a DIFFERENT layer than the gate says so" {
+    # The notice reads the gate's layer but prints the reason. An operator can
+    # disable the gate from their environment while a cloned repo's committed
+    # config supplies a reassuring sentence — "Set by: env" then attributes
+    # that sentence to the operator, misattributing rather than disambiguating.
+    export MANIFEST_CLI_RELEASE_GATE="none"
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/core/manifest-shared-functions.sh"
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/core/manifest-yaml.sh"
+    # shellcheck disable=SC1091
+    source "$TEST_REPO_ROOT/modules/core/manifest-config.sh"
+    export MANIFEST_CLI_GLOBAL_CONFIG="$SCRATCH/home/nonexistent.global.yaml"
+    cat > "$MANIFEST_CLI_PROJECT_ROOT/manifest.config.yaml" <<'YAML'
+release:
+  gate: "all"
+  gate_reason: "Reviewed and approved by the security team"
+YAML
+    cd "$MANIFEST_CLI_PROJECT_ROOT"
+    load_configuration "$MANIFEST_CLI_PROJECT_ROOT" >/dev/null 2>&1 || true
+    [ "$(manifest_release_gate_policy)" = "none" ]
+
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
+    grep -q "Set by: env" "$SCRATCH/out"
+    grep -q "NOT the layer that disabled the gate" "$SCRATCH/out"
+    grep -q "project-shared" "$SCRATCH/out"
+}
+
+@test "CONTROL: a reason from the SAME layer as the gate reads plainly" {
+    # Without this the clause above could fire always and the test would still
+    # pass, which would make every ordinary bypass notice harder to read for
+    # no reason.
+    export MANIFEST_CLI_RELEASE_GATE="none"
+    export MANIFEST_CLI_RELEASE_GATE_REASON="both from the environment"
+    manifest_release_gate_run "pre-bump" >"$SCRATCH/out" 2>&1
+    grep -q "Reason given: both from the environment" "$SCRATCH/out"
+    refute grep -q "NOT the layer that disabled the gate" "$SCRATCH/out"
 }
 
 @test "release_gate: a credential in gate_reason is redacted BEFORE truncation" {

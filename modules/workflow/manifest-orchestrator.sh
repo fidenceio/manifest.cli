@@ -686,17 +686,28 @@ manifest_release_gate_run() {
     local policy
     policy="$(manifest_release_gate_policy)" || return 1
     _MANIFEST_CLI_SHIP_LAST_GATE_POLICY="$policy"
-    # Reset beside the policy, not inside the `none` arm: these are only ever
-    # ASSIGNED there, so without this a later run under a different policy
-    # reported the earlier run's reason and layer next to its own status —
-    # gate_status=verified-local carrying "bypassed because …". A fleet ship
-    # calls this once per member in one process, so the stale pair would be
-    # attributed to the wrong repository.
-    _MANIFEST_CLI_SHIP_LAST_GATE_REASON=""
-    _MANIFEST_CLI_SHIP_LAST_GATE_LAYER=""
-
     case "$phase" in
         pre-bump)
+            # Reset HERE, in the phase that assigns the pair — not beside the
+            # policy above, where it also ran for post-push.
+            #
+            # A publishing ship calls pre-bump and then post-push, and both
+            # consumers (the status file and the audit event) read the
+            # variables AFTER post-push. Resetting above the case therefore
+            # wiped the reason and layer on every ship that publishes, while
+            # leaving _GATE_STATUS=bypassed intact — so the durable record said
+            # a gate was bypassed and refused to say why, which is the precise
+            # inverse of what §81 exists to do. Measured: reason survives
+            # pre-bump, empty after post-push.
+            #
+            # The hazard the misplaced reset was written for did not exist: its
+            # comment claimed a fleet ship would attribute a stale pair to the
+            # wrong member, but each member ships inside a subshell
+            # (manifest-fleet.sh, `( cd "$path" ... )`), so these variables
+            # cannot cross members. A real repeated pre-bump in one process is
+            # still cleared, which is what the guard test covers.
+            _MANIFEST_CLI_SHIP_LAST_GATE_REASON=""
+            _MANIFEST_CLI_SHIP_LAST_GATE_LAYER=""
             case "$policy" in
                 none)
                     # `none` is the one sanctioned way past verification, so the
@@ -738,19 +749,66 @@ manifest_release_gate_run() {
                     #   3. Bash substring, not `cut -c`, which is BYTE-based on
                     #      GNU coreutils and BusyBox and split a multi-byte
                     #      character mid-sequence.
-                    # Control characters become SPACES rather than being
-                    # deleted, so collapsing a line break cannot fuse two words
-                    # into one; runs are then squeezed.
-                    gate_reason="$(printf '%s' "${MANIFEST_CLI_RELEASE_GATE_REASON-}" \
-                        | tr '[:cntrl:]' ' ' | tr -s ' ')"
+                    #   4. It is a WHITELIST, and that is the actual fix. This
+                    #      sanitiser was patched three times — newlines, then
+                    #      ESC/BEL/BS, then the C1 range — which is not bad
+                    #      luck, it is what enumerating dangerous characters
+                    #      always costs. `tr '[:cntrl:]'` was the last version:
+                    #      measured, macOS BSD tr strips U+0080–U+009F but GNU
+                    #      coreutils and BusyBox pass it through, and U+009B is
+                    #      the CSI that `ESC [` stands in for — so that hole
+                    #      was closed on macOS and open on Linux. Keeping only
+                    #      what is printable inverts the burden: a control
+                    #      character nobody has thought of yet is already out.
+                    #
+                    # Bash's own pattern matching is locale-aware, so this is
+                    # ONE expansion with no fork, no `tr`/`sed` implementation
+                    # divergence, and no multi-byte corruption — verified to
+                    # strip ESC, DEL and the C1 pair while preserving `€` and
+                    # `é`. There is no library for this in bash and the shell
+                    # toolbox alternatives are all worse here: perl's
+                    # `\p{Cc}` would be correct but adds a runtime dependency
+                    # to a CLI installed on machines we do not control, and
+                    # `iconv -c` repairs invalid UTF-8 without touching C1.
+                    #
+                    # KNOWN RESIDUE, stated rather than papered over: under
+                    # LC_ALL=C the same expansion keeps bytes >= 0x80, C1
+                    # included. Nothing in the CLI sets that locale, and the
+                    # JSON sink escapes independently (_json_escape), so the
+                    # exposure is a plain-C-locale terminal. Named here so the
+                    # next reader does not have to rediscover it — the previous
+                    # three comments each claimed the class was closed.
+                    #
+                    # Removed rather than replaced with a space, then runs are
+                    # squeezed, so a collapsed line break cannot fuse two words.
+                    gate_reason="${MANIFEST_CLI_RELEASE_GATE_REASON-}"
+                    gate_reason="${gate_reason//[![:print:]]/ }"
+                    gate_reason="$(printf '%s' "$gate_reason" | tr -s ' ')"
                     if declare -F manifest_redact >/dev/null 2>&1; then
                         gate_reason="$(manifest_redact "$gate_reason")"
                     fi
                     gate_reason="${gate_reason:0:300}"
+                    # The reason has its OWN layer, and it need not be the gate's:
+                    # an operator can disable the gate from their environment
+                    # while a cloned repository's committed config supplies a
+                    # reassuring sentence. Naming only the gate's layer there
+                    # ("Set by: env") attributes the reason to the operator too,
+                    # which misattributes rather than disambiguates — the exact
+                    # failure the layer clause exists to prevent. Say the
+                    # reason's layer whenever it differs; stay quiet when it
+                    # matches, so the common case reads unchanged.
+                    local reason_layer=""
+                    if declare -F manifest_config_execution_key_layer >/dev/null 2>&1; then
+                        reason_layer="$(manifest_config_execution_key_layer MANIFEST_CLI_RELEASE_GATE_REASON 2>/dev/null)"
+                    fi
                     local notice="Release gate disabled (release_gate=none) — publishing without test verification."
                     [[ -n "$gate_layer" ]] && notice+=" Set by: ${gate_layer}."
                     if [[ -n "${gate_reason//[[:space:]]/}" ]]; then
-                        notice+=" Reason given: ${gate_reason}"
+                        if [[ -n "$reason_layer" && -n "$gate_layer" && "$reason_layer" != "$gate_layer" ]]; then
+                            notice+=" Reason given (from the ${reason_layer} layer, NOT the layer that disabled the gate): ${gate_reason}"
+                        else
+                            notice+=" Reason given: ${gate_reason}"
+                        fi
                     else
                         notice+=" No release.gate_reason is set — record why verification is not needed here, or the next reader cannot tell this from a mistake."
                     fi
