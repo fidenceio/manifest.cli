@@ -80,6 +80,46 @@ seed_tap_remote() {
     [[ "$output" == *"Failed to push formula to homebrew-tap repo"* ]]
 }
 
+@test "tap push: a hook that refuses the formula commit FAILS the step and pushes nothing (§82 — it used to report a successful publish)" {
+    local remote tap
+    remote="$(seed_tap_remote)"
+    tap="$SCRATCH/tap"
+    git clone -q "$remote" "$tap"
+    git -C "$tap" config user.email "test@example.com"
+    git -C "$tap" config user.name "Test"
+    local hooks="$SCRATCH/hooks"
+    mkdir -p "$hooks"
+    printf '#!/bin/sh\necho "HOOK-FIXTURE: refusing the formula commit"\nexit 1\n' > "$hooks/pre-commit"
+    chmod +x "$hooks/pre-commit"
+    git -C "$tap" config core.hooksPath "$hooks"
+
+    local cli_formula="$SCRATCH/manifest.rb"
+    echo "v6-formula" > "$cli_formula"
+    export MANIFEST_CLI_HOMEBREW_TAP_REMOTE_URL="$remote"
+
+    # The production call shape (manifest-core.sh: `if ! manifest_homebrew_…`),
+    # inside which bash ignores errexit — the subshell's own `set -e` included.
+    # Under that shape the old code pushed nothing, printed "Everything
+    # up-to-date", and reported success.
+    local verdict
+    if ! manifest_homebrew_tap_push_formula "$tap" "$cli_formula" "v6" >"$SCRATCH/tap.out" 2>&1; then
+        verdict=REFUSED
+    else
+        verdict=SUCCEEDED
+    fi
+    [ "$verdict" = "REFUSED" ]
+    grep -q "HOOK-FIXTURE: refusing the formula commit" "$SCRATCH/tap.out"
+    grep -q "Failed to commit the formula in the homebrew-tap checkout" "$SCRATCH/tap.out"
+    refute grep -q "Pushed to homebrew-tap repo" "$SCRATCH/tap.out"
+    refute grep -q "Failed to push formula" "$SCRATCH/tap.out"
+
+    # Nothing moved: the remote still serves v0 and the checkout has no new commit.
+    local verify="$SCRATCH/verify"
+    git clone -q "$remote" "$verify"
+    [ "$(cat "$verify/Formula/manifest.rb")" = "v0" ]
+    [ "$(git -C "$tap" log -1 --format=%s)" = "Initial formula" ]
+}
+
 @test "update_homebrew_formula gates out for non-canonical origin (push helper never reached)" {
     # Build a scratch repo with a non-canonical origin and the bare minimum
     # of files. The structural-canonical fallback in manifest_is_canonical_repo

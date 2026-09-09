@@ -52,6 +52,11 @@ setup() {
     [ "$(manifest_ship_recovery_mode not_attempted version_commit 0)" = "checkout-files" ]
     [ "$(manifest_ship_recovery_mode not_attempted version_commit unknown)" = "no-destructive" ]
     [ "$(manifest_ship_recovery_mode not_attempted version_commit "")" = "no-destructive" ]
+    # §82: the pre-bump auto-commit sweep. Its count is a verified zero, but the
+    # only files in the tree are the operator's own pending work — "checkout-files"
+    # would tell them to discard it. Never destructive, whatever the count says.
+    [ "$(manifest_ship_recovery_mode not_attempted auto_commit 0)" = "no-destructive" ]
+    [ "$(manifest_ship_recovery_mode not_attempted auto_commit unknown)" = "no-destructive" ]
     # Pin of current behavior: a successful push with a NON-post-push step
     # (post-push release gate) still falls through to the commit-count rules.
     [ "$(manifest_ship_recovery_mode success release_gate 2)" = "rollback" ]

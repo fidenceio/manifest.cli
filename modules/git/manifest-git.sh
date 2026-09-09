@@ -5,6 +5,8 @@
 
 # Git module - uses MANIFEST_CLI_PROJECT_ROOT from core module
 MANIFEST_CLI_GIT_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The one commit executor (§82): every `git commit` this module makes goes through it.
+source "$MANIFEST_CLI_GIT_SCRIPT_DIR/manifest-git-commit.sh"
 source "$MANIFEST_CLI_GIT_SCRIPT_DIR/manifest-doc-review.sh"
 
 # Git Configuration
@@ -803,19 +805,16 @@ commit_changes() {
         echo "✅ Nothing to commit (only skipped post-request changes)"
         return 0
     fi
-    local commit_ok=false
-    if [[ -n "${MANIFEST_CLI_DOC_REVIEW_COMMIT_BODY:-}" ]]; then
-        git commit -m "$message" -m "$MANIFEST_CLI_DOC_REVIEW_COMMIT_BODY" && commit_ok=true
-    else
-        git commit -m "$message" && commit_ok=true
-    fi
-    if [[ "$commit_ok" == "true" ]]; then
-        echo "✅ Changes committed"
-        return 0
-    else
-        echo "❌ Commit failed"
-        return 1
-    fi
+    # One executor for every commit Manifest writes (§82): on refusal it replays
+    # what git and its hooks printed and says why, instead of the bare
+    # "Commit failed" that used to be the whole diagnosis.
+    local commit_rc=0
+    manifest_git_commit "$MANIFEST_CLI_PROJECT_ROOT" "$message" "${MANIFEST_CLI_DOC_REVIEW_COMMIT_BODY:-}" || commit_rc=$?
+    case "$commit_rc" in
+        0) echo "✅ Changes committed"; return 0 ;;
+        3) echo "✅ Nothing to commit"; return 0 ;;
+        *) echo "❌ Commit failed"; return 1 ;;
+    esac
 }
 
 resolve_tag_target_sha() {

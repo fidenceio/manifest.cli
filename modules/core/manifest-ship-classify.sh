@@ -77,6 +77,14 @@ manifest_ship_recovery_mode() {
         echo "partial-push"
         return 0
     fi
+    # The auto-commit sweep runs BEFORE any ship-generated write (§82). A
+    # failure there leaves only the operator's own pending files in the tree —
+    # exactly what "checkout-files" would tell them to discard. Nothing of
+    # Manifest's exists to revert, so advise nothing destructive.
+    if [[ "$failure_step" == "auto_commit" ]]; then
+        echo "no-destructive"
+        return 0
+    fi
     case "$(manifest_ship_commits_created_class "$commits_created")" in
         positive) echo "rollback" ;;
         zero)     echo "checkout-files" ;;

@@ -80,6 +80,9 @@ readonly MANIFEST_CLI_FLEET_MODULE_NAME="manifest-fleet"
 # -----------------------------------------------------------------------------
 # Source fleet sub-modules
 source "$MANIFEST_CLI_FLEET_SCRIPT_DIR/manifest-fleet-config.sh"
+# The one commit executor (§82): the coordination-root commit goes through the
+# same routine as every member commit — repo and fleet call the same functions.
+source "$MANIFEST_CLI_FLEET_SCRIPT_DIR/../git/manifest-git-commit.sh"
 source "$MANIFEST_CLI_FLEET_SCRIPT_DIR/manifest-fleet-detect.sh"
 source "$MANIFEST_CLI_FLEET_SCRIPT_DIR/manifest-fleet-topics.sh"
 source "$MANIFEST_CLI_FLEET_SCRIPT_DIR/manifest-fleet-docs.sh"
@@ -3353,8 +3356,10 @@ _fleet_root_write_version_file() {
 # list that the USER staged by hand is refused rather than committed.
 #
 #   $1 root   $2 commit message
-# stdout: "committed" when a commit was made; "nothing" when the staged set was
-# empty (idempotent). Returns 1 on refusal or a failed commit.
+# Returns 0 when a commit was made; 3 when the staged set was empty
+# (idempotent); 1 on refusal or a failed commit — the executor has by then
+# replayed everything git and its hooks printed and named the cause (§82).
+# Nothing on stdout is a protocol: callers switch on the return code.
 _fleet_root_commit_coordination() {
     local root="$1" message="$2"
     local version_name
@@ -3411,18 +3416,40 @@ _fleet_root_commit_coordination() {
         return 1
     fi
 
-    # Nothing staged -> idempotent skip.
+    # Nothing staged -> idempotent skip. Reported as a RETURN CODE, not a word
+    # on stdout: this function's stdout used to be its protocol ("committed" /
+    # "nothing", captured with $( ) at both callers), which is exactly why the
+    # commit's own output had to be thrown away — a hook's refusal printed to
+    # stdout would have corrupted the token. Return codes leave stdout free for
+    # whatever git and its hooks say (§82).
     if [[ -z "$staged" ]]; then
-        echo "nothing"
-        return 0
+        return 3
     fi
 
-    if ! git -C "$root" commit -q -m "$message" >/dev/null 2>&1; then
-        log_error "Fleet root: commit failed (is git user.name/user.email configured?)"
-        return 1
+    local rc=0
+    manifest_git_commit "$root" "$message" || rc=$?
+    case "$rc" in
+        0|3) return "$rc" ;;
+    esac
+
+    # The commit was refused. The executor has already replayed what git and
+    # its hooks printed and named the cause; this used to be "is git
+    # user.name/user.email configured?", a guess that was wrong every time a
+    # hook said no. Symmetric with the refusal path above: undo exactly what
+    # THIS run staged, keep the files as written — the stamped version file is
+    # the only record of the version this run meant to land — and say what is
+    # left and how to finish.
+    if [[ ${#staged_by_run[@]} -gt 0 ]]; then
+        git -C "$root" reset -q -- "${staged_by_run[@]}" >/dev/null 2>&1 || true
     fi
-    echo "committed"
-    return 0
+    # Say exactly what the index holds now: what this run had added is undone;
+    # what the user had staged before the run (the version file included, if
+    # they had staged it — the stamp overwrote its content on disk) stays.
+    local remaining
+    remaining="$(git -C "$root" diff --cached --name-only 2>/dev/null || true)"
+    remaining="${remaining//$'\n'/ }"
+    log_error "Fleet root: the coordination commit was not made. Undone: this run's staging of ${staged_by_run[*]:-nothing}. Still staged from before this run: ${remaining:-nothing}. The stamped version file keeps its new content on disk either way — it is the only record of the intended version. Once the cause above is fixed, 'manifest ship fleet manager -y' commits the coordination files; 'git -C \"$root\" checkout -- <file>' discards one."
+    return 1
 }
 
 # Push ROOT's current branch to origin. A silent no-op (0) when local_only or
@@ -3499,10 +3526,14 @@ _fleet_root_release() {
     _fleet_root_ensure_repo "$root" || return 1
     _fleet_root_write_version_file "$root" "$version_name" "$next" || return 1
 
-    local outcome
-    outcome="$(_fleet_root_commit_coordination "$root" "Bump fleet version to $next")" || return 1
-    # Version file unchanged on disk -> nothing staged -> idempotent skip.
-    [[ "$outcome" == "committed" ]] || return 0
+    local commit_rc=0
+    _fleet_root_commit_coordination "$root" "Bump fleet version to $next" || commit_rc=$?
+    case "$commit_rc" in
+        0) ;;
+        # Version file unchanged on disk -> nothing staged -> idempotent skip.
+        3) return 0 ;;
+        *) return 1 ;;
+    esac
     echo "  - fleet root: committed fleet version $next"
 
     # Push only on a non-local ship, and only when a remote is configured. A
@@ -3816,13 +3847,13 @@ EOF
         echo "  - fleet root: stamped fleet version ${current:-(unset)} → $next ($version_name)"
     fi
     if [[ "$will_commit" == "true" ]]; then
-        local outcome
-        outcome="$(_fleet_root_commit_coordination "$root" "$message")" || return 1
-        if [[ "$outcome" == "committed" ]]; then
-            echo "  - fleet root: committed $(IFS=', '; echo "${to_commit[*]}")"
-        else
-            echo "  - fleet root: nothing to commit after staging (already current)"
-        fi
+        local commit_rc=0
+        _fleet_root_commit_coordination "$root" "$message" || commit_rc=$?
+        case "$commit_rc" in
+            0) echo "  - fleet root: committed $(IFS=', '; echo "${to_commit[*]}")" ;;
+            3) echo "  - fleet root: nothing to commit after staging (already current)" ;;
+            *) return 1 ;;
+        esac
     fi
     if [[ "$will_push" == "true" ]]; then
         if ! _fleet_root_push "$root" "$local_only"; then

@@ -236,14 +236,23 @@ manifest_homebrew_tap_push_formula() {
 
     local push_log
     push_log="$(mktemp "$(manifest_make_scratch_path core)/tmp.XXXXXXXX")"
+    # Every step aborts the subshell EXPLICITLY. The `set -e` that used to be
+    # here was inert: this function is called as `if ! manifest_homebrew_…`,
+    # and bash ignores errexit — including a subshell's own — for anything run
+    # inside an `if` condition. So a refused formula commit fell through to the
+    # push, which found nothing new, said "Everything up-to-date", exited 0,
+    # and the ship reported a SUCCESSFUL publish with the old formula still on
+    # the tap. Measured 2026-09-09 against a refusing hook (§82).
     (
-        set -e
-        cd "$tap_dir"
-        git add Formula/manifest.rb
+        cd "$tap_dir" || exit 1
+        git add Formula/manifest.rb || exit $?
         if ! git diff --cached --quiet; then
-            git commit -m "Update formula to ${tag}"
+            # §82: through the one executor, so a hook that refuses in the tap
+            # checkout is replayed and classified into this log as a COMMIT
+            # failure, and the push below never runs.
+            manifest_git_commit "$tap_dir" "Update formula to ${tag}" || exit $?
         fi
-        git push "$push_remote_url" "HEAD:${push_branch}"
+        git push "$push_remote_url" "HEAD:${push_branch}" || exit $?
     ) >"$push_log" 2>&1
     local push_status=$?
 
@@ -259,6 +268,11 @@ manifest_homebrew_tap_push_formula() {
     fi
 
     cat "$push_log" >&2
+    if grep -qE 'was rejected \(git exited|Commit in .* failed \(git exited' "$push_log"; then
+        log_error "Failed to commit the formula in the homebrew-tap checkout (${tap_dir}); nothing was pushed. The cause is above."
+        rm -f "$push_log"
+        return 1
+    fi
     log_error "Failed to push formula to homebrew-tap repo (${push_remote_url})"
     if grep -q "could not read Username for 'https://github.com" "$push_log"; then
         cat >&2 <<'EOF'

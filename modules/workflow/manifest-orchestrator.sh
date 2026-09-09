@@ -160,6 +160,11 @@ emit_ship_failure_report() {
         done
         echo "   Resume:      manifest ship repo resume"
         echo "   Note: resume re-pushes every configured remote, but its pre-push status probe checks origin only."
+    elif [[ "$failure_step" == "auto_commit" ]]; then
+        # §82: the pre-bump sweep failed, so this run wrote nothing — there is
+        # no push to retry and nothing of Manifest's to revert.
+        echo "   Nothing was written by this run; your pending files are untouched."
+        echo "   Fix the cause above (a hook's output, or git's), then re-run the ship."
     elif [ -n "$tag_name" ] && [ "$tag_name" != "none" ]; then
         echo "   Retry push:  git push origin ${branch} ${tag_name}"
         echo "   Resume:      manifest ship repo resume"
@@ -186,8 +191,12 @@ emit_ship_failure_report() {
             ;;
         no-destructive)
             # §9.10 fail-safe: an unverifiable commit count must not authorize a
-            # destructive command (§6: absence is not a value).
-            echo "   (rollback advice suppressed: the commits-created count is unverifiable, so no destructive command is advised)"
+            # destructive command (§6: absence is not a value). The auto-commit
+            # step lands here by design (§82) — its count IS verifiable, but the
+            # only files in play are the operator's own — so say that instead.
+            if [[ "$failure_step" != "auto_commit" ]]; then
+                echo "   (rollback advice suppressed: the commits-created count is unverifiable, so no destructive command is advised)"
+            fi
             ;;
     esac
     echo ""
@@ -2004,7 +2013,16 @@ manifest_ship_workflow() {
             _ac_hint=" ($_ac_count files: $_ac_first, ...)"
         fi
         echo "⚠️  Auto-committing $_ac_count pending file(s) into this release from $MANIFEST_CLI_PROJECT_ROOT."
-        commit_changes "Auto-commit before Manifest process$_ac_hint" "$timestamp"
+        # Wrapped and CHECKED (§82). This ran bare with its return value
+        # ignored, so a hook that refused the sweep left the ship to fail later
+        # at version_commit — on the same hook, with VERSION already dirty.
+        # Failing here is before any version bump, so nothing needs undoing:
+        # the pending files are still the operator's own, untouched.
+        if ! _manifest_ship_step "auto_commit" commit_changes "Auto-commit before Manifest process$_ac_hint" "$timestamp"; then
+            log_error "Failed to auto-commit the pending changes; aborting ship workflow before any version bump. Your files are unchanged."
+            emit_ship_failure_report "auto_commit" "$workflow_start_sha" "" "" "not_attempted" "not_applicable"
+            return 1
+        fi
         echo ""
     fi
 

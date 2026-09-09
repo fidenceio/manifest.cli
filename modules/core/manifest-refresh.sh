@@ -28,6 +28,10 @@ if [[ -n "${_MANIFEST_REFRESH_LOADED:-}" ]]; then
 fi
 _MANIFEST_REFRESH_LOADED=1
 
+# The one commit executor (§82). Idempotent to source; the git module loads it
+# too, and this keeps refresh usable when a test loads it alone.
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/git/manifest-git-commit.sh"
+
 # -----------------------------------------------------------------------------
 # Function: manifest_refresh_repo
 # -----------------------------------------------------------------------------
@@ -175,8 +179,14 @@ manifest_refresh_repo() {
             if [[ "${MANIFEST_CLI_GITLINKS_SKIPPED_COUNT:-0}" -gt 0 ]] && git diff --cached --quiet 2>/dev/null; then
                 echo "  Nothing to commit (only skipped nested git repos)"
             else
-                git commit -m "Refresh docs and metadata for v$current_version"
-                echo "  Committed"
+                # §82: this printed "Committed" whether or not git agreed.
+                local commit_rc=0
+                manifest_git_commit "$PWD" "Refresh docs and metadata for v$current_version" || commit_rc=$?
+                case "$commit_rc" in
+                    0) echo "  Committed" ;;
+                    3) echo "  Nothing to commit" ;;
+                    *) echo "  ✗ Commit failed (the cause is above)"; return 1 ;;
+                esac
             fi
         else
             echo "  No changes to commit"
@@ -308,13 +318,20 @@ _refresh_fleet_commit_changes() {
     if [[ -d "$root_dir/.git" ]]; then
         if [[ -n "$(git -C "$root_dir" status --porcelain 2>/dev/null)" ]]; then
             manifest_notice_new_untracked_files "$root_dir" "  fleet root: "
-            if git -C "$root_dir" add . && git -C "$root_dir" commit -m "$commit_msg" >/dev/null; then
-                echo "  ✓ fleet root: committed"
-                committed=$((committed + 1))
+            # §82: the commit's stdout was discarded here, and the fleet-root
+            # hook writes its refusal to stdout — so a refused commit showed
+            # only "commit failed". The executor replays it on stderr.
+            local root_commit_rc=0
+            if git -C "$root_dir" add .; then
+                manifest_git_commit "$root_dir" "$commit_msg" >/dev/null || root_commit_rc=$?
             else
-                echo "  ✗ fleet root: commit failed"
-                failed=$((failed + 1))
+                root_commit_rc=1
             fi
+            case "$root_commit_rc" in
+                0) echo "  ✓ fleet root: committed"; committed=$((committed + 1)) ;;
+                3) echo "  • fleet root: no changes"; skipped=$((skipped + 1)) ;;
+                *) echo "  ✗ fleet root: commit failed (the cause is above)"; failed=$((failed + 1)) ;;
+            esac
         else
             echo "  • fleet root: no changes"
             skipped=$((skipped + 1))
@@ -334,13 +351,17 @@ _refresh_fleet_commit_changes() {
 
         if [[ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]]; then
             manifest_notice_new_untracked_files "$path" "  $service: "
-            if git -C "$path" add . && git -C "$path" commit -m "$commit_msg" >/dev/null; then
-                echo "  ✓ $service: committed"
-                committed=$((committed + 1))
+            local svc_commit_rc=0
+            if git -C "$path" add .; then
+                manifest_git_commit "$path" "$commit_msg" >/dev/null || svc_commit_rc=$?
             else
-                echo "  ✗ $service: commit failed"
-                failed=$((failed + 1))
+                svc_commit_rc=1
             fi
+            case "$svc_commit_rc" in
+                0) echo "  ✓ $service: committed"; committed=$((committed + 1)) ;;
+                3) echo "  • $service: no changes"; skipped=$((skipped + 1)) ;;
+                *) echo "  ✗ $service: commit failed (the cause is above)"; failed=$((failed + 1)) ;;
+            esac
         else
             echo "  • $service: no changes"
             skipped=$((skipped + 1))

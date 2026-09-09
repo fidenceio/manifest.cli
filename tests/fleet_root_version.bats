@@ -283,3 +283,48 @@ YAML
     [[ "$output" == *"would bump fleet version"* ]]
     [ ! -f "$SCRATCH/FLEET_VERSION" ]                             # preview still writes nothing
 }
+
+# ---------------------------------------------------------------------------
+# §82 — the coordination-root commit goes through the one executor. Its stdout
+# used to be a protocol token ("committed"/"nothing") captured with $( ), which
+# is why the commit's own output was discarded and a hook's refusal was replaced
+# by the guess "is git user.name/user.email configured?".
+# ---------------------------------------------------------------------------
+
+# Install a pre-commit hook OUTSIDE the root (so the allowlist never sees it)
+# that prints LINE to STDOUT and exits RC.
+_mk_root_hook() {
+    local rc="$1" line="$2"
+    mkdir -p "$HOME/hooks"
+    printf '#!/bin/sh\necho "%s"\nexit %s\n' "$line" "$rc" > "$HOME/hooks/pre-commit"
+    chmod +x "$HOME/hooks/pre-commit"
+    git -C "$SCRATCH" config core.hooksPath "$HOME/hooks"
+}
+
+@test "_fleet_root_release: a hook's STDOUT refusal reaches the operator; this run's staging is undone; the stamp stays on disk (§82)" {
+    mk_fleet_root semver 1.0.0
+    _mk_root_hook 1 "HOOK-FIXTURE: refusing this commit"
+    run _fleet_root_release patch apply true 1
+    [ "$status" -eq 1 ]
+    grep -q "HOOK-FIXTURE: refusing this commit" <<<"$output"
+    grep -q "hook active at" <<<"$output"
+    refute grep -q "user.name/user.email" <<<"$output"
+    # Symmetric with the allowlist-refusal path: nothing this run staged stays staged …
+    [ -z "$(git -C "$SCRATCH" diff --cached --name-only)" ]
+    # … the stamp stays on disk — it is the only record of the intended version …
+    [ "$(cat "$SCRATCH/FLEET_VERSION")" = "1.0.1" ]
+    grep -q "manifest ship fleet manager -y" <<<"$output"
+    # … and nothing was committed.
+    refute git -C "$SCRATCH" rev-parse -q --verify HEAD
+}
+
+@test "CONTROL: a PASSING hook that prints to STDOUT does not corrupt the release's outcome (§82)" {
+    mk_fleet_root semver 1.0.0
+    _mk_root_hook 0 "HOOK-FIXTURE: ok"
+    run _fleet_root_release patch apply true 1
+    [ "$status" -eq 0 ]
+    # Under the old $( ) protocol this would have read "HOOK-FIXTURE: ok\ncommitted"
+    # and reported nothing committed.
+    grep -q "committed fleet version 1.0.1" <<<"$output"
+    [ "$(git -C "$SCRATCH" log -1 --format=%s)" = "Bump fleet version to 1.0.1" ]
+}

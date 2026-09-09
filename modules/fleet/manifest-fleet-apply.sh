@@ -11,6 +11,10 @@ if [[ -n "${_MANIFEST_CLI_FLEET_APPLY_LOADED:-}" ]]; then
 fi
 _MANIFEST_CLI_FLEET_APPLY_LOADED=1
 
+# The one commit executor (§82). Idempotent to source; manifest-fleet.sh loads
+# it too, and this keeps the module usable when a test loads it alone.
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/git/manifest-git-commit.sh"
+
 readonly MANIFEST_CLI_FLEET_APPLY_MODULE_VERSION="1.0.0"
 readonly MANIFEST_CLI_FLEET_APPLY_MODULE_NAME="manifest-fleet-apply"
 
@@ -342,7 +346,8 @@ _fleet_apply_plan() {
             [[ "$plan_add_path" == "$root_dir/"* ]] && plan_add_path="${plan_add_path#"$root_dir"/}"
             git -C "$root_dir" add manifest.fleet.config.yaml "$plan_add_path" 2>/dev/null || true
             if ! git -C "$root_dir" diff --cached --quiet; then
-                git -C "$root_dir" commit -m "Reconcile fleet adoption plan" || return 1
+                # §82: a refused commit returned 1 with no word about why.
+                manifest_git_commit "$root_dir" "Reconcile fleet adoption plan" || return 1
             fi
             # Explicit if/then, not `[[ cond ]] && cmd || return 1`. In that shape
             # the `||` arm fires whenever the CONDITION is false, so a run without
