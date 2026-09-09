@@ -1,5 +1,15 @@
 # Changelog
 
+## [60.1.1] - 2026-09-09
+
+**Release Type:** Patch
+
+### Changes
+
+- Fix(config,fleet): the reset shipped in v60.1.0 wiped the bypass reason on every publishing ship (§81, §77)
+- Docs(gate): correct C-locale residue comment; file two leads (§77, §81)
+
+
 ## [60.1.0] - 2026-09-07
 
 **Release Type:** Minor
@@ -111,15 +121,3 @@
 - Update documentation and examples
 - Wire first-class CLI commands to inspectable built-in recipe definitions
 - Add regression coverage for the changed CLI workflow
-
-
-## [59.6.1] - 2026-08-27
-
-**Release Type:** Patch
-
-### Changes
-
-- Docs(tracker): close two redaction leaks the v59.6.0 publish shipped, and why
-- Test(tracker): guard §-citation resolution before the rebuild that breaks it
-- Fix(security)!: unexport the consent gate rather than complete its closure
-- Docs(tracker): retire the 15 items v59.6.0 shipped, file §65/§66/§67, anchor by symbol
