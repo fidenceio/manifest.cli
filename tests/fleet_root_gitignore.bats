@@ -183,7 +183,13 @@ YAML
             > "$SCRATCH/manifest.fleet.config.yaml"
         [ "$(_fleet_root_version_name "$SCRATCH" 2>/dev/null)" = "FLEET_VERSION" ]
         run _fleet_root_version_name "$SCRATCH"
-        [[ "$output" == *"collides with the coordination file"* ]]
+        # "config layer", not "coordination file": manifest.config.yaml is not
+        # a coordination file at all, it is the fleet-shared config layer every
+        # member inherits, and the reason it is refused is that overwriting it
+        # rewrites policy fleet-wide. The message was corrected when §77(a)
+        # moved this validation into one shared function; naming the thing
+        # accurately is the whole point of a refusal that states its reason.
+        [[ "$output" == *"collides with the config layer"* ]]
     done
 }
 

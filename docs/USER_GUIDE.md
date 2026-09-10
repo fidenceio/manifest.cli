@@ -354,6 +354,37 @@ owner instead; run unattended and it never blocks. Members that already have an 
 keep it. A directory with no `.git` of its own is set up from what is actually on disk,
 even if a leftover row in the TSV still claims `HAS_GIT=true`.
 
+### What the coordination root carries
+
+The fleet root is a git repository that tracks Manifest's coordination files and
+nothing else — never member repositories, their source, or secrets. It uses an
+allowlist `.gitignore`: ignore everything, then re-include only what is declared.
+
+Five files are always included: `.gitignore`, `manifest.fleet.config.yaml`,
+`manifest.fleet.tsv`, the fleet version file, and `CHANGELOG_FLEET.md`. If your fleet
+coordinates on something else — a host and port map, a runbook, a shared inventory —
+declare it:
+
+```yaml
+# manifest.fleet.config.yaml
+fleet:
+  name: "my-fleet"
+  coordination_files:
+    - host-ports.yaml
+    - runbook.md
+```
+
+A declared name is re-included in the root's `.gitignore` **and** staged by
+`manifest ship fleet manager` and by the fleet ship's coordination commit. Editing the
+`.gitignore` by hand is not enough on its own: the stager adds by name, so a file it
+has never heard of is not committed even when git would allow it.
+
+Each entry must be a plain file name at the root. Paths, globs and `..` are refused, as
+are `.git` and the two config layers Manifest reads at a root
+(`manifest.config.yaml`, `manifest.config.local.yaml`) — the first is the fleet-shared
+layer every member inherits, and the second is deliberately untracked. Refused entries
+are named on stderr and ignored; the rest still apply.
+
 ### Adopt An Existing Workspace
 
 ```bash

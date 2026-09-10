@@ -128,6 +128,80 @@ readonly MANIFEST_CLI_FLEET_DEFAULT_VERSION_FILE="FLEET_VERSION"
 #   $1 fleet root (its manifest.fleet.config.yaml is read unless
 #      MANIFEST_CLI_FLEET_CONFIG_FILE names another)
 # -----------------------------------------------------------------------------
+# Why a name a fleet may write is validated in ONE place, and what it rejects.
+#
+# Two config keys now name files the coordination root will create, stage and
+# push: `fleet.version_file` and `fleet.coordination_files` (§77(a)). The
+# rejections below were written for the first and are exactly as necessary for
+# the second, so they live here rather than being restated — a second copy of
+# this list is how the collision set shipped incomplete once already (§36's
+# shape sitting inside the fix for §36's shape).
+#
+# Echoes a reason when NAME must be refused, nothing when it is acceptable.
+#   $1 the candidate name
+#   $2 "version_file" to also refuse names colliding with the fixed
+#      coordination set; anything else checks only the universal rules.
+_fleet_coordination_name_reject_reason() {
+    local name="$1" mode="${2:-}"
+
+    if [[ ! "$name" =~ ^[A-Za-z0-9._-]+$ ]]; then
+        printf '%s' "is not a plain file name"
+        return 0
+    fi
+
+    # Case-FOLDED, because a writer's `mv -f` resolves on the filesystem and
+    # macOS APFS is case-insensitive by default: `.GIT` passed the first cut of
+    # this check and clobbered the gitfile on this very host, with the
+    # directory entry still reading `.git` because APFS is also
+    # case-preserving. Anything that decides whether a path is dangerous has to
+    # fold, or it is correct only on Linux — and macOS is the primary platform.
+    local folded="${name,,}"
+    case "$folded" in
+        .|..) printf '%s' "is a directory reference, not a file name"; return 0 ;;
+        .git) printf '%s' "would overwrite the repository's own .git"; return 0 ;;
+        .gitmodules|.gitattributes)
+            printf '%s' "is git metadata, not a coordination file"; return 0 ;;
+    esac
+
+    # The two config layers Manifest itself reads at a fleet root are refused
+    # for BOTH keys. <root>/manifest.config.yaml is the FLEET-SHARED layer every
+    # member inherits, so touching it changes resolved policy — release.gate
+    # included — for every repo in the fleet, not just the root.
+    # <root>/manifest.config.local.yaml is deliberately untracked, and naming it
+    # would pull a host-local file into the allowlist, defeating the assertion
+    # in fleet_root_gitignore.bats that it never appears there.
+    local layer
+    for layer in manifest.config.yaml manifest.config.local.yaml; do
+        if [[ "$folded" == "${layer,,}" ]]; then
+            printf '%s' "collides with the config layer '$layer'"
+            return 0
+        fi
+    done
+
+    # A version file colliding with a coordination file DESTROYS that file: the
+    # writer does `mv -f "$tmp" "$root/$name"`, and manifest.fleet.tsv is the
+    # fleet's structure-of-record while manifest.fleet.config.yaml is the file
+    # that named it, so that case is self-erasing. The collision also makes
+    # _fleet_coordination_files emit a duplicate, pinning the root at
+    # `preserved-stale` with a self-contradicting warning.
+    #
+    # coordination_files entries are NOT checked against that set: naming one
+    # there is a redundant no-op, not a hazard, and it is deduplicated by the
+    # caller. Nothing overwrites those files — they are staged, not written.
+    if [[ "$mode" == "version_file" ]]; then
+        local fixed
+        for fixed in .gitignore manifest.fleet.config.yaml \
+                     manifest.fleet.tsv CHANGELOG_FLEET.md; do
+            if [[ "$folded" == "${fixed,,}" ]]; then
+                printf '%s' "collides with the coordination file '$fixed'"
+                return 0
+            fi
+        done
+    fi
+
+    return 0
+}
+
 _fleet_root_version_name() {
     local root="${1:-${MANIFEST_CLI_FLEET_ROOT:-$PWD}}"
     local config="${MANIFEST_CLI_FLEET_CONFIG_FILE:-$root/manifest.fleet.config.yaml}"
@@ -136,58 +210,8 @@ _fleet_root_version_name() {
         name="$(get_yaml_value "$config" ".fleet.version_file" "" 2>/dev/null)"
     fi
     if [[ -n "$name" ]]; then
-        local reject=""
-        if [[ ! "$name" =~ ^[A-Za-z0-9._-]+$ ]]; then
-            reject="is not a plain file name"
-        else
-            # Case-FOLDED, because the writer's `mv -f` resolves on the
-            # filesystem and macOS APFS is case-insensitive by default: `.GIT`
-            # passed the first cut of this check and clobbered the gitfile on
-            # this very host, with the directory entry still reading `.git`
-            # because APFS is also case-preserving. Anything that decides
-            # whether a path is dangerous has to fold, or it is correct only on
-            # Linux — and macOS is the primary platform here.
-            local folded="${name,,}"
-            case "$folded" in
-                # Not a shape problem — these are well-formed names that must
-                # never be written to. `.git` is the dangerous one: see above.
-                .|..) reject="is a directory reference, not a file name" ;;
-                .git) reject="would overwrite the repository's own .git" ;;
-                .gitmodules|.gitattributes)
-                    reject="is git metadata, not a version file" ;;
-                *)
-                    # A name colliding with a coordination file destroys that
-                    # file: the writer does `mv -f "$tmp" "$root/$name"`, and
-                    # `manifest.fleet.tsv` is the fleet's structure-of-record
-                    # while `manifest.fleet.config.yaml` is the file that named
-                    # it, so that case is self-erasing. The collision also makes
-                    # _fleet_coordination_files emit a duplicate, which pins the
-                    # root at `preserved-stale` with a self-contradicting
-                    # warning. Checked against the fixed set, folded.
-                    # The four coordination files PLUS the two config layers
-                    # Manifest itself reads at a fleet root. Those two were
-                    # missed by the first list and are the worse case:
-                    # <root>/manifest.config.yaml is the FLEET-SHARED layer
-                    # every member inherits, so overwriting it with a bare
-                    # version string silently changes resolved policy —
-                    # release.gate included — for every repo in the fleet, not
-                    # just the root. <root>/manifest.config.local.yaml is
-                    # deliberately untracked, and naming it would additionally
-                    # pull a host-local file into the allowlist, defeating the
-                    # assertion in fleet_root_gitignore.bats that it never
-                    # appears there.
-                    local fixed
-                    for fixed in .gitignore manifest.fleet.config.yaml \
-                                 manifest.fleet.tsv CHANGELOG_FLEET.md \
-                                 manifest.config.yaml manifest.config.local.yaml; do
-                        if [[ "$folded" == "${fixed,,}" ]]; then
-                            reject="collides with the coordination file '$fixed'"
-                            break
-                        fi
-                    done
-                    ;;
-            esac
-        fi
+        local reject
+        reject="$(_fleet_coordination_name_reject_reason "$name" version_file)"
         if [[ -n "$reject" ]]; then
             if declare -F log_warning >/dev/null 2>&1; then
                 log_warning "fleet.version_file '$name' $reject; using '$MANIFEST_CLI_FLEET_DEFAULT_VERSION_FILE'."
@@ -196,6 +220,71 @@ _fleet_root_version_name() {
         fi
     fi
     printf '%s' "${name:-$MANIFEST_CLI_FLEET_DEFAULT_VERSION_FILE}"
+}
+
+# The operator-declared coordination files, one per line (§77(a)).
+#
+# WHY THIS KEY EXISTS. The coordination root could only ever carry five files,
+# all hard-coded, so a fleet that coordinates on anything else — a host/port
+# map, a runbook, an inventory — had no way to get it committed. Re-including
+# it in .gitignore by hand was not enough: the stager force-adds by name, and
+# the name was not on the list.
+#
+# WHY IT IS SAFE TO COMMIT, unlike release.gate_command. It names FILES, not
+# programs; nothing here is executed. The allowlist property is preserved
+# because every entry is validated to a plain file name at the root — no paths,
+# no globs, no `..` — so a declared entry can never reach a member repository
+# or a directory. What it can do is widen what the root commits, which is why
+# the set is disclosed in the ship preview before any apply.
+#
+# Feeds _fleet_coordination_files, so the .gitignore renderer, the stager and
+# the staged-set verifier all learn the name from one place.
+_fleet_extra_coordination_files() {
+    local root="${1:-${MANIFEST_CLI_FLEET_ROOT:-$PWD}}"
+    local config="${MANIFEST_CLI_FLEET_CONFIG_FILE:-$root/manifest.fleet.config.yaml}"
+    [[ -f "$config" ]] || return 0
+    command -v yq >/dev/null 2>&1 || return 0
+
+    # One expression for both spellings a user may reach for: a YAML sequence
+    # and a comma-separated scalar. Absent reads as empty.
+    local raw
+    raw="$(yq e -r '[.fleet.coordination_files] | flatten | join(",")' "$config" 2>/dev/null)" || return 0
+    [[ -n "$raw" && "$raw" != "null" ]] || return 0
+
+    local version_name
+    version_name="$(_fleet_root_version_name "$root")"
+
+    local entry trimmed reject seen_list=""
+    local IFS=','
+    for entry in $raw; do
+        # Trim surrounding whitespace; a comma list is usually written with it.
+        trimmed="${entry#"${entry%%[![:space:]]*}"}"
+        trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+        [[ -n "$trimmed" ]] || continue
+
+        reject="$(_fleet_coordination_name_reject_reason "$trimmed")"
+        if [[ -n "$reject" ]]; then
+            if declare -F log_warning >/dev/null 2>&1; then
+                log_warning "fleet.coordination_files entry '$trimmed' $reject; ignoring it."
+            fi
+            continue
+        fi
+
+        # Deduplicate against the fixed set, the version file, and earlier
+        # entries. A duplicate would emit a second `!/name` line and pin the
+        # root's .gitignore at preserved-stale.
+        local folded="${trimmed,,}" dupe="" known
+        for known in .gitignore manifest.fleet.config.yaml manifest.fleet.tsv \
+                     CHANGELOG_FLEET.md "$version_name"; do
+            [[ "$folded" == "${known,,}" ]] && { dupe=1; break; }
+        done
+        [[ -z "$dupe" ]] && case ",$seen_list," in *",$folded,"*) dupe=1 ;; esac
+        [[ -n "$dupe" ]] && continue
+
+        seen_list="$seen_list,$folded"
+        printf '%s\n' "$trimmed"
+    done
+    return 0
 }
 
 # -----------------------------------------------------------------------------
