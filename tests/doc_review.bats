@@ -123,12 +123,17 @@ teardown() {
     run get_git_changes "1.0.0"
 
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Add recipe-backed workflow definitions and recipe introspection support"* ]]
+    # The auto-commit is described, not dropped — that is what this test has
+    # always been for. The docs/ and tests/ arms carry it.
+    [[ "$output" == *"Update documentation and examples"* ]]
     [[ "$output" == *"Add regression coverage for the changed CLI workflow"* ]]
     [[ "$output" != *"Auto-commit before Manifest process"* ]]
+    # §78: no product claim inferred from a path. Touching modules/recipe/ is
+    # not evidence that recipe support was added in this release.
+    [[ "$output" != *"Add recipe-backed workflow definitions"* ]]
 }
 
-@test "auto-commit GitHub release and preview work gets smart release notes" {
+@test "§78 no product claim is inferred from a path: module files get no feature bullet" {
     git tag v0.9.0
     mkdir -p modules/workflow modules/core examples tests
     echo "# orchestrator" > modules/workflow/manifest-orchestrator.sh
@@ -141,10 +146,29 @@ teardown() {
     run get_git_changes "1.0.0"
 
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Add GitHub Release publishing support"* ]]
-    [[ "$output" == *"Add smart ship preview summaries"* ]]
+    # These two sentences were emitted on the evidence of a FILENAME. Touching
+    # the orchestrator is not "Add GitHub Release publishing support", and a
+    # changelog that says so is stale the moment it is written.
+    [[ "$output" != *"Add GitHub Release publishing support"* ]]
+    [[ "$output" != *"Add smart ship preview summaries"* ]]
+    # Control: what a path CAN evidence is still said.
     [[ "$output" == *"Update documentation and examples"* ]]
     [[ "$output" == *"Add regression coverage for the changed CLI workflow"* ]]
+}
+
+@test "§78 a change with no describable path gets the honest count, not a feature claim" {
+    git tag v0.9.0
+    mkdir -p modules/workflow modules/core
+    echo "# orchestrator" > modules/workflow/manifest-orchestrator.sh
+    echo "# ship" > modules/core/manifest-ship.sh
+    git add modules/workflow/manifest-orchestrator.sh modules/core/manifest-ship.sh
+    git commit -q -m "Auto-commit before Manifest process (2 files: modules/workflow/manifest-orchestrator.sh, ...) [TS: 2026-05-08 12:00:00 UTC]"
+
+    run get_git_changes "1.0.0"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Update 2 files before release"* ]]
+    [[ "$output" != *"Add GitHub Release publishing support"* ]]
 }
 
 @test "README change in a plain repo gets a repo-neutral bullet, not Manifest product copy" {

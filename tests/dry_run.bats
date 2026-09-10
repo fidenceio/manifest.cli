@@ -159,7 +159,12 @@ teardown() {
     echo "$output" | grep -q "Current version:  1.2.3"
     echo "$output" | grep -q "Next version:     1.3.0"
     echo "$output" | grep -q "What's new"
-    echo "$output" | grep -q "Added smart ship preview summaries"
+    # §78: the preview summarises what a path can EVIDENCE, never a product
+    # claim inferred from a filename. Touching modules/core/manifest-ship.sh
+    # used to print "Added smart ship preview summaries" here whatever the
+    # change actually was, and the preview shares one bullet source with the
+    # changelog, so the same sentence shipped in both.
+    refute grep -q "Added smart ship preview summaries" <<<"$output"
     echo "$output" | grep -q "Updated documentation and examples"
     echo "$output" | grep -q "Working tree: 5 pending file(s) would be auto-committed"
     echo "$output" | grep -q "VERSION: update 1.2.3 -> 1.3.0"

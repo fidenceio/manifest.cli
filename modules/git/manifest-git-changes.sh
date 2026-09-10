@@ -65,36 +65,37 @@ manifest_git_changes_dirty_summary() {
     printf '%dm+%du' "$modified" "$untracked"
 }
 
+# Describe a set of changed files as changelog bullets.
+#
+# WHAT THIS MAY AND MAY NOT SAY (§78, neutralized 2026-09-10).
+#
+# A bullet here is derived from PATHS ALONE. That supports saying which area of
+# a repository was touched; it cannot support saying what was accomplished. The
+# table used to do the second: touching three module files emitted "Add GitHub
+# Release publishing support", touching one emitted "Add smart ship preview
+# summaries", and so on — frozen product claims asserted on the evidence of a
+# filename. They were wrong whenever the change was something else, which is
+# most of the time, and they were the single largest source of stale changelog
+# text in the tool. They also reached the ship PREVIEW through
+# manifest_ship_preview_summary, so a dry-run described a release that was not
+# happening. All five are deleted.
+#
+# What remains describes only what a path can actually evidence — that
+# documentation, completions, tests or the changelog were touched — and must
+# stay repo-neutral: these fire on ANY repo the CLI ships, not just this one
+# (RED-008). The count fallback below is the honest general case, and a release
+# whose bullets are only these is telling the reader to go and write better
+# ones. `docs.handoff` (§78) is the supported way to do that.
 manifest_git_changes_bullets_for_files() {
     local files="$1"
     local emitted=""
-    local github_release_changed=false
     [[ -n "$files" ]] || return 0
 
-    if _manifest_git_changes_files_match "$files" '(^|/)modules/workflow/manifest-orchestrator\.sh$|(^|/)modules/core/manifest-yaml\.sh$|(^|/)modules/core/manifest-config\.sh$'; then
-        github_release_changed=true
-        _manifest_git_changes_emit_once "Add GitHub Release publishing support" emitted
-    fi
-    if _manifest_git_changes_files_match "$files" '(^|/)modules/core/manifest-ship\.sh$'; then
-        _manifest_git_changes_emit_once "Add smart ship preview summaries" emitted
-    fi
-    # This pattern fires on almost ANY repo the CLI ships (nearly every repo
-    # has a README.md or docs/), so the bullet must stay repo-neutral — no
-    # Manifest-specific product wording (RED-008).
     if _manifest_git_changes_files_match "$files" '(^|/)docs/|(^|/)README\.md$|(^|/)examples/'; then
         _manifest_git_changes_emit_once "Update documentation and examples" emitted
     fi
-    if [[ "$github_release_changed" != "true" ]] && _manifest_git_changes_files_match "$files" '(^|/)modules/recipe/|(^|/)recipes/builtin/|(^|/)docs/contracts/recipe\.schema\.json$'; then
-        _manifest_git_changes_emit_once "Add recipe-backed workflow definitions and recipe introspection support" emitted
-    fi
-    if _manifest_git_changes_files_match "$files" '(^|/)modules/core/manifest-core\.sh$'; then
-        _manifest_git_changes_emit_once "Wire first-class CLI commands to inspectable built-in recipe definitions" emitted
-    fi
     if _manifest_git_changes_files_match "$files" '(^|/)completions/'; then
         _manifest_git_changes_emit_once "Update shell completions for new command options" emitted
-    fi
-    if _manifest_git_changes_files_match "$files" '(^|/)scripts/run-tests-container\.sh$'; then
-        _manifest_git_changes_emit_once "Add a containerized test runner for Manifest CLI" emitted
     fi
     if _manifest_git_changes_files_match "$files" '(^|/)tests/'; then
         _manifest_git_changes_emit_once "Add regression coverage for the changed CLI workflow" emitted
