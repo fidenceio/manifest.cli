@@ -1,0 +1,34 @@
+# Driver detection census (TRACKER §78) — MEASURED, never inferred.
+#
+# One row per assistant that has actually been observed driving this CLI. The
+# rule the tracker states and this file enforces: "establish by running, not by
+# reading, what each supported assistant actually exports". A named verdict in
+# modules/system/manifest-driver.sh requires a row here first.
+#
+# tests/driver_detection.bats iterates these rows as positive controls: it sets
+# ENV_PRESENT in a scrubbed environment and asserts EXPECTED_VERDICT. It also
+# asserts the row count is non-zero, so an emptied fixture fails loudly rather
+# than passing vacuously.
+#
+# ENV_PRESENT is `;`-separated. A NAME=VALUE pair is recorded only where the
+# value is not secret and is itself evidence (an entrypoint, a version string);
+# otherwise the bare NAME is recorded and the test sets it to 1.
+#
+# Columns:
+#   ASSISTANT  HOST  DATE  OS  PS_FLAVOUR  ENV_PRESENT  ANCESTRY  TTY_IN/OUT  EXPECTED_VERDICT  RECORDED_BY
+#
+# ANCESTRY is the `comm` chain from the CLI's own shell outward, `,`-separated.
+# TTY_IN/OUT is yes|no for stdin and stdout. Both are context for the next
+# person: only ENV_PRESENT and EXPECTED_VERDICT are asserted.
+#
+# ABSENT SIGNALS MATTER TOO, and are recorded here because a candidate that
+# turns out never to be set is what makes a detector work in a demo and fail in
+# use. Measured absent on the claude-code row below: TERM_PROGRAM (§78 listed it
+# as a candidate; it is not exported), and both stdin and stdout are NOT
+# terminals — so the CLI's existing `[ ! -t 0 ]` check already classifies an
+# agent-driven ship as non-interactive, and the interactive-human path can never
+# fire under an agent. VSCODE_* is present but identifies the host EDITOR, not
+# the driver: a human typing in the same terminal has it too, so it is never
+# treated as agent evidence.
+ASSISTANT	HOST	DATE	OS	PS_FLAVOUR	ENV_PRESENT	ANCESTRY	TTY_IN/OUT	EXPECTED_VERDICT	RECORDED_BY
+claude-code	vscode	2026-09-10	Darwin	bsd	CLAUDECODE=1;CLAUDE_CODE_ENTRYPOINT=claude-vscode;AI_AGENT=claude-code_2-1-266_agent;CLAUDE_CODE_CHILD_SESSION=1;CLAUDE_PID;CLAUDE_AGENT_SDK_VERSION;VSCODE_PID	bash,zsh,claude,Code Helper (Plugin),Code	no/no	claude-code	session 2026-09-10

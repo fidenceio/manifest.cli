@@ -278,3 +278,23 @@ EOF
     grep -F 'CLAUDE.md' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
     grep -F 'Mutating commands preview by default.' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
 }
+
+@test "the agent catalog's exit codes match COMMAND_REFERENCE, and name the pause" {
+    # The catalog is a hand-maintained literal in the installer that nothing
+    # under modules/ reads, so it drifts silently (§72). An agent that reads a
+    # non-zero status as a failed release will try to recover from a pause that
+    # left nothing to recover — hence a guard rather than a comment.
+    local documented catalogued
+    documented="$(grep -oE '^\| `[0-9]+` \|' "$TEST_REPO_ROOT/docs/COMMAND_REFERENCE.md" \
+        | grep -oE '[0-9]+' | sort -n | tr '\n' ' ')"
+    catalogued="$(awk '/"exit_codes": \{/,/\}/' "$TEST_REPO_ROOT/install-cli.sh" \
+        | grep -oE '"[0-9]+":' | grep -oE '[0-9]+' | sort -n | tr '\n' ' ')"
+    [ -n "$documented" ]
+    [ "$documented" = "$catalogued" ]
+
+    # The handoff exit code is named as a number, not only in prose.
+    grep -F '"handoff_exit_code": 4' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
+    # And the hint tells an agent what to DO about it.
+    grep -F 'Exit code 4 means the release paused for you' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
+    grep -F 're-run the identical command' "$TEST_REPO_ROOT/install-cli.sh" >/dev/null
+}

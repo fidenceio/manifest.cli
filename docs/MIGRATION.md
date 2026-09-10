@@ -75,19 +75,28 @@ it: `release.gate` (or the variable `MANIFEST_CLI_RELEASE_GATE`).
 | `none` | Nothing. Prints a loud warning and records the bypass in the audit log. |
 
 For `local-tests`, Manifest looks for `./scripts/run-tests.sh`. Point it somewhere else
-if your project differs:
+if your project differs — in a layer you own, because `gate_command` names a program to
+run and a committed config may not do that (see the next section). The policy is shared;
+the command is yours:
 
 ```yaml
-# manifest.config.yaml
+# manifest.config.yaml — committed and shared: the policy
 release:
   gate: "local-tests"
+```
+
+```yaml
+# manifest.config.local.yaml — gitignored and yours: the command
+release:
   gate_command: "pytest -q"     # or "go test ./...", "npm test", "make test"
 ```
 
 **One sharp edge worth knowing.** If you choose `local-tests` but Manifest cannot work
-out a test command, it warns and continues — it cannot run tests that do not exist. That
-means `local-tests` alone is not a guarantee. If you need the gate to be able to *stop* a
-release, either set `release.gate_command` explicitly or use `remote-ci` / `all`.
+out a test command, it refuses to release rather than publish unverified:
+*"Release gate (local-tests): no test command found — refusing to release unverified."*
+The ways out are to set `release.gate_command` in a layer you own, to add
+`./scripts/run-tests.sh`, or to choose `release.gate: none` deliberately — which is
+recorded in the audit log and disclosed on every ship.
 
 **Upgrading a pipeline that already worked.** If your automation previously released
 without running tests and you are not ready to change that, set `release.gate: none`

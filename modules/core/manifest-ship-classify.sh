@@ -18,6 +18,12 @@
 # these functions; only their messages differ.
 #
 # CLASSIFICATION MODEL
+#   paused          the ship stopped ON PURPOSE for a documentation handoff
+#                   (§78). Not a failure: nothing was committed, tagged or
+#                   pushed, and the uncommitted files are the ones the driver
+#                   was asked to write — so every destructive suggestion is
+#                   wrong here, including the "only the ship-generated files"
+#                   one below, which names CHANGELOG.md.
 #   post-push       push succeeded and the failed step runs after the push —
 #                   the release is public; rollback advice is forbidden.
 #   partial-push    a multi-remote push succeeded on some remotes and failed
@@ -38,6 +44,14 @@
 # the only definition site; call sites must not re-derive it.
 manifest_ship_step_is_post_push() {
     [[ "${1:-}" =~ ^(homebrew_|github_release$|completion_clean$) ]]
+}
+
+# 0 if the step is a deliberate PAUSE rather than a failure (§78). THE pause
+# step set — the only definition site, for the same reason the post-push set is.
+# A pause has no wreckage: nothing is committed, tagged or pushed, and the files
+# in the tree are the ones the driver was asked to write.
+manifest_ship_step_is_pause() {
+    [[ "${1:-}" =~ ^(doc_handoff$|handoff_verify$) ]]
 }
 
 # Classify a commits-created count. Echoes one of:
@@ -69,6 +83,14 @@ manifest_ship_recovery_mode() {
     local failure_step="${2:-}"
     local commits_created="${3:-}"
 
+    # A pause outranks every other classification, including a successful push
+    # (which a pause cannot have reached). Checked first so that no future
+    # reordering can let a pause fall through to advice that would tell the
+    # driver to discard the documentation it was asked to write.
+    if manifest_ship_step_is_pause "$failure_step"; then
+        echo "paused"
+        return 0
+    fi
     if [[ "$push_status" == "success" ]] && manifest_ship_step_is_post_push "$failure_step"; then
         echo "post-push"
         return 0

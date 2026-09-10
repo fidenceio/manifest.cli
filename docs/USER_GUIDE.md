@@ -195,6 +195,70 @@ everything into the first commit, set `git.allow_gate_drift: true`
 (`MANIFEST_CLI_GIT_ALLOW_GATE_DRIFT`). Manifest's own `.manifest-cli/` bookkeeping is
 always exempt, because the gate writes its results there while running.
 
+### Letting whoever is driving finish the documentation
+
+Manifest writes a `CHANGELOG.md` entry from your commit subjects. That is an honest
+summary of *what was committed*, and it is rarely a good summary of *what changed for a
+reader*. `docs.handoff` lets a person — or the AI agent already driving your terminal —
+write the real thing before the release commit is made, and then checks the result.
+
+```yaml
+# manifest.config.yaml — safe to commit: it names no program to run
+docs:
+  handoff: "auto"     # off (default) | auto | always
+```
+
+- **`off`** is the default and changes nothing.
+- **`auto`** pauses when Manifest detects an AI coding agent driving the session. It
+  never pauses in CI, even when an agent is running there, because a pipeline that
+  stops to wait for someone is broken rather than careful.
+- **`always`** pauses on every apply, whoever is driving. This is the setting to use if
+  you want the checkpoint for yourself.
+
+When it pauses, the ship exits `4` — not a failure, and nothing has been committed,
+tagged or pushed. `VERSION` and a `CHANGELOG.md` skeleton are written and uncommitted,
+and a brief is placed under `.git/`, whose path is printed. The brief carries the
+release facts, the real commit subjects, the changed files, the exact heading to keep,
+and a scan of every tracked markdown line still naming the previous version or holding a
+`vNEXT`-style placeholder. Edit the documentation, then re-run the identical command.
+
+The re-run **does not regenerate `CHANGELOG.md`** — your text is what gets committed.
+Everything else Manifest owns, including the managed version blocks in `README.md` and
+`docs/INDEX.md`, is still regenerated, so leave those alone. Four things are verified
+before anything is committed:
+
+| Rule | What it checks |
+| ---- | -------------- |
+| R1 | The `## [X.Y.Z] - <date>` heading is present exactly once, with the release date recorded when the handoff was written |
+| R2 | That section has at least one bullet |
+| R3 | No version placeholder is left in tracked markdown |
+| R4 | The section contains no assistant boilerplate ("As an AI", "Sure, here", …) |
+
+If a rule fails, the ship stops again at `4`, names every rule that failed, and commits
+nothing. Fix and re-run.
+
+**Manifest never runs a program for this.** Detection decides one thing — whether `auto`
+pauses — and nothing else; it is not a safety control, and it cannot select something to
+execute. That is why `docs.handoff` is safe to commit while `docs.review.command` is
+not. If you would rather hand the work to a *headless* agent instead, that is the
+release-notes provider, which you configure yourself from a layer you own; see
+`examples/release-notes-providers/`.
+
+### Documentation review and release-notes providers
+
+Two related hooks, both opt-in, and both configured **only** from a layer you own — your
+global config, a `*.local.yaml`, or the environment. A committed `manifest.config.yaml`
+naming either is refused with the key and the layer it came from, because a committed
+config travels with a clone.
+
+| Key | What it does |
+| --- | ------------ |
+| `docs.review.provider` / `docs.review.command` | Runs your program before each release commit, with a written report; it can supply the commit subject and body |
+| `docs.release_notes.provider` / `docs.release_notes.command` | Runs your program to write the release-note bullets, replacing Manifest's generated list |
+
+Both are called with plain arguments and their output is validated before use. See
+`examples/release-notes-providers/example-provider.sh` for the contract.
+
 ## Version Ownership
 
 Manifest writes exactly one version file: `VERSION`.

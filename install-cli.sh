@@ -1045,6 +1045,15 @@ EOF
   "safe_by_default": true,
   "preview_flags": ["--dry-run"],
   "apply_flags": ["-y", "--yes"],
+  "exit_codes": {
+    "0": "success, or a plan was printed",
+    "1": "error; nothing was released",
+    "2": "partial fleet ship: some members released, then a later step failed",
+    "3": "protective skip; a safety guard refused something destructive",
+    "4": "paused for a documentation handoff. NOT a failure and nothing to undo: read the printed brief, finish the docs, re-run the identical command",
+    "10": "a plan was printed and no consent was given (preview.exit_code=distinct)"
+  },
+  "handoff_exit_code": 4,
   "commands": [
     "manifest doctor",
     "manifest status repo",
@@ -1092,6 +1101,26 @@ Manifest CLI is available as \`manifest\`. Prefer first-class commands such as
 Mutating commands preview by default. Use \`--dry-run\` for explicit preview and
 \`-y\` or \`--yes\` to apply. Full command reference:
 $MANIFEST_CLI_INSTALL_LOCATION/docs/COMMAND_REFERENCE.md
+
+## Exit code 4 means the release paused for you — it is NOT a failure
+
+If \`manifest ship repo …\` exits 4, the repository has \`docs.handoff\` enabled.
+Nothing was committed, tagged or pushed. Manifest bumped \`VERSION\`, wrote a
+\`CHANGELOG.md\` skeleton, and stopped so that whoever is driving can write the
+real documentation.
+
+Do this, in order:
+
+1. Read the brief. Its path is printed, under \`.git/manifest-ship/handoff/\`.
+2. Rewrite the bullets under the \`## [X.Y.Z] - <date>\` heading in
+   \`CHANGELOG.md\`. Keep that heading exactly as written, date included.
+3. Fix anything the brief's stale scan lists — old version strings, leftover
+   \`vNEXT\` placeholders.
+4. Re-run the identical command. It verifies your edits, then commits, tags and
+   pushes. It does NOT regenerate the changelog: your text is what ships.
+
+Do not treat exit 4 as a broken release and do not try to recover from it: there
+is nothing to undo. Re-running the same command is the whole remedy.
 EOF
 
     cp "$agents_hint" "$claude_hint"

@@ -1207,6 +1207,10 @@ set_default_configuration() {
     export MANIFEST_CLI_RELEASE_NOTES_PROVIDER="${MANIFEST_CLI_RELEASE_NOTES_PROVIDER:-local}"
     export MANIFEST_CLI_RELEASE_NOTES_COMMAND="${MANIFEST_CLI_RELEASE_NOTES_COMMAND:-}"
     export MANIFEST_CLI_RELEASE_NOTES_REQUIRED="${MANIFEST_CLI_RELEASE_NOTES_REQUIRED:-false}"
+    # off | auto | always. Default off: pausing a ship that used to run to
+    # completion is a behaviour change, so it is asked for, never inherited
+    # by upgrading (§78).
+    export MANIFEST_CLI_DOCS_HANDOFF="${MANIFEST_CLI_DOCS_HANDOFF:-off}"
     
     # File and directory names
     export MANIFEST_CLI_README_FILE="${MANIFEST_CLI_README_FILE:-README.md}"

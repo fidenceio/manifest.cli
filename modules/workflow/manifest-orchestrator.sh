@@ -34,6 +34,77 @@ _emit_ship_status_file() {
     done
 }
 
+# Report a ship that stopped ON PURPOSE for a documentation handoff (§78).
+#
+# Deliberately NOT emit_ship_failure_report, and the distinction is the point:
+# that report exists to help someone recover from a half-done release, so it
+# offers rollback, `git reset --hard`, or `git checkout HEAD -- VERSION
+# CHANGELOG.md README.md docs/INDEX.md` depending on how far the ship got. Every
+# one of those would tell the driver to throw away the documentation it has just
+# been asked to write. A pause has no wreckage to clean up: nothing was
+# committed, tagged or pushed, and the only next step is to finish the docs and
+# re-run.
+#
+#   $1 step  $2 version  $3 increment  $4 publish_release  $5 outcome
+#   $6 start_sha — HEAD when the ship began, so this report can state what
+#                  actually happened instead of asserting "nothing".
+emit_ship_pause_report() {
+    local step="$1" version="$2" increment="$3" publish_release="$4" outcome="${5:-paused}"
+    local start_sha="${6:-}"
+    local brief="" replay="manifest ship repo $increment"
+    [ "$publish_release" != "true" ] && replay="$replay --local"
+    replay="$replay -y"
+
+    if declare -F manifest_handoff_pending >/dev/null 2>&1; then
+        brief="$(manifest_handoff_pending "$MANIFEST_CLI_PROJECT_ROOT" | cut -f4)"
+    fi
+
+    # What exists NOW, measured — not asserted. A first ship into a repo that
+    # was missing scaffolding runs the pre-release auto-commit before this
+    # point, so "nothing was committed" would be a plain falsehood, and a
+    # report that lies about the tree is the defect this whole feature exists
+    # to remove. Count the commits this run actually made.
+    local commits_made=0
+    if [ -n "$start_sha" ]; then
+        commits_made="$(git -C "${MANIFEST_CLI_PROJECT_ROOT:-$PWD}" rev-list --count "${start_sha}..HEAD" 2>/dev/null || echo 0)"
+        case "$commits_made" in ''|*[!0-9]*) commits_made=0 ;; esac
+    fi
+
+    echo ""
+    if [ "$outcome" = "not-verified" ]; then
+        echo "⏸️  Documentation handoff — not complete for $version"
+        echo "   No release commit, tag or push was made; your edits are untouched on disk."
+    else
+        echo "⏸️  Documentation handoff — release paused at $version"
+        echo "   No release commit, tag or push was made. VERSION and the CHANGELOG skeleton"
+        echo "   are written and uncommitted, waiting for the documentation to be finished."
+    fi
+    if [ "$commits_made" -gt 0 ]; then
+        echo "   already committed by this run: $commits_made pre-release auto-commit(s) of files that"
+        echo "   were pending before the ship began. The release commit itself has NOT been made."
+    fi
+    [ -n "$brief" ] && echo "   brief:    $brief"
+    echo "   continue: $replay"
+    echo "   abandon:  git checkout HEAD -- VERSION CHANGELOG.md && rm -rf \"\$(git rev-parse --git-dir)/manifest-ship/handoff\""
+    echo ""
+
+    _emit_ship_status_file \
+        result "paused" \
+        paused_step "$step" \
+        version "$version" \
+        tag "none" \
+        push_status "not_attempted" \
+        homebrew_status "not_applicable" \
+        commits_created "$commits_made" \
+        brief "${brief:-none}" \
+        driver "$(declare -F manifest_driver_describe >/dev/null 2>&1 && manifest_driver_describe || echo unknown)"
+
+    if declare -F manifest_ship_log_end >/dev/null 2>&1; then
+        manifest_ship_log_end "paused" "$step"
+    fi
+    return 0
+}
+
 # Run one ship step, recording its boundary in the per-run diagnostic log
 # (§5.6). Captures the step's stderr to a scratch file so it can be appended to
 # the log (redacted by manifest_ship_log_step) for forensic replay, then
@@ -1537,7 +1608,15 @@ manifest_ship_run_followup_patch() {
     echo ""
     echo "🔁 Running follow-up patch under the upgraded Manifest CLI..."
     echo "   Reason: canonical CLI ships may upgrade release behavior mid-run; the follow-up patch exercises the newly installed version once."
-    MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE=1 manifest_exec_manifest ship repo patch -y
+    # docs.handoff is forced off for the follow-up (§78). This call is the LAST
+    # statement of the workflow, so its status becomes the whole ship's — a
+    # pause here would return exit 4 from a release that had already been
+    # committed, tagged, pushed and published, and the audit event would record
+    # a completed release as paused. The follow-up is also not a release anyone
+    # writes documentation for: it exists to exercise the newly installed
+    # binary once.
+    MANIFEST_CLI_SHIP_FOLLOWUP_PATCH_ACTIVE=1 MANIFEST_CLI_DOCS_HANDOFF=off \
+        manifest_exec_manifest ship repo patch -y
 }
 
 # Probes whether the current repo is in a resume-eligible state. Pure function:
@@ -1835,7 +1914,12 @@ manifest_ship_workflow() {
     echo "   working folder:    $MANIFEST_CLI_PROJECT_ROOT"
     echo "   docs folder:       $(get_docs_folder "$MANIFEST_CLI_PROJECT_ROOT")"
     echo "   archive folder:    $(get_zarchive_dir)"
-    echo "   previous version:  $(cat "$MANIFEST_CLI_PROJECT_ROOT/VERSION" 2>/dev/null || echo 'unknown')"
+    # Captured, not just displayed: the documentation handoff's stale scan needs
+    # to know which version string the docs are moving AWAY from, and by the
+    # time it runs VERSION already holds the new one.
+    local workflow_previous_version
+    workflow_previous_version="$(cat "$MANIFEST_CLI_PROJECT_ROOT/VERSION" 2>/dev/null || echo 'unknown')"
+    echo "   previous version:  $workflow_previous_version"
     echo ""
 
     # Ensure required files exist before proceeding
@@ -1962,6 +2046,67 @@ manifest_ship_workflow() {
             ;;
     esac
 
+    # A documentation handoff (§78) left a brief behind: this run either
+    # RESUMES it or must refuse. Decided here, before the auto-commit, for the
+    # same reason the probe above runs here — the sweep would commit the bumped
+    # VERSION and the driver's edits under "Auto-commit before Manifest
+    # process", and the bump below would then run again from the swept value,
+    # skipping a version (the §76 shape).
+    local handoff_pending=false _ho_rc=0
+    if declare -F manifest_handoff_pending >/dev/null 2>&1; then
+        local _ho_pending _ho_version _ho_increment
+        _ho_pending="$(manifest_handoff_pending "$MANIFEST_CLI_PROJECT_ROOT")"
+        if [ -n "$_ho_pending" ]; then
+            _ho_version="${_ho_pending%%$'\t'*}"
+            _ho_increment="$(printf '%s' "$_ho_pending" | cut -f2)"
+            if [ "$resume_in_place" = "true" ] && [ "$_ho_version" = "$new_version" ]; then
+                handoff_pending=true
+                echo "↻ Resuming the documentation handoff for ${_ho_version}."
+                local _ho_prior_log _ho_prior_step
+                if declare -F manifest_ship_log_latest >/dev/null 2>&1; then
+                    _ho_prior_log="$(manifest_ship_log_latest 2>/dev/null || true)"
+                    if [ -n "$_ho_prior_log" ] && declare -F manifest_ship_log_last_step >/dev/null 2>&1; then
+                        _ho_prior_step="$(manifest_ship_log_last_step "$_ho_prior_log" 2>/dev/null || true)"
+                        [ -n "$_ho_prior_step" ] && echo "   prior run stopped at: $_ho_prior_step"
+                    fi
+                fi
+                echo ""
+            else
+                local _ho_replay="manifest ship repo ${_ho_increment:-patch}"
+                [ "$publish_release" != "true" ] && _ho_replay="$_ho_replay --local"
+                _ho_replay="$_ho_replay -y"
+                local _ho_clear="rm -rf \"\$(git rev-parse --git-dir)/manifest-ship/handoff\""
+                log_error "A documentation handoff for ${_ho_version} is pending, and this run would not resume it."
+                # WHICH advice is followable depends on why the resume state is
+                # gone, and telling someone to re-run the command that just
+                # refused is worse than saying nothing. The common case is a
+                # driver that committed its own doc edits: VERSION is no longer
+                # dirty, so the resume signal can never come back and clearing
+                # the brief is the only way forward.
+                # The discriminator is whether the PENDING handoff is still
+                # resumable at all — not whether THIS run resumes it. A `minor`
+                # run against a pending `patch` is refusable with followable
+                # advice ("re-run as patch"), because VERSION is still dirty at
+                # the pending version. Once that is no longer true the handoff
+                # is unreachable and only clearing it moves forward.
+                local _ho_disk_version _ho_head_version
+                _ho_disk_version="$({ tr -d '[:space:]' < "$MANIFEST_CLI_PROJECT_ROOT/VERSION"; } 2>/dev/null || true)"
+                _ho_head_version="$(git -C "$MANIFEST_CLI_PROJECT_ROOT" show HEAD:VERSION 2>/dev/null | tr -d '[:space:]' || true)"
+                if [ "$_ho_disk_version" != "$_ho_version" ] || [ "$_ho_head_version" = "$_ho_version" ]; then
+                    log_error "VERSION is no longer bumped-and-uncommitted, so that handoff cannot be resumed —"
+                    log_error "its work is either already committed or has been reverted."
+                    log_error "Clear it and ship normally:  ${_ho_clear} && ${_ho_replay}"
+                else
+                    log_error "This run is a '${increment_type}' and the pending handoff is a '${_ho_increment:-patch}'."
+                    log_error "Re-run exactly: ${_ho_replay}"
+                    log_error "Or abandon it:  git checkout HEAD -- VERSION CHANGELOG.md && ${_ho_clear}"
+                fi
+                log_error "Your own edits since the pause are yours to keep or revert."
+                return 1
+            fi
+        fi
+    fi
+
     # CI verdict pre-flight (§9.27(a)): before the local gate — and before any
     # mutation — consult origin's latest completed `tests` run. Publish mode
     # only: a --local prep pushes nothing, so origin's CI has nothing to bind.
@@ -2070,23 +2215,45 @@ manifest_ship_workflow() {
     
     # Generate documentation using new architecture
     local timestamp=$(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S UTC')
-    echo "📚 Generating documentation and release notes..."
-    if ! _manifest_ship_step "doc_generation" manifest_docs_generate "$new_version" "$timestamp" "$increment_type"; then
+    #
+    # On a documentation-handoff resume the CHANGELOG — and ONLY the CHANGELOG
+    # — is left alone (§78). The guard is load-bearing rather than an
+    # optimisation: prepend_root_changelog_entry deliberately DELETES an
+    # existing `## [<same version>]` section and re-inserts its own, which is
+    # what makes re-shipping a version idempotent, so regenerating it here
+    # would silently overwrite the driver's work and commit the skeleton.
+    #
+    # Everything else still generates. Skipping the whole step was the first
+    # cut and it was wrong in a way the handoff's own R5 caught: the README and
+    # docs/INDEX.md managed version blocks are Manifest's output, not the
+    # driver's, so a resume that skipped them shipped blocks still naming the
+    # PREVIOUS version — and then failed its own verification for it, on every
+    # re-run, in any repo carrying those markers.
+    if [ "$handoff_pending" = "true" ]; then
+        echo "📚 Generating documentation (keeping your CHANGELOG edits)..."
+    else
+        echo "📚 Generating documentation and release notes..."
+    fi
+    if ! MANIFEST_CLI_DOCS_GENERATE_CHANGELOG="$([ "$handoff_pending" = "true" ] && echo false || echo "${MANIFEST_CLI_DOCS_GENERATE_CHANGELOG:-true}")" \
+            _manifest_ship_step "doc_generation" manifest_docs_generate "$new_version" "$timestamp" "$increment_type"; then
         log_error "Document generation aborted; aborting ship workflow."
         emit_ship_failure_report "doc_generation" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
         return 1
     fi
     echo "✅ Documentation generated successfully"
     echo ""
-    
-    # Archive previous version documentation to zArchive (now that new version is created)
-    echo "📁 Archiving previous version documentation..."
-    if ! _manifest_ship_step "archive_sweep" main_cleanup "$new_version" "$timestamp"; then
-        log_error "Archive sweep aborted; aborting ship workflow."
-        emit_ship_failure_report "archive_sweep" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
-        return 1
+
+    # Archive previous version documentation to zArchive. Skipped on a resume
+    # for the smaller reason that the first run already did it.
+    if [ "$handoff_pending" != "true" ]; then
+        echo "📁 Archiving previous version documentation..."
+        if ! _manifest_ship_step "archive_sweep" main_cleanup "$new_version" "$timestamp"; then
+            log_error "Archive sweep aborted; aborting ship workflow."
+            emit_ship_failure_report "archive_sweep" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+            return 1
+        fi
+        echo ""
     fi
-    echo ""
     
     # Final markdown validation and fixing (before commit)
     echo "🔍 Final markdown validation and fixing..."
@@ -2097,6 +2264,33 @@ manifest_ship_workflow() {
     fi
     echo ""
     
+    # Documentation handoff (§78). Placed here deliberately: after the markdown
+    # validation above, so what the driver is shown and what the re-run verifies
+    # is exactly what the release commit below will carry; and before that
+    # commit, so a pause leaves nothing committed, tagged or pushed.
+    if [ "$handoff_pending" = "true" ]; then
+        if ! _manifest_ship_step "handoff_verify" manifest_handoff_verify "$new_version"; then
+            emit_ship_pause_report "handoff_verify" "$new_version" "$increment_type" "$publish_release" "not-verified" "$workflow_start_sha"
+            return "${MANIFEST_CLI_SHIP_HANDOFF_PAUSED_EXIT_CODE:-4}"
+        fi
+        echo ""
+    elif declare -F manifest_handoff_should_pause >/dev/null 2>&1 && \
+         { manifest_handoff_should_pause; _ho_rc=$?; [ "$_ho_rc" -ne 2 ] || { \
+             log_error "Refusing to release with an unreadable docs.handoff policy; nothing was committed."; \
+             return 1; }; [ "$_ho_rc" -eq 0 ]; }; then
+        local _ho_previous_version="$workflow_previous_version"
+        local _ho_local="true"
+        [ "$publish_release" = "true" ] && _ho_local="false"
+        if ! _manifest_ship_step "doc_handoff" manifest_handoff_pause \
+                "$new_version" "$_ho_previous_version" "$timestamp" "$increment_type" "$_ho_local"; then
+            log_error "Documentation handoff could not be prepared; aborting before the release commit."
+            emit_ship_failure_report "doc_handoff" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+            return 1
+        fi
+        emit_ship_pause_report "doc_handoff" "$new_version" "$increment_type" "$publish_release" "paused" "$workflow_start_sha"
+        return "${MANIFEST_CLI_SHIP_HANDOFF_PAUSED_EXIT_CODE:-4}"
+    fi
+
     # Commit version changes
     echo "💾 Committing version changes..."
     local pre_version_commit_sha
@@ -2111,6 +2305,12 @@ manifest_ship_workflow() {
         log_error "Version commit did not advance HEAD (pre=${pre_version_commit_sha:-unknown} post=${workflow_version_commit_sha:-unknown}); aborting ship workflow."
         emit_ship_failure_report "version_commit" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
         return 1
+    fi
+    # The handoff is complete once its work is committed, and not before: the
+    # state is cleared only after HEAD has been confirmed to advance, so a
+    # refused commit leaves the brief in place for the next attempt.
+    if [ "$handoff_pending" = "true" ] && declare -F manifest_handoff_clear >/dev/null 2>&1; then
+        manifest_handoff_clear "$MANIFEST_CLI_PROJECT_ROOT"
     fi
     echo ""
 

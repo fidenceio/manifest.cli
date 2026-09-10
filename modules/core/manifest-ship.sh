@@ -312,16 +312,51 @@ export -f manifest_ship_require_version_file
 
 # preview and apply so the two can be compared (and so the future apply-event
 # audit log can record exactly which plan was applied).
-manifest_ship_repo_plan_fingerprint() {
+# The version pair this run will move BETWEEN, echoed as "current<TAB>next".
+#
+# ONE derivation for the plan fingerprint and the preview block, because they
+# disagreed: both read the working VERSION as "current", which is wrong on a
+# tree where a previous run already bumped it and stopped before committing —
+# an interrupted ship, or a paused documentation handoff (§78). The preview then
+# reported 1.2.4 -> 1.2.5 for a run that will actually commit 1.2.4, and staged
+# a fingerprint the apply could never match. On such a tree the committed
+# VERSION is "current" and the working VERSION is "next", which is exactly what
+# manifest_ship_repo_pretag_state already decided.
+_manifest_ship_plan_versions() {
     local increment_type="$1"
-    local local_only="$2"
     local repo_root="${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
-    local current next tag
+    local current next
     # Brace-group the redirection: 2>/dev/null on the bare command silences tr's
     # stderr, not the SHELL's "No such file or directory" for a failed input
     # redirection, so a missing VERSION leaked a raw error path to the terminal.
     current="$({ tr -d '[:space:]' < "$repo_root/VERSION"; } 2>/dev/null || echo "unknown")"
+
+    if declare -F manifest_ship_repo_pretag_state >/dev/null 2>&1; then
+        local state resumed committed
+        state="$(manifest_ship_repo_pretag_state "$increment_type" 2>/dev/null || true)"
+        case "$state" in
+            resume-in-place\|*)
+                resumed="${state#resume-in-place|}"; resumed="${resumed%%|*}"
+                committed="$(git -C "$repo_root" show HEAD:VERSION 2>/dev/null | tr -d '[:space:]' || true)"
+                if [ -n "$resumed" ] && [ -n "$committed" ]; then
+                    printf '%s\t%s' "$committed" "$resumed"
+                    return 0
+                fi
+                ;;
+        esac
+    fi
+
     next="$(manifest_ship_preview_next_version "$increment_type")"
+    printf '%s\t%s' "$current" "$next"
+}
+
+manifest_ship_repo_plan_fingerprint() {
+    local increment_type="$1"
+    local local_only="$2"
+    local current next tag pair
+    pair="$(_manifest_ship_plan_versions "$increment_type")"
+    current="${pair%%$'\t'*}"
+    next="${pair#*$'\t'}"
     if [[ "$next" != "unknown" ]] && declare -F manifest_release_tag_name >/dev/null 2>&1; then
         tag="$(manifest_release_tag_name "$next")"
     else
@@ -334,10 +369,11 @@ manifest_ship_preview_plan() {
     local increment_type="$1"
     local local_only="$2"
     local repo_root="${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
-    local current_version next_version tag_name
+    local current_version next_version tag_name _pair
 
-    current_version="$({ tr -d '[:space:]' < "$repo_root/VERSION"; } 2>/dev/null || echo "unknown")"
-    next_version="$(manifest_ship_preview_next_version "$increment_type")"
+    _pair="$(_manifest_ship_plan_versions "$increment_type")"
+    current_version="${_pair%%$'\t'*}"
+    next_version="${_pair#*$'\t'}"
     if [[ "$next_version" != "unknown" ]] && declare -F manifest_release_tag_name >/dev/null 2>&1; then
         tag_name="$(manifest_release_tag_name "$next_version")"
     elif [[ "$next_version" != "unknown" ]]; then
@@ -369,6 +405,14 @@ manifest_ship_preview_plan() {
     # renders its own plan block and never called the disclosure, so the
     # dry-run stayed silent about exactly what §44(1) set out to disclose.
     manifest_execution_disclose_programs
+    # The documentation handoff changes where this run STOPS, so it is
+    # disclosed beside the programs, in the same preview, by the same renderer
+    # the apply header uses.
+    if declare -F manifest_handoff_disclose >/dev/null 2>&1; then
+        local _ho_replay="manifest ship repo $increment_type"
+        [[ "$local_only" == "true" ]] && _ho_replay="$_ho_replay --local"
+        manifest_handoff_disclose "$_ho_replay -y"
+    fi
     echo ""
 
     echo "What's new"
@@ -383,11 +427,27 @@ manifest_ship_preview_plan() {
             [ -n "$_sync_target" ] && echo "  - ${_sync_target}: sync version field -> $next_version (version.sync)"
         done < <(_manifest_version_sync_targets 2>/dev/null)
     fi
-    echo "  - CHANGELOG.md: prepend the $next_version release entry"
+    # A pending handoff means the CHANGELOG in the tree is the driver's work and
+    # this run will NOT regenerate it — saying otherwise would describe the
+    # opposite of what the apply does.
+    local _ho_pending=""
+    if declare -F manifest_handoff_pending >/dev/null 2>&1; then
+        _ho_pending="$(manifest_handoff_pending "$repo_root")"
+    fi
+    if [ -n "$_ho_pending" ]; then
+        echo "  - CHANGELOG.md: keep the handoff edits for $next_version (NOT regenerated) and verify them"
+    else
+        echo "  - CHANGELOG.md: prepend the $next_version release entry"
+    fi
     echo "  - README.md and docs/INDEX.md: refresh displayed current-version metadata when needed"
     echo "  - docs/: regenerate release documentation and command/reference indexes"
     echo "  - docs/zArchive/: archive superseded release/changelog artifacts according to docs.retain"
     echo "  - Documentation review: inspect changed source/docs before release commits"
+    if [ -n "$_ho_pending" ]; then
+        echo "  - Documentation handoff: verify the edits for $next_version, then commit (brief: $(printf '%s' "$_ho_pending" | cut -f4))"
+    elif declare -F manifest_handoff_should_pause >/dev/null 2>&1 && manifest_handoff_should_pause; then
+        echo "  - Documentation handoff: PAUSE before the release commit (exit ${MANIFEST_CLI_SHIP_HANDOFF_PAUSED_EXIT_CODE:-4}); the CHANGELOG entry is a skeleton for the driver to finish"
+    fi
 }
 
 manifest_ship_repo_identity_notice() {
@@ -578,6 +638,14 @@ manifest_ship_repo() {
     fi
 
     manifest_execution_apply_header
+
+    # Same renderer as the preview's, so an apply cannot silently pause on a
+    # run whose preview said nothing about it.
+    if declare -F manifest_handoff_disclose >/dev/null 2>&1; then
+        local _ho_apply_replay="manifest ship repo $increment_type"
+        [[ "$local_only" == "true" ]] && _ho_apply_replay="$_ho_apply_replay --local"
+        manifest_handoff_disclose "$_ho_apply_replay -y"
+    fi
 
     manifest_plan_render_fingerprint_line "$plan_fingerprint"
     if [[ "$local_only" == "true" ]]; then

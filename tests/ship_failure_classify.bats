@@ -62,6 +62,34 @@ setup() {
     [ "$(manifest_ship_recovery_mode success release_gate 2)" = "rollback" ]
 }
 
+@test "§78 a documentation-handoff pause is classified 'paused', never destructively" {
+    # A pause has no wreckage: nothing committed, tagged or pushed, and the
+    # uncommitted files are the ones the driver was asked to write. Every
+    # destructive mode is wrong here — including checkout-files, which names
+    # CHANGELOG.md, the very file being written.
+    [ "$(manifest_ship_recovery_mode not_attempted doc_handoff 0)" = "paused" ]
+    [ "$(manifest_ship_recovery_mode not_attempted handoff_verify 0)" = "paused" ]
+    # The verdict holds whatever the commit count says, because the pre-release
+    # auto-commit legitimately creates commits before the pause.
+    [ "$(manifest_ship_recovery_mode not_attempted doc_handoff 3)" = "paused" ]
+    [ "$(manifest_ship_recovery_mode not_attempted handoff_verify unknown)" = "paused" ]
+
+    # CONTROL: the neighbouring steps keep their existing classification, so
+    # the new arm cannot be swallowing anything.
+    [ "$(manifest_ship_recovery_mode not_attempted version_commit 0)" = "checkout-files" ]
+    [ "$(manifest_ship_recovery_mode not_attempted version_commit 2)" = "rollback" ]
+    # CONTROL: a step whose name merely contains a pause step's name is not one.
+    [ "$(manifest_ship_recovery_mode not_attempted doc_generation 0)" = "checkout-files" ]
+}
+
+@test "meta: the pause step set is defined only in manifest-ship-classify.sh" {
+    # Same anti-regression as the post-push set below: one definition site, so
+    # a second copy cannot drift and start advising a revert on a pause.
+    run grep -rFl 'doc_handoff$|handoff_verify$' "$TEST_REPO_ROOT/modules"
+    [ "$status" -eq 0 ]
+    [ "$output" = "$TEST_REPO_ROOT/modules/core/manifest-ship-classify.sh" ]
+}
+
 @test "meta: the post-push step set is defined only in manifest-ship-classify.sh" {
     # RED-001 anti-regression: the classifier exists because two divergent
     # copies of this pattern disagreed about completion_clean. Exactly one

@@ -25,6 +25,7 @@ gate yet, read the [Migration Guide](MIGRATION.md) first — this page assumes t
 | `1` | Error: bad arguments, a failed pre-flight check, a declined confirmation, or a failed apply in which nothing was released |
 | `2` | Partial completion of `ship fleet`: one or more member releases applied, then a later step failed — another member, or the fleet-root commit/push. Read the closing block and the recovery report; a retry without `--force-bump` skips members already at their tag. |
 | `3` | Protective skip — a safety guard refused something destructive (for example `uninstall` running under a temporary `HOME`) |
+| `4` | Paused for a documentation handoff (`docs.handoff`). Not a failure: no release commit, tag or push was made. A brief naming what the documentation needs is written under `.git/`, and its path is printed. Edit the documentation and re-run the identical command — that run verifies the edits and continues the release |
 | `10` | A plan was printed and no consent was given — only ever returned when `preview.exit_code` is set to `distinct` |
 
 **Why `0` covers both cases.** A plan is a successful run, so by default it exits `0`
@@ -477,6 +478,8 @@ Frequently used variables:
 | `MANIFEST_CLI_AUTO_CONFIRM` | Allow an ambiguous apply target (detached HEAD, or no origin) **after** `-y`. Not needed for an ordinary apply, and cannot start one |
 | `MANIFEST_CLI_PREVIEW_EXIT_CODE` | `zero` (default) or `distinct` — the exit code for a plan with no consent; see Exit Codes |
 | `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH` | Controls the canonical follow-up patch behaviour |
+| `MANIFEST_CLI_DOCS_HANDOFF` | `off` (default), `auto` or `always` — pause before the release commit so whoever is driving can finish the documentation; see Exit Codes `4`. Also settable as `docs.handoff`, including in a committed config: it names no program |
+| `MANIFEST_CLI_DRIVER` | Override who Manifest thinks is driving: `none`, `ci`, `claude-code` or `other-agent`. Environment only, never a config key — a committed file must not assert who is at the keyboard. Affects only the `auto` handoff default, never a safety control |
 | `MANIFEST_CLI_DOCS_GENERATE_SITE` | Turn on documentation-website generation (default off) |
 | `MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES` | Ask GitHub to enable Pages via `gh api` |
 | `MANIFEST_CLI_GITHUB_ACTIONS_WAIT` | Wait for GitHub Actions during release paths |

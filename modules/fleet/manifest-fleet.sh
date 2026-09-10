@@ -667,11 +667,20 @@ _fleet_init_directory() {
 # -----------------------------------------------------------------------------
 
 # One name per line, in the order the .gitignore lists them.
+#
+# The fixed five, then whatever `fleet.coordination_files` declares (§77(a)) —
+# validated, deduplicated and resolved by _fleet_extra_coordination_files in
+# manifest-fleet-config.sh. Declared names go LAST so the canonical ordering of
+# the fixed set never shifts when one is added or removed; a reordering would
+# make every existing root's .gitignore read `stale` and rewrite itself.
 _fleet_coordination_files() {
     local root="$1"
     local version_name
     version_name="$(_fleet_root_version_name "$root")"
     printf '%s\n' .gitignore manifest.fleet.config.yaml manifest.fleet.tsv "$version_name" CHANGELOG_FLEET.md
+    if declare -F _fleet_extra_coordination_files >/dev/null 2>&1; then
+        _fleet_extra_coordination_files "$root"
+    fi
 }
 
 # -----------------------------------------------------------------------------
@@ -2221,6 +2230,14 @@ _fleet_prep_run() {
         fi
         (
             cd "$path" || exit 1
+            # This IS a delegated apply — the fleet's consent covers it — and
+            # the marker has to say so. Two consumers read it: the ambiguous-
+            # target gate, and the documentation handoff, which must never
+            # pause a member (a member's non-zero status breaks this loop into
+            # the recovery report, so a deliberate pause would read as a failed
+            # prep). Found by the pre-commit steward review: this call site was
+            # the one delegated path that never set it.
+            export _MANIFEST_CLI_DELEGATED_APPLY_CONSENT=1
             manifest_prep "$increment_type" "false"
         ) || {
             echo "  - $service: ❌ prep failed"

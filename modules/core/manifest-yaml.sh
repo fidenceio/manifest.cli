@@ -200,6 +200,7 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     ["docs.release_notes.provider"]="MANIFEST_CLI_RELEASE_NOTES_PROVIDER"
     ["docs.release_notes.command"]="MANIFEST_CLI_RELEASE_NOTES_COMMAND"
     ["docs.release_notes.required"]="MANIFEST_CLI_RELEASE_NOTES_REQUIRED"
+    ["docs.handoff"]="MANIFEST_CLI_DOCS_HANDOFF"
 
     # -------------------------------------------------------------------------
     # files — file and directory paths
@@ -945,6 +946,14 @@ _manifest_cli_yaml_is_execution_key() {
 declare -ga _MANIFEST_CLI_YAML_DISCLOSED_POLICY_KEYS=(
     MANIFEST_CLI_RELEASE_GATE
     MANIFEST_CLI_RELEASE_GATE_REASON
+    # docs.handoff (§78) belongs to this class and NOT to the execution keys,
+    # and the distinction is the whole reason a team's release contract can be
+    # committed at all: it names no program. It changes when the ship stops so
+    # the driver can finish the documentation, and a repo that ships that way
+    # needs every clone to ship that way. The layer is still disclosed, because
+    # "this ship paused" and "this ship paused because a file in the repo you
+    # cloned said so" are different facts.
+    MANIFEST_CLI_DOCS_HANDOFF
 )
 
 _manifest_cli_yaml_is_disclosed_policy_key() {

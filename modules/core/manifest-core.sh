@@ -55,12 +55,16 @@ source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-lock.sh"
 # Now source core modules after variables are set
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-config.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-os.sh"
+# Driver detection (§78). Unlike manifest-os.sh this one does NOT detect at
+# source time — it may walk the process tree, so it runs only when asked.
+source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-driver.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-time.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-runtime-cleanup.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/git/manifest-git.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-env-naming.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-security.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/docs/manifest-documentation.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/docs/manifest-handoff.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/system/manifest-uninstall.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/workflow/manifest-orchestrator.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/docs/manifest-cleanup-docs.sh"

@@ -236,6 +236,18 @@ docs:
     provider: "local"       # local (use built-in generator) | command
     command: ""             # Path to provider script
     required: false         # If true, provider failure aborts the ship
+  # Pause before the release commit so whoever is driving — a person, or the AI
+  # agent already in the session — can finish the documentation, then verify
+  # what they wrote before committing it. The ship exits 4 and writes a brief
+  # under .git/; re-running the identical command verifies and continues.
+  #
+  # Safe to COMMIT, unlike the two `command` keys above: it names no program to
+  # run. Detection only decides whether `auto` applies; it never selects
+  # anything to execute, and it never pauses CI.
+  #   off    (default) never pause
+  #   auto   pause when an AI agent is driving, never in CI
+  #   always pause on every apply, whoever is driving
+  handoff: "off"
 
 # -----------------------------------------------------------------------------
 # Trusted Timestamps (HTTPS)

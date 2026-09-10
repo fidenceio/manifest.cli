@@ -336,6 +336,19 @@ manifest_plan_fingerprint_warn_on_drift() {
 # -----------------------------------------------------------------------------
 MANIFEST_CLI_PREVIEW_NO_CONSENT_EXIT_CODE=10
 
+# -----------------------------------------------------------------------------
+# Exit code for a ship that PAUSED for a documentation handoff (§78).
+#
+# Distinct from 1 for the same reason 2 is distinct for a partial fleet ship:
+# the caller has to be able to tell "this failed, nothing happened" from "this
+# stopped on purpose and is waiting for you". Nothing was committed, tagged or
+# pushed; re-running the identical command verifies the documentation and
+# continues. Documented in docs/COMMAND_REFERENCE.md and in the agent-facing
+# catalog the installer writes, because an agent that reads any non-zero status
+# as a failed release will try to recover from something that never happened.
+# -----------------------------------------------------------------------------
+MANIFEST_CLI_SHIP_HANDOFF_PAUSED_EXIT_CODE=4
+
 manifest_preview_exit_code() {
     case "$(normalize_enum_value "${MANIFEST_CLI_PREVIEW_EXIT_CODE:-zero}")" in
         ''|zero|0) printf '0' ;;

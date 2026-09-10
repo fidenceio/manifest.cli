@@ -994,11 +994,21 @@ _manifest_release_notes_validate_output() {
 
     [[ -n "$cleaned" ]] || return 1
 
-    case "$cleaned" in
-        *"As an AI"*|*"As a language model"*|*"Sure, here"*|*"Here are the"*|*"I'll generate"*|*"I'd be happy"*)
-            return 1
-            ;;
-    esac
+    # Assistant preamble. ONE list, shared with the handoff verifier's R4
+    # (_manifest_handoff_banned_phrase, modules/docs/manifest-handoff.sh), so a
+    # phrase added in one place is rejected on both paths — a provider's output
+    # here, and a driver's hand-written changelog section there. The inline
+    # fallback keeps this function working when sourced alone in a unit test.
+    local _banned=""
+    if declare -F _manifest_handoff_banned_phrase >/dev/null 2>&1; then
+        _banned="$(_manifest_handoff_banned_phrase "$cleaned")"
+    else
+        case "$cleaned" in
+            *"As an AI"*|*"As a language model"*|*"Sure, here"*|*"Here are the"*|*"I'll generate"*|*"I'd be happy"*)
+                _banned="preamble" ;;
+        esac
+    fi
+    [[ -n "$_banned" ]] && return 1
 
     printf '%s\n' "$cleaned"
 }
