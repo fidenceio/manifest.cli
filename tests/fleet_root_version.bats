@@ -328,3 +328,56 @@ _mk_root_hook() {
     grep -q "committed fleet version 1.0.1" <<<"$output"
     [ "$(git -C "$SCRATCH" log -1 --format=%s)" = "Bump fleet version to 1.0.1" ]
 }
+
+# ---------------------------------------------------------------------------
+# §83 — a stamp on disk that HEAD does not carry is one an earlier run wrote and
+# could not commit. The release tail lands it as its own commit and counts THIS
+# release's bump from it; it used to read the dirty file as "current" and bump
+# again, burning a number the fleet never had at HEAD.
+# ---------------------------------------------------------------------------
+
+# A semver root whose HEAD carries FLEET_VERSION=$1.
+_mk_semver_root_at() {
+    mk_fleet_root semver "$1"
+    printf '%s\n' "$1" > "$SCRATCH/FLEET_VERSION"
+    git -C "$SCRATCH" add -f FLEET_VERSION .gitignore manifest.fleet.config.yaml
+    git -C "$SCRATCH" commit -qm "root at $1"
+}
+
+@test "_fleet_root_release lands a PENDING stamp first, then bumps from it (§83)" {
+    _mk_semver_root_at 1.0.0
+    printf '1.0.1\n' > "$SCRATCH/FLEET_VERSION"          # left behind by a refused earlier run
+    export MANIFEST_CLI_FLEET_VERSION=1.0.1               # what the loader reads: the DISK
+    run _fleet_root_release patch apply true 1
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"landed the pending fleet version 1.0.1"* ]]
+    [[ "$output" == *"committed fleet version 1.0.2"* ]]
+    local subjects
+    subjects="$(git -C "$SCRATCH" log --format=%s)"
+    grep -q "^Bump fleet version to 1.0.1$" <<<"$subjects"
+    grep -q "^Bump fleet version to 1.0.2$" <<<"$subjects"
+    [ "$(git -C "$SCRATCH" show HEAD:FLEET_VERSION)" = "1.0.2" ]
+}
+
+@test "CONTROL: with no pending stamp the release tail bumps once from HEAD's version (§83)" {
+    _mk_semver_root_at 1.0.0
+    export MANIFEST_CLI_FLEET_VERSION=1.0.0
+    run _fleet_root_release patch apply true 1
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"pending"* ]]
+    [[ "$output" == *"committed fleet version 1.0.1"* ]]
+    [ "$(git -C "$SCRATCH" rev-list --count HEAD)" -eq 2 ]
+    [ "$(git -C "$SCRATCH" show HEAD:FLEET_VERSION)" = "1.0.1" ]
+}
+
+@test "_fleet_root_release says what it decided on every non-firing path (§83)" {
+    mk_fleet_root none ""
+    run _fleet_root_release patch apply false 1
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"fleet root: no version stamp (fleet.versioning: none)"* ]]
+
+    mk_fleet_root date ""
+    run _fleet_root_release patch preview false 0
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"fleet root: no release (no member released; root level with upstream)"* ]]
+}

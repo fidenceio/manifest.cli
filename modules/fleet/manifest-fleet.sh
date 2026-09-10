@@ -2478,7 +2478,18 @@ _fleet_service_release_reason() {
     # static/policy gates above (excluded, pr-gated, release-disabled, no VERSION,
     # tap, fleet root) are always honored — force-bump never ships those.
     if [[ "$force_bump" != "true" ]] && ! _fleet_service_has_release_changes "$path"; then
-        echo "no changes"
+        # A member parked on another branch with nothing new is skipped, never
+        # branch-checked (the pre-flight only examines releaseable members), so
+        # the skip used to read exactly like a member that was simply done.
+        # Name the branch when it is not the roster's (§83).
+        local roster_branch cur_branch
+        roster_branch="$(get_fleet_service_property "$service" "branch" "${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}")"
+        cur_branch="$(git -C "$path" branch --show-current 2>/dev/null || true)"
+        if [[ -n "$cur_branch" && "$cur_branch" != "$roster_branch" ]]; then
+            echo "no changes; on $cur_branch, not $roster_branch"
+        else
+            echo "no changes"
+        fi
         return 1
     fi
 
@@ -2551,7 +2562,13 @@ _fleet_preflight_on_default_branch() {
         if ! reason=$(_fleet_service_release_reason "$service" "$path" "$force_bump"); then
             continue
         fi
-        if ! manifest_assert_release_branch "$path" "  "; then
+        # The branch a member releases from is the ROSTER's word for it, not the
+        # coordination root's git.default_branch: member config resolves only
+        # inside the per-member subshell, so a member on `master` under a `main`
+        # root was refused here before its own configuration was ever read (§83).
+        local member_branch
+        member_branch="$(get_fleet_service_property "$service" "branch" "${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}")"
+        if ! MANIFEST_CLI_GIT_DEFAULT_BRANCH="$member_branch" manifest_assert_release_branch "$path" "  "; then
             failed=1
         fi
     done
@@ -2666,6 +2683,46 @@ _fleet_preflight_no_pr_gated() {
 # executable to enforce cross-repository policy that cannot live in an
 # individual member's release gate (for example, verified dependency drift).
 # It runs only on apply, before any mutation, and fails closed.
+# Run GATE with both streams captured to CAPTURE, printing a heartbeat while it
+# runs so a long gate (image pulls, a full suite) is visibly alive rather than
+# indistinguishable from a hung ship (§80's silence, §83). Returns the gate's
+# own exit status. MANIFEST_CLI_FLEET_GATE_HEARTBEAT_SECONDS sets the cadence
+# (default 30; 0 disables) — an env knob for tests, not a config key.
+#
+# The GATE stays in the foreground, so it keeps the terminal's stdin and gets
+# the terminal's SIGINT exactly as it did when it streamed. It is the heartbeat
+# TICKER that goes to the background. The first cut had this inverted, and a
+# backgrounded gate starts with SIGINT ignored (bash's rule for `&` without job
+# control), so Ctrl-C killed the ship and left the gate running as an orphan
+# with its capture file (found by the pre-commit steward review). The ticker
+# watches this shell's pid and stops on its own within a second of it going
+# away, so an interrupt leaves nothing behind in either shape.
+_fleet_run_gate_captured() {
+    local gate="$1" capture="$2"
+    local interval="${MANIFEST_CLI_FLEET_GATE_HEARTBEAT_SECONDS:-30}"
+    [[ "$interval" =~ ^[0-9]+$ ]] || interval=30
+    local ticker="" rc=0 parent=$BASHPID
+    if [[ "$interval" -gt 0 ]]; then
+        (
+            elapsed=0
+            while kill -0 "$parent" 2>/dev/null; do
+                sleep 1
+                elapsed=$((elapsed + 1))
+                if (( elapsed % interval == 0 )); then
+                    echo "   workspace policy gate still running (${elapsed}s)…"
+                fi
+            done
+        ) &
+        ticker=$!
+    fi
+    "$gate" >"$capture" 2>&1 || rc=$?
+    if [[ -n "$ticker" ]]; then
+        kill "$ticker" 2>/dev/null || true
+        wait "$ticker" 2>/dev/null || true
+    fi
+    return "$rc"
+}
+
 _fleet_preflight_workspace_policy() {
     local root="${MANIFEST_CLI_FLEET_ROOT:-$PWD}"
     local gate="$root/scripts/manifest-fleet-preflight.sh"
@@ -2676,7 +2733,46 @@ _fleet_preflight_workspace_policy() {
         return 1
     fi
     echo "Running workspace policy gate..."
-    if ! "$gate"; then
+
+    # Captured, not streamed (§83): a gate that pulls images wrote 21k lines
+    # of progress into the terminal, and the fleet process had no run log to
+    # keep them in. Now the whole output goes to the run log (when one exists)
+    # and the terminal gets a heartbeat, one line on success, and the tail on
+    # failure. Without a scratch file the gate streams live, as before.
+    local capture="" scratch rc=0
+    scratch="$(manifest_make_scratch_path fleet-gate 2>/dev/null || true)"
+    [[ -n "$scratch" ]] && capture="$(mktemp "$scratch/gate.XXXXXXXX" 2>/dev/null || true)"
+    if [[ -z "$capture" ]]; then
+        "$gate" || rc=$?
+    else
+        _fleet_run_gate_captured "$gate" "$capture" || rc=$?
+        local lines
+        # `grep -c` on an EMPTY file prints 0 AND exits 1, so `|| echo 0` made
+        # this the two-line string "0\n0" and the arithmetic below threw. A
+        # gate that fails without a word is exactly the case the tail is for.
+        lines="$(grep -c '' "$capture" 2>/dev/null || true)"
+        [[ "$lines" =~ ^[0-9]+$ ]] || lines=0
+        if [[ -n "${MANIFEST_CLI_SHIP_LOG_FILE:-}" ]]; then
+            manifest_ship_log_step "workspace_gate" "$rc" "$(cat "$capture" 2>/dev/null || true)"
+        fi
+        if [[ "$rc" -ne 0 ]]; then
+            local shown=40
+            [[ "$lines" -lt "$shown" ]] && shown="$lines"
+            echo "Workspace policy gate: FAILED (exit $rc). Last $shown of $lines line(s):"
+            tail -n 40 "$capture" 2>/dev/null | sed 's/^/   | /'
+            if [[ -n "${MANIFEST_CLI_SHIP_LOG_FILE:-}" ]]; then
+                echo "   full output: $MANIFEST_CLI_SHIP_LOG_FILE"
+            fi
+        else
+            if [[ -n "${MANIFEST_CLI_SHIP_LOG_FILE:-}" ]]; then
+                echo "Workspace policy gate: OK ($lines line(s) captured to the run log)"
+            else
+                echo "Workspace policy gate: OK ($lines line(s) captured)"
+            fi
+        fi
+        rm -f "$capture" 2>/dev/null || true
+    fi
+    if [[ "$rc" -ne 0 ]]; then
         log_error "Pre-flight: workspace policy gate failed."
         echo "Pre-flight refused before any mutation; no fleet member was shipped."
         return 1
@@ -2799,9 +2895,12 @@ _fleet_plan_service_display_name() {
 # whose HEAD is off the release branch get a trailing "!" so the preview shows
 # what apply will refuse. Non-git paths render as "—"; detached HEAD as
 # "detached". Long names are truncated to keep the column aligned.
+# $3 (optional): the branch this member releases from — the roster's word,
+# passed by the plan so the table, the skip reason and the pre-flight judge a
+# member by the SAME branch (§83). Falls back to the root's default.
 _fleet_plan_branch_cell() {
     local path="$1" releaseable="$2"
-    local expected="${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}"
+    local expected="${3:-${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}}"
     if ! git -C "$path" rev-parse --git-dir >/dev/null 2>&1; then
         echo "—"
         return
@@ -2928,7 +3027,7 @@ _fleet_ship_plan() {
                 decision="would ship"
             fi
             # Actual current branch; a trailing "!" marks members apply will refuse.
-            branch=$(_fleet_plan_branch_cell "$path" true)
+            branch=$(_fleet_plan_branch_cell "$path" true "$(get_fleet_service_property "$service" "branch" "${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}")")
             [[ "$branch" == *"!" ]] && offbranch_count=$((offbranch_count + 1))
             # A release-enabled member with no origin remote can only ship
             # local-only: the per-member ship will commit + tag but silently
@@ -2954,7 +3053,7 @@ _fleet_ship_plan() {
         else
             skipped_count=$((skipped_count + 1))
             # Skipped members never ship, so no off-branch marker is applied.
-            branch=$(_fleet_plan_branch_cell "$path" false)
+            branch=$(_fleet_plan_branch_cell "$path" false "$(get_fleet_service_property "$service" "branch" "${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}")")
             version="${current:-—}"
             printf '%-30s %-12s %-15s %-7s %-9s %-13s %s\n' "$display_name" "$branch" "$version" "$dirty" "read" "skip" "$path ($reason)"
         fi
@@ -2984,9 +3083,9 @@ _fleet_ship_plan() {
     if [[ $offbranch_count -gt 0 ]]; then
         local _rel_branch="${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}"
         echo ""
-        echo "⚠️  ${offbranch_count} releaseable member(s) marked '!' have HEAD off the release branch ('${_rel_branch}')."
+        echo "⚠️  ${offbranch_count} releaseable member(s) marked '!' have HEAD off their release branch (the roster's branch for that member, else '${_rel_branch}')."
         echo "    Apply refuses these (manifest_assert_release_branch): the version commit and tag"
-        echo "    would land off '${_rel_branch}'. Move the work onto '${_rel_branch}' before re-running with -y."
+        echo "    would land off that branch. Move the work onto it before re-running with -y."
     fi
     if [[ $emptyremote_count -gt 0 ]]; then
         echo ""
@@ -3499,48 +3598,141 @@ _fleet_root_push() {
 # For a change to the coordination files THEMSELVES — no member shipped, nothing
 # committed yet — the scope is `manifest ship fleet manager` (fleet_ship_manager).
 # -----------------------------------------------------------------------------
+# The fleet version HEAD actually carries — as opposed to what the loader read
+# from the file on DISK (MANIFEST_CLI_FLEET_VERSION). Empty on an unborn HEAD
+# or when the file is not tracked. `HEAD:./name`, not `HEAD:name`: a bare path
+# after the colon is relative to the repository's top level, so a fleet root
+# that is a subdirectory of a larger repo would read the wrong file.
+_fleet_root_committed_version() {
+    local root="$1" name="$2" v
+    v="$(git -C "$root" show "HEAD:./$name" 2>/dev/null || true)"
+    v="${v//[[:space:]]/}"
+    printf '%s' "$v"
+}
+
+# The version stamped on DISK that HEAD does not carry, or nothing (§83). Both
+# sides are compared whitespace-stripped: a trailing space or a CRLF in the
+# file is not a pending stamp, and the first cut read it as one and committed
+# the corrupted file under a bump subject (found by the pre-commit steward
+# review). Empty when HEAD has no committed version to compare against — an
+# unborn HEAD, an untracked file — so a first init never "lands" anything.
+# ONE comparison for the release tail, the manager and the nothing-to-do stop.
+_fleet_root_pending_version() {
+    local root="$1" name="$2" disk="$3" committed
+    disk="${disk//[[:space:]]/}"
+    committed="$(_fleet_root_committed_version "$root" "$name")"
+    if [[ -n "$committed" && -n "$disk" && "$disk" != "$committed" ]]; then
+        printf '%s' "$disk"
+    fi
+}
+
+# Record and print the fleet root's outcome for this run. ONE renderer for
+# preview and apply (§83): "no root bump" used to be conveyed by omission alone,
+# and the default scheme is `none`, so most fleets never saw a root line at all.
+# The closing block reads _MANIFEST_CLI_FLEET_ROOT_OUTCOME.
+_MANIFEST_CLI_FLEET_ROOT_OUTCOME=""
+_fleet_root_outcome() {
+    _MANIFEST_CLI_FLEET_ROOT_OUTCOME="$1"
+    echo "  - fleet root: $1"
+}
+
 _fleet_root_release() {
     local increment_type="$1" execution_mode="$2" local_only="$3" completed_count="${4:-0}"
     local scheme="${MANIFEST_CLI_FLEET_VERSIONING:-none}"
     local root="${MANIFEST_CLI_FLEET_ROOT:-$PWD}"
+    _MANIFEST_CLI_FLEET_ROOT_OUTCOME=""
 
-    [[ "$scheme" != "none" ]] || return 0
+    if [[ "$scheme" == "none" ]]; then
+        _fleet_root_outcome "no version stamp (fleet.versioning: none)"
+        return 0
+    fi
     # Release trigger: a member shipped, or the root has its own unpushed commits.
-    # Without either there is nothing to release — stay a no-op (no speculative bump).
+    # Without either there is nothing to release — say so (no speculative bump).
     if [[ "${completed_count:-0}" -le 0 ]] && ! _fleet_root_has_unpushed_commits "$root"; then
+        _fleet_root_outcome "no release (no member released; root level with upstream)"
         return 0
     fi
 
-    local version_name current next
+    local version_name current pending next
     version_name="$(_fleet_root_version_name "$root")"
     current="${MANIFEST_CLI_FLEET_VERSION:-}"
+    current="${current//[[:space:]]/}"
+    # A stamp on disk that HEAD does not carry is usually one an earlier run
+    # wrote and could not commit (a refused hook, say) — or a hand edit, which
+    # is why the messages below do not claim to know. It lands first, as its
+    # own commit; the bump for THIS release counts from it. A retry used to
+    # read the dirty file as "current" and stamp again, burning a number the
+    # fleet never had.
+    pending="$(_fleet_root_pending_version "$root" "$version_name" "$current")"
     next="$(_fleet_next_version "$scheme" "$current" "$increment_type")"
+    [[ -n "$next" && "$next" != "$current" ]] || next=""
 
-    [[ -n "$next" && "$next" != "$current" ]] || return 0
-
-    if [[ "$execution_mode" != "apply" ]]; then
-        echo "  - fleet root: would bump fleet version ${current:-(unset)} → $next (commit $version_name)"
+    if [[ -z "$next" && -z "$pending" ]]; then
+        _fleet_root_outcome "already at ${current:-(unset)}; nothing to stamp"
         return 0
     fi
 
-    _fleet_root_ensure_repo "$root" || return 1
-    _fleet_root_write_version_file "$root" "$version_name" "$next" || return 1
+    if [[ "$execution_mode" != "apply" ]]; then
+        if [[ -n "$pending" ]]; then
+            echo "  - fleet root: would land the pending fleet version $pending ($version_name is stamped on disk, not committed)"
+        fi
+        if [[ -n "$next" ]]; then
+            _fleet_root_outcome "would bump fleet version ${current:-(unset)} → $next (commit $version_name)"
+        else
+            _fleet_root_outcome "would land the pending fleet version $pending"
+        fi
+        return 0
+    fi
+
+    if ! _fleet_root_ensure_repo "$root"; then
+        _fleet_root_outcome "FAILED: the coordination root could not be prepared (see above)"
+        return 1
+    fi
 
     local commit_rc=0
+    if [[ -n "$pending" ]]; then
+        _fleet_root_commit_coordination "$root" "Bump fleet version to $pending" || commit_rc=$?
+        case "$commit_rc" in
+            0) echo "  - fleet root: landed the pending fleet version $pending (was stamped on disk, not committed)" ;;
+            3) ;;
+            *) _fleet_root_outcome "FAILED: the pending fleet version $pending could not be committed (see above); $version_name still holds it on disk"
+               return 1 ;;
+        esac
+        if [[ -z "$next" ]]; then
+            _fleet_root_outcome "landed the pending fleet version $pending; nothing new to stamp"
+            return 0
+        fi
+    fi
+
+    if ! _fleet_root_write_version_file "$root" "$version_name" "$next"; then
+        _fleet_root_outcome "FAILED: could not write $version_name (see above)"
+        return 1
+    fi
+    commit_rc=0
     _fleet_root_commit_coordination "$root" "Bump fleet version to $next" || commit_rc=$?
     case "$commit_rc" in
         0) ;;
         # Version file unchanged on disk -> nothing staged -> idempotent skip.
-        3) return 0 ;;
-        *) return 1 ;;
+        3) _fleet_root_outcome "already at $next; nothing to commit"
+           return 0 ;;
+        *) _fleet_root_outcome "FAILED: the coordination commit was refused (see above); $version_name is stamped $next on disk, not committed"
+           return 1 ;;
     esac
-    echo "  - fleet root: committed fleet version $next"
 
     # Push only on a non-local ship, and only when a remote is configured. A
     # failed push is a warning here: members have already shipped, and the
     # fleet version commit is safely local.
     if ! _fleet_root_push "$root" "$local_only"; then
         log_warning "Fleet-root release: push failed; the fleet version commit is local."
+        _fleet_root_outcome "committed fleet version $next; PUSH FAILED (the commit is local)"
+        return 0
+    fi
+    if [[ "$local_only" == "true" ]]; then
+        _fleet_root_outcome "committed fleet version $next (local: not pushed)"
+    elif git -C "$root" remote get-url origin >/dev/null 2>&1; then
+        _fleet_root_outcome "committed fleet version $next and pushed"
+    else
+        _fleet_root_outcome "committed fleet version $next (no origin remote; nothing to push)"
     fi
     return 0
 }
@@ -3706,12 +3898,22 @@ EOF
 
     # Stamp the fleet version alongside a commit when the fleet has a scheme, or
     # on explicit request (a bump word given). Never speculatively.
-    local current="${MANIFEST_CLI_FLEET_VERSION:-}" next=""
-    if [[ "$scheme" != "none" ]] && { [[ ${#to_commit[@]} -gt 0 ]] || [[ "$bump_requested" == "true" ]]; }; then
+    #
+    # A stamp on disk that HEAD does not carry is one an earlier run wrote and
+    # could not commit (§83). That version is LANDED as-is: this used to read
+    # the dirty file as "current" and stamp again, so the recovery the failure
+    # message recommends burned a number the fleet never had at HEAD.
+    local current="${MANIFEST_CLI_FLEET_VERSION:-}" next="" pending=""
+    current="${current//[[:space:]]/}"
+    if [[ "$is_repo" == "true" ]]; then
+        pending="$(_fleet_root_pending_version "$root" "$version_name" "$current")"
+    fi
+    if [[ -z "$pending" && "$scheme" != "none" ]] && { [[ ${#to_commit[@]} -gt 0 ]] || [[ "$bump_requested" == "true" ]]; }; then
         next="$(_fleet_next_version "$scheme" "$current" "$increment_type")"
         [[ -n "$next" && "$next" != "$current" ]] || next=""
     fi
-    if [[ -n "$next" ]]; then
+    local stamp="${next:-$pending}"
+    if [[ -n "$stamp" ]]; then
         _fleet_manager_list_has to_commit "$version_name" || to_commit+=("$version_name")
     fi
 
@@ -3741,14 +3943,14 @@ EOF
     # Commit message: say what the commit is, in the order a reader cares about.
     local -a changed_files=()
     for f in "${to_commit[@]}"; do
-        [[ "$f" == "$version_name" && -n "$next" ]] && continue
+        [[ "$f" == "$version_name" && -n "$stamp" ]] && continue
         changed_files+=("$f")
     done
     local message="Fleet manager: update coordination files"
-    if [[ -n "$next" && ${#changed_files[@]} -gt 0 ]]; then
-        message="Fleet manager: bump fleet version to $next (updates: $(IFS=', '; echo "${changed_files[*]}"))"
-    elif [[ -n "$next" ]]; then
-        message="Fleet manager: bump fleet version to $next"
+    if [[ -n "$stamp" && ${#changed_files[@]} -gt 0 ]]; then
+        message="Fleet manager: bump fleet version to $stamp (updates: $(IFS=', '; echo "${changed_files[*]}"))"
+    elif [[ -n "$stamp" ]]; then
+        message="Fleet manager: bump fleet version to $stamp"
     elif [[ ${#changed_files[@]} -gt 0 ]]; then
         message="Fleet manager: update $(IFS=', '; echo "${changed_files[*]}")"
     fi
@@ -3764,6 +3966,9 @@ EOF
     fi
     if [[ "$is_repo" == "true" && -z "$branch" ]]; then
         refusals+=("the coordination root is on a detached HEAD — check out a branch first")
+    fi
+    if [[ -n "$pending" && "$bump_requested" == "true" ]]; then
+        refusals+=("a fleet version stamp $pending is on disk and not committed — run without a bump word to land it, or discard it: git -C \"$root\" checkout -- $version_name")
     fi
 
     # ---- preview ------------------------------------------------------------
@@ -3782,7 +3987,11 @@ EOF
             create)          echo "  - fleet root: would write the allowlist .gitignore" ;;
             empty-overwrite) echo "  - fleet root: would replace the empty .gitignore with the allowlist" ;;
         esac
-        [[ -n "$next" ]] && echo "  - fleet root: would stamp fleet version ${current:-(unset)} → $next ($version_name)"
+        if [[ -n "$pending" ]]; then
+            echo "  - fleet root: would land the pending fleet version $pending ($version_name is stamped on disk, not committed)"
+        elif [[ -n "$next" ]]; then
+            echo "  - fleet root: would stamp fleet version ${current:-(unset)} → $next ($version_name)"
+        fi
         if [[ "$will_commit" == "true" ]]; then
             echo "  - fleet root: would commit $(IFS=', '; echo "${to_commit[*]}")"
             echo "      \"$message\""
@@ -3842,7 +4051,10 @@ EOF
         create)          echo "  - fleet root: wrote the allowlist .gitignore" ;;
         empty-overwrite) echo "  - fleet root: replaced the empty .gitignore with the allowlist" ;;
     esac
-    if [[ -n "$next" ]]; then
+    if [[ -n "$pending" ]]; then
+        # Already on disk; nothing to write — it is committed as it stands.
+        echo "  - fleet root: landing the pending fleet version $pending (stamped on disk, not committed)"
+    elif [[ -n "$next" ]]; then
         _fleet_root_write_version_file "$root" "$version_name" "$next" || return 1
         echo "  - fleet root: stamped fleet version ${current:-(unset)} → $next ($version_name)"
     fi
@@ -3971,8 +4183,62 @@ EOF
     manifest_plan_fingerprint_warn_on_drift "ship-fleet" "${MANIFEST_CLI_FLEET_PLAN_FINGERPRINT:-}" "${MANIFEST_CLI_FLEET_ROOT:-$PWD}"
     echo ""
 
+    # Nothing can happen — no member will release and the root cannot release
+    # either — so say so and stop (§83). This used to run the workspace policy
+    # gate (minutes, with image pulls) and every pre-flight for a run that then
+    # did nothing, and closed with the same line as a full release.
+    # PR-gated members are refused before anything else is decided (§1.1), and
+    # BEFORE the nothing-to-do stop below: a pr-gated member WITH changes is
+    # neither releaseable nor skipped in the plan's count, so the stop would
+    # otherwise call it "no changes" and exit 0 — a false headline over a
+    # refusal that exits 1 with its replay line (found by the pre-commit
+    # steward review). Read-only, so running it first costs nothing.
     if ! _fleet_preflight_no_pr_gated; then
         return 1
+    fi
+
+    if _fleet_ship_nothing_to_do; then
+        if [[ "${MANIFEST_CLI_FLEET_VERSIONING:-none}" == "none" ]]; then
+            echo "Nothing to release: no member has changes since its tag, and fleet.versioning is none, so the root never stamps."
+        else
+            echo "Nothing to release: no member has changes since its tag, and the fleet root is level with its upstream."
+            # A stamp on disk that HEAD does not carry is not a release trigger,
+            # but "level with its upstream" over a dirty version file would hide
+            # it. The manager is what lands it.
+            local nt_root="${MANIFEST_CLI_FLEET_ROOT:-$PWD}" nt_name nt_pending
+            nt_name="$(_fleet_root_version_name "$nt_root")"
+            nt_pending="$(_fleet_root_pending_version "$nt_root" "$nt_name" "${MANIFEST_CLI_FLEET_VERSION:-}")"
+            if [[ -n "$nt_pending" ]]; then
+                echo "A fleet version stamp $nt_pending is on disk and not committed; 'manifest ship fleet manager' lands it."
+            fi
+        fi
+        echo "(--force-bump includes at-tag members.)"
+        # The per-member skip lines the apply loop would have printed, so the
+        # apply's contract ("<member>: skipped (<reason>)") holds whether or not
+        # the loop runs. Counted here, not taken from the plan: the plan keeps
+        # pr-gated members out of its skipped figure.
+        local skip_service skip_path skip_reason skipped_here=0
+        for skip_service in $MANIFEST_CLI_FLEET_SERVICES; do
+            skip_path=$(get_fleet_service_property "$skip_service" "path")
+            if ! skip_reason=$(_fleet_service_release_reason "$skip_service" "$skip_path" "$force_bump"); then
+                echo "  - $skip_service: skipped ($skip_reason)"
+                skipped_here=$((skipped_here + 1))
+            fi
+        done
+        _fleet_ship_closing_block 0 "$skipped_here" "" "nothing to do (no member released; nothing for the root to release)" ok
+        return 0
+    fi
+
+    # One run log for the fleet process (§83). Each member's ship opens its own
+    # inside its subshell; this one holds what happens BETWEEN members — the
+    # workspace policy gate above all, whose output has nowhere else to go.
+    local fleet_log_cmd="manifest ship fleet $increment_type"
+    [[ "$local_only" == "true" ]] && fleet_log_cmd="$fleet_log_cmd --local"
+    # Called directly, not inside $( ): the opener EXPORTS the log path, and a
+    # command substitution would keep that export in its own subshell.
+    manifest_ship_log_begin "$fleet_log_cmd" >/dev/null 2>&1 || true
+    if [[ -n "${MANIFEST_CLI_SHIP_LOG_FILE:-}" ]]; then
+        echo "   run log: $MANIFEST_CLI_SHIP_LOG_FILE"
     fi
 
     if ! _fleet_preflight_workspace_policy; then
@@ -4047,10 +4313,11 @@ EOF
 
     local -a completed=() not_started=() skipped=()
     local failed_service="" failed_path="" failed_status_file=""
-    local service path reason status_file idx=0 rc rem rem_path rem_reason rem_idx
+    local service path reason status_file idx=0 rc=0 rem rem_path rem_reason rem_idx
 
     for service in "${member_list[@]}"; do
         idx=$((idx + 1))
+        rc=0
         path=$(get_fleet_service_property "$service" "path")
         if ! reason=$(_fleet_service_release_reason "$service" "$path" "$force_bump"); then
             echo "  - $service: skipped ($reason)"
@@ -4118,8 +4385,13 @@ EOF
             [[ "$local_only" == "true" ]] && member_ship_args+=("--local")
             [[ "$force_bump" == "true" ]] && member_ship_args+=("--force-bump")
             manifest_ship_repo "${member_ship_args[@]}"
-        )
-        rc=$?
+        ) || rc=$?
+        # `|| rc=$?`, not a bare `rc=$?` on the next line (§83): the CLI runs
+        # under errexit, and a member subshell exiting non-zero is a failing
+        # simple command — the process died HERE, before this line, so the
+        # recovery report below never ran for a mid-loop failure and the fleet
+        # exited with the member's status and no word about the rest. The tests
+        # for that report pre-populated its arrays, so nothing noticed.
         if [[ $rc -ne 0 ]]; then
             failed_service="$service"
             failed_path="$path"
@@ -4144,20 +4416,73 @@ EOF
             "$increment_type" "$local_only"
         rm -rf "$status_dir" 2>/dev/null
         log_error "Fleet ship aborted at $failed_service. See classification above before retrying."
+        _fleet_ship_closing_block "${#completed[@]}" "${#skipped[@]}" "$failed_service" "not attempted (the ship stopped at $failed_service)" failed
+        manifest_ship_log_end "failed" "member:$failed_service"
+        # Exit 2 = PARTIAL: releases already applied before the failure. Exit 1
+        # keeps meaning "nothing was released" (§83, COMMAND_REFERENCE exit codes).
+        if [[ ${#completed[@]} -gt 0 ]]; then
+            return 2
+        fi
         return 1
     fi
 
     rm -rf "$status_dir" 2>/dev/null
 
     # Fleet-level version bump + commit at the coordination root (members done).
-    # A failure here is a warning, not fatal: member releases have already applied.
-    if ! _fleet_root_release "$increment_type" "apply" "$local_only" "${#completed[@]}"; then
+    # A failure here does not undo anything — member releases have already
+    # applied — but it is no longer a warning buried on stderr under a green
+    # closing line: the closing block names it and the exit code is 2 (§83).
+    local root_rc=0
+    _fleet_root_release "$increment_type" "apply" "$local_only" "${#completed[@]}" || root_rc=$?
+    if [[ "$root_rc" -ne 0 ]]; then
         log_warning "Fleet-root version bump did not complete; member releases already applied."
     fi
 
-    _fleet_ship_topics_pass "$local_only"
+    # Topics grooming is post-release metadata; with nothing released there is
+    # nothing to groom, and it used to make its GitHub calls anyway.
+    if [[ ${#completed[@]} -gt 0 ]]; then
+        _fleet_ship_topics_pass "$local_only"
+    fi
 
-    echo "✅ Fleet ship workflow complete."
+    if [[ "$root_rc" -ne 0 ]]; then
+        _fleet_ship_closing_block "${#completed[@]}" "${#skipped[@]}" "" "${_MANIFEST_CLI_FLEET_ROOT_OUTCOME:-FAILED (see above)}" partial
+        manifest_ship_log_end "failed" "fleet_root"
+        return 2
+    fi
+    _fleet_ship_closing_block "${#completed[@]}" "${#skipped[@]}" "" "${_MANIFEST_CLI_FLEET_ROOT_OUTCOME:-no release}" ok
+    manifest_ship_log_end "completed"
+    return 0
+}
+
+# Nothing can happen on this apply: no member is releaseable (the plan said so)
+# and the root cannot release either — fleet.versioning is none, or the root
+# has no unpushed commits to carry. Read-only; decides the early exit (§83).
+_fleet_ship_nothing_to_do() {
+    [[ "${MANIFEST_CLI_FLEET_PLAN_RELEASEABLE_COUNT:-0}" -eq 0 ]] || return 1
+    [[ "${MANIFEST_CLI_FLEET_VERSIONING:-none}" == "none" ]] && return 0
+    ! _fleet_root_has_unpushed_commits "${MANIFEST_CLI_FLEET_ROOT:-$PWD}"
+}
+
+# The one closing block every fleet apply ends on (§83). It used to be the same
+# green line whether the fleet released, nothing happened, or the root commit
+# failed — and the failure was a warning on stderr, so stdout alone could not
+# tell them apart.
+#   $1 released  $2 skipped  $3 failed member ("" when none)  $4 root outcome
+#   $5 status: ok | partial | failed
+_fleet_ship_closing_block() {
+    # Not `skipped`/`failed`: those names are arrays in the apply function above,
+    # and shellcheck (SC2178/SC2128) reads a same-named scalar as a mistake.
+    local released="$1" skipped_count="$2" failed_member="$3" root_outcome="$4" status="$5"
+    echo ""
+    case "$status" in
+        ok)      echo "✅ Fleet ship workflow complete." ;;
+        partial) echo "⚠️  Fleet ship workflow finished with a failure at the fleet root (exit 2: member releases already applied)." ;;
+        failed)  echo "❌ Fleet ship workflow stopped at $failed_member." ;;
+    esac
+    local members="   members: $released released · $skipped_count skipped"
+    [[ -n "$failed_member" ]] && members="$members · 1 failed ($failed_member)"
+    echo "$members"
+    echo "   fleet root: $root_outcome"
 }
 
 # -----------------------------------------------------------------------------

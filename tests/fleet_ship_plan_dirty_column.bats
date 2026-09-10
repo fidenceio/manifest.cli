@@ -387,7 +387,7 @@ TSV
     cd "$SCRATCH/work"
     run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
     [ "$status" -eq 0 ]
-    echo "$output" | grep -F "have HEAD off the release branch" >/dev/null
+    echo "$output" | grep -F "have HEAD off their release branch" >/dev/null
     echo "$output" | grep -F "Apply refuses these" >/dev/null
 }
 

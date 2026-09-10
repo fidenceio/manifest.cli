@@ -22,7 +22,8 @@ gate yet, read the [Migration Guide](MIGRATION.md) first — this page assumes t
 | Code | Meaning |
 | ---- | ------- |
 | `0` | Success — either an apply finished, or a plan was printed (the default) |
-| `1` | Error: bad arguments, a failed pre-flight check, a declined confirmation, or a failed apply |
+| `1` | Error: bad arguments, a failed pre-flight check, a declined confirmation, or a failed apply in which nothing was released |
+| `2` | Partial completion of `ship fleet`: one or more member releases applied, then a later step failed — another member, or the fleet-root commit/push. Read the closing block and the recovery report; a retry without `--force-bump` skips members already at their tag. |
 | `3` | Protective skip — a safety guard refused something destructive (for example `uninstall` running under a temporary `HOME`) |
 | `10` | A plan was printed and no consent was given — only ever returned when `preview.exit_code` is set to `distinct` |
 
