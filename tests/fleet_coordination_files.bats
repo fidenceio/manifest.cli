@@ -137,6 +137,57 @@ run_manifest() {
     [ "$(printf '%s\n' "$got" | grep -cix '\.gitmodules')" -eq 0 ]
 }
 
+@test "a DIRECTORY is refused, because the re-include would un-ignore its subtree" {
+    # Measured, not reasoned: the root's .gitignore is `/*` plus one `!/<name>`
+    # per entry, and git's re-include of a directory re-includes everything
+    # under it — so `!/docs` makes `docs/a.md` stageable by the operator's own
+    # `git add .`. Manifest would not commit it (the stager skips a non-file),
+    # but the staged-set verifier matches whole names, so the first such file
+    # aborts every later coordination commit and the root stops releasing.
+    mkdir -p "$ROOT"
+    mkdir -p "$ROOT/subdir"
+    write_root subdir host-ports.yaml
+    local got; got="$(coordination_set)"
+    [ "$(printf '%s\n' "$got" | grep -cx 'subdir')" -eq 0 ]
+    # CONTROL: the declared FILE beside it is still accepted, so the rule is
+    # rejecting the directory and not the whole declaration.
+    [ "$(printf '%s\n' "$got" | grep -cx 'host-ports.yaml')" -eq 1 ]
+}
+
+@test "CONTROL: the same name is accepted when it is not a directory" {
+    # The other direction of the mutation. `subdir` is refused above only
+    # because of what is on disk, so with nothing on disk it must resolve.
+    write_root subdir
+    local got; got="$(coordination_set)"
+    [ "$(printf '%s\n' "$got" | grep -cx 'subdir')" -eq 1 ]
+}
+
+@test "secret-shaped and host-local names are refused outright" {
+    # This key widens what the coordination root COMMITS AND PUSHES, there is
+    # no key-material scan on the ship path, and §45 is the precedent: a
+    # credential in an allowlisted fleet file was pushed by design and could
+    # not be recovered by any local action. A refusal costs a rename.
+    write_root .env .env.local secrets.env config.local.yaml deploy.pem \
+               id_ed25519 app.key
+    local got; got="$(coordination_set)"
+    local name
+    for name in .env .env.local secrets.env config.local.yaml deploy.pem \
+                id_ed25519 app.key; do
+        [ "$(printf '%s\n' "$got" | grep -cxF "$name")" -eq 0 ]
+    done
+    # Nothing was widened at all: the set is still exactly the fixed five.
+    [ "$(printf '%s\n' "$got" | grep -c .)" -eq 5 ]
+}
+
+@test "CONTROL: .env.example and .env.template are NOT refused" {
+    # The carve-out matters, or the rule is wrong in the one case an operator
+    # is most likely to want — these two files exist to be committed.
+    write_root .env.example .env.template
+    local got; got="$(coordination_set)"
+    [ "$(printf '%s\n' "$got" | grep -cxF '.env.example')" -eq 1 ]
+    [ "$(printf '%s\n' "$got" | grep -cxF '.env.template')" -eq 1 ]
+}
+
 @test "duplicates and names already in the fixed set are dropped" {
     write_root host-ports.yaml host-ports.yaml FLEET_VERSION .gitignore
     local got; got="$(coordination_set)"

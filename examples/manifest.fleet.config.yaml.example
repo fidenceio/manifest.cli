@@ -50,6 +50,34 @@ fleet:
   # Fleet version file (only created if versioning != "none")
   version_file: "FLEET_VERSION"
 
+  # Extra files the coordination root should track, beyond the five it always
+  # carries (.gitignore, manifest.fleet.config.yaml, manifest.fleet.tsv, the
+  # version file above, and CHANGELOG_FLEET.md).
+  #
+  # The root uses an ALLOWLIST .gitignore — ignore everything, re-include what
+  # is declared — and the stager force-adds BY NAME, so editing that .gitignore
+  # by hand is not enough on its own: a file the stager has never heard of is
+  # not committed even when git would allow it. Naming it here teaches the
+  # .gitignore renderer, the stager and the staged-set verifier at once.
+  #
+  # Each entry must be a plain file name at the root. Refused, and named on
+  # stderr rather than dropped silently:
+  #   - paths, globs and ".."      (an entry must never reach a member repo)
+  #   - a DIRECTORY               (git re-includes its whole subtree)
+  #   - .git and its case-folds, .gitmodules, .gitattributes
+  #   - manifest.config.yaml / manifest.config.local.yaml (the two layers
+  #     Manifest itself reads at a root)
+  #   - secret-shaped names: .env and .env.*, *.local.{yaml,yml,json,toml},
+  #     *.pem, *.key, id_ed25519 and friends. This key widens what the root
+  #     PUSHES, and a published credential cannot be recalled.
+  #     .env.example and .env.template are the deliberate exceptions.
+  #
+  # A comma-separated string works too: "host-ports.yaml, runbook.md"
+  #
+  # coordination_files:
+  #   - host-ports.yaml
+  #   - runbook.md
+
 # =============================================================================
 # SERVICES / REPOSITORIES
 # =============================================================================

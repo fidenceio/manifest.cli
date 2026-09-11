@@ -223,6 +223,15 @@ detect_driver() {
 
     [ -n "$verdict" ] || verdict="none"
 
+    # MANIFEST_CLI_DRIVER is BOTH the operator's override input (read at the
+    # top of this function) and the computed verdict written here. That is
+    # deliberate — one name for "who is driving", whoever decided it — and it
+    # is safe only for as long as nothing EXPORTS it: a child would then read a
+    # parent's computed verdict as an explicit override and stop detecting for
+    # itself, which in a fleet means every member inheriting the root's answer.
+    # Measured 2026-09-10: `git grep -n "export MANIFEST_CLI_DRIVER"` matches
+    # test fixtures only, so nothing exports it today. Do not start; if a child
+    # ever needs the parent's verdict, pass it under a separate name.
     MANIFEST_CLI_DRIVER="$verdict"
     # The hint is only interesting when it says something the verdict does not.
     if [ -n "$hint" ] && [ "$hint" != "$verdict" ]; then

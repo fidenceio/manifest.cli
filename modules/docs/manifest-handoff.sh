@@ -32,6 +32,14 @@
 #     updated the docs is an unverified claim; the re-run checks the structure
 #     it can check and says exactly which rule failed. That check is worth the
 #     same whether a model, a person, or a future Cloud provider did the work.
+#     Be precise about the two halves of that, because overstating it would
+#     make this module the thing it exists to prevent. What it CAN establish is
+#     that the release notes were written at all (R5 refuses a section still
+#     byte-identical to the skeleton Manifest itself wrote), that they say
+#     something (R2), that no placeholder survived anywhere in tracked markdown
+#     (R3), and that no assistant preamble leaked into the release (R4). What
+#     it CANNOT establish is whether the prose is TRUE — no structural rule
+#     reaches that, and none here pretends to.
 
 # Where pause state lives. Under .git/, never in the working tree: the release
 # commit ends in a bare `git add .`, so a brief written beside the source would
@@ -302,6 +310,14 @@ manifest_handoff_pause() {
         printf 'brief=%s\n' "$brief"
     } > "$state" || return 1
 
+    # Snapshot the skeleton section so the re-run can tell "written" from
+    # "untouched" (R5). Taken here, after doc_generation has written it and
+    # before the driver sees it, which is the only moment it is Manifest's
+    # output and nobody else's.
+    _manifest_handoff_changelog_section \
+        "$project_root/CHANGELOG.md" "## [$version] - $release_date" \
+        > "$dir/skeleton-section.md" 2>/dev/null || true
+
     local replay="manifest ship repo $increment"
     [[ "$local_only" == "true" ]] && replay="$replay --local"
     replay="$replay -y"
@@ -366,7 +382,9 @@ manifest_handoff_pause() {
         printf -- '- **R1** `CHANGELOG.md` has exactly one heading `## [%s] - %s`.\n' "$version" "$release_date"
         printf -- '- **R2** That section has at least one `- ` bullet.\n'
         printf -- '- **R3** No version placeholder remains in tracked markdown.\n'
-        printf -- '- **R4** That section contains no assistant preamble ("As an AI", "Sure, here", ...).\n\n'
+        printf -- '- **R4** That section contains no assistant preamble ("As an AI", "Sure, here", ...).\n'
+        printf -- '- **R5** That section is no longer byte-identical to the skeleton below. Rewriting the\n'
+        printf -- '  bullets is the work being handed over; leaving them exactly as generated fails.\n\n'
         printf 'Manifest-managed blocks in README.md / docs/INDEX.md are regenerated for you;\n'
         printf 'do not edit inside them.\n\n' 
 
@@ -400,6 +418,20 @@ manifest_handoff_pause() {
 # Verification
 # ---------------------------------------------------------------------------
 
+# The body of one release section of a CHANGELOG, given its exact heading.
+# ONE derivation (§6): the pause snapshots the skeleton through this, and R5
+# re-reads the driver's version through it, so the two cannot disagree about
+# where a section starts and stops.
+_manifest_handoff_changelog_section() {
+    local file="$1" heading="$2"
+    [[ -f "$file" ]] || return 0
+    awk -v h="$heading" '
+        $0 == h { inside = 1; next }
+        inside && /^## \[/ { exit }
+        inside { print }
+    ' "$file" 2>/dev/null
+}
+
 # Verify the driver's documentation edits. Collects EVERY failure before
 # returning, so one re-run reports everything rather than one rule per attempt.
 manifest_handoff_verify() {
@@ -428,11 +460,7 @@ manifest_handoff_verify() {
 
     # R2 — the section says something.
     if [[ "$heading_count" == "1" ]]; then
-        section="$(awk -v h="$heading" '
-            $0 == h { inside = 1; next }
-            inside && /^## \[/ { exit }
-            inside { print }
-        ' "$changelog" 2>/dev/null)"
+        section="$(_manifest_handoff_changelog_section "$changelog" "$heading")"
         # Bullets inside a fenced block are an example, not release content —
         # the skeleton's own brief shows one, and copying it in would otherwise
         # satisfy R2 with nothing said.
@@ -452,6 +480,29 @@ manifest_handoff_verify() {
         banned="$(_manifest_handoff_banned_phrase "$section_prose")"
         if [[ -n "$banned" ]]; then
             failures+=("R4 CHANGELOG.md: the [$version] section contains assistant preamble (\"$banned\").")
+        fi
+
+        # R5 — the section is not still the skeleton. Without this rule every
+        # other rule is satisfied by MANIFEST'S OWN OUTPUT: the skeleton it
+        # writes at the pause has the right heading, has bullets, carries no
+        # placeholder and no preamble, so a driver that did nothing at all
+        # re-ran the command and was told "documentation handoff verified".
+        # A pause that cannot tell "written" from "untouched" is advice, not
+        # verification, and this module's header claims verification.
+        #
+        # Compared against the snapshot taken at the pause rather than
+        # regenerated here, because regenerating would need the commit range
+        # and the timestamp again and could differ for reasons the driver did
+        # not cause. An absent or empty snapshot skips the rule: it means the
+        # pause found no section to snapshot, and inventing a verdict from
+        # absent input is the §6 defect this repo keeps paying for.
+        local skeleton="$dir/skeleton-section.md"
+        if [[ -s "$skeleton" ]]; then
+            local snapshot
+            snapshot="$(cat "$skeleton" 2>/dev/null)"
+            if [[ "$section" == "$snapshot" ]]; then
+                failures+=("R5 CHANGELOG.md: the [$version] section is byte-identical to the skeleton Manifest wrote at the pause — the release notes have not been written. Edit the section, then re-run.")
+            fi
         fi
     fi
 
@@ -524,4 +575,4 @@ export -f manifest_handoff_state_dir manifest_handoff_policy \
     manifest_handoff_pending manifest_handoff_clear \
     manifest_handoff_stale_scan manifest_handoff_pause \
     manifest_handoff_verify _manifest_handoff_banned_phrase \
-    _manifest_handoff_state_get
+    _manifest_handoff_state_get _manifest_handoff_changelog_section

@@ -141,8 +141,12 @@ readonly MANIFEST_CLI_FLEET_DEFAULT_VERSION_FILE="FLEET_VERSION"
 #   $1 the candidate name
 #   $2 "version_file" to also refuse names colliding with the fixed
 #      coordination set; anything else checks only the universal rules.
+#   $3 the fleet root, optional. Supplied, the name is also checked against
+#      what is actually on disk there — see the directory rule below. Absent,
+#      only the syntactic rules run, so a caller without a root still gets
+#      every rejection that does not need one.
 _fleet_coordination_name_reject_reason() {
-    local name="$1" mode="${2:-}"
+    local name="$1" mode="${2:-}" root="${3:-}"
 
     if [[ ! "$name" =~ ^[A-Za-z0-9._-]+$ ]]; then
         printf '%s' "is not a plain file name"
@@ -178,6 +182,44 @@ _fleet_coordination_name_reject_reason() {
         fi
     done
 
+    # Secret-shaped names are refused OUTRIGHT, for both keys. This key's whole
+    # function is to widen what the coordination root commits and PUSHES, there
+    # is no key-material scan anywhere on the ship path, and §45 is the
+    # precedent that makes this a rejection rather than a warning: a credential
+    # written into an allowlisted fleet file was pushed *by design* and could
+    # not be recovered by any local action. A refusal costs an operator one
+    # rename; the other outcome costs them a rotation, if they notice at all.
+    #
+    # `.env.example` and `.env.template` are the two the repo's own rules
+    # already carve out — they exist to be committed, and refusing them would
+    # make this arm wrong in the one case an operator is most likely to want.
+    case "$folded" in
+        .env.example|.env.template) : ;;
+        .env|.env.*|*.env)
+            printf '%s' "is environment-file shaped, which is where credentials live"
+            return 0 ;;
+        *.local.yaml|*.local.yml|*.local.json|*.local.toml)
+            printf '%s' "is a host-local layer by naming convention, not a shared coordination file"
+            return 0 ;;
+        *.pem|*.key|*.p12|*.pfx|*.keystore|*.jks|id_rsa|id_dsa|id_ecdsa|id_ed25519)
+            printf '%s' "is key-material shaped"
+            return 0 ;;
+    esac
+
+    # A DIRECTORY is refused, and the reason is not tidiness. The .gitignore the
+    # root renders is `/*` plus one `!/<name>` per entry, and git's re-include
+    # of a directory re-includes its whole SUBTREE — measured: with `!/docs`,
+    # `git check-ignore docs/a.md` returns "not ignored" and the operator's own
+    # `git add .` stages it. Manifest itself would not commit it (the stager
+    # skips a name that is not a regular file), but the staged-set verifier
+    # compares whole names, so the first such file the operator stages aborts
+    # every subsequent coordination commit and the root stops releasing.
+    # Fail here, where the name can still be fixed, rather than there.
+    if [[ -n "$root" && -d "$root/$name" ]]; then
+        printf '%s' "is a directory at the fleet root; the re-include would un-ignore its whole subtree"
+        return 0
+    fi
+
     # A version file colliding with a coordination file DESTROYS that file: the
     # writer does `mv -f "$tmp" "$root/$name"`, and manifest.fleet.tsv is the
     # fleet's structure-of-record while manifest.fleet.config.yaml is the file
@@ -211,7 +253,7 @@ _fleet_root_version_name() {
     fi
     if [[ -n "$name" ]]; then
         local reject
-        reject="$(_fleet_coordination_name_reject_reason "$name" version_file)"
+        reject="$(_fleet_coordination_name_reject_reason "$name" version_file "$root")"
         if [[ -n "$reject" ]]; then
             if declare -F log_warning >/dev/null 2>&1; then
                 log_warning "fleet.version_file '$name' $reject; using '$MANIFEST_CLI_FLEET_DEFAULT_VERSION_FILE'."
@@ -233,8 +275,10 @@ _fleet_root_version_name() {
 # WHY IT IS SAFE TO COMMIT, unlike release.gate_command. It names FILES, not
 # programs; nothing here is executed. The allowlist property is preserved
 # because every entry is validated to a plain file name at the root — no paths,
-# no globs, no `..` — so a declared entry can never reach a member repository
-# or a directory. What it can do is widen what the root commits, which is why
+# no globs, no `..`, no directory, and nothing secret- or key-material-shaped —
+# so a declared entry can never reach a member repository, and the one class of
+# file whose publication cannot be undone is refused outright rather than
+# warned about. What it can do is widen what the root commits, which is why
 # the set is disclosed in the ship preview before any apply.
 #
 # Feeds _fleet_coordination_files, so the .gitignore renderer, the stager and
@@ -262,7 +306,7 @@ _fleet_extra_coordination_files() {
         trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
         [[ -n "$trimmed" ]] || continue
 
-        reject="$(_fleet_coordination_name_reject_reason "$trimmed")"
+        reject="$(_fleet_coordination_name_reject_reason "$trimmed" "" "$root")"
         if [[ -n "$reject" ]]; then
             if declare -F log_warning >/dev/null 2>&1; then
                 log_warning "fleet.coordination_files entry '$trimmed' $reject; ignoring it."

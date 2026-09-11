@@ -171,13 +171,63 @@ _handoff_state_date() {
     [ "$status" -eq 4 ]
 
     # The skeleton has bullets, so R1/R2/R4 pass; the placeholder in GUIDE.md
-    # is what is still wrong.
+    # and the untouched skeleton (R5) are what is still wrong.
     MANIFEST_CLI_DOCS_HANDOFF=always run_manifest ship repo patch --local -y
 
     [ "$status" -eq 4 ]
     [[ "$output" == *"R3 docs/GUIDE.md"* ]]
     [[ "$output" == *"not complete for 1.2.4"* ]]
     [ "$(git -C "$SCRATCH/work" show HEAD:VERSION)" = "1.2.3" ]
+}
+
+@test "R5: a driver that changed NOTHING in the release notes cannot pass" {
+    # The rule that stops the whole feature being advisory. Every other rule is
+    # satisfied by Manifest's OWN skeleton — right heading, bullets, no
+    # placeholder, no preamble — so before R5 existed a driver could re-run the
+    # identical command having done nothing and be told "handoff verified".
+    # Measured that way before the fix, in a scratch repo, exit 0.
+    #
+    # The placeholder is fixed here deliberately, so R3 cannot be what fails
+    # and R5 is the only rule left to explain the pause.
+    write_repo
+    MANIFEST_CLI_DOCS_HANDOFF=always run_manifest ship repo patch --local -y
+    [ "$status" -eq 4 ]
+
+    sed -i.bak 's/Coming in vNEXT: nothing yet./Coming next: nothing yet./' "$SCRATCH/work/docs/GUIDE.md"
+    rm -f "$SCRATCH/work/docs/GUIDE.md.bak"
+
+    MANIFEST_CLI_DOCS_HANDOFF=always run_manifest ship repo patch --local -y
+
+    [ "$status" -eq 4 ]
+    [[ "$output" == *"R5 CHANGELOG.md"* ]]
+    [[ "$output" == *"byte-identical to the skeleton"* ]]
+    [[ "$output" != *"R3 "* ]]
+    [[ "$output" != *"handoff verified"* ]]
+    # Nothing was released on the strength of an unwritten changelog.
+    [ "$(git -C "$SCRATCH/work" show HEAD:VERSION)" = "1.2.3" ]
+    refute git -C "$SCRATCH/work" rev-parse v1.2.4
+    # ...and the pause is still resumable: the brief and the snapshot survive.
+    [ -f "$(brief_path)" ]
+    [ -s "$SCRATCH/work/.git/manifest-ship/handoff/skeleton-section.md" ]
+}
+
+@test "CONTROL: R5 passes on a section the driver actually rewrote" {
+    # The other half of the mutation, without which R5 could be a rule that
+    # nothing can ever satisfy. THE GUARD below asserts the same landing for a
+    # different reason; this one names R5 as the thing being cleared.
+    write_repo
+    MANIFEST_CLI_DOCS_HANDOFF=always run_manifest ship repo patch --local -y
+    [ "$status" -eq 4 ]
+
+    write_driver_changelog
+    sed -i.bak 's/Coming in vNEXT: nothing yet./Coming next: nothing yet./' "$SCRATCH/work/docs/GUIDE.md"
+    rm -f "$SCRATCH/work/docs/GUIDE.md.bak"
+
+    MANIFEST_CLI_DOCS_HANDOFF=always run_manifest ship repo patch --local -y
+
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"R5 "* ]]
+    [[ "$output" == *"handoff verified"* ]]
 }
 
 @test "THE GUARD: the re-run keeps the driver's CHANGELOG instead of regenerating it" {

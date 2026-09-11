@@ -224,7 +224,7 @@ and a scan of every tracked markdown line still naming the previous version or h
 
 The re-run **does not regenerate `CHANGELOG.md`** — your text is what gets committed.
 Everything else Manifest owns, including the managed version blocks in `README.md` and
-`docs/INDEX.md`, is still regenerated, so leave those alone. Four things are verified
+`docs/INDEX.md`, is still regenerated, so leave those alone. Five things are verified
 before anything is committed:
 
 | Rule | What it checks |
@@ -233,9 +233,17 @@ before anything is committed:
 | R2 | That section has at least one bullet |
 | R3 | No version placeholder is left in tracked markdown |
 | R4 | The section contains no assistant boilerplate ("As an AI", "Sure, here", …) |
+| R5 | That section is no longer byte-identical to the skeleton Manifest wrote at the pause |
 
 If a rule fails, the ship stops again at `4`, names every rule that failed, and commits
 nothing. Fix and re-run.
+
+**R5 is the one that makes the other four mean anything.** Manifest's own skeleton has
+the right heading, has bullets, carries no placeholder and contains no boilerplate — so
+without R5 a driver who did nothing at all could re-run the command and be told the
+handoff was verified. Be equally clear about the limit: these rules establish that the
+release notes were *written*, not that they are *true*. No structural check reaches
+that, and none of these pretends to.
 
 **Manifest never runs a program for this.** Detection decides one thing — whether `auto`
 pauses — and nothing else; it is not a safety control, and it cannot select something to
@@ -384,6 +392,21 @@ are `.git` and the two config layers Manifest reads at a root
 (`manifest.config.yaml`, `manifest.config.local.yaml`) — the first is the fleet-shared
 layer every member inherits, and the second is deliberately untracked. Refused entries
 are named on stderr and ignored; the rest still apply.
+
+Three more rejections are worth knowing about before you hit them:
+
+- **A directory is refused**, even though it looks like a valid name. Git's re-include
+  of a directory re-includes its whole subtree, so `!/docs` would make everything under
+  `docs/` stageable at the root. Manifest would not commit it, but the staged-set
+  verifier matches whole names — so the first such file you staged yourself would abort
+  every later coordination commit and the root would stop releasing.
+- **Secret-shaped names are refused outright**: `.env` and `.env.*`, `*.local.{yaml,yml,json,toml}`,
+  and key material (`*.pem`, `*.key`, `*.p12`, `id_ed25519`, …). This key's whole
+  function is to widen what the root commits and **pushes**, and a pushed credential
+  cannot be recalled by any local action. `.env.example` and `.env.template` are the
+  deliberate exceptions — they exist to be committed.
+- The refusal is a rename, not a wall. If you genuinely need a file whose name matches
+  one of these, name it something that does not.
 
 ### Adopt An Existing Workspace
 

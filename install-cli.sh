@@ -1119,6 +1119,11 @@ Do this, in order:
 4. Re-run the identical command. It verifies your edits, then commits, tags and
    pushes. It does NOT regenerate the changelog: your text is what ships.
 
+Step 2 is not optional. The re-run refuses a section that is still byte-identical
+to the skeleton Manifest generated (rule R5) — so re-running without rewriting
+the bullets pauses again rather than releasing. Every other rule is satisfied by
+that skeleton already; R5 is the one that checks the work was actually done.
+
 Do not treat exit 4 as a broken release and do not try to recover from it: there
 is nothing to undo. Re-running the same command is the whole remedy.
 EOF
