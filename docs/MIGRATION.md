@@ -173,6 +173,60 @@ clone-from-elsewhere case exactly. A fleet whose members declare their own gate 
 in committed config must move each one to that member's `manifest.config.local.yaml`, or
 run with the trust variable set.
 
+## Upgrading to v61: the changelog stops guessing, and two new exit codes
+
+Three changes in v61.0.0 are visible without you configuring anything.
+
+**The canned changelog bullets are gone.** Manifest used to infer a *product claim* from
+a touched path — three module files changed, so the entry read *"Add GitHub Release
+publishing support"*, whether or not anything of the sort had happened. Those rules are
+deleted. What is left describes only what was touched — documentation and examples, shell
+completions, tests, the changelog — plus a count when nothing else fits, and the real
+commit subjects. **Your CHANGELOG entries and ship previews will read differently from
+v60 and earlier, and more modestly.** If something downstream parses those bullets, it is
+parsing sentences that were never measured; stop.
+
+**`ship fleet` now exits `2` when it completed partly** — one or more members released,
+then a later member or the fleet root failed. It used to exit `0` and print the same
+green closing line whether it released everything, released nothing, or failed at the
+root. A pipeline that treats any non-zero as total failure will now see a partial fleet
+release as a failure, which is the honest reading; one that treats `0` as "everything
+published" was wrong before and is right now.
+
+**The fleet ship's closing output changed shape along with it.** `✅ Fleet ship workflow
+complete.` used to print unconditionally; it now prints only when the run actually
+completed, and a partial or no-op run ends on a closing block naming members released,
+skipped and failed, plus the root's own outcome. If something greps for that line to
+confirm success, it will now correctly fail on a run that did not succeed — but it is
+an output change, so check for it before you upgrade a pipeline.
+
+**`fleet.coordination_files` is new, and it is a committed-config key that widens what
+the coordination root commits and pushes.** Nothing changes for an existing fleet — the
+default is the same five files as before — but if you adopt it, know that it is an
+allowlist of plain file names, that directories and secret-shaped names are refused, and
+that the resolved set is disclosed in the manager's preview before any apply. The full
+rules are in [USER_GUIDE.md](USER_GUIDE.md).
+
+**`4` is a pause, not a failure**, and it can only happen if you ask for it.
+`docs.handoff` defaults to `off`, so an upgrade changes nothing here. Set it to `always`
+(or `auto`, which pauses only when an AI agent is driving and never in CI) and a ship
+stops before the release commit, writes a brief under `.git/` naming what the
+documentation still needs, and exits `4`. No commit, no tag, no push. You edit the
+documentation and re-run the identical command; Manifest verifies the result and then
+releases. **Anything that reads a non-zero exit as a broken release needs to learn `4`
+before you turn this on** — including CI, which is why `auto` never pauses there.
+
+The full exit-code table is in
+[COMMAND_REFERENCE.md](COMMAND_REFERENCE.md#exit-codes).
+
+**What v61.0.0 does not carry, said plainly because it was reported as one problem.** If
+your fleet root runs a pre-commit hook that enforces conventional commit subjects, v61
+now shows you the hook's own output and names it as the cause instead of guessing at
+`user.name`, unstages exactly what it staged, and exits `2` rather than `0`. It does not
+yet make that commit *pass* — Manifest's own commit subjects come from one builder in a
+follow-up. Until then, the fleet root still stops at the coordination commit on such a
+repo; the difference is that it now tells you why.
+
 ## Versions are independent across a fleet
 
 Each repository counts up from its own `VERSION` file. Manifest never aligns versions
