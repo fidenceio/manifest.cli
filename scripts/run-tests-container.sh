@@ -49,10 +49,21 @@ done
 #   * 2 — chmod-based write-restriction tests, which root bypasses (the
 #         container runs as root against a host-owned bind mount)
 #   * 1 — configure_path's pty test, written against BSD script(1) + perl
-# All six are covered on the macOS CI leg. Anything beyond that is lost
-# coverage: fix the cause or move the number deliberately, with the reason
-# recorded here.
-MANIFEST_CLI_TEST_MAX_SKIPS="${MANIFEST_CLI_TEST_MAX_SKIPS:-6}"
+# Those six are covered on the macOS CI leg. Plus ONE that is not, and the
+# distinction matters:
+#   * 1 — fleet_ship_outcome.bats's "the gate runs in the FOREGROUND: it does
+#         not start with SIGINT ignored". It detects that the bats harness
+#         already ignores SIGINT and skips rather than passing vacuously, since
+#         a foreground and a backgrounded child are then indistinguishable.
+#         POSIX requires a shell to keep a signal ignored if it was ignored at
+#         entry, so this is not fixable from inside the harness — and it skips
+#         on BOTH legs, so unlike the six above it is lost coverage everywhere,
+#         not platform-specific. Raised 6 -> 7 on 2026-09-13 when §83 added it
+#         and the containerized leg went red on the budget with 2074/2074
+#         passing. Recorded rather than silently bumped, per the line below.
+# Anything beyond that is lost coverage: fix the cause or move the number
+# deliberately, with the reason recorded here.
+MANIFEST_CLI_TEST_MAX_SKIPS="${MANIFEST_CLI_TEST_MAX_SKIPS:-7}"
 export MANIFEST_CLI_TEST_MAX_SKIPS
 ENV_ARGS="$ENV_ARGS -e MANIFEST_CLI_TEST_MAX_SKIPS"
 
