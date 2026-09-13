@@ -217,6 +217,14 @@ pids
 # Coverage directory used by tools like istanbul
 coverage/
 
+# Scratch file lists the lint containers write into the bind-mounted repo root
+# (.github/workflows/lint.yml). Ephemeral on a CI runner, but reproducing a lint
+# failure locally leaves them in the tree — where the release commit's `git add .`
+# would stage them. Ignoring is the backstop; the fix is for those steps to write
+# outside /work (TRACKER §88).
+files.zero
+testfiles.zero
+
 # Dependency directories
 node_modules/
 
