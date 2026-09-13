@@ -1,5 +1,10 @@
 # Changelog
 
+## [61.2.0] - 2026-09-13
+
+**Release Type:** Minor — no user-facing changes.
+
+
 ## [61.1.0] - 2026-09-13
 
 **Release Type:** Minor — no user-facing changes.
@@ -106,17 +111,3 @@
 - Wire first-class CLI commands to inspectable built-in recipe definitions
 - Update shell completions for new command options
 - Add regression coverage for the changed CLI workflow
-
-
-## [59.8.0] - 2026-09-01
-
-**Release Type:** Minor
-
-### Changes
-
-- Fix(docs,test): make the release-state recipe runnable, and run it in the guard
-- Test(tracker): guard tier-tag/section agreement, and move §73 to T2
-- Fix(os): repair the OS layer's doppelganger, stdout leak and dead Bash-3.2 branches
-- Fix(test): stop the release-state guard failing on a tagless CI checkout
-- Refactor(os),docs(tracker): delete the dead OS shims, and cut four registers to one
-- Update documentation and examples
