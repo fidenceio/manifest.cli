@@ -1,5 +1,10 @@
 # Changelog
 
+## [61.1.0] - 2026-09-13
+
+**Release Type:** Minor — no user-facing changes.
+
+
 ## [61.0.0] - 2026-09-13
 
 **Release Type:** Major
@@ -115,16 +120,3 @@
 - Fix(test): stop the release-state guard failing on a tagless CI checkout
 - Refactor(os),docs(tracker): delete the dead OS shims, and cut four registers to one
 - Update documentation and examples
-
-
-## [59.7.0] - 2026-08-31
-
-**Release Type:** Minor
-
-### Changes
-
-- Docs(tracker): record v59.6.2 as released, and stop the post-release loop here
-- Docs(tracker),test: end the per-release docs commit, and guard it shut
-- Docs(tracker): sequence the user-feedback line, and record v59.6.2's increment
-- Fix(init): give .NET the renderer block it never had, and anchor bin/ instead of emitting it bare
-- Docs(tracker): close §69(a) at v59.7.0 and state why the increment is minor
