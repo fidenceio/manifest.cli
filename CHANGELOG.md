@@ -1,5 +1,25 @@
 # Changelog
 
+## [61.0.0] - 2026-09-13
+
+**Release Type:** Major
+
+### Changes
+
+- Feat(git): one commit executor; hook output shown and cause named (§82)
+- Feat(fleet): one closing block, exit 2 on partial, gate captured (§83)
+- Feat(ship): pause the release so the driver can finish the docs, then verify (§78)
+- Fix(changelog): stop asserting what a release did from the paths it touched (§78)
+- Feat(fleet): coordination files are declared, not hard-coded (§77a)
+- Fix(handoff,fleet): verification that can fail, and an allowlist that refuses directories and secrets (§78, §77a)
+- Docs(tracker,migration): retire §77 and §83, file §87, and say what v61 changes on upgrade (§77, §83, §78, §82, §87)
+- Fix(changelog): read the previous tag from HEAD, not HEAD~1 (§78)
+- Chore(gitignore): ignore the lint containers' scratch file lists (§88)
+- Test(wizard): drop the SIGPIPE race from the review-and-confirm assertions (§90)
+- Fix(test,docs): make the executor's identity precondition its own, not the platform's (§82, §91)
+- Test(container): raise the skip budget 6 -> 7 for §83's SIGINT-disposition skip
+
+
 ## [60.1.1] - 2026-09-09
 
 **Release Type:** Patch
@@ -108,16 +128,3 @@
 - Docs(tracker): sequence the user-feedback line, and record v59.6.2's increment
 - Fix(init): give .NET the renderer block it never had, and anchor bin/ instead of emitting it bare
 - Docs(tracker): close §69(a) at v59.7.0 and state why the increment is minor
-
-
-## [59.6.2] - 2026-08-28
-
-**Release Type:** Patch
-
-### Changes
-
-- Docs(tracker): make the resume block describe v59.6.1, and retire §59 as shipped
-- Docs(tracker): file §68 — main's branch protection binds nobody who ships
-- Update documentation and examples
-- Wire first-class CLI commands to inspectable built-in recipe definitions
-- Add regression coverage for the changed CLI workflow
