@@ -32,24 +32,24 @@ _call_review() {
     # Auto-confirm so the function returns 0 without consuming stdin.
     MANIFEST_CLI_AUTO_CONFIRM=1 run _call_review
     [ "$status" -eq 0 ]
-    echo "$output" | grep -qFx "Review your settings"
-    echo "$output" | grep -qFx "===================="
-    echo "$output" | grep -qF "Destination: $SCRATCH/manifest.config.local.yaml"
-    echo "$output" | grep -qFx "Project:"
-    echo "$output" | grep -qFx "Git:"
-    echo "$output" | grep -qFx "Time:"
-    echo "$output" | grep -qFx "Docs / automation / PR:"
+    grep -qFx "Review your settings" <<<"$output"
+    grep -qFx "====================" <<<"$output"
+    grep -qF "Destination: $SCRATCH/manifest.config.local.yaml" <<<"$output"
+    grep -qFx "Project:" <<<"$output"
+    grep -qFx "Git:" <<<"$output"
+    grep -qFx "Time:" <<<"$output"
+    grep -qFx "Docs / automation / PR:" <<<"$output"
     # Some of the actual values, to prove they're the ones being shown.
-    echo "$output" | grep -q "demo-project"
-    echo "$output" | grep -q "main"
-    echo "$output" | grep -q "https://t1"
+    grep -q "demo-project" <<<"$output"
+    grep -q "main" <<<"$output"
+    grep -q "https://t1" <<<"$output"
 }
 
 @test "review-and-confirm: returns 0 without prompting when MANIFEST_CLI_AUTO_CONFIRM=1" {
     # Don't pipe any input — the auto-confirm path must not call read.
     MANIFEST_CLI_AUTO_CONFIRM=1 run _call_review
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "MANIFEST_CLI_AUTO_CONFIRM=1"
+    grep -q "MANIFEST_CLI_AUTO_CONFIRM=1" <<<"$output"
 }
 
 @test "review-and-confirm: returns 0 on 'y' answer" {
