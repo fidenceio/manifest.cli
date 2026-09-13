@@ -175,7 +175,19 @@ run with the trust variable set.
 
 ## Upgrading to v61: the changelog stops guessing, and two new exit codes
 
-Three changes in v61.0.0 are visible without you configuring anything.
+Four changes in v61 are visible without you configuring anything.
+
+**A release cut with no commits since the last one no longer republishes that
+release's changelog.** If you cut a release immediately after another — a `--force-bump`
+on a tree the previous release left clean — Manifest read "the previous tag" from
+`HEAD~1`. On that state `HEAD` *is* the previous release's tagged commit, so `HEAD~1`
+stepped over its tag to the one before it, the range reopened the whole previous release,
+and the new entry claimed all of its bullets as its own. Exit `0`, no warning. The entry
+now correctly reads `**Release Type:** <type> — no user-facing changes.` **If you have
+published a release this way, its CHANGELOG entry is wrong and Manifest cannot correct it
+retroactively** — the text is already in your published changelog and release body. The
+range is now read from `HEAD`, which is the same answer on every ordinary release, so
+nothing else changes.
 
 **The canned changelog bullets are gone.** Manifest used to infer a *product claim* from
 a touched path — three module files changed, so the entry read *"Add GitHub Release
@@ -219,7 +231,7 @@ before you turn this on** — including CI, which is why `auto` never pauses the
 The full exit-code table is in
 [COMMAND_REFERENCE.md](COMMAND_REFERENCE.md#exit-codes).
 
-**What v61.0.0 does not carry, said plainly because it was reported as one problem.** If
+**What v61 does not carry, said plainly because it was reported as one problem.** If
 your fleet root runs a pre-commit hook that enforces conventional commit subjects, v61
 now shows you the hook's own output and names it as the cause instead of guessing at
 `user.name`, unstages exactly what it staged, and exits `2` rather than `0`. It does not

@@ -107,16 +107,28 @@ EOF
     refute git -C "$r" rev-parse -q --verify HEAD
 }
 
-@test "executor: a repo with NO identity and a refusing hook names the hook — git auto-detected an identity, so the hook is what said no" {
+@test "executor: a repo with NO identity of its own but one git can still find, plus a refusing hook, names the hook" {
     local r; r="$(mk_repo hooknoident)"
     git -C "$r" config --unset user.email
     git -C "$r" config --unset user.name
     mk_hook "$r" 1 "HOOK-FIXTURE: refusing this commit"
-    local empty_global="$SCRATCH/empty-gitconfig"; : > "$empty_global"
-    # A probe for a CONFIGURED identity would fire here on macOS (git would
-    # auto-detect one and commit) and blame identity for the hook's refusal.
+    # The identity lives in the GLOBAL config, never the repo's — so a probe for
+    # a CONFIGURED identity at repo level still fires here and blames identity
+    # for the hook's refusal, which is the misattribution this test exists to
+    # catch. What it must NOT depend on is git's auto-detection: that succeeds
+    # on macOS (hostname resolves) and FAILS in the Linux test container, where
+    # git refuses `root@…(none)` — so this test passed locally and was red on
+    # the containerized leg for the whole v61 batch, invisible because the local
+    # gate is macOS-only (§33, §74). Supplying the identity makes the
+    # precondition the test's own, not the platform's.
+    local host_global="$SCRATCH/host-gitconfig"
+    cat > "$host_global" <<'GITCFG'
+[user]
+	name = Executor Fixture
+	email = executor-fixture@example.invalid
+GITCFG
     run env -u GIT_AUTHOR_NAME -u GIT_AUTHOR_EMAIL -u GIT_COMMITTER_NAME -u GIT_COMMITTER_EMAIL \
-        GIT_CONFIG_GLOBAL="$empty_global" GIT_CONFIG_NOSYSTEM=1 \
+        GIT_CONFIG_GLOBAL="$host_global" GIT_CONFIG_NOSYSTEM=1 \
         bash -c 'set -eo pipefail; export MANIFEST_CLI_CORE_MODULES_DIR="$1"; source "$1/core/manifest-shared-utils.sh"; source "$1/system/manifest-install-paths.sh"; source "$1/git/manifest-git-commit.sh"; manifest_git_commit "$2" "chore(test): hook first"' \
         _ "$TEST_REPO_ROOT/modules" "$r"
     [ "$status" -eq 5 ]
