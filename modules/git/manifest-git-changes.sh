@@ -128,8 +128,19 @@ get_git_changes() {
     local last_tag=""
     local range=""
 
-    # Get the previous tag (not the current one)
-    last_tag=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+    # The previous release's tag. Read from HEAD, NOT HEAD~1.
+    #
+    # This runs BEFORE the release is tagged, so HEAD never carries the tag
+    # being built and `describe HEAD` always answers "the release before this
+    # one" — which is exactly the range we want.
+    #
+    # `HEAD~1` was wrong in one case and silently so: on a --force-bump release
+    # with no commits since the last one, HEAD *is* the previous release commit
+    # and *is* tagged, so HEAD~1 steps over that tag to the one before it. The
+    # range then reopens the whole previous release and this release republishes
+    # its bullets as its own — a false changelog, exit 0. Measured: a v2.1.0 cut
+    # immediately after v2.0.0 claimed every one of v2.0.0's changes.
+    last_tag=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || echo "")
 
     if [[ -n "$last_tag" ]]; then
         log_info "Getting changes since $last_tag" >&2
