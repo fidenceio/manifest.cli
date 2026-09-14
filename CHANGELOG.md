@@ -1,5 +1,15 @@
 # Changelog
 
+## [61.2.1] - 2026-09-14
+
+**Release Type:** Patch
+
+### Changes
+
+- Docs(tracker,agents): trim the register to what is open, and stand up the review panel (§2, §3, §25, §36, §52, §69, §78, §81, §82, §88, §90, §91)
+- Docs(tracker): state the VERSION-ahead-of-code fact as a derivation, not a number (§5)
+
+
 ## [61.2.0] - 2026-09-13
 
 **Release Type:** Minor — no user-facing changes.
@@ -99,15 +109,3 @@
 
 - Fix(cleanup): stop the empty-dir sweep reaching into linked worktrees
 - Update documentation and examples
-
-
-## [59.9.0] - 2026-09-01
-
-**Release Type:** Minor
-
-### Changes
-
-- Update documentation and examples
-- Wire first-class CLI commands to inspectable built-in recipe definitions
-- Update shell completions for new command options
-- Add regression coverage for the changed CLI workflow
