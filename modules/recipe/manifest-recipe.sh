@@ -319,6 +319,11 @@ manifest_recipe_run() {
         "manifest ship fleet minor") manifest_ship_fleet minor "$@" ;;
         "manifest ship fleet major") manifest_ship_fleet major "$@" ;;
         "manifest ship fleet revision") manifest_ship_fleet revision "$@" ;;
+        # The built-in recipe's `command:` moved to the post-fold spelling; the
+        # old string stays wired so an out-of-tree or pinned recipe that still
+        # says "manifest prep repo" keeps running (via the deprecated wrapper,
+        # which announces the replacement).
+        "manifest init repo --connect") manifest_init_connect_repo "$@" ;;
         "manifest prep repo") manifest_prep_repo "$@" ;;
         "manifest refresh repo") manifest_refresh_repo "$@" ;;
         "manifest pr ready") manifest_pr_ready "$@" ;;

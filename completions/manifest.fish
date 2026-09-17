@@ -42,7 +42,7 @@ complete -c manifest -f
 
 complete -c manifest -n '__manifest_token_count 1' -a first       -d 'Guided onboarding — inspect this directory and set up Manifest'
 complete -c manifest -n '__manifest_token_count 1' -a config      -d 'Setup wizard / show configuration'
-complete -c manifest -n '__manifest_token_count 1' -a init        -d 'Scaffold a repo or fleet'
+complete -c manifest -n '__manifest_token_count 1' -a init        -d "Set up a repo or fleet (--connect for remotes)"
 complete -c manifest -n '__manifest_token_count 1' -a plan        -d 'Generate an adoption plan'
 complete -c manifest -n '__manifest_token_count 1' -a reconcile   -d 'Validate and apply an adoption plan'
 complete -c manifest -n '__manifest_token_count 1' -a status      -d 'Read-only snapshot'
@@ -51,7 +51,7 @@ complete -c manifest -n '__manifest_token_count 1' -a discover    -d 'Discover r
 complete -c manifest -n '__manifest_token_count 1' -a update      -d 'Update fleet membership'
 complete -c manifest -n '__manifest_token_count 1' -a add         -d 'Add a resource to Manifest-managed configuration'
 complete -c manifest -n '__manifest_token_count 1' -a validate    -d 'Validate fleet configuration'
-complete -c manifest -n '__manifest_token_count 1' -a prep        -d 'Connect remotes, pull latest'
+complete -c manifest -n '__manifest_token_count 1' -a prep        -d "DEPRECATED: use init --connect"
 complete -c manifest -n '__manifest_token_count 1' -a refresh     -d 'Regenerate docs and metadata'
 complete -c manifest -n '__manifest_token_count 1' -a docs        -d 'Regenerate documentation for a repo or fleet'
 complete -c manifest -n '__manifest_token_count 1' -a topics      -d 'Add GitHub topics from each repo name'
@@ -103,8 +103,10 @@ complete -c manifest -n '__manifest_token_count 2; and __manifest_path reinstall
 
 # --- third-token arguments (token 3) -----------------------------------------
 
+complete -c manifest -n '__manifest_path init repo' \
+    -a '-y --yes --force --dry-run --connect --no-connect --create-repo-private --create-repo-public --help'
 complete -c manifest -n '__manifest_path init fleet' \
-    -a '-y --yes --depth --all-folders --force --dry-run --name --create-repo-private --create-repo-public --help'
+    -a '-y --yes --depth --all-folders --force --dry-run --name --connect --no-connect --parallel --clone-only --pull-only --create-repo-private --create-repo-public --help'
 complete -c manifest -n '__manifest_path ship repo' \
     -a 'patch minor major revision resume -y --yes --local --dry-run --explain --force-bump -i --interactive'
 complete -c manifest -n '__manifest_path ship fleet' \

@@ -1015,7 +1015,7 @@ _status_fleet_bootstrap_report() {
         echo ""
         echo "No changes written. To restore the absent members, clone each remote"
         echo "into its declared path, or run the fleet sync apply path:"
-        echo "  manifest prep fleet --clone-only -y"
+        echo "  manifest init fleet --connect --clone-only -y"
     fi
 }
 

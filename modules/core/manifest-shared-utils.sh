@@ -1150,14 +1150,34 @@ manifest_git_preflight_write_access() {
 # git-root existence is guaranteed by the manifest_repo_scope_require_git call
 # at the top of the gate, so it is not re-checked here.
 #
-# Both requirements default to TRUE, so every existing caller (ship, prep,
-# refresh, pr) keeps byte-identical semantics. They are relaxable only by an
-# operation that PUBLISHES NOTHING: what makes a target "ambiguous" is not
-# knowing where a change will land, and that question is meaningless for an
-# operation which only deletes local, untracked, regenerable files. `cleanup`
-# is the sole such caller today and passes false for both — see
-# manifest_cleanup_dispatch. Do not relax either one for an operation that
-# commits, tags, pushes or publishes.
+# Both requirements default to TRUE, so every existing caller (ship, init,
+# refresh, pr) keeps byte-identical semantics.
+#
+# WHEN A REQUIREMENT MAY BE RELAXED. The test is not "does this operation
+# publish" — it is: **is the condition being required the operation's own
+# premise?** A requirement that the operation exists to establish cannot also
+# be its precondition; demanding it makes the operation unreachable rather
+# than safe. Two callers qualify today, for two different reasons:
+#
+#   * `cleanup` passes false for BOTH (manifest_cleanup_dispatch). It deletes
+#     local, untracked, regenerable files and publishes nothing, so "where
+#     will this land" has no content for it.
+#
+#   * the connect phase of `init` passes origin_required=false, and ONLY when
+#     --create-repo-private/--create-repo-public is set
+#     (manifest_init_connect_repo). That operation DOES publish — it creates a
+#     GitHub repository — so the older wording here ("relaxable only by an
+#     operation that PUBLISHES NOTHING", "`cleanup` is the sole such caller")
+#     forbade it and was left behind when it landed. It qualifies under the
+#     premise rule instead: the flag exists precisely for a repo that has no
+#     origin yet, so requiring an origin left it with no state in which it
+#     could run. head_required stays TRUE for it — a detached HEAD is still
+#     ambiguous, and nothing about creating a remote resolves that.
+#
+# Relaxing a requirement an operation does NOT establish is still forbidden.
+# Nothing that commits, tags or pushes to an EXISTING remote may pass false
+# for origin_required, and nothing at all should pass false for head_required
+# without a reason of this shape written down here.
 manifest_repo_scope_target_unambiguous() {
     local git_root="$1"
     local origin_required="${2:-true}"

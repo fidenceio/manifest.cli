@@ -83,8 +83,16 @@ _manifest_complete() {
             ;;
         3)
             case "${words[1]} ${words[2]}" in
+                # `init repo` had no third-token completion at all before the
+                # prep fold, so --create-repo-* was never offered on the scope
+                # that accepts it. --connect is the connect phase (what
+                # `prep repo` used to be); --create-repo-* implies it.
+                "init repo")
+                    COMPREPLY=( $(compgen -W "-y --yes --force --dry-run --connect --no-connect --create-repo-private --create-repo-public --help" -- "$cur") )
+                    return 0
+                    ;;
                 "init fleet")
-                    COMPREPLY=( $(compgen -W "-y --yes --depth --all-folders --force --dry-run --name --create-repo-private --create-repo-public --help" -- "$cur") )
+                    COMPREPLY=( $(compgen -W "-y --yes --depth --all-folders --force --dry-run --name --connect --no-connect --parallel --clone-only --pull-only --create-repo-private --create-repo-public --help" -- "$cur") )
                     return 0
                     ;;
                 "ship repo")

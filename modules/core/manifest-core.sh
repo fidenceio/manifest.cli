@@ -668,18 +668,18 @@ _manifest_pr_fleet_dispatch() {
     fi
 }
 
-# Legacy prep entry point — kept for internal callers (manifest_ship in pr module)
-manifest_prep() {
-    local increment_type="${1:-}"
-    local interactive="${2:-false}"
-    local publish_release="${3:-false}"
-    if [ -z "$increment_type" ]; then
-        log_error "prep requires a release type subcommand"
-        echo "Usage: manifest ship repo <patch|minor|major|revision> [--local] [-i]"
-        return 1
-    fi
-    manifest_ship_workflow "$increment_type" "$interactive" "$publish_release"
-}
+# NOTE (fold of `prep` into `init`, and the dead chain removed with it):
+#
+# A function named `manifest_prep` used to live here. Its comment said it was
+# "kept for internal callers (manifest_ship in pr module)" — there was no such
+# caller. What it actually did was call `manifest_ship_workflow`: a prep-named
+# function that ran a release. Its only caller was `_fleet_prep_run`, whose only
+# caller was `fleet_prep`, which nothing called at all. Three functions, one
+# dead chain, verified with a positive control before deletion (§21's rule:
+# confirmed dead code is deleted, not fixed).
+#
+# The live connect phase is manifest_init_connect_repo / _fleet in
+# modules/core/manifest-prep.sh. `manifest prep` is a deprecated alias for it.
 
 main() {
     # Set MANIFEST_CLI_INSTALL_LOCATION early for security checks
@@ -1460,16 +1460,21 @@ Run 'git switch -' to go back to the branch you came from." \
             fleet_main "$@"
             ;;
 
-        # Old "manifest sync" -> new "manifest prep repo"
+        # Old "manifest sync" -> now "manifest init repo --connect".
+        #
+        # Point this at the CURRENT spelling, not at `prep repo`. `prep` is
+        # itself deprecated now, so forwarding here would have emitted two
+        # deprecation warnings for one command and named a deprecated verb as
+        # the replacement for a deprecated verb. Call the connect phase directly.
         "sync")  # manifest:hidden
             if _manifest_cli_has_help_token "$@"; then
                 _render_help \
                     "manifest sync" \
-                    "Deprecated alias for manifest prep repo."
+                    "Deprecated alias for manifest init repo --connect."
                 return 0
             fi
-            log_deprecated "manifest sync" "manifest prep repo"
-            manifest_prep_repo
+            log_deprecated "manifest sync" "manifest init repo --connect"
+            manifest_init_connect_repo
             ;;
 
         # Old "manifest time" -> accessible via "manifest config time"
@@ -1702,10 +1707,23 @@ changes. A few use their own word instead: 'plan fleet --apply' and
   Getting started:
     first                               Inspect this folder and set Manifest up.
                                         Start here — it works out whether you are
-                                        in a repo or a fleet and runs the right
-                                        one. Takes no repo|fleet scope.
-    init repo|fleet                     Create the files a repo or fleet needs.
-                                        Writes files; never touches the network
+                                        in a repo or a fleet and runs 'init' for
+                                        you. Writes nothing of its own. Takes no
+                                        repo|fleet scope.
+    init repo|fleet                     Set it up. Two phases:
+                                        scaffold — writes the files a repo or a
+                                        fleet needs; no network calls at all;
+                                        connect (--connect) — adds or creates
+                                        'origin', clones, pulls. Every network
+                                        call init can make is in that phase, and
+                                        it is off unless you ask for it.
+         --create-repo-private          Create a GitHub repo and add as origin.
+         --create-repo-public           --public PUBLISHES it. Both imply
+                                        --connect
+    prep repo|fleet                     DEPRECATED — this was init's connect
+                                        phase under its own verb. Use
+                                        'init repo|fleet --connect'. Still
+                                        works; prints a notice
     doctor                              Check tools, config, repo health
     status                              Show what would happen next (read-only)
 
@@ -1727,9 +1745,8 @@ changes. A few use their own word instead: 'plan fleet --apply' and
     plan fleet                          Write a plan of proposed repairs
     reconcile fleet                     Carry out that plan
     topics fleet                        Set GitHub topics from repo names
-    prep repo|fleet                     Add missing remotes, clone, pull.
-                                        The only one that uses the network; it
-                                        scaffolds nothing but .env.example
+    init fleet --connect                Clone missing members, pull the rest
+                                        (was 'prep fleet')
 
   Documentation:
     docs [fleet]                        Regenerate docs for a repo or fleet

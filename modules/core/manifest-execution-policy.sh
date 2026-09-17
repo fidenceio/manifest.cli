@@ -159,8 +159,13 @@ manifest_execution_replay_hint() {
 # (and is the natural single place for the future apply-event audit log).
 # Returns non-zero if apply was declined or write access failed.
 # $5/$6 forward the two target-ambiguity requirements to the gate, both
-# defaulting to true so existing callers are unchanged. Only an operation that
-# publishes nothing may pass false — see manifest_repo_scope_target_unambiguous.
+# defaulting to true so existing callers are unchanged. A caller may pass false
+# only for a requirement that its own operation EXISTS TO ESTABLISH — not
+# merely because it publishes nothing. Two callers qualify: `cleanup` (both,
+# it publishes nothing) and `init`'s connect phase under --create-repo-*
+# (origin_required only — it creates the origin). Full rule and the reason the
+# older "publishes nothing" wording was wrong: see
+# manifest_repo_scope_target_unambiguous in manifest-shared-utils.sh.
 manifest_execution_require_apply() {
     local mode="$1"
     local project_root="$2"

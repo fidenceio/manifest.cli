@@ -17,7 +17,7 @@ _manifest() {
     top_cmds=(
         'first:Guided onboarding — inspect this directory and set up Manifest'
         'config:Setup wizard / show configuration'
-        'init:Scaffold a repo or fleet'
+        'init:Set up a repo or fleet (--connect for remotes)'
         'plan:Generate an adoption plan'
         'reconcile:Validate and apply an adoption plan'
         'status:Read-only snapshot'
@@ -26,7 +26,7 @@ _manifest() {
         'update:Update fleet membership'
         'add:Add a resource to Manifest-managed configuration'
         'validate:Validate fleet configuration'
-        'prep:Connect remotes, pull latest'
+        'prep:DEPRECATED: use init --connect'
         'refresh:Regenerate docs and metadata'
         'docs:Regenerate documentation for a repo or fleet'
         'topics:Add GitHub topics from each repo name'
@@ -112,8 +112,11 @@ _manifest() {
             ;;
         arg3)
             case "$words[2] $words[3]" in
+                "init repo")
+                    _values 'option' -y --yes --force --dry-run --connect --no-connect --create-repo-private --create-repo-public --help
+                    ;;
                 "init fleet")
-                    _values 'option' -y --yes --depth --all-folders --force --dry-run --name --create-repo-private --create-repo-public --help
+                    _values 'option' -y --yes --depth --all-folders --force --dry-run --name --connect --no-connect --parallel --clone-only --pull-only --create-repo-private --create-repo-public --help
                     ;;
                 "ship repo")
                     _values 'release type / option' "${bumps[@]}" resume -y --yes --local --dry-run --explain --force-bump -i --interactive

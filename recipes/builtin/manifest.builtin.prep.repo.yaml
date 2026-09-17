@@ -1,10 +1,10 @@
 id: manifest.builtin.prep.repo
 title: Prep Repo
 kind: builtin
-command: manifest prep repo
+command: manifest init repo --connect
 scope: repo
-summary: Preview or apply repository prep for the current Git repository, including repo-scope validation, target confirmation, remote inspection, and latest-state sync.
-entrypoint: manifest_prep_repo
+summary: Preview or apply the connect phase of init for the current Git repository, including repo-scope validation, target confirmation, remote inspection, and latest-state sync.
+entrypoint: manifest_init_connect_repo
 execution:
   default_mode: preview
   requires_yes_for: [local-write]

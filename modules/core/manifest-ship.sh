@@ -25,7 +25,7 @@
 # DEPENDENCIES:
 #   - manifest-pr.sh (manifest_ship — the existing ship function)
 #   - manifest-orchestrator.sh (manifest_ship_workflow)
-#   - manifest-fleet.sh (fleet_ship, fleet_prep)
+#   - manifest-fleet.sh (fleet_ship)
 # =============================================================================
 
 # Guard against multiple sourcing
@@ -711,7 +711,9 @@ manifest_ship_repo() {
 # Function: manifest_ship_fleet
 # -----------------------------------------------------------------------------
 # Coordinated fleet ship: version bump + docs + commit + tag + push across fleet.
-# With --local: local-only (delegates to fleet_prep instead of fleet_ship).
+# With --local: local-only — fleet_ship runs the same member loop and stops
+# before tag/push. (This line used to claim it delegated to `fleet_prep`; that
+# function had no callers and has been deleted.)
 #
 # ARGUMENTS:
 #   $1             Increment type: patch|minor|major|revision
@@ -767,7 +769,9 @@ manifest_ship_fleet() {
   -y, --yes                Apply the fleet release plan
   --local                  With -y, local only — no push, no tags (ship and manager; not valid for resume)
   --explain                Show the built-in recipe definition without running it
-  --noprep                 Skip per-service prep step (requires clean trees)
+  --noprep                 Require every member tree to be clean before shipping.
+                           No per-member prep step runs in either mode — this flag
+                           only adds the clean-tree check.
   --force-bump             Ship every release-eligible member even with no changes since its tag
                            (forward-only — new commit + tag; honors pr-gated/release-disabled)" \
                     "Flow" "  preview:  load fleet -> render per-service release plan -> name the workspace policy gate

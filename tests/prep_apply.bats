@@ -63,7 +63,8 @@ make_behind_clone() {
     # applies on -y alone, no AUTO_CONFIRM needed.
     echo "$output" | grep -q "Auto-confirmed unambiguous target (apply via -y)"
     echo "$output" | grep -q "Applying because -y/--yes was provided."
-    echo "$output" | grep -q "Preparing repository: $SCRATCH/work"
+    # Banner wording changed with the fold: prep is now init's connect phase.
+    echo "$output" | grep -q "Connecting repository: $SCRATCH/work"
 
     # The pull really ran against the local origin.
     echo "$output" | grep -q "Syncing with origin"

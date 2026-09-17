@@ -160,11 +160,16 @@ assert_preview_clean() {
     assert_preview_clean sync
 }
 
-@test "sync alias: default invocation routes through prep repo's replay hint" {
+@test "sync alias: default invocation routes through the connect phase's replay hint" {
+    # `sync` forwarded to `prep repo` until prep itself was deprecated; pointing
+    # one deprecated verb at another emitted two warnings for one command and
+    # named a deprecated replacement. It now calls the connect phase directly.
     setup_repo_with_remote
     run_manifest sync
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "manifest prep repo -y"
+    echo "$output" | grep -q "manifest init repo --connect -y"
+    # And must not regress to naming the deprecated verb as the way forward.
+    ! echo "$output" | grep -q "manifest prep repo -y"
 }
 
 # -----------------------------------------------------------------------------

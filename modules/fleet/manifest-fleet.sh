@@ -35,7 +35,7 @@
 #
 # COMMANDS (v42 entry points — preferred):
 #   manifest init fleet      - Scaffold a new fleet (calls _fleet_start / _fleet_init)
-#   manifest prep fleet      - Clone/pull all services (calls _fleet_sync)
+#   manifest init fleet --connect - Clone/pull all services (calls _fleet_sync)
 #   manifest update fleet    - Re-scan and add new repos (--dry-run to preview)
 #   manifest ship fleet      - Coordinated release across services
 #
@@ -44,7 +44,7 @@
 #   manifest refresh fleet   - DEPRECATED — use 'update fleet' (+ 'docs fleet')
 #   manifest discover fleet  - Alias for 'update fleet --dry-run'
 #   manifest add fleet       - Add a service to fleet
-#   manifest prep fleet      - Coordinated version bump (no commit/push)
+#   manifest prep fleet      - DEPRECATED alias for init fleet --connect
 #   manifest docs fleet      - Generate unified documentation
 #   manifest validate fleet  - Validate configuration
 #
@@ -377,7 +377,7 @@ fleet_status() {
     echo "Quick actions:"
     echo "  manifest update fleet             - Re-scan and add new repos"
     echo "  manifest update fleet --dry-run   - Preview new repos"
-    echo "  manifest prep fleet               - Clone missing, pull existing"
+    echo "  manifest init fleet --connect     - Clone missing, pull existing"
     echo "  manifest ship fleet patch         - Coordinated release"
 }
 
@@ -1399,7 +1399,7 @@ EOF
             echo "Next steps:"
             echo "  1. Review manifest.fleet.config.yaml and adjust service configuration"
             echo "  2. Run 'manifest status' to see fleet overview"
-            echo "  3. Run 'manifest prep fleet' to clone/pull all services"
+            echo "  3. Run 'manifest init fleet --connect -y' to clone/pull all services"
             echo "  4. Run 'manifest ship fleet patch' for first coordinated release"
             echo ""
         fi
@@ -1525,7 +1525,7 @@ fleet_discover() {
 }
 
 # =============================================================================
-# INTERNAL: fleet sync (called by 'manifest prep fleet')
+# INTERNAL: fleet sync (called by 'manifest init fleet --connect')
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -1660,7 +1660,11 @@ _fleet_sync_dry_run() {
     echo "────────────────────────────────────────────────────────────────────────"
     echo "Plan: $would_clone clone, $would_pull pull, $would_skip skip, $would_fail fail (of $total total)"
     echo ""
-    local replay_command="manifest prep fleet"
+    # Name the spelling the user typed. Hardcoding "manifest prep fleet" made
+    # `manifest init fleet --connect` print a replay hint for the DEPRECATED
+    # verb — a new command teaching the old one. _MANIFEST_CLI_INIT_CONNECT_ALIAS
+    # is set only by the deprecated wrapper; default to the current spelling.
+    local replay_command="${_MANIFEST_CLI_INIT_CONNECT_ALIAS:-manifest init fleet --connect}"
     [[ "$parallel" == "true" ]] && replay_command="$replay_command --parallel"
     [[ "$clone_only" == "true" ]] && replay_command="$replay_command --clone-only"
     [[ "$pull_only" == "true" ]] && replay_command="$replay_command --pull-only"
@@ -2087,7 +2091,7 @@ EOF
             printf "  - %-25s %s\n" "$name" "$path"
         done
         echo ""
-        echo "  Run 'manifest prep fleet' to clone missing repos,"
+        echo "  Run 'manifest init fleet --connect -y' to clone missing repos,"
         echo "  or remove them from manifest.fleet.config.yaml manually."
     fi
 
@@ -2197,86 +2201,6 @@ fleet_topics() {
     if [[ "$dry_run" == "true" ]]; then
         return "$(manifest_preview_exit_code)"
     fi
-}
-
-# =============================================================================
-# COMMAND: prep fleet
-# =============================================================================
-
-# -----------------------------------------------------------------------------
-# Function: fleet_prep
-# -----------------------------------------------------------------------------
-# Runs manifest prep across all fleet services. This is the coordinated version
-# bump step that can be invoked standalone or as part of fleet ship.
-#
-# ARGUMENTS:
-#   $1 - Increment type: patch|minor|major|revision (default: patch)
-#
-# EXAMPLE:
-#   manifest prep fleet
-#   manifest prep fleet minor
-# -----------------------------------------------------------------------------
-# Internal prep runner (no banner — called by fleet_ship and fleet_prep)
-_fleet_prep_run() {
-    local increment_type="${1:-patch}"
-
-    local any_failures=0
-    for service in $MANIFEST_CLI_FLEET_SERVICES; do
-        local path
-        path=$(get_fleet_service_property "$service" "path")
-        if [ ! -d "$path/.git" ]; then
-            echo "  - $service: skipped (not a git repo)"
-            continue
-        fi
-        (
-            cd "$path" || exit 1
-            # This IS a delegated apply — the fleet's consent covers it — and
-            # the marker has to say so. Two consumers read it: the ambiguous-
-            # target gate, and the documentation handoff, which must never
-            # pause a member (a member's non-zero status breaks this loop into
-            # the recovery report, so a deliberate pause would read as a failed
-            # prep). Found by the pre-commit steward review: this call site was
-            # the one delegated path that never set it.
-            export _MANIFEST_CLI_DELEGATED_APPLY_CONSENT=1
-            manifest_prep "$increment_type" "false"
-        ) || {
-            echo "  - $service: ❌ prep failed"
-            any_failures=1
-        }
-    done
-
-    if [ "$any_failures" -eq 1 ]; then
-        log_error "Fleet prep failed for one or more services."
-        return 1
-    fi
-}
-
-fleet_prep() {
-    if ! _fleet_require_initialized "prep"; then
-        return 1
-    fi
-
-    local increment_type="${1:-patch}"
-
-    if [[ ! "$increment_type" =~ ^(patch|minor|major|revision)$ ]]; then
-        log_error "Invalid increment type: '$increment_type' (expected patch|minor|major|revision)"
-        return 1
-    fi
-
-    echo ""
-    echo "╔══════════════════════════════════════════════════════════════════════╗"
-    echo "║                         MANIFEST FLEET PREP                          ║"
-    echo "╚══════════════════════════════════════════════════════════════════════╝"
-    echo ""
-    echo "Running prep ($increment_type) across fleet services..."
-
-    if ! _fleet_prep_run "$increment_type"; then
-        return 1
-    fi
-
-    echo ""
-    echo "✓ Fleet prep complete ($increment_type)"
-    echo ""
 }
 
 # =============================================================================
@@ -4140,7 +4064,8 @@ Options:
   --dry-run                 Explicit preview; no writes, commits, tags, pushes, or PRs
   -y, --yes                 Apply the fleet release plan
   --local                   With -y, apply local release prep only
-  --noprep                  Skip per-service prep step during apply
+  --noprep                  Require every member tree to be clean before apply
+                            (adds a clean-tree check; no prep step runs either way)
   --force-bump              Ship every release-eligible member even with no changes
                             since its tag (forward-only; honors pr-gated/disabled)
 
@@ -4996,7 +4921,7 @@ fleet_main() {
                 discover)   replacement="manifest discover fleet" ;;
                 docs)       replacement="manifest docs fleet" ;;
                 init|start) replacement="manifest init fleet" ;;
-                prep|sync)  replacement="manifest prep fleet" ;;
+                prep|sync)  replacement="manifest init fleet --connect" ;;
                 pr)         replacement="manifest pr fleet" ;;
                 ship)       replacement="manifest ship fleet" ;;
                 status)     replacement="manifest status" ;;
@@ -5035,7 +4960,7 @@ Use action-first commands:
   manifest init fleet           Scaffold
   manifest plan fleet           Generate an adoption plan (dry-run by default)
   manifest reconcile fleet      Apply a validated adoption plan (--apply/--do)
-  manifest prep fleet           Clone/pull
+  manifest init fleet --connect Clone/pull
   manifest discover fleet       Preview fleet membership discovery
   manifest update fleet         Re-scan and add new repos
   manifest refresh fleet        DEPRECATED — use 'update fleet' (+ 'docs fleet')
@@ -5128,7 +5053,7 @@ COMMAND DETAILS:
       --dry-run          Explicit preview; no writes, commits, tags, or pushes
       -y, --yes          Apply the fleet release plan
       --local            With -y, local release prep only
-      --noprep           Skip per-service prep step (requires clean trees)
+      --noprep           Require every member tree to be clean before shipping
       --explain          Show the built-in recipe definition without running it
     PR flags (--safe, --method, --force, --no-delete-branch, --draft) belong
     under 'manifest pr fleet ...'.
@@ -5183,7 +5108,7 @@ EXAMPLES:
   manifest status
 
   # Clone all missing services
-  manifest prep fleet
+  manifest init fleet --connect -y
 
 EOF
 }

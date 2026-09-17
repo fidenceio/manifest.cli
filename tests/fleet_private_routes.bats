@@ -32,11 +32,13 @@ setup() {
     [[ "$output" == *"manifest init fleet"* ]]
 }
 
-@test "fleet_main sync: emits migration hint pointing at 'manifest prep fleet'" {
+@test "fleet_main sync: emits migration hint pointing at 'manifest init fleet --connect'" {
+    # Was 'manifest prep fleet'. Once prep folded into init, a migration hint
+    # naming it would send the user from one retired spelling to another.
     run fleet_main sync
     [ "$status" -ne 0 ]
     [[ "$output" == *"no longer a dispatcher route"* ]]
-    [[ "$output" == *"manifest prep fleet"* ]]
+    [[ "$output" == *"manifest init fleet --connect"* ]]
 }
 
 @test "fleet_main discover: emits replacement pointing at 'manifest discover fleet'" {

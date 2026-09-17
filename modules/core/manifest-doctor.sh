@@ -177,7 +177,7 @@ manifest_doctor() {
         if [[ -n "$origin" ]]; then
             _doctor_ok "Origin remote" "$origin"
         else
-            _doctor_warn "Origin remote" "not set — run 'manifest prep repo' to add"
+            _doctor_warn "Origin remote" "not set — run 'manifest init repo --connect -y' to add"
         fi
 
         if manifest_is_canonical_repo "$proj" 2>/dev/null; then

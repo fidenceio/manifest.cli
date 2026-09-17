@@ -479,7 +479,7 @@ _manifest_cleanup_apply_repo() {
     return 0
 }
 
-# Fan out across fleet members, modelled on fleet_prep's loop: iterate
+# Fan out across fleet members, modelled on fleet_ship's loop: iterate
 # MANIFEST_CLI_FLEET_SERVICES, resolve each path, skip what is not a git repo.
 # One member's failure never aborts the run — a fleet is 365 repos in the
 # product case, and stopping at the first bad one would make the command

@@ -1744,6 +1744,7 @@ manifest_init_repo() {
     local force=false
     local dry_run=true
     local create_repo_visibility=""
+    local connect=false
     local execution_mode="preview"
     local _local_only=false
     local remaining_args=()
@@ -1757,6 +1758,8 @@ manifest_init_repo() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -f|--force) force=true; shift ;;
+            --connect) connect=true; shift ;;
+            --no-connect) connect=false; shift ;;
             --create-repo-private)
                 create_repo_visibility=$(_manifest_parse_create_repo_flag "$create_repo_visibility" "private") || return 1
                 shift ;;
@@ -1765,30 +1768,49 @@ manifest_init_repo() {
                 shift ;;
             -h|--help)
                 _render_help \
-                    "manifest init repo [-y|--yes] [--dry-run] [--force] [--create-repo-private|--create-repo-public]" \
-                    "Scaffold a single repository: VERSION, CHANGELOG.md, README.md, docs/, .gitignore,
-scripts/run-tests.sh (the release gate 'manifest ship' auto-detects — fail-closed since v56).
-Idempotent — safe to re-run. Optionally creates a GitHub repo via 'gh repo create'." \
+                    "manifest init repo [-y|--yes] [--dry-run] [--force] [--connect] [--create-repo-private|--create-repo-public]" \
+                    "Set up a single repository. Two phases, and only the second uses the network.
+
+  scaffold (always)   VERSION, CHANGELOG.md, README.md, docs/, .gitignore,
+                      .env.example, scripts/run-tests.sh (the release gate
+                      'manifest ship' auto-detects — fail-closed since v56)
+  connect (opt-in)    add or create 'origin', then pull latest
+
+Idempotent — safe to re-run." \
                     "Options" "  --dry-run                  Explicit preview; no writes
-  -y, --yes                  Apply the scaffold plan
+  -y, --yes                  Apply the plan
   -f, --force                Recreate manifest.config.local.yaml if present
                              (scaffold content files stay no-clobber; existing
                              content is preserved and nothing is written beside it)
-  --create-repo-private      Create a private GitHub repo (gh repo create) and add as origin
-  --create-repo-public       Create a public GitHub repo (gh repo create) and add as origin" \
+  --connect                  Also run the connect phase: add/create origin, pull
+                             latest. OFF by default — without it this command
+                             makes no network call at all.
+  --no-connect               Explicitly skip the connect phase (the default;
+                             useful to override an implied --connect)
+  --create-repo-private      Create a private GitHub repo (gh repo create) and add
+                             as origin. Implies --connect.
+  --create-repo-public       Create a PUBLIC GitHub repo and add as origin. This
+                             publishes a repository to GitHub. Implies --connect." \
                     "Examples" "  manifest init repo
   manifest init repo --dry-run
-  manifest init repo -y
+  manifest init repo -y                       # files only, no network
+  manifest init repo --connect -y             # files, then remotes + pull
   manifest init repo --create-repo-private -y
-  manifest init repo --force --create-repo-public -y"
+  manifest init repo --force --create-repo-public -y" \
+                    "Deprecated spelling" "  manifest prep repo   ->  manifest init repo --connect"
                 return 0
                 ;;
             *)
-                _render_help_error "Unknown option: $1" "manifest init repo [--force] [--dry-run] [--create-repo-private|--create-repo-public]"
+                _render_help_error "Unknown option: $1" "manifest init repo [--force] [--dry-run] [--connect] [--create-repo-private|--create-repo-public]"
                 return 1
                 ;;
         esac
     done
+
+    # Creating a GitHub repo IS the connect phase — it is the call that reaches
+    # the network and configures origin. Asking for it without --connect is not
+    # a contradiction to refuse, it is an implication to honour.
+    [[ -n "$create_repo_visibility" ]] && connect=true
 
     local project_root="${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}"
     if [[ -n "$create_repo_visibility" ]]; then
@@ -1859,8 +1881,21 @@ Idempotent — safe to re-run. Optionally creates a GitHub repo via 'gh repo cre
                 echo "  would gh repo create: $repo_target ($create_repo_visibility) and add as origin"
             fi
         fi
+        # Name the connect phase in the plan. The preview is the consent surface,
+        # so the one phase that reaches the network has to appear in it — and its
+        # absence has to be just as visible, or "no network line" is
+        # indistinguishable from "did not look".
         echo ""
-        manifest_execution_footer "manifest init repo -y"
+        if [[ "$connect" == "true" ]]; then
+            echo "  connect phase:   ON — would add/create origin and pull latest"
+        else
+            echo "  connect phase:   off — no network calls (add --connect to enable)"
+        fi
+        echo ""
+        local init_replay="manifest init repo"
+        [[ "$connect" == "true" && -z "$create_repo_visibility" ]] && init_replay+=" --connect"
+        [[ -n "$create_repo_visibility" ]] && init_replay+=" --create-repo-$create_repo_visibility"
+        manifest_execution_footer "$init_replay -y"
         echo ""
         return 0
     fi
@@ -1910,22 +1945,67 @@ EOF
         echo "  Created: manifest.config.local.yaml"
     fi
 
-    if [[ -n "$create_repo_visibility" ]]; then
+    # --- Connect phase ---------------------------------------------------------
+    # The home for every remote call the REPO scope can make. It used to be
+    # split: this function called _manifest_gh_repo_create inline while
+    # `manifest prep repo` called it too, so the same job had two
+    # implementations and `manifest help` claimed init "never touches the
+    # network". Now one verb, one phase, one call site — for `init repo`.
+    # `init fleet --create-repo-*` still creates per-member repos inside Phase 2
+    # (manifest-fleet.sh, _fleet_init_directory); see the note in
+    # manifest-prep.sh's header before claiming the CLI has a single call site.
+    if [[ "$connect" == "true" ]]; then
+        local connect_args=(-y)
+        [[ -n "$create_repo_visibility" ]] && connect_args+=("--create-repo-$create_repo_visibility")
         echo ""
-        if ! _manifest_gh_repo_create "$project_root" "$create_repo_visibility"; then
-            log_warning "GitHub repo creation failed; local scaffold is intact."
+        if ! _MANIFEST_CLI_INIT_CONNECT_NESTED=1 manifest_init_connect_repo "${connect_args[@]}"; then
+            log_warning "Connect phase failed; the local scaffold is intact."
             echo ""
-            echo "  Re-attempt later with: manifest prep repo --create-repo-$create_repo_visibility"
+            # Recovery advice has to name something that can actually succeed.
+            # Two ways to get that wrong here, and this block exists because
+            # both were live:
+            #
+            #   1. Echoing a bare `--connect` when they asked for
+            #      --create-repo-* sends them to a command that connects but
+            #      never creates the repo — advice that does LESS than the
+            #      thing that just failed.
+            #   2. Echoing the identical command back when the failure was
+            #      "no origin remote". `init repo --connect -y` on a scaffolded
+            #      repo with no origin fails the apply gate, so repeating it
+            #      fails identically, forever. That is the §16 class — a
+            #      recovery line that its own state contradicts.
+            #
+            # So: name the remedy for the state we are actually in.
+            if [[ -n "$create_repo_visibility" ]]; then
+                echo "  Re-attempt later with: manifest init repo --create-repo-$create_repo_visibility -y"
+            elif ! git -C "$project_root" remote get-url origin >/dev/null 2>&1; then
+                echo "  This repository has no 'origin' remote, so there is nothing to connect to."
+                echo "  Either create one:"
+                echo "    manifest init repo --create-repo-private -y   (or --create-repo-public)"
+                echo "  or point at an existing remote and re-run:"
+                echo "    git remote add origin <url>"
+                echo "    manifest init repo --connect -y"
+            else
+                echo "  Re-attempt later with: manifest init repo --connect -y"
+            fi
             return 1
         fi
+        echo ""
+        echo "Repository initialized successfully."
+        echo ""
+        echo "Next steps:"
+        echo "  manifest config           Adjust settings"
+        echo "  manifest ship repo patch  Cut a release"
+        echo ""
+        return 0
     fi
 
     echo ""
-    echo "Repository initialized successfully."
+    echo "Repository scaffolded successfully."
     echo ""
     echo "Next steps:"
-    echo "  manifest prep repo       Connect remotes, pull latest"
-    echo "  manifest config          Adjust settings"
+    echo "  manifest init repo --connect   Add/create origin, pull latest"
+    echo "  manifest config                Adjust settings"
     echo ""
 }
 
@@ -2131,6 +2211,8 @@ manifest_init_fleet() {
     local fleet_name=""
     local create_repo_visibility=""
     local all_folders=false
+    local connect=false
+    local connect_args=()
     local fleet_args=()
     local execution_mode="preview"
     local _local_only=false
@@ -2152,6 +2234,14 @@ manifest_init_fleet() {
                 depth="$2"; shift 2 ;;
             -f|--force) force=true; shift ;;
             --all-folders) all_folders=true; shift ;;
+            --connect) connect=true; shift ;;
+            --no-connect) connect=false; shift ;;
+            # Connect-phase flags. Accepting them here is what lets
+            # `manifest init fleet --connect --parallel` replace
+            # `manifest prep fleet --parallel` without losing a knob.
+            -p|--parallel)   connect=true; connect_args+=("--parallel");   shift ;;
+            --clone-only)    connect=true; connect_args+=("--clone-only"); shift ;;
+            --pull-only)     connect=true; connect_args+=("--pull-only");  shift ;;
             -n|--name)
                 if [[ -z "${2:-}" ]] || [[ "${2:-}" == --* ]]; then
                     log_error "--name requires a value"
@@ -2166,8 +2256,8 @@ manifest_init_fleet() {
                 shift ;;
             -h|--help)
                 _render_help \
-                    "manifest init fleet [-y|--yes] [--dry-run] [--depth N|auto] [--all-folders] [--force] [--name NAME] [--create-repo-private|--create-repo-public]" \
-                    "Two-phase fleet initialization." \
+                    "manifest init fleet [-y|--yes] [--dry-run] [--depth N|auto] [--all-folders] [--force] [--name NAME] [--connect] [--create-repo-private|--create-repo-public]" \
+                    "Two-phase fleet initialization, plus an opt-in connect phase." \
                     "Phases" "  Phase 1 (no TSV yet):  Scan directories, ask repo depth per
                          top-level folder when interactive, then write
                          manifest.fleet.tsv for review.
@@ -2187,13 +2277,23 @@ manifest_init_fleet() {
                              skips guard); does NOT overwrite member content —
                              VERSION/README/etc. stay no-clobber
   -n, --name                 Fleet name (prompted if not provided)
+  --connect                  After Phase 2, run the connect phase: clone missing
+                             members, pull existing ones. OFF by default — without
+                             it (and without --create-repo-*) this command makes no
+                             network call at all.
+  --no-connect               Explicitly skip the connect phase (the default)
+  -p, --parallel             Connect phase: clone/pull in parallel (implies --connect)
+  --clone-only               Connect phase: only clone missing members (implies --connect)
+  --pull-only                Connect phase: only pull existing members (implies --connect)
   --create-repo-private      In Phase 2, create a private GitHub repo for each scaffolded dir
-  --create-repo-public       In Phase 2, create a public GitHub repo for each scaffolded dir" \
+  --create-repo-public       In Phase 2, create a PUBLIC GitHub repo for each scaffolded dir" \
                     "Examples" "  manifest init fleet                 # Phase 1: discover
   manifest init fleet --dry-run       # Preview current phase
   vim manifest.fleet.tsv             # edit SELECT column
-  manifest init fleet -y              # Apply current phase
+  manifest init fleet -y              # Apply current phase, no network
+  manifest init fleet --connect -y    # Apply, then clone/pull members
   manifest init fleet --create-repo-private -y   # Phase 2 + create private GitHub repos" \
+                    "Deprecated spelling" "  manifest prep fleet  ->  manifest init fleet --connect" \
                     "Exit codes (Phase 2)" "  0  All directories initialized (and gh ok if requested)
   1  One or more directories failed to init or to create their gh repo
   2  TSV references one or more directories that don't exist on disk"
@@ -2289,7 +2389,18 @@ manifest_init_fleet() {
         fleet_args+=("--create-repo-$create_repo_visibility")
     fi
 
-    _fleet_init "${fleet_args[@]}"
+    _fleet_init "${fleet_args[@]}" || return $?
+
+    # --- Connect phase ---------------------------------------------------------
+    # Phase 2 has written the config and scaffolded the selected members; only
+    # now is there a membership list to clone or pull against. Opt-in, so a
+    # fleet init that was network-free before the fold stays network-free.
+    if [[ "$connect" == "true" ]]; then
+        echo ""
+        # ${a[@]+"${a[@]}"} — an empty array under `set -u` unbinds on older
+        # bash; scripts/run-tests.sh runs with -u.
+        _MANIFEST_CLI_INIT_CONNECT_NESTED=1 manifest_init_connect_fleet -y ${connect_args[@]+"${connect_args[@]}"}
+    fi
 }
 
 # -----------------------------------------------------------------------------
@@ -2355,7 +2466,13 @@ manifest_init_dispatch() {
         -h|--help|help)
             _render_help \
                 "manifest init <repo|fleet> [options]" \
-                "Scaffold a repository or fleet. No remote operations." \
+                "Set up a repository or fleet. Two phases:
+
+  scaffold   writes files — no network calls, ever
+  connect    --connect: add/create remotes, clone, pull — every network call
+             init can make lives here, and it is OFF unless you ask
+
+This verb absorbed 'manifest prep', which used to own the connect phase." \
                 "Scopes" "  repo    Scaffold single repo (VERSION, CHANGELOG, docs, .gitignore)
   fleet   Two-phase fleet setup via directory scanning" \
                 "More" "  manifest init repo --help    Per-repo options

@@ -266,10 +266,18 @@ _help_sub_tokens() {
     # records: 'refresh fleet' was advertised under "Core workflow" while
     # manifest-refresh.sh called log_deprecated on it. Guard the listing
     # against the marked names returning.
+    # Indent bound, not just leading whitespace. display_help puts a listing
+    # entry in the command column (4 spaces, or 9 for a continuation flag) and
+    # wraps its description at 40. Matching "any leading whitespace" made every
+    # WRAPPED DESCRIPTION LINE a candidate: a sentence that happened to wrap
+    # onto "fleet needs, no network calls" tripped this test as though `fleet`
+    # had been listed as a command. That is a false positive in a guard, which
+    # is worse than no guard — it trains you to edit prose to appease a test.
+    # 9 is the widest real entry indent; descriptions start far past it.
     local listed=() cmd
     while read -r cmd; do
         [ -n "$cmd" ] || continue
-        if grep -qE "^[[:space:]]+${cmd}([[:space:]|]|$)" <<< "$help_text"; then
+        if grep -qE "^[[:space:]]{1,9}${cmd}([[:space:]|]|$)" <<< "$help_text"; then
             listed+=("$cmd")
         fi
     done < <(_dispatch_arms hidden)
