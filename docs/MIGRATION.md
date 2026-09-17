@@ -7,7 +7,7 @@ or someone upgrading a pipeline that already existed. Both come back to one rule
 
 ## The preview / apply model
 
-Every command that could change something — `init`, `prep`, `refresh`, `ship` — prints
+Every command that could change something — `init`, `refresh`, `ship` — prints
 what it *would* do and then stops. Nothing is written until you ask:
 
 ```bash
@@ -238,6 +238,66 @@ now shows you the hook's own output and names it as the cause instead of guessin
 yet make that commit *pass* — Manifest's own commit subjects come from one builder in a
 follow-up. Until then, the fleet root still stops at the coordination commit on such a
 repo; the difference is that it now tells you why.
+
+## `prep` folded into `init`
+
+`manifest prep` is now the **connect phase** of `manifest init`. Both spellings
+work; `prep` prints a deprecation notice naming the replacement.
+
+```bash
+manifest prep repo             ->  manifest init repo --connect
+manifest prep fleet            ->  manifest init fleet --connect
+manifest prep fleet --parallel ->  manifest init fleet --connect --parallel
+```
+
+**`init` without `--connect` and `prep` both behave exactly as before.** The
+connect phase is opt-in precisely so that an existing `manifest init repo -y` in
+a pipeline does not silently gain a `git pull`.
+
+The **one** invocation whose behaviour changes is
+`manifest init repo --create-repo-private|--create-repo-public`: see the scripting
+notes below. If you do not pass those flags, nothing you run today changes.
+
+### Why
+
+The two verbs were meant to divide cleanly — one writes files, one talks to the
+network — and they never did:
+
+- **Both** accepted `--create-repo-private` / `--create-repo-public`, so **both**
+  called `gh repo create`. The same job had two implementations.
+- Because of that, `manifest help` said `init` *"never touches the network"*
+  while `manifest init repo --create-repo-public -y` published a repository to
+  GitHub. A help line sat next to a flag that did the opposite of what it claimed.
+- Both scaffolded `.env.example` through the same no-clobber writer.
+
+Folding them makes the boundary structural instead of asserted: one verb owns
+setup, its scaffold phase writes files and makes no network call at all, and its
+connect phase is where the repo scope's remote calls live.
+
+One exception, named here rather than left to be discovered: `init fleet` with
+`--create-repo-private` / `--create-repo-public` still creates each member's
+GitHub repo inside Phase 2's scaffold, not the connect phase. That is the only
+place either scope reaches the network without `--connect`.
+
+### If you script against Manifest
+
+- Replace `manifest prep <scope>` with `manifest init <scope> --connect` when
+  convenient. There is no deadline in this release.
+- Set `MANIFEST_CLI_QUIET_DEPRECATIONS=1` to silence the notice meanwhile.
+- `manifest init repo --create-repo-*` now implies `--connect`. It still creates
+  the GitHub repo and adds it as `origin`, but the connect phase then also pulls
+  from the new remote — the scaffold-only path never did. **On a repository that
+  was just created and is therefore empty, that pull has no ref to fetch**, so
+  expect `git_retry`'s backoff, a `⚠️ All sync attempts failed` line, and then a
+  success line: noisy, non-fatal, and new in this release. If you script against
+  this command's output, that is the change to account for.
+- `manifest init fleet --create-repo-*` is **unchanged**: per-member repo creation
+  still happens inside Phase 2's scaffold, not the connect phase. The
+  "scaffold makes no network call" property described above holds for
+  `init repo`; `init fleet` with that flag is the documented exception.
+- The internal helpers `manifest_prep_repo` / `manifest_prep_fleet` still exist as
+  deprecated aliases; the implementations are `manifest_init_connect_repo` and
+  `manifest_init_connect_fleet`.
 
 ## Versions are independent across a fleet
 

@@ -138,8 +138,8 @@ manifest doctor
 Get the repository ready:
 
 ```bash
-manifest prep repo
-manifest prep repo -y
+manifest init repo --connect
+manifest init repo --connect -y
 ```
 
 See what a release would do:
@@ -424,7 +424,7 @@ The flags stack, so you cannot skip a step by accident: `--commit` requires `--a
 
 ```bash
 manifest status fleet
-manifest prep fleet
+manifest init fleet --connect
 manifest update fleet          # re-scan which repos are members (once called 'refresh fleet'; for docs use 'manifest docs fleet')
 manifest ship fleet patch
 manifest ship fleet patch -y

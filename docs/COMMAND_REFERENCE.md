@@ -92,9 +92,28 @@ Layer model: [User Guide — Configuration](USER_GUIDE.md#configuration).
 ### `manifest init`
 
 ```bash
-manifest init repo [--dry-run] [-y|--yes] [--create-repo-private|--create-repo-public]
-manifest init fleet [--dry-run] [-y|--yes] [--depth N] [--all-folders] [--name NAME] [--force] [--create-repo-private|--create-repo-public]
+manifest init repo [--dry-run] [-y|--yes] [--connect] [--create-repo-private|--create-repo-public]
+manifest init fleet [--dry-run] [-y|--yes] [--depth N] [--all-folders] [--name NAME] [--force]
+                    [--connect] [--parallel] [--clone-only] [--pull-only]
+                    [--create-repo-private|--create-repo-public]
 ```
+
+`init` runs in two phases, and **only the second one uses the network**:
+
+| Phase | When | What it does |
+| --- | --- | --- |
+| scaffold | always | Writes the files below. Makes no network call of any kind. |
+| connect | `--connect`, or implied by `--create-repo-*` | Adds or creates `origin`, clones missing fleet members, pulls latest. |
+
+The connect phase is **off by default**. `manifest init repo -y` writes files and
+stops; it will not contact a remote.
+
+> **One exception, stated rather than glossed:** `init fleet --create-repo-private`
+> / `--create-repo-public` creates each selected member's GitHub repo inside
+> **Phase 2's scaffold**, not the connect phase. So the "scaffold makes no
+> network call" rule above is exact for `init repo` and has this one carve-out
+> for `init fleet`. Nothing else in either scope reaches the network without
+> `--connect`.
 
 `init repo` creates the files a Manifest project needs: `VERSION`, `README.md`,
 `CHANGELOG.md`, `.gitignore`, `docs/`, `scripts/run-tests.sh`, `.env.example`,
@@ -108,13 +127,21 @@ their previews look alike, so the split is worth stating plainly:
 
 | Command | What it does | Writes files? | Touches the network? |
 | --- | --- | --- | --- |
-| `manifest first` | Inspects the directory, reports what it found, and delegates to the right initializer. Takes no `repo`/`fleet` scope — it works out which you are in. | No, not itself | No |
-| `manifest init` | Scaffolds the files above, and `git init`s if needed. | Yes | No |
-| `manifest prep` | Adds a missing `origin` and pulls from every remote. | Only `.env.example` | Yes |
+| `manifest first` | Inspects the directory, reports what it found, and delegates to `init`. Takes no `repo`/`fleet` scope — it works out which you are in. | No, not itself | No |
+| `manifest init` | Scaffolds the files above, and `git init`s if needed. | Yes | Only with `--connect` |
+| `manifest init --connect` | Adds or creates `origin`, clones fleet members, pulls. | Same as above | Yes |
+| `manifest prep` | **Deprecated** alias for `manifest init --connect`. | — | — |
 
 `first` on an uninitialized repo runs the same scaffolding `init repo` does — the
 difference is that `first` resolves and confirms the apply target first and records an
 audit event. **If you are unsure which to run, run `manifest first`.**
+
+> **Changed:** `prep` used to be a third verb, and this table used to say `init`
+> never touched the network. That was wrong — `init repo --create-repo-public`
+> called `gh repo create` and published a repository. Both verbs also offered
+> `--create-repo-*`, so the same job had two implementations. `prep` is now the
+> connect *phase* of `init`, the `gh repo create` call has one call site, and the
+> network boundary is a property of the phase rather than a claim in a table.
 
 **How `init` treats an existing `.gitignore`.** It never overwrites it. Instead it *adds*
 missing recommended rules under a marked header and tells you how many it added. This is
@@ -136,14 +163,17 @@ organisation and both the plan and the apply target `<owner>/<repo>`; leave it u
 directory's own `.git` state from disk, so a stale `HAS_GIT` value in the TSV cannot
 cause a member to inherit the fleet root's repository or remote.
 
-### `manifest prep`
+### `manifest prep` — DEPRECATED
 
 ```bash
-manifest prep repo [--dry-run] [-y|--yes]
-manifest prep fleet [--dry-run] [-y|--yes] [--parallel]
+manifest prep repo  [--dry-run] [-y|--yes]              # -> manifest init repo --connect
+manifest prep fleet [--dry-run] [-y|--yes] [--parallel]  # -> manifest init fleet --connect
 ```
 
-Gets remotes and workspace state ready before release work.
+Gets remotes and workspace state ready before release work. This is now the
+**connect phase of `manifest init`**; the `prep` spelling still works, still does
+exactly the same thing, and prints a deprecation notice naming the replacement.
+Silence the notice with `MANIFEST_CLI_QUIET_DEPRECATIONS=1`.
 
 ### `manifest refresh`
 
