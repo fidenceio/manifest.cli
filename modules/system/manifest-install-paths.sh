@@ -647,9 +647,41 @@ manifest_install_paths_cleanup_profile_entries() {
     # code must scope to MANIFEST_CLI; only uninstall paths broaden the
     # pattern.
     if [ "$unset_env" = "1" ]; then
-        local var
-        for var in $(env | grep -E '^MANIFEST_(CLI_)?[A-Z_]+=' | cut -d'=' -f1); do
-            unset "$var"
+        # Prefix expansion, not `env | grep | cut`. The old form had three
+        # faults, all of the class recorded in TRACKER §12c: it shelled out to a
+        # PATH-resolved `env`; `[A-Z_]+` silently skipped every name containing
+        # a DIGIT; and a value carrying a newline produced continuation lines
+        # that could themselves match the pattern and unset a name the user
+        # never set. Quoted, so IFS cannot split a name. Expanding the list
+        # before the loop starts makes unsetting while iterating safe.
+        #
+        # The EXPORT filter is the load-bearing line, and dropping it is a
+        # defect this function already shipped once in review. `env` lists only
+        # EXPORTED names; `${!MANIFEST_@}` lists every shell variable with the
+        # prefix. Measured under a full runtime load: 6 exported names against
+        # 156 total, of which 70 are `readonly` module constants
+        # (`manifest-discovery.sh:20` and friends). `unset` on a readonly fails,
+        # and under `set -e` that aborted the whole uninstall partway — after
+        # the binary was gone and before "uninstalled successfully". Keeping
+        # only names with the export attribute (`x`) reproduces `env`'s scope on
+        # every variable shape present in this tree — NOT in general: bash sets
+        # `x` on arrays too (`declare -ax` passes this test while `env` lists
+        # nothing), and there are zero such declarations here today.
+        #
+        # Two honest caveats about the OTHER two lines, so nobody mistakes them
+        # for load-bearing. Measured: readonly+exported is **0** in the real
+        # sweep, so the `r` skip is inert in production and is defence against a
+        # shape the tree does not currently have; and deleting `|| true` leaves
+        # both guards green for the same reason. Both stay so the documented
+        # best-effort contract still holds if the export filter is ever relaxed.
+        local var decl
+        for var in "${!MANIFEST_@}"; do
+            decl="$(declare -p "$var" 2>/dev/null || true)"
+            decl="${decl#declare }"
+            decl="${decl%% *}"
+            [[ "$decl" == -*x* ]] || continue
+            [[ "$decl" == -*r* ]] && continue
+            unset "$var" || true
         done
     fi
 

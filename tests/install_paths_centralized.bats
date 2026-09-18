@@ -263,3 +263,54 @@ EOF
     manifest_install_paths_cleanup_profile_entries 0 0
     [ "${MANIFEST_CLI_TEST_SENTINEL:-}" = "1" ]
 }
+
+# The sweep runs late in `uninstall -y`, after the binary is already gone, and
+# the modules loaded around it declare ~70 `readonly MANIFEST_CLI_*` constants
+# (`manifest-discovery.sh:20` and friends). `unset` on a readonly returns
+# non-zero; under `set -e` that aborted the uninstall between "CLI binary
+# removed" and "uninstalled successfully". Measured, not hypothesised: it is
+# how an `env | grep`-to-prefix-expansion rewrite failed review (TRACKER §12c).
+@test "cleanup_profile_entries survives a readonly MANIFEST_CLI_ constant" {
+    source "$TEST_REPO_ROOT/modules/system/manifest-install-paths.sh"
+    _setup_seeded_profile_home
+    manifest_install_paths_shell_profiles() { echo "$SANDBOX_HOME/.zshrc"; }
+
+    # Two readonlies, because the two filters cover different shapes and a
+    # test that only used one would be vacuous against the other. The FIRST
+    # draft of this test used only the non-exported form and survived deleting
+    # the readonly skip outright — the export filter had already excluded it,
+    # so the branch under test never ran.
+    readonly MANIFEST_CLI_TEST_RO_LOCAL=5       # the shipped shape: readonly, not exported
+    export MANIFEST_CLI_TEST_RO_EXPORT=7
+    readonly MANIFEST_CLI_TEST_RO_EXPORT        # declare -rx: reaches the readonly skip
+
+    # PRESENCE CONTROL: an exported sentinel that MUST be gone afterwards. A
+    # bare "returned 0" assertion would pass just as well against a sweep that
+    # skipped every variable, so the control is what makes the test mean
+    # anything — it proves the loop ran and still did its job.
+    export MANIFEST_CLI_TEST_SENTINEL=1
+
+    run -0 manifest_install_paths_cleanup_profile_entries 1 1
+    refute grep -qi "readonly" <<<"$output"
+
+    manifest_install_paths_cleanup_profile_entries 1 1
+    [ -z "${MANIFEST_CLI_TEST_SENTINEL:-}" ]
+    [ "${MANIFEST_CLI_TEST_RO_LOCAL:-}" = "5" ]
+    [ "${MANIFEST_CLI_TEST_RO_EXPORT:-}" = "7" ]
+}
+
+# `env` lists only EXPORTED names, so that was always this sweep's scope. The
+# prefix expansion that replaced it sees shell-locals too; keeping the export
+# filter is what stops the rewrite from quietly widening what uninstall clears.
+@test "cleanup_profile_entries unsets only EXPORTED MANIFEST_CLI_ vars" {
+    source "$TEST_REPO_ROOT/modules/system/manifest-install-paths.sh"
+    _setup_seeded_profile_home
+    manifest_install_paths_shell_profiles() { echo "$SANDBOX_HOME/.zshrc"; }
+
+    MANIFEST_CLI_TEST_SHELL_LOCAL=keep-me      # deliberately not exported
+    export MANIFEST_CLI_TEST_SENTINEL=1        # presence control, as above
+
+    manifest_install_paths_cleanup_profile_entries 1 1
+    [ -z "${MANIFEST_CLI_TEST_SENTINEL:-}" ]
+    [ "${MANIFEST_CLI_TEST_SHELL_LOCAL:-}" = "keep-me" ]
+}
