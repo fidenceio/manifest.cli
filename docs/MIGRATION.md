@@ -239,6 +239,40 @@ yet make that commit *pass* — Manifest's own commit subjects come from one bui
 follow-up. Until then, the fleet root still stops at the coordination commit on such a
 repo; the difference is that it now tells you why.
 
+## Upgrading to v62: an environment override with a space now applies, and `prep` is folded into `init`
+
+Two changes in v62 are visible without you configuring anything. The second has its own
+section below.
+
+**A `MANIFEST_CLI_*` environment override whose value contains a space now takes effect
+on GNU-coreutils hosts.** That is every Linux install and every Homebrew macOS install:
+the formula depends on `coreutils` and the bin wrapper puts its `gnubin` first on `PATH`.
+Manifest snapshots the process environment as its highest-precedence config layer — the
+one that outranks every file you can open — and from v47.11.0 through the last v61 release
+it did so by parsing the output of `env`. GNU `env` shell-quotes a value containing a space when it
+lists (`VAR='has space'`); BSD `env` does not. So on a GNU host such a value was captured
+**with the literal quotes wrapped around it**, outranked the correct file value, and then
+failed validation downstream. The concrete case: an exported
+`MANIFEST_CLI_DOCS_RETAIN="10 versions"` was silently ignored, and CHANGELOG pruning was
+skipped with a warning naming a value you never typed. A value containing a newline was
+corrupted too — split across entries by BSD `env`, kept as a quoted literal by GNU `env`.
+
+The layer is now read with bash's own prefix expansion — no external program is
+involved, and spaces, newlines and quotes are exact. **After upgrading, an override that
+had been silently falling through to the default is applied.** If you exported one of
+these and had stopped expecting it to work, expect it to work now. Stock macOS without
+Homebrew coreutils was never affected and sees no change.
+
+**The same class was fixed in `manifest uninstall`.** Its in-process environment sweep
+used `env | grep | cut`, which skipped any `MANIFEST_*` name containing a digit and could
+misread a newline-bearing value as further names to unset. It now uses prefix expansion
+with the same scope `env` had — exported names only — and skips readonly module constants,
+so the sweep cannot abort an uninstall partway.
+
+**Fixing it in v62 does not fix it for a machine still on an older binary.** Every release
+from v47.11.0 up to and including the last v61 release carries the parser; upgrading is the
+only remedy.
+
 ## `prep` folded into `init`
 
 `manifest prep` is now the **connect phase** of `manifest init`. Both spellings
