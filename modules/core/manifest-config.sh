@@ -63,8 +63,58 @@ _manifest_config_auto_confirm_authorized() {
     [ "${_MANIFEST_CLI_AUTO_CONFIRM_FROM_ENV:-0}" = "1" ]
 }
 
+# Snapshot the process-environment config layer — the HIGHEST-precedence layer,
+# so a value corrupted here silently outranks every file the user can inspect.
+#
+# This used to parse the output of `env`, line by line. Two ways that was wrong,
+# and the first one is a live PRODUCT defect on the platform most users are on:
+#
+#   1. **GNU coreutils `env` shell-quotes values that need quoting.** Measured
+#      with coreutils 9.12: a value containing a space lists as
+#      `VAR='has space'` — WITH the quotes — while BSD `env` lists `VAR=has
+#      space`. The loop took everything after the first `=` verbatim, so on any
+#      host where `env` resolves to GNU coreutils, every MANIFEST_CLI_* override
+#      whose value contains a space was captured with literal single quotes
+#      wrapped around it. That is every Linux user AND every Homebrew macOS
+#      user: the formula depends on `coreutils` and the wrapper puts its gnubin
+#      first on PATH on every run. Manifest ships defaults of exactly this
+#      shape — `docs.retain: "10 versions"`.
+#
+#   2. **A value containing a newline was corrupted under either `env`.** BSD
+#      `env` prints it across lines, so the remainder parsed as a separate
+#      entry: dropped when it failed the MANIFEST_CLI_* prefix test, or
+#      captured as a PHANTOM override the user never exported when it happened
+#      to look like one (measured: a value of $'a\nMANIFEST_CLI_PHANTOM=evil'
+#      set MANIFEST_CLI_PHANTOM). GNU `env` keeps it on one line as an ANSI-C
+#      literal (`VAR='a'$'\n''b'`), which was then captured verbatim, quotes
+#      and all.
+#
+# Bash's own prefix expansion needs no external program, so neither variant can
+# reach it, and it is exact for spaces, newlines and quotes alike. Exported-only
+# is enforced explicitly via the declare attributes: this layer is the PROCESS
+# environment, and a shell-local variable a module set before this ran is not
+# part of it.
+#
+# One limit of that filter, stated because the obvious justification for it is
+# WRONG. It is tempting to write "bash cannot export arrays, so an exported
+# match is always a scalar" — the premise holds (an array never enters the
+# environment) but the conclusion does not, because the filter tests the `x`
+# ATTRIBUTE and bash sets that on an array quite happily: `declare -ax FOO=(a b)`
+# reports attributes `-ax` and passes this test, while `env` lists nothing, and
+# ${!name} would then yield element 0 rather than the whole value. Measured on
+# bash 5.3. Not reachable today — zero `declare -[aA]x` anywhere in modules/ or
+# scripts/ — so this is a bound on the filter, not a live defect. If a mapped
+# key ever becomes an array, filter on the `a`/`A` attributes too.
+#
+# Found 2026-09-17. Every `manifest` invocation prepends Homebrew's gnubin to
+# PATH, but the bats suite is sourced by `load_modules` under the developer's
+# ambient BSD PATH; the release gate is the only place the suite runs as a
+# child of a loaded runtime, so it alone ran against GNU `env` — the suite was
+# green 5 times and the gate failed twice on the same two tests. That is the
+# test lane TRACKER §74 records as missing (the macOS suite never runs under
+# GNU coreutils) reaching a shipped code path.
 _manifest_config_capture_process_env_overrides() {
-    local entry env_var env_value
+    local env_var decl
     local mapping_decl
 
     mapping_decl="$(declare -p _MANIFEST_ENV_TO_YAML 2>/dev/null || true)"
@@ -73,13 +123,22 @@ _manifest_config_capture_process_env_overrides() {
         *) return 0 ;;
     esac
 
-    while IFS= read -r entry; do
-        env_var="${entry%%=*}"
-        env_value="${entry#*=}"
-        [[ "$env_var" == MANIFEST_CLI_* ]] || continue
+    # QUOTED. `${!prefix@}` quoted behaves like "$@": one word per name, and
+    # zero names yields zero iterations. Unquoted it is subject to IFS — and
+    # `_` is both legal in a variable name and a plausible IFS character, so
+    # `IFS=_` would split MANIFEST_CLI_DOCS_FOLDER into four tokens, every one
+    # of which misses the map, and the entire highest-precedence config layer
+    # would be dropped in silence. Measured; no persistent `IFS=` exists in
+    # modules/ today, so this is a guard against the fragility, not a live bug.
+    for env_var in "${!MANIFEST_CLI_@}"; do
         [[ -n "${_MANIFEST_ENV_TO_YAML[$env_var]:-}" ]] || continue
-        _MANIFEST_CONFIG_PROCESS_ENV_OVERRIDES["$env_var"]="$env_value"
-    done < <(env)
+        decl="$(declare -p "$env_var" 2>/dev/null || true)"
+        # Attribute field is the token after `declare `; require the export flag.
+        decl="${decl#declare }"
+        decl="${decl%% *}"
+        [[ "$decl" == -*x* ]] || continue
+        _MANIFEST_CONFIG_PROCESS_ENV_OVERRIDES["$env_var"]="${!env_var}"
+    done
 }
 
 _manifest_config_apply_process_env_overrides() {
