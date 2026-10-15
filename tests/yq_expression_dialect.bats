@@ -7,7 +7,7 @@
 #
 #     if <cond> then <join> else <sentinel> end
 #
-# mikefarah yq v4 has no `if/then/else/end`. Two properties turned that typo
+# At the time, mikefarah yq lacked `if/then/else/end`. Two properties turned that typo
 # into a repo-wide outage rather than a bug in one branch:
 #
 #   1. yq LEXES THE EXPRESSION BEFORE IT READS THE DOCUMENT. The program was
@@ -53,7 +53,7 @@
 #   D. The skip count is PINNED and printed. Skips are the guard's honest cost;
 #      an unpinned skip list is how coverage evaporates one commit at a time.
 #
-#   E. An end-to-end positive control plants the historical jq-dialect
+#   E. An end-to-end positive control plants a malformed yq
 #      expression in a throwaway module tree and requires the whole chain
 #      (extract -> substitute -> parse) to go RED on it.
 #
@@ -539,27 +539,19 @@ yq_scan_tree() {
 #    are both indistinguishable from a passing guard
 # ===========================================================================
 
-@test "positive control: the parse probe REJECTS the jq-dialect ternary" {
-    # The exact shape of the shipped defect.
-    local jq_dialect
-    jq_dialect='if ([.[] | select(tag == "!!map" or tag == "!!seq")] | length) == 0'
-    jq_dialect="$jq_dialect then join(\",\") else \"${_MANIFEST_CLI_YAML_SEQ_UNREPRESENTABLE}\" end"
-
-    refute yq_expr_parses "$jq_dialect"
-
-    # ... and for the documented reason, not some incidental one.
-    run yq -n "$jq_dialect"
+@test "positive control: the parse probe REJECTS malformed syntax" {
+    # yq 4.54 added conditionals, so the historical ternary is now valid there.
+    # An unterminated string remains invalid on both old and current releases.
+    local malformed='.k | "unterminated'
+    refute yq_expr_parses "$malformed"
+    run yq -n "$malformed"
     [ "$status" -ne 0 ]
-    [[ "$output" == *"lexer"* ]] || {
-        printf 'expected a lexer rejection, got: %s\n' "$output" >&2
-        return 1
-    }
+    [[ "$output" == *"lexer"* ]]
 }
 
-@test "positive control: other jq-only spellings are rejected too" {
+@test "positive control: malformed delimiters are rejected too" {
     local bad
-    for bad in 'try .a catch 1' 'reduce .[] as $x (0; . + $x)' '.a // empty' \
-               'foreach .[] as $x (0; . + $x)' 'if . then 1 end'; do
+    for bad in '.a | (]' '.a | [' '.a | join(' '.a | "unterminated'; do
         refute yq_expr_parses "$bad"
     done
 }
@@ -575,17 +567,16 @@ yq_scan_tree() {
     yq_expr_parses '.a | join(",")'
 }
 
-@test "positive control: the whole guard goes RED on a module carrying a jq-dialect expression" {
+@test "positive control: the whole guard goes RED on a module carrying malformed syntax" {
     local badtree="$SCRATCH/badmodules/core"
     mkdir -p "$badtree"
-    {
-        printf '#!/usr/bin/env bash\n'
-        printf '_fake_reader() {\n'
-        printf '    local f="$1"\n'
-        printf '    yq e -r ".k | if ([.[] | select(tag == \\"!!map\\")] | length) == 0'
-        printf ' then join(\\",\\") else \\"SENTINEL\\" end" "$f" 2>/dev/null\n'
-        printf '}\n'
-    } > "$badtree/manifest-fake.sh"
+    cat > "$badtree/manifest-fake.sh" <<'BROKEN'
+#!/usr/bin/env bash
+_fake_reader() {
+    local f="$1"
+    yq e -r '.k | "unterminated' "$f" 2>/dev/null
+}
+BROKEN
 
     refute yq_scan_tree "$SCRATCH/badmodules"
 

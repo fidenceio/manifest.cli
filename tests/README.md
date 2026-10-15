@@ -91,3 +91,8 @@ To check coverage reporting with a TAP stream larger than a pipe buffer:
 
 The traced runner writes TAP directly to `coverage/tests.tap`, which is emitted
 after tracing. This avoids a kcov stdout-pipe deadlock on large suites.
+
+CI runs the project inside Linux containers. GitHub's macOS runners do not
+provide Docker; the former native Homebrew test-install step is removed to
+honor the no-host-dependencies policy. Platform-specific skips remain reported;
+this lane does not establish native macOS behavior.

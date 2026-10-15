@@ -36,9 +36,8 @@ EOF
 @test "test container and CI install GNU parallel for run-tests.sh --jobs" {
     # Parallelism is a required test dependency (run-tests.sh defaults to --jobs
     # auto), so every place that provisions the suite must install it. The Linux
-    # CI leg runs the suite inside the disposable container (no host installs), so
-    # it inherits parallel from there; the host-native macOS leg (no Docker on
-    # GitHub macOS runners) installs it via brew. The host installer/formula must
+    # CI runs the suite inside the disposable container (no host installs), so
+    # it inherits parallel from there. The host installer/formula must
     # NOT — parallel is a test-only dep, like bats, never shipped to CLI users.
     grep -F 'apk add --no-cache bash git bats parallel yq coreutils jq' \
         "$TEST_REPO_ROOT/tests/containers/run-tests.Dockerfile" >/dev/null
@@ -49,8 +48,8 @@ EOF
     grep -F './scripts/run-tests-container.sh --print-image' "$TEST_REPO_ROOT/.github/workflows/test.yml" >/dev/null
     # …and no longer installs test deps on the runner host.
     refute grep -F 'apt-get install -y bats parallel' "$TEST_REPO_ROOT/.github/workflows/test.yml"
-    # macOS leg is host-native and brew-installs parallel (and gnu-sed for §5.11).
-    grep -F 'brew install bats-core yq bash coreutils gnu-sed parallel' "$TEST_REPO_ROOT/.github/workflows/test.yml" >/dev/null
+    refute grep -E 'brew install|apt-get install|apk add' "$TEST_REPO_ROOT/.github/workflows/test.yml"
+    refute grep -F 'host-native' "$TEST_REPO_ROOT/.github/workflows/test.yml"
 
     refute grep -iqE 'parallel' "$TEST_REPO_ROOT/install-cli.sh"
     refute grep -iqE 'parallel' "$TEST_REPO_ROOT/formula/manifest.rb"
@@ -213,7 +212,7 @@ EOF
 }
 
 @test "CI and git retry use the supported coreutils timeout command" {
-    grep -F 'brew install bats-core yq bash coreutils' "$TEST_REPO_ROOT/.github/workflows/test.yml" >/dev/null
+    grep -F 'apk add --no-cache bash git bats parallel yq coreutils jq' "$TEST_REPO_ROOT/tests/containers/run-tests.Dockerfile" >/dev/null
     grep -F 'manifest_git_timeout_command' "$TEST_REPO_ROOT/modules/git/manifest-git.sh" >/dev/null
     grep -F 'gtimeout' "$TEST_REPO_ROOT/modules/git/manifest-git.sh" >/dev/null
     refute grep -F 'if timeout "$timeout"' "$TEST_REPO_ROOT/modules/git/manifest-git.sh" >/dev/null
