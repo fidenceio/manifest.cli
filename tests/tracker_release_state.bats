@@ -146,7 +146,26 @@ release_state_git_commands() {
     | sed 's/[[:space:]]*$//'
 }
 
+# Recipe syntax needs a branch, an upstream, and optionally a release tag.
+# Those are fixture preconditions, not properties of the CI checkout: PR jobs
+# deliberately use detached HEADs. Never attach or reconfigure the real checkout.
+_release_state_fixture() {
+    local root
+    root="$(mk_scratch)"
+    git init --quiet --initial-branch=main "$root" || return 1
+    cp "$TEST_REPO_ROOT/VERSION" "$root/VERSION" || return 1
+    git -C "$root" add VERSION || return 1
+    git -C "$root" commit --quiet -m 'Release recipe fixture' || return 1
+    git -C "$root" remote add origin "$root" || return 1
+    git -C "$root" update-ref refs/remotes/origin/main HEAD || return 1
+    git -C "$root" branch --quiet --set-upstream-to=origin/main main || return 1
+    git -C "$root" tag "v$(cat "$root/VERSION")" || return 1
+    printf '%s\n' "$root"
+}
+
 @test "release state: every git command in the recipe actually runs" {
+    local recipe_root
+    recipe_root="$(_release_state_fixture)"
     local cmds
     cmds="$(release_state_git_commands)"
 
@@ -180,8 +199,8 @@ release_state_git_commands() {
     # substitution control below pins.
     local tag_operand='"v$(cat VERSION)"'
     local have_tag=1
-    git -C "$TEST_REPO_ROOT" rev-parse -q --verify \
-        "refs/tags/v$(cat "$TEST_REPO_ROOT/VERSION")" >/dev/null 2>&1 || have_tag=0
+    git -C "$recipe_root" rev-parse -q --verify \
+        "refs/tags/v$(cat "$recipe_root/VERSION")" >/dev/null 2>&1 || have_tag=0
 
     local cmd out failed=""
     while IFS= read -r cmd; do
@@ -195,7 +214,7 @@ release_state_git_commands() {
         # non-zero exit would kill this test at the assignment — the same
         # confusion between "exited non-zero" and "is broken" that this test was
         # rewritten to avoid, reappearing one line lower.
-        out="$( ( cd "$TEST_REPO_ROOT" && eval "$cmd" ) 2>&1 >/dev/null || true )"
+        out="$( ( cd "$recipe_root" && eval "$cmd" ) 2>&1 >/dev/null || true )"
         if grep -qE '^(fatal|usage|error):' <<<"$out"; then
             failed+="  $cmd"$'\n'"      -> $(grep -m1 -E '^(fatal|usage|error):' <<<"$out")"$'\n'
         fi
@@ -208,9 +227,11 @@ release_state_git_commands() {
 }
 
 @test "positive control: the recipe runner fails on a command that cannot run" {
+    local recipe_root
+    recipe_root="$(_release_state_fixture)"
     # Proves the loop above can go red, using the exact historical defect as the
     # probe — so this also documents what broke: --short takes one revision.
-    run bash -c "cd '$TEST_REPO_ROOT' && git rev-parse --short HEAD '@{upstream}'"
+    run bash -c "cd '$recipe_root' && git rev-parse --short HEAD '@{upstream}'"
     [ "$status" -ne 0 ]
     grep -qF 'Needed a single revision' <<<"$output"
     # ...and it is caught by the detector the loop above uses, not merely by
@@ -220,21 +241,25 @@ release_state_git_commands() {
 }
 
 @test "positive control: a non-zero exit that is a real ANSWER is not flagged" {
+    local recipe_root
+    recipe_root="$(_release_state_fixture)"
     # The counterpart, and the reason this guard reads stderr instead of $?.
     # `grep -c` exits 1 on a count of zero, and zero is what the recipe requires.
     # A runner keyed on exit status would call the correct answer a broken
     # command and go permanently red.
-    run bash -c "cd '$TEST_REPO_ROOT' && git ls-tree -r --name-only HEAD | grep -c CODEX_AUDIT"
+    run bash -c "cd '$recipe_root' && git ls-tree -r --name-only HEAD | grep -c CODEX_AUDIT"
     [ "$status" -ne 0 ]
     [ "$output" = "0" ]
     refute grep -qE '^(fatal|usage|error):' <<<"$output"
 }
 
 @test "positive control: the HEAD substitution still catches a malformed command" {
+    local recipe_root
+    recipe_root="$(_release_state_fixture)"
     # The substitution above must not be a way for a broken command to pass. The
     # historical defect was `--short` with TWO revisions; with the tag operand
     # replaced by HEAD it is still two revisions, so it must still be refused.
-    run bash -c "cd '$TEST_REPO_ROOT' && git rev-parse --short HEAD '@{upstream}'"
+    run bash -c "cd '$recipe_root' && git rev-parse --short HEAD '@{upstream}'"
     [ "$status" -ne 0 ]
     grep -qE '^(fatal|usage|error):' <<<"$output"
 }
@@ -243,8 +268,9 @@ release_state_git_commands() {
     # Reproduces the CI environment directly rather than trusting the reasoning
     # above: a clone with no tags at all. Before the substitution this made the
     # runner report two commands as broken; now it must report none.
-    local bare="$BATS_TEST_TMPDIR/notags"
-    git clone --quiet --no-tags --depth 1 "file://$TEST_REPO_ROOT" "$bare" 2>/dev/null \
+    local recipe_root bare="$BATS_TEST_TMPDIR/notags"
+    recipe_root="$(_release_state_fixture)"
+    git clone --quiet --no-tags --depth 1 "file://$recipe_root" "$bare" 2>/dev/null \
         || skip "cannot clone this working tree (shallow-clone restrictions)"
 
     # Control: the clone really has no tags, so this is not passing vacuously.
@@ -267,9 +293,11 @@ release_state_git_commands() {
 }
 
 @test "positive control: the replacement upstream command does run" {
+    local recipe_root
+    recipe_root="$(_release_state_fixture)"
     # The other direction: the form now in the recipe must succeed and answer the
     # question, so the fix is not merely 'a command that exits 0'.
-    run bash -c "cd '$TEST_REPO_ROOT' && git rev-list --left-right --count 'HEAD...@{upstream}'"
+    run bash -c "cd '$recipe_root' && git rev-list --left-right --count 'HEAD...@{upstream}'"
     [ "$status" -eq 0 ]
     [[ "$output" =~ ^[0-9]+[[:space:]]+[0-9]+$ ]]
 }
