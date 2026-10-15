@@ -3,10 +3,12 @@
 # Init prepares; it never invokes the release workflow. Real local Git remotes
 # establish the behavior without any network or GitHub publication.
 load 'helpers/setup'
+load 'helpers/scaffold_gate_docker'
 
 setup() {
     export MANIFEST_CLI_RELEASE_GATE=local-tests
     SCRATCH="$(mk_scratch)"
+    scaffold_gate_docker_stub_install "$SCRATCH/bin"
     export HOME="$SCRATCH/home"
     mkdir -p "$HOME" "$SCRATCH/work/scripts"
     git init -q --bare -b main "$SCRATCH/origin.git"

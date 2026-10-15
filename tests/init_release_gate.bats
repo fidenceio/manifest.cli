@@ -13,10 +13,12 @@
 # verification (it can fail), not a disguised `exit 0`.
 
 load 'helpers/setup'
+load 'helpers/scaffold_gate_docker'
 
 setup() {
     load_modules
     SCRATCH="$(mk_scratch)"
+    scaffold_gate_docker_stub_install "$SCRATCH/bin"
     PROJ="$SCRATCH/proj"
     mkdir -p "$PROJ"
     # shellcheck disable=SC1091
@@ -35,6 +37,33 @@ teardown() {
     [ "$status" -eq 0 ]
     [ -x "$PROJ/scripts/run-tests.sh" ]
     bash -n "$PROJ/scripts/run-tests.sh"
+}
+
+@test "gate scaffold: host wrapper dispatches the real checks through Docker" {
+    echo "1.0.0" > "$PROJ/VERSION"
+    ensure_release_gate_script "$PROJ"
+    cd "$PROJ"
+    run scaffold_gate_run_as_host ./scripts/run-tests.sh --tier smoke
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"run-tests: PASS (tier: smoke)"* ]]
+    grep -F $'run\t--rm\t' "$MANIFEST_TEST_GATE_DOCKER_LOG"
+    grep -F $'bash\tscripts/run-tests.sh\t--tier\tsmoke' "$MANIFEST_TEST_GATE_DOCKER_LOG"
+    printf 'if then\n' > broken.sh
+    run scaffold_gate_run_as_host ./scripts/run-tests.sh --tier smoke
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"shell syntax: broken.sh"* ]]
+}
+
+@test "gate scaffold: host without Docker refuses before executing project checks" {
+    ensure_release_gate_script "$PROJ"
+    cd "$PROJ"
+    local body
+    body="$(sed 's/^if \[\[ ! -f \/.dockerenv && ! -f \/run\/.containerenv \]\]; then$/if true; then/' scripts/run-tests.sh)"
+    [[ "$body" == *'if true; then'* ]]
+    run env PATH=/nonexistent "$BASH" -c "$body" ./scripts/run-tests.sh --tier smoke
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Docker is required for the release check"* ]]
+    [ ! -e "$MANIFEST_TEST_GATE_DOCKER_LOG" ]
 }
 
 @test "gate scaffold: no-clobber — an existing gate is never overwritten" {
