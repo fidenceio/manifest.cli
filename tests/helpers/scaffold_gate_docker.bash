@@ -6,7 +6,7 @@
 scaffold_gate_docker_stub_install() {
     local bin_dir="$1"
     mkdir -p "$bin_dir"
-    export MANIFEST_TEST_GATE_DOCKER_LOG="$bin_dir/docker.log"
+    SCAFFOLD_GATE_DOCKER_LOG="$bin_dir/docker.log"
     cat > "$bin_dir/docker" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail

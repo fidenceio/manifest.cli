@@ -46,8 +46,8 @@ teardown() {
     run scaffold_gate_run_as_host ./scripts/run-tests.sh --tier smoke
     [ "$status" -eq 0 ]
     [[ "$output" == *"run-tests: PASS (tier: smoke)"* ]]
-    grep -F $'run\t--rm\t' "$MANIFEST_TEST_GATE_DOCKER_LOG"
-    grep -F $'bash\tscripts/run-tests.sh\t--tier\tsmoke' "$MANIFEST_TEST_GATE_DOCKER_LOG"
+    grep -F $'run\t--rm\t' "$SCAFFOLD_GATE_DOCKER_LOG"
+    grep -F $'bash\tscripts/run-tests.sh\t--tier\tsmoke' "$SCAFFOLD_GATE_DOCKER_LOG"
     printf 'if then\n' > broken.sh
     run scaffold_gate_run_as_host ./scripts/run-tests.sh --tier smoke
     [ "$status" -ne 0 ]
@@ -63,7 +63,7 @@ teardown() {
     run env PATH=/nonexistent "$BASH" -c "$body" ./scripts/run-tests.sh --tier smoke
     [ "$status" -ne 0 ]
     [[ "$output" == *"Docker is required for the release check"* ]]
-    [ ! -e "$MANIFEST_TEST_GATE_DOCKER_LOG" ]
+    [ ! -e "$SCAFFOLD_GATE_DOCKER_LOG" ]
 }
 
 @test "gate scaffold: no-clobber — an existing gate is never overwritten" {
