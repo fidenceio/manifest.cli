@@ -15,7 +15,7 @@ on:
 jobs:
   # Decide the test plan from the triggering event (§5.10 event-tiered matrix).
   #
-  #   Full container run — anything that gates merge or release confidence:
+  #   Full + OS matrix  — anything that gates merge or release confidence:
   #                       PR-to-main, push-to-main, the nightly schedule, and
   #                       manual dispatch. Runs --no-cache so the suite always
   #                       executes here, now (mirrors the release gate).
@@ -41,7 +41,7 @@ jobs:
             echo "tier=full"
             echo "changed=false"
             echo "no_cache=true"
-            echo 'os=["ubuntu-latest"]'
+            echo 'os=["ubuntu-latest","macos-latest"]'
           }
           fast() {
             echo "tier=smoke"
@@ -76,9 +76,32 @@ jobs:
           # merge-base with main; full PR/main/nightly runs can stay shallow.
           fetch-depth: ${{ needs.plan.outputs.changed == 'true' && 0 || 1 }}
 
-      # All project code and test dependencies run inside Docker. GitHub's
-      # macOS runners provide no Docker, so native macOS tests are not run here.
-      # Platform-only skips remain visible and are bounded by the test runner.
+      # Local development and Linux CI remain containerized. The approved
+      # exception is native validation on disposable GitHub macOS runners;
+      # Linux containers cannot establish macOS behavior. Keep this job name
+      # aligned with the existing required bats (macos-latest) status check.
+      - name: Install dependencies (macOS, host-native)
+        if: matrix.os == 'macos-latest'
+        run: |
+          set -euxo pipefail
+          # 'parallel' last keeps run-tests.sh --jobs (default 'auto') working.
+          brew install bats-core yq bash coreutils gnu-sed parallel
+          # macos-latest still ships /bin/bash 3.2 (no associative arrays).
+          # bats's `#!/usr/bin/env bash` picks whichever bash is first in PATH —
+          # ensure that's Homebrew's modern bash for every subsequent step.
+          echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
+          "$(brew --prefix)/bin/bash" --version | head -1
+          yq --version
+
+      - name: Print environment (macOS host)
+        if: matrix.os == 'macos-latest'
+        run: |
+          bash --version | head -1
+          bats --version
+          yq --version
+          git --version
+          parallel --version | head -1
+
       - name: Print environment (Linux, Docker)
         if: matrix.os == 'ubuntu-latest'
         run: docker --version
@@ -106,6 +129,21 @@ jobs:
           set -euo pipefail
           echo "run-tests-container.sh ${{ steps.args.outputs.args }}"
           ./scripts/run-tests-container.sh ${{ steps.args.outputs.args }}
+
+      - name: Run bats suite (macOS, host-native)
+        if: matrix.os == 'macos-latest'
+        run: |
+          set -euo pipefail
+          echo "run-tests.sh ${{ steps.args.outputs.args }}"
+          ./scripts/run-tests.sh ${{ steps.args.outputs.args }}
+
+      - name: Smoke-test the CLI (macOS host)
+        if: matrix.os == 'macos-latest'
+        run: |
+          bash scripts/manifest-cli.sh version
+          bash scripts/manifest-cli.sh help | head -40
+          bash scripts/manifest-cli.sh status
+          bash scripts/manifest-cli.sh doctor
 
       - name: Smoke-test the CLI (Linux, containerized)
         if: matrix.os == 'ubuntu-latest'

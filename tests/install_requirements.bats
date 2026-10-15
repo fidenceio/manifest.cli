@@ -46,10 +46,14 @@ EOF
     # Linux leg runs via the containerized runner (parallel provisioned in-container)…
     grep -F './scripts/run-tests-container.sh' "$TEST_REPO_ROOT/.github/workflows/test.yml" >/dev/null
     grep -F './scripts/run-tests-container.sh --print-image' "$TEST_REPO_ROOT/.github/workflows/test.yml" >/dev/null
-    # …and no longer installs test deps on the runner host.
+    # Linux never installs test dependencies on its host. The native macOS
+    # exception provisions GNU parallel only on the disposable macOS runner.
     refute grep -F 'apt-get install -y bats parallel' "$TEST_REPO_ROOT/.github/workflows/test.yml"
-    refute grep -E 'brew install|apt-get install|apk add' "$TEST_REPO_ROOT/.github/workflows/test.yml"
-    refute grep -F 'host-native' "$TEST_REPO_ROOT/.github/workflows/test.yml"
+    local mac_install mac_condition
+    mac_install="$(yq -r '.jobs.bats.steps[] | select(.name == "Install dependencies (macOS, host-native)") | .run' "$TEST_REPO_ROOT/.github/workflows/test.yml")"
+    mac_condition="$(yq -r '.jobs.bats.steps[] | select(.name == "Install dependencies (macOS, host-native)") | .if' "$TEST_REPO_ROOT/.github/workflows/test.yml")"
+    [[ "$mac_install" == *"brew install bats-core yq bash coreutils gnu-sed parallel"* ]]
+    [ "$mac_condition" = "matrix.os == 'macos-latest'" ]
 
     refute grep -iqE 'parallel' "$TEST_REPO_ROOT/install-cli.sh"
     refute grep -iqE 'parallel' "$TEST_REPO_ROOT/formula/manifest.rb"

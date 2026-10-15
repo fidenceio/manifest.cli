@@ -92,7 +92,10 @@ To check coverage reporting with a TAP stream larger than a pipe buffer:
 The traced runner writes TAP directly to `coverage/tests.tap`, which is emitted
 after tracing. This avoids a kcov stdout-pipe deadlock on large suites.
 
-CI runs the project inside Linux containers. GitHub's macOS runners do not
-provide Docker; the former native Homebrew test-install step is removed to
-honor the no-host-dependencies policy. Platform-specific skips remain reported;
-this lane does not establish native macOS behavior.
+Local development and Linux CI run in containers; do not install test dependencies
+on a developer host. Full CI also runs the suite natively on disposable GitHub
+macOS runners under the approved CI-only exception. That lane provisions its own
+Homebrew tools and exercises macOS-specific behavior that Linux containers cannot
+establish. Pull requests, main pushes, nightly runs, and manual dispatches run both
+platforms without the test cache. Routine feature pushes retain the Linux smoke
+lane. Keep the native job named `bats (macos-latest)` to satisfy branch protection.
