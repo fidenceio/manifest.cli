@@ -51,7 +51,6 @@ if no member released and `2` after a member released. `--local` commits without
 pushing. Root commit subjects now use `chore(fleet): ...`; sign-off still follows
 the repository's `format.signOff` setting.
 
-
 This guide covers the two things most likely to catch out someone new to Manifest CLI,
 or someone upgrading a pipeline that already existed. Both come back to one rule:
 

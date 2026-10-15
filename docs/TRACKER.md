@@ -10,7 +10,6 @@ Fleet revert now uses a manager commit containing `manifest.fleet.snapshot.json`
 Normal fleet ships record that member commit map and include the owned file in
 the coordination allowlist; earlier manager history cannot reconstruct it.
 
-
 Open work for the Manifest CLI repo, as one flat list in priority order.
 
 - **This file is the canonical open-work register for the CLI repo** (locked 2026-08-15). Audits produce *evidence and verdicts*; the work they imply is filed here under a stable `§N` ID. No audit maintains its own parallel to-do list: an audit's remediation section points back here, and its `FINDINGS.tsv` carries the owning §-ID in its `remediation` column. **Audit artifacts are deliberately untracked** (`CODEX_AUDIT_*` is gitignored, locked 2026-08-16) — they are local evidence for the run that produced them, and each locks a baseline of the tracked tree that committing its own output would invalidate. So this file is the only durable record: if a finding is not filed here, a fresh clone has no trace of it.
