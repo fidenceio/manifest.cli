@@ -1200,52 +1200,126 @@ sync_repository() {
     return 0
 }
 
-revert_version() {
-    echo "🔄 Reverting to previous version..."
-    
-    # Get list of available versions
-    local available_versions=()
-    local tags=$(git tag --sort=-version:refname | head -10)
-    
-    for tag in $tags; do
-        available_versions+=("$tag")
-    done
-    
-    if [ ${#available_versions[@]} -eq 0 ]; then
-        echo "❌ No version tags found"
+# Explicit checkout scopes; fleet targets a manager commit and its member map.
+manifest_revert_dispatch() {
+    local scope="${1:-}"
+    shift || true
+    case "$scope" in
+        repo) manifest_revert_repo "$@" ;;
+        fleet) manifest_revert_fleet "$@" ;;
+        help|-h|--help)
+            _render_help "manifest revert <repo|fleet> [target] [-y|--yes] [--dry-run]" \
+                "Preview or apply local checkouts at a recorded version." \
+                "Scopes" "  repo [<tag>]         Check out a local tag
+  fleet [<snapshot>]   Restore a manager commit and its recorded members" \
+                "Options" "  --dry-run   Explicit preview; no writes
+  -y, --yes   Apply checkouts" ;;
+        "")
+            _render_help_error "revert requires a scope" "manifest revert <repo|fleet> [target] [-y|--yes] [--dry-run]"
+            return 1 ;;
+        *)
+            _render_help_error "Unknown revert scope: $scope" "manifest revert <repo|fleet> [target] [-y|--yes] [--dry-run]"
+            return 1 ;;
+    esac
+}
+
+manifest_revert_repo() {
+    local execution_mode="preview" local_only=false
+    local args=() tag=""
+    manifest_execution_parse execution_mode local_only args "$@" || return 1
+    if [[ "$local_only" == true ]]; then
+        log_error "Unknown revert option: --local (tag checkout is already local)"
         return 1
     fi
-    
-    echo "📋 Available versions:"
-    for i in "${!available_versions[@]}"; do
-        local version=${available_versions[$i]}
-        echo "   $((i+1)). $version"
+    set -- "${args[@]}"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help|help)
+                _render_help \
+                    "manifest revert repo [<tag>] [-y|--yes] [--dry-run]" \
+                    "Preview or check out a local tag in detached HEAD. With no tag, a terminal
+lets you select from the ten highest version tags; scripts must name a tag to apply.
+This moves the checkout only; published releases and branch history stay intact." \
+                    "Options" "  --dry-run   Explicit preview; no checkout or writes
+  -y, --yes   Apply the tag checkout" \
+                    "Examples" "  manifest revert repo
+  manifest revert repo v1.2.3
+  manifest revert repo v1.2.3 -y
+  git switch -                       # Return to the previous checkout"
+                return 0 ;;
+            -*) _render_help_error "Unknown revert option: $1" "manifest revert repo [<tag>] [-y|--yes] [--dry-run]"; return 1 ;;
+            *)
+                if [[ -n "$tag" ]]; then
+                    log_error "Expected one tag; unexpected argument: $1"
+                    return 1
+                fi
+                tag="$1"; shift ;;
+        esac
     done
-    
-    echo ""
-    read -p "Select version to revert to (1-${#available_versions[@]}) or 'q' to quit: " selection
-    
-    if [ "$selection" = "q" ]; then
-        echo "🔄 Revert cancelled"
+
+    local root
+    manifest_repo_scope_require_git "manifest revert repo" || return 1
+    root="$(git rev-parse --show-toplevel)" || return 1
+    if [[ -z "$tag" ]]; then
+        local tags=() candidate selection i
+        while IFS= read -r candidate; do
+            [[ -z "$candidate" || ${#tags[@]} -ge 10 ]] || tags+=("$candidate")
+        done < <(git -C "$root" tag --sort=-version:refname)
+        if [[ ${#tags[@]} -eq 0 ]]; then
+            log_error "No version tags found"
+            return 1
+        fi
+        echo "Available versions:"
+        for i in "${!tags[@]}"; do printf '  %s. %s\n' "$((i+1))" "${tags[$i]}"; done
+        if [[ -t 0 ]]; then
+            read -r -p "Select version (1-${#tags[@]}) or 'q' to quit: " selection || return 1
+            [[ "$selection" != q ]] || { echo "Revert cancelled"; return 0; }
+            if [[ ! "$selection" =~ ^([1-9]|10)$ ]] || ! validate_version_selection "$selection" "${#tags[@]}"; then
+                log_error "Invalid selection"
+                return 1
+            fi
+            tag="${tags[$((10#$selection-1))]}"
+        elif [[ "$execution_mode" == apply ]]; then
+            log_error "Name a tag to apply non-interactively: manifest revert repo <tag> -y"
+            return 1
+        else
+            manifest_execution_footer "manifest revert repo <tag> -y"
+            return 0
+        fi
+    fi
+
+    local commit current
+    if ! git check-ref-format "refs/tags/$tag" >/dev/null 2>&1 ||
+       ! commit="$(git -C "$root" rev-parse --verify "refs/tags/$tag^{commit}" 2>/dev/null)"; then
+        log_error "Unknown local commit tag: $tag"
+        return 1
+    fi
+    current="$(git -C "$root" rev-parse --verify HEAD 2>/dev/null)" || return 1
+    echo "Repository: $root"
+    echo "Current commit: $current"
+    echo "Target tag: $tag ($commit)"
+    echo "Checkout leaves detached HEAD; local changes that would be overwritten are refused."
+    echo "Submodule working trees are left as they are."
+    local quoted_tag replay
+    printf -v quoted_tag '%q' "$tag"
+    replay="manifest revert repo $quoted_tag -y"
+    if [[ "$execution_mode" != apply ]]; then
+        manifest_execution_preview_header "manifest revert repo $tag"
+        manifest_execution_footer "$replay"
         return 0
     fi
-    
-    # Enhanced input validation
-    if ! validate_version_selection "$selection" "${#available_versions[@]}"; then
-        echo "❌ Invalid selection. Please enter a number between 1 and ${#available_versions[@]} or 'q' to quit."
+
+    # This local inspection explicitly names the destination commit and creates
+    # detached HEAD. Neither an origin nor a current branch identifies its target.
+    manifest_execution_require_apply "$execution_mode" "$root" "$replay" "" false false || return 1
+    manifest_execution_apply_header
+    # Pin the resolved commit: an identically named branch or a moved tag cannot
+    # change the destination. Preserve ignored-file and submodule working trees too.
+    if ! git -C "$root" checkout --detach --no-overwrite-ignore --no-recurse-submodules "$commit"; then
+        log_error "Tag checkout failed; resolve the Git refusal before retrying."
         return 1
     fi
-    
-    local selected_version=${available_versions[$((selection-1))]}
-    echo "🔄 Reverting to $selected_version..."
-    
-    if git checkout "$selected_version"; then
-        echo "✅ Successfully reverted to $selected_version"
-        echo "💡 Note: You are now in 'detached HEAD' state"
-    else
-        echo "❌ Failed to revert to $selected_version"
-        return 1
-    fi
+    echo "Checked out $tag ($commit) in detached HEAD. Return with: git switch -"
 }
 
 # ---------------------------------------------------------------------------

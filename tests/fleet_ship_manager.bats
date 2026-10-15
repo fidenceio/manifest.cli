@@ -28,9 +28,8 @@ setup() {
     HOME="$SCRATCH/home"
     mkdir -p "$HOME"
     export HOME
-    # A git identity for the fixtures that this verb itself git-inits.
-    git config --global user.email test@example.com
-    git config --global user.name "Test"
+    # The shared helper supplies a private Git identity for every test,
+    # including fixtures that this verb itself git-inits.
 
     # Full module graph, as scripts/manifest-cli.sh wires it, so the dispatch
     # tests run the real manifest_ship_fleet -> fleet_ship_manager path.
@@ -143,7 +142,7 @@ root_head()   { git -C "$FLEET" rev-parse HEAD 2>/dev/null; }
     [[ "$output" == *"pushed main"* ]]
 
     run git -C "$FLEET" log -1 --pretty=%s
-    [ "$output" = "Fleet manager: update manifest.fleet.config.yaml" ]
+    [ "$output" = "chore(fleet): update manifest.fleet.config.yaml" ]
 
     run git -C "$FLEET" ls-tree -r --name-only HEAD
     [[ "$output" == *"manifest.fleet.config.yaml"* ]]   # positive control: the commit carries the file
@@ -223,7 +222,7 @@ root_head()   { git -C "$FLEET" rev-parse HEAD 2>/dev/null; }
     [ "$(cat "$FLEET/FLEET_VERSION")" = "$expected" ]
     [[ "$output" == *"stamped fleet version (unset) → $expected"* ]]
     run git -C "$FLEET" log -1 --pretty=%s
-    [ "$output" = "Fleet manager: bump fleet version to $expected (updates: manifest.fleet.config.yaml)" ]
+    [ "$output" = "chore(fleet): bump fleet version to $expected (updates: manifest.fleet.config.yaml)" ]
     run git -C "$FLEET" ls-tree -r --name-only HEAD
     [[ "$output" == *"FLEET_VERSION"* ]]
     [ "$(root_head)" = "$(remote_head)" ]
@@ -246,7 +245,7 @@ root_head()   { git -C "$FLEET" rev-parse HEAD 2>/dev/null; }
     [ "$status" -eq 0 ]
     [ "$(cat "$FLEET/FLEET_VERSION")" = "1.3.0" ]
     run git -C "$FLEET" log -1 --pretty=%s
-    [ "$output" = "Fleet manager: bump fleet version to 1.3.0" ]
+    [ "$output" = "chore(fleet): bump fleet version to 1.3.0" ]
     [ "$(root_head)" = "$(remote_head)" ]
 }
 

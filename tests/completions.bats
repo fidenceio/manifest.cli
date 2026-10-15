@@ -2,37 +2,64 @@
 
 load 'helpers/setup'
 
+@test "bash completion offers supported scopes and guided init options" {
+    # Exercise completion output, rather than only checking its source text.
+    source "$TEST_REPO_ROOT/completions/manifest.bash"
+    local verb
+    COMP_CWORD=2
+    for verb in plan reconcile discover update add validate topics; do
+        COMP_WORDS=(manifest "$verb" "")
+        _manifest_complete
+        [ "${COMPREPLY[*]}" = fleet ]
+    done
+    COMP_WORDS=(manifest init "")
+    _manifest_complete
+    [[ " ${COMPREPLY[*]} " == *' repo '* ]]
+    [[ " ${COMPREPLY[*]} " == *' fleet '* ]]
+    [[ " ${COMPREPLY[*]} " == *' --yes '* ]]
+    COMP_WORDS=(manifest revert "")
+    _manifest_complete
+    [ "${COMPREPLY[*]}" = 'repo fleet --help' ]
+    COMP_CWORD=1
+    COMP_WORDS=(manifest "")
+    _manifest_complete
+    [[ " ${COMPREPLY[*]} " == *' init '* ]]
+    for verb in first refresh sync time fleet; do
+        [[ " ${COMPREPLY[*]} " != *" $verb "* ]]
+    done
+}
+
 @test "bash completion includes plan and reconcile" {
     grep -Eq 'top_cmds=.*(^| )plan( |")' "$TEST_REPO_ROOT/completions/manifest.bash"
     grep -Eq 'top_cmds=.*(^| )reconcile( |")' "$TEST_REPO_ROOT/completions/manifest.bash"
     grep -Eq 'top_cmds=.*(^| )recipe( |")' "$TEST_REPO_ROOT/completions/manifest.bash"
-    grep -Eq 'first\|init\|plan\|reconcile' "$TEST_REPO_ROOT/completions/manifest.bash"
+    grep -Eq 'plan\|reconcile\|discover' "$TEST_REPO_ROOT/completions/manifest.bash"
 }
 
-@test "bash completion includes first as a top command" {
-    grep -Eq 'top_cmds="first ' "$TEST_REPO_ROOT/completions/manifest.bash"
+@test "bash completion includes init as a top command" {
+    grep -Eq 'top_cmds="config init ' "$TEST_REPO_ROOT/completions/manifest.bash"
 }
 
 @test "zsh completion includes plan and reconcile" {
     grep -q "'plan:Generate an adoption plan'" "$TEST_REPO_ROOT/completions/_manifest"
     grep -q "'reconcile:Validate and apply an adoption plan'" "$TEST_REPO_ROOT/completions/_manifest"
     grep -q "'recipe:Inspect workflow recipes'" "$TEST_REPO_ROOT/completions/_manifest"
-    grep -Eq 'first\|init\|plan\|reconcile' "$TEST_REPO_ROOT/completions/_manifest"
+    grep -Eq 'plan\|reconcile\|discover' "$TEST_REPO_ROOT/completions/_manifest"
 }
 
-@test "zsh completion includes first as a top command" {
-    grep -q "'first:" "$TEST_REPO_ROOT/completions/_manifest"
+@test "zsh completion includes init as a top command" {
+    grep -q "'init:" "$TEST_REPO_ROOT/completions/_manifest"
 }
 
 @test "fish completion includes plan and reconcile" {
     grep -q "a plan .*-d 'Generate an adoption plan'" "$TEST_REPO_ROOT/completions/manifest.fish"
     grep -q "a reconcile .*-d 'Validate and apply an adoption plan'" "$TEST_REPO_ROOT/completions/manifest.fish"
     grep -q "a recipe .*-d 'Inspect workflow recipes'" "$TEST_REPO_ROOT/completions/manifest.fish"
-    grep -q "first init plan reconcile" "$TEST_REPO_ROOT/completions/manifest.fish"
+    grep -q "for cmd in plan reconcile discover" "$TEST_REPO_ROOT/completions/manifest.fish"
 }
 
-@test "fish completion includes first as a top command" {
-    grep -q "a first " "$TEST_REPO_ROOT/completions/manifest.fish"
+@test "fish completion includes init as a top command" {
+    grep -q "a init " "$TEST_REPO_ROOT/completions/manifest.fish"
 }
 
 @test "completions expose fleet adoption flags" {

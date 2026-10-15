@@ -443,32 +443,6 @@ AUDIT_FILE() { echo "$HOME/.manifest-cli/audit/apply-events.ndjson"; }
 }
 
 # -----------------------------------------------------------------------------
-# refresh repo --local -y
-#
-# refresh never has remote operations regardless of --local; this proves the
-# apply path regenerates docs locally and stays inside the offline boundary,
-# without bumping the version.
-# -----------------------------------------------------------------------------
-
-@test "refresh repo --local -y: regenerates docs locally, no push or publish" {
-    local repo
-    repo="$(mk_repo 2.5.4)"
-    # Local marker proves the regen step ran in-tree.
-    manifest_docs_generate() { echo regenerated > "$MANIFEST_CLI_PROJECT_ROOT/.refresh-marker"; return 0; }
-
-    cd "$repo"
-    MANIFEST_CLI_PROJECT_ROOT="$repo" run manifest_refresh_repo --local -y
-    [ "$status" -eq 0 ]
-    [[ "$output" == *"Refresh complete."* ]]
-
-    # Doc regen ran; version is unchanged (refresh never bumps).
-    [ -f "$repo/.refresh-marker" ]
-    [ "$(cat "$repo/VERSION")" = "2.5.4" ]
-
-    assert_no_remote_dispatch
-}
-
-# -----------------------------------------------------------------------------
 # ship fleet --local -y
 #
 # Drives the full fleet apply path: load config -> pre-flights -> single-flight

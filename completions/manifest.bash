@@ -10,7 +10,7 @@ _manifest_complete() {
     words=("${COMP_WORDS[@]}")
 
     # Top-level commands shown in `manifest --help`
-    local top_cmds="first config init plan reconcile status recipe discover update add validate prep refresh docs topics ship pr doctor cleanup security env upgrade reinstall uninstall revert test cloud agent version help"
+    local top_cmds="config init plan reconcile status recipe discover update add validate docs topics ship pr doctor cleanup security env upgrade reinstall uninstall revert test cloud agent version help"
     local scopes="repo fleet"
     local bumps="patch minor major revision"
     local config_subs="show list get set unset describe doctor setup time"
@@ -19,6 +19,16 @@ _manifest_complete() {
     # `config list` but never to set/unset, which would try to write it.
     local write_layers="global project local"
     local read_layers="global project local fleet"
+
+    if [[ "${words[1]:-}" == revert && "${words[2]:-}" == repo && "$cword" -ge 3 ]]; then
+        COMPREPLY=( $(compgen -W "-y --yes --dry-run --help $(git tag --sort=-version:refname 2>/dev/null)" -- "$cur") )
+        return 0
+    fi
+
+    if [[ "${words[1]:-}" == revert && "${words[2]:-}" == fleet && "$cword" -ge 3 ]]; then
+        COMPREPLY=( $(compgen -W "-y --yes --dry-run --help $(git log --all -10 --format=%h -- manifest.fleet.snapshot.json 2>/dev/null)" -- "$cur") )
+        return 0
+    fi
 
     case $cword in
         1)
@@ -32,8 +42,20 @@ _manifest_complete() {
                 # _manifest_cli_is_existing_repo_scope_request alongside
                 # prep/refresh/ship — but it was missing here, so the one scoped
                 # command users reach for most often offered no completion.
-                first|init|plan|reconcile|discover|update|add|validate|prep|refresh|docs|ship|status)
+                ship|status)
                     COMPREPLY=( $(compgen -W "$scopes" -- "$cur") )
+                    return 0
+                    ;;
+                revert)
+                    COMPREPLY=( $(compgen -W "repo fleet --help" -- "$cur") )
+                    return 0
+                    ;;
+                init)
+                    COMPREPLY=( $(compgen -W "repo fleet -y --yes --dry-run --depth --name --force --remote --no-connect --create-repo-private --create-repo-public --help" -- "$cur") )
+                    return 0
+                    ;;
+                docs)
+                    COMPREPLY=( $(compgen -W "fleet metadata cleanup --help" -- "$cur") )
                     return 0
                     ;;
                 # cleanup takes repo|fleet like the scoped verbs, plus `state`
@@ -43,7 +65,7 @@ _manifest_complete() {
                     COMPREPLY=( $(compgen -W "repo fleet state" -- "$cur") )
                     return 0
                     ;;
-                topics)
+                plan|reconcile|discover|update|add|validate|topics)
                     COMPREPLY=( $(compgen -W "fleet" -- "$cur") )
                     return 0
                     ;;
@@ -88,7 +110,7 @@ _manifest_complete() {
                 # that accepts it. --connect is the connect phase (what
                 # `prep repo` used to be); --create-repo-* implies it.
                 "init repo")
-                    COMPREPLY=( $(compgen -W "-y --yes --force --dry-run --connect --no-connect --create-repo-private --create-repo-public --help" -- "$cur") )
+                    COMPREPLY=( $(compgen -W "-y --yes --force --dry-run --connect --no-connect --remote --create-repo-private --create-repo-public --help" -- "$cur") )
                     return 0
                     ;;
                 "init fleet")
@@ -100,7 +122,7 @@ _manifest_complete() {
                     return 0
                     ;;
                 "ship fleet")
-                    COMPREPLY=( $(compgen -W "$bumps resume manager -y --yes --local --dry-run --explain --force-bump --noprep" -- "$cur") )
+                    COMPREPLY=( $(compgen -W "$bumps resume manager -y --yes --local --dry-run --explain --force-bump --require-clean" -- "$cur") )
                     return 0
                     ;;
                 "topics fleet")
@@ -112,11 +134,11 @@ _manifest_complete() {
                     return 0
                     ;;
                 "plan fleet")
-                    COMPREPLY=( $(compgen -W "--apply --do --dry-run --depth --safety-cap --plan --name --force --help" -- "$cur") )
+                    COMPREPLY=( $(compgen -W "-y --yes --dry-run --depth --safety-cap --plan --name --force --help" -- "$cur") )
                     return 0
                     ;;
                 "reconcile fleet")
-                    COMPREPLY=( $(compgen -W "--apply --do --dry-run --plan --commit --push --force --adopt-submodules --help" -- "$cur") )
+                    COMPREPLY=( $(compgen -W "-y --yes --dry-run --plan --commit --push --force --adopt-submodules --help" -- "$cur") )
                     return 0
                     ;;
                 "pr create")

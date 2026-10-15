@@ -1,5 +1,57 @@
 # Migration Guide
 
+## Upcoming breaking command cleanup
+
+Use `manifest <verb> <scope> [action]`. Mutating workflow commands preview by
+default; `-y` / `--yes` applies and `--dry-run` explicitly previews. Combining
+preview and apply flags is an error in either order.
+
+| Removed spelling | Replacement |
+| --- | --- |
+| `manifest prep repo` | `manifest init repo --connect` |
+| `manifest prep fleet` | `manifest init fleet --connect` |
+| `manifest revert` | `manifest revert repo [<tag>]`; previews by default, `-y` applies |
+| `manifest first` | `manifest init` for guided setup; explicit `init repo` / `init fleet` remain |
+| `manifest refresh repo` | `manifest docs`, `manifest docs metadata`, and `manifest docs cleanup` as needed |
+| `manifest sync` | `manifest init repo --connect` |
+| `manifest time` | `manifest config time` |
+| `manifest fleet help` | `manifest help` and the action-first fleet commands |
+| `manifest ship <bump>` | `manifest ship repo <bump>` |
+| `manifest recipe run <id>` | The recipe's named command; list/show/explain remain |
+| `manifest refresh fleet` | `manifest update fleet`, then `manifest docs fleet` as needed |
+| `plan fleet --apply` / `--do` | `plan fleet -y` / `--yes` |
+| `reconcile fleet --apply` / `--do` | `reconcile fleet -y` / `--yes` |
+| `ship fleet --noprep` | `ship fleet --require-clean` |
+
+The guided setup implementation now lives under bare `manifest init`, with the
+same preview, target checks, audit record, and fleet membership-review checkpoint.
+The refresh implementation and `manifest.builtin.refresh.repo` recipe are deleted.
+The connect recipe is named `manifest.builtin.init.repo.connect` (formerly
+`manifest.builtin.prep.repo`). Recipe inspection
+remains available; the deprecated recipe execution shim is deleted.
+
+Bare `revert` no longer selects and checks out immediately. `revert repo` previews,
+and applying from a script requires an explicit tag. `revert fleet <manager-commit>`
+restores members using the commit's `manifest.fleet.snapshot.json`, then restores
+the manager itself. Fleet ships now record that file after members finish and
+include it in the manager coordination commit. Old manager commits without the
+map cannot reconstruct fleet versions. Fleet revert requires clean working trees
+and reports partial checkout failures with exit `2`.
+
+These spellings are removed, without compatibility aliases. Existing automation
+must use the replacements before upgrading to this breaking release. Connecting
+through `init repo --connect` or `init fleet --connect` includes init's local scaffolding phase; it preserves
+existing files unless an explicit overwrite option is given.
+
+A normal `ship fleet <type> -y` now ships the manager coordination repo after
+members, including when every member is skipped or `fleet.versioning` is `none`.
+Only declared coordination files are staged. `ship fleet manager` remains the
+root-only command and recovery path. Manager commit or push failures return `1`
+if no member released and `2` after a member released. `--local` commits without
+pushing. Root commit subjects now use `chore(fleet): ...`; sign-off still follows
+the repository's `format.signOff` setting.
+
+
 This guide covers the two things most likely to catch out someone new to Manifest CLI,
 or someone upgrading a pipeline that already existed. Both come back to one rule:
 
@@ -7,7 +59,7 @@ or someone upgrading a pipeline that already existed. Both come back to one rule
 
 ## The preview / apply model
 
-Every command that could change something — `init`, `refresh`, `ship` — prints
+Every command that could change something — `init`, `ship` — prints
 what it *would* do and then stops. Nothing is written until you ask:
 
 ```bash
@@ -275,8 +327,9 @@ only remedy.
 
 ## `prep` folded into `init`
 
-`manifest prep` is now the **connect phase** of `manifest init`. Both spellings
-work; `prep` prints a deprecation notice naming the replacement.
+The former `manifest prep` behavior lives in the **connect phase** of
+`manifest init`. The redundant command and internal compatibility wrappers are
+removed in the upcoming breaking cleanup.
 
 ```bash
 manifest prep repo             ->  manifest init repo --connect
@@ -284,13 +337,10 @@ manifest prep fleet            ->  manifest init fleet --connect
 manifest prep fleet --parallel ->  manifest init fleet --connect --parallel
 ```
 
-**`init` without `--connect` and `prep` both behave exactly as before.** The
-connect phase is opt-in precisely so that an existing `manifest init repo -y` in
-a pipeline does not silently gain a `git pull`.
-
-The **one** invocation whose behaviour changes is
-`manifest init repo --create-repo-private|--create-repo-public`: see the scripting
-notes below. If you do not pass those flags, nothing you run today changes.
+**Repository setup now prepares for ship by default.** `manifest init repo -y`
+connects origin and runs readiness checks. Missing origin defaults to private GitHub
+creation; use `--remote URL` for an existing repository. Existing scaffold-only
+pipelines must explicitly use `manifest init repo --no-connect -y`.
 
 ### Why
 
@@ -310,28 +360,25 @@ connect phase is where the repo scope's remote calls live.
 
 One exception, named here rather than left to be discovered: `init fleet` with
 `--create-repo-private` / `--create-repo-public` still creates each member's
-GitHub repo inside Phase 2's scaffold, not the connect phase. That is the only
-place either scope reaches the network without `--connect`.
+GitHub repo inside Phase 2's scaffold, not the connect phase. Repository connection is now enabled by default; fleet connection remains opt-in.
 
 ### If you script against Manifest
 
-- Replace `manifest prep <scope>` with `manifest init <scope> --connect` when
-  convenient. There is no deadline in this release.
-- Set `MANIFEST_CLI_QUIET_DEPRECATIONS=1` to silence the notice meanwhile.
-- `manifest init repo --create-repo-*` now implies `--connect`. It still creates
-  the GitHub repo and adds it as `origin`, but the connect phase then also pulls
-  from the new remote — the scaffold-only path never did. **On a repository that
-  was just created and is therefore empty, that pull has no ref to fetch**, so
-  expect `git_retry`'s backoff, a `⚠️ All sync attempts failed` line, and then a
-  success line: noisy, non-fatal, and new in this release. If you script against
-  this command's output, that is the change to account for.
+- Replace `manifest prep <scope>` with `manifest init <scope> --connect` before
+  upgrading to this breaking cleanup.
+- The unused alias-warning toggle `deprecations.quiet` and its environment
+  variable are removed with the aliases.
+- New empty remotes skip pulling. Existing remotes use a fast-forward-only
+  connection; remote failures and history conflicts return nonzero.
+- Repository init checks Git identity, branch, version and the real release check.
+  It makes no release commit, tag, version bump or push. Missing project
+  verification is reported as incomplete setup rather than success.
 - `manifest init fleet --create-repo-*` is **unchanged**: per-member repo creation
   still happens inside Phase 2's scaffold, not the connect phase. The
   "scaffold makes no network call" property described above holds for
   `init repo`; `init fleet` with that flag is the documented exception.
-- The internal helpers `manifest_prep_repo` / `manifest_prep_fleet` still exist as
-  deprecated aliases; the implementations are `manifest_init_connect_repo` and
-  `manifest_init_connect_fleet`.
+- The retained implementations are `manifest_init_connect_repo` and
+  `manifest_init_connect_fleet` in `modules/core/manifest-init-connect.sh`.
 
 ## Versions are independent across a fleet
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=smoke
 #
 # §8.1a: a multi-remote push that succeeds on some remotes and fails on another
 # leaves public state behind — push_changes must record a per-remote ledger and

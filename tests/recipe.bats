@@ -95,8 +95,7 @@ run_manifest_from_plain_dir() {
     offenders=""
 
     for file in \
-        "$TEST_REPO_ROOT/recipes/builtin/manifest.builtin.prep.repo.yaml" \
-        "$TEST_REPO_ROOT/recipes/builtin/manifest.builtin.refresh.repo.yaml" \
+        "$TEST_REPO_ROOT/recipes/builtin/manifest.builtin.init.repo.connect.yaml" \
         "$TEST_REPO_ROOT"/recipes/builtin/manifest.builtin.ship.repo.*.yaml; do
         if [ "$(yq e '[.steps[] | select(.id == "confirm-repo-target" and .uses == "manifest.repo.confirm_target" and .effect == "read" and .when == "apply")] | length' "$file")" != "1" ]; then
             offenders="$offenders $file"

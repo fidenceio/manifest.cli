@@ -41,20 +41,16 @@
 #
 # ADDITIONAL ACTION-FIRST COMMANDS:
 #   manifest status          - Show fleet status when in fleet mode
-#   manifest refresh fleet   - DEPRECATED — use 'update fleet' (+ 'docs fleet')
 #   manifest discover fleet  - Alias for 'update fleet --dry-run'
 #   manifest add fleet       - Add a service to fleet
-#   manifest prep fleet      - DEPRECATED alias for init fleet --connect
 #   manifest docs fleet      - Generate unified documentation
 #   manifest validate fleet  - Validate configuration
 #
 # USAGE:
 #   # From manifest-core.sh
 #   source manifest-fleet.sh
-#   fleet_main "status"
+#   manifest status fleet
 #
-#   # Standalone (for testing)
-#   ./manifest-fleet.sh status
 #
 # =============================================================================
 
@@ -88,6 +84,7 @@ source "$MANIFEST_CLI_FLEET_SCRIPT_DIR/manifest-fleet-topics.sh"
 source "$MANIFEST_CLI_FLEET_SCRIPT_DIR/manifest-fleet-docs.sh"
 source "$MANIFEST_CLI_FLEET_SCRIPT_DIR/manifest-fleet-plan.sh"
 source "$MANIFEST_CLI_FLEET_SCRIPT_DIR/manifest-fleet-apply.sh"
+source "$MANIFEST_CLI_FLEET_SCRIPT_DIR/manifest-fleet-revert.sh"
 
 # =============================================================================
 # UTILITY FUNCTIONS
@@ -678,6 +675,12 @@ _fleet_coordination_files() {
     local version_name
     version_name="$(_fleet_root_version_name "$root")"
     printf '%s\n' .gitignore manifest.fleet.config.yaml manifest.fleet.tsv "$version_name" CHANGELOG_FLEET.md
+    # Snapshot maps join the coordination allowlist once the first real fleet
+    # ship records one. Preview can announce the prospective file without writing.
+    if [[ "${_MANIFEST_CLI_FLEET_SNAPSHOT_PLANNED:-0}" == 1 ]] ||
+       _manifest_fleet_snapshot_owned "$root/$(_manifest_fleet_snapshot_file)"; then
+        _manifest_fleet_snapshot_file
+    fi
     if declare -F _fleet_extra_coordination_files >/dev/null 2>&1; then
         _fleet_extra_coordination_files "$root"
     fi
@@ -1006,10 +1009,10 @@ create_fleet_gitignore() {
 # Called from manifest_init_fleet (Phase 2) in modules/core/manifest-init.sh.
 #
 # Reads the reviewed selections from manifest.fleet.tsv (written by Phase 1 /
-# _fleet_start, or by `manifest first` on a fleet) and initializes the selected
+# _fleet_start, or by `manifest init` on a fleet) and initializes the selected
 # directories. Phase 2 requires the TSV — there is no auto-discovery fallback
 # (that path was retired with the internal `--_autodiscover` flag once
-# `manifest first` moved onto the two-phase rails).
+# `manifest init` moved onto the two-phase rails).
 #
 # BEHAVIOR:
 #   1. Reads selected directories from manifest.fleet.tsv
@@ -1088,13 +1091,13 @@ _fleet_init() {
     fi
 
     # Phase 2 requires the reviewed selection file. It is written by Phase 1
-    # (`manifest init fleet` with no TSV) or by `manifest first` on a fleet;
+    # (`manifest init fleet` with no TSV) or by `manifest init` on a fleet;
     # there is no auto-discovery fallback here.
     if [[ ! -f "$start_file" ]]; then
         log_warning "No selection file found."
         echo ""
         echo "  Run first:  manifest init fleet   (scan and select directories)"
-        echo "  Or:         manifest first        (discover and register git repos)"
+        echo "  Or:         manifest init         (discover and register git repos)"
         return 1
     fi
 
@@ -1497,7 +1500,7 @@ changelog:
 # Fleet apply delegates each releaseable member to `manifest ship repo -y`,
 # which auto-commits that member's pending changes as part of the release
 # (subject to the gate-drift snapshot rules), so a fleet apply SHIPS dirty
-# members rather than refusing them. Only `--noprep` requires every tree to
+# members rather than refusing them. Only `--require-clean` requires every tree to
 # be clean and refuses otherwise. There is no validation: block here —
 # config that advertised a toggle the CLI ignores was removed (see CLI
 # TRACKER §2.8, following the require_expected_branch precedent).
@@ -1554,7 +1557,7 @@ _fleet_validate_clone_path() {
 # Function: _fleet_sync (internal)
 # -----------------------------------------------------------------------------
 # Synchronizes all fleet services (clone missing, pull existing).
-# Called from manifest_prep_fleet in modules/core/manifest-prep.sh.
+# Called from manifest_init_connect_fleet in modules/core/manifest-init-connect.sh.
 #
 # ARGUMENTS:
 #   --parallel, -p   Run in parallel (default based on config)
@@ -3423,7 +3426,7 @@ _fleet_root_commit_coordination() {
     local -a staged_by_run=()
     for f in "${allowlist[@]}"; do
         [[ -f "$root/$f" ]] || continue
-        if [[ "$f" == "$version_name" ]]; then
+        if [[ "$f" == "$version_name" || "$f" == "$(_manifest_fleet_snapshot_file)" ]]; then
             # Force-added: coordination by definition, even under a custom name
             # that a preserved (non-allowlist) .gitignore happens to ignore.
             git -C "$root" add -f -- "$f" 2>/dev/null || continue
@@ -3494,8 +3497,7 @@ _fleet_root_commit_coordination() {
 
 # Push ROOT's current branch to origin. A silent no-op (0) when local_only or
 # when no origin is configured. Returns 1 when the push cannot happen or fails;
-# the CALLER decides whether that is a warning (the root release: members have
-# already shipped) or an error (the manager: the push is the point).
+# both fleet ship and manager-only ship report an incomplete push as failure.
 #   $1 root   $2 local_only
 _fleet_root_push() {
     local root="$1" local_only="$2"
@@ -3583,15 +3585,12 @@ _fleet_root_release() {
     local root="${MANIFEST_CLI_FLEET_ROOT:-$PWD}"
     _MANIFEST_CLI_FLEET_ROOT_OUTCOME=""
 
-    if [[ "$scheme" == "none" ]]; then
-        _fleet_root_outcome "no version stamp (fleet.versioning: none)"
-        return 0
-    fi
-    # Release trigger: a member shipped, or the root has its own unpushed commits.
-    # Without either there is nothing to release — say so (no speculative bump).
-    if [[ "${completed_count:-0}" -le 0 ]] && ! _fleet_root_has_unpushed_commits "$root"; then
-        _fleet_root_outcome "no release (no member released; root level with upstream)"
-        return 0
+    # Manager work is part of every fleet ship, including unversioned fleets
+    # and runs with no member releases. Reuse its planner and allowlisted writer.
+    # The fleet apply already owns the lock; preview never acquires it.
+    if [[ "$scheme" == "none" ]] || { [[ "$completed_count" -le 0 ]] && ! _fleet_root_has_unpushed_commits "$root"; }; then
+        _fleet_manager_run "$execution_mode" "$local_only" "$increment_type" false held
+        return $?
     fi
 
     local version_name current pending next
@@ -3609,8 +3608,10 @@ _fleet_root_release() {
     [[ -n "$next" && "$next" != "$current" ]] || next=""
 
     if [[ -z "$next" && -z "$pending" ]]; then
-        _fleet_root_outcome "already at ${current:-(unset)}; nothing to stamp"
-        return 0
+        # A date stamp can be unchanged within the same second. The manager
+        # still has to commit coordination edits or push existing commits.
+        _fleet_manager_run "$execution_mode" "$local_only" "$increment_type" false held
+        return $?
     fi
 
     if [[ "$execution_mode" != "apply" ]]; then
@@ -3632,7 +3633,7 @@ _fleet_root_release() {
 
     local commit_rc=0
     if [[ -n "$pending" ]]; then
-        _fleet_root_commit_coordination "$root" "Bump fleet version to $pending" || commit_rc=$?
+        _fleet_root_commit_coordination "$root" "chore(fleet): bump fleet version to $pending" || commit_rc=$?
         case "$commit_rc" in
             0) echo "  - fleet root: landed the pending fleet version $pending (was stamped on disk, not committed)" ;;
             3) ;;
@@ -3640,8 +3641,8 @@ _fleet_root_release() {
                return 1 ;;
         esac
         if [[ -z "$next" ]]; then
-            _fleet_root_outcome "landed the pending fleet version $pending; nothing new to stamp"
-            return 0
+            _fleet_manager_run "$execution_mode" "$local_only" "$increment_type" false held
+            return $?
         fi
     fi
 
@@ -3650,23 +3651,22 @@ _fleet_root_release() {
         return 1
     fi
     commit_rc=0
-    _fleet_root_commit_coordination "$root" "Bump fleet version to $next" || commit_rc=$?
+    _fleet_root_commit_coordination "$root" "chore(fleet): bump fleet version to $next" || commit_rc=$?
     case "$commit_rc" in
         0) ;;
         # Version file unchanged on disk -> nothing staged -> idempotent skip.
-        3) _fleet_root_outcome "already at $next; nothing to commit"
-           return 0 ;;
+        3) _fleet_manager_run "$execution_mode" "$local_only" "$increment_type" false held
+           return $? ;;
         *) _fleet_root_outcome "FAILED: the coordination commit was refused (see above); $version_name is stamped $next on disk, not committed"
            return 1 ;;
     esac
 
     # Push only on a non-local ship, and only when a remote is configured. A
-    # failed push is a warning here: members have already shipped, and the
-    # fleet version commit is safely local.
+    # failed push leaves the fleet incomplete, even though the commit is local.
     if ! _fleet_root_push "$root" "$local_only"; then
         log_warning "Fleet-root release: push failed; the fleet version commit is local."
         _fleet_root_outcome "committed fleet version $next; PUSH FAILED (the commit is local)"
-        return 0
+        return 1
     fi
     if [[ "$local_only" == "true" ]]; then
         _fleet_root_outcome "committed fleet version $next (local: not pushed)"
@@ -3776,6 +3776,15 @@ EOF
         return 1
     fi
 
+    _fleet_manager_run "$execution_mode" "$local_only" "$increment_type" "$bump_requested"
+}
+
+# Shared manager planner/executor. Only the fleet release tail passes "held":
+# it already owns the same lock, so taking it again would refuse our own run.
+_fleet_manager_run() {
+    local execution_mode="$1" local_only="$2" increment_type="$3" bump_requested="$4"
+    local lock_mode="${5:-acquire}"
+
     local root="${MANIFEST_CLI_FLEET_ROOT:-$PWD}"
     local scheme="${MANIFEST_CLI_FLEET_VERSIONING:-none}"
     local version_name
@@ -3811,7 +3820,7 @@ EOF
         for f in "${allowlist[@]}"; do
             [[ -f "$root/$f" ]] || continue
             _fleet_manager_list_has to_commit "$f" && continue
-            if [[ "$f" == "$version_name" ]]; then
+            if [[ "$f" == "$version_name" || "$f" == "$(_manifest_fleet_snapshot_file)" ]]; then
                 git -C "$root" add -f --dry-run -- "$f" 2>/dev/null | grep -q . && to_commit+=("$f")
             else
                 git -C "$root" add --dry-run -- "$f" 2>/dev/null | grep -q . && to_commit+=("$f")
@@ -3821,6 +3830,10 @@ EOF
         for f in "${allowlist[@]}"; do
             [[ -f "$root/$f" ]] && to_commit+=("$f")
         done
+    fi
+
+    if [[ "${_MANIFEST_CLI_FLEET_SNAPSHOT_PLANNED:-0}" == 1 ]]; then
+        _fleet_manager_list_has to_commit "$(_manifest_fleet_snapshot_file)" || to_commit+=("$(_manifest_fleet_snapshot_file)")
     fi
 
     local gitignore_decision
@@ -3887,13 +3900,13 @@ EOF
         [[ "$f" == "$version_name" && -n "$stamp" ]] && continue
         changed_files+=("$f")
     done
-    local message="Fleet manager: update coordination files"
+    local message="chore(fleet): update coordination files"
     if [[ -n "$stamp" && ${#changed_files[@]} -gt 0 ]]; then
-        message="Fleet manager: bump fleet version to $stamp (updates: $(IFS=', '; echo "${changed_files[*]}"))"
+        message="chore(fleet): bump fleet version to $stamp (updates: $(IFS=', '; echo "${changed_files[*]}"))"
     elif [[ -n "$stamp" ]]; then
-        message="Fleet manager: bump fleet version to $stamp"
+        message="chore(fleet): bump fleet version to $stamp"
     elif [[ ${#changed_files[@]} -gt 0 ]]; then
-        message="Fleet manager: update $(IFS=', '; echo "${changed_files[*]}")"
+        message="chore(fleet): update $(IFS=', '; echo "${changed_files[*]}")"
     fi
 
     _fleet_manager_scope_block "$root"
@@ -3918,6 +3931,7 @@ EOF
         echo "Fleet manager plan"
         if [[ "$will_commit" != "true" && "$will_push" != "true" ]]; then
             echo "  - fleet root: nothing to commit or push"
+            _MANIFEST_CLI_FLEET_ROOT_OUTCOME="nothing to commit or push"
             [[ -n "$push_note" ]] && echo "    ($push_note)"
             echo ""
             echo "No changes written."
@@ -3951,15 +3965,19 @@ EOF
             echo "No changes written."
             return "$(manifest_preview_exit_code)"
         fi
-        local replay_command="manifest ship fleet manager"
-        [[ "$bump_requested" == "true" ]] && replay_command="$replay_command $increment_type"
-        [[ "$local_only" == "true" ]] && replay_command="$replay_command --local"
-        manifest_execution_footer "$replay_command -y"
+        if [[ "$lock_mode" != "held" ]]; then
+            local replay_command="manifest ship fleet manager"
+            [[ "$bump_requested" == "true" ]] && replay_command="$replay_command $increment_type"
+            [[ "$local_only" == "true" ]] && replay_command="$replay_command --local"
+            manifest_execution_footer "$replay_command -y"
+        fi
+        _MANIFEST_CLI_FLEET_ROOT_OUTCOME="manager plan shown above"
         return "$(manifest_preview_exit_code)"
     fi
 
     # ---- apply --------------------------------------------------------------
     if [[ ${#refusals[@]} -gt 0 ]]; then
+        _MANIFEST_CLI_FLEET_ROOT_OUTCOME="FAILED: manager refused before writing"
         local r
         for r in "${refusals[@]}"; do
             log_error "Fleet manager REFUSED: $r"
@@ -3970,20 +3988,25 @@ EOF
     if [[ "$will_commit" != "true" && "$will_push" != "true" ]]; then
         echo ""
         echo "Fleet root: nothing to commit or push."
+        _MANIFEST_CLI_FLEET_ROOT_OUTCOME="nothing to commit or push"
         [[ -n "$push_note" ]] && echo "  ($push_note)"
         return 0
     fi
 
     # Single-flight with `ship fleet`, whose tail step writes the same root.
-    local fleet_lock
-    fleet_lock="$(_fleet_lock_dir_path)"
-    if ! _fleet_lock_acquire "$fleet_lock"; then
-        return 1
+    if [[ "$lock_mode" != "held" ]]; then
+        local fleet_lock
+        fleet_lock="$(_fleet_lock_dir_path)"
+        if ! _fleet_lock_acquire "$fleet_lock"; then
+            return 1
+        fi
+        trap '_fleet_lock_release "${fleet_lock:-}"' RETURN
+        trap '_fleet_lock_release "${fleet_lock:-}"; trap - INT; kill -INT $$' INT
+        trap '_fleet_lock_release "${fleet_lock:-}"; trap - TERM; kill -TERM $$' TERM
+        trap '_fleet_lock_release "${fleet_lock:-}"; trap - HUP; kill -HUP $$' HUP
     fi
-    trap '_fleet_lock_release "${fleet_lock:-}"' RETURN
-    trap '_fleet_lock_release "${fleet_lock:-}"; trap - INT; kill -INT $$' INT
-    trap '_fleet_lock_release "${fleet_lock:-}"; trap - TERM; kill -TERM $$' TERM
-    trap '_fleet_lock_release "${fleet_lock:-}"; trap - HUP; kill -HUP $$' HUP
+
+    _MANIFEST_CLI_FLEET_ROOT_OUTCOME="FAILED: manager did not complete"
 
     echo ""
     echo "Fleet manager"
@@ -4017,6 +4040,8 @@ EOF
         echo "  - fleet root: $push_note"
     fi
     echo "✅ Fleet manager complete."
+    _MANIFEST_CLI_FLEET_ROOT_OUTCOME="manager complete ($push_note)"
+    [[ "$will_push" == "true" ]] && _MANIFEST_CLI_FLEET_ROOT_OUTCOME="manager complete (pushed $branch)"
     return 0
 }
 
@@ -4040,7 +4065,7 @@ fleet_ship() {
                 increment_type="$1"
                 shift
                 ;;
-            --noprep)
+            --require-clean)
                 run_prep=false
                 shift
                 ;;
@@ -4064,14 +4089,14 @@ Options:
   --dry-run                 Explicit preview; no writes, commits, tags, pushes, or PRs
   -y, --yes                 Apply the fleet release plan
   --local                   With -y, apply local release prep only
-  --noprep                  Require every member tree to be clean before apply
-                            (adds a clean-tree check; no prep step runs either way)
+  --require-clean           Require every member tree to be clean before apply
   --force-bump              Ship every release-eligible member even with no changes
                             since its tag (forward-only; honors pr-gated/disabled)
 
 Flow:
   default: preview release plan + workspace policy gate verdict
-  -y:      direct ship of releaseable services (refuses if the policy gate fails)
+  -y:      ship releaseable services, then commit and push the fleet manager
+           (refuses if the policy gate fails)
   PR work: manifest pr fleet ...
 
 Fleet membership and release-eligibility are determined by manifest.fleet.config.yaml.
@@ -4092,7 +4117,17 @@ EOF
     if [[ "$execution_mode" == "preview" ]]; then
         _fleet_scope_block
         _fleet_ship_plan "$increment_type" "$local_only" "$force_bump"
-        _fleet_root_release "$increment_type" "preview" "$local_only" "${MANIFEST_CLI_FLEET_PLAN_RELEASEABLE_COUNT:-0}"
+        if ! _fleet_ship_nothing_to_do; then
+            echo "Would record member commits in manifest.fleet.snapshot.json for fleet revert."
+            if [[ "${MANIFEST_CLI_FLEET_PLAN_RELEASEABLE_COUNT:-0}" -gt 0 ]] ||
+               _manifest_fleet_snapshot_needed "${MANIFEST_CLI_FLEET_ROOT:-$PWD}"; then
+                _MANIFEST_CLI_FLEET_SNAPSHOT_PLANNED=1 _fleet_root_release "$increment_type" "preview" "$local_only" "${MANIFEST_CLI_FLEET_PLAN_RELEASEABLE_COUNT:-0}"
+            else
+                _fleet_root_release "$increment_type" "preview" "$local_only" "${MANIFEST_CLI_FLEET_PLAN_RELEASEABLE_COUNT:-0}"
+            fi
+        else
+            _fleet_root_release "$increment_type" "preview" "$local_only" "${MANIFEST_CLI_FLEET_PLAN_RELEASEABLE_COUNT:-0}"
+        fi
         # The apply path refuses on the workspace policy gate, so an honest
         # preview must not recommend -y without consulting it.
         _fleet_preview_workspace_policy
@@ -4144,15 +4179,6 @@ EOF
             echo "Nothing to release: no member has changes since its tag, and fleet.versioning is none, so the root never stamps."
         else
             echo "Nothing to release: no member has changes since its tag, and the fleet root is level with its upstream."
-            # A stamp on disk that HEAD does not carry is not a release trigger,
-            # but "level with its upstream" over a dirty version file would hide
-            # it. The manager is what lands it.
-            local nt_root="${MANIFEST_CLI_FLEET_ROOT:-$PWD}" nt_name nt_pending
-            nt_name="$(_fleet_root_version_name "$nt_root")"
-            nt_pending="$(_fleet_root_pending_version "$nt_root" "$nt_name" "${MANIFEST_CLI_FLEET_VERSION:-}")"
-            if [[ -n "$nt_pending" ]]; then
-                echo "A fleet version stamp $nt_pending is on disk and not committed; 'manifest ship fleet manager' lands it."
-            fi
         fi
         echo "(--force-bump includes at-tag members.)"
         # The per-member skip lines the apply loop would have printed, so the
@@ -4170,6 +4196,8 @@ EOF
         _fleet_ship_closing_block 0 "$skipped_here" "" "nothing to do (no member released; nothing for the root to release)" ok
         return 0
     fi
+
+    _manifest_fleet_snapshot_destination "${MANIFEST_CLI_FLEET_ROOT:-$PWD}" || return 1
 
     # One run log for the fleet process (§83). Each member's ship opens its own
     # inside its subshell; this one holds what happens BETWEEN members — the
@@ -4224,7 +4252,7 @@ EOF
     trap '_fleet_lock_release "${fleet_lock:-}"; [ -n "${status_dir:-}" ] && rm -rf "${status_dir}" 2>/dev/null; trap - HUP; kill -HUP $$' HUP
 
     if [ "$run_prep" != "true" ]; then
-        echo "⏭️  Skipping fleet prep (--noprep)."
+        echo "⏭️  Requiring clean member trees (--require-clean)."
         for service in $MANIFEST_CLI_FLEET_SERVICES; do
             local path
             path=$(get_fleet_service_property "$service" "path")
@@ -4232,12 +4260,12 @@ EOF
                 continue
             fi
             if [ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ]; then
-                echo "  - $service: ❌ has uncommitted changes; cannot use --noprep"
+                echo "  - $service: ❌ has uncommitted changes; cannot use --require-clean"
                 any_failures=1
             fi
         done
         if [ "$any_failures" -eq 1 ]; then
-            log_error "Cannot continue fleet ship --noprep with dirty repositories."
+            log_error "Cannot continue fleet ship --require-clean with dirty repositories."
             return 1
         fi
     fi
@@ -4375,9 +4403,14 @@ EOF
     # applied — but it is no longer a warning buried on stderr under a green
     # closing line: the closing block names it and the exit code is 2 (§83).
     local root_rc=0
-    _fleet_root_release "$increment_type" "apply" "$local_only" "${#completed[@]}" || root_rc=$?
+    if _manifest_fleet_snapshot_write "${MANIFEST_CLI_FLEET_ROOT:-$PWD}"; then
+        _fleet_root_release "$increment_type" "apply" "$local_only" "${#completed[@]}" || root_rc=$?
+    else
+        root_rc=1
+        _MANIFEST_CLI_FLEET_ROOT_OUTCOME="FAILED: could not record fleet snapshot"
+    fi
     if [[ "$root_rc" -ne 0 ]]; then
-        log_warning "Fleet-root version bump did not complete; member releases already applied."
+        log_warning "Fleet manager did not complete. See the root outcome below."
     fi
 
     # Topics grooming is post-release metadata; with nothing released there is
@@ -4387,9 +4420,14 @@ EOF
     fi
 
     if [[ "$root_rc" -ne 0 ]]; then
-        _fleet_ship_closing_block "${#completed[@]}" "${#skipped[@]}" "" "${_MANIFEST_CLI_FLEET_ROOT_OUTCOME:-FAILED (see above)}" partial
+        local root_status=failed_root root_exit=1
+        if [[ ${#completed[@]} -gt 0 ]]; then
+            root_status=partial
+            root_exit=2
+        fi
+        _fleet_ship_closing_block "${#completed[@]}" "${#skipped[@]}" "" "${_MANIFEST_CLI_FLEET_ROOT_OUTCOME:-FAILED (see above)}" "$root_status"
         manifest_ship_log_end "failed" "fleet_root"
-        return 2
+        return "$root_exit"
     fi
     _fleet_ship_closing_block "${#completed[@]}" "${#skipped[@]}" "" "${_MANIFEST_CLI_FLEET_ROOT_OUTCOME:-no release}" ok
     manifest_ship_log_end "completed"
@@ -4397,12 +4435,39 @@ EOF
 }
 
 # Nothing can happen on this apply: no member is releaseable (the plan said so)
-# and the root cannot release either — fleet.versioning is none, or the root
-# has no unpushed commits to carry. Read-only; decides the early exit (§83).
+# and the manager has nothing to commit or push. Read-only; decides the early
+# exit before running the workspace policy gate.
 _fleet_ship_nothing_to_do() {
     [[ "${MANIFEST_CLI_FLEET_PLAN_RELEASEABLE_COUNT:-0}" -eq 0 ]] || return 1
-    [[ "${MANIFEST_CLI_FLEET_VERSIONING:-none}" == "none" ]] && return 0
-    ! _fleet_root_has_unpushed_commits "${MANIFEST_CLI_FLEET_ROOT:-$PWD}"
+    ! _fleet_manager_has_work
+}
+
+# Read-only counterpart of the manager plan, used only for the no-op shortcut.
+# Include invalid staged content so the manager can refuse it instead of a
+# successful "nothing to do" hiding it.
+_fleet_manager_has_work() {
+    local root="${MANIFEST_CLI_FLEET_ROOT:-$PWD}" f version_name
+    version_name="$(_fleet_root_version_name "$root")"
+    _fleet_dir_is_own_git_repo "$root" || return 0
+    case "$(_fleet_gitignore_decision "$root")" in
+        create|empty-overwrite|stale) return 0 ;;
+    esac
+    [[ -n "$(git -C "$root" diff --cached --name-only)" ]] && return 0
+    while IFS= read -r f; do
+        [[ -f "$root/$f" ]] || continue
+        if [[ "$f" == "$version_name" || "$f" == "$(_manifest_fleet_snapshot_file)" ]]; then
+            git -C "$root" add -f --dry-run -- "$f" 2>/dev/null | grep -q . && return 0
+        else
+            git -C "$root" add --dry-run -- "$f" 2>/dev/null | grep -q . && return 0
+        fi
+    done < <(_fleet_coordination_files "$root")
+    _fleet_root_has_unpushed_commits "$root" && return 0
+    if git -C "$root" remote get-url origin >/dev/null 2>&1 \
+        && git -C "$root" rev-parse --verify HEAD >/dev/null 2>&1 \
+        && ! git -C "$root" rev-parse --verify '@{u}' >/dev/null 2>&1; then
+        return 0
+    fi
+    return 1
 }
 
 # The one closing block every fleet apply ends on (§83). It used to be the same
@@ -4410,7 +4475,7 @@ _fleet_ship_nothing_to_do() {
 # failed — and the failure was a warning on stderr, so stdout alone could not
 # tell them apart.
 #   $1 released  $2 skipped  $3 failed member ("" when none)  $4 root outcome
-#   $5 status: ok | partial | failed
+#   $5 status: ok | partial | failed | failed_root
 _fleet_ship_closing_block() {
     # Not `skipped`/`failed`: those names are arrays in the apply function above,
     # and shellcheck (SC2178/SC2128) reads a same-named scalar as a mistake.
@@ -4419,6 +4484,7 @@ _fleet_ship_closing_block() {
     case "$status" in
         ok)      echo "✅ Fleet ship workflow complete." ;;
         partial) echo "⚠️  Fleet ship workflow finished with a failure at the fleet root (exit 2: member releases already applied)." ;;
+        failed_root) echo "❌ Fleet ship workflow failed at the fleet root (exit 1: no member released)." ;;
         failed)  echo "❌ Fleet ship workflow stopped at $failed_member." ;;
     esac
     local members="   members: $released released · $skipped_count skipped"
@@ -4888,250 +4954,3 @@ fleet_add() {
     fi
     echo ""
 }
-
-# =============================================================================
-# MAIN ENTRY POINT
-# =============================================================================
-
-# -----------------------------------------------------------------------------
-# Function: fleet_main
-# -----------------------------------------------------------------------------
-# Main entry point for fleet commands.
-#
-# ARGUMENTS:
-#   $1 - Subcommand (status, init, discover, sync, go, docs, validate, add, remove)
-#   $@ - Additional arguments passed to subcommand
-#
-# EXAMPLE:
-#   fleet_main "status" "--verbose"
-#   fleet_main "init" "--name" "my-fleet" "--discover"
-# -----------------------------------------------------------------------------
-fleet_main() {
-    local subcommand="${1:-help}"
-    shift || true
-
-    case "$subcommand" in
-        help|--help|-h)
-            fleet_help
-            ;;
-        add|discover|docs|init|prep|pr|ship|start|status|sync|update|validate)
-            local replacement
-            case "$subcommand" in
-                add)        replacement="manifest add fleet" ;;
-                discover)   replacement="manifest discover fleet" ;;
-                docs)       replacement="manifest docs fleet" ;;
-                init|start) replacement="manifest init fleet" ;;
-                prep|sync)  replacement="manifest init fleet --connect" ;;
-                pr)         replacement="manifest pr fleet" ;;
-                ship)       replacement="manifest ship fleet" ;;
-                status)     replacement="manifest status" ;;
-                update)     replacement="manifest update fleet" ;;
-                validate)   replacement="manifest validate fleet" ;;
-            esac
-            log_error "'manifest fleet $subcommand' is no longer a dispatcher route."
-            echo "  Use: $replacement"
-            echo ""
-            echo "  See 'manifest help' for the v42 command surface."
-            return 1
-            ;;
-        *)
-            log_error "Unknown fleet command: $subcommand"
-            fleet_help
-            return 1
-            ;;
-    esac
-}
-
-# -----------------------------------------------------------------------------
-# Function: fleet_help
-# -----------------------------------------------------------------------------
-# Displays help for fleet commands.
-# -----------------------------------------------------------------------------
-fleet_help() {
-    cat << 'EOF'
-
-MANIFEST FLEET - Polyrepo Management
-=====================================
-
-Manage multiple related repositories as a coordinated fleet.
-
-Use action-first commands:
-
-  manifest init fleet           Scaffold
-  manifest plan fleet           Generate an adoption plan (dry-run by default)
-  manifest reconcile fleet      Apply a validated adoption plan (--apply/--do)
-  manifest init fleet --connect Clone/pull
-  manifest discover fleet       Preview fleet membership discovery
-  manifest update fleet         Re-scan and add new repos
-  manifest refresh fleet        DEPRECATED — use 'update fleet' (+ 'docs fleet')
-  manifest validate fleet       Validate fleet configuration
-  manifest add fleet <path>     Add a service to the fleet
-  manifest docs fleet           Generate fleet documentation
-  manifest topics fleet         Add GitHub topics from each repo name
-  manifest pr fleet             Fleet-wide PR operations
-  manifest ship fleet <bump>    Coordinated release
-
-COMMAND DETAILS:
-
-  manifest init fleet [options]
-    Two-phase fleet setup. Scans with a depth guardrail, then asks how deep
-    repos should be under each top-level folder before writing manifest.fleet.tsv.
-    Options:
-      --depth N|auto     Scan depth; auto deepens to repos found, capped (default: auto)
-      --all-folders      Write every scanned folder to manifest.fleet.tsv
-      --name, -n NAME    Fleet name
-      --force, -f        Overwrite generated files
-      --dry-run          Preview files and discovery without writing
-
-  manifest plan fleet [options]
-    Generate manifest.fleet.plan.yaml for fleet adoption.
-    Dry-run by default.
-    Options:
-      --apply, --do      Write the plan file
-      --depth N|auto     Scan depth guardrail (default: auto)
-      --plan FILE        Plan file path
-
-  manifest reconcile fleet [options]
-    Validate and apply manifest.fleet.plan.yaml.
-    Dry-run by default.
-    Options:
-      --apply, --do      Apply local filesystem/config changes
-      --commit           Commit local changes (requires --apply/--do)
-      --push             Push commits (requires --commit)
-      --force            Reserved for explicit overrides (requires --apply/--do)
-      --adopt-submodules Allow adopt_submodule actions
-
-  manifest status [options]
-    Show fleet status overview.
-    Options:
-      --verbose, -v      Show detailed information
-      --json             Output as JSON
-
-  manifest update fleet [options]
-    Re-scan workspace and add new repos to manifest.fleet.config.yaml.
-    Options:
-      -y, --yes          Apply fleet membership updates
-      --dry-run          Preview only — do not modify manifest.fleet.config.yaml
-      --depth N|auto     Scan depth; auto deepens to repos found, capped (default: auto)
-      --json             Output JSON summary (implies --dry-run)
-      --quiet, -q        Only output new repo lines (implies --dry-run)
-
-  manifest discover fleet [options]
-    Alias for 'manifest update fleet --dry-run'.
-
-  manifest validate fleet
-    Validate fleet configuration.
-
-  manifest add fleet <path-or-url> [options]
-    Add a service to the fleet.
-    Options:
-      -y, --yes          Apply fleet membership updates
-      --dry-run          Preview YAML without modifying manifest.fleet.config.yaml
-      --name NAME        Service name
-
-  manifest pr fleet [options]
-    Preferred shorthand for: manifest pr fleet queue [options]
-    (queues policy-aware auto-merge across fleet PRs after gates pass)
-    Queue options:
-      --method <merge|squash|rebase>
-      --force
-      --no-delete-branch
-    Explicit subcommands:
-      create | status | checks | ready | queue
-    Examples:
-      manifest pr fleet
-      manifest pr fleet create
-      manifest pr fleet status
-      manifest pr fleet checks
-      manifest pr fleet ready
-      manifest pr fleet --method squash         # Preferred team path
-      manifest pr fleet queue --method merge    # Explicit equivalent
-
-  manifest ship fleet [patch|minor|major|revision]|resume [options]
-    Highest-level coordinated fleet workflow.
-    Options:
-      --dry-run          Explicit preview; no writes, commits, tags, or pushes
-      -y, --yes          Apply the fleet release plan
-      --local            With -y, local release prep only
-      --noprep           Require every member tree to be clean before shipping
-      --explain          Show the built-in recipe definition without running it
-    PR flags (--safe, --method, --force, --no-delete-branch, --draft) belong
-    under 'manifest pr fleet ...'.
-
-  manifest topics fleet [-y|--yes] [--dry-run]
-    Turn the parts of each repo's dotted name into GitHub topics. Only adds
-    topics; never removes one, including ones you set by hand.
-    Preview by default; -y pushes the missing topics. Requires topics.from_name
-    (inner | all | all-but-first) in manifest.fleet.config.yaml, or host-local:
-      manifest config set topics.from_name inner --layer global
-    With topics enabled, 'manifest ship fleet -y' also runs this quietly after
-    a completed ship.
-
-  manifest docs fleet [subcommand] [-y|--yes] [--dry-run] [options]
-    Generate fleet documentation per configured strategy.
-    Subcommands:
-      generate          Generate docs (default)
-      status            Show current docs configuration
-      help              Show docs help
-    Options:
-      --strategy <s>    Override strategy: fleet-root|per-service|both
-      --fleet-only      Only generate fleet-root docs
-      --services-only   Only generate per-service docs
-      --dry-run         Preview planned docs writes without changing files
-      -y, --yes         Apply planned docs writes
-
-CONFIGURATION:
-
-  Fleet is configured via manifest.fleet.config.yaml in the fleet root directory.
-  Service-specific overrides go in each service's manifest.config.local.yaml.
-
-  Run 'manifest init fleet' to set up a new fleet.
-
-EXAMPLES:
-
-  # Recommended workflow for new fleet (v42)
-  manifest init fleet                   # choose repo depths, write manifest.fleet.tsv
-  # ... review manifest.fleet.tsv ...
-  manifest init fleet                   # apply selections (Phase 2)
-
-  # Add newly discovered repos to an existing fleet (edits the TSV in place)
-  manifest update fleet                 # 'manifest docs fleet' regenerates docs
-
-  # Preview only (read-only)
-  manifest plan fleet
-  manifest reconcile fleet
-  manifest init fleet --dry-run
-  manifest update fleet --dry-run
-  manifest docs fleet --dry-run
-
-  # Check fleet status
-  manifest status
-
-  # Clone all missing services
-  manifest init fleet --connect -y
-
-EOF
-}
-
-# =============================================================================
-# STANDALONE EXECUTION
-# =============================================================================
-# Allows running this module directly for testing
-
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    # Source dependencies if running standalone
-    MODULES_DIR="$(dirname "$MANIFEST_CLI_FLEET_SCRIPT_DIR")"
-
-    if [[ -f "$MODULES_DIR/core/manifest-shared-utils.sh" ]]; then
-        source "$MODULES_DIR/core/manifest-shared-utils.sh"
-    else
-        # Minimal logging fallback
-        log_info() { echo "[INFO] $*"; }
-        log_error() { echo "[ERROR] $*" >&2; }
-        log_warning() { echo "[WARN] $*"; }
-        log_success() { echo "[OK] $*"; }
-        log_debug() { [[ "${MANIFEST_CLI_DEBUG:-false}" == "true" ]] && echo "[DEBUG] $*"; }
-    fi
-
-    fleet_main "$@"
-fi

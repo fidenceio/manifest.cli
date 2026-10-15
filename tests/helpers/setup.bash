@@ -40,7 +40,7 @@ clear_release_gate_env_override() {
 # ~/.gitconfig core.excludesFile pointing at ~/.gitignore_global once made an
 # init-template assertion fail inside the sandbox; separately, tests that run
 # `git config --global init.defaultBranch main` were writing into the real
-# ~/.gitconfig. Redirecting the global layer to a per-run file fixes both
+# ~/.gitconfig. Redirecting the global layer to a per-test file fixes both
 # directions at once, and — unlike /dev/null — keeps `git config --global`
 # writable, so those tests still get the branch default they set up.
 #
@@ -57,8 +57,14 @@ clear_release_gate_env_override() {
 # in the container with "requires running inside a Git repository", which is
 # how it broke CI in 58.0.1. The host config this guard exists to neutralize —
 # core.excludesFile pointing at ~/.gitignore_global — is global anyway.
-if [ -z "${TEST_GIT_CONFIG_GLOBAL:-}" ]; then
-    TEST_GIT_CONFIG_GLOBAL="$(mktemp "${BATS_TEST_TMPDIR:-${BATS_TMPDIR:-/tmp}}/manifest-test-gitconfig.XXXXXX")"
+if [[ -n "${BATS_TEST_TMPDIR:-}" ]]; then
+    # Bats exports the gather process's environment to parallel workers. Give
+    # each worker its own config even when that inherited variable is already
+    # set, so test setup writes cannot race on a shared .gitconfig.lock.
+    TEST_GIT_CONFIG_GLOBAL="$BATS_TEST_TMPDIR/manifest-test-gitconfig"
+fi
+if [[ -z "${TEST_GIT_CONFIG_GLOBAL:-}" || ! -f "$TEST_GIT_CONFIG_GLOBAL" ]]; then
+    TEST_GIT_CONFIG_GLOBAL="${TEST_GIT_CONFIG_GLOBAL:-$(mktemp "${BATS_TMPDIR:-/tmp}/manifest-test-gitconfig.XXXXXX")}"
     export TEST_GIT_CONFIG_GLOBAL
     git config --file "$TEST_GIT_CONFIG_GLOBAL" user.name "Manifest Test" 2>/dev/null || true
     git config --file "$TEST_GIT_CONFIG_GLOBAL" user.email "test@manifest.invalid" 2>/dev/null || true

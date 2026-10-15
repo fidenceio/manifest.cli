@@ -70,7 +70,7 @@ _manifest_doc_review_classify_file() {
     case "$file" in
         README.md|CHANGELOG.md|docs/*|completions/README.md|examples/*.md)
             printf '%s\n' "docs" ;;
-        modules/core/manifest-core.sh|modules/core/manifest-ship.sh|modules/core/manifest-init.sh|modules/core/manifest-prep.sh|modules/core/manifest-refresh.sh)
+        modules/core/manifest-core.sh|modules/core/manifest-ship.sh|modules/core/manifest-init.sh|modules/core/manifest-init-connect.sh|modules/core/manifest-init-guided.sh)
             printf '%s\n' "command_surface" ;;
         modules/fleet/*|modules/pr/*|modules/docs/*|modules/git/*|modules/system/*|modules/cloud/*)
             printf '%s\n' "runtime" ;;

@@ -150,16 +150,16 @@ YAML
     [ "$status" -ne 0 ]                 # no commit
 }
 
-@test "_fleet_root_release no-op when no member shipped (completed=0)" {
+@test "_fleet_root_release ships pending coordination files when no member shipped" {
     mk_fleet_root date ""
     run _fleet_root_release patch apply false 0
     [ "$status" -eq 0 ]
-    [ ! -f "$SCRATCH/FLEET_VERSION" ]
-    run git -C "$SCRATCH" rev-parse -q --verify HEAD
-    [ "$status" -ne 0 ]
+    [ -f "$SCRATCH/FLEET_VERSION" ]
+    run git -C "$SCRATCH" show HEAD:manifest.fleet.config.yaml
+    [ "$status" -eq 0 ]
 }
 
-@test "_fleet_root_release no-op for versioning=none" {
+@test "_fleet_root_release ships the manager without a version stamp for versioning=none" {
     mk_fleet_root none ""
     run _fleet_root_release patch apply false 1
     [ "$status" -eq 0 ]
@@ -256,17 +256,18 @@ YAML
     local expected; expected="$(format_timestamp 1700000000 '+%Y.%m.%d.%H%M%S')"
     [ "$(cat "$SCRATCH/FLEET_VERSION")" = "$expected" ]            # version stamped
     run git -C "$SCRATCH" log -1 --pretty=%s
-    [[ "$output" == *"Bump fleet version"* ]]                      # bump commit made
+    [[ "$output" == *"chore(fleet): bump fleet version"* ]]                      # bump commit made
     # the previously-unpushed root commit AND the bump both reached the remote
     # (compare the pushed branch ref; the bare repo's symbolic HEAD is unrelated)
     [ "$(git -C "$SCRATCH" rev-parse HEAD)" = "$(git -C "$SCRATCH-remote.git" rev-parse refs/heads/main)" ]
 }
 
-@test "_fleet_root_release preview is a no-op when nothing to release (completed=0, no unpushed commits)" {
+@test "_fleet_root_release preview shows manager-only work when no member released" {
     mk_fleet_root date ""
     run _fleet_root_release patch preview false 0
     [ "$status" -eq 0 ]
-    [[ "$output" != *"would bump fleet version"* ]]               # honest: apply would do nothing
+    [[ "$output" == *"would stamp fleet version"* ]]
+    [[ "$output" == *"would commit"* ]]
     [ ! -f "$SCRATCH/FLEET_VERSION" ]
 }
 
@@ -326,7 +327,7 @@ _mk_root_hook() {
     # Under the old $( ) protocol this would have read "HOOK-FIXTURE: ok\ncommitted"
     # and reported nothing committed.
     grep -q "committed fleet version 1.0.1" <<<"$output"
-    [ "$(git -C "$SCRATCH" log -1 --format=%s)" = "Bump fleet version to 1.0.1" ]
+    [ "$(git -C "$SCRATCH" log -1 --format=%s)" = "chore(fleet): bump fleet version to 1.0.1" ]
 }
 
 # ---------------------------------------------------------------------------
@@ -354,8 +355,8 @@ _mk_semver_root_at() {
     [[ "$output" == *"committed fleet version 1.0.2"* ]]
     local subjects
     subjects="$(git -C "$SCRATCH" log --format=%s)"
-    grep -q "^Bump fleet version to 1.0.1$" <<<"$subjects"
-    grep -q "^Bump fleet version to 1.0.2$" <<<"$subjects"
+    grep -q "^chore(fleet): bump fleet version to 1.0.1$" <<<"$subjects"
+    grep -q "^chore(fleet): bump fleet version to 1.0.2$" <<<"$subjects"
     [ "$(git -C "$SCRATCH" show HEAD:FLEET_VERSION)" = "1.0.2" ]
 }
 
@@ -374,10 +375,28 @@ _mk_semver_root_at() {
     mk_fleet_root none ""
     run _fleet_root_release patch apply false 1
     [ "$status" -eq 0 ]
-    [[ "$output" == *"fleet root: no version stamp (fleet.versioning: none)"* ]]
+    [[ "$output" == *"fleet root: committed"* ]]
 
     mk_fleet_root date ""
     run _fleet_root_release patch preview false 0
     [ "$status" -eq 0 ]
-    [[ "$output" == *"fleet root: no release (no member released; root level with upstream)"* ]]
+    [[ "$output" == *"fleet root: would stamp fleet version"* ]]
+}
+
+@test "an unchanged date stamp still commits and pushes manager edits" {
+    local current; current="$(format_timestamp 1700000000 '+%Y.%m.%d.%H%M%S')"
+    mk_fleet_root date "$current"
+    echo "$current" > "$SCRATCH/FLEET_VERSION"
+    git -C "$SCRATCH" add .gitignore manifest.fleet.config.yaml FLEET_VERSION
+    git -C "$SCRATCH" commit -qm base
+    git init -q --bare "$SCRATCH-remote.git"
+    git -C "$SCRATCH" remote add origin "$SCRATCH-remote.git"
+    git -C "$SCRATCH" push -q -u origin main
+    echo '  description: edited' >> "$SCRATCH/manifest.fleet.config.yaml"
+
+    run _fleet_root_release patch apply false 1
+    [ "$status" -eq 0 ]
+    git -C "$SCRATCH" diff --quiet -- manifest.fleet.config.yaml
+    [ "$(git -C "$SCRATCH" show HEAD:FLEET_VERSION)" = "$current" ]
+    [ "$(git -C "$SCRATCH" rev-parse HEAD)" = "$(git -C "$SCRATCH-remote.git" rev-parse refs/heads/main)" ]
 }

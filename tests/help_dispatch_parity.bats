@@ -182,10 +182,28 @@ _help_sub_tokens() {
     # And that the marker is doing its job in the other direction.
     run _dispatch_arms hidden
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 5 ]
-    for alias_name in fleet sync time commit bump-version; do
+    [ "${#lines[@]}" -eq 2 ]
+    for alias_name in commit bump-version; do
         echo "$output" | grep -qx "$alias_name"
     done
+}
+
+@test "parity: startup command allowlist matches the actual dispatcher" {
+    local expected actual
+    expected="$( { _dispatch_arms visible; _dispatch_arms hidden; } | sort -u)"
+    actual="$(awk '
+        /^_manifest_cli_is_supported_command\(\)/ { inside=1; next }
+        inside && /^}/ { exit }
+        inside && /^        ""\|/ {
+            line=$0; sub(/\).*$/, "", line); gsub(/[[:space:]"]/, "", line)
+            n=split(line, names, "|")
+            for (i=1;i<=n;i++) if (names[i]!="" && names[i]!~/^-/) print names[i]
+        }
+    ' "$TEST_REPO_ROOT/modules/core/manifest-core.sh" | sort -u)"
+    # A broken parser cannot make two empty sets look like agreement.
+    grep -qx init <<< "$expected"
+    grep -qx init <<< "$actual"
+    [ "$actual" = "$expected" ]
 }
 
 @test "parity: every dispatched command is listed in 'manifest --help'" {
@@ -264,8 +282,8 @@ _help_sub_tokens() {
 
     # A deprecated spelling reappearing in help is the exact defect §11
     # records: 'refresh fleet' was advertised under "Core workflow" while
-    # manifest-refresh.sh called log_deprecated on it. Guard the listing
-    # against the marked names returning.
+    # its implementation was already deprecated. Guard the listing against
+    # the marked names returning.
     # Indent bound, not just leading whitespace. display_help puts a listing
     # entry in the command column (4 spaces, or 9 for a continuation flag) and
     # wraps its description at 40. Matching "any leading whitespace" made every
@@ -290,19 +308,17 @@ _help_sub_tokens() {
     fi
 }
 
-@test "parity: 'refresh fleet' is not advertised as current in help" {
-    # manifest-refresh.sh calls log_deprecated on it, so help must not present
-    # it as a normal scope. 'refresh repo' is fine and expected.
+@test "parity: removed refresh is refused and absent from help" {
+    # The removed verb must fail and stay absent from top-level help.
     local help_text
     help_text="$(NO_COLOR=1 bash "$TEST_REPO_ROOT/scripts/manifest-cli.sh" --help 2>/dev/null)"
     [ -n "$help_text" ]
 
-    # Confirm the deprecation is real before asserting on its consequence,
-    # so this test fails loudly if the deprecation is ever reversed.
-    grep -q 'log_deprecated "manifest refresh fleet"' \
-        "$TEST_REPO_ROOT/modules/core/manifest-refresh.sh"
+    # Exercise the removed scope before checking its help representation.
+    run bash "$TEST_REPO_ROOT/scripts/manifest-cli.sh" refresh fleet --help
+    [ "$status" -ne 0 ]
 
-    refute grep -qE '^[[:space:]]+refresh repo\|fleet' <<< "$help_text"
+    refute grep -qE '^[[:space:]]+refresh([[:space:]]|$)' <<< "$help_text"
 }
 
 # =============================================================================

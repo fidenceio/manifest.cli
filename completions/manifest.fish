@@ -40,7 +40,6 @@ end
 
 complete -c manifest -f
 
-complete -c manifest -n '__manifest_token_count 1' -a first       -d 'Guided onboarding — inspect this directory and set up Manifest'
 complete -c manifest -n '__manifest_token_count 1' -a config      -d 'Setup wizard / show configuration'
 complete -c manifest -n '__manifest_token_count 1' -a init        -d "Set up a repo or fleet (--connect for remotes)"
 complete -c manifest -n '__manifest_token_count 1' -a plan        -d 'Generate an adoption plan'
@@ -51,8 +50,6 @@ complete -c manifest -n '__manifest_token_count 1' -a discover    -d 'Discover r
 complete -c manifest -n '__manifest_token_count 1' -a update      -d 'Update fleet membership'
 complete -c manifest -n '__manifest_token_count 1' -a add         -d 'Add a resource to Manifest-managed configuration'
 complete -c manifest -n '__manifest_token_count 1' -a validate    -d 'Validate fleet configuration'
-complete -c manifest -n '__manifest_token_count 1' -a prep        -d "DEPRECATED: use init --connect"
-complete -c manifest -n '__manifest_token_count 1' -a refresh     -d 'Regenerate docs and metadata'
 complete -c manifest -n '__manifest_token_count 1' -a docs        -d 'Regenerate documentation for a repo or fleet'
 complete -c manifest -n '__manifest_token_count 1' -a topics      -d 'Add GitHub topics from each repo name'
 complete -c manifest -n '__manifest_token_count 1' -a ship        -d 'Publish a release (version + tag + push)'
@@ -78,14 +75,23 @@ complete -c manifest -n '__manifest_token_count 1' -a help        -d 'Show help'
 # [repo|fleet]` and manifest-core.sh lists it alongside prep/refresh/ship in
 # _manifest_cli_is_existing_repo_scope_request. All three completion files
 # omitted it identically, so this is one shared gap rather than drift.
-set -l __manifest_scoped 'first init plan reconcile discover update add validate prep refresh docs ship status'
+set -l __manifest_scoped 'ship status'
 for cmd in (string split ' ' $__manifest_scoped)
     complete -c manifest -n "__manifest_token_count 2; and __manifest_path $cmd" -a repo  -d 'Single-repo scope'
     complete -c manifest -n "__manifest_token_count 2; and __manifest_path $cmd" -a fleet -d 'Fleet scope'
 end
 
-# topics is fleet-scoped only (no repo scope).
-complete -c manifest -n '__manifest_token_count 2; and __manifest_path topics' -a fleet -d 'Fleet scope'
+complete -c manifest -n '__manifest_token_count 2; and __manifest_path revert' -a 'repo fleet' -d 'Single-repo tag checkout'
+complete -c manifest -n '__manifest_path revert fleet' -a '-y --yes --dry-run --help'
+complete -c manifest -n '__manifest_path revert fleet' -a '(git log --all -10 --format=%h -- manifest.fleet.snapshot.json 2>/dev/null)'
+complete -c manifest -n '__manifest_path revert repo' -a '-y --yes --dry-run --help'
+complete -c manifest -n '__manifest_path revert repo' -a '(git tag --sort=-version:refname 2>/dev/null)'
+
+complete -c manifest -n '__manifest_token_count 2; and __manifest_path init' -a 'repo fleet -y --yes --dry-run --depth --name --force --remote --no-connect --create-repo-private --create-repo-public --help'
+complete -c manifest -n '__manifest_token_count 2; and __manifest_path docs' -a 'fleet metadata cleanup --help'
+for cmd in plan reconcile discover update add validate topics
+    complete -c manifest -n "__manifest_token_count 2; and __manifest_path $cmd" -a fleet -d 'Fleet scope'
+end
 # `state` is host-level, deliberately not a repo/fleet scope.
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path cleanup' -a repo  -d 'Single-repo scope'
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path cleanup' -a fleet -d 'Fleet scope'
@@ -104,19 +110,19 @@ complete -c manifest -n '__manifest_token_count 2; and __manifest_path reinstall
 # --- third-token arguments (token 3) -----------------------------------------
 
 complete -c manifest -n '__manifest_path init repo' \
-    -a '-y --yes --force --dry-run --connect --no-connect --create-repo-private --create-repo-public --help'
+    -a '-y --yes --force --dry-run --connect --no-connect --remote --create-repo-private --create-repo-public --help'
 complete -c manifest -n '__manifest_path init fleet' \
     -a '-y --yes --depth --all-folders --force --dry-run --name --connect --no-connect --parallel --clone-only --pull-only --create-repo-private --create-repo-public --help'
 complete -c manifest -n '__manifest_path ship repo' \
     -a 'patch minor major revision resume -y --yes --local --dry-run --explain --force-bump -i --interactive'
 complete -c manifest -n '__manifest_path ship fleet' \
-    -a 'patch minor major revision resume manager -y --yes --local --dry-run --explain --force-bump --noprep'
+    -a 'patch minor major revision resume manager -y --yes --local --dry-run --explain --force-bump --require-clean'
 complete -c manifest -n '__manifest_path topics fleet' \
     -a '-y --yes --dry-run --help'
 complete -c manifest -n '__manifest_path plan fleet' \
-    -a '--apply --do --dry-run --depth --safety-cap --plan --name --force --help'
+    -a '-y --yes --dry-run --depth --safety-cap --plan --name --force --help'
 complete -c manifest -n '__manifest_path reconcile fleet' \
-    -a '--apply --do --dry-run --plan --commit --push --force --adopt-submodules --help'
+    -a '-y --yes --dry-run --plan --commit --push --force --adopt-submodules --help'
 complete -c manifest -n '__manifest_path pr create' \
     -a '-y --yes --dry-run --draft --title --body --base --labels --reviewers --help'
 for sub in ready merge update queue

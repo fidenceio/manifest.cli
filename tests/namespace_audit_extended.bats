@@ -172,8 +172,6 @@ _namespace_scan_offenders() {
         "_MANIFEST_INSTALL_PATHS_LOADED"
         # Plugin-loader module-loaded sentinel (pre-namespace).
         "_MANIFEST_PLUGIN_LOADER_LOADED"
-        # Prep module-loaded sentinel (pre-namespace).
-        "_MANIFEST_PREP_LOADED"
         # PR-native module-loaded sentinel (pre-namespace).
         "_MANIFEST_PR_NATIVE_LOADED"
         # PR stub module-loaded sentinel (pre-namespace).

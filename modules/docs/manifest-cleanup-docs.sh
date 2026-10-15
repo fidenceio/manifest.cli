@@ -150,7 +150,7 @@ _manifest_cleanup_worktree_roots() {
 #
 # shellcheck disable=SC2120  # "preview" is passed by callers in other files
 # (manifest-core.sh's `cleanup`/`docs cleanup` preview arms and
-# manifest-refresh.sh's plan output); shellcheck only sees this file.
+# the docs cleanup preview); shellcheck only sees this file.
 cleanup_temp_files() {
     local mode="${1:-apply}"
     local root="${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"

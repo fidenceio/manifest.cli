@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=smoke
 
 # Verifies the destructive-target sandbox tripwire in
 # modules/system/manifest-install-paths.sh. The tripwire's job: when a bats

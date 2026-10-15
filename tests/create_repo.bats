@@ -37,12 +37,12 @@ teardown() {
     echo "$output" | grep -q "mutually exclusive"
 }
 
-@test "prep repo: --create-repo-private and --create-repo-public are mutually exclusive" {
-    source "$TEST_REPO_ROOT/modules/core/manifest-prep.sh"
+@test "init repo --connect: --create-repo-private and --create-repo-public are mutually exclusive" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-init-connect.sh"
     cd "$SCRATCH"
     git init -q
 
-    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_prep_repo --create-repo-private --create-repo-public --dry-run
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_connect_repo --create-repo-private --create-repo-public --dry-run
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "mutually exclusive"
 }
@@ -85,26 +85,26 @@ teardown() {
 }
 
 # -----------------------------------------------------------------------------
-# prep repo --dry-run with create flag
+# init repo --connect --dry-run with create flag
 # -----------------------------------------------------------------------------
 
-@test "prep repo --dry-run --create-repo-private: replaces prompt with planned gh repo create" {
-    source "$TEST_REPO_ROOT/modules/core/manifest-prep.sh"
+@test "init repo --connect --dry-run --create-repo-private: replaces prompt with planned gh repo create" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-init-connect.sh"
     cd "$SCRATCH"
     git init -q
 
-    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_prep_repo --dry-run --create-repo-private < /dev/null
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_connect_repo --dry-run --create-repo-private < /dev/null
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "would gh repo create:.*private"
     refute grep -q "would prompt for an origin URL" <<<"$output"
 }
 
-@test "prep repo --dry-run --create-repo-public: visibility flows through" {
-    source "$TEST_REPO_ROOT/modules/core/manifest-prep.sh"
+@test "init repo --connect --dry-run --create-repo-public: visibility flows through" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-init-connect.sh"
     cd "$SCRATCH"
     git init -q
 
-    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_prep_repo --dry-run --create-repo-public < /dev/null
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_connect_repo --dry-run --create-repo-public < /dev/null
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "would gh repo create:.*public"
 }
@@ -121,9 +121,9 @@ teardown() {
     echo "$output" | grep -q -- "--create-repo-public"
 }
 
-@test "prep repo --help: lists --create-repo-private and --create-repo-public" {
-    source "$TEST_REPO_ROOT/modules/core/manifest-prep.sh"
-    run manifest_prep_repo --help
+@test "init repo --connect --help: lists --create-repo-private and --create-repo-public" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-init-connect.sh"
+    run manifest_init_connect_repo --help
     [ "$status" -eq 0 ]
     echo "$output" | grep -q -- "--create-repo-private"
     echo "$output" | grep -q -- "--create-repo-public"
@@ -214,7 +214,7 @@ teardown() {
     git init -q "$SCRATCH"
     mkdir -p "$SCRATCH/child"
 
-    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/child" run manifest_init_repo -y
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/child" run manifest_init_repo --no-connect -y
     [ "$status" -eq 0 ]
     [ -d "$SCRATCH/child/.git" ]
     run git -C "$SCRATCH/child" rev-parse --show-toplevel
@@ -405,7 +405,7 @@ teardown() {
     [ "$status" -eq 0 ]
     # §9.5: a cleanly-initialized member is also made Manifest-trackable.
     # VERSION is the load-bearing file (created first, no external deps); the
-    # full set (README/CHANGELOG/docs) is asserted end-to-end in first.bats.
+    # full set (README/CHANGELOG/docs) is asserted end-to-end in init_guided.bats.
     [ -f "$SCRATCH/svc_clean/VERSION" ]
 }
 
@@ -511,7 +511,7 @@ teardown() {
     # Bare member backfilled. VERSION/README/CHANGELOG have no external deps;
     # the docs/ folder depends on MANIFEST_CLI_DOCS_FOLDER (set by full config
     # init, not by direct module sourcing) so the docs/ backfill is asserted
-    # end-to-end in first.bats rather than here.
+    # end-to-end in init_guided.bats rather than here.
     [ -f "$SCRATCH/svc_bare/VERSION" ]
     [ -f "$SCRATCH/svc_bare/README.md" ]
     [ -f "$SCRATCH/svc_bare/CHANGELOG.md" ]

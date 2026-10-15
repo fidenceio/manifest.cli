@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=smoke
 
 load 'helpers/setup'
 
@@ -274,21 +275,6 @@ EOF
     # marker is left untouched.
     [ -f "$cache_dir/timestamp.cache" ]
     [ "$(tr -d '[:space:]' < "$cache_dir/cleanup.last")" = "$stamped" ]
-}
-
-@test "time: display_time_info renders timestamp details from the cache" {
-    unset MANIFEST_CLI_TIMEZONE
-    _manifest_time_write_cache_data "1700000000" "+0.500000" "0.250000" "https://ex/t" "9.9.9.9"
-    run display_time_info
-    [ "$status" -eq 0 ]
-    [[ "$output" == *"🕐 Manifest Timestamp Service"* ]]
-    [[ "$output" == *"📊 Timestamp Details:"* ]]
-    [[ "$output" == *"🕐 Time: "*" UTC"* ]]
-    [[ "$output" == *"📊 Offset: +0.500000 seconds"* ]]
-    [[ "$output" == *"🎯 Uncertainty: ±0.250000 seconds"* ]]
-    [[ "$output" == *"🌐 Source: https://ex/t (9.9.9.9)"* ]]
-    [[ "$output" == *"🔧 Method: cache"* ]]
-    [[ "$output" == *"💡 This timestamp is ready for manifest operations"* ]]
 }
 
 @test "time: display_time_config renders defaults with labeled servers" {

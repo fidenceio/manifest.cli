@@ -138,7 +138,7 @@ class Manifest < Formula
       To get started:
         manifest --help          # Show help
         manifest test            # Test functionality
-        manifest time            # Get trusted timestamp
+        manifest config time     # Show HTTPS timestamp configuration
 
       The CLI will automatically detect your OS and apply optimizations.
 

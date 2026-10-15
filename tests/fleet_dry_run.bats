@@ -167,36 +167,36 @@ TSV
     [ ! -d "$SCRATCH/work/svc/docs" ]
 }
 
-@test "prep fleet --dry-run lists sync plan and exits successfully" {
+@test "init fleet --connect --dry-run lists sync plan and exits successfully" {
     mkdir -p "$SCRATCH/work/svc"
     git -C "$SCRATCH/work" init -q
     git -C "$SCRATCH/work/svc" init -q
     write_fleet_config
     write_selected_tsv
 
-    run_manifest prep fleet --dry-run
+    run_manifest init fleet --connect --dry-run
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"MANIFEST FLEET SYNC (DRY RUN)"* ]]
     [[ "$output" == *"svc: would pull --rebase"* ]]
     [[ "$output" == *"Plan:"*"1 pull"* ]]
     [[ "$output" == *"No changes written. Re-run with -y to apply this plan:"* ]]
-    [[ "$output" == *"manifest prep fleet --parallel -y"* ]]
+    [[ "$output" == *"manifest init fleet --connect --parallel -y"* ]]
 }
 
-@test "prep fleet defaults to preview" {
+@test "init fleet --connect defaults to preview" {
     mkdir -p "$SCRATCH/work/svc"
     git -C "$SCRATCH/work" init -q
     git -C "$SCRATCH/work/svc" init -q
     write_fleet_config
     write_selected_tsv
 
-    run_manifest prep fleet
+    run_manifest init fleet --connect
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"MANIFEST FLEET SYNC (DRY RUN)"* ]]
     [[ "$output" == *"No changes written. Re-run with -y to apply this plan:"* ]]
-    [[ "$output" == *"manifest prep fleet --parallel -y"* ]]
+    [[ "$output" == *"manifest init fleet --connect --parallel -y"* ]]
 }
 
 @test "ship fleet defaults to preview and does not call PR dispatch" {
@@ -232,7 +232,7 @@ YAML
     [ "$(cat "$SCRATCH/work/svc/VERSION")" = "1.2.3" ]
 }
 
-@test "refresh fleet --dry-run does not rewrite manifest.fleet.tsv" {
+@test "update fleet --dry-run does not rewrite manifest.fleet.tsv" {
     mkdir -p "$SCRATCH/work/svc"
     git -C "$SCRATCH/work" init -q
     git -C "$SCRATCH/work/svc" init -q
@@ -240,17 +240,16 @@ YAML
     write_selected_tsv
     before="$(cat "$SCRATCH/work/manifest.fleet.tsv")"
 
-    run_manifest refresh fleet --dry-run
+    run_manifest update fleet --dry-run
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"MANIFEST FLEET UPDATE (dry-run)"* ]]
     [[ "$output" == *"Would update manifest.fleet.tsv"* ]]
-    [[ "$output" == *"Dry run complete"* ]]
     [ "$(cat "$SCRATCH/work/manifest.fleet.tsv")" = "$before" ]
     [ ! -f "$SCRATCH/work/manifest.fleet.tsv.tmp" ]
 }
 
-@test "refresh fleet --dry-run treats configured fleet root as discovered" {
+@test "update fleet --dry-run treats configured fleet root as discovered" {
     mkdir -p "$SCRATCH/work/svc"
     git -C "$SCRATCH/work" init -q
     git -C "$SCRATCH/work/svc" init -q
@@ -258,7 +257,7 @@ YAML
     write_root_selected_tsv
     before="$(cat "$SCRATCH/work/manifest.fleet.tsv")"
 
-    run_manifest refresh fleet --dry-run
+    run_manifest update fleet --dry-run
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"MANIFEST FLEET UPDATE (dry-run)"* ]]
@@ -268,7 +267,7 @@ YAML
     [ "$(cat "$SCRATCH/work/manifest.fleet.tsv")" = "$before" ]
 }
 
-@test "refresh fleet appends git repos to the TSV, not every subdirectory" {
+@test "update fleet appends git repos to the TSV, not every subdirectory" {
     mkdir -p "$SCRATCH/work/svc/src"
     git -C "$SCRATCH/work" init -q
     git -C "$SCRATCH/work/svc" init -q
@@ -279,7 +278,7 @@ YAML
 true	rootworkspace	.	true
 TSV
 
-    run_manifest refresh fleet -y
+    run_manifest update fleet -y
 
     [ "$status" -eq 0 ]
     # Pre-existing root row is preserved verbatim.
@@ -399,7 +398,7 @@ TSV
     [[ "$output" == *"gone"* ]]
 }
 
-@test "refresh fleet --dry-run reports no drift for configured dotted-name members" {
+@test "update fleet --dry-run reports no drift for configured dotted-name members" {
     mkdir -p "$SCRATCH/work/fidenceio.manifest.cli" "$SCRATCH/work/fidenceio.homebrew.tap/Formula"
     git -C "$SCRATCH/work" init -q
     git -C "$SCRATCH/work/fidenceio.manifest.cli" init -q
@@ -422,7 +421,7 @@ true	fidenceiohomebrewtap	./fidenceio.homebrew.tap	true
 TSV
     before="$(cat "$SCRATCH/work/manifest.fleet.tsv")"
 
-    run_manifest refresh fleet --dry-run
+    run_manifest update fleet --dry-run
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"MANIFEST FLEET UPDATE (dry-run)"* ]]

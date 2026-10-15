@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=smoke
 # §82 — the pre-bump auto-commit sweep is a checked ship step.
 #
 # It used to run bare with its return value ignored, so a hook that refused the

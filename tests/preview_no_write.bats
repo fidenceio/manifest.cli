@@ -190,83 +190,63 @@ TSV
 }
 
 # -----------------------------------------------------------------------------
-# prep repo
+# init repo --connect
 # -----------------------------------------------------------------------------
 
-@test "prep repo: default preview makes no writes" {
+@test "init repo --connect: default preview makes no writes" {
     setup_repo_with_remote
-    assert_preview_clean prep repo
+    assert_preview_clean init repo --connect
 }
 
-@test "prep repo: --dry-run makes no writes" {
+@test "init repo --connect: --dry-run makes no writes" {
     setup_repo_with_remote
-    assert_preview_clean prep repo --dry-run
+    assert_preview_clean init repo --connect --dry-run
 }
 
-@test "prep repo: AUTO_CONFIRM=1 default still previews and makes no writes" {
+@test "init repo --connect: AUTO_CONFIRM=1 default still previews and makes no writes" {
     setup_repo_with_remote
     export MANIFEST_CLI_AUTO_CONFIRM=1
-    assert_preview_clean prep repo
+    assert_preview_clean init repo --connect
 }
 
 # -----------------------------------------------------------------------------
-# prep fleet
+# init fleet --connect
 # -----------------------------------------------------------------------------
 
-@test "prep fleet: default preview makes no writes" {
+@test "init fleet --connect: default preview makes no writes" {
     setup_fleet_minimal
-    assert_preview_clean prep fleet
+    assert_preview_clean init fleet --connect
 }
 
-@test "prep fleet: --dry-run makes no writes" {
+@test "init fleet --connect: --dry-run makes no writes" {
     setup_fleet_minimal
-    assert_preview_clean prep fleet --dry-run
+    assert_preview_clean init fleet --connect --dry-run
 }
 
-@test "prep fleet: AUTO_CONFIRM=1 default still previews and makes no writes" {
-    setup_fleet_minimal
-    export MANIFEST_CLI_AUTO_CONFIRM=1
-    assert_preview_clean prep fleet
-}
-
-# -----------------------------------------------------------------------------
-# refresh repo
-# -----------------------------------------------------------------------------
-
-@test "refresh repo: default preview makes no writes" {
-    setup_bare_repo
-    assert_preview_clean refresh repo
-}
-
-@test "refresh repo: --dry-run makes no writes" {
-    setup_bare_repo
-    assert_preview_clean refresh repo --dry-run
-}
-
-@test "refresh repo: AUTO_CONFIRM=1 default still previews and makes no writes" {
-    setup_bare_repo
-    export MANIFEST_CLI_AUTO_CONFIRM=1
-    assert_preview_clean refresh repo
-}
-
-# -----------------------------------------------------------------------------
-# refresh fleet
-# -----------------------------------------------------------------------------
-
-@test "refresh fleet: default preview makes no writes" {
-    setup_fleet_minimal
-    assert_preview_clean refresh fleet
-}
-
-@test "refresh fleet: --dry-run makes no writes" {
-    setup_fleet_minimal
-    assert_preview_clean refresh fleet --dry-run
-}
-
-@test "refresh fleet: AUTO_CONFIRM=1 default still previews and makes no writes" {
+@test "init fleet --connect: AUTO_CONFIRM=1 default still previews and makes no writes" {
     setup_fleet_minimal
     export MANIFEST_CLI_AUTO_CONFIRM=1
-    assert_preview_clean refresh fleet
+    assert_preview_clean init fleet --connect
+}
+
+# -----------------------------------------------------------------------------
+# update fleet
+# -----------------------------------------------------------------------------
+
+@test "update fleet: default preview makes no writes" {
+    setup_fleet_minimal
+    assert_preview_clean update fleet
+}
+
+@test "update fleet: --dry-run makes no writes" {
+    setup_fleet_minimal
+    assert_preview_clean update fleet --dry-run
+}
+
+@test "update fleet: AUTO_CONFIRM=1 default still previews and makes no writes" {
+    setup_fleet_minimal
+    export MANIFEST_CLI_AUTO_CONFIRM=1
+    assert_preview_clean update fleet
 }
 
 # -----------------------------------------------------------------------------
@@ -527,7 +507,7 @@ TSV
 }
 
 # -----------------------------------------------------------------------------
-# plan fleet  (apply contract uses --apply/--do, not -y; default is preview)
+# plan fleet  (apply contract uses -y/--yes; default is preview)
 # -----------------------------------------------------------------------------
 
 @test "plan fleet: default preview makes no writes" {
@@ -544,7 +524,7 @@ TSV
 }
 
 # -----------------------------------------------------------------------------
-# reconcile fleet  (apply contract uses --apply/--do, not -y; default is preview)
+# reconcile fleet  (apply contract uses -y/--yes; default is preview)
 # -----------------------------------------------------------------------------
 
 @test "reconcile fleet: default preview makes no writes" {

@@ -113,7 +113,7 @@ teardown() {
     grep -q 'run_check cargo test' "$PROJ/scripts/run-tests.sh"
 }
 
-@test "gate scaffold: package.json scripts become host-native pm run checks; placeholder test skipped" {
+@test "gate scaffold: package.json scripts become containerized pm run checks; placeholder test skipped" {
     cat > "$PROJ/package.json" << 'EOF'
 {
   "name": "x",
@@ -128,8 +128,8 @@ EOF
     grep -q 'run_check npm run lint' "$PROJ/scripts/run-tests.sh"
     grep -q 'run_check npm run build' "$PROJ/scripts/run-tests.sh"
     refute grep -qE 'run_check npm run test' "$PROJ/scripts/run-tests.sh"
-    # Host-native only: the neutral default never imposes a container.
-    refute grep -q 'docker' "$PROJ/scripts/run-tests.sh"
+    # Generated checks provision their toolchain in a disposable container.
+    grep -q 'exec docker run' "$PROJ/scripts/run-tests.sh"
 }
 
 @test "gate scaffold: node repo with build+test gets both via the detected pm" {
@@ -176,12 +176,12 @@ EOF
     refute grep -q 'run_check yarn run' "$PROJ/scripts/run-tests.sh"
 }
 
-@test "gate scaffold: Go repo gets host-native go build + go test" {
+@test "gate scaffold: Go repo gets containerized go build + go test" {
     printf 'module x\n\ngo 1.23\n' > "$PROJ/go.mod"
     ensure_release_gate_script "$PROJ"
     grep -q 'run_check go build ./\.\.\.' "$PROJ/scripts/run-tests.sh"
     grep -q 'run_check go test ./\.\.\.' "$PROJ/scripts/run-tests.sh"
-    refute grep -q 'docker' "$PROJ/scripts/run-tests.sh"
+    grep -q 'exec docker run' "$PROJ/scripts/run-tests.sh"
 }
 
 @test "gate scaffold: Makefile test target is a fallback when nothing more specific is declared" {
@@ -206,7 +206,7 @@ EOF
     grep -q 'run_check dotnet build' "$PROJ/scripts/run-tests.sh"
     grep -q 'run_check dotnet test' "$PROJ/scripts/run-tests.sh"
     refute grep -q 'cannot certify' "$PROJ/scripts/run-tests.sh"
-    refute grep -q 'docker' "$PROJ/scripts/run-tests.sh"
+    grep -q 'exec docker run' "$PROJ/scripts/run-tests.sh"
 }
 
 @test "gate scaffold: .NET solution at repo root is detected" {
@@ -229,11 +229,11 @@ EOF
     refute grep -q 'docker compose config' "$PROJ/scripts/run-tests.sh"
 }
 
-@test "gate scaffold: Docker-only repo is NOT auto-containerized — falls to the loud path" {
+@test "gate scaffold: Dockerfile alone does not supply a passing project check" {
     echo "1.0.0" > "$PROJ/VERSION"
     printf 'FROM alpine:3.20\nCMD ["true"]\n' > "$PROJ/Dockerfile"
     ensure_release_gate_script "$PROJ"
-    refute grep -q 'docker build' "$PROJ/scripts/run-tests.sh"
+    refute grep -q 'run_check docker build' "$PROJ/scripts/run-tests.sh"
     grep -q 'cannot certify' "$PROJ/scripts/run-tests.sh"
 }
 
@@ -265,7 +265,7 @@ EOF
     cd "$PROJ"
     git init -q
 
-    MANIFEST_CLI_PROJECT_ROOT="$PROJ" run manifest_init_repo -y
+    MANIFEST_CLI_PROJECT_ROOT="$PROJ" run manifest_init_repo --no-connect -y
     [ "$status" -eq 0 ]
     [ -x "$PROJ/scripts/run-tests.sh" ]
 }
@@ -286,4 +286,18 @@ EOF
 
     MANIFEST_CLI_PROJECT_ROOT="$PROJ" _manifest_release_gate_test_command "full"
     [ "${MANIFEST_CLI_RELEASE_GATE_ARGV[0]}" = "./scripts/run-tests.sh" ]
+}
+
+@test "gate scaffold: smoke checks untracked scripts in an unborn repository" {
+    git init -q -b main "$PROJ"
+    echo "1.0.0" > "$PROJ/VERSION"
+    printf 'if then\n' > "$PROJ/broken.sh"
+    ensure_release_gate_script "$PROJ"
+    cd "$PROJ"
+    run ./scripts/run-tests.sh --tier smoke
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"shell syntax: broken.sh"* ]]
+    printf '#!/bin/sh\necho fixed\n' > broken.sh
+    run ./scripts/run-tests.sh --tier smoke
+    [ "$status" -eq 0 ]
 }

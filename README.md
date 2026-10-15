@@ -122,27 +122,27 @@ More detail: [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
 ## Your First Release
 
-New to Manifest? `manifest first` looks at where you are — one repository, or a folder
+New to Manifest? `manifest init` looks at where you are — one repository, or a folder
 containing several — tells you what is already set up, and proposes the rest as a plan.
 It writes nothing until you add `-y`:
 
 ```bash
 cd your-project
 
-manifest first                  # look and propose; changes nothing
-manifest first -y               # do the proposed setup (recorded in the audit log)
+manifest init                  # look and propose; changes nothing
+manifest init -y               # do the proposed setup (recorded in the audit log)
 ```
 
 Prefer to drive each step yourself:
 
 ```bash
-manifest init repo              # show which files are missing
-manifest init repo -y           # create VERSION, CHANGELOG.md, docs/, ignore files
+manifest init repo              # preview Git, origin, scaffold and readiness
+manifest init repo -y           # prepare and verify; no release or push
 manifest init repo --create-repo-private       # also show the GitHub repo it would create
 manifest init repo --create-repo-private -y    # create it; github.owner picks the org or user
 
-manifest prep repo              # show remote and config preparation
-manifest prep repo -y           # do it
+manifest init repo --remote <url>          # connect an existing remote instead
+manifest init repo --no-connect -y         # scaffold only; readiness not verified
 
 manifest ship repo patch        # show the release
 manifest ship repo patch -y     # publish it
@@ -167,9 +167,12 @@ manifest init fleet             # scan the folder, or read an existing fleet TSV
 manifest init fleet --create-repo-private      # show which members have no remote yet
 manifest status fleet           # inspect the selected repositories
 manifest ship fleet patch       # show which members would be released
-manifest ship fleet patch -y    # release them
+manifest ship fleet patch -y    # release members, then commit + push the manager
 manifest ship fleet manager -y  # commit + push the fleet coordination root only
 ```
+
+The fleet ship includes the manager coordination repo even when all members are
+skipped or fleet versioning is disabled. `ship fleet manager` runs that step alone.
 
 **A fleet release skips members with nothing to release.** Being release-enabled only
 makes a member *eligible*. It is actually bumped when one of two things is true: its
@@ -180,9 +183,9 @@ Adopting an existing folder into a fleet, or repairing one, is also plan-first:
 
 ```bash
 manifest plan fleet             # write a plan describing what adoption would do
-manifest plan fleet --apply
+manifest plan fleet -y
 manifest reconcile fleet        # show the changes that plan implies
-manifest reconcile fleet --do
+manifest reconcile fleet -y
 ```
 
 More detail: [docs/FLEET_DESIGN_SPEC.md](docs/FLEET_DESIGN_SPEC.md).
@@ -193,9 +196,9 @@ Commands read as `manifest <verb> <scope>`, where scope is usually `repo` or `fl
 
 | Area | Commands |
 | ---- | -------- |
-| Setup | `manifest first`, `manifest config`, `manifest init repo`, `manifest init fleet` |
-| Preparation | `manifest prep repo`, `manifest prep fleet` |
-| Refresh | `manifest refresh repo`, `manifest update fleet` (once called `refresh fleet`) |
+| Setup | `manifest init`, `manifest init repo`, `manifest init fleet`, `manifest config` |
+| Connect remotes | `manifest init repo --connect`, `manifest init fleet --connect` |
+| Membership | `manifest discover fleet`, `manifest update fleet` |
 | Release | `manifest ship repo <type>`, `manifest ship fleet <type>` |
 | Diagnostics | `manifest status`, `manifest doctor`, `manifest security` |
 | Pull requests | `manifest pr create`, `manifest pr checks`, `manifest pr ready`, `manifest pr merge`, `manifest pr update` |

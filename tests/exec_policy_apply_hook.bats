@@ -44,7 +44,7 @@ teardown() {
 }
 
 @test "preview never reaches the apply boundary: registered hook stays silent" {
-    source "$TEST_REPO_ROOT/modules/core/manifest-prep.sh"
+    source "$TEST_REPO_ROOT/modules/core/manifest-init-connect.sh"
     _manifest_execution_apply_hook() {
         echo "hook-fired"
         touch "$SCRATCH/hook.marker"
@@ -54,7 +54,7 @@ teardown() {
     git init -q -b main
     git remote add origin git@github.com:example/x.git
 
-    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/work" run manifest_prep_repo --dry-run
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/work" run manifest_init_connect_repo --dry-run
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Dry run"
     refute grep -q "hook-fired" <<<"$output"

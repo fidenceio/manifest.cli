@@ -88,10 +88,10 @@ manifest status fleet
 
 ```bash
 manifest plan fleet
-manifest plan fleet --apply
+manifest plan fleet -y
 # read manifest.fleet.plan.yaml
 manifest reconcile fleet
-manifest reconcile fleet --do
+manifest reconcile fleet -y
 ```
 
 ## Fleet Release

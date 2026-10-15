@@ -52,11 +52,12 @@ _mk_ship_fixture() {
     echo "$output" | grep -q "Highest consequence command"
 }
 
-@test "ship dispatch: legacy bare bump word routes to ship repo with args intact" {
+@test "ship dispatch: bare bump word is refused before reaching ship repo" {
     manifest_ship_repo() { echo "ROUTED:$*"; }
     run manifest_ship_dispatch patch --dry-run
-    [ "$status" -eq 0 ]
-    [ "$output" = "ROUTED:patch --dry-run" ]
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Unknown scope: patch"* ]]
+    [[ "$output" != *"ROUTED:"* ]]
 }
 
 # --- ship repo: bump types beyond patch/minor --------------------------------

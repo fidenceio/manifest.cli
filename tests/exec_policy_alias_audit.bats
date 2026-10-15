@@ -143,67 +143,26 @@ assert_preview_clean() {
 }
 
 # -----------------------------------------------------------------------------
-# Deprecated alias: manifest sync (-> manifest prep repo)
-#
-# sync delegates straight to manifest_prep_repo, which parses execution policy.
-# Guard that the alias keeps previewing by default (no fetch, no commit).
-# -----------------------------------------------------------------------------
-
-@test "sync alias: default invocation previews and makes no writes" {
-    setup_repo_with_remote
-    assert_preview_clean sync
-}
-
-@test "sync alias: AUTO_CONFIRM=1 default still previews and makes no writes" {
-    setup_repo_with_remote
-    export MANIFEST_CLI_AUTO_CONFIRM=1
-    assert_preview_clean sync
-}
-
-@test "sync alias: default invocation routes through the connect phase's replay hint" {
-    # `sync` forwarded to `prep repo` until prep itself was deprecated; pointing
-    # one deprecated verb at another emitted two warnings for one command and
-    # named a deprecated replacement. It now calls the connect phase directly.
-    setup_repo_with_remote
-    run_manifest sync
-    [ "$status" -eq 0 ]
-    echo "$output" | grep -q "manifest init repo --connect -y"
-    # And must not regress to naming the deprecated verb as the way forward.
-    ! echo "$output" | grep -q "manifest prep repo -y"
-}
-
-# -----------------------------------------------------------------------------
 # Deprecated alias: manifest prep <type> (-> manifest ship repo <type> --local)
 #
 # The old "prep-as-local-release" syntax must reach ship's preview, not apply.
 # -----------------------------------------------------------------------------
 
-@test "prep <type> alias: default invocation previews and makes no writes" {
+@test "removed prep <type> refuses and makes no writes" {
     setup_repo_with_remote
-    assert_preview_clean prep patch
+    local before; before="$(preview_snapshot)"
+    run_manifest prep patch
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Unknown command: prep"* ]]
+    assert_no_writes "$before" "$(preview_snapshot)"
 }
 
-@test "prep <type> alias: AUTO_CONFIRM=1 default still previews and makes no writes" {
+@test "removed prep <type> stays refused with AUTO_CONFIRM=1" {
     setup_repo_with_remote
     export MANIFEST_CLI_AUTO_CONFIRM=1
-    assert_preview_clean prep patch
-}
-
-# -----------------------------------------------------------------------------
-# Deprecated alias: manifest recipe run <id> (-> the mapped first-class command)
-#
-# recipe run forwards "$@" to the first-class function, which parses execution
-# policy. A mutating recipe must still preview by default.
-# -----------------------------------------------------------------------------
-
-@test "recipe run alias: ship recipe previews and makes no writes by default" {
-    setup_repo_with_remote
-    assert_preview_clean recipe run manifest.builtin.ship.repo.patch
-    echo "$output" | grep -q "manifest ship repo patch -y"
-}
-
-@test "recipe run alias: AUTO_CONFIRM=1 default still previews and makes no writes" {
-    setup_repo_with_remote
-    export MANIFEST_CLI_AUTO_CONFIRM=1
-    assert_preview_clean recipe run manifest.builtin.ship.repo.patch
+    local before; before="$(preview_snapshot)"
+    run_manifest prep patch
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Unknown command: prep"* ]]
+    assert_no_writes "$before" "$(preview_snapshot)"
 }

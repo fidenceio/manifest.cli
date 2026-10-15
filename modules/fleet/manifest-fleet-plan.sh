@@ -5,7 +5,7 @@
 # =============================================================================
 #
 # Builds a generated, editable adoption plan for messy polyrepo workspaces.
-# Commands are dry-run by default; --apply and --do are exact aliases.
+# Commands preview by default; -y/--yes applies. Redundant apply aliases are refused.
 
 if [[ -n "${_MANIFEST_CLI_FLEET_PLAN_LOADED:-}" ]]; then
     return 0
@@ -38,15 +38,15 @@ _fleet_parse_apply_contract() {
     local -n _push_ref="$_push_var"
     local -n _force_ref="$_force_var"
 
-    local apply_value=false commit_value=false push_value=false force_value=false
+    local apply_value=false commit_value=false push_value=false force_value=false dry_run=false
     local rest=()
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --apply|--do)
+            -y|--yes)
                 apply_value=true; shift ;;
             --dry-run)
-                shift ;;
+                dry_run=true; shift ;;
             --commit)
                 commit_value=true; shift ;;
             --push)
@@ -58,16 +58,20 @@ _fleet_parse_apply_contract() {
         esac
     done
 
+    if [[ "$dry_run" == "true" && "$apply_value" == "true" ]]; then
+        log_error "Cannot combine --dry-run with -y/--yes. Preview is already the default."
+        return 1
+    fi
     if [[ "$push_value" == "true" && "$commit_value" != "true" ]]; then
         log_error "--push requires --commit"
         return 1
     fi
     if [[ "$commit_value" == "true" && "$apply_value" != "true" ]]; then
-        log_error "--commit requires --apply or --do"
+        log_error "--commit requires -y/--yes"
         return 1
     fi
     if [[ "$force_value" == "true" && "$apply_value" != "true" ]]; then
-        log_error "--force requires --apply or --do"
+        log_error "--force requires -y/--yes"
         return 1
     fi
 
@@ -356,10 +360,10 @@ fleet_plan() {
                 fleet_name="$2"; shift 2 ;;
             -h|--help|help)
                 _render_help \
-                    "manifest plan fleet [--apply|--do] [--depth auto|N] [--plan FILE]" \
+                    "manifest plan fleet [-y|--yes] [--dry-run] [--depth auto|N] [--plan FILE]" \
                     "Generate a fleet adoption plan. Dry-run by default." \
-                    "Mutation" "  --apply, --do   Write the validated plan file
-  --dry-run       Explicit no-op; dry-run is already the default" \
+                    "Mutation" "  -y, --yes       Write the validated plan file
+  --dry-run       Explicit preview; cannot combine with apply" \
                     "Options" "  --depth N|auto  Scan depth guardrail (default: auto)
   --safety-cap N  Auto-depth ceiling (default: 10)
   --plan FILE     Plan file path (default: manifest.fleet.plan.yaml)
@@ -384,13 +388,13 @@ fleet_plan() {
         echo "Would write: $plan_file"
         _fleet_plan_summary "$plan_content"
         echo ""
-        echo "No changes written. Re-run with --apply or --do to apply."
+        echo "No changes written. Re-run with -y or --yes to apply."
         return 0
     fi
 
     if [[ -f "$plan_file" && "$force" != "true" ]]; then
         log_error "Plan file already exists: $plan_file"
-        echo "Use --apply --force to overwrite it."
+        echo "Use -y --force to overwrite it."
         return 1
     fi
 

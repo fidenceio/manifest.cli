@@ -11,6 +11,17 @@ This map identifies high-consequence paths and their side-effect boundaries.
 | `remote-write` | Push, publish, create release, or mutate external state |
 | `pr` | Create, update, merge, or queue pull requests |
 
+## Repository Initialization
+
+`init` / `init repo` preview without writes or network calls. Applying initializes
+Git on the configured branch if needed, connects an existing origin or creates a
+private GitHub repository, fast-forwards existing history, scaffolds absent files,
+and runs the configured release check. It preserves existing content and refuses
+remote/history/check failures. `--remote URL` selects an existing remote;
+`--no-connect` selects an explicitly unverified local scaffold. No release workflow,
+version bump, new commit, tag or push runs. Readiness checks can create normal
+build/test artifacts. Fleet membership review remains a separate two-phase flow.
+
 ## Release Transaction
 
 `manifest ship repo patch -y` follows this sequence when all optional features are enabled:
@@ -45,7 +56,8 @@ Preview mode stops before local and remote writes. `--local -y` allows local wri
 3. Inspect each service branch, version, status, and release policy.
 4. Skip release-disabled services and eligible services with no release changes.
 5. Execute repo release flow for release-enabled services with release changes.
-6. Report per-service success or failure.
+6. Record member commits in `manifest.fleet.snapshot.json`, then commit and push the fleet manager (coordination root), including when all members were skipped or `fleet.versioning` is `none`. Stage only declared coordination files. With `--local`, commit locally without pushing.
+7. Report member and manager outcomes separately. A manager failure returns `1` when no member released, or `2` after a member released.
 
 Fleet output must make skipped and failed services explicit.
 

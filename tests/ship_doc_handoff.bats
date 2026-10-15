@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=smoke
 # §78 — the documentation handoff, end to end through scripts/manifest-cli.sh.
 #
 # The unit-level rules live in doc_handoff.bats. This file proves the parts
@@ -294,7 +295,7 @@ _handoff_state_date() {
     [ ! -f "$(brief_path)" ]
 }
 
-@test "a fleet member never pauses, even on the prep path" {
+@test "a fleet member never pauses during a local fleet ship" {
     # The module guarantees this, but the guarantee was enforced only by
     # _MANIFEST_CLI_DELEGATED_APPLY_CONSENT, and `_fleet_prep_run` was the one
     # delegated call site that never set it. A paused member returns non-zero
@@ -319,7 +320,7 @@ _handoff_state_date() {
     echo "work" > "$w/svca/src.txt"
     git -C "$w/svca" add -A && git -C "$w/svca" commit -qm "feat: work"
 
-    MANIFEST_CLI_DOCS_HANDOFF=always MANIFEST_CLI_DRIVER=claude-code run_manifest prep fleet -y
+    MANIFEST_CLI_DOCS_HANDOFF=always MANIFEST_CLI_DRIVER=claude-code run_manifest ship fleet patch --local -y
 
     [ "$status" -eq 0 ]
     [[ "$output" != *"prep failed"* ]]

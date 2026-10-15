@@ -67,7 +67,7 @@ Line two." \
     run manifest_ship_fleet --help
     [ "$status" -eq 0 ]
     # Fleet ship is release-only. PR flags live under manifest pr fleet.
-    echo "$output" | grep -q -- "--noprep"
+    echo "$output" | grep -q -- "--require-clean"
     echo "$output" | grep -q -- "--dry-run"
     echo "$output" | grep -q -- "-y, --yes"
     refute grep -q -- "--method" <<<"$output"

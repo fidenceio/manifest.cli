@@ -3,7 +3,7 @@
 Manifest breaks release work into named stages, each of which you run when you want it:
 
 ```text
-config -> init -> prep -> refresh -> ship
+config -> init -> ship
 ```
 
 Every stage that would change something shows you a plan and stops. Add `-y` (or
@@ -64,16 +64,16 @@ environment variable must never be able to publish a release by itself.
 
 ## First-Time Setup
 
-Start with `manifest first`. It is the guided front door: it looks at where you are —
+Start with `manifest init`. It is the guided front door: it looks at where you are —
 one repository, a folder of repositories, or a project already set up — and proposes a
 sensible setup. It writes nothing until you apply.
 
 ```bash
-manifest first
-manifest first -y
+manifest init
+manifest init -y
 ```
 
-Applying is recorded in the audit log. Underneath, `manifest first` just calls the
+Applying is recorded in the audit log. Guided setup delegates to the explicit
 commands below, so you can run them yourself instead:
 
 ```bash
@@ -82,6 +82,14 @@ manifest config show
 manifest init repo
 manifest init repo -y
 ```
+
+Repository init also establishes Git and origin and runs the release check when
+applied. Missing origin defaults to private GitHub creation; `--remote URL` connects
+an existing remote. Empty remotes need no pull. Init makes no release, commit, tag,
+version bump or push. A failed release check or missing identity is reported as
+incomplete setup. New generated release checks run in containers. For an empty
+project they verify the scaffold itself; adding application files requires real
+project checks before readiness can pass. `--no-connect` requests only local scaffolding.
 
 `manifest init repo` creates the files a Manifest-managed project needs. It writes each
 one only if it is absent — an existing file is always preserved, even under `--force`.
@@ -138,8 +146,8 @@ manifest doctor
 Get the repository ready:
 
 ```bash
-manifest init repo --connect
-manifest init repo --connect -y
+manifest init repo
+manifest init repo -y
 ```
 
 See what a release would do:
@@ -412,20 +420,19 @@ Three more rejections are worth knowing about before you hit them:
 
 ```bash
 manifest plan fleet
-manifest plan fleet --apply
+manifest plan fleet -y
 manifest reconcile fleet
-manifest reconcile fleet --do
+manifest reconcile fleet -y
 ```
 
-The flags stack, so you cannot skip a step by accident: `--commit` requires `--apply` or
-`--do`, and `--push` requires `--commit`.
+The flags stack, so you cannot skip a step by accident: `--commit` requires `-y` / `--yes`, and `--push` requires `--commit`.
 
 ### Operate A Fleet
 
 ```bash
 manifest status fleet
 manifest init fleet --connect
-manifest update fleet          # re-scan which repos are members (once called 'refresh fleet'; for docs use 'manifest docs fleet')
+manifest update fleet          # re-scan which repos are members; for docs use 'manifest docs fleet'
 manifest ship fleet patch
 manifest ship fleet patch -y
 manifest ship fleet patch --local -y
@@ -445,11 +452,14 @@ files** — `manifest.fleet.config.yaml`, the roster `manifest.fleet.tsv`, the a
 `.gitignore` ignores everything and re-includes only those names, so member repos,
 source and secrets can never be tracked there.
 
-`manifest ship fleet <type>` reaches that root only as the last step of a member
-release. When the coordination files themselves change — you edited the fleet config,
-`manifest update fleet` rewrote the roster — there was no way to publish that without
-a full fleet ship in which every member was a no-op. `manifest ship fleet manager` is
-that missing scope:
+`manifest ship fleet <type>` ships this manager root after the members. It also ships
+manager changes when every member is skipped, and when `fleet.versioning` is `none`.
+A failed manager commit or push makes the overall ship fail; completed member
+releases remain applied.
+
+Use `manifest ship fleet manager` to publish coordination changes on their own or
+retry the manager after fixing a hook or remote. Its behavior is shared with the
+normal fleet ship:
 
 - It **stages by allowlist name** through the same writer the fleet release uses. A
   file outside the allowlist that is already staged makes it refuse before any commit.
@@ -766,16 +776,26 @@ reflog` can usually still find the commit you moved away from.
 To go and look at an earlier release:
 
 ```bash
-manifest revert
+manifest revert repo v1.2.3       # Preview
+manifest revert repo v1.2.3 -y    # Check out the tag
 ```
 
-This lists the ten highest version tags and checks out the one you pick. It acts
-immediately — there is no `-y` here — but it only changes what you are looking at: no
-commits are deleted and nothing is rewritten, and git refuses outright if you have local
-changes the checkout would overwrite. You end up in **detached HEAD**, meaning you are
-viewing that tag rather than sitting on a branch. Run `git switch -` to go back.
+Omit the tag to select from the ten highest version tags in a terminal. Without a
+terminal, it lists the tags; applying requires you to name one. Checkout previews by
+default and requires `-y` / `--yes` to apply. Git refuses conflicting local changes,
+including untracked and ignored files, and submodule working trees stay as they are.
+You end up in **detached HEAD**, viewing that tag rather than sitting on a branch.
+Run `git switch -` to go back.
 
-So `revert` is for inspecting an old release, not for undoing a published one. Undoing a
+For a fleet, `manifest revert fleet` lists recorded snapshots. Preview one with
+`manifest revert fleet <manager-commit>`, then add `-y` to restore its member commits
+and manager commit. Fleet ships record the member map in
+`manifest.fleet.snapshot.json`, committed with the manager. Earlier manager history
+without that file cannot identify a complete fleet state. All affected working
+trees must be clean; checkouts are local and preserve branch history. Git failures
+can leave a partial checkout, which is reported with exit `2`.
+
+So `revert repo` is for inspecting an old release, not for undoing a published one. Undoing a
 release that is already public is a deliberate, manual job — usually a new forward release
 rather than an attempt to erase the old one.
 
@@ -797,3 +817,12 @@ and also means read-only, so existing hooks and scripts keep working.)
 
 The pre-commit hook — which is versioned in the repository but must be enabled per clone
 — is documented in [../.git-hooks/README.md](../.git-hooks/README.md).
+
+### Publishing the CLI tap from a container
+
+Canonical CLI publishers can set `MANIFEST_CLI_HOMEBREW_TAP_CHECKOUT` to an
+existing Homebrew tap repository containing `Formula/`. Formula publication then
+uses that checkout without requiring Homebrew on the publishing machine. An
+invalid explicit checkout fails rather than falling back to another tap. The
+release tarball checksum is still independently verified before the formula is
+committed and pushed.

@@ -161,10 +161,12 @@ manifest_execution_replay_hint() {
 # $5/$6 forward the two target-ambiguity requirements to the gate, both
 # defaulting to true so existing callers are unchanged. A caller may pass false
 # only for a requirement that its own operation EXISTS TO ESTABLISH — not
-# merely because it publishes nothing. Two callers qualify: `cleanup` (both,
+# merely because it publishes nothing. Callers include `cleanup` (both,
 # it publishes nothing) and `init`'s connect phase under --create-repo-*
 # (origin_required only — it creates the origin). Full rule and the reason the
-# older "publishes nothing" wording was wrong: see
+# older "publishes nothing" wording was wrong. `revert` also passes both
+# false: its destination is a local tag or snapshot commit, and detached HEAD is
+# the intended result. It neither requires nor changes a publishing branch. See
 # manifest_repo_scope_target_unambiguous in manifest-shared-utils.sh.
 manifest_execution_require_apply() {
     local mode="$1"

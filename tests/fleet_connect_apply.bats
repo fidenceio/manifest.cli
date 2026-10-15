@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# APPLY coverage for `manifest prep fleet -y` (manifest_prep_fleet → _fleet_sync).
+# APPLY coverage for `manifest init fleet --connect -y` (manifest_init_connect_fleet → _fleet_sync).
 #
 # fleet_dry_run.bats proves the preview plans without touching disk. This file
 # proves the apply: a member that is BEHIND its origin really gets
@@ -87,7 +87,7 @@ advance_origin() {
     git -C "$seed" push -q origin main
 }
 
-@test "prep fleet -y pulls a member that is behind its origin (HEAD advances)" {
+@test "init fleet --connect -y pulls a member that is behind its origin (HEAD advances)" {
     mk_member_with_origin svc-a
     advance_origin svc-a
     write_fleet_config
@@ -99,7 +99,7 @@ advance_origin() {
     remote_tip="$(git -C "$SCRATCH/remote-svc-a.git" rev-parse main)"
     [ "$before" != "$remote_tip" ]   # fixture sanity: member starts behind
 
-    run_manifest prep fleet -y
+    run_manifest init fleet --connect -y
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"Applying because -y/--yes was provided."* ]]
@@ -114,7 +114,7 @@ advance_origin() {
     [ "$(git -C "$SCRATCH/work/svc-a" rev-parse HEAD)" = "$remote_tip" ]
 }
 
-@test "prep fleet -y --parallel pulls every behind member (HEADs advance)" {
+@test "init fleet --connect -y --parallel pulls every behind member (HEADs advance)" {
     mk_member_with_origin svc-a
     mk_member_with_origin svc-b
     advance_origin svc-a
@@ -129,7 +129,7 @@ advance_origin() {
     tip_a="$(git -C "$SCRATCH/remote-svc-a.git" rev-parse main)"
     tip_b="$(git -C "$SCRATCH/remote-svc-b.git" rev-parse main)"
 
-    run_manifest prep fleet -y --parallel
+    run_manifest init fleet --connect -y --parallel
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"Running in parallel mode..."* ]]
@@ -140,7 +140,7 @@ advance_origin() {
     [ "$(git -C "$SCRATCH/work/svc-b" rev-parse HEAD)" = "$tip_b" ]
 }
 
-@test "prep fleet without -y stays a preview: a behind member does NOT advance" {
+@test "init fleet --connect without -y stays a preview: a behind member does NOT advance" {
     mk_member_with_origin svc-a
     advance_origin svc-a
     write_fleet_config
@@ -150,7 +150,7 @@ advance_origin() {
     local before
     before="$(git -C "$SCRATCH/work/svc-a" rev-parse HEAD)"
 
-    run_manifest prep fleet
+    run_manifest init fleet --connect
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"MANIFEST FLEET SYNC (DRY RUN)"* ]]

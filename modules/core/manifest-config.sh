@@ -335,7 +335,7 @@ _manifest_config_migration_state_file() {
 # Ensure the state directory exists. Callers that intend to write must invoke
 # this; pure-read paths must not, so preview-mode commands never mutate disk.
 _manifest_config_state_dir_ensure() {
-    # Strictly read-only inspections (e.g. `manifest first`) set this so a
+    # Strictly read-only inspections (e.g. `manifest init`) set this so a
     # config load never touches disk — return non-zero so atomic writers abort.
     is_truthy "${MANIFEST_CLI_CONFIG_SKIP_WRITES:-0}" && return 1
     mkdir -p "$(_manifest_config_state_dir)" 2>/dev/null
@@ -742,7 +742,7 @@ _manifest_config_apply_migrations() {
 }
 
 auto_migrate_user_global_configuration() {
-    # Strictly read-only inspections (e.g. `manifest first`) set this so the
+    # Strictly read-only inspections (e.g. `manifest init`) set this so the
     # config load never rewrites — or nags about — the global config.
     is_truthy "${MANIFEST_CLI_CONFIG_SKIP_WRITES:-0}" && return 0
     local config_file="$MANIFEST_CLI_GLOBAL_CONFIG"
@@ -1301,9 +1301,8 @@ set_default_configuration() {
     export MANIFEST_CLI_PROJECT_DESCRIPTION="${MANIFEST_CLI_PROJECT_DESCRIPTION:-A powerful CLI tool for versioning, AI documenting, and repository operations}"
     export MANIFEST_CLI_ORGANIZATION="${MANIFEST_CLI_ORGANIZATION:-Your Organization}"
 
-    # Automation / deprecations / network / Cloud
+    # Automation / network / Cloud
     export MANIFEST_CLI_AUTO_CONFIRM="${MANIFEST_CLI_AUTO_CONFIRM:-false}"
-    export MANIFEST_CLI_QUIET_DEPRECATIONS="${MANIFEST_CLI_QUIET_DEPRECATIONS:-false}"
     export MANIFEST_CLI_OFFLINE_MODE="${MANIFEST_CLI_OFFLINE_MODE:-false}"
     export MANIFEST_CLI_CLOUD_SKIP="${MANIFEST_CLI_CLOUD_SKIP:-false}"
     export MANIFEST_CLI_CLOUD_API_KEY_ENV="${MANIFEST_CLI_CLOUD_API_KEY_ENV:-MANIFEST_CLI_CLOUD_API_KEY}"

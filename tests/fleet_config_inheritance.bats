@@ -35,10 +35,10 @@ setup_fleet() {
     mkdir -p "$SCRATCH/services/member"
 }
 
-@test "nested repo inherits fleet-root github.owner during init (include_project_overrides=false)" {
+@test "nested repo inherits fleet-root github.owner even without project local overrides" {
     setup_fleet
-    # "false" mirrors how `manifest init repo` loads config — it must still
-    # inherit the fleet org even though it skips the repo's OWN local file.
+    # Fleet inheritance is independent of whether the caller loads the repo's
+    # own local overrides. Both config modes must inherit the fleet org.
     load_configuration "$SCRATCH/services/member" "false" >/dev/null 2>&1
     [ "$MANIFEST_CLI_GITHUB_OWNER" = "fidenceio" ]
 

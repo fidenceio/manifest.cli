@@ -71,7 +71,7 @@ if [[ "${1:-}" == "repo" && "${2:-}" == "create" \
     done
     if [[ -n "$source_dir" ]]; then
         [[ "$target" == */* ]] || target="authenticated-user/$target"
-        git -C "$source_dir" remote add "$remote_name" "git@github.com:${target}.git"
+        git -C "$source_dir" remote add "$remote_name" "${MANIFEST_CLI_GH_STUB_REMOTE_URL:-git@github.com:${target}.git}"
     fi
 fi
 

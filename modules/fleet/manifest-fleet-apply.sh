@@ -118,7 +118,7 @@ _fleet_validate_plan_file() {
     _fleet_plan_require_yq || return 1
     [[ -f "$plan_file" ]] || {
         log_error "Plan file not found: $plan_file"
-        echo "Run: manifest plan fleet --apply"
+        echo "Run: manifest plan fleet -y"
         return 1
     }
 
@@ -181,7 +181,7 @@ _fleet_validate_plan_file() {
 
         if [[ "$action" == "adopt_submodule" ]]; then
             if [[ "$adopt_submodules" != "true" ]]; then
-                log_error "Plan entry '$name' uses adopt_submodule; pass --adopt-submodules with --apply/--do"
+                log_error "Plan entry '$name' uses adopt_submodule; pass --adopt-submodules with -y/--yes"
                 ((errors += 1))
             fi
             if [[ -z "$remote_url" ]]; then
@@ -384,12 +384,13 @@ fleet_reconcile() {
                 adopt_submodules=true; shift ;;
             -h|--help|help)
                 _render_help \
-                    "manifest reconcile fleet [--apply|--do] [--plan FILE] [--commit] [--push]" \
+                    "manifest reconcile fleet [-y|--yes] [--dry-run] [--plan FILE] [--commit] [--push]" \
                     "Validate and apply a fleet adoption plan. Dry-run by default." \
-                    "Mutation" "  --apply, --do       Apply local filesystem/config changes
-  --commit            Commit local changes; requires --apply/--do
+                    "Mutation" "  -y, --yes           Apply local filesystem/config changes
+  --dry-run           Explicit preview; cannot combine with apply
+  --commit            Commit local changes; requires -y/--yes
   --push              Push commits; requires --commit
-  --force             Reserved for explicit overrides; requires --apply/--do" \
+  --force             Reserved for explicit overrides; requires -y/--yes" \
                     "Dangerous Actions" "  --adopt-submodules  Allow adopt_submodule plan entries"
                 return 0 ;;
             *)
@@ -405,7 +406,7 @@ fleet_reconcile() {
         _fleet_plan_require_yq || return 1
         [[ -f "$plan_file" ]] || {
             log_error "Plan file not found: $plan_file"
-            echo "Run: manifest plan fleet --apply"
+            echo "Run: manifest plan fleet -y"
             return 1
         }
         echo ""
@@ -416,7 +417,7 @@ fleet_reconcile() {
         if _fleet_validate_plan_file "$plan_file" "$root_dir" "$force" "$adopt_submodules"; then
             echo "Validation: passed"
             echo ""
-            echo "No changes written. Re-run with --apply or --do to apply."
+            echo "No changes written. Re-run with -y or --yes to apply."
             return 0
         fi
         echo ""

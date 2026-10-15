@@ -1,0 +1,39 @@
+id: manifest.builtin.init.repo.connect
+title: Prepare Repository
+kind: builtin
+command: manifest init repo
+scope: repo
+summary: Prepare Git, origin, scaffold and the local release check; preview by default, and never commit, tag or push a release.
+entrypoint: manifest_init_repo
+execution:
+  default_mode: preview
+  requires_yes_for: [local-write, remote-write]
+inputs: {}
+steps:
+  - id: inspect-target
+    uses: manifest.repo.identity
+    effect: read
+  - id: initialize-git
+    uses: manifest.git.init
+    effect: local-write
+    when: apply && git_missing
+  - id: confirm-repo-target
+    uses: manifest.repo.confirm_target
+    effect: read
+    when: apply
+  - id: create-origin-if-missing
+    uses: github.repo.create
+    effect: remote-write
+    when: apply && origin_missing && !no_connect && !remote_url
+  - id: sync-repo
+    uses: manifest.git.sync
+    effect: local-write
+    when: apply && !no_connect
+  - id: scaffold-files
+    uses: manifest.repo.ensure_required_files
+    effect: local-write
+    when: apply
+  - id: verify-readiness
+    uses: manifest.repo.release_check
+    effect: local-write
+    when: apply && !no_connect

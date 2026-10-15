@@ -8,10 +8,10 @@
 #
 # PURPOSE:
 #   Scaffold a single repo or fleet. First step after config in the user journey.
-#   Creates local files only — no remote operations.
+#   Preview setup, then connect/scaffold/verify on apply; never ship.
 #
 # COMMANDS:
-#   manifest init repo          Scaffold single repo (VERSION, CHANGELOG, etc.)
+#   manifest init repo          Prepare Git, origin, scaffold and release check
 #   manifest init fleet         Two-phase fleet setup via TSV discovery
 #
 # DEPENDENCIES:
@@ -466,10 +466,8 @@ ensure_repo_scaffold() {
         return 1
     fi
 
-    # Best-effort: a scaffold hiccup warns inside the helper but does not fail
-    # the overall init (parity with historical init-repo behavior).
-    ensure_release_gate_script "$project_root" || true
-    ensure_env_files "$project_root" || true
+    ensure_release_gate_script "$project_root" || return 1
+    ensure_env_files "$project_root" || return 1
     return 0
 }
 
@@ -517,29 +515,18 @@ ensure_release_gate_script() {
 
 # Generate the default scripts/run-tests.sh release gate.
 #
-# The PROJECT CHECKS section is detected once, here at scaffold time, from the
-# repo's OWN declared verification (package.json scripts, Cargo, .NET .sln/.csproj,
-# go, pyproject/tox, a Makefile target, or a compose file) — the generated
-# script contains plain reviewable commands run with the developer's host
-# toolchain, not runtime magic and no imposed container. A Docker-only repo
-# (a Dockerfile with no recognizable source manifest) is left to the loud path
-# rather than force a container build by default. When the repo declares no
-# build or test, the full-tier gate refuses (fail-closed) rather than reporting
-# a green "verified" it never earned; the emitted message tells the owner how to
-# fix it (add a check, set release_gate_command, or take the audited
-# release_gate=none bypass). The cheap BASELINE floor (VERSION shape, shell
-# syntax, JSON parse) always runs.
+# Detect declared verification once at scaffold time. New gates execute in a
+# disposable Docker container, or directly when already inside a container.
+# Existing project gates are preserved. Undeclared verification fails closed.
 create_default_run_tests() {
     local gate_file="$1"
     local project_root
     project_root="$(dirname "$(dirname "$gate_file")")"
 
     # --- Detect the repo's OWN declared verification (scaffold-time) ---------
-    # Wire the gate to the developer's existing toolchain, host-native. Only
-    # what the project actually declares is emitted — no invented commands, no
-    # imposed toolchain (containerization is opt-in via release_gate_command,
-    # never baked in here).
+    # Emit only declared checks; provisioning stays inside the container.
     local checks=""
+    local container_packages="bash git jq make"
 
     local ecosystems label
     ecosystems="$(manifest_detect_project_ecosystems "$project_root")"
@@ -561,6 +548,7 @@ create_default_run_tests() {
     done <<< "$ecosystems"
 
     if [[ "$eco_rust" == "true" ]]; then
+        container_packages+=" cargo rust"
         checks+='    run_check cargo test'$'\n'
     fi
 
@@ -577,6 +565,7 @@ create_default_run_tests() {
                 else pm="npm"; fi
                 ;;
         esac
+        container_packages+=" nodejs npm"
         for s in lint typecheck type-check build test; do
             grep -qE "\"$s\"[[:space:]]*:" "$project_root/package.json" || continue
             # Skip npm's scaffold placeholder ("Error: no test specified").
@@ -585,6 +574,19 @@ create_default_run_tests() {
             fi
             # `<pm> run <script>` runs the package.json script across every
             # manager (bun's bare `bun test` would bypass it, so `run` is used).
+            if [[ "$checks" != *"$pm run "* ]]; then
+                case "$pm" in
+                    npm)
+                        if [[ -f "$project_root/package-lock.json" ]]; then
+                            checks+='    run_check npm ci'$'\n'
+                        else
+                            checks+='    run_check npm install --package-lock=false'$'\n'
+                        fi ;;
+                    *)
+                        checks+="    run_check npm install --global $pm"$'\n'
+                        checks+="    run_check $pm install"$'\n' ;;
+                esac
+            fi
             checks+="    run_check $pm run $s"$'\n'
         done
     fi
@@ -597,14 +599,17 @@ create_default_run_tests() {
     fi
 
     if [[ "$eco_go" == "true" ]]; then
+        container_packages+=" go"
         checks+='    run_check go build ./...'$'\n'
         checks+='    run_check go test ./...'$'\n'
     fi
 
     if [[ -f "$project_root/pyproject.toml" ]] && { [[ -d "$project_root/tests" ]] || [[ -d "$project_root/test" ]]; }; then
+        container_packages+=" python3 py3-pytest"
         checks+='    run_check python3 -m pytest -q'$'\n'
     fi
     if [[ -f "$project_root/tox.ini" ]]; then
+        container_packages+=" py3-tox"
         checks+='    run_check tox'$'\n'
     fi
 
@@ -628,24 +633,65 @@ create_default_run_tests() {
         for cf in "$project_root"/docker-compose*.yml "$project_root"/docker-compose*.yaml \
                   "$project_root"/compose*.yml "$project_root"/compose*.yaml; do
             [[ -e "$cf" ]] || continue
+            container_packages+=" docker-cli docker-cli-compose"
             checks+='    run_check docker compose config -q'$'\n'
             break
         done
     fi
 
-    # Nothing real declared. A gate that passed here would report "verified"
-    # without verifying anything, so it refuses on the release (full) tier and
-    # says exactly how to fix it. release_gate=none is the audited escape hatch.
+    # A new scaffold has no application code to build. Verify that exact,
+    # bounded inventory; adding any other content requires real project checks.
+    # This is a structural check, never a blanket passing placeholder.
     if [[ -z "$checks" ]]; then
-        checks='    bad "no build or test verification is declared by this repo — the release gate cannot certify it"'$'\n'
-        checks+='    note "A passing gate here would claim \"verified\" without verifying anything. Do ONE of:"'$'\n'
-        checks+='    note "  1. add your real check above:  run_check <build/test command>"'$'\n'
-        checks+='    note "  2. point the gate elsewhere:   set release_gate_command (MANIFEST_CLI_RELEASE_GATE_COMMAND)"'$'\n'
-        checks+='    note "  3. bypass deliberately:         set release_gate=none (audited, unverified)"'$'\n'
+        checks=$(cat <<'BOOTSTRAP_CHECK'
+    bootstrap_only=true
+    [ -d "$DOCS_FOLDER" ] || bootstrap_only=false
+    for required in VERSION README.md CHANGELOG.md .gitignore .env.example robots.txt ai.txt; do
+        [ -s "$required" ] || bootstrap_only=false
+    done
+    while IFS= read -r file; do
+        case "$file" in
+            VERSION|README.md|CHANGELOG.md|.gitignore|.env.example|robots.txt|ai.txt|scripts/run-tests.sh|manifest.config.yaml|manifest.config.local.yaml|"$DOCS_FOLDER"/*.md) ;;
+            "$DOCS_SITE_FOLDER"/_config.yml|"$DOCS_SITE_FOLDER"/index.md|"$DOCS_SITE_FOLDER"/_layouts/default.html|"$DOCS_SITE_FOLDER"/assets/css/manifest.css|"$DOCS_SITE_FOLDER"/.gitignore|.github/workflows/manifest-docs-pages.yml)
+                # Ship can add these exact managed documentation files. A user
+                # file at the same path must not gain this exception by name.
+                grep -Fq 'Managed by Manifest CLI docs site generation' "$file" || bootstrap_only=false ;;
+            *) bootstrap_only=false ;;
+        esac
+    done < <(list_files '*')
+    if [ "$bootstrap_only" = true ]; then
+        ok "scaffold-only repository: verified required files, version, shell syntax and JSON"
+    else
+        bad "no build or test verification is declared by this repo — the release gate cannot certify it"
+        note "Add real PROJECT CHECKS above or configure release.gate_command for your container test runner."
+        note "release_gate=none is an unverified ship bypass; init cannot certify readiness with it."
+    fi
+BOOTSTRAP_CHECK
+)
+        checks+=$'\n'
     fi
 
     # --- Static head (quoted heredoc: nothing expands) -----------------------
-    cat > "$gate_file" << 'MANIFEST_CLI_GATE_HEAD'
+    cat > "$gate_file" << 'MANIFEST_CLI_GATE_CONTAINER'
+#!/usr/bin/env bash
+# Release gate — scaffolded by Manifest CLI. Dependencies stay in containers.
+# Existing containers execute directly; the host builds/runs an isolated image.
+if [[ ! -f /.dockerenv && ! -f /run/.containerenv ]]; then
+    command -v docker >/dev/null 2>&1 || { echo "Docker is required for the release check; no host dependencies are installed." >&2; exit 1; }
+    root="$(cd "$(dirname "$0")/.." && pwd)" || exit 1
+MANIFEST_CLI_GATE_CONTAINER
+    printf '    packages=%q\n' "$container_packages" >> "$gate_file"
+    cat >> "$gate_file" << 'MANIFEST_CLI_GATE_CONTAINER'
+    image="manifest-project-checks:$(printf '%s' "$packages" | cksum | awk '{print $1}')"
+    if ! docker image inspect "$image" >/dev/null 2>&1; then
+        printf 'FROM alpine:3.24\nRUN apk add --no-cache %s && git config --system --add safe.directory /workspace\n' "$packages" | docker build -q -t "$image" - || exit 1
+    fi
+    # Ephemeral dependency/build volumes prevent host node_modules/target trees.
+    exec docker run --rm -v "$root:/workspace" -v /workspace/node_modules -v /workspace/target \
+        -w /workspace "$image" bash scripts/run-tests.sh "$@"
+fi
+MANIFEST_CLI_GATE_CONTAINER
+    cat >> "$gate_file" << 'MANIFEST_CLI_GATE_HEAD'
 #!/usr/bin/env bash
 # Release gate — scaffolded by Manifest CLI (manifest init).
 #
@@ -688,7 +734,7 @@ run_check() {
 # Tracked files by pattern — git's view when available, pruned find otherwise.
 list_files() {
     if git rev-parse --git-dir >/dev/null 2>&1; then
-        git ls-files -- "$1" 2>/dev/null
+        git ls-files --cached --others --exclude-standard -- "$1" 2>/dev/null | sort -u
     else
         find . -type d \( -name .git -o -name node_modules -o -name target \
             -o -name dist -o -name build -o -name .next -o -name vendor \) -prune \
@@ -737,6 +783,8 @@ if [ "$TIER" = "full" ]; then
 MANIFEST_CLI_GATE_HEAD
 
     # --- Detected project checks (expanded now, on purpose) ------------------
+    printf '    DOCS_FOLDER=%q\n' "${MANIFEST_CLI_DOCS_FOLDER:-docs}" >> "$gate_file"
+    printf '    DOCS_SITE_FOLDER=%q\n' "${MANIFEST_CLI_DOCS_SITE_SOURCE_DIR:-docs-site}" >> "$gate_file"
     printf '%s' "$checks" >> "$gate_file"
 
     # --- Static tail ----------------------------------------------------------
@@ -1728,6 +1776,59 @@ Index: no
 EOF
 }
 
+# Check the same local prerequisites as ship without invoking its workflow.
+# The gate may build/test project code; only an applied init runs it.
+_manifest_init_repo_ready() (
+    local root="$1" blocked=0 policy tier version
+    cd "$root" || return 1
+    export MANIFEST_CLI_PROJECT_ROOT="$root"
+    # A connect may have checked out committed configuration. Resolve it now,
+    # with the same precedence as the next CLI invocation, without migrations.
+    if declare -F load_configuration >/dev/null 2>&1; then
+        MANIFEST_CLI_CONFIG_SKIP_WRITES=1 load_configuration "$root" true || return 1
+    fi
+    echo "Checking ship readiness..."
+    manifest_assert_release_branch "$root" || blocked=1
+    manifest_ship_ci_verdict_preflight || blocked=1
+    if ! git var GIT_AUTHOR_IDENT >/dev/null 2>&1 || ! git var GIT_COMMITTER_IDENT >/dev/null 2>&1; then
+        log_error "Git author/committer identity is missing. Configure user.name and user.email, then re-run init."
+        blocked=1
+    fi
+    version="$(tr -d '[:space:]' < "$root/VERSION")" || return 1
+    if ! manifest_version_next "$version" patch >/dev/null 2>&1; then
+        log_error "VERSION is invalid: $version"
+        blocked=1
+    fi
+    policy="$(manifest_release_gate_policy)" || return 1
+    case "$policy" in
+        local-tests|all)
+            tier="$(manifest_release_gate_tier)" || return 1
+            if ! _manifest_release_gate_test_command "$tier"; then
+                log_error "No executable release check. Add scripts/run-tests.sh or configure release.gate_command."
+                blocked=1
+            else
+                printf 'Release check: %s\n' "${MANIFEST_CLI_RELEASE_GATE_ARGV[*]}"
+                if ! "${MANIFEST_CLI_RELEASE_GATE_ARGV[@]}"; then
+                    log_error "Release check failed. Fix its reported errors; init preserves existing checks and never bypasses them."
+                    blocked=1
+                fi
+            fi
+            ;;
+        none)
+            log_warning "release.gate=none is configured; setup cannot certify test readiness."
+            blocked=1 ;;
+    esac
+    if [[ "$policy" == "remote-ci" || "$policy" == "all" ]]; then
+        log_error "Remote CI cannot be verified before publishing the first commit. Init does not publish; configure a passing local release check to verify readiness."
+        blocked=1
+    fi
+    if ! manifest_repo_scaffold_is_complete "$root" || [[ ! -d "$(get_docs_folder "$root")" ]]; then
+        log_error "Required scaffold files are missing or are not regular files. Resolve path conflicts and re-run init."
+        blocked=1
+    fi
+    [[ "$blocked" -eq 0 ]]
+)
+
 # -----------------------------------------------------------------------------
 # Function: manifest_init_repo
 # -----------------------------------------------------------------------------
@@ -1744,7 +1845,9 @@ manifest_init_repo() {
     local force=false
     local dry_run=true
     local create_repo_visibility=""
-    local connect=false
+    local connect=true
+    local remote_url=""
+    local create_explicit=false
     local execution_mode="preview"
     local _local_only=false
     local remaining_args=()
@@ -1760,44 +1863,39 @@ manifest_init_repo() {
             -f|--force) force=true; shift ;;
             --connect) connect=true; shift ;;
             --no-connect) connect=false; shift ;;
+            --remote)
+                [[ -n "${2:-}" && "$2" != -* ]] || { log_error "--remote requires a URL or path"; return 1; }
+                remote_url="$2"; shift 2 ;;
             --create-repo-private)
+                create_explicit=true
                 create_repo_visibility=$(_manifest_parse_create_repo_flag "$create_repo_visibility" "private") || return 1
                 shift ;;
             --create-repo-public)
+                create_explicit=true
                 create_repo_visibility=$(_manifest_parse_create_repo_flag "$create_repo_visibility" "public") || return 1
                 shift ;;
             -h|--help)
                 _render_help \
-                    "manifest init repo [-y|--yes] [--dry-run] [--force] [--connect] [--create-repo-private|--create-repo-public]" \
-                    "Set up a single repository. Two phases, and only the second uses the network.
+                    "manifest init repo [-y|--yes] [--dry-run] [--force] [--remote URL] [--no-connect] [--create-repo-private|--create-repo-public]" \
+                    "Prepare a repository for ship: initialize Git, connect origin, preserve or
+create project files, then run the release check. Preview by default.
+No version bump, release commit, tag, or push is made.
 
-  scaffold (always)   VERSION, CHANGELOG.md, README.md, docs/, .gitignore,
-                      .env.example, scripts/run-tests.sh (the release gate
-                      'manifest ship' auto-detects — fail-closed since v56)
-  connect (opt-in)    add or create 'origin', then pull latest
-
-Idempotent — safe to re-run." \
-                    "Options" "  --dry-run                  Explicit preview; no writes
-  -y, --yes                  Apply the plan
-  -f, --force                Recreate manifest.config.local.yaml if present
-                             (scaffold content files stay no-clobber; existing
-                             content is preserved and nothing is written beside it)
-  --connect                  Also run the connect phase: add/create origin, pull
-                             latest. OFF by default — without it this command
-                             makes no network call at all.
-  --no-connect               Explicitly skip the connect phase (the default;
-                             useful to override an implied --connect)
-  --create-repo-private      Create a private GitHub repo (gh repo create) and add
-                             as origin. Implies --connect.
-  --create-repo-public       Create a PUBLIC GitHub repo and add as origin. This
-                             publishes a repository to GitHub. Implies --connect." \
+Without an origin, the plan creates a PRIVATE GitHub repository by default.
+Use --remote URL to connect an existing repository instead." \
+                    "Options" "  --dry-run                  Preview all actions; no writes or network calls
+  -y, --yes                  Apply setup and run readiness checks
+  -f, --force                Recreate local config; preserve project content
+  --remote URL              Add origin using this existing remote URL or path
+  --create-repo-private     Explicit private GitHub creation (default if missing)
+  --create-repo-public      Create a PUBLIC GitHub repository
+  --connect                 Explicitly enable connection (already the default)
+  --no-connect              Local scaffold only; readiness is not certified" \
                     "Examples" "  manifest init repo
-  manifest init repo --dry-run
-  manifest init repo -y                       # files only, no network
-  manifest init repo --connect -y             # files, then remotes + pull
-  manifest init repo --create-repo-private -y
-  manifest init repo --force --create-repo-public -y" \
-                    "Deprecated spelling" "  manifest prep repo   ->  manifest init repo --connect"
+  manifest init repo -y
+  manifest init repo --remote git@github.com:owner/project.git
+  manifest init repo --create-repo-public
+  manifest init repo --no-connect -y"
                 return 0
                 ;;
             *)
@@ -1810,9 +1908,20 @@ Idempotent — safe to re-run." \
     # Creating a GitHub repo IS the connect phase — it is the call that reaches
     # the network and configures origin. Asking for it without --connect is not
     # a contradiction to refuse, it is an implication to honour.
-    [[ -n "$create_repo_visibility" ]] && connect=true
-
     local project_root="${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}"
+    if [[ "$connect" == "false" && ( -n "$create_repo_visibility" || -n "$remote_url" ) ]]; then
+        log_error "--no-connect cannot be combined with --remote or --create-repo-*."
+        return 1
+    fi
+    if [[ -n "$remote_url" && -n "$create_repo_visibility" ]]; then
+        log_error "--remote and --create-repo-* are mutually exclusive."
+        return 1
+    fi
+    if [[ "$connect" == "true" && -z "$remote_url" && -z "$create_repo_visibility" ]] \
+        && { ! _manifest_dir_is_own_git_repository "$project_root" \
+            || ! git -C "$project_root" remote get-url origin >/dev/null 2>&1; }; then
+        create_repo_visibility=private
+    fi
     if [[ -n "$create_repo_visibility" ]]; then
         _manifest_github_repo_target "$project_root" >/dev/null || return 1
     fi
@@ -1871,7 +1980,9 @@ Idempotent — safe to re-run." \
                 echo "  would create:    manifest.config.local.yaml   ($(_manifest_scaffold_purpose "manifest.config.local.yaml"))"
             fi
         fi
-        if [[ -n "$create_repo_visibility" ]]; then
+        if [[ -n "$remote_url" ]]; then
+            printf '  would connect origin: %s\n' "$remote_url"
+        elif [[ -n "$create_repo_visibility" ]]; then
             local repo_target
             repo_target="$(_manifest_github_repo_display_target "$project_root")" || return 1
             if _manifest_dir_is_own_git_repository "$project_root" \
@@ -1887,14 +1998,22 @@ Idempotent — safe to re-run." \
         # indistinguishable from "did not look".
         echo ""
         if [[ "$connect" == "true" ]]; then
-            echo "  connect phase:   ON — would add/create origin and pull latest"
+            echo "  connect phase:   ON — verify origin; fast-forward existing history (skip pull for an empty remote)"
+            echo "  readiness:       check release branch, Git identity, VERSION, available origin CI and run the configured release check"
+            echo "  verification:    new checks run in Docker; images and dependencies may be downloaded inside containers"
+            echo "  no release:      no commit, version bump, tag, release, or push"
         else
             echo "  connect phase:   off — no network calls (add --connect to enable)"
         fi
         echo ""
         local init_replay="manifest init repo"
-        [[ "$connect" == "true" && -z "$create_repo_visibility" ]] && init_replay+=" --connect"
-        [[ -n "$create_repo_visibility" ]] && init_replay+=" --create-repo-$create_repo_visibility"
+        [[ "$connect" == "false" ]] && init_replay+=" --no-connect"
+        [[ "$create_explicit" == "true" ]] && init_replay+=" --create-repo-$create_repo_visibility"
+        if [[ -n "$remote_url" ]]; then
+            local quoted_remote
+            printf -v quoted_remote '%q' "$remote_url"
+            init_replay+=" --remote $quoted_remote"
+        fi
         manifest_execution_footer "$init_replay -y"
         echo ""
         return 0
@@ -1908,11 +2027,29 @@ Idempotent — safe to re-run." \
     # Ensure we're in a git repo (or create one)
     if ! _manifest_dir_is_own_git_repository "$project_root"; then
         echo "No git repository found. Initializing..."
-        if git init "$project_root" >/dev/null; then
+        local initial_branch="${MANIFEST_CLI_GIT_DEFAULT_BRANCH:-main}"
+        git check-ref-format --branch "$initial_branch" >/dev/null || return 1
+        if git -c "init.defaultBranch=$initial_branch" init "$project_root" >/dev/null; then
             echo "  Created: .git/"
         else
             log_error "Failed to initialize git repository"
             return 1
+        fi
+    fi
+
+    # Read/fast-forward remote content BEFORE scaffolding, so an unborn local
+    # repository can adopt existing remote files without untracked collisions.
+    if [[ "$connect" == "true" ]]; then
+        manifest_assert_release_branch "$project_root" || return 1
+        local connect_args=(-y)
+        [[ -n "$create_repo_visibility" ]] && connect_args+=("--create-repo-$create_repo_visibility")
+        [[ -n "$remote_url" ]] && connect_args+=(--remote "$remote_url")
+        if ! _MANIFEST_CLI_INIT_CONNECT_NESTED=1 manifest_init_connect_repo "${connect_args[@]}"; then
+            log_error "Setup incomplete: origin connection failed. No release was made. Re-run the same init command after fixing the reported blocker."
+            return 1
+        fi
+        if declare -F load_configuration >/dev/null 2>&1; then
+            MANIFEST_CLI_CONFIG_SKIP_WRITES=1 load_configuration "$project_root" true || return 1
         fi
     fi
 
@@ -1945,68 +2082,19 @@ EOF
         echo "  Created: manifest.config.local.yaml"
     fi
 
-    # --- Connect phase ---------------------------------------------------------
-    # The home for every remote call the REPO scope can make. It used to be
-    # split: this function called _manifest_gh_repo_create inline while
-    # `manifest prep repo` called it too, so the same job had two
-    # implementations and `manifest help` claimed init "never touches the
-    # network". Now one verb, one phase, one call site — for `init repo`.
-    # `init fleet --create-repo-*` still creates per-member repos inside Phase 2
-    # (manifest-fleet.sh, _fleet_init_directory); see the note in
-    # manifest-prep.sh's header before claiming the CLI has a single call site.
-    if [[ "$connect" == "true" ]]; then
-        local connect_args=(-y)
-        [[ -n "$create_repo_visibility" ]] && connect_args+=("--create-repo-$create_repo_visibility")
-        echo ""
-        if ! _MANIFEST_CLI_INIT_CONNECT_NESTED=1 manifest_init_connect_repo "${connect_args[@]}"; then
-            log_warning "Connect phase failed; the local scaffold is intact."
-            echo ""
-            # Recovery advice has to name something that can actually succeed.
-            # Two ways to get that wrong here, and this block exists because
-            # both were live:
-            #
-            #   1. Echoing a bare `--connect` when they asked for
-            #      --create-repo-* sends them to a command that connects but
-            #      never creates the repo — advice that does LESS than the
-            #      thing that just failed.
-            #   2. Echoing the identical command back when the failure was
-            #      "no origin remote". `init repo --connect -y` on a scaffolded
-            #      repo with no origin fails the apply gate, so repeating it
-            #      fails identically, forever. That is the §16 class — a
-            #      recovery line that its own state contradicts.
-            #
-            # So: name the remedy for the state we are actually in.
-            if [[ -n "$create_repo_visibility" ]]; then
-                echo "  Re-attempt later with: manifest init repo --create-repo-$create_repo_visibility -y"
-            elif ! git -C "$project_root" remote get-url origin >/dev/null 2>&1; then
-                echo "  This repository has no 'origin' remote, so there is nothing to connect to."
-                echo "  Either create one:"
-                echo "    manifest init repo --create-repo-private -y   (or --create-repo-public)"
-                echo "  or point at an existing remote and re-run:"
-                echo "    git remote add origin <url>"
-                echo "    manifest init repo --connect -y"
-            else
-                echo "  Re-attempt later with: manifest init repo --connect -y"
-            fi
-            return 1
-        fi
-        echo ""
-        echo "Repository initialized successfully."
-        echo ""
-        echo "Next steps:"
-        echo "  manifest config           Adjust settings"
-        echo "  manifest ship repo patch  Cut a release"
-        echo ""
+    echo ""
+    if [[ "$connect" == "false" ]]; then
+        echo "Local scaffold prepared (--no-connect). Ship readiness has not been verified."
+        echo "Next: manifest init repo   # preview connection and readiness checks"
         return 0
     fi
+    if ! _manifest_init_repo_ready "$project_root"; then
+        log_error "Setup incomplete: fix the reported blockers and re-run init. No release was made."
+        return 1
+    fi
+    echo "Repository prepared for ship. No release, tag, commit, or push was made."
+    echo "Next: manifest ship repo patch   # preview the first release"
 
-    echo ""
-    echo "Repository scaffolded successfully."
-    echo ""
-    echo "Next steps:"
-    echo "  manifest init repo --connect   Add/create origin, pull latest"
-    echo "  manifest config                Adjust settings"
-    echo ""
 }
 
 # -----------------------------------------------------------------------------
@@ -2293,7 +2381,6 @@ manifest_init_fleet() {
   manifest init fleet -y              # Apply current phase, no network
   manifest init fleet --connect -y    # Apply, then clone/pull members
   manifest init fleet --create-repo-private -y   # Phase 2 + create private GitHub repos" \
-                    "Deprecated spelling" "  manifest prep fleet  ->  manifest init fleet --connect" \
                     "Exit codes (Phase 2)" "  0  All directories initialized (and gh ok if requested)
   1  One or more directories failed to init or to create their gh repo
   2  TSV references one or more directories that don't exist on disk"
@@ -2356,8 +2443,18 @@ manifest_init_fleet() {
     fi
 
     if [[ "$dry_run" == "true" ]]; then
-        _manifest_init_fleet_dry_run_phase2 "$root_dir" "$start_file" "$config_file" "$force" "$fleet_name" "$create_repo_visibility" "$stale_tsv"
-        return $?
+        _manifest_init_fleet_dry_run_phase2 "$root_dir" "$start_file" "$config_file" "$force" "$fleet_name" "$create_repo_visibility" "$stale_tsv" || return $?
+        if [[ "$connect" == "true" ]]; then
+            if [[ -f "$config_file" && "$force" != "true" ]]; then
+                # Existing membership is preserved, so the shared connect
+                # preview can describe the same members apply will use.
+                manifest_init_connect_fleet --dry-run ${connect_args[@]+"${connect_args[@]}"} || return $?
+            else
+                echo "Connect phase: after scaffolding, would clone missing members and pull existing members."
+                echo "Re-run with --connect -y after reviewing the scaffold plan."
+            fi
+        fi
+        return 0
     fi
 
     if [[ "$stale_tsv" == "true" ]]; then
@@ -2465,22 +2562,29 @@ manifest_init_dispatch() {
             ;;
         -h|--help|help)
             _render_help \
-                "manifest init <repo|fleet> [options]" \
-                "Set up a repository or fleet. Two phases:
+                "manifest init [repo|fleet] [options]" \
+                "Prepare a repository for ship, or review fleet membership.
+With no scope, an empty directory or a Git repo uses repository setup;
+a directory containing repositories uses two-phase fleet setup.
 
-  scaffold   writes files — no network calls, ever
-  connect    --connect: add/create remotes, clone, pull — every network call
-             init can make lives here, and it is OFF unless you ask
-
-This verb absorbed 'manifest prep', which used to own the connect phase." \
-                "Scopes" "  repo    Scaffold single repo (VERSION, CHANGELOG, docs, .gitignore)
+Repository setup connects origin, scaffolds missing files and runs the release
+check. Missing origin defaults to private GitHub creation. No release is made.
+Fleet membership is reviewed before member scaffolding; fleet connection uses
+--connect. All setup is dry-run by default; -y applies." \
+                "Scopes" "  repo    Prepare one repository for ship
   fleet   Two-phase fleet setup via directory scanning" \
+                "Options" "  --dry-run    Explicit preview; no writes
+  -y, --yes    Apply the setup plan
+  --depth N|auto, --name NAME, -f|--force
+               Guided fleet setup options; use scope help for all options" \
                 "More" "  manifest init repo --help    Per-repo options
   manifest init fleet --help   Phase 1 / Phase 2 details"
             ;;
         "")
-            _render_help_error "init requires a scope" "manifest init <repo|fleet>"
-            return 1
+            _manifest_init_guided "$@"
+            ;;
+        -y|--yes|--dry-run|--depth|--name|-n|--force|-f|--connect|--no-connect|--remote|--create-repo-private|--create-repo-public)
+            _manifest_init_guided "$scope" "$@"
             ;;
         *)
             _render_help_error "Unknown scope: $scope" "manifest init <repo|fleet>"

@@ -50,15 +50,15 @@ YAML
     [ "$status" -eq 0 ]
     [[ "$output" == *"Dry run - manifest plan fleet"* ]]
     [[ "$output" == *"Would write:"*"manifest.fleet.plan.yaml"* ]]
-    [[ "$output" == *"No changes written. Re-run with --apply or --do to apply."* ]]
+    [[ "$output" == *"No changes written. Re-run with -y or --yes to apply."* ]]
     [ ! -f "$SCRATCH/work/manifest.fleet.plan.yaml" ]
 }
 
-@test "plan fleet --do writes manifest.fleet.plan.yaml" {
+@test "plan fleet --yes writes manifest.fleet.plan.yaml" {
     mkdir -p "$SCRATCH/work/services/api"
     git -C "$SCRATCH/work/services/api" init -q
 
-    run_manifest plan fleet --do --name test-fleet
+    run_manifest plan fleet --yes --name test-fleet
 
     [ "$status" -eq 0 ]
     [ -f "$SCRATCH/work/manifest.fleet.plan.yaml" ]
@@ -66,14 +66,44 @@ YAML
     grep -q 'action: "track"' "$SCRATCH/work/manifest.fleet.plan.yaml"
 }
 
-@test "plan fleet --apply and --do are compatible aliases" {
+@test "plan fleet -y and --yes are compatible aliases" {
     mkdir -p "$SCRATCH/work/services/api"
     git -C "$SCRATCH/work/services/api" init -q
 
-    run_manifest plan fleet --apply --do --name test-fleet
+    run_manifest plan fleet -y --yes --name test-fleet
 
     [ "$status" -eq 0 ]
     [ -f "$SCRATCH/work/manifest.fleet.plan.yaml" ]
+}
+
+@test "plan and reconcile accept the standard apply spellings" {
+    local flag
+    for flag in -y --yes; do
+        run_manifest plan fleet "$flag" --force --name test-fleet
+        [ "$status" -eq 0 ]
+        [ -f "$SCRATCH/work/manifest.fleet.plan.yaml" ]
+        mkdir -p "$SCRATCH/work/plain"
+        write_plan
+        run_manifest reconcile fleet "$flag"
+        [ "$status" -eq 0 ]
+        [ -d "$SCRATCH/work/plain/.git" ]
+        rm -rf "$SCRATCH/work/plain" "$SCRATCH/work/manifest.fleet.config.yaml"
+    done
+}
+
+@test "adoption commands reject preview combined with every apply spelling in either order" {
+    local command flag
+    for command in plan reconcile; do
+        for flag in -y --yes; do
+            run_manifest "$command" fleet --dry-run "$flag"
+            [ "$status" -eq 1 ]
+            [[ "$output" == *"Cannot combine --dry-run"* ]]
+            run_manifest "$command" fleet "$flag" --dry-run
+            [ "$status" -eq 1 ]
+        done
+    done
+    [ ! -f "$SCRATCH/work/manifest.fleet.plan.yaml" ]
+    [ ! -f "$SCRATCH/work/manifest.fleet.config.yaml" ]
 }
 
 @test "reconcile fleet defaults to dry-run and does not initialize plain dirs" {
@@ -86,16 +116,16 @@ YAML
     [[ "$output" == *"Dry run - manifest reconcile fleet"* ]]
     [[ "$output" == *"init repos:"*"1"* ]]
     [[ "$output" == *"Validation: passed"* ]]
-    [[ "$output" == *"No changes written. Re-run with --apply or --do to apply."* ]]
+    [[ "$output" == *"No changes written. Re-run with -y or --yes to apply."* ]]
     [ ! -d "$SCRATCH/work/plain/.git" ]
     [ ! -f "$SCRATCH/work/manifest.fleet.config.yaml" ]
 }
 
-@test "reconcile fleet --apply initializes plain dir and tracks it" {
+@test "reconcile fleet -y initializes plain dir and tracks it" {
     mkdir -p "$SCRATCH/work/plain"
     write_plan
 
-    run_manifest reconcile fleet --apply
+    run_manifest reconcile fleet -y
 
     [ "$status" -eq 0 ]
     [ -d "$SCRATCH/work/plain/.git" ]
@@ -103,11 +133,11 @@ YAML
     grep -q '^  plain:' "$SCRATCH/work/manifest.fleet.config.yaml"
 }
 
-@test "reconcile fleet --apply --commit succeeds when --push was not requested" {
+@test "reconcile fleet -y --commit succeeds when --push was not requested" {
     # Regression: the push step was written `[[ "$push" == "true" ]] && git push || return 1`.
     # In that shape the `||` arm fires when the CONDITION is false, so committing
     # WITHOUT --push returned 1 — reporting failure for a run that did everything
-    # asked of it. --commit requires --apply; --push is deliberately omitted here,
+    # asked of it. --commit requires -y; --push is deliberately omitted here,
     # which is precisely the path that used to fail.
     mkdir -p "$SCRATCH/work/plain"
     git -C "$SCRATCH/work" init -q
@@ -115,7 +145,7 @@ YAML
     git -C "$SCRATCH/work" config user.name "Test"
     write_plan
 
-    run_manifest reconcile fleet --apply --commit
+    run_manifest reconcile fleet -y --commit
 
     [ "$status" -eq 0 ]
     [ -f "$SCRATCH/work/manifest.fleet.config.yaml" ]
@@ -125,11 +155,11 @@ YAML
     grep -q 'Reconcile fleet adoption plan' <<<"$subjects"
 }
 
-@test "reconcile fleet --do behaves like --apply" {
+@test "reconcile fleet --yes behaves like -y" {
     mkdir -p "$SCRATCH/work/plain"
     write_plan
 
-    run_manifest reconcile fleet --do
+    run_manifest reconcile fleet --yes
 
     [ "$status" -eq 0 ]
     [ -d "$SCRATCH/work/plain/.git" ]
@@ -142,15 +172,15 @@ YAML
 
     run_manifest reconcile fleet --commit
     [ "$status" -ne 0 ]
-    [[ "$output" == *"--commit requires --apply or --do"* ]]
+    [[ "$output" == *"--commit requires -y/--yes"* ]]
 
-    run_manifest reconcile fleet --apply --push
+    run_manifest reconcile fleet -y --push
     [ "$status" -ne 0 ]
     [[ "$output" == *"--push requires --commit"* ]]
 
     run_manifest reconcile fleet --force
     [ "$status" -ne 0 ]
-    [[ "$output" == *"--force requires --apply or --do"* ]]
+    [[ "$output" == *"--force requires -y/--yes"* ]]
 }
 
 @test "reconcile fleet blocks target collisions" {
@@ -198,7 +228,7 @@ YAML
 	url = https://example.invalid/infra.git
 GITMODULES
 
-    run_manifest plan fleet --apply
+    run_manifest plan fleet -y
 
     [ "$status" -eq 0 ]
     grep -q 'kind: "submodule"' "$SCRATCH/work/manifest.fleet.plan.yaml"
@@ -270,7 +300,7 @@ entries:
     submodule_name: "infra"
 YAML
 
-    run_manifest reconcile fleet --apply --adopt-submodules
+    run_manifest reconcile fleet -y --adopt-submodules
 
     [ "$status" -eq 0 ]
     [ -d "$SCRATCH/work/standalone/infra/.git" ]

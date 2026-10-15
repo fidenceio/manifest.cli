@@ -146,3 +146,28 @@ RUBY
     local expected; expected="$(_sha_of "stable-bytes")"
     grep -q "sha256 \"${expected}\"" "$PUSHED_FORMULA"
 }
+
+@test "publish: explicit tap checkout needs no Homebrew executable" {
+    export MANIFEST_CLI_HOMEBREW_TAP_CHECKOUT="$SCRATCH/explicit-tap"
+    mkdir -p "$MANIFEST_CLI_HOMEBREW_TAP_CHECKOUT/Formula"
+    brew() { printf 'unexpected brew invocation\n' > "$SCRATCH/brew-called"; return 1; }
+    manifest_homebrew_tap_push_formula() {
+        printf '%s\n' "$1" > "$SCRATCH/push-target"
+        cp "$2" "$PUSHED_FORMULA"
+    }
+    _install_split_curl 0 "stable-bytes" "stable-bytes"
+    run update_homebrew_formula
+    [ "$status" -eq 0 ]
+    [ "$(cat "$SCRATCH/push-target")" = "$MANIFEST_CLI_HOMEBREW_TAP_CHECKOUT" ]
+    [ ! -e "$SCRATCH/brew-called" ]
+    [ -s "$PUSHED_FORMULA" ]
+}
+
+@test "publish: invalid explicit tap checkout refuses instead of falling back to another tap" {
+    export MANIFEST_CLI_HOMEBREW_TAP_CHECKOUT="$SCRATCH/missing-tap"
+    _install_split_curl 0 "stable-bytes" "stable-bytes"
+    run update_homebrew_formula
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Homebrew tap not found locally"* ]]
+    [ ! -e "$PUSHED_FORMULA" ]
+}

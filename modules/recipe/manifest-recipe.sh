@@ -293,49 +293,6 @@ manifest_recipe_validate_command_effects() {
         "$execution_mode" "$local_only" "$publish_release"
 }
 
-manifest_recipe_run() {
-    local id="$1"
-    local file command
-    shift || true
-
-    if [[ -z "$id" ]]; then
-        _render_help_error "recipe run requires an id" "manifest recipe run <id> [recipe options]"
-        return 1
-    fi
-
-    if ! file="$(_manifest_recipe_file_for_id "$id")"; then
-        log_error "Recipe not found: $id"
-        return 1
-    fi
-
-    command="$(_manifest_recipe_value "$file" ".command")"
-    log_deprecated "manifest recipe run" "${command:-mapped first-class command}" "recipes are inspectable contracts; run the named command instead"
-    case "$command" in
-        "manifest ship repo patch") manifest_ship_repo patch "$@" ;;
-        "manifest ship repo minor") manifest_ship_repo minor "$@" ;;
-        "manifest ship repo major") manifest_ship_repo major "$@" ;;
-        "manifest ship repo revision") manifest_ship_repo revision "$@" ;;
-        "manifest ship fleet patch") manifest_ship_fleet patch "$@" ;;
-        "manifest ship fleet minor") manifest_ship_fleet minor "$@" ;;
-        "manifest ship fleet major") manifest_ship_fleet major "$@" ;;
-        "manifest ship fleet revision") manifest_ship_fleet revision "$@" ;;
-        # The built-in recipe's `command:` moved to the post-fold spelling; the
-        # old string stays wired so an out-of-tree or pinned recipe that still
-        # says "manifest prep repo" keeps running (via the deprecated wrapper,
-        # which announces the replacement).
-        "manifest init repo --connect") manifest_init_connect_repo "$@" ;;
-        "manifest prep repo") manifest_prep_repo "$@" ;;
-        "manifest refresh repo") manifest_refresh_repo "$@" ;;
-        "manifest pr ready") manifest_pr_ready "$@" ;;
-        "manifest security --check") manifest_security --check "$@" ;;
-        *)
-            log_error "Recipe run is not wired for command: $command"
-            echo "Use 'manifest recipe show $id' to inspect the definition."
-            return 1
-            ;;
-    esac
-}
-
 manifest_recipe_dispatch() {
     local subcommand="${1:-list}"
     shift || true
@@ -349,9 +306,6 @@ manifest_recipe_dispatch() {
             ;;
         explain)
             manifest_recipe_explain "$@"
-            ;;
-        run)
-            manifest_recipe_run "$@"
             ;;
         help|-h|--help)
             _render_help \
@@ -378,5 +332,4 @@ export -f manifest_recipe_explain
 export -f manifest_recipe_explain_command
 export -f manifest_recipe_validate_local_apply_file
 export -f manifest_recipe_validate_command_effects
-export -f manifest_recipe_run
 export -f manifest_recipe_dispatch

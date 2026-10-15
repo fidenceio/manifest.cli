@@ -508,6 +508,12 @@ manifest_ship_repo() {
         fi
         case "$1" in
             resume)
+                local resume_arg
+                for resume_arg in "$@"; do
+                    case "$resume_arg" in
+                        -h|--help) manifest_ship_repo --help; return $? ;;
+                    esac
+                done
                 manifest_ship_repo_resume "$@"
                 return $?
                 ;;
@@ -769,15 +775,14 @@ manifest_ship_fleet() {
   -y, --yes                Apply the fleet release plan
   --local                  With -y, local only — no push, no tags (ship and manager; not valid for resume)
   --explain                Show the built-in recipe definition without running it
-  --noprep                 Require every member tree to be clean before shipping.
-                           No per-member prep step runs in either mode — this flag
-                           only adds the clean-tree check.
+  --require-clean          Require every member tree to be clean before shipping
   --force-bump             Ship every release-eligible member even with no changes since its tag
                            (forward-only — new commit + tag; honors pr-gated/release-disabled)" \
                     "Flow" "  preview:  load fleet -> render per-service release plan -> name the workspace policy gate
             (scripts/manifest-fleet-preflight.sh is NOT run in preview; apply refuses when it fails.
             MANIFEST_CLI_FLEET_PREVIEW_POLICY_GATE=run executes it and shows the verdict)
   apply:    load fleet -> pre-flights (policy gate among them) -> ship release-enabled services
+            -> commit and push the fleet manager root
   resume:   load fleet -> per-member eligibility probe -> delegate to repo resume
   manager:  load fleet -> commit the coordination files at the root (allowlist only) -> push
   PR work:  use manifest pr fleet ... explicitly" \
@@ -917,12 +922,8 @@ manifest_ship_dispatch() {
                 "Options" "  --local             Local only — no tag, push, Homebrew, PRs
   -i, --interactive   Enable interactive safety prompts" \
                 "More" "  manifest ship repo --help           Per-repo options + bump short flags
-  manifest ship fleet --help          Fleet-specific flags (--noprep, --safe, --method, ...)
+  manifest ship fleet --help          Fleet-specific flags (--require-clean, --force-bump, ...)
   manifest ship fleet manager --help  The coordination-root scope"
-            ;;
-        # Legacy support: old "ship <patch|minor|major|revision>" routes to ship repo
-        patch|minor|major|revision)
-            manifest_ship_repo "$scope" "$@"
             ;;
         "")
             _render_help_error \

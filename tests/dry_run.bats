@@ -89,45 +89,45 @@ teardown() {
 }
 
 # -----------------------------------------------------------------------------
-# prep repo --dry-run
+# init repo --connect --dry-run
 # -----------------------------------------------------------------------------
 
-@test "prep repo --dry-run: lists remotes that would be pulled, no network" {
-    source "$TEST_REPO_ROOT/modules/core/manifest-prep.sh"
+@test "init repo --connect --dry-run: lists remotes that would be pulled, no network" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-init-connect.sh"
     cd "$SCRATCH"
     git init -q
     git remote add origin https://example.invalid/example.git
 
-    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_prep_repo --dry-run
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_connect_repo --dry-run
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Dry run"
     echo "$output" | grep -q "Remotes that would be pulled"
     echo "$output" | grep -q "origin"
     echo "$output" | grep -q "https://example.invalid/example.git"
     echo "$output" | grep -q "No changes written. Re-run with -y to apply this plan:"
-    echo "$output" | grep -q "manifest prep repo -y"
+    echo "$output" | grep -q "manifest init repo --connect -y"
 }
 
-@test "prep repo defaults to preview and makes no remote calls" {
-    source "$TEST_REPO_ROOT/modules/core/manifest-prep.sh"
+@test "init repo --connect defaults to preview and makes no remote calls" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-init-connect.sh"
     cd "$SCRATCH"
     git init -q
     git remote add origin https://example.invalid/example.git
 
-    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_prep_repo
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_connect_repo
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Dry run"
     echo "$output" | grep -q "Remotes that would be pulled"
 }
 
-@test "prep repo --dry-run: no remote configured -> reports plan, no prompt" {
-    source "$TEST_REPO_ROOT/modules/core/manifest-prep.sh"
+@test "init repo --connect --dry-run: no remote configured -> reports plan, no prompt" {
+    source "$TEST_REPO_ROOT/modules/core/manifest-init-connect.sh"
     cd "$SCRATCH"
     git init -q
 
     # Run with stdin closed so a real prompt would hang or fail; dry-run must
     # short-circuit before that point.
-    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_prep_repo --dry-run < /dev/null
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_connect_repo --dry-run < /dev/null
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "no remotes configured"
 }
@@ -181,48 +181,4 @@ teardown() {
     echo "$output" | grep -q "Preview mode did not touch .git or test Git metadata writes."
     echo "$output" | grep -q "When you rerun with -y, Manifest checks Git metadata write access before changing files."
     echo "$output" | grep -q "Depending upon your IDE or agent, you may see a brief failure before an elevated script completes the job."
-}
-
-# -----------------------------------------------------------------------------
-# refresh repo --dry-run
-# -----------------------------------------------------------------------------
-
-@test "refresh repo --dry-run: prints plan and skips doc regen" {
-    source "$TEST_REPO_ROOT/modules/core/manifest-refresh.sh"
-    cd "$SCRATCH"
-    git init -q
-    echo "2.5.4" > VERSION
-
-    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_refresh_repo --dry-run
-    [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Dry run"
-    echo "$output" | grep -q "Version: 2.5.4 (unchanged)"
-    echo "$output" | grep -q "Would perform"
-    echo "$output" | grep -q "Regenerate documentation"
-    echo "$output" | grep -q "No changes written. Re-run with -y to apply this plan:"
-    echo "$output" | grep -q "manifest refresh repo -y"
-}
-
-@test "refresh repo defaults to preview" {
-    source "$TEST_REPO_ROOT/modules/core/manifest-refresh.sh"
-    cd "$SCRATCH"
-    git init -q
-    echo "2.5.4" > VERSION
-
-    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_refresh_repo
-    [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Dry run"
-    echo "$output" | grep -q "No changes written. Re-run with -y to apply this plan:"
-    echo "$output" | grep -q "manifest refresh repo -y"
-}
-
-@test "refresh repo --dry-run --commit: surfaces the commit step in the plan" {
-    source "$TEST_REPO_ROOT/modules/core/manifest-refresh.sh"
-    cd "$SCRATCH"
-    git init -q
-    echo "0.1.0" > VERSION
-
-    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_refresh_repo --dry-run --commit
-    [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Commit refreshed files"
 }

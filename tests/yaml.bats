@@ -267,13 +267,12 @@ EOF
     set_yaml_value "$YAML" "fleet.root" "../fleet"
     set_yaml_value "$YAML" "fleet.config_filename" "fleet.yaml"
     set_yaml_value "$YAML" "automation.auto_confirm" "true"
-    set_yaml_value "$YAML" "deprecations.quiet" "true"
     set_yaml_value "$YAML" "network.offline" "true"
     set_yaml_value "$YAML" "cloud.skip" "true"
     set_yaml_value "$YAML" "cloud.api_key_env" "TEST_MANIFEST_CLOUD_KEY"
     set_yaml_value "$YAML" "security.private_files" ".secret,manifest.config.local.yaml"
     unset MANIFEST_CLI_CANONICAL_REPO_SLUGS MANIFEST_CLI_INTERACTIVE_MODE MANIFEST_CLI_FLEET_MODE MANIFEST_CLI_FLEET_ROOT MANIFEST_CLI_FLEET_CONFIG_FILENAME
-    unset MANIFEST_CLI_AUTO_CONFIRM MANIFEST_CLI_QUIET_DEPRECATIONS MANIFEST_CLI_OFFLINE_MODE MANIFEST_CLI_CLOUD_SKIP MANIFEST_CLI_CLOUD_API_KEY_ENV MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES
+    unset MANIFEST_CLI_AUTO_CONFIRM MANIFEST_CLI_OFFLINE_MODE MANIFEST_CLI_CLOUD_SKIP MANIFEST_CLI_CLOUD_API_KEY_ENV MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES
 
     load_yaml_to_env "$YAML"
 
@@ -283,7 +282,6 @@ EOF
     [ "$MANIFEST_CLI_FLEET_ROOT" = "../fleet" ]
     [ "$MANIFEST_CLI_FLEET_CONFIG_FILENAME" = "fleet.yaml" ]
     [ "$MANIFEST_CLI_AUTO_CONFIRM" = "true" ]
-    [ "$MANIFEST_CLI_QUIET_DEPRECATIONS" = "true" ]
     [ "$MANIFEST_CLI_OFFLINE_MODE" = "true" ]
     [ "$MANIFEST_CLI_CLOUD_SKIP" = "true" ]
     [ "$MANIFEST_CLI_CLOUD_API_KEY_ENV" = "TEST_MANIFEST_CLOUD_KEY" ]

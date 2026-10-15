@@ -141,40 +141,6 @@ is_falsy() {
 }
 
 # -----------------------------------------------------------------------------
-# Deprecation warning — single source of truth for legacy aliases.
-# -----------------------------------------------------------------------------
-# Args:
-#   $1 — old name (e.g. "manifest update")
-#   $2 — new name (e.g. "manifest upgrade")
-#   $3 — optional context note (e.g. "syntax changed in v42")
-#
-# Behavior:
-#   - Emits at most once per old name per session (tracked in the
-#     MANIFEST_CLI_DEPRECATIONS_WARNED env var).
-#   - Suppressed entirely when MANIFEST_CLI_QUIET_DEPRECATIONS=1.
-#   - Always goes to stderr via log_warning so it never mixes with stdout.
-# -----------------------------------------------------------------------------
-log_deprecated() {
-    is_truthy "${MANIFEST_CLI_QUIET_DEPRECATIONS:-0}" && return 0
-
-    local old="$1"
-    local new="$2"
-    local note="${3:-}"
-
-    # Idempotent per old-name. Use a delimited string instead of an
-    # associative array so this works even when no `declare -gA` is in
-    # scope yet (e.g. very early-loading callers).
-    case ":${MANIFEST_CLI_DEPRECATIONS_WARNED:-}:" in
-        *":${old}:"*) return 0 ;;
-    esac
-    export MANIFEST_CLI_DEPRECATIONS_WARNED="${MANIFEST_CLI_DEPRECATIONS_WARNED:-}:${old}"
-
-    local msg="'${old}' is deprecated. Use '${new}' instead."
-    [[ -n "$note" ]] && msg="${msg} (${note})"
-    log_warning "${msg}  Silence with MANIFEST_CLI_QUIET_DEPRECATIONS=1"
-}
-
-# -----------------------------------------------------------------------------
 # Subcommand help renderer — single source of truth for `manifest X --help`.
 # -----------------------------------------------------------------------------
 # Args:
@@ -1157,7 +1123,7 @@ manifest_git_preflight_write_access() {
 # publish" — it is: **is the condition being required the operation's own
 # premise?** A requirement that the operation exists to establish cannot also
 # be its precondition; demanding it makes the operation unreachable rather
-# than safe. Two callers qualify today, for two different reasons:
+# than safe. The qualifying callers are:
 #
 #   * `cleanup` passes false for BOTH (manifest_cleanup_dispatch). It deletes
 #     local, untracked, regenerable files and publishes nothing, so "where
@@ -1173,6 +1139,11 @@ manifest_git_preflight_write_access() {
 #     origin yet, so requiring an origin left it with no state in which it
 #     could run. head_required stays TRUE for it — a detached HEAD is still
 #     ambiguous, and nothing about creating a remote resolves that.
+#
+#   * `revert` passes false for BOTH. The target is an explicit local tag or
+#     recorded fleet snapshot commit, and checkout deliberately establishes detached
+#     HEAD. An existing branch or publishing remote is irrelevant to that target;
+#     it creates no commit, tag, or push. Git's checkout protections still apply.
 #
 # Relaxing a requirement an operation does NOT establish is still forbidden.
 # Nothing that commits, tags or pushes to an EXISTING remote may pass false

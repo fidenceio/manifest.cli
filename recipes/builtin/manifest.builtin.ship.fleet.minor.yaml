@@ -40,3 +40,11 @@ steps:
     uses: manifest.fleet.ship_releaseable_services
     effect: remote-write
     when: apply && publish_release
+  - id: commit-fleet-manager
+    uses: manifest.fleet.root_commit_coordination
+    effect: local-write
+    when: apply
+  - id: push-fleet-manager
+    uses: manifest.fleet.root_push
+    effect: remote-write
+    when: apply && publish_release

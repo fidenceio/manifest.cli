@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=smoke
 
 load 'helpers/setup'
 
@@ -127,7 +128,7 @@ init_repo_fixture() {
     init_repo_fixture
     git -C "$SCRATCH" remote remove origin
 
-    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_repo_scope_confirm_apply "$SCRATCH" "manifest first -y" "false" < /dev/null
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_repo_scope_confirm_apply "$SCRATCH" "manifest init -y" "false" < /dev/null
 
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Auto-confirmed unambiguous target (apply via -y)"

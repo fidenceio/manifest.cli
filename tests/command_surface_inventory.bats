@@ -27,14 +27,14 @@ run_manifest_from_plain_dir() {
 
 mutating_help_surfaces() {
     cat <<'EOF'
-first --help
+init --help
 init repo --help
 init fleet --help
-prep repo --help
-prep fleet --help
-refresh repo --help
-refresh fleet --help
+plan fleet --help
+reconcile fleet --help
 ship repo --help
+revert repo --help
+revert fleet --help
 ship fleet --help
 docs --help
 docs fleet help

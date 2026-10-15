@@ -6,6 +6,41 @@ Every supported command, with its flags. For live help, run
 If you have not met the preview/apply model, `MANIFEST_CLI_AUTO_CONFIRM`, or the release
 gate yet, read the [Migration Guide](MIGRATION.md) first — this page assumes them.
 
+## Command Tree
+
+The main workflow uses a verb, a scope, and an optional action:
+
+```text
+manifest
+├── init [repo|fleet]                          guided or explicit setup; --connect on explicit scopes
+├── status repo|fleet                           inspect current state
+├── ship
+│   ├── repo patch|minor|major|revision         release one repo
+│   ├── repo resume                            finish an interrupted release
+│   ├── fleet patch|minor|major|revision        release members, then ship the manager
+│   ├── fleet resume                           finish interrupted member releases
+│   └── fleet manager                          ship only the coordination root
+├── discover|add|update|validate fleet          manage membership
+├── plan|reconcile fleet                       prepare and apply adoption repairs
+├── docs [fleet]                               generate documentation
+├── topics fleet                               add GitHub topics
+├── pr create|status|checks|ready|merge|update   manage a pull request
+├── pr fleet                                   manage fleet pull requests
+├── config show|setup|list|get|set|unset|describe|doctor|time
+├── env generate|validate
+├── revert
+│   ├── repo [<tag>]                           preview or apply a local tag checkout
+│   └── fleet [<snapshot>]                     restore manager and recorded member commits
+├── doctor|security                            inspect health and security
+├── recipe list|show|explain                    inspect execution recipes
+├── cleanup repo|fleet|state
+├── upgrade|reinstall|uninstall
+└── version|help
+```
+
+Cloud commands and the remaining specialist options appear below. Removed
+spellings and their replacements are listed in the [Migration Guide](MIGRATION.md).
+
 ## Global Rules
 
 | Rule | Detail |
@@ -13,6 +48,7 @@ gate yet, read the [Migration Guide](MIGRATION.md) first — this page assumes t
 | Shape of a command | `manifest <verb> <scope>`, for example `manifest ship repo patch` |
 | Plan by default | Anything that changes something only plans, unless `-y` / `--yes` is present |
 | Explicit plan | `--dry-run` always means plan only |
+| Conflicting modes | `--dry-run` cannot be combined with an apply flag, in either order |
 | Local apply | `--local -y` does the local work and skips everything remote |
 | Which repo? | Repo scope uses the `.git` root of your current directory |
 | Which repos? | Fleet scope uses the fleet config and the selected rows of the fleet TSV |
@@ -23,7 +59,7 @@ gate yet, read the [Migration Guide](MIGRATION.md) first — this page assumes t
 | ---- | ------- |
 | `0` | Success — either an apply finished, or a plan was printed (the default) |
 | `1` | Error: bad arguments, a failed pre-flight check, a declined confirmation, or a failed apply in which nothing was released |
-| `2` | Partial completion of `ship fleet`: one or more member releases applied, then a later step failed — another member, or the fleet-root commit/push. Read the closing block and the recovery report; a retry without `--force-bump` skips members already at their tag. |
+| `2` | Partial completion of `ship fleet` or `revert fleet`: one or more member releases or checkouts applied, then a later step failed. Read the closing block and the recovery report; a retry without `--force-bump` skips members already at their tag. |
 | `3` | Protective skip — a safety guard refused something destructive (for example `uninstall` running under a temporary `HOME`) |
 | `4` | Paused for a documentation handoff (`docs.handoff`). Not a failure: no release commit, tag or push was made. A brief naming what the documentation needs is written under `.git/`, and its path is printed. Edit the documentation and re-run the identical command — that run verifies the edits and continues the release |
 | `10` | A plan was printed and no consent was given — only ever returned when `preview.exit_code` is set to `distinct` |
@@ -41,23 +77,23 @@ without blocking.
 
 ## Core Journey
 
-### `manifest first`
+### `manifest init` — guided setup
 
 ```bash
-manifest first
-manifest first --dry-run
-manifest first -y
-manifest first --depth N|auto
-manifest first --name NAME
-manifest first -f|--force
+manifest init
+manifest init --dry-run
+manifest init -y
+manifest init --depth N|auto
+manifest init --name NAME
+manifest init -f|--force
 ```
 
 The guided front door. By default it inspects your current directory without changing
 anything and shows a proposed setup — recognising a single repository, a folder that
 could become a fleet, or something already configured.
 
-With `-y` it applies that setup through the audited apply path, writing one audit record
-per run. For a single repository the apply needs no extra environment variable as long as
+With `-y` it applies that setup through the audited apply path. When setup is
+applied, one audit record is written. For a single repository the apply needs no extra environment variable as long as
 the target is unambiguous — meaning you are on a named branch. An `origin` remote is not
 required during onboarding, since you may not have created one yet.
 
@@ -89,31 +125,30 @@ fixes, both require confirmation.
 
 Layer model: [User Guide — Configuration](USER_GUIDE.md#configuration).
 
-### `manifest init`
+### `manifest init repo|fleet`
 
 ```bash
-manifest init repo [--dry-run] [-y|--yes] [--connect] [--create-repo-private|--create-repo-public]
+manifest init repo [--dry-run] [-y|--yes] [--remote URL] [--no-connect] [--create-repo-private|--create-repo-public]
 manifest init fleet [--dry-run] [-y|--yes] [--depth N] [--all-folders] [--name NAME] [--force]
                     [--connect] [--parallel] [--clone-only] [--pull-only]
                     [--create-repo-private|--create-repo-public]
 ```
 
-`init` runs in two phases, and **only the second one uses the network**:
+Repository setup is **dry-run by default**. `manifest init repo -y` initializes
+Git on the configured release branch when necessary, connects `origin`, scaffolds
+missing files, and runs the same configured local release check as ship. It does
+not bump a version, create a commit or tag, publish a release, or push.
 
-| Phase | When | What it does |
-| --- | --- | --- |
-| scaffold | always | Writes the files below. Makes no network call of any kind. |
-| connect | `--connect`, or implied by `--create-repo-*` | Adds or creates `origin`, clones missing fleet members, pulls latest. |
+When `origin` is missing, the preview proposes a **private GitHub repository**;
+`-y` creates it using `github.owner` or the authenticated GitHub user. Use
+`--remote URL` to connect an existing remote, or `--create-repo-public` to choose
+public visibility explicitly. Existing origins are preserved. Empty origins need
+no pull; populated origins are fast-forwarded before scaffolding. Unreachable
+remotes, conflicts and diverged histories fail setup instead of being hidden.
 
-The connect phase is **off by default**. `manifest init repo -y` writes files and
-stops; it will not contact a remote.
-
-> **One exception, stated rather than glossed:** `init fleet --create-repo-private`
-> / `--create-repo-public` creates each selected member's GitHub repo inside
-> **Phase 2's scaffold**, not the connect phase. So the "scaffold makes no
-> network call" rule above is exact for `init repo` and has this one carve-out
-> for `init fleet`. Nothing else in either scope reaches the network without
-> `--connect`.
+`--no-connect` requests only a local scaffold and explicitly leaves readiness
+unverified. Fleet initialization retains its reviewed, two-phase membership flow
+and opt-in `--connect`; `--create-repo-*` creates selected member remotes in Phase 2.
 
 `init repo` creates the files a Manifest project needs: `VERSION`, `README.md`,
 `CHANGELOG.md`, `.gitignore`, `docs/`, `scripts/run-tests.sh`, `.env.example`,
@@ -122,26 +157,24 @@ stops; it will not contact a remote.
 [User Guide](USER_GUIDE.md#first-time-setup) has the same table in full, including why the
 two crawl-privacy files are there.
 
-**`first` vs `init` vs `prep` — which one you want.** They share a flag vocabulary and
-their previews look alike, so the split is worth stating plainly:
+**Guided or explicit setup.** Bare `manifest init` handles an empty directory
+as a new repository, checks an existing repository for missing files, or offers
+fleet discovery when child repositories exist. An existing `VERSION` alone does
+not mean setup is complete. Both bare and explicit repository setup use the same
+plan and readiness checks. `init -y` on a fleet candidate writes the membership
+list and stops for review; `init fleet -y` applies the reviewed selection.
 
-| Command | What it does | Writes files? | Touches the network? |
-| --- | --- | --- | --- |
-| `manifest first` | Inspects the directory, reports what it found, and delegates to `init`. Takes no `repo`/`fleet` scope — it works out which you are in. | No, not itself | No |
-| `manifest init` | Scaffolds the files above, and `git init`s if needed. | Yes | Only with `--connect` |
-| `manifest init --connect` | Adds or creates `origin`, clones fleet members, pulls. | Same as above | Yes |
-| `manifest prep` | **Deprecated** alias for `manifest init --connect`. | — | — |
-
-`first` on an uninitialized repo runs the same scaffolding `init repo` does — the
-difference is that `first` resolves and confirms the apply target first and records an
-audit event. **If you are unsure which to run, run `manifest first`.**
-
-> **Changed:** `prep` used to be a third verb, and this table used to say `init`
-> never touched the network. That was wrong — `init repo --create-repo-public`
-> called `gh repo create` and published a repository. Both verbs also offered
-> `--create-repo-*`, so the same job had two implementations. `prep` is now the
-> connect *phase* of `init`, the `gh repo create` call has one call site, and the
-> network boundary is a property of the phase rather than a claim in a table.
+Readiness checks the release branch, Git author/committer identity, valid version,
+required files, available origin CI, and the configured release check. A failed or missing real check returns nonzero
+with a blocker; init preserves existing checks and does not disable verification.
+New generated checks run in containers; applying may build images and download
+dependencies inside those containers. A new scaffold can pass structural
+verification of its bounded file inventory. Adding application files makes that
+check fail until real project verification is supplied; it is not a passing
+placeholder for untested application code. Remote CI cannot be certified before
+publication; init reports that limitation without publishing to test it. A passing
+init establishes current local readiness, not a guarantee of later remote service
+availability or push permissions.
 
 **How `init` treats an existing `.gitignore`.** It never overwrites it. Instead it *adds*
 missing recommended rules under a marked header and tells you how many it added. This is
@@ -163,38 +196,14 @@ organisation and both the plan and the apply target `<owner>/<repo>`; leave it u
 directory's own `.git` state from disk, so a stale `HAS_GIT` value in the TSV cannot
 cause a member to inherit the fleet root's repository or remote.
 
-### `manifest prep` — DEPRECATED
-
-```bash
-manifest prep repo  [--dry-run] [-y|--yes]              # -> manifest init repo --connect
-manifest prep fleet [--dry-run] [-y|--yes] [--parallel]  # -> manifest init fleet --connect
-```
-
-Gets remotes and workspace state ready before release work. This is now the
-**connect phase of `manifest init`**; the `prep` spelling still works, still does
-exactly the same thing, and prints a deprecation notice naming the replacement.
-Silence the notice with `MANIFEST_CLI_QUIET_DEPRECATIONS=1`.
-
-### `manifest refresh`
-
-```bash
-manifest refresh repo [--dry-run] [-y|--yes]
-manifest refresh fleet [--dry-run] [-y|--yes]   # DEPRECATED — use 'manifest update fleet'
-```
-
-Refreshes generated metadata, docs, and fleet membership.
-
-`refresh fleet` is **deprecated**. It still works and warns. Prefer
-`manifest update fleet` to re-scan which repositories are members, and
-`manifest docs fleet` to regenerate documentation.
-
 ### `manifest ship`
 
 ```bash
 manifest ship repo patch|minor|major|revision [--dry-run] [-y|--yes] [--local] [--explain] [--force-bump] [-i]
-manifest ship fleet patch|minor|major|revision [--dry-run] [-y|--yes] [--local] [--force-bump] [--noprep]
+manifest ship fleet patch|minor|major|revision [--dry-run] [-y|--yes] [--local] [--force-bump] [--require-clean]
 manifest ship repo resume [--dry-run] [-y|--yes]
 manifest ship fleet resume [--dry-run] [-y|--yes]
+manifest ship fleet manager [--dry-run] [-y|--yes] [--local]
 ```
 
 A repo release can raise the version, generate docs, commit, tag, push, publish GitHub
@@ -205,6 +214,17 @@ that `HEAD` is still the commit it pushed.
 A fleet release applies the same policy to each release-enabled member that has
 something to release. Members that are already tagged and clean are listed and skipped
 as `no changes`.
+
+The fleet ship then commits and pushes the **manager**, the fleet coordination
+root. This also runs when every member is skipped, and with `fleet.versioning:
+none`; that setting disables the version stamp, not the manager commit or push.
+Only the coordination allowlist is staged. A pending fleet version is landed
+without another bump when no new member release is being made. `--local` keeps
+the manager commit local. `ship fleet manager` remains available for a root-only
+change or retry.
+
+`--require-clean` refuses a fleet ship if a member has uncommitted changes.
+The former `--noprep` spelling has been removed.
 
 `--force-bump` releases even when nothing has changed since the last tag. It is
 forward-only: you get a new commit and a new tag, and no history is ever rewritten.
@@ -298,8 +318,8 @@ manifest update fleet [--dry-run] [-y|--yes]
 manifest validate fleet
 manifest docs fleet [--dry-run] [-y|--yes]
 manifest topics fleet [--dry-run] [-y|--yes]
-manifest plan fleet [--apply]
-manifest reconcile fleet [--do|--apply] [--commit] [--push] [--adopt-submodules]
+manifest plan fleet [-y|--yes] [--dry-run]
+manifest reconcile fleet [-y|--yes] [--dry-run] [--commit] [--push] [--adopt-submodules]
 ```
 
 Verb-first is the supported spelling (`manifest topics fleet`, not `manifest fleet topics`).
@@ -400,7 +420,7 @@ How strictly it is enforced is configurable: `env.naming_enforcement` is `strict
 default, which blocks; `warn` makes violations advisory. `env.naming_allow` takes extra
 allowed entries, comma-separated, where a trailing `_` means "treat as a prefix".
 
-`manifest init repo` and `manifest prep repo` create a missing `.env.example` — never
+`manifest init repo` and its connect phase create a missing `.env.example` — never
 overwriting an existing one — using the spec when an `env:` block exists, and honouring
 the configured prefix.
 
@@ -408,16 +428,44 @@ the configured prefix.
 
 ```bash
 manifest ship repo resume     # continue a release that stopped partway
-manifest revert               # check out an older version tag
+manifest revert repo v1.2.3    # preview a tag checkout
+manifest revert repo v1.2.3 -y # apply the checkout
+manifest revert fleet          # list available snapshot commits
+manifest revert fleet <commit> # preview a recorded fleet checkout
+manifest revert fleet <commit> -y # apply member checkouts, then manager
 ```
 
-`revert` lists the ten highest version tags and checks out the one you pick. It acts as
-soon as you choose — there is no `-y` step — but it only moves where you are looking. It
-rewrites nothing and deletes no commits, and git refuses if you have local changes that
-the checkout would overwrite.
+`revert repo [<tag>]` previews by default. Specify a local tag, or select one of the
+ten highest version tags when running in a terminal. Without a terminal, omitting
+the tag lists available versions; applying requires an explicit tag. `-y` / `--yes`
+applies the checkout, and `--dry-run` explicitly previews.
+
+The target is the tag's resolved commit, even when a branch has the same name.
+Git refuses to overwrite conflicting tracked, untracked, or ignored files; no force,
+stash, reset, commit, tag, or push is performed. Submodule working trees stay as they
+are. No origin remote or current branch is required for this local checkout.
+`revert fleet [<snapshot>]` restores the exact member commits recorded in
+`manifest.fleet.snapshot.json`, then checks out the manager at the selected commit.
+A snapshot is a manager commit containing that file. Fleet ships record the map
+after members finish and include it in the manager coordination commit; it is
+available after cloning the manager's Git history. No extra tag is created.
+Omit the snapshot to list recent manager commits that changed the map. Applying
+requires an explicit manager commit or ref and `-y` / `--yes`.
+
+Fleet revert requires clean manager and member working trees, every recorded
+repository inside the fleet root, and every recorded commit available locally.
+It acquires the fleet and repository locks and checks all targets before checkout.
+Ignored-file conflicts and Git hooks can still stop a later checkout; failures
+report the completed count and return `2` after any checkout completed. Members
+are restored first and the manager last; no automatic rollback or push occurs.
+Submodule working trees are preserved. Non-Git/missing members are recorded with
+an unavailable commit and make that snapshot ineligible for fleet revert.
+
+Manager history from before snapshot recording cannot reconstruct member
+versions. Fleet snapshots record committed state; uncommitted files are not backups.
 
 Afterwards you are in **detached HEAD**: viewing that tag rather than being on a branch.
-`git switch -` returns you to the branch you came from. `revert` is therefore a way to
+`git switch -` returns you to the branch you came from. `revert repo` is therefore a way to
 *look at* an old release, not a way to undo a published one. Undoing a published release
 is a declared Non-Goal ([NORTH_STAR.md](NORTH_STAR.md)): recovery is roll-forward — ship
 a new version.
@@ -459,7 +507,7 @@ other mutating command; `-y` applies with no prompt.
   wrote these beside an existing file as a merge reference until v58.0.0, when the
   mechanism was removed for drifting from the CLI that generated them. The writer went;
   the files did not, so any repo scaffolded by an older CLI still carries them.
-- Manifest's own temporary files (the same sweep `refresh repo` runs).
+- Manifest's own temporary files.
 - Stale `git worktree` records, via `git worktree prune`.
 - `state` only: stale runtime cache files under `TMPDIR`, empty scratch directories, and
   ship logs past the keep-last-N window.

@@ -91,17 +91,16 @@ fi
 # Source Fleet module for polyrepo management
 source "$MANIFEST_CLI_CORE_MODULES_DIR/fleet/manifest-fleet.sh"
 
-# Source v42 journey modules (init, prep, refresh, ship dispatchers)
+# Source setup, release, diagnostics, and configuration modules
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-init.sh"
-source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-prep.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-init-connect.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-env.sh"
-source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-refresh.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/recipe/manifest-recipe.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-ship.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-status.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-doctor.sh"
 source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-config-crud.sh"
-source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-first.sh"
+source "$MANIFEST_CLI_CORE_MODULES_DIR/core/manifest-init-guided.sh"
 
 # Function to get the CLI installation directory dynamically
 get_cli_dir() {
@@ -465,8 +464,11 @@ update_homebrew_formula() {
     echo "   ✅ Generated tap formula from ${formula_source_file} (sha256 independently verified)"
 
     # Sync to the Homebrew tap repo
-    local tap_dir
-    if command -v brew &>/dev/null; then
+    # The explicit checkout also supports container/CI publishers where
+    # Homebrew is not installed. An invalid explicit target must fail rather
+    # than silently publishing to a different checkout.
+    local tap_dir="${MANIFEST_CLI_HOMEBREW_TAP_CHECKOUT:-}"
+    if [[ -z "$tap_dir" ]] && command -v brew &>/dev/null; then
         tap_dir="$(brew --prefix)/Library/Taps/fidenceio/homebrew-tap"
     fi
 
@@ -555,7 +557,7 @@ _manifest_cli_is_existing_repo_scope_request() {
     shift || true
 
     case "$command" in
-        prep|refresh|ship|status)
+        ship|status)
             [[ "${1:-}" == "repo" ]]
             ;;
         *)
@@ -679,7 +681,19 @@ _manifest_pr_fleet_dispatch() {
 # confirmed dead code is deleted, not fixed).
 #
 # The live connect phase is manifest_init_connect_repo / _fleet in
-# modules/core/manifest-prep.sh. `manifest prep` is a deprecated alias for it.
+# modules/core/manifest-init-connect.sh; repository setup connects by default,
+# while fleet setup opts into connection with --connect.
+
+# Checked before config loading: a removed or mistyped command must not trigger
+# migrations, upgrade checks, or repository initialization. The parity suite
+# compares this allowlist with the actual dispatch arms below.
+_manifest_cli_is_supported_command() {
+    case "${1:-}" in
+        ""|config|init|plan|reconcile|recipe|discover|add|update|topics|validate|ship|status|doctor|pr|revert|security|env|test|upgrade|uninstall|reinstall|cloud|agent|commit|bump-version|docs|cleanup|help|-help|--help|-h|version|-version|--version|-v|-V)
+            return 0 ;;
+        *) return 1 ;;
+    esac
+}
 
 main() {
     # Set MANIFEST_CLI_INSTALL_LOCATION early for security checks
@@ -701,12 +715,37 @@ main() {
     local command="${1:-}"
     [[ $# -gt 0 ]] && shift
 
+    if ! _manifest_cli_is_supported_command "$command"; then
+        log_error "Unknown command: $command"
+        echo "Run 'manifest help' for available commands."
+        return 1
+    fi
+    # Retired nested routes also fail before any configuration side effects.
+    if [[ "$command" == "recipe" ]]; then
+        case "${1:-list}" in
+            list|show|explain|help|-h|--help) ;;
+            *) manifest_recipe_dispatch "$@"; return $? ;;
+        esac
+    elif [[ "$command" == "ship" ]]; then
+        case "${1:-}" in
+            ""|repo|fleet|help|-h|--help) ;;
+            *) manifest_ship_dispatch "$@"; return $? ;;
+        esac
+    fi
+
+    if [[ "$command" == "revert" ]]; then
+        case "${1:-}" in
+            repo|fleet) ;;
+            *) manifest_revert_dispatch "$@"; return $? ;;
+        esac
+    fi
+
     # =========================================================================
     # Pre-dispatch: load config / validate git depending on command
     # =========================================================================
     case "$command" in
         # Commands that do NOT require a Git repository
-        "help"|"-help"|"--help"|"-h"|"version"|"-version"|"--version"|"-v"|"-V"|"uninstall"|"reinstall"|"add"|"discover"|"fleet"|"update"|"upgrade"|"validate"|"config")
+        "help"|"-help"|"--help"|"-h"|"version"|"-version"|"--version"|"-v"|"-V"|"uninstall"|"reinstall"|"add"|"discover"|"update"|"upgrade"|"validate"|"config")
             case "$command" in
                 "config")
                     MANIFEST_CLI_PROJECT_ROOT="$(pwd)"
@@ -722,12 +761,12 @@ main() {
         "init")
             MANIFEST_CLI_PROJECT_ROOT="$(pwd)"
             export MANIFEST_CLI_PROJECT_ROOT
-            load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "false"
+            MANIFEST_CLI_CONFIG_SKIP_WRITES=1 load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "true"
             ;;
-        # status is read-only; it handles non-git directories itself
+        # Read-only diagnostics handle non-git directories themselves
         # Both self-describe as read-only ("never modifies anything" / "Zero
-        # side effects"), so they take the same read-only guard as `first`
-        # below. Measured 2026-08-19: they already write nothing — with legacy
+        # side effects"), so they take the read-only configuration guard.
+        # Measured 2026-08-19: they already write nothing — with legacy
         # keys present, the cooldown cleared and AUTO_CONFIRM set, both leave
         # the global config byte-identical and only ADVISE running `upgrade`.
         # The guard is here so that stays a property of the entry point rather
@@ -737,31 +776,10 @@ main() {
             export MANIFEST_CLI_PROJECT_ROOT
             MANIFEST_CLI_CONFIG_SKIP_WRITES=1 load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "false"
             ;;
-        # first onboards single repos AND fleet roots (which need not be git
-        # repos), so don't require one. The inspection must not touch disk: load
-        # config with the read-only guard so no incidental migration or marker
-        # writes happen. The -y apply path uses the audited writers.
-        "first")
+        "recipe"|"revert")
             MANIFEST_CLI_PROJECT_ROOT="$(pwd)"
             export MANIFEST_CLI_PROJECT_ROOT
             MANIFEST_CLI_CONFIG_SKIP_WRITES=1 load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "false"
-            ;;
-        "recipe")
-            if [[ "${1:-}" == "run" ]] && ! _manifest_cli_is_help_request "$command" "$@"; then
-                if ! ensure_repository_root; then
-                    log_error "Repository root validation failed"
-                    return 1
-                fi
-
-                MANIFEST_CLI_PROJECT_ROOT="$(pwd)"
-                export MANIFEST_CLI_PROJECT_ROOT
-                load_configuration "$MANIFEST_CLI_PROJECT_ROOT"
-                check_auto_upgrade
-            else
-                MANIFEST_CLI_PROJECT_ROOT="$(pwd)"
-                export MANIFEST_CLI_PROJECT_ROOT
-                load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "false"
-            fi
             ;;
         "docs"|"pr"|"plan"|"reconcile"|"discover"|"add"|"update"|"validate"|"topics")
             if [[ "${1:-}" == "fleet" ]] || _manifest_cli_is_help_request "$command" "$@"; then
@@ -806,17 +824,13 @@ main() {
     esac
 
     # =========================================================================
-    # Command dispatch — v42 core journey + supporting + legacy aliases
+    # Command dispatch — setup, release, supporting commands and internal plumbing
     # =========================================================================
     case "$command" in
 
         # =====================================================================
-        # CORE JOURNEY: first → config → init → prep → refresh → ship
+        # CORE JOURNEY: config → init → ship
         # =====================================================================
-        "first")
-            manifest_first "$@"
-            ;;
-
         "config")
             case "${1:-}" in
                 "show")
@@ -901,10 +915,6 @@ EOF
             manifest_init_dispatch "$@"
             ;;
 
-        "prep")
-            manifest_prep_dispatch "$@"
-            ;;
-
         "plan")
             case "${1:-}" in
                 fleet)
@@ -949,10 +959,6 @@ EOF
                     return 1
                     ;;
             esac
-            ;;
-
-        "refresh")
-            manifest_refresh_dispatch "$@"
             ;;
 
         "recipe")
@@ -1227,19 +1233,7 @@ EOF
             ;;
 
         "revert")
-            if _manifest_cli_has_help_token "$@"; then
-                _render_help \
-                    "manifest revert" \
-                    "Pick one of the last 10 version tags and check it out. Acts as soon as you
-choose — there is no -y step here. It rewrites nothing and deletes no commits.
-
-You end up in 'detached HEAD': looking at that tag rather than on a branch.
-Run 'git switch -' to go back to the branch you came from." \
-                    "See also" "  manifest status    which version you are on now
-  git tag            the full tag list (this menu shows only 10)"
-                return 0
-            fi
-            revert_version
+            manifest_revert_dispatch "$@"
             ;;
 
         # =====================================================================
@@ -1444,7 +1438,7 @@ Run 'git switch -' to go back to the branch you came from." \
             ;;
 
         # =====================================================================
-        # HIDDEN LEGACY ALIASES (still functional, not shown in help)
+        # INTERNAL PLUMBING (not shown in help)
         #
         # Each arm below carries a `# manifest:hidden` marker, and that marker —
         # not this banner and not position in the file — is what exempts it.
@@ -1454,39 +1448,6 @@ Run 'git switch -' to go back to the branch you came from." \
         # completion, so adding a command without listing it fails the suite,
         # and hiding one is a deliberate act you have to write down.
         # =====================================================================
-
-        # Old "manifest fleet *" top-level — help plus replacement hints only
-        "fleet")  # manifest:hidden
-            fleet_main "$@"
-            ;;
-
-        # Old "manifest sync" -> now "manifest init repo --connect".
-        #
-        # Point this at the CURRENT spelling, not at `prep repo`. `prep` is
-        # itself deprecated now, so forwarding here would have emitted two
-        # deprecation warnings for one command and named a deprecated verb as
-        # the replacement for a deprecated verb. Call the connect phase directly.
-        "sync")  # manifest:hidden
-            if _manifest_cli_has_help_token "$@"; then
-                _render_help \
-                    "manifest sync" \
-                    "Deprecated alias for manifest init repo --connect."
-                return 0
-            fi
-            log_deprecated "manifest sync" "manifest init repo --connect"
-            manifest_init_connect_repo
-            ;;
-
-        # Old "manifest time" -> accessible via "manifest config time"
-        "time")  # manifest:hidden
-            if _manifest_cli_has_help_token "$@"; then
-                _render_help \
-                    "manifest time" \
-                    "Deprecated alias for manifest config time."
-                return 0
-            fi
-            display_time_info
-            ;;
 
         # Old "manifest commit" — plumbing, called by ship
         "commit")  # manifest:hidden
@@ -1514,7 +1475,7 @@ Run 'git switch -' to go back to the branch you came from." \
             bump_version "$increment_type"
             ;;
 
-        # Old "manifest docs" — plumbing, replaced by "refresh"
+        # Documentation operations, independent of release versioning
         "docs")
             if [[ "${1:-}" == "fleet" ]]; then
                 shift || true
@@ -1618,7 +1579,7 @@ Run 'git switch -' to go back to the branch you came from." \
         # origin_required=false AND head_required=false: cleanup deletes local,
         # untracked, regenerable files and publishes nothing, so neither a
         # missing origin nor a detached HEAD makes its target ambiguous. Without
-        # that, `manifest revert` (which leaves a detached HEAD) followed by
+        # that, `manifest revert repo -y` (which leaves a detached HEAD) followed by
         # `cleanup -y` would be refused.
         "cleanup")
             local execution_mode="preview"
@@ -1681,11 +1642,8 @@ Run 'git switch -' to go back to the branch you came from." \
 #      reconcile/topics/docs) were dispatched and documented in
 #      docs/COMMAND_REFERENCE.md but absent here, while the DEPRECATED
 #      'refresh fleet' spelling was advertised under "Core workflow".
-#      Deliberately still unlisted: only the arms under the "HIDDEN LEGACY
-#      ALIASES" banner below (fleet, sync, time, commit, bump-version,
-#      cleanup). Those are deprecated spellings or ship-internal plumbing;
-#      listing an alias beside the verb it aliases makes this longer, not
-#      clearer. Anything NOT under that banner belongs here — 'reinstall' sat
+#      Deliberately unlisted: commit and bump-version are ship-internal
+#      plumbing, marked manifest:hidden. Anything NOT under that banner belongs here — 'reinstall' sat
 #      outside it, documented in COMMAND_REFERENCE.md and next to 'uninstall'
 #      in the dispatcher, yet missing from this listing.
 #
@@ -1701,41 +1659,36 @@ Manifest CLI
 Usage: manifest <command> [scope] [options]
 
 Most commands only show you a plan. Add -y (or --yes) to actually make the
-changes. A few use their own word instead: 'plan fleet --apply' and
-'reconcile fleet --do'. [Cloud] marks a feature that needs a Cloud plugin.
+changes. --dry-run explicitly previews and cannot be combined with -y.
+[Cloud] marks a feature that needs a Cloud plugin.
 
   Getting started:
-    first                               Inspect this folder and set Manifest up.
-                                        Start here — it works out whether you are
-                                        in a repo or a fleet and runs 'init' for
-                                        you. Writes nothing of its own. Takes no
-                                        repo|fleet scope.
-    init repo|fleet                     Set it up. Two phases:
-                                        scaffold — writes the files a repo or a
-                                        fleet needs; no network calls at all;
-                                        connect (--connect) — adds or creates
-                                        'origin', clones, pulls. Every network
-                                        call init can make is in that phase, and
-                                        it is off unless you ask for it.
-         --create-repo-private          Create a GitHub repo and add as origin.
-         --create-repo-public           --public PUBLISHES it. Both imply
-                                        --connect
-    prep repo|fleet                     DEPRECATED — this was init's connect
-                                        phase under its own verb. Use
-                                        'init repo|fleet --connect'. Still
-                                        works; prints a notice
+    init                                Inspect this folder and propose setup;
+                                        detects a repo or fleet. Preview by
+                                        default; -y applies the proposed setup.
+    init repo                           Prepare Git, origin, project files and
+                                        run the release check. No release made.
+         --remote URL                   Connect an existing origin URL or path.
+         --create-repo-private          Default when origin is missing.
+         --create-repo-public           Create a PUBLIC GitHub repository.
+         --no-connect                   Scaffold only; readiness not verified.
+    init fleet                          Review membership, scaffold members;
+                                        --connect clones/pulls members.
     doctor                              Check tools, config, repo health
     status                              Show what would happen next (read-only)
 
   Releasing:
-    ship repo|fleet <patch|minor|major> Release: version, tag, push, publish
+    ship repo|fleet <patch|minor|major|revision>
+                                        Release: version, tag, push, publish
+                                        Fleet ships include the manager root
          --local                        All of that except tag, push, publish
                                         — it still commits
     ship fleet manager                  Commit + push the fleet coordination
                                         root only (no members, no release)
     recipe list|show|explain            See the exact steps a command runs
-    revert                              Check out an older tag; leaves you in
-                                        detached HEAD (no branch)
+    revert repo [<tag>]                 Preview a tag checkout; -y applies
+                                        in detached HEAD (no branch)
+    revert fleet [<snapshot>]           Restore recorded manager/member commits
 
   Fleet — a folder of repositories managed together:
     discover fleet                      Find repos that could become members
@@ -1746,12 +1699,9 @@ changes. A few use their own word instead: 'plan fleet --apply' and
     reconcile fleet                     Carry out that plan
     topics fleet                        Set GitHub topics from repo names
     init fleet --connect                Clone missing members, pull the rest
-                                        (was 'prep fleet')
 
   Documentation:
     docs [fleet]                        Regenerate docs for a repo or fleet
-    refresh repo                        Regenerate docs and metadata only —
-                                        no version change, no network
 
   Pull requests:                        (wraps the gh CLI; no Cloud needed)
     pr                                  Show this branch's PR, or offer to open

@@ -1012,14 +1012,20 @@ Use these first-class commands before falling back to lower-level internals:
 
 - \`manifest doctor\` - validate dependencies, config, and repository state
 - \`manifest status [repo|fleet]\` - inspect current repo or fleet state
-- \`manifest init repo [--dry-run|-y]\` - scaffold repo metadata
+- \`manifest init [--dry-run|-y]\` - inspect this folder and propose setup
+- \`manifest init repo [--dry-run|-y]\` - prepare Git, origin, files and verify readiness; no release
 - \`manifest init fleet [--dry-run|-y]\` - scaffold fleet inventory
-- \`manifest prep repo [--dry-run|-y]\` - prepare remotes and repo metadata
-- \`manifest prep fleet [--dry-run|-y]\` - prepare fleet members
-- \`manifest refresh repo [--dry-run|-y]\` - refresh generated docs and metadata
-- \`manifest refresh fleet [--dry-run|-y]\` - refresh fleet inventory
+- \`manifest init repo --connect [--dry-run|-y]\` - connect repository remotes
+- \`manifest init fleet --connect [--dry-run|-y]\` - clone and pull fleet members
+- \`manifest docs [--dry-run|-y]\` - regenerate repository documentation
+- \`manifest docs metadata [--dry-run|-y]\` - update repository metadata
+- \`manifest update fleet [--dry-run|-y]\` - re-scan fleet membership
+- \`manifest docs fleet [--dry-run|-y]\` - regenerate fleet documentation
 - \`manifest ship repo patch|minor|major|revision [--dry-run|-y]\` - preview or cut a repo release
 - \`manifest ship fleet patch|minor|major|revision [--dry-run|-y]\` - preview or cut fleet releases
+- \`manifest ship fleet manager [--dry-run|-y]\` - commit and push only the coordination root
+- \`manifest revert repo [<tag>] [--dry-run|-y]\` - inspect a tagged checkout
+- \`manifest revert fleet [<snapshot>] [--dry-run|-y]\` - restore recorded member and manager checkouts
 - \`manifest config list|get|set|unset|doctor\` - inspect and manage YAML config
 - \`manifest recipe list|show|explain\` - inspect built-in workflow contracts
 - \`manifest pr create|status|checks|ready|merge|update\` - GitHub PR helpers
@@ -1048,7 +1054,7 @@ EOF
   "exit_codes": {
     "0": "success, or a plan was printed",
     "1": "error; nothing was released",
-    "2": "partial fleet ship: some members released, then a later step failed",
+    "2": "partial fleet ship or revert: some releases or checkouts completed, then a later step failed",
     "3": "protective skip; a safety guard refused something destructive",
     "4": "paused for a documentation handoff. NOT a failure and nothing to undo: read the printed brief, finish the docs, re-run the identical command",
     "10": "a plan was printed and no consent was given (preview.exit_code=distinct)"
@@ -1058,12 +1064,15 @@ EOF
     "manifest doctor",
     "manifest status repo",
     "manifest status fleet",
+    "manifest init",
     "manifest init repo",
     "manifest init fleet",
-    "manifest prep repo",
-    "manifest prep fleet",
-    "manifest refresh repo",
-    "manifest refresh fleet",
+    "manifest init repo --connect",
+    "manifest init fleet --connect",
+    "manifest docs",
+    "manifest docs metadata",
+    "manifest docs fleet",
+    "manifest update fleet",
     "manifest ship repo patch",
     "manifest ship repo minor",
     "manifest ship repo major",
@@ -1072,6 +1081,11 @@ EOF
     "manifest ship fleet minor",
     "manifest ship fleet major",
     "manifest ship fleet revision",
+    "manifest ship repo resume",
+    "manifest ship fleet resume",
+    "manifest ship fleet manager",
+    "manifest revert repo",
+    "manifest revert fleet",
     "manifest config list",
     "manifest config get",
     "manifest config set",
@@ -1095,7 +1109,7 @@ EOF
 
 Manifest CLI is available as \`manifest\`. Prefer first-class commands such as
 \`manifest status\`, \`manifest doctor\`, \`manifest init repo\`,
-\`manifest prep repo\`, \`manifest refresh repo\`, and
+\`manifest init repo --connect\`, \`manifest docs\`, and
 \`manifest ship repo patch\`.
 
 Mutating commands preview by default. Use \`--dry-run\` for explicit preview and
@@ -1360,7 +1374,7 @@ display_post_install_info() {
 🚀 First steps with Manifest CLI:
    $MANIFEST_CLI_NAME doctor                     # health check (deps + config + repo)
    $MANIFEST_CLI_NAME status                     # snapshot of current repo
-   $MANIFEST_CLI_NAME init repo                  # scaffold a project
+   $MANIFEST_CLI_NAME init repo                  # preview setup and ship readiness
    $MANIFEST_CLI_NAME ship repo patch            # cut a release
 
 🔧 Configuration:

@@ -397,23 +397,6 @@ format_timestamp() {
     format_timestamp_cross_platform "$1" "$2"
 }
 
-# Public: human-readable status, used by `manifest doctor` / display flow.
-display_time_info() {
-    echo "🕐 Manifest Timestamp Service"
-    echo "============================="
-    get_time_timestamp
-    echo "📊 Timestamp Details:"
-    local tz
-    tz=$(get_timezone_display "$MANIFEST_CLI_TIME_TIMESTAMP")
-    echo "   🕐 Time: $(format_timestamp "$MANIFEST_CLI_TIME_TIMESTAMP" '+%Y-%m-%d %H:%M:%S') $tz"
-    echo "   📊 Offset: $MANIFEST_CLI_TIME_OFFSET seconds"
-    echo "   🎯 Uncertainty: ±$MANIFEST_CLI_TIME_UNCERTAINTY seconds"
-    echo "   🌐 Source: $MANIFEST_CLI_TIME_SERVER ($MANIFEST_CLI_TIME_SERVER_IP)"
-    echo "   🔧 Method: $MANIFEST_CLI_TIME_METHOD"
-    echo ""
-    echo "💡 This timestamp is ready for manifest operations"
-}
-
 # Public: `manifest config time` output.
 display_time_config() {
     echo "⚙️  Manifest Timestamp Configuration"

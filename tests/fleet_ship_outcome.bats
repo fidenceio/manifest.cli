@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# bats file_tags=smoke
 # §83 — the fleet ship tells the truth about what it did.
 #
 # It used to end on the same green line whether the fleet released, nothing
@@ -61,7 +62,8 @@ write_root() {
         printf 'true\t%s\t./%s\tfalse\tmain\n' "$m" "$m" >> "$w/manifest.fleet.tsv"
     done
     echo "1.0.0" > "$w/FLEET_VERSION"
-    git -C "$w" add manifest.fleet.config.yaml manifest.fleet.tsv FLEET_VERSION
+    printf '/*\n!/.gitignore\n!/manifest.fleet.config.yaml\n!/manifest.fleet.tsv\n!/FLEET_VERSION\n' > "$w/.gitignore"
+    git -C "$w" add .gitignore manifest.fleet.config.yaml manifest.fleet.tsv FLEET_VERSION
     git -C "$w" commit -qm "coordination"
 }
 
@@ -177,8 +179,9 @@ fleet_run_log() {
     [[ "$output" == *"svca: shipping patch"* ]]
     [[ "$output" == *"Fleet ship workflow complete."* ]]
     [[ "$output" == *"members: 1 released · 0 skipped"* ]]
-    # D4: the root says what it decided even when the answer is "nothing".
-    [[ "$output" == *"fleet root: no version stamp (fleet.versioning: none)"* ]]
+    # A successful fleet release now records a durable member snapshot.
+    [[ "$output" == *"fleet root: manager complete (--local: nothing pushed)"* ]]
+    git -C "$SCRATCH/work" cat-file -e HEAD:manifest.fleet.snapshot.json
     [ "$(cat "$SCRATCH/work/svca/VERSION")" = "1.2.4" ]
 }
 
@@ -279,14 +282,15 @@ fleet_run_log() {
 
 # --- D4: the root line in preview -----------------------------------------------
 
-@test "preview: the fleet root says what it would do even when that is nothing" {
+@test "preview: the fleet root announces its snapshot commit for releasable members" {
     write_root none
     write_member_releasable svca
 
     run_manifest ship fleet patch
 
     [ "$status" -eq 0 ]
-    [[ "$output" == *"fleet root: no version stamp (fleet.versioning: none)"* ]]
+    [[ "$output" == *"would commit manifest.fleet.snapshot.json"* ]]
+    [ ! -e "$SCRATCH/work/manifest.fleet.snapshot.json" ]
 }
 
 # --- D5: a pending stamp is landed, never re-bumped ---------------------------------
@@ -306,7 +310,7 @@ fleet_run_log() {
     [[ "$output" == *"landing the pending fleet version 1.0.1"* ]]
     # The fixture root has no allowlist .gitignore yet, so the manager writes one
     # and names it in the subject's "(updates: …)" — the version is what matters.
-    [[ "$(git -C "$SCRATCH/work" log -1 --format=%s)" == "Fleet manager: bump fleet version to 1.0.1"* ]]
+    [[ "$(git -C "$SCRATCH/work" log -1 --format=%s)" == "chore(fleet): bump fleet version to 1.0.1"* ]]
     [ "$(git -C "$SCRATCH/work" show HEAD:FLEET_VERSION)" = "1.0.1" ]
 }
 
@@ -329,7 +333,7 @@ fleet_run_log() {
 
     [ "$status" -eq 0 ]
     [ "$(git -C "$SCRATCH/work" show HEAD:FLEET_VERSION)" = "1.0.1" ]
-    [[ "$(git -C "$SCRATCH/work" log -1 --format=%s)" == "Fleet manager: bump fleet version to 1.0.1"* ]]
+    [[ "$(git -C "$SCRATCH/work" log -1 --format=%s)" == "chore(fleet): bump fleet version to 1.0.1"* ]]
 }
 
 # --- D6: the branch pre-flight ---------------------------------------------------
@@ -429,10 +433,10 @@ fleet_run_log() {
 
     [ "$status" -eq 0 ]
     [ "$(git -C "$SCRATCH/work" show HEAD:FLEET_VERSION)" = "1.0.1" ]
-    [[ "$(git -C "$SCRATCH/work" log -1 --format=%s)" == "Fleet manager: bump fleet version to 1.0.1"* ]]
+    [[ "$(git -C "$SCRATCH/work" log -1 --format=%s)" == "chore(fleet): bump fleet version to 1.0.1"* ]]
 }
 
-@test "nothing to release with a pending stamp on disk names it and points at the manager" {
+@test "fleet ship with no member changes lands a pending manager stamp" {
     write_root semver
     root_level_with_upstream
     write_member_at_tag svca
@@ -441,5 +445,119 @@ fleet_run_log() {
     run_manifest ship fleet patch -y
 
     [ "$status" -eq 0 ]
-    [[ "$output" == *"A fleet version stamp 1.0.1 is on disk and not committed; 'manifest ship fleet manager' lands it."* ]]
+    [[ "$output" == *"landing the pending fleet version 1.0.1"* ]]
+    [ "$(git -C "$SCRATCH/work" show HEAD:FLEET_VERSION)" = "1.0.1" ]
+    [ "$(git -C "$SCRATCH/work" rev-parse HEAD)" = "$(git -C "$SCRATCH/root-remote.git" rev-parse refs/heads/main)" ]
+}
+
+@test "fleet ship includes manager-only changes with versioning none and leaves unrelated files alone" {
+    write_root none
+    root_level_with_upstream
+    write_member_at_tag svca
+    echo '  description: changed' >> "$SCRATCH/work/manifest.fleet.config.yaml"
+    echo private > "$SCRATCH/work/.env"
+    local member_head; member_head="$(git -C "$SCRATCH/work/svca" rev-parse HEAD)"
+
+    run_manifest ship fleet patch
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"would commit manifest.fleet.config.yaml"* ]]
+    [[ "$output" == *"would push main to origin"* ]]
+    run git -C "$SCRATCH/work" diff --quiet
+    [ "$status" -eq 1 ]
+
+    run_manifest ship fleet patch -y
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"members: 0 released · 1 skipped"* ]]
+    [[ "$output" == *"fleet root: manager complete (pushed main)"* ]]
+    [ "$(git -C "$SCRATCH/work" rev-parse HEAD)" = "$(git -C "$SCRATCH/root-remote.git" rev-parse refs/heads/main)" ]
+    git -C "$SCRATCH/work" diff --quiet -- manifest.fleet.config.yaml
+    [ "$(git -C "$SCRATCH/work/svca" rev-parse HEAD)" = "$member_head" ]
+    run git -C "$SCRATCH/work" ls-tree -r --name-only HEAD
+    [[ "$output" != *".env"* ]]
+    [[ "$output" != *"svca/"* ]]
+}
+
+@test "fleet ship includes manager-only semver changes and bumps once" {
+    write_root semver
+    root_level_with_upstream
+    write_member_at_tag svca
+    echo '  description: changed' >> "$SCRATCH/work/manifest.fleet.config.yaml"
+
+    run_manifest ship fleet minor -y
+    [ "$status" -eq 0 ]
+    [ "$(git -C "$SCRATCH/work" show HEAD:FLEET_VERSION)" = "1.1.0" ]
+    [ "$(git -C "$SCRATCH/work" rev-list --count HEAD)" -eq 2 ]
+}
+
+@test "fleet ship pushes an unversioned manager with its first snapshot and establishes the upstream" {
+    write_root none
+    write_member_at_tag svca
+    git init -q --bare "$SCRATCH/root-remote.git"
+    git -C "$SCRATCH/work" remote add origin "$SCRATCH/root-remote.git"
+    local root_head; root_head="$(git -C "$SCRATCH/work" rev-parse HEAD)"
+
+    run_manifest ship fleet patch -y
+    [ "$status" -eq 0 ]
+    local recorded; recorded="$(git -C "$SCRATCH/work" rev-parse HEAD)"
+    [ "$recorded" != "$root_head" ]
+    git -C "$SCRATCH/work" cat-file -e HEAD:manifest.fleet.snapshot.json
+    [ "$(git -C "$SCRATCH/root-remote.git" rev-parse refs/heads/main)" = "$recorded" ]
+    [ "$(git -C "$SCRATCH/work" rev-parse '@{u}')" = "$recorded" ]
+}
+
+@test "manager hook rejection with no member changes returns 1 and preserves the change" {
+    write_root none
+    root_level_with_upstream
+    write_member_at_tag svca
+    echo '  description: changed' >> "$SCRATCH/work/manifest.fleet.config.yaml"
+    install_refusing_hook "$SCRATCH/work"
+
+    run_manifest ship fleet patch -y
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"failed at the fleet root (exit 1: no member released)"* ]]
+    [[ "$output" != *"✅ Fleet ship workflow complete."* ]]
+    run git -C "$SCRATCH/work" diff --quiet
+    [ "$status" -eq 1 ]
+}
+
+@test "fleet ship commits the unversioned manager after its member and honors --local" {
+    write_root none
+    root_level_with_upstream
+    write_member_releasable svca
+    echo '  description: changed' >> "$SCRATCH/work/manifest.fleet.config.yaml"
+    local remote_head; remote_head="$(git -C "$SCRATCH/root-remote.git" rev-parse refs/heads/main)"
+    mkdir -p "$SCRATCH/hooks"
+    printf '#!/bin/sh\ntest "$(cat svca/VERSION)" = 1.2.4\ngrep -q "^chore(fleet): " "$1"\n' > "$SCRATCH/hooks/commit-msg"
+    chmod +x "$SCRATCH/hooks/commit-msg"
+    printf 'grep -q "^Signed-off-by: " "$1"\n' >> "$SCRATCH/hooks/commit-msg"
+    git -C "$SCRATCH/work" config format.signOff true
+    git -C "$SCRATCH/work" config core.hooksPath "$SCRATCH/hooks"
+
+    run_manifest ship fleet patch --local -y
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"fleet root: manager complete (--local: nothing pushed)"* ]]
+    [ "$(git -C "$SCRATCH/root-remote.git" rev-parse refs/heads/main)" = "$remote_head" ]
+    git -C "$SCRATCH/work" diff --quiet -- manifest.fleet.config.yaml
+    [ "$(git -C "$SCRATCH/work" rev-parse HEAD)" != "$remote_head" ]
+}
+
+@test "versioned fleet manager push rejection after a member release returns 2" {
+    write_root semver
+    root_level_with_upstream
+    write_member_releasable svca
+    printf '#!/bin/sh\nexit 1\n' > "$SCRATCH/root-remote.git/hooks/pre-receive"
+    chmod +x "$SCRATCH/root-remote.git/hooks/pre-receive"
+
+    run_manifest ship fleet patch -y --local
+    [ "$status" -eq 0 ]
+    # The local ship above proves the root commit is valid. Now make another
+    # member release eligible; only the manager's remote rejects publication.
+    echo change > "$SCRATCH/work/svca/change"
+    git init -q --bare "$SCRATCH/member-remote.git"
+    git -C "$SCRATCH/work/svca" remote add origin "$SCRATCH/member-remote.git"
+    run_manifest ship fleet patch -y
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"PUSH FAILED"* ]]
+    [[ "$output" == *"members: 1 released"* ]]
+    [[ "$output" != *"✅ Fleet ship workflow complete."* ]]
 }

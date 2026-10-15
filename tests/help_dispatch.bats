@@ -19,10 +19,10 @@ run_manifest_from_plain_dir() {
     run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" "$@"
 }
 
-@test "fleet help works outside a git repository" {
-    run_manifest_from_plain_dir fleet help
+@test "action-first fleet help works outside a git repository" {
+    run_manifest_from_plain_dir discover fleet --help
     [ "$status" -eq 0 ]
-    [[ "$output" == *"MANIFEST FLEET"* ]]
+    [[ "$output" == *"Usage: manifest discover fleet"* ]]
     [[ "$output" != *"Not in a Git repository"* ]]
 }
 
