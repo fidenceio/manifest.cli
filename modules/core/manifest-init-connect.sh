@@ -120,7 +120,7 @@ Empty remotes need no pull; connection failures stop setup." \
             return 1
         fi
         if [[ "$dry_run" == "true" ]]; then
-            printf '  would connect origin: %s\n' "$remote_url"
+            printf '  would connect origin: %s\n' "$(manifest_redact "$remote_url")"
             return 0
         elif [[ -z "$existing_origin" ]]; then
             git -C "$project_root" remote add origin "$remote_url" || return 1

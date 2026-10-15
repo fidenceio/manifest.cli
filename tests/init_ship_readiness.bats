@@ -382,3 +382,24 @@ CHECK
     [ -z "$(git tag)" ]
     [ -z "$(git -C "$SCRATCH/origin.git" for-each-ref)" ]
 }
+
+@test "init readiness: remote preview and replay redact credentials while preserving ordinary URLs" {
+    local remote needle plain
+    remote="$(printf 'https://%s:%s@example.invalid/org/repo.git' review-user review-only-token)"
+    needle="$(printf '%s:%s@' review-user review-only-token)"
+    cli init repo --remote "$remote"
+    [ "$status" -eq 0 ]
+    refute grep -Fq "$needle" <<< "$output"
+    refute grep -Fq review-only-token <<< "$output"
+    [[ "$output" == *REDACTED* ]]
+    [[ "$output" == *example.invalid/org/repo.git* ]]
+    [[ "$output" == *"manifest init repo --remote"* ]]
+    [ ! -e .git ]
+    [ ! -e "$INIT_CHECK_LOG" ]
+    plain=https://example.invalid/org/repo.git
+    cli init repo --remote "$plain"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"would connect origin: $plain"* ]]
+    [[ "$output" == *"manifest init repo --remote $plain -y"* ]]
+    [ ! -e .git ]
+}

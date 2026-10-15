@@ -1981,7 +1981,7 @@ Use --remote URL to connect an existing repository instead." \
             fi
         fi
         if [[ -n "$remote_url" ]]; then
-            printf '  would connect origin: %s\n' "$remote_url"
+            printf '  would connect origin: %s\n' "$(manifest_redact "$remote_url")"
         elif [[ -n "$create_repo_visibility" ]]; then
             local repo_target
             repo_target="$(_manifest_github_repo_display_target "$project_root")" || return 1
@@ -2011,7 +2011,7 @@ Use --remote URL to connect an existing repository instead." \
         [[ "$create_explicit" == "true" ]] && init_replay+=" --create-repo-$create_repo_visibility"
         if [[ -n "$remote_url" ]]; then
             local quoted_remote
-            printf -v quoted_remote '%q' "$remote_url"
+            printf -v quoted_remote '%q' "$(manifest_redact "$remote_url")"
             init_replay+=" --remote $quoted_remote"
         fi
         manifest_execution_footer "$init_replay -y"
