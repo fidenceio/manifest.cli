@@ -119,7 +119,8 @@ disc_row() {
     [[ "$err" == *"NEW:1"* ]]
 
     # Order preserved: alpha, then beta, then the appended gamma.
-    run bash -c "grep -n $'\\\\t\\\\(alpha\\\\|beta\\\\|gamma\\\\)\\\\t' '$WS/out.tsv' | cut -d: -f2 | awk -F'\\t' '{print \$2}'"
+    run awk -F '\t' '!/^#/ && NF {print $2}' "$WS/out.tsv"
+    [ "$status" -eq 0 ]
     [ "${lines[0]}" = "alpha" ]
     [ "${lines[1]}" = "beta" ]
     [ "${lines[2]}" = "gamma" ]

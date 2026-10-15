@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
 
 # §5.10 TTL'd green-run cache: run-tests.sh --cache / --no-cache. After a green
-# run, run-tests.sh records a fingerprint (content of modules/ + tests/ + the
-# script + the bats version, keyed by run scope) and, on a later run that matches
+# run, run-tests.sh records a fingerprint (content of modules/ + tests/ + scripts/
+# + the bats version, keyed by run scope) and, on a later run that matches
 # within the window, skips re-running and reports a cache hit. The cache only ever
 # skips byte-identical inputs that already passed; any doubt is a miss and runs.
 #
@@ -131,4 +131,26 @@ _seed_marker() {
     run --separate-stderr RUN "$BATS_TEST_TMPDIR/does-not-exist.bats"
     [ "$status" -ne 0 ]
     [ ! -d "$CACHE_DIR" ] || [ -z "$(ls -A "$CACHE_DIR" 2>/dev/null)" ]
+}
+
+
+@test "cache: changes to safety and coverage tooling invalidate a prior green result" {
+    local fixture="$BATS_TEST_TMPDIR/cache-inputs" before after entry
+    mkdir -p "$fixture/scripts" "$fixture/modules/core" "$fixture/tests"
+    cp "$TEST_REPO_ROOT/scripts/run-tests.sh" "$fixture/scripts/"
+    cp "$TEST_REPO_ROOT/modules/core/manifest-requirements.sh" "$fixture/modules/core/"
+    printf '#!/usr/bin/env bats\n@test "fixture" { true; }\n' > "$fixture/tests/probe.bats"
+    for entry in check-safety-contracts.sh check-coverage.sh coverage.sh; do
+        printf '#!/bin/bash\n:\n' > "$fixture/scripts/$entry"
+    done
+    before="$(bash "$fixture/scripts/run-tests.sh" --jobs 1 --print-cache-key "$fixture/tests/probe.bats")"
+    [ -n "$before" ]
+    [ "$(bash "$fixture/scripts/run-tests.sh" --jobs 1 --print-cache-key "$fixture/tests/probe.bats")" = "$before" ]
+    for entry in check-safety-contracts.sh check-coverage.sh coverage.sh; do
+        printf '# changed verification behavior\n' >> "$fixture/scripts/$entry"
+        after="$(bash "$fixture/scripts/run-tests.sh" --jobs 1 --print-cache-key "$fixture/tests/probe.bats")"
+        [ -n "$after" ]
+        [ "$before" != "$after" ]
+        before="$after"
+    done
 }

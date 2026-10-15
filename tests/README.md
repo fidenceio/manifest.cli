@@ -46,3 +46,48 @@ bind-mounts the repo into `/work`.
 ## Host Runner
 
 `scripts/run-tests.sh` exists for controlled environments that already provide the right tools. It is not the default workflow for this workspace.
+
+## Safety contracts and line coverage
+
+Full, smoke, and change-aware runs enforce every contract registered in
+`tests/safety-contracts.tsv`. Each contract names two smoke tests: a passing
+control and a challenging case (refusal, preservation, or recovery). The runner
+checks actual TAP results and refuses missing, failed, duplicate, or skipped
+proofs. The registry itself has removal and stale-reference guards. Explicit
+file/filter runs stay focused and do not claim complete contract coverage.
+Use `--no-cache` to demand fresh execution; release checks already require it.
+Changes to verification scripts invalidate cached results.
+
+This is 100% of the **registered critical safety contracts**, not proof that
+all possible failure modes are tested. Changes to a mutating workflow need a
+review of the register as well as meaningful regression tests.
+
+Measure executable-line coverage separately:
+
+```bash
+./scripts/coverage.sh
+# Optional explicit line target; an unmet target exits nonzero:
+MANIFEST_CLI_COVERAGE_MIN_PERCENT=100 ./scripts/coverage.sh
+```
+
+The container parses a zero-hit inventory before merging actual traces, so a
+module that tests never load still counts. The scope is every `modules/**/*.sh`
+file plus `scripts/manifest-cli.sh`, `scripts/manifest-cli-wrapper.sh`, and
+`scripts/migrate-user-config.sh`. Installer scripts, completions, test tooling,
+and tests are outside this runtime metric. Inventory mismatches and malformed
+reports always fail. A rounded `100%` headline cannot hide uncovered lines.
+
+The default line target is zero for measurement; it does **not** assert 100%
+line coverage or act as a release qualification. Test failures still fail the
+coverage command. `coverage/report/index.html` contains the report and
+`coverage/uncovered-lines.tsv` lists gaps. The source mount is read-only;
+fixtures and report output remain writable inside the disposable container.
+
+To check coverage reporting with a TAP stream larger than a pipe buffer:
+
+```bash
+./scripts/coverage.sh tests/fixtures/coverage_stdout_probe.bats
+```
+
+The traced runner writes TAP directly to `coverage/tests.tap`, which is emitted
+after tracing. This avoids a kcov stdout-pipe deadlock on large suites.

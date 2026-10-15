@@ -70,7 +70,7 @@ fi
 #
 # --cache / --no-cache control the TTL'd green-run cache (§5.10). After a run
 # passes, run-tests.sh records a fingerprint of the test-relevant tree (modules/
-# + tests/ + this script, plus the bats version) keyed by the run's scope (tier +
+# + tests/ + scripts/, plus the bats version) keyed by the run's scope (tier +
 # selected files). On a later run whose fingerprint matches AND falls inside the
 # window, the run is SKIPPED and reported as a cache hit. The cache only ever
 # skips work that already passed for byte-identical inputs; ANY doubt — no marker,
@@ -372,7 +372,7 @@ _cache_fingerprint() {
     [ -n "$_HASH_CMD" ] || return 1
     {
         ( cd "$REPO_ROOT" 2>/dev/null && \
-          find modules tests scripts/run-tests.sh -type f -print0 2>/dev/null \
+          find modules tests scripts -type f -print0 2>/dev/null \
           | sort -z | xargs -0 $_HASH_CMD 2>/dev/null )
         bats --version 2>/dev/null
         printf 'scope=%s\n' "$1"
@@ -438,10 +438,10 @@ fi
 # piped or in a terminal). Total comes from TAP's `1..N` plan line; works with
 # parallel runs since it counts completed `ok`/`not ok` lines regardless of order.
 _tap_filter() {
-    awk -v show_progress="$1" -v skips_out="$2" '
+    awk -v show_progress="$1" -v skips_out="$2" -v contracts_out="$CONTRACTS_TAP" '
         BEGIN { next_ms = 10 }
         /^1\.\.[0-9]+$/ { total = substr($0, 4) + 0 }
-        { print; fflush() }
+        { print; print > contracts_out; fflush() }
         # A skipped test reports as `ok N name # skip reason` — it is counted as
         # a pass by every TAP consumer, so a lost tool reads as a green run.
         # Record the names so the budget check below can name what went missing.
@@ -471,7 +471,15 @@ _tap_filter() {
 # Unset means "report but do not enforce" — a developer host, and the macOS CI
 # leg that runs host-native, legitimately lack some of these.
 SKIPS_FILE="$(mktemp "${TMPDIR:-/tmp}/manifest-tap-skips.XXXXXX")"
-trap 'rm -f "$SKIPS_FILE"' EXIT
+CONTRACTS_TAP="$(mktemp "${TMPDIR:-/tmp}/manifest-contract-tap.XXXXXX")"
+trap 'rm -f "$SKIPS_FILE" "$CONTRACTS_TAP"' EXIT
+# Full, smoke, and --changed runs must execute every registered safety proof.
+# Explicit file/filter runs remain focused and make no complete-contract claim.
+ENFORCE_CONTRACTS=0
+if [[ ${#BATS_ARGS[@]} -eq 0 ]]; then
+    ENFORCE_CONTRACTS=1
+    bash "$REPO_ROOT/scripts/check-safety-contracts.sh" "$TESTS_DIR/safety-contracts.tsv" "$REPO_ROOT" || exit 1
+fi
 
 # Piping suppresses bats's pretty formatter (it renders TAP when stdout is not a
 # terminal), so only pipe where that costs nothing: progress mode already did,
@@ -482,6 +490,7 @@ NEED_TAP_FILTER=0
 [ "$PROGRESS" -eq 1 ] && NEED_TAP_FILTER=1
 [ -n "${MANIFEST_CLI_TEST_MAX_SKIPS:-}" ] && NEED_TAP_FILTER=1
 [ -t 1 ] || NEED_TAP_FILTER=1
+[ "$ENFORCE_CONTRACTS" -eq 1 ] && NEED_TAP_FILTER=1
 
 if [ "$NEED_TAP_FILTER" -eq 1 ]; then
     bats "${PARALLEL[@]}" "${FILTER[@]}" "${TARGET[@]}" | _tap_filter "$PROGRESS" "$SKIPS_FILE"
@@ -506,6 +515,9 @@ if [ -n "${MANIFEST_CLI_TEST_MAX_SKIPS:-}" ]; then
         echo "[skips] A skipped test is lost coverage, not a pass. Install the missing tool or raise the budget deliberately." >&2
         status=1
     fi
+fi
+if [[ "$ENFORCE_CONTRACTS" -eq 1 ]]; then
+    bash "$REPO_ROOT/scripts/check-safety-contracts.sh" "$TESTS_DIR/safety-contracts.tsv" "$REPO_ROOT" "$CONTRACTS_TAP" || status=1
 fi
 if [ "$status" -eq 0 ] && [ "$CACHE_ENABLED" -eq 1 ] && [ "$CACHE_WINDOW" -gt 0 ] && [ -n "$CACHE_FP" ]; then
     if mkdir -p "$CACHE_DIR" 2>/dev/null && printf '%s\n' "$(date +%s)" > "$CACHE_DIR/$CACHE_FP" 2>/dev/null; then

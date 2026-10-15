@@ -227,7 +227,7 @@ revision"
         printf '%s\n' "$bad" > "$w/VERSION"
 
         run env -u MANIFEST_CLI_VERSION_SEPARATOR bash -c \
-            "MANIFEST_CLI_PROJECT_ROOT='$w' source '$TEST_REPO_ROOT/modules/core/manifest-shared-utils.sh' >/dev/null 2>&1;
+            "export MANIFEST_CLI_PROJECT_ROOT='$w'; source '$TEST_REPO_ROOT/modules/core/manifest-shared-utils.sh' >/dev/null 2>&1;
              source '$TEST_REPO_ROOT/modules/core/manifest-shared-functions.sh';
              source '$TEST_REPO_ROOT/modules/git/manifest-git.sh';
              bump_version patch"
