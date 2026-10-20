@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}a{color:inherit}</style>
+<title>Manifest Fleet Mechanics</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column; diagrams and the check widget sit full-width inside it. */
+:root {
+  --bg: #F5F7F7; --surface: #FFFFFF; --fg: #16201F; --muted: #5B6967; --line: #D3DAD9;
+  --code-bg: #ECF0EF; --accent: #0B7A75; --accent-soft: #D9EFEC;
+  --tracked: #A8640A; --tracked-soft: #F6E8D2; --stop: #B3261E; --stop-soft: #F8DCD9;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", sans-serif;
+  --body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111615; --surface: #1A2120; --fg: #E6ECEA; --muted: #9AA8A5; --line: #2D3836;
+  --code-bg: #0D1211; --accent: #4FC6BF; --accent-soft: #163634;
+  --tracked: #E3A64F; --tracked-soft: #3A2A12; --stop: #F2847A; --stop-soft: #3F1A17; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111615; --surface: #1A2120; --fg: #E6ECEA; --muted: #9AA8A5; --line: #2D3836;
+  --code-bg: #0D1211; --accent: #4FC6BF; --accent-soft: #163634;
+  --tracked: #E3A64F; --tracked-soft: #3A2A12; --stop: #F2847A; --stop-soft: #3F1A17; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 16px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+.wrap { max-width: 880px; margin: 0 auto; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; line-height: 1.1; margin: 0; }
+h1 { font-size: clamp(34px, 6vw, 56px); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: clamp(24px, 3.4vw, 32px); font-weight: 700; margin-top: 64px; }
+h3 { font-size: 19px; font-weight: 600; }
+p { max-width: 66ch; margin: 12px 0 0; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+header.hero { padding-block: 56px 24px; border-bottom: 1px solid var(--line); }
+header.hero p.lede { font-size: 19px; max-width: 58ch; margin-top: 16px; }
+.pill { display: inline-block; font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); margin-top: 18px; }
+code, pre { font-family: var(--mono); font-size: 0.92em; }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+pre { background: var(--code-bg); padding: 14px 16px; border-radius: 6px; overflow-x: auto; margin: 14px 0 0; line-height: 1.5; }
+pre code { background: none; padding: 0; }
+figure { margin: 24px 0 0; }
+figure svg { width: 100%; min-width: 640px; max-width: 100%; height: auto; display: block; font-family: var(--mono); font-size: 12px; }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 10px; max-width: 70ch; }
+.scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+@media (min-width: 700px) { figure svg { min-width: 0; } }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 20px; }
+.fact { border-left: 3px solid var(--accent); padding: 4px 0 4px 16px; min-width: 0; }
+.fact h3 { font-size: 17px; }
+table { border-collapse: collapse; width: 100%; margin-top: 16px; font-size: 15px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+.tag { font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+.tag.release { background: var(--accent-soft); color: var(--accent); }
+.tag.track { background: var(--tracked-soft); color: var(--tracked); }
+.tag.stop { background: var(--stop-soft); color: var(--stop); }
+.tag.bench { background: var(--code-bg); color: var(--muted); }
+
+/* scenario cards */
+.scenarios { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 20px; }
+.sc { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px 18px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.sc .n { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.sc h3 { font-size: 18px; }
+.sc ol { margin: 0; padding-left: 20px; font-size: 15px; }
+.sc ol li { margin-top: 4px; }
+.sc .check { margin-top: auto; padding-top: 10px; border-top: 1px dashed var(--line); font-size: 15px; display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+.sc .check .tag { margin-top: 2px; }
+
+/* pre-flight widget */
+.widget { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 20px; margin-top: 20px; }
+.widget .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+.widget label { display: block; font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.widget select { width: 100%; font: inherit; font-size: 15px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); }
+.widget select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.verdict { margin-top: 18px; padding: 14px 16px; border-radius: 6px; border: 1px solid var(--line); display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: start; }
+.verdict .tag { font-size: 13px; margin-top: 2px; }
+.verdict p { margin: 0; font-size: 15px; }
+.verdict .msg { font-family: var(--mono); font-size: 13px; color: var(--muted); margin-top: 6px; }
+.verdict[data-kind="release"] { border-color: var(--accent); }
+.verdict[data-kind="track"] { border-color: var(--tracked); }
+.verdict[data-kind="stop"] { border-color: var(--stop); }
+
+.plain { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 20px 22px; margin-top: 20px; }
+.plain dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; margin: 0; font-size: 15px; }
+.plain dt { font-family: var(--mono); font-size: 13px; color: var(--accent); }
+.plain dd { margin: 0; }
+@media (max-width: 480px) { .plain dl { grid-template-columns: 1fr; gap: 2px 0; } .plain dd { margin-bottom: 8px; } }
+footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+@media (prefers-reduced-motion: no-preference) { .verdict { transition: border-color .2s; } }
+</style>
+
+<div class="wrap">
+<header class="hero">
+  <div class="eyebrow">Manifest CLI · Fleet</div>
+  <h1>Many repos, one release. No submodules.</h1>
+  <p class="lede">A fleet is a folder that lists your repositories and releases them together. Each repository carries one readable line that says which fleet releases it. Everything else follows from those two facts.</p>
+  <span class="pill">design preview · planned for v63</span>
+</header>
+
+<h2>The two facts</h2>
+<div class="two">
+  <div class="fact"><h3>1. The fleet root lists its members</h3><p><code>manifest.fleet.tsv</code> is a plain table: name, path, selected or benched. It is committed in the fleet root and reviewed like any other file.</p></div>
+  <div class="fact"><h3>2. Each repo says who releases it</h3><p>One line in the repo's own <code>manifest.config.yaml</code>. It travels with <code>git clone</code>, so every machine and every checkout reads the same answer.</p></div>
+</div>
+<pre><code>fleet:
+  released_by: fidenceio/platform    # &lt;github owner&gt;/&lt;fleet name&gt;</code></pre>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 800 250" role="img" aria-label="A fleet root lists three repos. api and web say they are released by this fleet, so the fleet releases them. lib says it is released by another fleet, so this fleet only tracks it.">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker>
+    <marker id="arrT" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--tracked)"/></marker>
+  </defs>
+  <g stroke="currentColor" fill="var(--surface)" stroke-width="1.2">
+    <rect x="20" y="30" width="260" height="190" rx="6"/>
+    <rect x="460" y="30" width="320" height="50" rx="6"/>
+    <rect x="460" y="100" width="320" height="50" rx="6"/>
+    <rect x="460" y="170" width="320" height="50" rx="6" stroke="var(--tracked)"/>
+  </g>
+  <g fill="currentColor">
+    <text x="36" y="54" font-weight="500">fleet root · fidenceio/platform</text>
+    <text x="36" y="80" fill="var(--muted)">manifest.fleet.tsv</text>
+    <text x="36" y="104">✓  api      ./api</text>
+    <text x="36" y="126">✓  web      ./web</text>
+    <text x="36" y="148">✓  lib      ./lib</text>
+    <text x="36" y="178" fill="var(--muted)">manifest.fleet.snapshot.json</text>
+    <text x="36" y="200" fill="var(--muted)">api 3e1f · web a90c · lib 7b2d</text>
+    <text x="476" y="50" font-weight="500">api</text>
+    <text x="476" y="68" fill="var(--accent)">released_by: fidenceio/platform</text>
+    <text x="476" y="120" font-weight="500">web</text>
+    <text x="476" y="138" fill="var(--accent)">released_by: fidenceio/platform</text>
+    <text x="476" y="190" font-weight="500">lib</text>
+    <text x="476" y="208" fill="var(--tracked)">released_by: fidenceio/core</text>
+  </g>
+  <g stroke="currentColor" stroke-width="1.2" fill="none">
+    <line x1="280" y1="62" x2="458" y2="62" marker-end="url(#arr)"/>
+    <line x1="280" y1="132" x2="458" y2="132" marker-end="url(#arr)"/>
+    <line x1="280" y1="202" x2="458" y2="202" stroke="var(--tracked)" marker-end="url(#arrT)"/>
+  </g>
+  <g fill="currentColor" text-anchor="middle">
+    <text x="369" y="52" fill="var(--accent)">lists · releases</text>
+    <text x="369" y="122" fill="var(--accent)">lists · releases</text>
+    <text x="369" y="192" fill="var(--tracked)">lists · tracks only</text>
+  </g>
+</svg>
+</div>
+<figcaption>The root decides what is listed. The repo decides who releases it. When the two agree, the fleet releases the repo. When the repo names another fleet, this fleet keeps a copy at a known commit and never tags it.</figcaption>
+</figure>
+
+<h2>What <code>add fleet</code> does</h2>
+<p>Adding a repo is three local writes and no network call. The line reaches origin with the repo's next release, through the same gates every release passes, so there is no extra push that can fail halfway.</p>
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 1110 160" role="img" aria-label="manifest add fleet lib -y commits the released_by line in the repo, then writes the roster row. Nothing is pushed; the next ship fleet carries the line to origin with the release.">
+  <defs><marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
+  <g stroke="currentColor" fill="var(--surface)" stroke-width="1.2">
+    <rect x="10" y="50" width="170" height="60" rx="6"/>
+    <rect x="250" y="50" width="230" height="60" rx="6"/>
+    <rect x="550" y="50" width="140" height="60" rx="6"/>
+    <rect x="760" y="50" width="140" height="60" rx="6"/>
+    <rect x="970" y="50" width="130" height="60" rx="6" stroke-dasharray="4 3"/>
+  </g>
+  <g fill="currentColor">
+    <text x="24" y="74" font-weight="500">manifest add fleet</text><text x="24" y="94">lib -y</text>
+    <text x="264" y="74" font-weight="500">lib/manifest.config.yaml</text><text x="264" y="94" fill="var(--accent)">released_by: …/platform</text>
+    <text x="564" y="74" font-weight="500">git commit</text><text x="564" y="94">only that file</text>
+    <text x="774" y="74" font-weight="500">roster</text><text x="774" y="94">+ lib  ✓ selected</text>
+    <text x="984" y="74" font-weight="500" fill="var(--muted)">next ship fleet</text><text x="984" y="94" fill="var(--muted)">pushes the line</text>
+  </g>
+  <g stroke="currentColor" stroke-width="1.2" fill="none">
+    <line x1="180" y1="80" x2="248" y2="80" marker-end="url(#arr2)"/>
+    <line x1="480" y1="80" x2="548" y2="80" marker-end="url(#arr2)"/>
+    <line x1="690" y1="80" x2="758" y2="80" marker-end="url(#arr2)"/>
+    <line x1="900" y1="80" x2="968" y2="80" stroke-dasharray="4 3" marker-end="url(#arr2)"/>
+  </g>
+  <g fill="var(--muted)" text-anchor="middle">
+    <text x="214" y="70">1 writes</text><text x="514" y="70">2 commits</text><text x="724" y="70">3 writes</text><text x="934" y="70">later</text>
+    <text x="555" y="142">a hook failure or a foreign line stops at step 2: nothing else is written</text>
+  </g>
+</svg>
+</div>
+<figcaption>The commit stages only that one file, so unrelated edits in the repo are never swept in. It counts as a change, so a repo added to a fleet gets one small release at the next ship, and that release is what carries the line to origin.</figcaption>
+</figure>
+
+<h2>What <code>ship fleet</code> does</h2>
+<p>The release is gated. Every check runs before anything of yours is written, and the checks decide one of three outcomes per member. A conflict stops the whole fleet before any tag exists, so there is never a half-released fleet to clean up.</p>
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 800 480" role="img" aria-label="ship fleet locks every member, fetches each member's released_by line from origin, then decides per member: release, track, or stop. Nothing is written above the dashed line. Below it, released members are bumped, tagged and pushed, the snapshot records every member's commit, and the root commits roster and snapshot.">
+  <defs><marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
+  <g stroke="currentColor" fill="var(--surface)" stroke-width="1.2">
+    <rect x="240" y="10" width="320" height="44" rx="6"/>
+    <rect x="240" y="84" width="320" height="44" rx="6"/>
+    <rect x="30" y="170" width="220" height="60" rx="6" stroke="var(--accent)"/>
+    <rect x="290" y="170" width="220" height="60" rx="6" stroke="var(--tracked)"/>
+    <rect x="550" y="170" width="220" height="60" rx="6" stroke="var(--stop)"/>
+    <rect x="30" y="310" width="220" height="44" rx="6"/>
+    <rect x="190" y="380" width="420" height="44" rx="6"/>
+    <rect x="240" y="440" width="320" height="34" rx="6"/>
+  </g>
+  <g fill="currentColor">
+    <text x="400" y="30" text-anchor="middle" font-weight="500">fetch · read released_by</text>
+    <text x="400" y="46" text-anchor="middle" fill="var(--muted)">from every remote the ship pushes to</text>
+    <text x="400" y="104" text-anchor="middle" font-weight="500">lock every member</text>
+    <text x="400" y="120" text-anchor="middle" fill="var(--muted)">sorted · all or nothing</text>
+    <text x="140" y="192" text-anchor="middle" font-weight="500" fill="var(--accent)">release</text>
+    <text x="140" y="210" text-anchor="middle">origin says this fleet,</text>
+    <text x="140" y="224" text-anchor="middle">or no line yet</text>
+    <text x="400" y="192" text-anchor="middle" font-weight="500" fill="var(--tracked)">track</text>
+    <text x="400" y="210" text-anchor="middle">origin names another fleet;</text>
+    <text x="400" y="224" text-anchor="middle">keep at current commit</text>
+    <text x="660" y="192" text-anchor="middle" font-weight="500" fill="var(--stop)">stop</text>
+    <text x="660" y="210" text-anchor="middle">origin and your copy</text>
+    <text x="660" y="224" text-anchor="middle">name different fleets</text>
+    <text x="660" y="258" text-anchor="middle" fill="var(--stop)">whole fleet stops · nothing tagged</text>
+    <text x="780" y="288" text-anchor="end" fill="var(--muted)">nothing of yours is written above this line</text>
+    <text x="140" y="330" text-anchor="middle" font-weight="500">bump · commit · tag · push</text>
+    <text x="140" y="346" text-anchor="middle" fill="var(--muted)">released members only</text>
+    <text x="400" y="400" text-anchor="middle" font-weight="500">snapshot.json</text>
+    <text x="400" y="416" text-anchor="middle" fill="var(--muted)">records every member's commit, released and tracked</text>
+    <text x="400" y="462" text-anchor="middle" font-weight="500">root commit: roster + snapshot</text>
+  </g>
+  <g stroke="currentColor" stroke-width="1.2" fill="none">
+    <line x1="400" y1="54" x2="400" y2="82" marker-end="url(#arr3)"/>
+    <line x1="400" y1="128" x2="400" y2="150"/>
+    <line x1="140" y1="150" x2="660" y2="150"/>
+    <line x1="140" y1="150" x2="140" y2="168" marker-end="url(#arr3)"/>
+    <line x1="400" y1="150" x2="400" y2="168" marker-end="url(#arr3)"/>
+    <line x1="660" y1="150" x2="660" y2="168" marker-end="url(#arr3)"/>
+    <line x1="140" y1="230" x2="140" y2="308" marker-end="url(#arr3)"/>
+    <line x1="400" y1="230" x2="400" y2="378" marker-end="url(#arr3)"/>
+    <line x1="140" y1="354" x2="140" y2="402"/>
+    <line x1="140" y1="402" x2="188" y2="402" marker-end="url(#arr3)"/>
+    <line x1="400" y1="424" x2="400" y2="438" marker-end="url(#arr3)"/>
+    <line x1="660" y1="230" x2="660" y2="244" stroke="var(--stop)" marker-end="url(#arr3)"/>
+    <line x1="20" y1="272" x2="780" y2="272" stroke-dasharray="6 5"/>
+  </g>
+</svg>
+</div>
+<figcaption>The fetch only updates remote-tracking refs; your files, branches and history are untouched until the dashed line. Tracked members cross it only into the snapshot: their current commit is recorded, nothing in them is changed. The line is re-read once more inside each member right before its bump, so a claim that lands between the check and the release is still caught.</figcaption>
+</figure>
+
+<h2>Try the pre-flight rule</h2>
+<p>This is the exact decision the gate makes for one member. Change the inputs and read the outcome. "Origin's copy" means the line on the branch this fleet releases from, on every remote the member pushes to.</p>
+<div class="widget">
+  <div class="row">
+    <div><label for="origin">origin's copy says</label>
+      <select id="origin"><option value="empty">no line, never had one</option><option value="removed">no line, but the last snapshot had one</option><option value="this">released by this fleet</option><option value="other">released by another fleet</option><option value="unreachable">could not fetch</option></select></div>
+    <div><label for="local">your copy says</label>
+      <select id="local"><option value="this">released by this fleet</option><option value="empty">no line</option><option value="other">released by another fleet</option><option value="bad">unreadable (conflict markers, bad value)</option></select></div>
+    <div><label for="mode">ship mode</label>
+      <select id="mode"><option value="normal">normal</option><option value="local">--local (no push)</option></select></div>
+  </div>
+  <div class="verdict" id="verdict" data-kind="release">
+    <span class="tag release" id="vtag">release</span>
+    <div><p id="vtext"></p><div class="msg" id="vmsg"></div></div>
+  </div>
+</div>
+
+<h2>Scenario checks</h2>
+<p>Each card is a situation the design has to survive, the steps that happen, and the outcome the test suite asserts. The tag names the same three outcomes as the gate above.</p>
+<div class="scenarios">
+
+<article class="sc"><div class="n">S1 · shared library</div><h3>Two products use the same library</h3>
+<ol><li>Fleet <code>core</code> adds <code>lib</code> first; the line says <code>fidenceio/core</code>.</li><li>Fleet <code>platform</code> adds <code>lib</code> too.</li><li>Both fleets ship.</li></ol>
+<div class="check"><span class="tag release">release</span><span><code>core</code> tags lib.</span></div>
+<div class="check"><span class="tag track">track</span><span><code>platform</code> records lib's commit in its snapshot and never tags it. No configuration beyond the add.</span></div></article>
+
+<article class="sc"><div class="n">S2 · first claim</div><h3>The line is new and origin has none</h3>
+<ol><li><code>add fleet api -y</code> writes and commits the line; nothing is pushed.</li><li>Origin has never carried a line for <code>api</code>.</li><li>You ship.</li></ol>
+<div class="check"><span class="tag release">release</span><span>Origin has no line and no snapshot ever recorded one, so there is nothing to disagree with. The release carries the line to origin. A first claim never blocks itself.</span></div></article>
+
+<article class="sc"><div class="n">S3 · blind race</div><h3>Two fleets claim one repo without talking</h3>
+<ol><li><code>core</code> adds <code>lib</code> and ships, so origin carries <code>fidenceio/core</code>.</li><li><code>platform</code>, out of date, adds <code>lib</code> too; its copy says <code>platform</code>.</li><li><code>platform</code> ships.</li></ol>
+<div class="check"><span class="tag stop">stop</span><span>Pre-flight fetches, sees <code>core</code> on origin, and stops before any tag: <em>lib: origin says released by fidenceio/core, your copy says fidenceio/platform.</em> Pull to accept it, or push a take-over commit and re-run. Without the origin check this race is still caught, but only by git rejecting the push after a local tag exists.</span></div></article>
+
+<article class="sc"><div class="n">S4 · two machines, one fleet</div><h3>Teammates build separate fleet roots</h3>
+<ol><li>Each runs <code>init fleet</code> in their own folder, sets <code>fleet.name: platform</code> and <code>github.owner: fidenceio</code>.</li><li>Neither shares a root repo.</li><li>Both add the same repos.</li></ol>
+<div class="check"><span class="tag release">release</span><span>The fleet's identity is its name under its owner, so both roots are <code>fidenceio/platform</code>. Members agree. Only one can push a given release first; git's ordinary push rules handle that. A fleet with no explicit name or owner is refused when it tries to write a line, so an accidental <code>unnamed-fleet</code> can never claim anything.</span></div></article>
+
+<article class="sc"><div class="n">S5 · IDE workspace</div><h3>A member opened from some other folder</h3>
+<ol><li>A <code>.code-workspace</code> lists repos from several fleets side by side.</li><li>You open <code>api</code> there and run <code>manifest status</code>, then <code>ship repo</code>.</li></ol>
+<div class="check"><span class="tag release">release</span><span>Status shows <em>Released by: fidenceio/platform</em>. <code>ship repo</code> prints a notice that this repo is normally released with that fleet, then proceeds. Workspaces are views; Manifest never reads them for membership.</span></div></article>
+
+<article class="sc"><div class="n">S6 · offline</div><h3>Origin cannot be reached, or <code>--local</code></h3>
+<ol><li>You ship on a train with <code>--local</code>.</li><li>Pre-flight cannot fetch.</li></ol>
+<div class="check"><span class="tag release">release</span><span>The gate uses your copy's line and says so: <em>could not check origin; used your copy</em>. In <code>--local</code> nothing is pushed. In a normal ship with a dead origin the final push fails and the member is reported as stranded, the same recovery path as any failed push today.</span></div></article>
+
+<article class="sc"><div class="n">S7 · fresh clone</div><h3>Clone the root on a new machine</h3>
+<ol><li><code>git clone</code> the fleet root.</li><li><code>manifest init fleet --connect -y</code>.</li></ol>
+<div class="check"><span class="tag release">release</span><span>Members this fleet releases are cloned and follow their branch.</span></div>
+<div class="check"><span class="tag track">track</span><span>Members released elsewhere are cloned and checked out at the commit in the snapshot. Repos you release follow their branch; repos you only use stay at the version you shipped with.</span></div></article>
+
+<article class="sc"><div class="n">S8 · hand-over</div><h3>Move a repo to another fleet, or rename a fleet</h3>
+<ol><li><code>manifest add fleet api --take-over -y</code> in the new fleet.</li><li>Preview: <em>api is released by fidenceio/old. Take over: it will be released by fidenceio/new.</em></li></ol>
+<div class="check"><span class="tag release">release</span><span>One visible commit in <code>api</code>. The old fleet's next ship sees the new line on origin and tracks <code>api</code> from then on.</span></div></article>
+
+<article class="sc"><div class="n">S9 · migration</div><h3>Replace a real submodule</h3>
+<ol><li><code>manifest plan fleet -y</code> finds the <code>.gitmodules</code> entry.</li><li><code>manifest reconcile fleet -y --adopt-submodules --commit</code>.</li></ol>
+<div class="check"><span class="tag release">release</span><span>The submodule becomes an ordinary repo on a branch, the parent's gitlink and <code>.gitmodules</code> section are removed and committed, the roster gains a row, and the line is written.</span></div></article>
+
+<article class="sc"><div class="n">S10 · leaving</div><h3>A fleet stops releasing a repo</h3>
+<ol><li>The repo is benched in the roster.</li><li>Its line still names the old fleet.</li></ol>
+<div class="check"><span class="tag bench">benched</span><span>A benched repo is left out of the ship and the snapshot entirely; it is neither released nor tracked. Its line keeps naming this fleet until another fleet takes it over. Nothing breaks, and <code>status</code> shows the stale name so a human can ask.</span></div></article>
+
+<article class="sc"><div class="n">S11 · fork</div><h3>origin is a fork, upstream is the real repo</h3>
+<ol><li><code>lib</code> has two remotes: <code>origin</code> (your fork, no line) and <code>upstream</code> (released by <code>fidenceio/core</code>).</li><li>Today a release pushes to every remote.</li><li>You ship.</li></ol>
+<div class="check"><span class="tag track">track</span><span>The gate reads the line from every remote the release would push to, not just <code>origin</code>. Upstream names <code>core</code>, so <code>lib</code> is tracked. Reading one remote while pushing to all of them was the single worst hole the review found.</span></div></article>
+
+<article class="sc"><div class="n">S12 · deleted line</div><h3>Someone removes the line on origin</h3>
+<ol><li>A cleanup commit, or a squash merge, drops <code>released_by</code> from <code>lib</code> on origin.</li><li>Another fleet ships next.</li></ol>
+<div class="check"><span class="tag stop">stop</span><span>The last snapshot recorded <code>fidenceio/core</code> for <code>lib</code>. "No line now" after "a line before" is a removal, not a first claim, so the gate stops and names the take-over command. The snapshot is the fleet's memory; no registry is needed.</span></div></article>
+
+</div>
+
+<h2>Fleet against submodules</h2>
+<p>The difference is where the pin lives. A submodule pins a commit inside the parent's history and leaves a detached checkout behind. A fleet pins in a file and leaves every repo as a normal repo on a branch.</p>
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 900 300" role="img" aria-label="Left: a git superproject holds .gitmodules and gitlink pins in its own history; each submodule is a detached checkout, and every bump needs a parent commit. Right: a fleet root holds a roster and a snapshot file with pins and URLs; each member is a normal repo on its branch, and a tracked member is held at the snapshot commit.">
+  <defs><marker id="arr4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
+  <g fill="currentColor" font-weight="500" font-family="var(--display)" font-size="16">
+    <text x="20" y="28">Git submodules</text><text x="450" y="28">Manifest Fleet</text>
+  </g>
+  <line x1="430" y1="12" x2="430" y2="290" stroke="currentColor" stroke-dasharray="4 4" stroke-width="1"/>
+  <g stroke="currentColor" fill="var(--surface)" stroke-width="1.2">
+    <rect x="20" y="50" width="190" height="120" rx="6"/>
+    <rect x="260" y="50" width="150" height="50" rx="6"/>
+    <rect x="260" y="120" width="150" height="50" rx="6"/>
+    <rect x="450" y="50" width="190" height="120" rx="6"/>
+    <rect x="690" y="50" width="190" height="50" rx="6" stroke="var(--accent)"/>
+    <rect x="690" y="120" width="190" height="50" rx="6" stroke="var(--tracked)"/>
+  </g>
+  <g fill="currentColor">
+    <text x="34" y="72" font-weight="500">superproject</text>
+    <text x="34" y="94" fill="var(--muted)">.gitmodules: urls</text>
+    <text x="34" y="114" fill="var(--muted)">history: gitlink per bump</text>
+    <text x="34" y="134">lib @ 7b2d</text><text x="34" y="154">ui  @ 19e0</text>
+    <text x="272" y="70" font-weight="500">lib</text><text x="272" y="88" fill="var(--muted)">detached HEAD</text>
+    <text x="272" y="140" font-weight="500">ui</text><text x="272" y="158" fill="var(--muted)">detached HEAD</text>
+    <text x="464" y="72" font-weight="500">fleet root</text>
+    <text x="464" y="94" fill="var(--muted)">roster: names, paths</text>
+    <text x="464" y="114" fill="var(--muted)">snapshot: commit + url</text>
+    <text x="464" y="134">api 3e1f · web a90c</text><text x="464" y="154">lib 7b2d (tracked)</text>
+    <text x="702" y="70" font-weight="500">api</text><text x="702" y="88" fill="var(--accent)">on main · released here</text>
+    <text x="702" y="140" font-weight="500">lib</text><text x="702" y="158" fill="var(--tracked)">at 7b2d · released by core</text>
+  </g>
+  <g stroke="currentColor" stroke-width="1.2" fill="none">
+    <line x1="210" y1="75" x2="258" y2="75" marker-end="url(#arr4)"/>
+    <line x1="210" y1="145" x2="258" y2="145" marker-end="url(#arr4)"/>
+    <line x1="640" y1="75" x2="688" y2="75" marker-end="url(#arr4)"/>
+    <line x1="640" y1="145" x2="688" y2="145" marker-end="url(#arr4)"/>
+  </g>
+  <g fill="var(--muted)" text-anchor="middle">
+    <text x="234" y="66">pins</text><text x="234" y="136">pins</text>
+    <text x="664" y="66">records</text><text x="664" y="136">holds</text>
+  </g>
+  <g fill="currentColor">
+    <text x="20" y="210" fill="var(--muted)">every version bump = a commit in the parent</text>
+    <text x="20" y="230" fill="var(--muted)">contributors work on detached checkouts</text>
+    <text x="20" y="250" fill="var(--muted)">one superproject owns the pin</text>
+    <text x="450" y="210" fill="var(--muted)">a bump = a new line in snapshot.json, written by ship</text>
+    <text x="450" y="230" fill="var(--muted)">contributors work on branches, as in any repo</text>
+    <text x="450" y="250" fill="var(--muted)">any fleet may track; the repo says who releases</text>
+  </g>
+</svg>
+</div>
+<figcaption>Same guarantee, reproducible checkouts from a pinned record, with the pin moved out of git history and into a file that the release writes for you.</figcaption>
+</figure>
+
+<div class="scroll">
+<table>
+<thead><tr><th>You want to</th><th>With submodules</th><th>With a fleet</th></tr></thead>
+<tbody>
+<tr><td>Record which repos belong together</td><td><code>.gitmodules</code></td><td><code>manifest.fleet.tsv</code></td></tr>
+<tr><td>Pin exact versions</td><td>gitlink commits in parent history</td><td><code>manifest.fleet.snapshot.json</code>, written by every <code>ship fleet</code></td></tr>
+<tr><td>Get everything on a new machine</td><td><code>git submodule update --init</code></td><td><code>manifest init fleet --connect -y</code></td></tr>
+<tr><td>Share one library between two products</td><td>both superprojects pin it; neither owns releases</td><td>both fleets list it; the library's line says who releases it</td></tr>
+<tr><td>Release the group</td><td>by hand, repo by repo</td><td><code>manifest ship fleet patch -y</code></td></tr>
+<tr><td>Work on a member</td><td>detached HEAD, remember to commit the parent</td><td>a normal branch; nothing to remember</td></tr>
+<tr><td>Migrate</td><td>—</td><td><code>plan fleet -y</code>, then <code>reconcile fleet -y --adopt-submodules --commit</code></td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>In plain words</h2>
+<div class="plain"><dl>
+<dt>fleet</dt><dd>A folder that lists repositories and releases them together.</dd>
+<dt>fleet root</dt><dd>That folder. It holds the list and the snapshot, and nothing else of yours.</dd>
+<dt>member</dt><dd>A repository on the list.</dd>
+<dt>released by</dt><dd>The one line in a repo that names the fleet allowed to tag and publish it.</dd>
+<dt>tracked</dt><dd>Listed by this fleet, released by another. Kept at a known version, never tagged here.</dd>
+<dt>benched</dt><dd>On the list but switched off. Left out of the ship and the snapshot.</dd>
+<dt>snapshot</dt><dd>The file the release writes: every member's commit at that moment.</dd>
+<dt>take over</dt><dd>Move a repo's release to a different fleet, on purpose, with one commit.</dd>
+<dt>pre-flight</dt><dd>The checks that run before anything is written. If one fails, nothing was changed.</dd>
+</dl></div>
+
+<footer>Companion page: <a href="decision-tree.html">the decision trees</a>. Behaviour described here is the v63 design after review. Commands shown exist today unless marked; <code>released_by</code>, tracked members, the origin check and <code>--take-over</code> are the additions. The origin check and <code>--take-over</code> are planned for the release after the first one.</footer>
+</div>
+
+<script>
+(function () {
+  var origin = document.getElementById('origin'), local = document.getElementById('local'), mode = document.getElementById('mode');
+  var box = document.getElementById('verdict'), tag = document.getElementById('vtag'), text = document.getElementById('vtext'), msg = document.getElementById('vmsg');
+
+  // The gate, for one member. Returns {kind, why, line}.
+  function decide(o, l, m) {
+    if (l === 'bad') return { kind: 'stop', why: 'The line in your copy cannot be read. A line that exists but does not parse is never treated as "no line" or "another fleet"; it stops the fleet before any member is touched.', line: 'lib: fleet.released_by is unreadable; fix the file and re-run' };
+    var unverified = (m === 'local' || o === 'unreachable');
+    if (unverified) {
+      if (l === 'other') return { kind: 'track', why: 'Your copy names another fleet, so this member is tracked, not released.', line: 'could not check origin; used your copy' };
+      if (m === 'local') return { kind: 'release', why: 'Your copy says this fleet, or has no line. --local pushes nothing, so an unverified line cannot reach anyone else.', line: 'could not check origin; used your copy' };
+      return { kind: 'release', why: 'Your copy says this fleet, or has no line. A normal ship still pushes at the end, so if origin later disagrees that push is rejected and the member is reported as stranded, not silently overwritten.', line: 'could not check origin; used your copy' };
+    }
+    if (o === 'removed') {
+      if (l === 'other') return { kind: 'track', why: 'Someone removed the line on origin since this fleet last shipped, and your copy names another fleet.', line: 'lib: the line was removed on origin since the last snapshot' };
+      return { kind: 'stop', why: 'The last snapshot recorded a line and origin now has none. Removing a line is not the same as never having one, so this is not a first claim.', line: 'lib: released_by was removed on origin since the last ship. Pull, or: manifest add fleet lib --take-over -y' };
+    }
+    if (o === 'empty') {
+      if (l === 'other') return { kind: 'track', why: 'Origin has no line, your copy names another fleet. Tracked until that line lands on origin.', line: '' };
+      if (l === 'empty') return { kind: 'release', why: 'Released as today. No line exists anywhere; one is written the next time you run add fleet on it.', line: '' };
+      return { kind: 'release', why: 'A first claim. Origin has nothing to disagree with; the release carries the line to origin.', line: 'first claim: the release pushes released_by' };
+    }
+    if (o === 'this') {
+      if (l === 'other') return { kind: 'stop', why: 'Origin says this fleet, but your copy hands the repo to another fleet and that commit has not been pushed.', line: 'origin says released by us, your copy says another fleet. Push the hand-over (git push origin <branch>) and re-run, or pull to drop it.' };
+      return { kind: 'release', why: 'Origin and your copy agree: this fleet releases it.', line: '' };
+    }
+    // origin === 'other'
+    if (l === 'this') return { kind: 'stop', why: 'Another fleet claimed it on origin and your copy still says this fleet. Nothing is tagged.', line: 'origin says released by another fleet, your copy says us. Pull to accept it, or push your take-over commit and re-run.' };
+    return { kind: 'track', why: 'Origin names another fleet; this fleet keeps the repo at its current commit and never tags it.', line: 'tracked (released by another fleet)' };
+  }
+
+  function render() {
+    var r = decide(origin.value, local.value, mode.value);
+    box.setAttribute('data-kind', r.kind);
+    tag.className = 'tag ' + r.kind;
+    tag.textContent = r.kind;
+    text.textContent = r.why;
+    msg.textContent = r.line;
+    msg.hidden = !r.line;
+  }
+  [origin, local, mode].forEach(function (el) { el.addEventListener('change', render); });
+  render();
+})();
+</script>
+</head>
+<body></body>
+</html>

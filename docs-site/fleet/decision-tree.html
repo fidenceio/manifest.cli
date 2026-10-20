@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}a{color:inherit}</style>
+<title>Fleet Decision Tree</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column; each tree is a full-width figure that scrolls sideways on phones. */
+:root {
+  --bg: #F5F7F7; --surface: #FFFFFF; --fg: #16201F; --muted: #5B6967; --line: #D3DAD9;
+  --code-bg: #ECF0EF; --accent: #0B7A75; --accent-soft: #D9EFEC;
+  --tracked: #A8640A; --tracked-soft: #F6E8D2; --stop: #B3261E; --stop-soft: #F8DCD9;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", sans-serif;
+  --body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111615; --surface: #1A2120; --fg: #E6ECEA; --muted: #9AA8A5; --line: #2D3836;
+  --code-bg: #0D1211; --accent: #4FC6BF; --accent-soft: #163634;
+  --tracked: #E3A64F; --tracked-soft: #3A2A12; --stop: #F2847A; --stop-soft: #3F1A17; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111615; --surface: #1A2120; --fg: #E6ECEA; --muted: #9AA8A5; --line: #2D3836;
+  --code-bg: #0D1211; --accent: #4FC6BF; --accent-soft: #163634;
+  --tracked: #E3A64F; --tracked-soft: #3A2A12; --stop: #F2847A; --stop-soft: #3F1A17; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 16px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+.wrap { max-width: 960px; margin: 0 auto; }
+h1, h2 { font-family: var(--display); text-wrap: balance; line-height: 1.1; margin: 0; }
+h1 { font-size: clamp(32px, 5.5vw, 50px); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: clamp(22px, 3.2vw, 30px); font-weight: 700; margin-top: 56px; }
+p { max-width: 66ch; margin: 12px 0 0; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+header.hero { padding-block: 48px 20px; border-bottom: 1px solid var(--line); }
+header.hero p.lede { font-size: 18px; max-width: 60ch; margin-top: 14px; }
+.pill { display: inline-block; font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); margin-top: 18px; }
+code { font-family: var(--mono); font-size: 0.92em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+figure { margin: 20px 0 0; }
+.scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+figure svg { width: 100%; min-width: 720px; max-width: 100%; height: auto; display: block; font-family: var(--mono); font-size: 12px; }
+@media (min-width: 780px) { figure svg { min-width: 0; } }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 10px; max-width: 72ch; }
+.rule { margin-top: 20px; padding: 18px 22px; border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 8px 8px 0; }
+.rule p { margin: 0; font-size: 18px; max-width: none; }
+.rule p + p { margin-top: 8px; font-size: 15px; color: var(--muted); }
+ol.steps { margin: 14px 0 0; padding-left: 22px; max-width: 70ch; }
+ol.steps li { margin-top: 8px; }
+ol.steps li ul { margin: 4px 0 0; padding-left: 18px; }
+.tag { font-family: var(--mono); font-size: 12px; padding: 1px 7px; border-radius: 4px; white-space: nowrap; }
+.tag.release { background: var(--accent-soft); color: var(--accent); }
+.tag.track { background: var(--tracked-soft); color: var(--tracked); }
+.tag.stop { background: var(--stop-soft); color: var(--stop); }
+.tag.bench { background: var(--code-bg); color: var(--muted); }
+footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+</style>
+
+<div class="wrap">
+<header class="hero">
+  <div class="eyebrow">Manifest CLI · Fleet</div>
+  <h1>What happens to each repo when a fleet ships</h1>
+  <p class="lede">Two trees. The first is the question the release gate asks about every repo on the list, in order. The second is the question you ask before adding a repo. Each path ends in one of four words.</p>
+  <span class="pill">design preview · planned for v63</span>
+</header>
+
+<h2>At ship time, for one repo</h2>
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 1000 548" role="img" aria-label="Decision tree. Is the repo switched on in the roster? No: benched. Can you read the line in your copy? No: stop. What does origin say? If origin says us: release, unless your copy says someone else, then stop. If origin says someone else: track, unless your copy says us, then stop. If origin never had a line: release as a first claim, unless your copy says someone else, then track. If origin had a line that is now removed: stop, unless your copy says someone else, then track. If origin cannot be reached: follow your copy, unverified.">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
+
+  <!-- Q0 -->
+  <rect x="300" y="14" width="400" height="44" rx="6" fill="var(--surface)" stroke="currentColor" stroke-width="1.2"/>
+  <text x="500" y="41" text-anchor="middle" fill="currentColor" font-weight="500">Is the repo switched on in the roster?</text>
+  <line x1="700" y1="36" x2="758" y2="36" stroke="currentColor" stroke-width="1.2" marker-end="url(#a)"/>
+  <text x="729" y="29" text-anchor="middle" fill="var(--muted)">no</text>
+  <rect x="760" y="14" width="140" height="44" rx="6" fill="var(--code-bg)" stroke="var(--line)" stroke-width="1.2"/>
+  <text x="830" y="34" text-anchor="middle" fill="var(--muted)" font-weight="500">benched</text>
+  <text x="830" y="49" text-anchor="middle" fill="var(--muted)">left out entirely</text>
+  <line x1="500" y1="58" x2="500" y2="86" stroke="currentColor" stroke-width="1.2" marker-end="url(#a)"/>
+  <text x="512" y="77" fill="var(--muted)">yes</text>
+
+  <!-- Q1 -->
+  <rect x="300" y="88" width="400" height="44" rx="6" fill="var(--surface)" stroke="currentColor" stroke-width="1.2"/>
+  <text x="500" y="115" text-anchor="middle" fill="currentColor" font-weight="500">Can you read the line in your copy?</text>
+  <line x1="700" y1="110" x2="758" y2="110" stroke="currentColor" stroke-width="1.2" marker-end="url(#a)"/>
+  <text x="729" y="103" text-anchor="middle" fill="var(--muted)">no</text>
+  <rect x="760" y="88" width="140" height="44" rx="6" fill="var(--stop-soft)" stroke="var(--stop)" stroke-width="1.2"/>
+  <text x="830" y="108" text-anchor="middle" fill="var(--stop)" font-weight="500">stop</text>
+  <text x="830" y="123" text-anchor="middle" fill="var(--stop)">fix the file first</text>
+  <line x1="500" y1="132" x2="500" y2="160" stroke="currentColor" stroke-width="1.2" marker-end="url(#a)"/>
+  <text x="512" y="151" fill="var(--muted)">yes</text>
+
+  <!-- Q2 -->
+  <rect x="250" y="162" width="500" height="58" rx="6" fill="var(--surface)" stroke="currentColor" stroke-width="1.2"/>
+  <text x="500" y="185" text-anchor="middle" fill="currentColor" font-weight="500">What does origin say?</text>
+  <text x="500" y="204" text-anchor="middle" fill="var(--muted)">the release branch, on every remote you push to</text>
+  <line x1="500" y1="220" x2="500" y2="246" stroke="currentColor" stroke-width="1.2"/>
+  <line x1="100" y1="246" x2="900" y2="246" stroke="currentColor" stroke-width="1.2"/>
+  <g stroke="currentColor" stroke-width="1.2" fill="none">
+    <line x1="100" y1="246" x2="100" y2="286" marker-end="url(#a)"/>
+    <line x1="300" y1="246" x2="300" y2="286" marker-end="url(#a)"/>
+    <line x1="500" y1="246" x2="500" y2="286" marker-end="url(#a)"/>
+    <line x1="700" y1="246" x2="700" y2="286" marker-end="url(#a)"/>
+    <line x1="900" y1="246" x2="900" y2="286" marker-end="url(#a)"/>
+  </g>
+
+  <!-- five columns: header node (answer + follow-up question) -->
+  <g fill="var(--surface)" stroke="currentColor" stroke-width="1.2">
+    <rect x="10" y="288" width="180" height="62" rx="6"/>
+    <rect x="210" y="288" width="180" height="62" rx="6"/>
+    <rect x="410" y="288" width="180" height="62" rx="6"/>
+    <rect x="610" y="288" width="180" height="62" rx="6"/>
+    <rect x="810" y="288" width="180" height="62" rx="6"/>
+  </g>
+  <g text-anchor="middle" fill="currentColor">
+    <text x="100" y="310" font-weight="500" fill="var(--accent)">origin: us</text>
+    <text x="100" y="334">copy says someone else?</text>
+    <text x="300" y="310" font-weight="500" fill="var(--tracked)">origin: someone else</text>
+    <text x="300" y="334">copy says us?</text>
+    <text x="500" y="310" font-weight="500">origin: never had a line</text>
+    <text x="500" y="334">copy says someone else?</text>
+    <text x="700" y="310" font-weight="500" fill="var(--stop)">origin: line removed</text>
+    <text x="700" y="334">copy says someone else?</text>
+    <text x="900" y="310" font-weight="500" fill="var(--muted)">origin: unreachable</text>
+    <text x="900" y="334">copy says someone else?</text>
+  </g>
+
+  <!-- yes / no edges to leaves -->
+  <g stroke="currentColor" stroke-width="1.2" fill="none">
+    <line x1="100" y1="350" x2="52" y2="398" marker-end="url(#a)"/><line x1="100" y1="350" x2="148" y2="398" marker-end="url(#a)"/>
+    <line x1="300" y1="350" x2="252" y2="398" marker-end="url(#a)"/><line x1="300" y1="350" x2="348" y2="398" marker-end="url(#a)"/>
+    <line x1="500" y1="350" x2="452" y2="398" marker-end="url(#a)"/><line x1="500" y1="350" x2="548" y2="398" marker-end="url(#a)"/>
+    <line x1="700" y1="350" x2="652" y2="398" marker-end="url(#a)"/><line x1="700" y1="350" x2="748" y2="398" marker-end="url(#a)"/>
+    <line x1="900" y1="350" x2="852" y2="398" marker-end="url(#a)"/><line x1="900" y1="350" x2="948" y2="398" marker-end="url(#a)"/>
+  </g>
+  <g fill="var(--muted)" text-anchor="middle">
+    <text x="62" y="378">yes</text><text x="140" y="378">no</text>
+    <text x="262" y="378">yes</text><text x="340" y="378">no</text>
+    <text x="462" y="378">yes</text><text x="540" y="378">no</text>
+    <text x="662" y="378">yes</text><text x="740" y="378">no</text>
+    <text x="862" y="378">yes</text><text x="940" y="378">no</text>
+  </g>
+
+  <!-- leaves: x = cx-96 (yes) and cx+4 (no), w=92 -->
+  <g stroke-width="1.2">
+    <rect x="4"   y="400" width="92" height="46" rx="6" fill="var(--stop-soft)" stroke="var(--stop)"/>
+    <rect x="104" y="400" width="92" height="46" rx="6" fill="var(--accent-soft)" stroke="var(--accent)"/>
+    <rect x="204" y="400" width="92" height="46" rx="6" fill="var(--stop-soft)" stroke="var(--stop)"/>
+    <rect x="304" y="400" width="92" height="46" rx="6" fill="var(--tracked-soft)" stroke="var(--tracked)"/>
+    <rect x="404" y="400" width="92" height="46" rx="6" fill="var(--tracked-soft)" stroke="var(--tracked)"/>
+    <rect x="504" y="400" width="92" height="46" rx="6" fill="var(--accent-soft)" stroke="var(--accent)"/>
+    <rect x="604" y="400" width="92" height="46" rx="6" fill="var(--tracked-soft)" stroke="var(--tracked)"/>
+    <rect x="704" y="400" width="92" height="46" rx="6" fill="var(--stop-soft)" stroke="var(--stop)"/>
+    <rect x="804" y="400" width="92" height="46" rx="6" fill="var(--tracked-soft)" stroke="var(--tracked)"/>
+    <rect x="904" y="400" width="92" height="46" rx="6" fill="var(--accent-soft)" stroke="var(--accent)"/>
+  </g>
+  <g text-anchor="middle" font-weight="500">
+    <text x="50"  y="420" fill="var(--stop)">stop</text>
+    <text x="150" y="420" fill="var(--accent)">release</text>
+    <text x="250" y="420" fill="var(--stop)">stop</text>
+    <text x="350" y="420" fill="var(--tracked)">track</text>
+    <text x="450" y="420" fill="var(--tracked)">track</text>
+    <text x="550" y="420" fill="var(--accent)">release</text>
+    <text x="650" y="420" fill="var(--tracked)">track</text>
+    <text x="750" y="420" fill="var(--stop)">stop</text>
+    <text x="850" y="420" fill="var(--tracked)">track</text>
+    <text x="950" y="420" fill="var(--accent)">release</text>
+  </g>
+  <g text-anchor="middle" font-size="11">
+    <text x="50"  y="436" fill="var(--stop)">push or pull</text>
+    <text x="150" y="436" fill="var(--accent)">you agree</text>
+    <text x="250" y="436" fill="var(--stop)">pull/take over</text>
+    <text x="350" y="436" fill="var(--tracked)">theirs</text>
+    <text x="450" y="436" fill="var(--tracked)">theirs</text>
+    <text x="550" y="436" fill="var(--accent)">first claim</text>
+    <text x="650" y="436" fill="var(--tracked)">theirs</text>
+    <text x="750" y="436" fill="var(--stop)">line removed</text>
+    <text x="850" y="436" fill="var(--tracked)">unverified</text>
+    <text x="950" y="436" fill="var(--accent)">unverified</text>
+  </g>
+
+  <line x1="60" y1="470" x2="940" y2="470" stroke="var(--line)" stroke-width="1"/>
+  <text x="500" y="492" text-anchor="middle" fill="var(--muted)">every stop happens before any member is touched</text>
+  <text x="500" y="510" text-anchor="middle" fill="var(--muted)">a release still ends with a normal push: an unverified line can be rejected there, never overwritten</text>
+  <text x="500" y="528" text-anchor="middle" fill="var(--muted)">"line removed" = the last snapshot recorded a line for this repo and origin now has none</text>
+</svg>
+</div>
+<figcaption>Read top to bottom. Three questions reach a leaf for every repo; the only branching that matters is what origin says, and each of its five answers needs at most one more yes/no.</figcaption>
+</figure>
+
+<div class="rule">
+  <p>Trust origin. If your copy contradicts it, stop. Nothing on origin counts as a first claim only if nothing was ever there.</p>
+  <p>That sentence is the whole tree. The leaves are the four words a repo can end up as: released, tracked, benched, or stopped.</p>
+</div>
+
+<h2>Before adding a repo</h2>
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 1000 340" role="img" aria-label="Decision tree for adding a repo. Is the repo inside your fleet folder? No: clone or move it in first. Does it already say who releases it? No line: add it and you release it. It says us: add it, already yours. It says another fleet: do you want to release it? No: add it as tracked. Yes: take over with one visible commit.">
+  <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
+
+  <rect x="300" y="14" width="400" height="44" rx="6" fill="var(--surface)" stroke="currentColor" stroke-width="1.2"/>
+  <text x="500" y="41" text-anchor="middle" fill="currentColor" font-weight="500">Is the repo inside your fleet folder?</text>
+  <line x1="700" y1="36" x2="758" y2="36" stroke="currentColor" stroke-width="1.2" marker-end="url(#b)"/>
+  <text x="729" y="29" text-anchor="middle" fill="var(--muted)">no</text>
+  <rect x="760" y="14" width="234" height="44" rx="6" fill="var(--code-bg)" stroke="var(--line)" stroke-width="1.2"/>
+  <text x="877" y="34" text-anchor="middle" fill="var(--muted)" font-weight="500">clone or move it in first</text>
+  <text x="877" y="49" text-anchor="middle" fill="var(--muted)">a fleet owns what it contains</text>
+  <line x1="500" y1="58" x2="500" y2="86" stroke="currentColor" stroke-width="1.2" marker-end="url(#b)"/>
+  <text x="512" y="77" fill="var(--muted)">yes</text>
+
+  <rect x="300" y="88" width="400" height="44" rx="6" fill="var(--surface)" stroke="currentColor" stroke-width="1.2"/>
+  <text x="500" y="115" text-anchor="middle" fill="currentColor" font-weight="500">Does it already say who releases it?</text>
+  <line x1="500" y1="132" x2="500" y2="158" stroke="currentColor" stroke-width="1.2"/>
+  <line x1="160" y1="158" x2="840" y2="158" stroke="currentColor" stroke-width="1.2"/>
+  <g stroke="currentColor" stroke-width="1.2" fill="none">
+    <line x1="160" y1="158" x2="160" y2="196" marker-end="url(#b)"/>
+    <line x1="500" y1="158" x2="500" y2="196" marker-end="url(#b)"/>
+    <line x1="840" y1="158" x2="840" y2="196" marker-end="url(#b)"/>
+  </g>
+
+  <rect x="60" y="198" width="200" height="56" rx="6" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.2"/>
+  <text x="160" y="220" text-anchor="middle" fill="var(--muted)">no line</text>
+  <text x="160" y="240" text-anchor="middle" fill="var(--accent)" font-weight="500">add it · you release it</text>
+
+  <rect x="400" y="198" width="200" height="56" rx="6" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.2"/>
+  <text x="500" y="220" text-anchor="middle" fill="var(--muted)">it says us</text>
+  <text x="500" y="240" text-anchor="middle" fill="var(--accent)" font-weight="500">add it · already yours</text>
+
+  <rect x="740" y="198" width="200" height="56" rx="6" fill="var(--surface)" stroke="currentColor" stroke-width="1.2"/>
+  <text x="840" y="220" text-anchor="middle" fill="var(--muted)">it says another fleet</text>
+  <text x="840" y="240" text-anchor="middle" fill="currentColor" font-weight="500">do you want to release it?</text>
+  <g stroke="currentColor" stroke-width="1.2" fill="none">
+    <line x1="840" y1="254" x2="770" y2="290" marker-end="url(#b)"/>
+    <line x1="840" y1="254" x2="910" y2="290" marker-end="url(#b)"/>
+  </g>
+  <text x="790" y="276" text-anchor="middle" fill="var(--muted)">no</text>
+  <text x="892" y="276" text-anchor="middle" fill="var(--muted)">yes</text>
+  <rect x="700" y="292" width="134" height="44" rx="6" fill="var(--tracked-soft)" stroke="var(--tracked)" stroke-width="1.2"/>
+  <text x="767" y="311" text-anchor="middle" fill="var(--tracked)" font-weight="500">add as tracked</text>
+  <text x="767" y="327" text-anchor="middle" fill="var(--tracked)" font-size="11">kept, never tagged</text>
+  <rect x="844" y="292" width="134" height="44" rx="6" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.2"/>
+  <text x="911" y="311" text-anchor="middle" fill="var(--accent)" font-weight="500">take over</text>
+  <text x="911" y="327" text-anchor="middle" fill="var(--accent)" font-size="11">--take-over · one commit</text>
+</svg>
+</div>
+<figcaption>Two questions, four outcomes. The only choice a person makes is the last one, and it is the choice they would have had to make anyway: release this repo here, or keep using it at a known version.</figcaption>
+</figure>
+
+<h2>The same trees as text</h2>
+<ol class="steps">
+  <li><strong>Switched on in the roster?</strong> No → <span class="tag bench">benched</span>, left out of the ship and the snapshot.</li>
+  <li><strong>Can the line in your copy be read?</strong> No → <span class="tag stop">stop</span>; a line that exists but does not parse is never treated as empty.</li>
+  <li><strong>What does origin say?</strong> Origin means the release branch on every remote the repo pushes to.
+    <ul>
+      <li>Us → <span class="tag release">release</span>, unless your copy says someone else → <span class="tag stop">stop</span> (an unpushed hand-over: push it or pull).</li>
+      <li>Someone else → <span class="tag track">track</span>, unless your copy says us → <span class="tag stop">stop</span> (pull to accept, or push a take-over).</li>
+      <li>Never had a line → <span class="tag release">release</span> as a first claim, unless your copy says someone else → <span class="tag track">track</span>.</li>
+      <li>Had a line, now removed → <span class="tag stop">stop</span>, unless your copy says someone else → <span class="tag track">track</span>.</li>
+      <li>Unreachable → follow your copy and say so; the final push still has to succeed.</li>
+    </ul>
+  </li>
+</ol>
+<ol class="steps">
+  <li><strong>Inside your fleet folder?</strong> No → clone or move it in.</li>
+  <li><strong>Does it already name a releaser?</strong> No line, or us → add it. Another fleet → add as tracked, or <code>add fleet &lt;repo&gt; --take-over -y</code> if you mean to release it here.</li>
+</ol>
+
+<footer>Companion to <a href="mechanics.html">the Fleet Mechanics page</a>. Describes the v63 design after review; the origin check and <code>--take-over</code> land in the release after the first one.</footer>
+</div>
+</head>
+<body></body>
+</html>
