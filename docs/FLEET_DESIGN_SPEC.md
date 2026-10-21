@@ -103,7 +103,7 @@ Outward actions — push, GitHub Release, create-remote — gate on `verified`, 
 | Verb | Moves | Idempotent | Safety | Available as |
 | ---- | ----- | ---------- | ------ | ------------ |
 | select / unselect | membership flag (`SELECT`) | yes | default benched; reversible | `SELECT` toggle in `manifest.fleet.tsv` |
-| clone | Local `absent` → `repo` | yes (skip if present) | read-only on remote | no user-facing verb — see [TRACKER §34](TRACKER.md) |
+| clone | Local `absent` → `repo` | yes (skip if present) | read-only on remote | no user-facing verb; cloning a missing member belongs to the connect route — see [TRACKER §95](TRACKER.md) |
 | verify | Remote `declared` → `verified` | yes (pure read) | grants outward trust | internal `git ls-remote` primitive only; no user-facing sweep — see [TRACKER §34](TRACKER.md) |
 | create-remote | Remote → `verified` | yes (create-if-absent, never clobber) | irreversible — dry-run first | `manifest init repo\|fleet --create-repo-private\|public` |
 
