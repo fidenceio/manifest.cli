@@ -1,5 +1,20 @@
 # Changelog
 
+## [62.0.1] - 2026-10-21
+
+**Release Type:** Patch
+
+### Changes
+
+- Fix(ci): restore required native macOS validation
+- Test(ci): isolate release recipe checks from checkout branch state
+- Test(ci): exercise generated gates on native runners without Docker
+- Test(ci): keep Docker fixture state outside product namespace
+- Chore(agents): add Codex mirrors of the four .claude/agents charters
+- Docs(site): add Fleet mechanics and decision-tree pages (v63 design preview)
+- Docs(tracker): file the v63 Fleet design as §93–§96; prune §34's clone half into §95a
+
+
 ## [62.0.0] - 2026-09-18
 
 **Release Type:** Major
@@ -123,15 +138,4 @@
 
 - Fix(config): refuse execution-naming config keys from committed layers (§44)
 - Docs(config): document that a committed config cannot name a program (§44)
-- Update documentation and examples
-
-
-## [59.10.0] - 2026-09-03
-
-**Release Type:** Minor
-
-### Changes
-
-- Fix(fleet): drop the roster's REMOTE_URL column so a credential cannot be committed
-- Fix(fleet): stop fleet init silently rewriting each member's own .gitignore
 - Update documentation and examples
