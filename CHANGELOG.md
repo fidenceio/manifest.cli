@@ -1,5 +1,15 @@
 # Changelog
 
+## [62.1.0] - 2026-11-05
+
+**Release Type:** Minor
+
+### Changes
+
+- Feat(cli)!: remove single-letter switches; only -y keeps a short form
+- Docs(reference): drop short spellings from COMMAND_REFERENCE usage lines
+
+
 ## [62.0.1] - 2026-10-21
 
 **Release Type:** Patch
@@ -128,14 +138,3 @@
 - Docs(tracker): §44(3) landed and the --explain lead reproduced; file §6(19) and the §79 nested-ship lead (§44)
 - Docs(tracker): file §80 — a gate that hangs on docker stalls a fleet ship silently (§80)
 - Fix(config): keep the whole command and its trust annotation in the execution disclosure (§44)
-
-
-## [59.10.1] - 2026-09-05
-
-**Release Type:** Patch
-
-### Changes
-
-- Fix(config): refuse execution-naming config keys from committed layers (§44)
-- Docs(config): document that a committed config cannot name a program (§44)
-- Update documentation and examples
