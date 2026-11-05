@@ -139,7 +139,7 @@ _manifest() {
                     _values 'option' -y --yes --depth --all-folders --force --dry-run --name --connect --no-connect --parallel --clone-only --pull-only --create-repo-private --create-repo-public --help
                     ;;
                 "ship repo")
-                    _values 'release type / option' "${bumps[@]}" resume -y --yes --local --dry-run --explain --force-bump -i --interactive
+                    _values 'release type / option' "${bumps[@]}" resume -y --yes --local --dry-run --explain --force-bump --interactive
                     ;;
                 "ship fleet")
                     _values 'release type / option' "${bumps[@]}" resume manager -y --yes --local --dry-run --explain --force-bump --require-clean

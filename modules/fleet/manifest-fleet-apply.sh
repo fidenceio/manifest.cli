@@ -382,7 +382,7 @@ fleet_reconcile() {
                 plan_file="$2"; shift 2 ;;
             --adopt-submodules)
                 adopt_submodules=true; shift ;;
-            -h|--help|help)
+            --help|help)
                 _render_help \
                     "manifest reconcile fleet [-y|--yes] [--dry-run] [--plan FILE] [--commit] [--push]" \
                     "Validate and apply a fleet adoption plan. Dry-run by default." \

@@ -517,7 +517,7 @@ check_auto_upgrade() {
 
 _manifest_cli_is_help_token() {
     case "${1:-}" in
-        help|-help|-h|--help) return 0 ;;
+        help|--help) return 0 ;;
         *) return 1 ;;
     esac
 }
@@ -536,7 +536,7 @@ _manifest_cli_has_help_flag() {
     local arg
     for arg in "$@"; do
         case "$arg" in
-            -help|-h|--help) return 0 ;;
+            --help) return 0 ;;
         esac
     done
     return 1
@@ -597,7 +597,7 @@ _manifest_pr_fleet_dispatch() {
     local implicit_queue=false
 
     case "${1:-}" in
-        create|status|checks|ready|queue|help|-h|--help)
+        create|status|checks|ready|queue|help|--help)
             pr_subcommand="${1:-help}"
             shift || true
             ;;
@@ -625,7 +625,7 @@ _manifest_pr_fleet_dispatch() {
     if [ "$implicit_queue" = "true" ]; then
         echo "ℹ️  Default fleet PR action: queue (use 'manifest pr fleet help' for all subcommands)."
     fi
-    if [[ "$pr_subcommand" == "help" || "$pr_subcommand" == "-h" || "$pr_subcommand" == "--help" ]]; then
+    if [[ "$pr_subcommand" == "help" || "$pr_subcommand" == "--help" ]]; then
         _render_help \
             "manifest pr fleet [queue|create|status|checks|ready] [-y|--yes] [--dry-run] [options]" \
             "Preview or run fleet-wide PR operations." \
@@ -689,7 +689,7 @@ _manifest_pr_fleet_dispatch() {
 # compares this allowlist with the actual dispatch arms below.
 _manifest_cli_is_supported_command() {
     case "${1:-}" in
-        ""|config|init|plan|reconcile|recipe|discover|add|update|topics|validate|ship|status|doctor|pr|revert|security|env|test|upgrade|uninstall|reinstall|cloud|agent|commit|bump-version|docs|cleanup|help|-help|--help|-h|version|-version|--version|-v|-V)
+        ""|config|init|plan|reconcile|recipe|discover|add|update|topics|validate|ship|status|doctor|pr|revert|security|env|test|upgrade|uninstall|reinstall|cloud|agent|commit|bump-version|docs|cleanup|help|--help|version|--version)
             return 0 ;;
         *) return 1 ;;
     esac
@@ -723,12 +723,12 @@ main() {
     # Retired nested routes also fail before any configuration side effects.
     if [[ "$command" == "recipe" ]]; then
         case "${1:-list}" in
-            list|show|explain|help|-h|--help) ;;
+            list|show|explain|help|--help) ;;
             *) manifest_recipe_dispatch "$@"; return $? ;;
         esac
     elif [[ "$command" == "ship" ]]; then
         case "${1:-}" in
-            ""|repo|fleet|help|-h|--help) ;;
+            ""|repo|fleet|help|--help) ;;
             *) manifest_ship_dispatch "$@"; return $? ;;
         esac
     fi
@@ -745,7 +745,7 @@ main() {
     # =========================================================================
     case "$command" in
         # Commands that do NOT require a Git repository
-        "help"|"-help"|"--help"|"-h"|"version"|"-version"|"--version"|"-v"|"-V"|"uninstall"|"reinstall"|"add"|"discover"|"update"|"upgrade"|"validate"|"config")
+        "help"|"--help"|"version"|"--version"|"uninstall"|"reinstall"|"add"|"discover"|"update"|"upgrade"|"validate"|"config")
             case "$command" in
                 "config")
                     MANIFEST_CLI_PROJECT_ROOT="$(pwd)"
@@ -870,7 +870,7 @@ main() {
                         show_configuration
                     fi
                     ;;
-                "-h"|"--help")
+                "--help")
                     cat <<'EOF'
 Usage: manifest config [<subcommand>] [args]
 
@@ -921,7 +921,7 @@ EOF
                     shift || true
                     fleet_plan "$@"
                     ;;
-                help|-h|--help)
+                help|--help)
                     _render_help \
                         "manifest plan <fleet> [options]" \
                         "Generate adoption plans. Dry-run by default." \
@@ -944,7 +944,7 @@ EOF
                     shift || true
                     fleet_reconcile "$@"
                     ;;
-                help|-h|--help)
+                help|--help)
                     _render_help \
                         "manifest reconcile <fleet> [options]" \
                         "Validate and apply adoption plans. Dry-run by default." \
@@ -975,12 +975,12 @@ EOF
                             "Discover repositories for fleet membership without writing changes." \
                             "Options" "  --depth N|auto  Scan depth; auto deepens to repos found, capped (default: auto)
   --json          Output JSON summary
-  --quiet, -q     Only output new repo lines"
+  --quiet         Only output new repo lines"
                         return 0
                     fi
                     fleet_discover "$@"
                     ;;
-                help|-h|--help)
+                help|--help)
                     _render_help \
                         "manifest discover <fleet> [options]" \
                         "Discover resources without writing changes." \
@@ -1012,7 +1012,7 @@ EOF
                     fi
                     fleet_add "$@"
                     ;;
-                help|-h|--help)
+                help|--help)
                     _render_help \
                         "manifest add <fleet> [options]" \
                         "Add a resource to Manifest-managed configuration." \
@@ -1041,12 +1041,12 @@ EOF
   -y, --yes       Apply fleet membership updates
   --depth N|auto  Scan depth; auto deepens to repos found, capped (default: auto)
   --json          Output JSON summary
-  --quiet, -q     Only output new repo lines"
+  --quiet         Only output new repo lines"
                         return 0
                     fi
                     fleet_update "$@"
                     ;;
-                help|-h|--help)
+                help|--help)
                     _render_help \
                         "manifest update <fleet>" \
                         "Update resources. For CLI upgrades, use manifest upgrade." \
@@ -1078,7 +1078,7 @@ EOF
                     fi
                     fleet_topics "$@"
                     ;;
-                help|-h|--help)
+                help|--help)
                     _render_help \
                         "manifest topics <fleet>" \
                         "Turn the parts of a repo's dotted name into GitHub topics." \
@@ -1107,7 +1107,7 @@ EOF
                     fi
                     fleet_validate "$@"
                     ;;
-                help|-h|--help)
+                help|--help)
                     _render_help \
                         "manifest validate <fleet>" \
                         "Validate Manifest-managed resources." \
@@ -1148,7 +1148,7 @@ EOF
 
             local subcommand=""
             case "${1:-}" in
-                "create"|"update"|"status"|"ready"|"checks"|"merge"|"queue"|"policy"|"help"|"-h"|"--help")
+                "create"|"update"|"status"|"ready"|"checks"|"merge"|"queue"|"policy"|"help"|"--help")
                     subcommand="${1:-help}"
                     shift || true
                     ;;
@@ -1221,7 +1221,7 @@ EOF
                             ;;
                     esac
                     ;;
-                "help"|"-h"|"--help")
+                "help"|"--help")
                     manifest_pr_help
                     ;;
                 *)
@@ -1614,11 +1614,11 @@ EOF
         # =====================================================================
         # HELP / FALLBACK
         # =====================================================================
-        "help"|"-help"|"--help"|"-h")
+        "help"|"--help")
             display_help
             ;;
 
-        "version"|"-version"|"--version"|"-v"|"-V")
+        "version"|"--version")
             display_version
             ;;
 

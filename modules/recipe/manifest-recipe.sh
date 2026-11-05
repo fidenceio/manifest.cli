@@ -307,7 +307,7 @@ manifest_recipe_dispatch() {
         explain)
             manifest_recipe_explain "$@"
             ;;
-        help|-h|--help)
+        help|--help)
             _render_help \
                 "manifest recipe <list|show|explain> [id]" \
                 "Inspect Manifest workflow recipes behind first-class commands." \

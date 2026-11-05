@@ -4,8 +4,8 @@
 
 # Coverage for manifest_ship_dispatch — scope routing, the legacy bare
 # bump-word route, help, and both error branches — plus the manifest_ship_repo
-# bump types not exercised elsewhere (major, revision, their short flags, and
-# the unknown/missing release-type errors). All ship calls here are previews:
+# bump types not exercised elsewhere (major, revision, the refused short
+# spellings, and the unknown/missing release-type errors). All ship calls here are previews:
 # nothing is written, no gate runs.
 
 load 'helpers/setup'
@@ -45,8 +45,8 @@ _mk_ship_fixture() {
     echo "$output" | grep -q "Unknown scope: bogus"
 }
 
-@test "ship dispatch: -h renders help and exits 0" {
-    run manifest_ship_dispatch -h
+@test "ship dispatch: --help renders help and exits 0" {
+    run manifest_ship_dispatch --help
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "manifest ship <repo|fleet> <patch|minor|major|revision>"
     echo "$output" | grep -q "Highest consequence command"
@@ -80,15 +80,23 @@ _mk_ship_fixture() {
     [ "$(cat "$SCRATCH/VERSION")" = "1.2.3" ]
 }
 
-@test "ship repo preview: -M and -r short flags resolve to major and revision" {
+# The single-letter release spellings (-p -m -M -r) and -i were removed with the
+# rest of the short switches; only -y keeps a short form. A short bump must be
+# refused as an unknown option, never resolved. The full word is the positive
+# control, asserted in the same test so a parser that ignores both cannot pass.
+@test "ship repo: short release spellings are refused; the full word still works" {
     _mk_ship_fixture
-    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_ship_repo -M
+    local short
+    for short in -p -m -M -r -i -h; do
+        MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_ship_repo "$short"
+        [ "$status" -eq 1 ]
+        echo "$output" | grep -q -- "Unknown option: $short"
+        ! echo "$output" | grep -q "Release type:"
+    done
+
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_ship_repo major
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "Release type:     major"
-
-    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_ship_repo -r
-    [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Release type:     revision"
 }
 
 @test "ship repo: unknown release type errors with usage" {

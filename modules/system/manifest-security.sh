@@ -115,7 +115,7 @@ _manifest_security_private_env_files() {
 
 # Main security audit function
 manifest_security() {
-    if [[ "${1:-}" == "help" || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    if [[ "${1:-}" == "help" || "${1:-}" == "--help" ]]; then
         _render_help \
             "manifest security [--write]" \
             "Run a security audit for tracked private files, likely PII, and environment-file hygiene." \

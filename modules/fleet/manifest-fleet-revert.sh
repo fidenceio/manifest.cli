@@ -98,7 +98,7 @@ manifest_revert_fleet() (
     [[ "$local_only" != true ]] || { log_error "Fleet revert is already local; --local is not supported."; return 1; }
     for arg in "${args[@]}"; do
         case "$arg" in
-            help|-h|--help)
+            help|--help)
                 _render_help "manifest revert fleet [<snapshot>] [-y|--yes] [--dry-run]" \
                     "Check out the manager and members at a recorded fleet snapshot.
 A snapshot is a manager Git commit containing manifest.fleet.snapshot.json.

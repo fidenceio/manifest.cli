@@ -601,7 +601,7 @@ fleet_docs_dispatch() {
             _fleet_ensure_initialized || return 1
             fleet_docs_status
             ;;
-        help|--help|-h)
+        help|--help)
             fleet_docs_help
             ;;
         # Allow passing flags directly to generate (e.g., manifest docs fleet --fleet-only)

@@ -68,8 +68,8 @@ YAML
     echo "$output" | grep -q "env validate: PASS"
 }
 
-@test "env dispatch: -h renders subcommand help and exits 0" {
-    run manifest_env_dispatch -h
+@test "env dispatch: --help renders subcommand help and exits 0" {
+    run manifest_env_dispatch --help
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "manifest env <generate|validate>"
     # Anchored on the subcommand name plus the opening words of its line, so a

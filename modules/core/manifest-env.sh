@@ -201,7 +201,7 @@ manifest_env_generate() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --check) check_only=true ;;
-            -h|--help)
+            --help)
                 _render_help \
                     "manifest env generate [--check] [--dry-run] [-y|--yes]" \
                     "Write the env files your spec's env: block describes, so the variable
@@ -338,7 +338,7 @@ names live in one place instead of being retyped per deployment target." \
 
 # manifest env validate — read-only: env prefix policy + drift + gitignore hygiene.
 manifest_env_validate() {
-    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || "${1:-}" == "help" ]]; then
+    if [[ "${1:-}" == "--help" || "${1:-}" == "help" ]]; then
         _render_help \
             "manifest env validate" \
             "Validate env hygiene: prefix policy, generated-artifact drift, gitignore." \
@@ -418,7 +418,7 @@ manifest_env_dispatch() {
             shift || true
             manifest_env_validate "$@"
             ;;
-        help|-h|--help|"")
+        help|--help|"")
             _render_help \
                 "manifest env <generate|validate>" \
                 "Keep your environment-variable names in one place — the spec's env: block —

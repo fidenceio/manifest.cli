@@ -1270,11 +1270,11 @@ manifest_status() {
                 verify=true
                 shift
                 ;;
-            -v|--verbose)
+            --verbose)
                 scope="fleet"
                 shift
                 ;;
-            -h|--help)
+            --help)
                 _render_help \
                     "manifest status [repo|fleet] [--json] [--bootstrap] [--verify]" \
                     "Read-only snapshot of repo or fleet state." \

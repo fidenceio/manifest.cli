@@ -51,7 +51,7 @@ _fleet_parse_apply_contract() {
                 commit_value=true; shift ;;
             --push)
                 push_value=true; shift ;;
-            --force|-f)
+            --force)
                 force_value=true; shift ;;
             *)
                 rest+=("$1"); shift ;;
@@ -352,13 +352,13 @@ fleet_plan() {
                     return 1
                 fi
                 plan_file="$2"; shift 2 ;;
-            --name|-n)
+            --name)
                 if [[ -z "${2:-}" ]] || [[ "${2:-}" == --* ]]; then
                     log_error "--name requires a value"
                     return 1
                 fi
                 fleet_name="$2"; shift 2 ;;
-            -h|--help|help)
+            --help|help)
                 _render_help \
                     "manifest plan fleet [-y|--yes] [--dry-run] [--depth auto|N] [--plan FILE]" \
                     "Generate a fleet adoption plan. Dry-run by default." \

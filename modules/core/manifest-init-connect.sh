@@ -49,7 +49,7 @@ manifest_init_connect_repo() {
             --create-repo-public)
                 create_repo_visibility=$(_manifest_parse_create_repo_flag "$create_repo_visibility" "public") || return 1
                 shift ;;
-            -h|--help)
+            --help)
                 _render_help \
                     "manifest init repo --connect [-y|--yes] [--dry-run] [--create-repo-private|--create-repo-public]" \
                     "Connect phase: establish origin and fast-forward existing history.
@@ -279,17 +279,17 @@ manifest_init_connect_fleet() {
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -p|--parallel) fleet_args+=("--parallel"); shift ;;
+            --parallel) fleet_args+=("--parallel"); shift ;;
             --clone-only) fleet_args+=("--clone-only"); shift ;;
             --pull-only) fleet_args+=("--pull-only"); shift ;;
-            -h|--help)
+            --help)
                 _render_help \
                     "manifest init fleet --connect [-y|--yes] [--dry-run] [--parallel] [--clone-only] [--pull-only]" \
                     "Connect phase: clone missing members, pull existing ones.
 This is the only part of 'init' that uses the network." \
                     "Options" "  --dry-run          Explicit preview; no clones, no pulls
   -y, --yes          Apply the connect plan
-  -p, --parallel     Run operations in parallel
+  --parallel         Run operations in parallel
   --clone-only       Only clone missing repos (skip pull)
   --pull-only        Only pull existing repos (skip clone)" \
                     "Examples" "  manifest init fleet --connect

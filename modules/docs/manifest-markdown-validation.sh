@@ -198,7 +198,7 @@ main() {
                 exit 1
             fi
             ;;
-        "help"|"-h"|"--help")
+        "help"|"--help")
             echo "Manifest Markdown Validation Module"
             echo "==================================="
             echo ""

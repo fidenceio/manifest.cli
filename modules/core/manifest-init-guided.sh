@@ -170,9 +170,9 @@ _manifest_init_guided() {
             --remote)
                 [[ -n "${2:-}" && "$2" != -* ]] || { log_error "--remote requires a URL or path"; return 1; }
                 repo_args+=(--remote "$2"); shift 2 ;;
-            -h|--help|help)
+            --help|help)
                 _render_help \
-                    "manifest init [-y|--yes] [--dry-run] [--depth N|auto] [--name NAME] [-f|--force]" \
+                    "manifest init [-y|--yes] [--dry-run] [--depth N|auto] [--name NAME] [--force]" \
                     "Guided onboarding: inspect this directory and set up Manifest." \
                     "Options" "  --dry-run        Explicit preview; no writes (default)
   -y, --yes        Apply the proposed setup (audited)
@@ -182,7 +182,7 @@ _manifest_init_guided() {
   --create-repo-private|--create-repo-public
                   GitHub visibility (default private when origin is missing)
   --no-connect    Scaffold only; do not certify ship readiness
-  -f, --force      Recreate local config; preserve project content" \
+  --force          Recreate local config; preserve project content" \
                     "Examples" "  manifest init                     # inspect + preview
   manifest init -y                  # single repo → fully initialized
   manifest init -y                  # fleet → writes manifest.fleet.tsv, then stops
@@ -195,15 +195,15 @@ _manifest_init_guided() {
                     log_error "--depth requires a value (N or auto)"; return 1
                 fi
                 depth_spec="$2"; shift 2 ;;
-            -n|--name)
+            --name)
                 if [[ -z "${2:-}" || "${2:-}" == -* ]]; then
                     log_error "--name requires a value"; return 1
                 fi
                 fleet_name="$2"; shift 2 ;;
-            -f|--force) force=true; shift ;;
+            --force) force=true; shift ;;
             *)
                 _render_help_error "Unknown option: $1" \
-                    "manifest init [-y|--yes] [--dry-run] [--depth N|auto] [--name NAME] [-f|--force]"
+                    "manifest init [-y|--yes] [--dry-run] [--depth N|auto] [--name NAME] [--force]"
                 return 1
                 ;;
         esac

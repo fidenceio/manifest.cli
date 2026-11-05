@@ -72,7 +72,7 @@ manifest_pr_create() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --draft)        draft=true; shift ;;
-            -h|--help)
+            --help)
                 _render_help \
                     "manifest pr create [-y|--yes] [--dry-run] [--draft] [--title <t>] [--body <b>] [--base <branch>]" \
                     "Preview or create a pull request from the current branch via the GitHub CLI (gh).
@@ -119,7 +119,7 @@ Any flag not handled here is forwarded to 'gh pr create'." \
 # manifest pr status [<number-or-branch>]
 # -----------------------------------------------------------------------------
 manifest_pr_status() {
-    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    if [[ "${1:-}" == "--help" ]]; then
         _render_help \
             "manifest pr status [<number-or-branch>]" \
             "Show the current branch's PR by default; pass a number or branch to target another."
@@ -138,7 +138,7 @@ manifest_pr_status() {
 # manifest pr checks [<number-or-branch>] [--watch]
 # -----------------------------------------------------------------------------
 manifest_pr_checks() {
-    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    if [[ "${1:-}" == "--help" ]]; then
         _render_help \
             "manifest pr checks [<number-or-branch>] [--watch]" \
             "Show CI check status. Pass --watch to poll until complete."
@@ -161,7 +161,7 @@ manifest_pr_ready() {
     fi
     set -- "${remaining_args[@]}"
 
-    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    if [[ "${1:-}" == "--help" ]]; then
         _render_help \
             "manifest pr ready [-y|--yes] [--dry-run] [<number-or-branch>]" \
             "Mark a draft PR as ready for review."
@@ -194,7 +194,7 @@ manifest_pr_merge() {
     fi
     set -- "${remaining_args[@]}"
 
-    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    if [[ "${1:-}" == "--help" ]]; then
         _render_help \
             "manifest pr merge [-y|--yes] [--dry-run] [<number-or-branch>] [--squash|--merge|--rebase] [--auto]" \
             "Merge a PR. Default is squash. --auto enables GitHub auto-merge once checks pass.
@@ -237,7 +237,7 @@ manifest_pr_update() {
     fi
     set -- "${remaining_args[@]}"
 
-    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    if [[ "${1:-}" == "--help" ]]; then
         _render_help \
             "manifest pr update [-y|--yes] [--dry-run] [<number-or-branch>] [--rebase|--merge]" \
             "Bring a PR branch up to date with its base."

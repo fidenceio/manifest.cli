@@ -152,10 +152,10 @@ is_falsy() {
 #
 # Example:
 #   _render_help \
-#       "manifest ship repo <patch|minor|major|revision> [--local] [-i]" \
+#       "manifest ship repo <patch|minor|major|revision> [--local] [--interactive]" \
 #       "Publish a release: version bump, docs, commit, tag, push." \
 #       "Options" "  --local            Local only (no tag, push, Homebrew)
-#   -i|--interactive   Enable interactive safety prompts" \
+#   --interactive   Enable interactive safety prompts" \
 #       "Examples" "  manifest ship repo patch
 #   manifest ship repo minor --local"
 # -----------------------------------------------------------------------------

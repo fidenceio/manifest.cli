@@ -202,7 +202,7 @@ disc_row() {
     write_curated_tsv             # records "# Depth: 2"
     export MANIFEST_CLI_FLEET_ROOT="$WS"
 
-    run fleet_update -q
+    run fleet_update --quiet
     [ "$status" -eq 0 ]
     [[ "$output" == *"deepsvc"* ]]
 }
@@ -214,7 +214,7 @@ disc_row() {
     # adaptive and resolves to the deepest repo (depth 2), so deepsvc is found.
     export MANIFEST_CLI_FLEET_ROOT="$WS"
 
-    run fleet_update -q
+    run fleet_update --quiet
     [ "$status" -eq 0 ]
     [[ "$output" == *"alpha"* ]]
     [[ "$output" == *"deepsvc"* ]]
@@ -226,7 +226,7 @@ disc_row() {
     write_curated_tsv                # records "# Depth: 2"
     export MANIFEST_CLI_FLEET_ROOT="$WS"
 
-    run fleet_update -q --depth 1    # explicit shallow scan wins
+    run fleet_update --quiet --depth 1    # explicit shallow scan wins
     [ "$status" -eq 0 ]
     [[ "$output" != *"deepsvc"* ]]
 }

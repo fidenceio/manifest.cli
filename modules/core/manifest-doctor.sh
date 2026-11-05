@@ -66,11 +66,15 @@ _doctor_version_surface_report() {
 }
 
 manifest_doctor() {
-    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    if [[ "${1:-}" == "--help" ]]; then
         echo "Usage: manifest doctor"
         echo ""
         echo "Comprehensive read-only health check of your Manifest environment."
         return 0
+    fi
+    if [[ "${1:-}" == -* ]]; then
+        _render_help_error "Unknown option: $1" "manifest doctor"
+        return 1
     fi
 
     local _doctor_errs=0

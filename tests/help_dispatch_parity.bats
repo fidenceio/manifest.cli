@@ -46,7 +46,7 @@ _dispatch_arms() {
             for (i = 1; i <= n; i++) {
                 p = pats[i]
                 gsub(/"/, "", p)
-                # Flag spellings of a command (-h, --help) are not commands.
+                # Flag spellings of a command (--help) are not commands.
                 if (p ~ /^-/) continue
                 print p
             }
@@ -72,7 +72,7 @@ _dispatch_arms() {
 # scope-dispatching arms (plan, reconcile, discover, add, update, topics,
 # validate) write theirs bare — `fleet)`, not `"fleet")` — and this scan
 # returns nothing for them. Widening the pattern is not enough to wire those
-# up: they also spell their help arm `help|-h|--help`, so the rule below would
+# up: they also spell their help arm `help|--help`, so the rule below would
 # read a bare `help` as a subcommand needing a help line.
 #
 # If `config` ever restyles to bare patterns this returns nothing, and the
@@ -351,8 +351,9 @@ unset"
     [ "$output" = "$expected" ]
 
     # Flag spellings are excluded by the rule, not missed by accident: the
-    # `config` arm also dispatches "-h"|"--help" and "--non-interactive", and
-    # none of the three belongs in a listing of commands.
+    # `config` arm also dispatches "--help" and "--non-interactive", and
+    # neither belongs in a listing of commands. "-h" is asserted absent too:
+    # the short spelling was removed with every other short switch except -y.
     refute grep -qx -- "--non-interactive" <<< "$output"
     refute grep -qx -- "--help" <<< "$output"
     refute grep -qx -- "-h" <<< "$output"

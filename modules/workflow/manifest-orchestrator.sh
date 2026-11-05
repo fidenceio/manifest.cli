@@ -1934,7 +1934,7 @@ manifest_ship_workflow() {
     local interactive_mode=false
     
     # Enable interactive mode with explicit flag values.
-    if [ "$interactive" = "-i" ] || [ "$interactive" = "--interactive" ] || [ "$interactive" = "true" ] || [ "$interactive" = "1" ]; then
+    if [ "$interactive" = "--interactive" ] || [ "$interactive" = "true" ] || [ "$interactive" = "1" ]; then
         interactive_mode=true
     fi
     
@@ -2574,7 +2574,7 @@ main() {
             local increment_type="${2:-patch}"
             manifest_test_dry_run "$increment_type"
             ;;
-        "help"|"-h"|"--help")
+        "help"|"--help")
             echo "Manifest Orchestrator Module"
             echo "==========================="
             echo ""
@@ -2587,11 +2587,11 @@ main() {
             echo ""
             echo "Options:"
             echo "  type: patch, minor, major, revision (default: patch)"
-            echo "  interactive: -i for interactive mode"
+            echo "  interactive: --interactive for interactive mode"
             echo ""
             echo "Examples:"
             echo "  $0 ship minor"
-            echo "  $0 ship patch -i"
+            echo "  $0 ship patch --interactive"
             echo "  $0 test major"
             ;;
         *)

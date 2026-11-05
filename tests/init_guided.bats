@@ -120,9 +120,9 @@ ready_repo() {
 
 # --- flags: help, policy -----------------------------------------------------
 
-@test "init guided: -h prints usage and writes nothing" {
+@test "init guided: --help prints usage and writes nothing" {
     mkdir -p "$SCRATCH/plain"
-    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/plain" run _manifest_init_guided -h
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/plain" run _manifest_init_guided --help
     [ "$status" -eq 0 ]
     echo "$output" | grep -q "manifest init"
     echo "$output" | grep -q "Guided onboarding"
@@ -220,7 +220,7 @@ ready_repo() {
 
 @test "init guided: --name followed by a flag errors (consumes no flag)" {
     mkrepo "$SCRATCH/repo"
-    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run _manifest_init_guided --name -f
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run _manifest_init_guided --name --force
     [ "$status" -ne 0 ]
     echo "$output" | grep -q -- "--name requires a value"
 }
@@ -232,11 +232,12 @@ ready_repo() {
     echo "$output" | grep -q -- "--depth requires a value"
 }
 
-@test "init guided: --help usage line lists -f|--force" {
+@test "init guided: --help usage line lists --force and no short spelling" {
     mkdir -p "$SCRATCH/plain"
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/plain" run _manifest_init_guided --help
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q -- "-f|--force"
+    echo "$output" | grep -q -- "\[--force\]"
+    ! echo "$output" | grep -q -- "-f|--force"
 }
 
 # --- read-only config guard (the mechanism `manifest init` relies on) --------

@@ -835,7 +835,7 @@ config_doctor() {
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            "-h"|"--help"|"help")
+            "--help"|"help")
                 echo "Usage: manifest config doctor [--fix] [-y|--yes] [--dry-run] [--file <path>]"
                 echo ""
                 echo "Options:"

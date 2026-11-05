@@ -1860,7 +1860,7 @@ manifest_init_repo() {
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -f|--force) force=true; shift ;;
+            --force) force=true; shift ;;
             --connect) connect=true; shift ;;
             --no-connect) connect=false; shift ;;
             --remote)
@@ -1874,7 +1874,7 @@ manifest_init_repo() {
                 create_explicit=true
                 create_repo_visibility=$(_manifest_parse_create_repo_flag "$create_repo_visibility" "public") || return 1
                 shift ;;
-            -h|--help)
+            --help)
                 _render_help \
                     "manifest init repo [-y|--yes] [--dry-run] [--force] [--remote URL] [--no-connect] [--create-repo-private|--create-repo-public]" \
                     "Prepare a repository for ship: initialize Git, connect origin, preserve or
@@ -1885,7 +1885,7 @@ Without an origin, the plan creates a PRIVATE GitHub repository by default.
 Use --remote URL to connect an existing repository instead." \
                     "Options" "  --dry-run                  Preview all actions; no writes or network calls
   -y, --yes                  Apply setup and run readiness checks
-  -f, --force                Recreate local config; preserve project content
+  --force                    Recreate local config; preserve project content
   --remote URL              Add origin using this existing remote URL or path
   --create-repo-private     Explicit private GitHub creation (default if missing)
   --create-repo-public      Create a PUBLIC GitHub repository
@@ -2320,17 +2320,17 @@ manifest_init_fleet() {
                     return 1
                 fi
                 depth="$2"; shift 2 ;;
-            -f|--force) force=true; shift ;;
+            --force) force=true; shift ;;
             --all-folders) all_folders=true; shift ;;
             --connect) connect=true; shift ;;
             --no-connect) connect=false; shift ;;
             # Connect-phase flags. Accepting them here is what lets
             # `manifest init fleet --connect --parallel` replace
             # `manifest prep fleet --parallel` without losing a knob.
-            -p|--parallel)   connect=true; connect_args+=("--parallel");   shift ;;
+            --parallel)   connect=true; connect_args+=("--parallel");   shift ;;
             --clone-only)    connect=true; connect_args+=("--clone-only"); shift ;;
             --pull-only)     connect=true; connect_args+=("--pull-only");  shift ;;
-            -n|--name)
+            --name)
                 if [[ -z "${2:-}" ]] || [[ "${2:-}" == --* ]]; then
                     log_error "--name requires a value"
                     return 1
@@ -2342,7 +2342,7 @@ manifest_init_fleet() {
             --create-repo-public)
                 create_repo_visibility=$(_manifest_parse_create_repo_flag "$create_repo_visibility" "public") || return 1
                 shift ;;
-            -h|--help)
+            --help)
                 _render_help \
                     "manifest init fleet [-y|--yes] [--dry-run] [--depth N|auto] [--all-folders] [--force] [--name NAME] [--connect] [--create-repo-private|--create-repo-public]" \
                     "Two-phase fleet initialization, plus an opt-in connect phase." \
@@ -2361,16 +2361,16 @@ manifest_init_fleet() {
   --depth N|auto             Scan depth in Phase 1; auto deepens to the
                              shallowest level with repos, capped (default: auto)
   --all-folders              Write every scanned folder to the TSV
-  -f, --force                Overwrite fleet-root/config files (re-runs Phase 1 +
+  --force                    Overwrite fleet-root/config files (re-runs Phase 1 +
                              skips guard); does NOT overwrite member content —
                              VERSION/README/etc. stay no-clobber
-  -n, --name                 Fleet name (prompted if not provided)
+  --name                     Fleet name (prompted if not provided)
   --connect                  After Phase 2, run the connect phase: clone missing
                              members, pull existing ones. OFF by default — without
                              it (and without --create-repo-*) this command makes no
                              network call at all.
   --no-connect               Explicitly skip the connect phase (the default)
-  -p, --parallel             Connect phase: clone/pull in parallel (implies --connect)
+  --parallel                 Connect phase: clone/pull in parallel (implies --connect)
   --clone-only               Connect phase: only clone missing members (implies --connect)
   --pull-only                Connect phase: only pull existing members (implies --connect)
   --create-repo-private      In Phase 2, create a private GitHub repo for each scaffolded dir
@@ -2560,7 +2560,7 @@ manifest_init_dispatch() {
         fleet)
             manifest_init_fleet "$@"
             ;;
-        -h|--help|help)
+        --help|help)
             _render_help \
                 "manifest init [repo|fleet] [options]" \
                 "Prepare a repository for ship, or review fleet membership.
@@ -2575,7 +2575,7 @@ Fleet membership is reviewed before member scaffolding; fleet connection uses
   fleet   Two-phase fleet setup via directory scanning" \
                 "Options" "  --dry-run    Explicit preview; no writes
   -y, --yes    Apply the setup plan
-  --depth N|auto, --name NAME, -f|--force
+  --depth N|auto, --name NAME, --force
                Guided fleet setup options; use scope help for all options" \
                 "More" "  manifest init repo --help    Per-repo options
   manifest init fleet --help   Phase 1 / Phase 2 details"
@@ -2583,7 +2583,7 @@ Fleet membership is reviewed before member scaffolding; fleet connection uses
         "")
             _manifest_init_guided "$@"
             ;;
-        -y|--yes|--dry-run|--depth|--name|-n|--force|-f|--connect|--no-connect|--remote|--create-repo-private|--create-repo-public)
+        -y|--yes|--dry-run|--depth|--name|--force|--connect|--no-connect|--remote|--create-repo-private|--create-repo-public)
             _manifest_init_guided "$scope" "$@"
             ;;
         *)

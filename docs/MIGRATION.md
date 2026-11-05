@@ -22,6 +22,20 @@ preview and apply flags is an error in either order.
 | `plan fleet --apply` / `--do` | `plan fleet -y` / `--yes` |
 | `reconcile fleet --apply` / `--do` | `reconcile fleet -y` / `--yes` |
 | `ship fleet --noprep` | `ship fleet --require-clean` |
+| `ship repo -p` / `-m` / `-M` / `-r` | `ship repo patch` / `minor` / `major` / `revision` |
+| `ship repo -i` | `ship repo --interactive` |
+| `-h` / `-help` / `-version` / `-v` / `-V` | `--help` / `--version` (the bare words `help` and `version` remain) |
+| `init -f`, `init fleet -n` / `-p` | `--force`, `--name` / `--parallel` |
+| `discover fleet -q`, `update fleet -q` | `--quiet` |
+| `status fleet -v` | `--verbose` |
+
+Every switch now has exactly one spelling, the full word. The only short
+switch kept is `-y`, because it is the apply switch in every documented command
+and in every script that drives Manifest. A removed short spelling is refused
+as an unknown option (`Unknown option: -q`, exit 1); it is never silently
+accepted or mapped. The one surface that does not refuse is `manifest pr
+create|status|checks|ready|merge|update`, which forwards any flag it does not
+recognise to `gh pr …`, so `-h` there shows gh's help rather than Manifest's.
 
 The guided setup implementation now lives under bare `manifest init`, with the
 same preview, target checks, audit record, and fleet membership-review checkpoint.

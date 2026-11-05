@@ -841,7 +841,7 @@ main() {
         "validate")
             validate_repository
             ;;
-        "help"|"-h"|"--help")
+        "help"|"--help")
             echo "Manifest Cleanup Docs Module"
             echo "======================"
             echo ""

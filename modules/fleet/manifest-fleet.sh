@@ -240,7 +240,7 @@ _fleet_require_initialized() {
 #   - Pending changes summary
 #
 # ARGUMENTS:
-#   --verbose, -v    Show detailed information for each service
+#   --verbose        Show detailed information for each service
 #   --json           Output in JSON format (for scripting)
 #
 # EXAMPLE:
@@ -254,7 +254,7 @@ fleet_status() {
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -v|--verbose) verbose=true; shift ;;
+            --verbose) verbose=true; shift ;;
             --json) json_output=true; shift ;;
             *) shift ;;
         esac
@@ -462,7 +462,7 @@ _fleet_start() {
                 fi
                 depth="$2"; shift 2 ;;
             --all-folders) all_folders=true; shift ;;
-            -f|--force) force=true; shift ;;
+            --force) force=true; shift ;;
             *) shift ;;
         esac
     done
@@ -1024,9 +1024,9 @@ create_fleet_gitignore() {
 #   5. Validates the configuration
 #
 # ARGUMENTS:
-#   --name, -n NAME              Fleet name (prompted if not provided)
-#   --template, -t               Use minimal template (no comments)
-#   --force, -f                  Overwrite existing manifest.fleet.config.yaml
+#   --name NAME                  Fleet name (prompted if not provided)
+#   --template                   Use minimal template (no comments)
+#   --force                      Overwrite existing manifest.fleet.config.yaml
 #   --create-repo-private        After init, gh-create a private GitHub repo per dir
 #   --create-repo-public         After init, gh-create a public  GitHub repo per dir
 #
@@ -1045,14 +1045,14 @@ _fleet_init() {
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -n|--name)
+            --name)
                 if [ -z "${2:-}" ] || [[ "${2:-}" == --* ]]; then
                     log_error "--name requires a value"
                     return 1
                 fi
                 fleet_name="$2"; shift 2 ;;
-            -t|--template) minimal_template=true; shift ;;
-            -f|--force) force=true; shift ;;
+            --template) minimal_template=true; shift ;;
+            --force) force=true; shift ;;
             --create-repo-private)
                 create_repo_visibility=$(_manifest_parse_create_repo_flag "$create_repo_visibility" "private") || return 1
                 shift ;;
@@ -1518,7 +1518,7 @@ EOF
 # All discovery logic now lives in fleet_update.
 # -----------------------------------------------------------------------------
 fleet_discover() {
-    if [[ "${1:-}" == "help" || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    if [[ "${1:-}" == "help" || "${1:-}" == "--help" ]]; then
         _render_help \
             "manifest discover fleet [--depth N|auto] [--json] [--quiet]" \
             "Discover repositories for fleet membership without writing changes."
@@ -1577,7 +1577,7 @@ _fleet_sync() {
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -p|--parallel) parallel=true; shift ;;
+            --parallel) parallel=true; shift ;;
             --clone-only) clone_only=true; shift ;;
             --pull-only) pull_only=true; shift ;;
             --dry-run) dry_run=true; shift ;;
@@ -1886,7 +1886,7 @@ _fleet_sync_parallel() {
 #   --depth N|auto Scan depth; auto deepens to repos found, capped (default: auto)
 #   --dry-run      Preview only — do not modify manifest.fleet.config.yaml
 #   --json         Output JSON summary (implies --dry-run)
-#   --quiet, -q    Only output new repo lines, for scripting (implies --dry-run)
+#   --quiet        Only output new repo lines, for scripting (implies --dry-run)
 #
 # EXAMPLE:
 #   manifest update fleet
@@ -1921,8 +1921,8 @@ fleet_update() {
                 depth="$2"; depth_explicit=true; shift 2 ;;
             --_from-init) skip_init_check=true; shift ;;
             --json) json_output=true; dry_run=true; shift ;;
-            -q|--quiet) quiet=true; dry_run=true; shift ;;
-            -h|--help|help)
+            --quiet) quiet=true; dry_run=true; shift ;;
+            --help|help)
                 _render_help \
                     "manifest update fleet [-y|--yes] [--dry-run] [--depth N|auto] [--json] [--quiet]" \
                     "Re-scan fleet membership and add newly discovered repositories." \
@@ -1930,8 +1930,17 @@ fleet_update() {
   -y, --yes    Apply fleet membership updates
   --depth N|auto  Scan depth; auto deepens to the shallowest level with repos, capped (default: auto)
   --json       Output JSON summary
-  --quiet, -q  Only output new repo lines"
+  --quiet      Only output new repo lines"
                 return 0
+                ;;
+            -*)
+                # A switch this parser does not know is refused, not dropped:
+                # dropping `-q` here once turned a one-line scripting output
+                # into the full banner with exit 0.
+                _render_help_error \
+                    "Unknown option: $1" \
+                    "manifest update fleet [-y|--yes] [--dry-run] [--depth N|auto] [--json] [--quiet]"
+                return 1
                 ;;
             *) shift ;;
         esac
@@ -2164,7 +2173,7 @@ fleet_topics() {
     set -- "${remaining_args[@]}"
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -h|--help|help)
+            --help|help)
                 _render_help \
                     "manifest topics fleet [-y|--yes] [--dry-run]" \
                     "Turn the parts of each repo's dotted name into GitHub topics. Only adds topics; never removes one." \
@@ -3738,7 +3747,7 @@ fleet_ship_manager() {
         case "$1" in
             patch|minor|major|revision)
                 increment_type="$1"; bump_requested=true; shift ;;
-            -h|--help)
+            --help)
                 cat << 'EOF'
 Usage: manifest ship fleet manager [patch|minor|major|revision] [-y|--yes] [--dry-run] [--local]
 
@@ -4081,7 +4090,7 @@ fleet_ship() {
                 log_error "--method belongs under 'manifest pr fleet queue', not 'manifest ship fleet'."
                 return 1
                 ;;
-            -h|--help)
+            --help)
                 cat << 'EOF'
 Usage: manifest ship fleet [patch|minor|major|revision] [-y|--yes] [--dry-run] [--local] [options]
 
@@ -4639,7 +4648,7 @@ fleet_resume() {
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -h|--help)
+            --help)
                 cat << 'EOF'
 Usage: manifest ship fleet resume [-y|--yes] [--dry-run]
 
@@ -4758,11 +4767,15 @@ EOF
 #   manifest validate fleet
 # -----------------------------------------------------------------------------
 fleet_validate() {
-    if [[ "${1:-}" == "help" || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    if [[ "${1:-}" == "help" || "${1:-}" == "--help" ]]; then
         _render_help \
             "manifest validate fleet" \
             "Validate fleet configuration and service paths."
         return 0
+    fi
+    if [[ "${1:-}" == -* ]]; then
+        _render_help_error "Unknown option: $1" "manifest validate fleet"
+        return 1
     fi
 
     if ! _fleet_require_initialized "validate"; then
@@ -4816,7 +4829,7 @@ fleet_add() {
                     return 1
                 fi
                 service_name="$2"; shift 2 ;;
-            -h|--help|help)
+            --help|help)
                 _render_help \
                     "manifest add fleet <path-or-url> [-y|--yes] [--dry-run] [--name NAME]" \
                     "Add a local path or remote URL to fleet membership."

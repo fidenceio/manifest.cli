@@ -481,7 +481,7 @@ manifest_ship_repo_preview_preflight_notice() {
 # ARGUMENTS:
 #   $1             Increment type: patch|minor|major|revision
 #   --local        Local-only mode (no remote operations)
-#   -i|--interactive  Enable interactive safety prompts
+#   --interactive  Enable interactive safety prompts
 # -----------------------------------------------------------------------------
 manifest_ship_repo() {
     local increment_type=""
@@ -511,31 +511,27 @@ manifest_ship_repo() {
                 local resume_arg
                 for resume_arg in "$@"; do
                     case "$resume_arg" in
-                        -h|--help) manifest_ship_repo --help; return $? ;;
+                        --help) manifest_ship_repo --help; return $? ;;
                     esac
                 done
                 manifest_ship_repo_resume "$@"
                 return $?
                 ;;
-            -p) increment_type="patch"; shift ;;
-            -m) increment_type="minor"; shift ;;
-            -M) increment_type="major"; shift ;;
-            -r) increment_type="revision"; shift ;;
-            -i|--interactive) interactive=true; shift ;;
+            --interactive) interactive=true; shift ;;
             --force-bump) force_bump=true; shift ;;
             --explain) explain=true; shift ;;
-            -h|--help)
+            --help)
                 _render_help \
-                    "manifest ship repo <patch|minor|major|revision>|resume [-y|--yes] [--dry-run] [--local] [--force-bump] [-i]" \
+                    "manifest ship repo <patch|minor|major|revision>|resume [-y|--yes] [--dry-run] [--local] [--force-bump] [--interactive]" \
                     "Preview or publish a release: version bump, docs, commit, tag, push." \
-                    "Options" "  patch | -p          Increment patch version (e.g. 1.2.3 -> 1.2.4)
-  minor | -m          Increment minor version (e.g. 1.2.3 -> 1.3.0)
-  major | -M          Increment major version (e.g. 1.2.3 -> 2.0.0)
-  revision | -r       Increment revision (e.g. 1.2.3 -> 1.2.3.1)
+                    "Options" "  patch               Increment patch version (e.g. 1.2.3 -> 1.2.4)
+  minor               Increment minor version (e.g. 1.2.3 -> 1.3.0)
+  major               Increment major version (e.g. 1.2.3 -> 2.0.0)
+  revision            Increment revision (e.g. 1.2.3 -> 1.2.3.1)
   --dry-run           Explicit preview; no writes, commits, tags, or pushes
   -y, --yes           Apply the release plan
   --local             With -y, local only — no tag, push, or Homebrew update
-  -i, --interactive   Enable interactive safety prompts
+  --interactive       Enable interactive safety prompts
   --force-bump        Bump, commit, and push even with no changes since the last
                       tag (forward-only — new commit + tag; never rewrites history)
   --explain           Show the built-in recipe definition without running it
@@ -544,14 +540,14 @@ manifest_ship_repo() {
   manifest ship repo patch -y
   manifest ship repo minor --local -y
   manifest ship repo patch --force-bump -y
-  manifest ship repo -M -i -y
+  manifest ship repo major --interactive -y
   manifest ship repo resume"
                 return 0
                 ;;
             *)
                 _render_help_error \
                     "Unknown option: $1" \
-                    "manifest ship repo <patch|minor|major|revision> [--local] [-i]"
+                    "manifest ship repo <patch|minor|major|revision> [--local] [--interactive]"
                 return 1
                 ;;
         esac
@@ -560,7 +556,7 @@ manifest_ship_repo() {
     if [[ -z "$increment_type" ]]; then
         _render_help_error \
             "ship repo requires a release type" \
-            "manifest ship repo <patch|minor|major|revision> [--local] [-i]"
+            "manifest ship repo <patch|minor|major|revision> [--local] [--interactive]"
         return 1
     fi
 
@@ -755,7 +751,7 @@ manifest_ship_fleet() {
             manager)
                 subcommand="manager"; shift ;;
             --explain) explain=true; shift ;;
-            -h|--help)
+            --help)
                 if [[ "$subcommand" == "resume" ]]; then
                     fleet_resume "--help"
                     return $?
@@ -912,16 +908,16 @@ manifest_ship_dispatch() {
         fleet)
             manifest_ship_fleet "$@"
             ;;
-        -h|--help|help)
+        --help|help)
             _render_help \
-                "manifest ship <repo|fleet> <patch|minor|major|revision> [--local] [-i]" \
+                "manifest ship <repo|fleet> <patch|minor|major|revision> [--local] [--interactive]" \
                 "Publish a release. Highest consequence command." \
                 "Scopes" "  repo           Single repo: version + docs + commit + tag + push
   fleet          Coordinated fleet release across all services
   fleet manager  Commit + push the fleet coordination root only (no members, no release)" \
                 "Options" "  --local             Local only — no tag, push, Homebrew, PRs
-  -i, --interactive   Enable interactive safety prompts" \
-                "More" "  manifest ship repo --help           Per-repo options + bump short flags
+  --interactive       Enable interactive safety prompts" \
+                "More" "  manifest ship repo --help           Per-repo options + release types
   manifest ship fleet --help          Fleet-specific flags (--require-clean, --force-bump, ...)
   manifest ship fleet manager --help  The coordination-root scope"
             ;;

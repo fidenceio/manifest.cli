@@ -459,7 +459,7 @@ manifest_config_list() {
         case "$1" in
             --layer) filter_layer="$2"; shift 2 ;;
             --json) emit_json=true; shift ;;
-            -h|--help)
+            --help)
                 _render_help \
                     "manifest config list [--layer global|fleet|project|local] [--json]" \
                     "List all configuration keys with their effective value and source layer.
@@ -594,7 +594,7 @@ _config_list_json_layer() {
 # manifest config get <key>
 # -----------------------------------------------------------------------------
 manifest_config_get() {
-    if [[ "${1:-}" == "" || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    if [[ "${1:-}" == "" || "${1:-}" == "--help" ]]; then
         _render_help \
             "manifest config get <key>" \
             "Print a config key's effective value (after layering)." \
@@ -634,7 +634,7 @@ manifest_config_set() {
     while [[ "${1:-}" == --* || "${1:-}" == -* ]]; do
         case "$1" in
             --layer) layer="$2"; shift 2 ;;
-            -h|--help)
+            --help)
                 _render_help \
                     "manifest config set [-y|--yes] [--dry-run] [--layer global|project|local] <key> <value>" \
                     "Set a config key in a specific layer.
@@ -712,7 +712,7 @@ manifest_config_unset() {
     while [[ "${1:-}" == --* || "${1:-}" == -* ]]; do
         case "$1" in
             --layer) layer="$2"; shift 2 ;;
-            -h|--help)
+            --help)
                 _render_help \
                     "manifest config unset [-y|--yes] [--dry-run] [--layer global|project|local] <key>" \
                     "Remove a config key from a specific layer.
@@ -771,7 +771,7 @@ here — remove fleet-wide values by running this command at the fleet root." \
 # manifest config describe <key>
 # -----------------------------------------------------------------------------
 manifest_config_describe() {
-    if [[ "${1:-}" == "" || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    if [[ "${1:-}" == "" || "${1:-}" == "--help" ]]; then
         _render_help \
             "manifest config describe <key>" \
             "Show where a key's value comes from across layers, plus its env-var name." \

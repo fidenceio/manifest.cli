@@ -1207,7 +1207,7 @@ manifest_revert_dispatch() {
     case "$scope" in
         repo) manifest_revert_repo "$@" ;;
         fleet) manifest_revert_fleet "$@" ;;
-        help|-h|--help)
+        help|--help)
             _render_help "manifest revert <repo|fleet> [target] [-y|--yes] [--dry-run]" \
                 "Preview or apply local checkouts at a recorded version." \
                 "Scopes" "  repo [<tag>]         Check out a local tag
@@ -1234,7 +1234,7 @@ manifest_revert_repo() {
     set -- "${args[@]}"
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -h|--help|help)
+            --help|help)
                 _render_help \
                     "manifest revert repo [<tag>] [-y|--yes] [--dry-run]" \
                     "Preview or check out a local tag in detached HEAD. With no tag, a terminal

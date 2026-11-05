@@ -239,7 +239,7 @@ main() {
             fi
             analyze_changes "$version" "$changes_file"
             ;;
-        "help"|"-h"|"--help")
+        "help"|"--help")
             echo "Manifest Git Changes Module"
             echo "=========================="
             echo ""

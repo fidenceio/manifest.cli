@@ -187,7 +187,7 @@ main() {
         "workflow")
             generate_workflow_template "${2:-}" "${3:-}" "${4:-}" "${5:-}"
             ;;
-        "help"|"-h"|"--help")
+        "help"|"--help")
             echo "Manifest Markdown Templates Module"
             echo "=================================="
             echo ""

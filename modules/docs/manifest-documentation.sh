@@ -1366,7 +1366,7 @@ main() {
             cat "$changes_file"
             rm -f "$changes_file"
             ;;
-        "help"|"-h"|"--help")
+        "help"|"--help")
             echo "Manifest Documentation Module"
             echo "============================"
             echo ""

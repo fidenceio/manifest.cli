@@ -489,7 +489,7 @@ main() {
         "force")
             uninstall_manifest "true" "true"
             ;;
-        "help"|"-h"|"--help")
+        "help"|"--help")
             echo "Manifest Uninstall Module"
             echo "========================"
             echo ""
