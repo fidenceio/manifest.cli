@@ -85,7 +85,7 @@ manifest init --dry-run
 manifest init -y
 manifest init --depth N|auto
 manifest init --name NAME
-manifest init -f|--force
+manifest init --force
 ```
 
 The guided front door. By default it inspects your current directory without changing
@@ -199,7 +199,7 @@ cause a member to inherit the fleet root's repository or remote.
 ### `manifest ship`
 
 ```bash
-manifest ship repo patch|minor|major|revision [--dry-run] [-y|--yes] [--local] [--explain] [--force-bump] [-i]
+manifest ship repo patch|minor|major|revision [--dry-run] [-y|--yes] [--local] [--explain] [--force-bump] [--interactive]
 manifest ship fleet patch|minor|major|revision [--dry-run] [-y|--yes] [--local] [--force-bump] [--require-clean]
 manifest ship repo resume [--dry-run] [-y|--yes]
 manifest ship fleet resume [--dry-run] [-y|--yes]
