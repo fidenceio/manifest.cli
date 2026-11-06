@@ -217,11 +217,11 @@ pids
 # Coverage directory used by tools like istanbul
 coverage/
 
-# Scratch file lists the lint containers write into the bind-mounted repo root
-# (.github/workflows/lint.yml). Ephemeral on a CI runner, but reproducing a lint
-# failure locally leaves them in the tree — where the release commit's `git add .`
-# would stage them. Ignoring is the backstop; the fix is for those steps to write
-# outside /work (TRACKER §88).
+# Scratch file lists the lint containers once wrote into the bind-mounted repo
+# root (.github/workflows/lint.yml). The steps now write under /tmp and
+# tests/lint_workflow_scratch.bats refuses a redirect into the mount (TRACKER
+# §88). Kept ignored as a backstop: a regressed step would otherwise leave them
+# where the release commit's `git add .` stages them.
 files.zero
 testfiles.zero
 

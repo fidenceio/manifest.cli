@@ -25,12 +25,17 @@ jobs:
             # (>= 0.7) parses .bats natively, and .bats files carry error-level
             # bats-specific checks (e.g. SC2314: a bare `!` in a @test never fails
             # the test). Reads .shellcheckrc automatically.
-            find modules scripts -name "*.sh" -type f -print0 > files.zero
-            find tests -name "*.bats" -type f -print0 >> files.zero
-            find tests -name "*.bash" -type f -print0 >> files.zero
-            printf "%s\0%s\0%s\0" install-cli.sh uninstall-cli.sh bootstrap.sh >> files.zero
-            echo "scripts: $(tr -dc "\0" < files.zero | wc -c)"
-            xargs -0 shellcheck --severity=error < files.zero
+            #
+            # The file list lives under /tmp, never under /work: /work is the
+            # bind-mounted repo, and a redirect into it leaves a scratch file in
+            # the tree of whoever reproduces this step locally (TRACKER §88).
+            # tests/lint_workflow_scratch.bats refuses a redirect into the mount.
+            find modules scripts -name "*.sh" -type f -print0 > /tmp/files.zero
+            find tests -name "*.bats" -type f -print0 >> /tmp/files.zero
+            find tests -name "*.bash" -type f -print0 >> /tmp/files.zero
+            printf "%s\0%s\0%s\0" install-cli.sh uninstall-cli.sh bootstrap.sh >> /tmp/files.zero
+            echo "scripts: $(tr -dc "\0" < /tmp/files.zero | wc -c)"
+            xargs -0 shellcheck --severity=error < /tmp/files.zero
           '
 
       - name: ShellCheck (hard gate — inert !-prefixed suite assertions)
@@ -45,10 +50,10 @@ jobs:
             # SC2251 (info) in plain bash such as tests/helpers/*.bash; with
             # --include only those codes are reported, so info severity is safe
             # as a hard gate.
-            find tests -name "*.bats" -type f -print0 > testfiles.zero
-            find tests -name "*.bash" -type f -print0 >> testfiles.zero
-            echo "test files: $(tr -dc "\0" < testfiles.zero | wc -c)"
-            xargs -0 shellcheck --include=SC2251,SC2314 --severity=info < testfiles.zero
+            find tests -name "*.bats" -type f -print0 > /tmp/testfiles.zero
+            find tests -name "*.bash" -type f -print0 >> /tmp/testfiles.zero
+            echo "test files: $(tr -dc "\0" < /tmp/testfiles.zero | wc -c)"
+            xargs -0 shellcheck --include=SC2251,SC2314 --severity=info < /tmp/testfiles.zero
           '
 
       - name: ShellCheck (advisory — warnings reported, do not block)
@@ -56,9 +61,9 @@ jobs:
         run: |
           set -uo pipefail
           docker run --rm -v "$PWD:/work" -w /work koalaman/shellcheck-alpine:v0.10.0 sh -lc '
-            find modules scripts -name "*.sh" -type f -print0 > files.zero
-            printf "%s\0%s\0%s\0" install-cli.sh uninstall-cli.sh bootstrap.sh >> files.zero
-            xargs -0 shellcheck --severity=warning < files.zero
+            find modules scripts -name "*.sh" -type f -print0 > /tmp/files.zero
+            printf "%s\0%s\0%s\0" install-cli.sh uninstall-cli.sh bootstrap.sh >> /tmp/files.zero
+            xargs -0 shellcheck --severity=warning < /tmp/files.zero
           '
 
   gitleaks:
