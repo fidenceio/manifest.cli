@@ -42,7 +42,7 @@ Four things, and an item missing any of them is not ready — it is a request fo
 
 Sizing them the same way is the most common planning error in this register:
 
-- **A build** — code plus its guard. Estimable. `§87`, `§88`.
+- **A build** — code plus its guard. Estimable. `§87`, `§90`.
 - **A lead** — a runtime claim nobody has reproduced. `§79`, `§80`, `§89` say so in their own
   text. **You do not schedule a lead; you schedule its reproduction**, which is usually
   under an hour, and the build is only sizeable afterwards. Scheduling the build first is how
@@ -59,11 +59,12 @@ Sizing them the same way is the most common planning error in this register:
 A deferral records the reason it was taken, and reasons lapse. **Re-read the reason, not the
 verdict.**
 
-The live example: `§88` was deliberately held out of v61.0.0 because `shellcheck` is a
-required status check on `main` and this repo's CI is only verified *after* publication — so
-a workflow edit riding on a release whose review was already complete was the one change
-that could not be walked back cheaply. **v61 has shipped. That reason has expired**, and
-`§88` is now an ordinary cheap change where a red lint costs a re-push.
+The example that proved it: `§88` was deliberately held out of v61.0.0 because `shellcheck`
+is a required status check on `main` and this repo's CI is only verified *after* publication
+— so a workflow edit riding on a release whose review was already complete was the one
+change that could not be walked back cheaply. **The reason expired the day v61 shipped**,
+the item sat for eight more weeks after its own register said so, and when it was finally
+picked up (retired 2026-11-06) it was an ordinary cheap change, committed between releases.
 
 Also check dependency chains before promising anything: `§86` waits on `§80`; `§32` is
 blocked on `§8`/`§9`; `§70 → §69 → §71` is a stated ordering constraint, not a preference,
