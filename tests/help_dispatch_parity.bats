@@ -1,15 +1,29 @@
 #!/usr/bin/env bats
+# bats file_tags=smoke
 #
-# Guards docs/TRACKER.md §11.
+# Guards docs/TRACKER.md §11 and §72.
 #
-# The command set is stated in four places: the dispatch `case` in
+# The command set is stated in SEVEN places: the dispatch `case` in
 # modules/core/manifest-core.sh (the only authority), display_help, the three
-# completion files, and docs/COMMAND_REFERENCE.md. Nothing compared any two of
-# them, and on 2026-08-20 each had drifted differently — display_help was
-# missing EIGHT dispatched, already-documented fleet commands while advertising
-# the deprecated `refresh fleet`, and the completions offered no `revert` at
-# all. A full 1532/1532 green suite either side of that fix proved the point:
-# no test asserted on display_help, so nothing could have caught it.
+# completion files, docs/COMMAND_REFERENCE.md, and the IDE catalog the
+# installer writes from heredocs in install-cli.sh (`install_ide_command_catalog`:
+# a JSON file, a markdown twin and two assistant hints). Nothing compared any
+# two of them, and on 2026-08-20 each had drifted differently — display_help
+# was missing EIGHT dispatched, already-documented fleet commands while
+# advertising the deprecated `refresh fleet`, and the completions offered no
+# `revert` at all. A full 1532/1532 green suite either side of that fix proved
+# the point: no test asserted on display_help, so nothing could have caught it.
+#
+# From 2026-08-20 to 2026-11-06 this header named COMMAND_REFERENCE.md as a
+# surface this file read, and it did not — the four it read were help and the
+# completions. §72 measured that with a control. The two surfaces an agent
+# actually reads, the reference and the installer catalog, are now read below
+# from the same dispatch parse: the reference must document every visible
+# command and its Command Tree must name only dispatched ones; the catalog's
+# `top_level_commands` must EQUAL the visible set, and each of its curated
+# command strings must name a dispatched command (and, for `config` and `pr`,
+# a dispatched subcommand). The catalog is guarded rather than generated: its
+# command strings carry scopes and increments the dispatcher does not know.
 #
 # The authority is parsed, never restated here — a hand-kept list of commands
 # in a test is just a fifth surface to drift. The one thing the file declares
@@ -482,4 +496,191 @@ unset"
         echo "remove it from the Settings block of display_help." >&2
         return 1
     fi
+}
+
+# ---------------------------------------------------------------------------
+# The two surfaces an agent reads (§72): docs/COMMAND_REFERENCE.md and the
+# installer's IDE catalog. Each helper takes the FILE to read, so the controls
+# below can mutate a copy and prove the check goes red.
+# ---------------------------------------------------------------------------
+
+# The top-level nodes of the Command Tree: lines whose first character is a
+# branch glyph (`├──`/`└──`) — nested lines start with `│` or spaces and name
+# scopes, not commands. `a|b|c` groups split. Locale-safe: index() of the glyph
+# is 1 under both a byte-wise and a UTF-8 awk, and the glyphs are stripped as
+# "everything before the first lowercase letter".
+_reference_tree_nodes() {
+    awk '/^## Command Tree/ { intree = 1 }
+         intree && /^```text/ { infence = 1; next }
+         infence && /^```/ { exit }
+         infence && (index($0, "├") == 1 || index($0, "└") == 1) {
+             sub(/^[^a-z]+/, "")
+             print $1
+         }' "$1" | tr '|' '\n' | grep -E '^[a-z][a-z-]*$' | sort -u
+}
+
+# Every command name the reference documents anywhere: the tree nodes plus the
+# second word of every `manifest <word>` phrase that starts a line — a usage
+# line, not a prose mention, so a sentence that merely names a command cannot
+# satisfy completeness. Usage lines still yield harmless extra tokens
+# ("manifest commands"), which is why only the tree is held to the stale
+# direction.
+_reference_command_tokens() {
+    { _reference_tree_nodes "$1"
+      grep -oE '^manifest [a-z][a-z-]*' "$1" | awk '{ print $2 }'
+    } | sort -u
+}
+
+_reference_missing() {
+    local tokens cmd
+    tokens="$(_reference_command_tokens "$1")"
+    while read -r cmd; do
+        [ -n "$cmd" ] || continue
+        grep -qx "$cmd" <<< "$tokens" || echo "$cmd"
+    done < <(_dispatch_arms visible)
+}
+
+# The installer's JSON catalog, read from its heredoc in install-cli.sh rather
+# than by running the installer: the heredoc IS the source, and a guard reads
+# the source. Anchored on the redirect line, never on a line number.
+_catalog_json() {
+    awk '/cat > "\$command_catalog_json" <<.EOF.$/ { inside = 1; next }
+         inside && /^EOF$/ { exit }
+         inside' "$1"
+}
+
+# The markdown twin's command bullets (`- \`manifest <verb> …`), verbs only.
+_catalog_md_verbs() {
+    awk '/cat > "\$command_catalog_md" <<EOF$/ { inside = 1; next }
+         inside && /^EOF$/ { exit }
+         inside' "$1" | grep -oE '^- \\`manifest [a-z][a-z-]*' | awk '{ print $3 }' | sort -u
+}
+
+# Curated command strings naming a verb, or a config/pr subcommand, that the
+# dispatcher does not have — the stale direction, which is the one that sends
+# an agent to a command that no longer exists.
+_catalog_stale() {
+    local visible cfg pr verb sub line
+    visible="$(_dispatch_arms visible)"
+    cfg="$(_sub_dispatch_arms config visible)"
+    pr="$(_sub_dispatch_arms pr visible)"
+    while read -r line; do
+        [ -n "$line" ] || continue
+        verb="$(awk '{ print $2 }' <<< "$line")"
+        sub="$(awk '{ print $3 }' <<< "$line")"
+        if ! grep -qx "$verb" <<< "$visible"; then echo "$line"; continue; fi
+        case "$verb" in
+            config) [ -z "$sub" ] || grep -qx "$sub" <<< "$cfg" || echo "$line" ;;
+            pr)     [ -z "$sub" ] || grep -qx "$sub" <<< "$pr"  || echo "$line" ;;
+        esac
+    done < <(_catalog_json "$1" | jq -r '.commands[]')
+}
+
+@test "parity: the reference and catalog scans find believable sets (positive control)" {
+    local nodes tokens
+    nodes="$(_reference_tree_nodes "$TEST_REPO_ROOT/docs/COMMAND_REFERENCE.md")"
+    [ "$(wc -l <<< "$nodes" | tr -d ' ')" -gt 15 ]
+    grep -qx ship <<< "$nodes"
+    grep -qx reconcile <<< "$nodes"
+    # Nested scope lines must NOT read as commands.
+    refute grep -qx repo <<< "$nodes"
+    refute grep -qx patch <<< "$nodes"
+    # The phrase scan reaches the commands documented below the tree.
+    tokens="$(_reference_command_tokens "$TEST_REPO_ROOT/docs/COMMAND_REFERENCE.md")"
+    grep -qx cloud <<< "$tokens"
+    grep -qx test <<< "$tokens"
+
+    _catalog_json "$TEST_REPO_ROOT/install-cli.sh" | jq -e '.commands | length > 20' >/dev/null
+    _catalog_json "$TEST_REPO_ROOT/install-cli.sh" | jq -e '.top_level_commands | length > 15' >/dev/null
+    [ "$(_catalog_md_verbs "$TEST_REPO_ROOT/install-cli.sh" | wc -l | tr -d ' ')" -gt 5 ]
+    grep -qx ship <<< "$(_catalog_md_verbs "$TEST_REPO_ROOT/install-cli.sh")"
+}
+
+@test "parity: every dispatched command is documented in docs/COMMAND_REFERENCE.md" {
+    local missing
+    missing="$(_reference_missing "$TEST_REPO_ROOT/docs/COMMAND_REFERENCE.md")"
+    if [ -n "$missing" ]; then
+        echo "Dispatched but absent from docs/COMMAND_REFERENCE.md: $(tr '\n' ' ' <<< "$missing")" >&2
+        echo "Add each to the Command Tree or document it as 'manifest <cmd>' below it." >&2
+        return 1
+    fi
+}
+
+@test "parity: every Command Tree node in COMMAND_REFERENCE.md is a dispatched command" {
+    local dispatched stale=() node
+    dispatched="$( { _dispatch_arms visible; _dispatch_arms hidden; } | sort -u)"
+    while read -r node; do
+        [ -n "$node" ] || continue
+        grep -qx "$node" <<< "$dispatched" || stale+=("$node")
+    done < <(_reference_tree_nodes "$TEST_REPO_ROOT/docs/COMMAND_REFERENCE.md")
+    if [ "${#stale[@]}" -gt 0 ]; then
+        echo "In the Command Tree but not dispatched: ${stale[*]}" >&2
+        return 1
+    fi
+}
+
+@test "parity: a command deleted from COMMAND_REFERENCE.md is reported missing (negative control)" {
+    local mutant
+    mutant="$BATS_TEST_TMPDIR/COMMAND_REFERENCE.md"
+    # Remove every mention of `doctor` — its tree node and its phrases.
+    sed -E 's/doctor/dctr/g' "$TEST_REPO_ROOT/docs/COMMAND_REFERENCE.md" > "$mutant"
+    refute grep -q doctor "$mutant"
+    [ "$(_reference_missing "$mutant")" = "doctor" ]
+    # Undoctored, the check reports nothing.
+    [ -z "$(_reference_missing "$TEST_REPO_ROOT/docs/COMMAND_REFERENCE.md")" ]
+}
+
+@test "parity: the installer catalog's top_level_commands equals the dispatcher's visible set" {
+    local expected actual
+    expected="$(_dispatch_arms visible)"
+    actual="$(_catalog_json "$TEST_REPO_ROOT/install-cli.sh" | jq -r '.top_level_commands[]' | sort -u)"
+    grep -qx init <<< "$expected"
+    grep -qx init <<< "$actual"
+    if [ "$actual" != "$expected" ]; then
+        echo "install-cli.sh top_level_commands drifted from the dispatcher." >&2
+        echo "Only in dispatcher: $(comm -23 <(echo "$expected") <(echo "$actual") | tr '\n' ' ')" >&2
+        echo "Only in catalog:    $(comm -13 <(echo "$expected") <(echo "$actual") | tr '\n' ' ')" >&2
+        return 1
+    fi
+}
+
+@test "parity: every curated command string in the installer catalog is dispatched" {
+    local stale
+    stale="$(_catalog_stale "$TEST_REPO_ROOT/install-cli.sh")"
+    if [ -n "$stale" ]; then
+        echo "Catalog strings naming no dispatched command/subcommand:" >&2
+        echo "$stale" >&2
+        return 1
+    fi
+    # And the markdown twin's bullets name dispatched verbs.
+    local verb bad=()
+    while read -r verb; do
+        [ -n "$verb" ] || continue
+        grep -qx "$verb" <<< "$(_dispatch_arms visible)" || bad+=("$verb")
+    done < <(_catalog_md_verbs "$TEST_REPO_ROOT/install-cli.sh")
+    [ "${#bad[@]}" -eq 0 ] || { echo "manifest-cli-commands.md bullets naming no dispatched command: ${bad[*]}" >&2; return 1; }
+}
+
+@test "parity: a stale catalog string and a dropped top-level command are both reported (negative control)" {
+    local mutant
+    mutant="$BATS_TEST_TMPDIR/install-cli.sh"
+    # A removed spelling re-added to the curated list, and a config subcommand
+    # that does not exist.
+    awk '$0 == "    \"manifest doctor\"," {
+             print "    \"manifest refresh fleet\","
+             print "    \"manifest config frobnicate\","
+             next }
+         { print }' "$TEST_REPO_ROOT/install-cli.sh" > "$mutant"
+    grep -q 'manifest refresh fleet' "$mutant"
+    [ "$(_catalog_stale "$mutant")" = "$(printf 'manifest refresh fleet\nmanifest config frobnicate')" ]
+    [ -z "$(_catalog_stale "$TEST_REPO_ROOT/install-cli.sh")" ]
+
+    # A visible command dropped from top_level_commands.
+    sed -E '/^    "cleanup",?$/d' "$TEST_REPO_ROOT/install-cli.sh" > "$mutant"
+    refute grep -qx '    "cleanup",' "$mutant"
+    local actual
+    actual="$(_catalog_json "$mutant" | jq -r '.top_level_commands[]' | sort -u)"
+    [ "$actual" != "$(_dispatch_arms visible)" ]
+    grep -qx cleanup <<< "$(_dispatch_arms visible)"
+    refute grep -qx cleanup <<< "$actual"
 }

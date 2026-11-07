@@ -547,6 +547,18 @@ manifest agent init|auth|status
 
 These need Manifest Cloud plugins. Ordinary repo and fleet releases do not.
 
+## Machine-Readable Catalog
+
+Every install writes an agent-facing catalog to `~/.manifest-cli/ide/`:
+
+| File | What it holds |
+| ---- | ------------- |
+| `manifest-cli-commands.json` | `top_level_commands` (the complete command set, kept equal to the dispatcher by the test suite), `commands` (the first-class command strings to prefer), the preview and apply flags, and the exit codes |
+| `manifest-cli-commands.md` | The first-class commands, grouped, each with a one-line purpose |
+| `AGENTS.md`, `CLAUDE.md` | A hint for coding assistants: preview by default, `-y` to apply, where the docs are, and what exit code `4` (the documentation handoff) asks of the agent |
+
+An agent or script should read the JSON rather than parse `manifest help`.
+
 ## Environment
 
 Frequently used variables:

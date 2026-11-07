@@ -1100,6 +1100,35 @@ EOF
     "manifest pr ready",
     "manifest pr merge",
     "manifest pr update"
+  ],
+  "top_level_commands": [
+    "add",
+    "agent",
+    "cleanup",
+    "cloud",
+    "config",
+    "discover",
+    "docs",
+    "doctor",
+    "env",
+    "help",
+    "init",
+    "plan",
+    "pr",
+    "recipe",
+    "reconcile",
+    "reinstall",
+    "revert",
+    "security",
+    "ship",
+    "status",
+    "test",
+    "topics",
+    "uninstall",
+    "update",
+    "upgrade",
+    "validate",
+    "version"
   ]
 }
 EOF
