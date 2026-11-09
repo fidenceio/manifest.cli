@@ -125,8 +125,16 @@ teardown() {
         run _manifest_release_gate_exec "$MANIFEST_CLI_PROJECT_ROOT" bash -c 'echo "writes=${MANIFEST_CLI_RELEASE_GATE_HOST_WRITES-unset} tier=${MANIFEST_CLI_RELEASE_GATE_TIER-unset}"'
     [ "$status" -eq 0 ]
     [[ "$output" == *"writes=true tier=unset"* ]]
-    # Unset on the caller's side arrives as empty, which the gate reads as false.
-    run _manifest_release_gate_exec "$MANIFEST_CLI_PROJECT_ROOT" bash -c 'echo "writes=[${MANIFEST_CLI_RELEASE_GATE_HOST_WRITES-unset}]"'
+    # The value is forwarded as the caller holds it: a ship has already
+    # defaulted it to `false` (set_default_configuration), and a bare
+    # caller holds it empty, which the gate reads as false. Both reach the
+    # clean room unchanged; the test supplies each rather than assuming
+    # which one its own environment carries.
+    MANIFEST_CLI_RELEASE_GATE_HOST_WRITES=false \
+        run _manifest_release_gate_exec "$MANIFEST_CLI_PROJECT_ROOT" bash -c 'echo "writes=[${MANIFEST_CLI_RELEASE_GATE_HOST_WRITES-unset}]"'
+    [[ "$output" == *"writes=[false]"* ]]
+    MANIFEST_CLI_RELEASE_GATE_HOST_WRITES= \
+        run _manifest_release_gate_exec "$MANIFEST_CLI_PROJECT_ROOT" bash -c 'echo "writes=[${MANIFEST_CLI_RELEASE_GATE_HOST_WRITES-unset}]"'
     [[ "$output" == *"writes=[]"* ]]
 }
 

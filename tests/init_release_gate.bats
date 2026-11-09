@@ -98,9 +98,11 @@ teardown() {
 
 @test "gate scaffold: with real Docker, a writing project check leaves nothing on the host; the opt-out lets it write" {
     [ -f /.dockerenv ] && skip "already inside a container; the host wrapper is not reached"
-    docker info >/dev/null 2>&1 || skip "docker is not available"
-    # Drop the stub so the real docker runs.
+    # Drop the stub BEFORE probing, or the probe hits the stub and this test
+    # skips forever while reading as covered.
     PATH="${PATH#"$SCRATCH/bin:"}"
+    [[ "$(command -v docker)" != "$SCRATCH/bin/docker" ]]
+    docker info >/dev/null 2>&1 || skip "docker is not available"
     echo "1.0.0" > "$PROJ/VERSION"
     printf 'test:\n\ttouch created-by-gate\n\tmkdir -p build-output\n' > "$PROJ/Makefile"
     ensure_release_gate_script "$PROJ"
@@ -125,8 +127,9 @@ teardown() {
     # On a Linux host the bind mount carries the host user's uid; Docker Desktop
     # presents it as root, so the ownership is staged inside the container here.
     [ -f /.dockerenv ] && skip "already inside a container; the host wrapper is not reached"
-    docker info >/dev/null 2>&1 || skip "docker is not available"
     PATH="${PATH#"$SCRATCH/bin:"}"
+    [[ "$(command -v docker)" != "$SCRATCH/bin/docker" ]]
+    docker info >/dev/null 2>&1 || skip "docker is not available"
     echo "1.0.0" > "$PROJ/VERSION"
     printf 'test:\n\tgit rev-parse --git-dir\n' > "$PROJ/Makefile"
     ensure_release_gate_script "$PROJ"
