@@ -398,13 +398,63 @@ A component spec's `env:` block is the single source of truth for a repository's
 environment variables. `env generate` builds the derived files from it:
 
 - `.env.example` — always
-- `k8s/env/configmap.yaml` and `k8s/env/external-secret.yaml` — when a `k8s/` directory exists
+- `k8s/env/kustomization.yaml` and `k8s/env/configmap.yaml` — when a `k8s/` directory
+  exists; the kustomization lists the bridges so overlays can reference the directory
+- `k8s/env/external-secret.yaml` — when a `k8s/` directory exists, the spec declares
+  secret variables, and `env.secrets.provider` is `external-secrets`
+- `k8s/env/component/kustomization.yaml` — with the above, when the secret path has `{env}`
 - the Dockerfile `ARG`→`ENV` marker block, for values needed at build time
 
 Planning is the default and `-y` writes. `--check` is the drift gate for use in a
-release: it exits `1` if any generated file is out of date. `env validate` only reads —
-it checks the prefix policy, whether generated files have drifted, and that `.env` is
-properly git-ignored.
+release: it exits `1` if any generated file is out of date, and names a secret store or
+path that differs from configuration. `env validate` only reads — it checks the prefix
+policy, whether generated files have drifted, and that `.env` is properly git-ignored.
+
+**The secret store is configuration; there is no built-in one.** When the spec declares
+secret variables and `env.secrets` is not set, `env generate` exits `1` and writes
+nothing. Set it once in the fleet root's `manifest.config.yaml`; a repository's own
+`manifest.config.yaml` overrides it key by key, and the repository value wins.
+
+```yaml
+env:
+  secrets:
+    provider: external-secrets        # or: none — secrets reach the workload another way
+    store: { kind: ClusterSecretStore, name: <store-name> }
+    api_version: external-secrets.io/v1
+    path: "secret/data/{env}/{identity}/{group}"   # tokens: {env} {identity} {group} {name}
+    property: "{name}"
+    refresh_interval: 1h
+    env_label: env                    # label the {env} value is read from
+```
+
+`{identity}` is the repository directory name, `{group}` the variable's `group`
+(default `app`), and `{name}` its stored name. `{env}` is not filled by `env generate`:
+it stays literal in every `remoteRef.key`, and the generated kustomize Component fills
+it per environment with one replacement that reads the `env_label` label off the
+ExternalSecret and writes it into that path segment. The segment index comes from where
+`{env}` sits in the template, so `kv/{env}/{identity}` gives index `1`. `{env}` must be a
+whole segment, and the label key must be a plain name, because kustomize addresses a
+label by a dotted field path.
+
+kustomize runs a Component before the including kustomization's own transformers, so
+a `labels:` entry beside `components:` arrives too late and the build fails with
+*fieldPath metadata.labels.env is missing*. Label the ExternalSecret one layer down,
+in a kustomization that references the `k8s/env` directory (kustomize refuses a file
+outside the referencing directory, which is why the generated `k8s/env/kustomization.yaml`
+exists), then include that layer and the Component together:
+
+```yaml
+# k8s/overlays/prod/env/kustomization.yaml — the label for this environment
+resources: [ ../../../env ]
+labels: [ { pairs: { env: prod } } ]
+
+# k8s/overlays/prod/kustomization.yaml — the labelled layer, then the Component fills {env}
+resources: [ env ]
+components: [ ../../env/component ]
+```
+
+The secret comments in `.env.example` are rendered from the same path template, so the
+two surfaces cannot disagree. No default names a vendor.
 
 **The prefix policy is on by default**, to keep environment-variable names tidy. Your
 application's own variable names must start with this repository's prefix. Well-known

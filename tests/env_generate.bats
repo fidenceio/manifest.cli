@@ -18,12 +18,21 @@ setup() {
     mkdir -p "$PROJ"
     export MANIFEST_CLI_PROJECT_ROOT="$PROJ"
     cd "$PROJ"
+    # The fixture spec declares a secret, and the generator fails closed with
+    # no secret store configured (env_secrets_store.bats pins that). These
+    # tests are about everything else, so they run with a store configured.
+    export MANIFEST_CLI_ENV_SECRETS_PROVIDER=external-secrets
+    export MANIFEST_CLI_ENV_SECRETS_STORE_NAME=team-store
+    export MANIFEST_CLI_ENV_SECRETS_PATH='secret/data/{env}/{identity}/{group}'
+    export MANIFEST_CLI_ENV_SECRETS_ENV_LABEL=env
 }
 
 teardown() {
     cd /tmp
     rm -rf "$SCRATCH"
     unset MANIFEST_CLI_PROJECT_ROOT
+    unset MANIFEST_CLI_ENV_SECRETS_PROVIDER MANIFEST_CLI_ENV_SECRETS_STORE_NAME \
+          MANIFEST_CLI_ENV_SECRETS_PATH MANIFEST_CLI_ENV_SECRETS_ENV_LABEL
 }
 
 write_spec() {
@@ -93,10 +102,12 @@ YAML
     refute grep -q "DB_PASSWORD" "$PROJ/k8s/env/configmap.yaml"
 
     # Secret bridge orientation (D-ENV-3/§2.7.2): secretKey = framework name,
-    # property = FIDENCE stored name, path = secret/{env}/{slug}/{group}.
+    # property = FIDENCE stored name, path = the configured template with
+    # {identity} and {group} expanded and {env} left for the Component.
     grep -q "secretKey: DATABASE_URL" "$PROJ/k8s/env/external-secret.yaml"
-    grep -q "property: FIDENCE_APP_DEMO_DB_PASSWORD" "$PROJ/k8s/env/external-secret.yaml"
-    grep -q "key: secret/data/{env}/fidence.app.demo/db" "$PROJ/k8s/env/external-secret.yaml"
+    grep -q 'property: "FIDENCE_APP_DEMO_DB_PASSWORD"' "$PROJ/k8s/env/external-secret.yaml"
+    grep -q 'key: "secret/data/{env}/fidence.app.demo/db"' "$PROJ/k8s/env/external-secret.yaml"
+    [ -f "$PROJ/k8s/env/component/kustomization.yaml" ]
 }
 
 @test "env generate -y: Dockerfile publics bridge block, applied idempotently" {

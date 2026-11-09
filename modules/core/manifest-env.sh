@@ -7,8 +7,19 @@
 #
 #   .env.example                    stored-name schema template (always)
 #   k8s/env/configmap.yaml          non-secret bridge (when k8s/ exists)
-#   k8s/env/external-secret.yaml    secret bridge via ESO (when k8s/ exists)
+#   k8s/env/external-secret.yaml    secret bridge via External Secrets Operator
+#                                   (when k8s/ exists, secrets are declared, and
+#                                   env.secrets.provider is external-secrets)
+#   k8s/env/component/kustomization.yaml
+#                                   kustomize Component that fills {env} in
+#                                   every remoteRef.key per environment (when
+#                                   the path template has {env})
 #   Dockerfile marker block         build-time publics ARG→ENV bridge
+#
+# The secret store is configuration, never a built-in (env.secrets.*, resolved
+# by _manifest_env_secrets_setting in manifest-init.sh). A spec that declares
+# secret variables with no env.secrets configured FAILS CLOSED: generate exits
+# non-zero and writes nothing.
 #
 # `env generate` previews by default, applies with -y, and gates drift with
 # --check (the run-tests.sh stanza). `env validate` = env prefix policy + drift +
@@ -69,28 +80,169 @@ _manifest_env_render_configmap() {
     fi
 }
 
-# Render the generated ExternalSecret (secret bridge, D-ENV-3): ESO secretKey
-# = injected framework name, remoteRef.property = FIDENCE stored name, path
-# secret/{env}/{slug}/{group} (refresh ≤4h per T1-9). `{env}` is patched by
-# the per-environment overlay.
+# Names of the spec's secret variables, one per line (empty when none).
+# Same predicate as the renderers (`.secret // false` compared as the string
+# "true"), so a quoted `secret: "true"` is a secret here too; a gate that only
+# accepted the YAML boolean let that spec through unconfigured.
+_manifest_env_spec_secret_names() {
+    local spec_file="$1"
+    yq e '.env[] | select((.secret // false | tostring) == "true") | .name // ""' "$spec_file" 2>/dev/null | grep -v '^$' || true
+}
+
+# Every problem with env.secrets for this spec, one per line on stdout; exit
+# 1 when there is at least one. No secret variables → nothing to configure.
+# This is the fail-closed gate: `env generate` refuses on any line here.
+_manifest_env_secrets_problems() {
+    local spec_file="$1"
+    local -a secret_names=()
+    local line
+    while IFS= read -r line; do
+        secret_names+=("$line")
+    done < <(_manifest_env_spec_secret_names "$spec_file")
+    [[ ${#secret_names[@]} -gt 0 ]] || return 0
+
+    local provider problems=0
+    provider="$(_manifest_env_secrets_setting provider)"
+    case "$provider" in
+        "")
+            local joined
+            joined="$(printf '%s, ' "${secret_names[@]}")"
+            echo "env.secrets.provider is not set, but ${#secret_names[@]} secret variable(s) are declared: ${joined%, }"
+            echo "Set env.secrets in manifest.config.yaml at the fleet root (or in this repo, which wins): provider external-secrets with store.name and path, or provider none when secrets reach the workload some other way. There is no built-in store."
+            return 1
+            ;;
+        none)
+            return 0
+            ;;
+        external-secrets)
+            ;;
+        *)
+            echo "env.secrets.provider '${provider}' is not recognised (external-secrets | none)"
+            return 1
+            ;;
+    esac
+
+    local store_name path property env_label
+    store_name="$(_manifest_env_secrets_setting store_name)"
+    path="$(_manifest_env_secrets_setting path)"
+    property="$(_manifest_env_secrets_setting property)"
+    env_label="$(_manifest_env_secrets_setting env_label)"
+
+    if [[ -z "$store_name" ]]; then
+        echo "env.secrets.store.name is not set"
+        problems=$((problems + 1))
+    elif [[ ! "$store_name" =~ ^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$ || "$store_name" == *..* ]]; then
+        # A Kubernetes object name (DNS-1123), which is also what keeps the
+        # unquoted YAML scalar a scalar.
+        echo "env.secrets.store.name '${store_name}' must be a Kubernetes object name (lowercase letters, digits, '-' and '.')"
+        problems=$((problems + 1))
+    fi
+    if [[ -z "$path" ]]; then
+        echo "env.secrets.path is not set (tokens: {env} {identity} {group} {name})"
+        problems=$((problems + 1))
+    fi
+
+    local api_version refresh_interval
+    api_version="$(_manifest_env_secrets_setting api_version)"
+    refresh_interval="$(_manifest_env_secrets_setting refresh_interval)"
+    if [[ ! "$api_version" =~ ^[A-Za-z0-9][A-Za-z0-9./-]*$ ]]; then
+        echo "env.secrets.api_version '${api_version}' is not an API group/version (letters, digits, '.', '/' and '-')"
+        problems=$((problems + 1))
+    fi
+    # A Go duration; bare `0` is the "fetch once" spelling the operator documents.
+    if [[ ! "$refresh_interval" =~ ^(0|([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+)$ ]]; then
+        echo "env.secrets.refresh_interval '${refresh_interval}' is not a duration (for example 1h, 30m, 90s, or 0 to fetch once)"
+        problems=$((problems + 1))
+    fi
+    # key and property are emitted double-quoted; a quote, a backslash or
+    # whitespace in the template would escape the quoting or retype the value.
+    if [[ "$path" =~ [\"\\[:space:]] ]]; then
+        echo "env.secrets.path may not contain quotes, backslashes or whitespace"
+        problems=$((problems + 1))
+    fi
+    if [[ "$property" =~ [\"\\[:space:]] ]]; then
+        echo "env.secrets.property may not contain quotes, backslashes or whitespace"
+        problems=$((problems + 1))
+    fi
+    local env_count
+    env_count="$(printf '%s' "$path" | grep -o '{env}' | grep -c . || true)"
+    if [[ "$env_count" -gt 1 ]]; then
+        echo "env.secrets.path may use {env} once: the per-environment replacement fills one segment, and a second {env} would ship literally"
+        problems=$((problems + 1))
+    fi
+
+    local token
+    while IFS= read -r token; do
+        [[ -n "$token" ]] || continue
+        case "$token" in
+            '{env}'|'{identity}'|'{group}'|'{name}') ;;
+            *)
+                echo "env.secrets.path has an unknown token ${token} (known: {env} {identity} {group} {name})"
+                problems=$((problems + 1))
+                ;;
+        esac
+    done < <(printf '%s' "$path" | grep -oE '\{[^}]*\}' || true)
+    while IFS= read -r token; do
+        [[ -n "$token" ]] || continue
+        case "$token" in
+            '{env}')
+                echo "env.secrets.property may not use {env}; only the path is filled per environment"
+                problems=$((problems + 1))
+                ;;
+            '{identity}'|'{group}'|'{name}') ;;
+            *)
+                echo "env.secrets.property has an unknown token ${token} (known: {identity} {group} {name})"
+                problems=$((problems + 1))
+                ;;
+        esac
+    done < <(printf '%s' "$property" | grep -oE '\{[^}]*\}' || true)
+
+    local env_index
+    env_index="$(_manifest_env_secrets_env_index "$path")"
+    if [[ "$env_index" == "-2" ]]; then
+        echo "env.secrets.path: {env} must be a whole path segment (between slashes), because the per-environment replacement addresses it by segment index"
+        problems=$((problems + 1))
+    elif [[ "$env_index" != "-1" ]]; then
+        if [[ -z "$env_label" ]]; then
+            echo "env.secrets.env_label is not set, and the path has {env}: the per-environment Component reads the environment from that label"
+            problems=$((problems + 1))
+        elif [[ ! "$env_label" =~ ^[A-Za-z0-9_-]+$ ]]; then
+            echo "env.secrets.env_label '${env_label}' must be a plain name (letters, digits, '-' and '_'): kustomize addresses a label by a dotted field path, so a key containing '.' or '/' cannot be referenced"
+            problems=$((problems + 1))
+        fi
+    fi
+
+    [[ "$problems" -eq 0 ]]
+}
+
+# Render the generated ExternalSecret (secret bridge, D-ENV-3): secretKey =
+# injected framework name, remoteRef.property = the stored name by default,
+# remoteRef.key = the env.secrets.path template with {identity} {group}
+# {name} expanded. `{env}` stays literal here; the Component fills it per
+# environment. Called only when secrets are declared and the provider is
+# external-secrets.
 _manifest_env_render_external_secret() {
     local spec_file="$1"
     local project_root="$2"
     local repo_dir
     repo_dir="$(basename "$project_root")"
+    local path_template property_template
+    path_template="$(_manifest_env_secrets_setting path)"
+    property_template="$(_manifest_env_secrets_setting property)"
 
     printf '# Generated by Manifest CLI from %s `env:` (ENV-001, STANDARD.md §2.7).\n' "$(basename "$spec_file")"
-    printf '# Secret bridge — OpenBao via ESO; {env} is patched per overlay.\n'
-    printf '# Regenerate: manifest env generate -y\n'
-    printf 'apiVersion: external-secrets.io/v1\n'
+    printf '# Secret bridge — External Secrets Operator. Store and path come from\n'
+    printf '# env.secrets in manifest.config.yaml; {env} is filled per environment by\n'
+    printf '# k8s/env/component. Regenerate: manifest env generate -y\n'
+    printf 'apiVersion: %s\n' "$(_manifest_env_secrets_setting api_version)"
     printf 'kind: ExternalSecret\n'
     printf 'metadata:\n'
     printf '  name: %s-env\n' "$repo_dir"
     printf 'spec:\n'
-    printf '  refreshInterval: 1h\n'
+    printf '  refreshInterval: %s\n' "$(_manifest_env_secrets_setting refresh_interval)"
     printf '  secretStoreRef:\n'
-    printf '    name: openbao-customer\n'
-    printf '    kind: ClusterSecretStore\n'
+    printf '    name: %s\n' "$(_manifest_env_secrets_setting store_name)"
+    printf '    kind: %s\n' "$(_manifest_env_secrets_setting store_kind)"
     printf '  target:\n'
     printf '    name: %s-env\n' "$repo_dir"
     printf '    creationPolicy: Owner\n'
@@ -109,12 +261,118 @@ _manifest_env_render_external_secret() {
         injected="${framework_name:-$name}"
         printf '    - secretKey: %s\n' "$injected"
         printf '      remoteRef:\n'
-        printf '        key: secret/data/{env}/%s/%s\n' "$repo_dir" "$group"
-        printf '        property: %s\n' "$name"
+        # Quoted: a template that starts with {env} would otherwise parse as a
+        # YAML flow mapping.
+        printf '        key: "%s"\n' "$(_manifest_env_secrets_expand "$path_template" "$repo_dir" "$group" "$name")"
+        printf '        property: "%s"\n' "$(_manifest_env_secrets_expand "$property_template" "$repo_dir" "$group" "$name")"
         emitted=$((emitted + 1))
     done
     if [[ "$emitted" -eq 0 ]]; then
         printf '    []\n'
+    fi
+}
+
+# Render the kustomize Component that fills {env} per environment: one
+# replacement reads the env_label label off the ExternalSecret and writes it
+# into the {env} segment of every remoteRef.key. The segment index comes from
+# where {env} sits in the path template. Called only when the template has a
+# whole-segment {env}.
+_manifest_env_render_env_component() {
+    local spec_file="$1"
+    local project_root="$2"
+    local repo_dir env_label env_index
+    repo_dir="$(basename "$project_root")"
+    env_label="$(_manifest_env_secrets_setting env_label)"
+    env_index="$(_manifest_env_secrets_env_index "$(_manifest_env_secrets_setting path)")"
+
+    printf '# Generated by Manifest CLI from %s `env:`.\n' "$(basename "$spec_file")"
+    printf '# Fills {env} in every remoteRef.key of the ExternalSecret from the `%s`\n' "$env_label"
+    printf '# label, per environment. kustomize runs a Component before the including\n'
+    printf '# kustomization'"'"'s own transformers, so the label must already be on the\n'
+    printf '# ExternalSecret when this is included: label it one layer down, in a\n'
+    printf '# kustomization that references the k8s/env DIRECTORY (its kustomization.yaml\n'
+    printf '# is generated beside this file; a file outside the referencing directory is\n'
+    printf '# refused by kustomize).\n'
+    printf '#   k8s/overlays/<environment>/env/kustomization.yaml\n'
+    printf '#     resources: [ ../../../env ]\n'
+    printf '#     labels: [ { pairs: { %s: <environment> } } ]\n' "$env_label"
+    printf '#   k8s/overlays/<environment>/kustomization.yaml\n'
+    printf '#     resources: [ env ]\n'
+    printf '#     components: [ ../../env/component ]\n'
+    printf '# Regenerate: manifest env generate -y\n'
+    printf 'apiVersion: kustomize.config.k8s.io/v1alpha1\n'
+    printf 'kind: Component\n'
+    printf 'replacements:\n'
+    printf '  - source:\n'
+    printf '      kind: ExternalSecret\n'
+    printf '      name: %s-env\n' "$repo_dir"
+    printf '      fieldPath: metadata.labels.%s\n' "$env_label"
+    printf '    targets:\n'
+    printf '      - select:\n'
+    printf '          kind: ExternalSecret\n'
+    printf '          name: %s-env\n' "$repo_dir"
+    printf '        fieldPaths:\n'
+    printf '          - spec.data.*.remoteRef.key\n'
+    printf '        options:\n'
+    printf '          delimiter: "/"\n'
+    printf '          index: %s\n' "$env_index"
+}
+
+# Render k8s/env/kustomization.yaml, which makes the bridge directory a
+# buildable base. An overlay may only reference a FILE in or below its own
+# directory, so the per-environment layer that labels the ExternalSecret has
+# to reference this directory, not the file.
+_manifest_env_render_env_kustomization() {
+    local spec_file="$1"
+    local with_secret_bridge="$2"
+
+    printf '# Generated by Manifest CLI from %s `env:`.\n' "$(basename "$spec_file")"
+    printf '# Makes k8s/env a buildable base: kustomize refuses a file outside the\n'
+    printf '# referencing kustomization'"'"'s directory, so overlays reference this directory.\n'
+    printf '# Regenerate: manifest env generate -y\n'
+    printf 'apiVersion: kustomize.config.k8s.io/v1beta1\n'
+    printf 'kind: Kustomization\n'
+    printf 'resources:\n'
+    printf '  - configmap.yaml\n'
+    if [[ "$with_secret_bridge" == "true" ]]; then
+        printf '  - external-secret.yaml\n'
+    fi
+}
+
+# Disposition of k8s/env/kustomization.yaml: the ordinary create|update|current,
+# plus `foreign` for an existing file whose first line is not our marker — a
+# hand-authored kustomization is never replaced and never counted as drift.
+_manifest_env_kustomization_state() {
+    local target="$1"
+    local rendered="$2"
+    if [[ -f "$target" ]] && ! head -n 1 "$target" 2>/dev/null | grep -q '^# Generated by Manifest CLI'; then
+        printf 'foreign'
+        return 0
+    fi
+    _manifest_env_artifact_state "$target" "$rendered"
+}
+
+# Drift detail for an existing external-secret.yaml that no longer matches:
+# names the store or path the file carries against what config says, one line
+# each, so the plan says WHAT drifted rather than only that something did.
+_manifest_env_secrets_drift_detail() {
+    local target="$1"
+    local rendered="$2"
+    [[ -f "$target" ]] || return 0
+
+    local file_store file_kind file_key want_store want_kind want_key
+    file_store="$(yq e '.spec.secretStoreRef.name // ""' "$target" 2>/dev/null)"
+    file_kind="$(yq e '.spec.secretStoreRef.kind // ""' "$target" 2>/dev/null)"
+    file_key="$(yq e '.spec.data[0].remoteRef.key // ""' "$target" 2>/dev/null)"
+    want_store="$(printf '%s\n' "$rendered" | yq e '.spec.secretStoreRef.name // ""' - 2>/dev/null)"
+    want_kind="$(printf '%s\n' "$rendered" | yq e '.spec.secretStoreRef.kind // ""' - 2>/dev/null)"
+    want_key="$(printf '%s\n' "$rendered" | yq e '.spec.data[0].remoteRef.key // ""' - 2>/dev/null)"
+
+    if [[ "$file_store" != "$want_store" || "$file_kind" != "$want_kind" ]]; then
+        echo "store drift: file names ${file_kind:-?}/${file_store:-?}, config says ${want_kind}/${want_store}"
+    fi
+    if [[ "$file_key" != "$want_key" ]]; then
+        echo "path drift: file's first key is ${file_key:-<none>}, config renders $(_manifest_env_secrets_setting path) as ${want_key:-<none>}"
     fi
 }
 
@@ -212,10 +470,27 @@ names live in one place instead of being retyped per deployment target." \
                     "Files written" "  .env.example                  every variable name; non-secrets carry their
                                 spec default (blank when the spec sets none),
                                 secrets are commented out and left valueless
+  k8s/env/kustomization.yaml    lists the bridges, so overlays can reference
+                                the k8s/env directory (if k8s/ exists)
   k8s/env/configmap.yaml        Kubernetes non-secret values (if k8s/ exists)
   k8s/env/external-secret.yaml  Kubernetes secret refs, via External Secrets
-                                Operator (if k8s/ exists)
-  Dockerfile bridge block       build-time public vars, ARG→ENV (if present)"
+                                Operator (if k8s/ exists and secrets are
+                                declared); store and path come from env.secrets
+  k8s/env/component/kustomization.yaml
+                                kustomize Component that fills {env} in each
+                                secret path per environment (if the path has it)
+  Dockerfile bridge block       build-time public vars, ARG→ENV (if present)" \
+                    "Secret store" "  There is no built-in store. With secret variables declared and no
+  env.secrets configured, generate exits 1 and writes nothing. Set, at the
+  fleet root or per repo (the repo wins):
+    env.secrets.provider          external-secrets | none
+    env.secrets.store.name        the SecretStore / ClusterSecretStore name
+    env.secrets.store.kind        default ClusterSecretStore
+    env.secrets.path              template; tokens {env} {identity} {group} {name}
+    env.secrets.property          template; default {name}
+    env.secrets.env_label         label the {env} value is read from
+    env.secrets.api_version       default external-secrets.io/v1
+    env.secrets.refresh_interval  default 1h"
                 return 0
                 ;;
             *)
@@ -245,24 +520,74 @@ names live in one place instead of being retyped per deployment target." \
     local apply=false
     [[ "$execution_mode" == "apply" && "$check_only" != "true" ]] && apply=true
 
+    # ---- Fail closed on the secret store ------------------------------------
+    # Secret variables with no (or a broken) env.secrets: refuse before anything
+    # is rendered, so preview, --check and -y all exit 1 and nothing is written.
+    local problems
+    if ! problems="$(_manifest_env_secrets_problems "$spec_file")"; then
+        echo ""
+        echo "env.secrets — cannot generate: $project_root"
+        echo ""
+        printf '%s\n' "$problems" | sed 's/^/  /'
+        echo ""
+        echo "Nothing was written. Fix env.secrets, then: manifest env generate -y"
+        return 1
+    fi
+
     # ---- Render everything first (read-only) --------------------------------
-    local example_rendered configmap_rendered external_rendered bridge_rendered
+    local example_rendered configmap_rendered external_rendered component_rendered bridge_rendered
     example_rendered="$(_manifest_env_render_example "$spec_file" "$project_root")"
     configmap_rendered="$(_manifest_env_render_configmap "$spec_file" "$project_root")"
-    external_rendered="$(_manifest_env_render_external_secret "$spec_file" "$project_root")"
     bridge_rendered="$(_manifest_env_render_dockerfile_bridge "$spec_file")"
+
+    # The secret bridge exists only when there is something to bridge AND a
+    # provider to bridge it through; the Component only when {env} needs filling.
+    local emit_secret_bridge=false emit_component=false
+    if [[ -n "$(_manifest_env_spec_secret_names "$spec_file")" \
+          && "$(_manifest_env_secrets_setting provider)" == "external-secrets" ]]; then
+        emit_secret_bridge=true
+        external_rendered="$(_manifest_env_render_external_secret "$spec_file" "$project_root")"
+        if [[ "$(_manifest_env_secrets_env_index "$(_manifest_env_secrets_setting path)")" -ge 0 ]]; then
+            emit_component=true
+            component_rendered="$(_manifest_env_render_env_component "$spec_file" "$project_root")"
+        fi
+    fi
 
     local -a plan_names=() plan_states=()
     plan_names+=(".env.example")
     plan_states+=("$(_manifest_env_artifact_state "$project_root/.env.example" "$example_rendered")")
 
     local emit_k8s=false
+    local -a secret_drift_lines=()
+    local kustomization_rendered="" kustomization_state=""
     if [[ -d "$project_root/k8s" ]]; then
         emit_k8s=true
+        kustomization_rendered="$(_manifest_env_render_env_kustomization "$spec_file" "$emit_secret_bridge")"
+        # Marker-guarded, unlike the two bridges (§1(d) owns that gap): an
+        # adopter who consumed the bridges before this file existed had to
+        # author a kustomization here themselves, often with more in it, and
+        # replacing it would drop resources from their next build silently.
+        kustomization_state="$(_manifest_env_kustomization_state "$project_root/k8s/env/kustomization.yaml" "$kustomization_rendered")"
+        plan_names+=("k8s/env/kustomization.yaml")
+        plan_states+=("$kustomization_state")
         plan_names+=("k8s/env/configmap.yaml")
         plan_states+=("$(_manifest_env_artifact_state "$project_root/k8s/env/configmap.yaml" "$configmap_rendered")")
-        plan_names+=("k8s/env/external-secret.yaml")
-        plan_states+=("$(_manifest_env_artifact_state "$project_root/k8s/env/external-secret.yaml" "$external_rendered")")
+        if [[ "$emit_secret_bridge" == "true" ]]; then
+            local secret_state
+            secret_state="$(_manifest_env_artifact_state "$project_root/k8s/env/external-secret.yaml" "$external_rendered")"
+            plan_names+=("k8s/env/external-secret.yaml")
+            plan_states+=("$secret_state")
+            if [[ "$secret_state" == "update" ]]; then
+                local drift_line
+                while IFS= read -r drift_line; do
+                    [[ -n "$drift_line" ]] && secret_drift_lines+=("$drift_line")
+                done < <(_manifest_env_secrets_drift_detail "$project_root/k8s/env/external-secret.yaml" "$external_rendered")
+            fi
+        fi
+        if [[ "$emit_component" == "true" ]]; then
+            plan_names+=("k8s/env/component/kustomization.yaml")
+            plan_states+=("$(_manifest_env_artifact_state "$project_root/k8s/env/component/kustomization.yaml" "$component_rendered")")
+        fi
     fi
 
     local emit_bridge=false
@@ -293,8 +618,18 @@ names live in one place instead of being retyped per deployment target." \
     for i in "${!plan_names[@]}"; do
         case "${plan_states[$i]}" in
             current) echo "  up-to-date:   ${plan_names[$i]}" ;;
+            foreign) echo "  hand-authored, left untouched: ${plan_names[$i]} (list configmap.yaml$([[ "$emit_secret_bridge" == "true" ]] && printf ' and external-secret.yaml') in it yourself)" ;;
             create)  echo "  would create: ${plan_names[$i]}"; drift=$((drift + 1)) ;;
-            update)  echo "  would update: ${plan_names[$i]}"; drift=$((drift + 1)) ;;
+            update)
+                echo "  would update: ${plan_names[$i]}"
+                drift=$((drift + 1))
+                if [[ "${plan_names[$i]}" == "k8s/env/external-secret.yaml" && ${#secret_drift_lines[@]} -gt 0 ]]; then
+                    local d
+                    for d in "${secret_drift_lines[@]}"; do
+                        echo "                $d"
+                    done
+                fi
+                ;;
         esac
     done
     echo ""
@@ -319,10 +654,23 @@ names live in one place instead of being retyped per deployment target." \
     echo "  wrote: .env.example"
     if [[ "$emit_k8s" == "true" ]]; then
         mkdir -p "$project_root/k8s/env"
+        if [[ "$kustomization_state" == "foreign" ]]; then
+            echo "  left:  k8s/env/kustomization.yaml (hand-authored)"
+        else
+            printf '%s\n' "$kustomization_rendered" > "$project_root/k8s/env/kustomization.yaml"
+            echo "  wrote: k8s/env/kustomization.yaml"
+        fi
         printf '%s\n' "$configmap_rendered" > "$project_root/k8s/env/configmap.yaml"
         echo "  wrote: k8s/env/configmap.yaml"
-        printf '%s\n' "$external_rendered" > "$project_root/k8s/env/external-secret.yaml"
-        echo "  wrote: k8s/env/external-secret.yaml"
+        if [[ "$emit_secret_bridge" == "true" ]]; then
+            printf '%s\n' "$external_rendered" > "$project_root/k8s/env/external-secret.yaml"
+            echo "  wrote: k8s/env/external-secret.yaml"
+        fi
+        if [[ "$emit_component" == "true" ]]; then
+            mkdir -p "$project_root/k8s/env/component"
+            printf '%s\n' "$component_rendered" > "$project_root/k8s/env/component/kustomization.yaml"
+            echo "  wrote: k8s/env/component/kustomization.yaml"
+        fi
     fi
     if [[ "$emit_bridge" == "true" ]]; then
         if _manifest_env_dockerfile_bridge_apply "$project_root/Dockerfile" "$bridge_rendered"; then
@@ -343,7 +691,9 @@ manifest_env_validate() {
             "manifest env validate" \
             "Validate env hygiene: prefix policy, generated-artifact drift, gitignore." \
             "Checks" "  prefix     stored names carry the repo prefix (derived unless env.prefix set; off to disable)
-  drift      .env.example and k8s/env/* match the spec env: block
+  drift      .env.example and k8s/env/* match the spec env: block and env.secrets
+             (a store or path that differs from config is named; secrets declared
+             with no env.secrets configured is reported as a configuration gap)
   gitignore  .env value files are ignored; only example/template tracked"
         return 0
     fi
@@ -376,10 +726,19 @@ manifest_env_validate() {
 
     echo "  generated-artifact drift:"
     if _manifest_env_spec_ready "$project_root"; then
-        if manifest_env_generate --check >/dev/null 2>&1; then
-            echo "      ✅ artifacts match the spec env: block"
+        local check_out check_rc=0
+        check_out="$(manifest_env_generate --check 2>&1)" || check_rc=$?
+        if [[ "$check_rc" -eq 0 ]]; then
+            echo "      ✅ artifacts match the spec env: block and env.secrets"
+        elif printf '%s\n' "$check_out" | grep -q '^env.secrets — cannot generate'; then
+            # The gate refused before rendering: this is a configuration gap,
+            # not stale output, and the fix is different.
+            echo "      ❌ secret store not configured — secrets are declared but env.secrets is unset or invalid:"
+            printf '%s\n' "$check_out" | sed -n '/^  env.secrets/p' | sed 's/^/          /'
+            failures=$((failures + 1))
         else
             echo "      ❌ stale artifacts — run: manifest env generate -y"
+            printf '%s\n' "$check_out" | grep -E '^ +(store|path) drift:' | sed 's/^ */          /'
             failures=$((failures + 1))
         fi
     else

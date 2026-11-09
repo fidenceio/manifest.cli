@@ -293,6 +293,18 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     ["env.prefix"]="MANIFEST_CLI_ENV_PREFIX"
     ["env.naming_allow"]="MANIFEST_CLI_ENV_NAMING_ALLOW"
     ["env.naming_enforcement"]="MANIFEST_CLI_ENV_NAMING_ENFORCEMENT"
+    # env.secrets — where `env generate` sends secret variables. There is no
+    # built-in store: provider, store and path are configuration, set once at
+    # the fleet root and overridable per repo (the repo value wins, key by key,
+    # through the ordinary layers above). Read by _manifest_env_secrets_setting.
+    ["env.secrets.provider"]="MANIFEST_CLI_ENV_SECRETS_PROVIDER"
+    ["env.secrets.store.kind"]="MANIFEST_CLI_ENV_SECRETS_STORE_KIND"
+    ["env.secrets.store.name"]="MANIFEST_CLI_ENV_SECRETS_STORE_NAME"
+    ["env.secrets.api_version"]="MANIFEST_CLI_ENV_SECRETS_API_VERSION"
+    ["env.secrets.path"]="MANIFEST_CLI_ENV_SECRETS_PATH"
+    ["env.secrets.property"]="MANIFEST_CLI_ENV_SECRETS_PROPERTY"
+    ["env.secrets.refresh_interval"]="MANIFEST_CLI_ENV_SECRETS_REFRESH_INTERVAL"
+    ["env.secrets.env_label"]="MANIFEST_CLI_ENV_SECRETS_ENV_LABEL"
 )
 
 # Build the reverse map (ENV var -> YAML path) programmatically

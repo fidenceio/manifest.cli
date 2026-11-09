@@ -1,5 +1,34 @@
 # Migration Guide
 
+## The secret store is configuration — the newest change; its release is the first CHANGELOG entry that mentions `env.secrets`
+
+`manifest env generate` used to write every `k8s/env/external-secret.yaml` with one
+vendor's store name (`openbao-customer`) and one fixed path layout
+(`secret/data/{env}/<repo>/<group>`), and nothing filled `{env}` per environment. If you
+hand-patched those files, the next `generate -y` overwrote the patches.
+
+Now the store and path come only from `env.secrets` in `manifest.config.yaml`, set at
+the fleet root and overridable per repository (the repository value wins, key by key).
+The change you will notice first:
+
+- **A spec that declares secret variables with no `env.secrets` configured makes
+  `env generate` exit `1` and write nothing**, in preview, `--check` and `-y` alike.
+  `env validate` reports it as *secret store not configured*, not as stale output.
+  There is no built-in store any more.
+- To keep the old layout, set `env.secrets.provider: external-secrets`,
+  `env.secrets.store.name: openbao-customer`,
+  `env.secrets.path: "secret/data/{env}/{identity}/{group}"` and
+  `env.secrets.env_label: <label>` at the fleet root, then `manifest env generate -y`.
+- A repository whose secrets reach the workload some other way sets
+  `env.secrets.provider: none`; the secret bridge is then not written at all.
+- `remoteRef.key` and `remoteRef.property` are now double-quoted in the generated file;
+  a new `k8s/env/kustomization.yaml` makes the bridge directory a buildable base, and a
+  new `k8s/env/component/kustomization.yaml` fills `{env}` per environment. Each overlay
+  labels the bridge one layer down and includes the Component above it; the exact two
+  files are in the Command Reference, and the one-layer shape fails under kustomize.
+- `.env.example` secret comments now carry the configured store and path instead of a
+  vendor name.
+
 ## Breaking command cleanup — shipped: verbs and scopes in v62.0.0, short switches in the release after it
 
 Use `manifest <verb> <scope> [action]`. Mutating workflow commands preview by
