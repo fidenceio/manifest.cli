@@ -117,6 +117,19 @@ teardown() {
     [[ "$output" == *":/bin:"* ]]
 }
 
+@test "release_gate: clean room forwards the host-writes opt-out, and nothing else of the caller's MANIFEST_CLI_* env" {
+    # The scaffolded gate reads MANIFEST_CLI_RELEASE_GATE_HOST_WRITES to decide
+    # whether the checkout is mounted read-write; a clean room that dropped it
+    # would make the opt-out silently inert.
+    MANIFEST_CLI_RELEASE_GATE_HOST_WRITES=true MANIFEST_CLI_RELEASE_GATE_TIER=smoke \
+        run _manifest_release_gate_exec "$MANIFEST_CLI_PROJECT_ROOT" bash -c 'echo "writes=${MANIFEST_CLI_RELEASE_GATE_HOST_WRITES-unset} tier=${MANIFEST_CLI_RELEASE_GATE_TIER-unset}"'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"writes=true tier=unset"* ]]
+    # Unset on the caller's side arrives as empty, which the gate reads as false.
+    run _manifest_release_gate_exec "$MANIFEST_CLI_PROJECT_ROOT" bash -c 'echo "writes=[${MANIFEST_CLI_RELEASE_GATE_HOST_WRITES-unset}]"'
+    [[ "$output" == *"writes=[]"* ]]
+}
+
 @test "release_gate: clean room resolves core tools (tr/date/git) via the floor" {
     run _manifest_release_gate_exec "$MANIFEST_CLI_PROJECT_ROOT" bash -c 'command -v tr && command -v date && command -v git'
     [ "$status" -eq 0 ]

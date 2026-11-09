@@ -29,6 +29,29 @@ The change you will notice first:
 - `.env.example` secret comments now carry the configured store and path instead of a
   vendor name.
 
+## The scaffolded release gate no longer writes to your machine — same release as the section above
+
+The `scripts/run-tests.sh` that `manifest init` scaffolds already ran its checks in a
+container, but it bind-mounted the checkout read-write and masked `node_modules/` and
+`target/` with anonymous volumes. Docker creates those mount points on the host, so
+every gate run left empty `node_modules/` and `target/` directories in the checkout
+(root-owned on Linux), and any check that writes into its tree (`pytest`, `tox`,
+`dotnet build`, a `make test` that touches files) wrote onto the host.
+
+A newly scaffolded gate mounts the checkout read-only, copies it inside the container,
+and runs the checks in the copy. Nothing reaches the host. The opt-out is explicit:
+`release.gate_host_writes: true` (or `MANIFEST_CLI_RELEASE_GATE_HOST_WRITES=true`)
+mounts the checkout read-write again, with no masking volumes.
+
+An existing `scripts/run-tests.sh` is never overwritten, so a repository scaffolded
+earlier keeps the old wrapper until you replace it: move your project checks aside,
+delete the file, run `manifest init repo -y`, and put the checks back under
+`PROJECT CHECKS`. Do not copy only the new `docker run` lines into an old file: the
+read-only mount needs the copy block at the top of the inner script as well, and
+without it every writing check fails on a read-only file system. To find an old
+wrapper: `grep -F -- '-v /workspace/node_modules' scripts/run-tests.sh`. A checkout
+whose `.git` is very large pays the copy on every gate run; the opt-out exists for it.
+
 ## Breaking command cleanup — shipped: verbs and scopes in v62.0.0, short switches in the release after it
 
 Use `manifest <verb> <scope> [action]`. Mutating workflow commands preview by

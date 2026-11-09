@@ -674,8 +674,14 @@ BOOTSTRAP_CHECK
     # --- Static head (quoted heredoc: nothing expands) -----------------------
     cat > "$gate_file" << 'MANIFEST_CLI_GATE_CONTAINER'
 #!/usr/bin/env bash
-# Release gate — scaffolded by Manifest CLI. Dependencies stay in containers.
-# Existing containers execute directly; the host builds/runs an isolated image.
+# Release gate — scaffolded by Manifest CLI. Dependencies stay in containers, and
+# by default nothing is written back to this checkout: the tree is mounted
+# read-only and copied inside the container, so no cache, build output or volume
+# mount point lands on the host. Existing containers execute directly.
+# To let the checks write into this checkout instead, opt out explicitly:
+#   release.gate_host_writes: true   (manifest.config.local.yaml; honoured when
+#                                     `manifest ship` runs this gate)
+#   MANIFEST_CLI_RELEASE_GATE_HOST_WRITES=true   (when running it yourself)
 if [[ ! -f /.dockerenv && ! -f /run/.containerenv ]]; then
     command -v docker >/dev/null 2>&1 || { echo "Docker is required for the release check; no host dependencies are installed." >&2; exit 1; }
     root="$(cd "$(dirname "$0")/.." && pwd)" || exit 1
@@ -686,9 +692,12 @@ MANIFEST_CLI_GATE_CONTAINER
     if ! docker image inspect "$image" >/dev/null 2>&1; then
         printf 'FROM alpine:3.24\nRUN apk add --no-cache %s && git config --system --add safe.directory /workspace\n' "$packages" | docker build -q -t "$image" - || exit 1
     fi
-    # Ephemeral dependency/build volumes prevent host node_modules/target trees.
-    exec docker run --rm -v "$root:/workspace" -v /workspace/node_modules -v /workspace/target \
-        -w /workspace "$image" bash scripts/run-tests.sh "$@"
+    if [[ "${MANIFEST_CLI_RELEASE_GATE_HOST_WRITES:-false}" == "true" ]]; then
+        # Opted out: the checks run against this checkout read-write.
+        exec docker run --rm -v "$root:/workspace" -w /workspace "$image" bash scripts/run-tests.sh "$@"
+    fi
+    exec docker run --rm -v "$root:/source:ro" -e MANIFEST_CLI_GATE_SOURCE=/source \
+        -w /source "$image" bash scripts/run-tests.sh "$@"
 fi
 MANIFEST_CLI_GATE_CONTAINER
     cat >> "$gate_file" << 'MANIFEST_CLI_GATE_HEAD'
@@ -708,6 +717,23 @@ MANIFEST_CLI_GATE_CONTAINER
 # CHECKS section with this repo's actual suite as it grows.
 
 set -uo pipefail
+
+# Inside the container the checkout arrives read-only at $MANIFEST_CLI_GATE_SOURCE
+# (the host wrapper's default). Copy it to a scratch tree the checks can write
+# to, then run from there: nothing reaches the host.
+if [ -n "${MANIFEST_CLI_GATE_SOURCE:-}" ]; then
+    gate_source="$MANIFEST_CLI_GATE_SOURCE"
+    unset MANIFEST_CLI_GATE_SOURCE
+    gate_work="$(mktemp -d "${TMPDIR:-/tmp}/release-gate.XXXXXX")" \
+        || { echo "release gate: could not create a scratch tree under ${TMPDIR:-/tmp}" >&2; exit 2; }
+    # -o on extract: do not restore the archive's uid/gid. On a Linux host the
+    # bind mount carries the host user's uid; a copy that kept it would be
+    # refused by git as "dubious ownership" while this script runs as root.
+    tar -C "$gate_source" --exclude=./node_modules --exclude=./target -cf - . | tar -C "$gate_work" -o -xf - \
+        || { echo "release gate: could not copy the checkout from $gate_source into the container" >&2; exit 2; }
+    cd "$gate_work" || { echo "release gate: could not enter $gate_work" >&2; exit 2; }
+    exec bash scripts/run-tests.sh "$@"
+fi
 
 TIER="full"
 while [ $# -gt 0 ]; do

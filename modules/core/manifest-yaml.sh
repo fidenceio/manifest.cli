@@ -97,6 +97,7 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     ["release.gate_command"]="MANIFEST_CLI_RELEASE_GATE_COMMAND"
     ["release.gate_tier"]="MANIFEST_CLI_RELEASE_GATE_TIER"
     ["release.gate_freshness_days"]="MANIFEST_CLI_RELEASE_GATE_FRESHNESS_DAYS"
+    ["release.gate_host_writes"]="MANIFEST_CLI_RELEASE_GATE_HOST_WRITES"
     # §9.27(a): a publishing ship consults origin's latest completed `tests`
     # workflow run before any mutation and refuses when it concluded failure.
     # false keeps the pre-flight (and its finding) but makes it advisory.

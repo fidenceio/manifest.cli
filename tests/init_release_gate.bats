@@ -54,6 +54,104 @@ teardown() {
     [[ "$output" == *"shell syntax: broken.sh"* ]]
 }
 
+# --- nothing is written to the host unless the user opts out --------------------
+
+@test "gate scaffold: the checkout is mounted read-only and copied inside the container by default; rw is an explicit opt-out" {
+    echo "1.0.0" > "$PROJ/VERSION"
+    ensure_release_gate_script "$PROJ"
+    cd "$PROJ"
+    run scaffold_gate_run_as_host ./scripts/run-tests.sh --tier smoke
+    [ "$status" -eq 0 ]
+    grep -F -e $'-v\t'"$PROJ"$':/source:ro\t' "$SCAFFOLD_GATE_DOCKER_LOG"
+    grep -F -e $'-e\tMANIFEST_CLI_GATE_SOURCE=/source\t' "$SCAFFOLD_GATE_DOCKER_LOG"
+    refute grep -F "$PROJ:/workspace" "$SCAFFOLD_GATE_DOCKER_LOG"
+    # The old anonymous volumes were what created empty node_modules/ and
+    # target/ on the host as mount points; they are gone.
+    refute grep -F '/workspace/node_modules' "$SCAFFOLD_GATE_DOCKER_LOG"
+
+    : > "$SCAFFOLD_GATE_DOCKER_LOG"
+    MANIFEST_CLI_RELEASE_GATE_HOST_WRITES=true run scaffold_gate_run_as_host ./scripts/run-tests.sh --tier smoke
+    [ "$status" -eq 0 ]
+    grep -F -e $'-v\t'"$PROJ"$':/workspace\t' "$SCAFFOLD_GATE_DOCKER_LOG"
+    refute grep -F ':/source:ro' "$SCAFFOLD_GATE_DOCKER_LOG"
+}
+
+@test "gate scaffold: inside the container the read-only source is copied and the checks write only to the copy" {
+    echo "1.0.0" > "$PROJ/VERSION"
+    # A project check that writes into its tree — the thing that used to land
+    # on the host.
+    printf 'test:\n\ttouch created-by-gate\n' > "$PROJ/Makefile"
+    ensure_release_gate_script "$PROJ"
+    cd "$PROJ"
+    chmod -R a-w "$PROJ"
+    # The stub execs the inner payload on the host with the environment
+    # inherited, so this exercises the in-container copy branch for real:
+    # the payload copies $MANIFEST_CLI_GATE_SOURCE to a scratch tree and re-runs
+    # itself there.
+    MANIFEST_CLI_GATE_SOURCE="$PROJ" run scaffold_gate_run_as_host ./scripts/run-tests.sh --tier full
+    chmod -R u+w "$PROJ"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"ok    make test"* ]]
+    [[ "$output" == *"run-tests: PASS (tier: full)"* ]]
+    [ ! -e "$PROJ/created-by-gate" ]
+}
+
+@test "gate scaffold: with real Docker, a writing project check leaves nothing on the host; the opt-out lets it write" {
+    [ -f /.dockerenv ] && skip "already inside a container; the host wrapper is not reached"
+    docker info >/dev/null 2>&1 || skip "docker is not available"
+    # Drop the stub so the real docker runs.
+    PATH="${PATH#"$SCRATCH/bin:"}"
+    echo "1.0.0" > "$PROJ/VERSION"
+    printf 'test:\n\ttouch created-by-gate\n\tmkdir -p build-output\n' > "$PROJ/Makefile"
+    ensure_release_gate_script "$PROJ"
+    cd "$PROJ"
+    git init -q . && git add -A && git -c user.email=t@example.com -c user.name=t commit -qm init
+
+    run ./scripts/run-tests.sh --tier full --jobs 1 --no-cache
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"run-tests: PASS (tier: full)"* ]]
+    [ ! -e "$PROJ/created-by-gate" ]
+    [ ! -d "$PROJ/build-output" ]
+    [ ! -d "$PROJ/node_modules" ]
+    [ ! -d "$PROJ/target" ]
+    [ -z "$(git status --porcelain)" ]
+
+    MANIFEST_CLI_RELEASE_GATE_HOST_WRITES=true run ./scripts/run-tests.sh --tier full --jobs 1 --no-cache
+    [ "$status" -eq 0 ]
+    [ -e "$PROJ/created-by-gate" ]
+}
+
+@test "gate scaffold: with real Docker, a source owned by a Linux host user is copied as root so git works in the copy (A/B on tar -o)" {
+    # On a Linux host the bind mount carries the host user's uid; Docker Desktop
+    # presents it as root, so the ownership is staged inside the container here.
+    [ -f /.dockerenv ] && skip "already inside a container; the host wrapper is not reached"
+    docker info >/dev/null 2>&1 || skip "docker is not available"
+    PATH="${PATH#"$SCRATCH/bin:"}"
+    echo "1.0.0" > "$PROJ/VERSION"
+    printf 'test:\n\tgit rev-parse --git-dir\n' > "$PROJ/Makefile"
+    ensure_release_gate_script "$PROJ"
+    cd "$PROJ"
+    git init -q . && git add -A && git -c user.email=t@example.com -c user.name=t commit -qm init
+    # Build the gate's own image the way the wrapper does, then reuse it.
+    run ./scripts/run-tests.sh --tier smoke
+    [ "$status" -eq 0 ]
+    local packages image
+    packages="$(eval "printf '%s' $(sed -n 's/^    packages=//p' scripts/run-tests.sh)")"
+    image="manifest-project-checks:$(printf '%s' "$packages" | cksum | awk '{print $1}')"
+
+    run docker run --rm -v "$PROJ:/source:ro" "$image" bash -c \
+        'cp -a /source /owned && chown -R 1000:1000 /owned && cd /owned && MANIFEST_CLI_GATE_SOURCE=/owned bash scripts/run-tests.sh --tier full'
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"ok    make test"* ]]
+
+    # Mutation control: the same run with -o removed from the extracting tar
+    # keeps uid 1000 on the copy, and git refuses it as dubious ownership.
+    run docker run --rm -v "$PROJ:/source:ro" "$image" bash -c \
+        'cp -a /source /owned && chown -R 1000:1000 /owned && sed -i "s/ -o -xf -/ -xf -/" /owned/scripts/run-tests.sh && grep -q -- " -xf -" /owned/scripts/run-tests.sh && cd /owned && MANIFEST_CLI_GATE_SOURCE=/owned bash scripts/run-tests.sh --tier full'
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"dubious ownership"* ]]
+}
+
 @test "gate scaffold: host without Docker refuses before executing project checks" {
     ensure_release_gate_script "$PROJ"
     cd "$PROJ"

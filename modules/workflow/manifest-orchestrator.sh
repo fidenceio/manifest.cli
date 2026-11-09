@@ -673,6 +673,7 @@ _manifest_release_gate_exec() {
         LC_ALL="${LC_ALL-}" \
         LC_CTYPE="${LC_CTYPE-}" \
         TZ="${TZ-}" \
+        MANIFEST_CLI_RELEASE_GATE_HOST_WRITES="${MANIFEST_CLI_RELEASE_GATE_HOST_WRITES-}" \
         bash -c 'cd "$1" || exit 1; shift; exec "$@"' _ "$gate_root" "$@" </dev/null
 }
 

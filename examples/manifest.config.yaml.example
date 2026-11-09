@@ -132,6 +132,12 @@ release:
   # The clock advances only on a real pass — a stamp-only skip never bumps it.
   gate_freshness_days: 30
 
+  # gate_host_writes — the scaffolded scripts/run-tests.sh runs its checks in a
+  # container against a READ-ONLY mount of this checkout, copied inside, so no
+  # cache, build output or volume mount point is ever created on your machine.
+  # Set true to opt out and let the checks write into this checkout.
+  gate_host_writes: false
+
 # -----------------------------------------------------------------------------
 # Ship
 # -----------------------------------------------------------------------------

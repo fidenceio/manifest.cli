@@ -1155,6 +1155,12 @@ set_default_configuration() {
     # The freshness clock advances only on a real PASS — a stamp-only skip never
     # bumps it, so repeated stamps can never keep the window green without tests.
     export MANIFEST_CLI_RELEASE_GATE_FRESHNESS_DAYS="${MANIFEST_CLI_RELEASE_GATE_FRESHNESS_DAYS:-30}"
+    # The scaffolded gate (scripts/run-tests.sh) runs its checks in a container
+    # against a READ-ONLY mount of the checkout, copied inside, so no cache,
+    # build output or volume mount point is ever created on the host. `true`
+    # is the explicit opt-out: the checks then run against the checkout
+    # read-write. Forwarded into the gate's clean room by the ship.
+    export MANIFEST_CLI_RELEASE_GATE_HOST_WRITES="${MANIFEST_CLI_RELEASE_GATE_HOST_WRITES:-false}"
     # §9.27(a): CI's verdict binds the ship. Before any mutation, a publishing
     # ship reads origin's latest COMPLETED `tests` workflow run on the default
     # branch and REFUSES when it concluded failure (the local gate proves this

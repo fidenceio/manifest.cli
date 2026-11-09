@@ -101,7 +101,7 @@ one only if it is absent — an existing file is always preserved, even under `-
 | `CHANGELOG.md` | Release history; every ship appends an entry. |
 | `.gitignore` | Ignore rules, **chosen for your project's ecosystem** — see below. |
 | `docs/` | The documentation folder Manifest generates into. |
-| `scripts/run-tests.sh` | The release gate. `manifest ship` runs it and refuses a failing release. |
+| `scripts/run-tests.sh` | The release gate. `manifest ship` runs it and refuses a failing release. Its checks run in a container against a read-only copy of the checkout, so nothing is written to your machine unless you set `release.gate_host_writes: true`. |
 | `.env.example` | Env schema template, kept trackable while real `.env` files are ignored. |
 | `robots.txt` | Crawl privacy: disallows search and AI crawlers by default. |
 | `ai.txt` | Crawl privacy: declares no crawling, training, or indexing. |
