@@ -1,5 +1,21 @@
 # Changelog
 
+## [62.2.0] - 2026-11-09
+
+**Release Type:** Minor
+
+### Changes
+
+- Fix(ci): write the ShellCheck file lists under /tmp, not into the repo mount (§88)
+- Docs(agents): make the scrum-master charters' §88 deferral example historical
+- Feat(install): add top_level_commands to the IDE catalog; guard it and COMMAND_REFERENCE against the dispatcher (§72)
+- Docs(tracker): retire §72 into the release that follows
+- Fix(security): make the PII detector fire; refuse to read a failed scan as clean (§2b)
+- Fix(security): scan for private key material and refuse to sweep it into a commit (§2a)
+- Docs(tracker,migration): record §2(a)/(b), re-cut the resume order PRODUCT-first, decide the d6a8cfc increment
+- Docs(tracker): file the IDE-catalog lead under §11; make the resume baseline version-free; re-title §2 to its remainder and rank it below §4
+
+
 ## [62.1.0] - 2026-11-05
 
 **Release Type:** Minor
@@ -122,19 +138,3 @@
 - Feat(config): make release.gate=none explain itself with a reason and its layer (§81)
 - Fix(fleet,config): repair four defects the pre-ship review found in yesterday's two fixes (§77, §81)
 - Fix(fleet): report the two new .gitignore outcomes in init fleet's summary (§77)
-
-
-## [60.0.0] - 2026-09-07
-
-**Release Type:** Major
-
-### Changes
-
-- Feat(fleet): add 'ship fleet manager' to commit and push the coordination root only (§77)
-- Docs(tracker): record §77(b) decided as 'ship fleet manager' and (c) fixed; (a) stays open (§77)
-- Feat(config): make repo-command trust durable with MANIFEST_CLI_TRUST_REPO_COMMANDS=remember|forget (§44)
-- Fix(ship): disclose config-named programs in the ship repo and ship fleet previews; --explain points at the preview (§44)
-- Docs(config): document remember/forget and the trust record (§44)
-- Docs(tracker): §44(3) landed and the --explain lead reproduced; file §6(19) and the §79 nested-ship lead (§44)
-- Docs(tracker): file §80 — a gate that hangs on docker stalls a fleet ship silently (§80)
-- Fix(config): keep the whole command and its trust annotation in the execution disclosure (§44)
