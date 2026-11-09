@@ -1,5 +1,17 @@
 # Changelog
 
+## [63.0.0] - 2026-11-09
+
+**Release Type:** Major
+
+### Changes
+
+- Feat(env)!: the secret store is configuration; generate fails closed without it and a Component fills {env} (§97)
+- Fix(init): the scaffolded release gate mounts the checkout read-only and copies it inside; host writes are an explicit opt-out (§100)
+- Docs(tracker): retire §97 and §100, file §98 and §101, re-anchor §1(d)
+- Test(release-gate): supply the clean-room input instead of assuming it, and probe docker after dropping the stub
+
+
 ## [62.2.0] - 2026-11-09
 
 **Release Type:** Minor
@@ -125,16 +137,3 @@
 
 - Fix(config,fleet): the reset shipped in v60.1.0 wiped the bypass reason on every publishing ship (§81, §77)
 - Docs(gate): correct C-locale residue comment; file two leads (§77, §81)
-
-
-## [60.1.0] - 2026-09-07
-
-**Release Type:** Minor
-
-### Changes
-
-- Docs(tracker): correct §77(c)'s scope — the symptom needs a changed version_file, not every fleet root (§77)
-- Fix(fleet): converge an existing root's allowlist when version_file changes, and refuse '.', '..' and '.git' (§77)
-- Feat(config): make release.gate=none explain itself with a reason and its layer (§81)
-- Fix(fleet,config): repair four defects the pre-ship review found in yesterday's two fixes (§77, §81)
-- Fix(fleet): report the two new .gitignore outcomes in init fleet's summary (§77)
