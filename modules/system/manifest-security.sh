@@ -182,6 +182,17 @@ manifest_security() {
     echo "🛡️  Privacy Protection Check:"
     echo "=============================="
 
+    # Private key material by content (§2(a)) — CRITICAL, like a tracked
+    # private file: it is what the release's sweep commit would publish.
+    local _km_rc=0
+    check_key_material "$project_root" || _km_rc=$?
+    if [ "$_km_rc" -eq 0 ]; then
+        echo "   ✅ No private key material in the tree"
+    else
+        echo "   ❌ CRITICAL: Private key material in the tree (or the scan could not run)"
+        critical_issues=$((critical_issues + 1))
+    fi
+
     # Check for actual PII (not just example patterns). 2 means the scan
     # itself could not run: a control that cannot run fails, it does not
     # narrow (§6, §2(b)).
@@ -362,6 +373,132 @@ check_actual_pii() {
     rm -f "$scan_err"
 
     [ $pii_found -eq 0 ]
+}
+
+# Private key material by CONTENT, not filename (§2(a)). The .gitignore KEY
+# MATERIAL block is prevention by name: a key under a name it does not list
+# (`credentials.json`, `deploy-secret.txt`) reaches `git add .`, and a key
+# committed before the block existed stays tracked. Two sets are read: what
+# `git add .` would land (modified + untracked, ignored files excluded,
+# deletions dropped) and what is already tracked. Headers only — a PEM body
+# or a PuTTY key file cannot exist without one — and the regex text does not
+# match itself, so this module is safe under its own scan. Hits are printed
+# by path. Returns 1 on a hit, 2 if the scan could not run, 0 otherwise;
+# outside a git repository it says so and passes, like check_git_tracking.
+_MANIFEST_CLI_KEY_MATERIAL_PATTERN='-----BEGIN [A-Z ]*PRIVATE KEY-----|PuTTY-User-Key-File-[0-9]+:'
+
+# NUL-separated paths of one scan set, relative to the repo top level.
+#   tracked  — `git ls-files`: what is already in the index.
+#   pending  — what `git add .` would land: modified and untracked, ignored
+#              files excluded, deletions dropped.
+# Both listings are `-z`, so a path git would otherwise QUOTE (a space, a
+# quote, a backslash, a non-ASCII byte under core.quotePath) arrives as
+# bytes, not as `"my file.txt"` — a quoted name is a path that does not
+# exist, which `grep -s` skipped without a word, and five planted keys read
+# as two (steward, 2026-11-07).
+_manifest_key_material_paths() {
+    local top="$1" set="$2"
+    case "$set" in
+        tracked)
+            git -C "$top" ls-files -z
+            ;;
+        pending)
+            # Porcelain v1 with -z: `XY path\0`, and for a rename or copy the
+            # source follows as its own record: `XY dst\0src\0`.
+            local rec xy _src
+            git -C "$top" status --porcelain -z --untracked-files=all | {
+                while IFS= read -r -d '' rec; do
+                    xy="${rec:0:2}"
+                    case "$xy" in
+                        R?|C?|?R|?C) IFS= read -r -d '' _src || true ;;
+                    esac
+                    case "$xy" in
+                        U?|?U|AA|DD) ;;  # unmerged and present: git add . stages it as resolved
+                        D?|?D) continue ;;
+                    esac
+                    printf '%s\0' "${rec:3}"
+                done
+            }
+            ;;
+    esac
+}
+
+# Paths in one set whose CONTENT carries a private-key header, one per line
+# on stdout. Returns 0 (hits or none), or 2 with the error text on stdout when
+# the scan itself could not run — a control that cannot run fails, it does
+# not narrow. For the pending set, a modified tracked file whose key is
+# already in HEAD is dropped: that key is not newly landing, it belongs to
+# the tracked set.
+_manifest_key_material_hits() {
+    local top="$1" set="$2"
+    local list scan_err hits
+    list="$(mktemp "${TMPDIR:-/tmp}/manifest-keys-list.XXXXXX")" || { echo "mktemp failed"; return 2; }
+    scan_err="$(mktemp "${TMPDIR:-/tmp}/manifest-keys-err.XXXXXX")" || { rm -f "$list"; echo "mktemp failed"; return 2; }
+    _manifest_key_material_paths "$top" "$set" > "$list"
+    if [ ! -s "$list" ]; then
+        rm -f "$list" "$scan_err"
+        return 0
+    fi
+    hits="$(cd "$top" && xargs -0 grep -l -E -s -- "$_MANIFEST_CLI_KEY_MATERIAL_PATTERN" < "$list" 2>>"$scan_err")"
+    rm -f "$list"
+    if [ -s "$scan_err" ]; then
+        head -1 "$scan_err"
+        rm -f "$scan_err"
+        return 2
+    fi
+    rm -f "$scan_err"
+
+    if [ "$set" = pending ] && [ -n "$hits" ]; then
+        local h kept=""
+        while IFS= read -r h; do
+            [ -n "$h" ] || continue
+            if git -C "$top" cat-file -e "HEAD:$h" 2>/dev/null \
+               && git -C "$top" show "HEAD:$h" 2>/dev/null | grep -q -E -- "$_MANIFEST_CLI_KEY_MATERIAL_PATTERN"; then
+                continue
+            fi
+            kept="${kept}${h}"$'\n'
+        done <<< "$hits"
+        hits="${kept%$'\n'}"
+    fi
+    [ -z "$hits" ] || printf '%s\n' "$hits"
+    return 0
+}
+
+# check_key_material <root> [all|pending|tracked]
+# Reports each hit on its own line; returns 1 on hits, 2 when the scan could
+# not run, 0 when clean. `manifest security` runs `all`; the ship's sweep
+# commit refuses on `pending` and only names `tracked` — a key already in
+# history has already been pushed, and refusing would break every repo that
+# commits fixture keys for its own tests (steward, 2026-11-07).
+check_key_material() {
+    local project_root="$1" set="${2:-all}"
+    local top
+    if ! top="$(git -C "$project_root" rev-parse --show-toplevel 2>/dev/null)"; then
+        echo "      ⚠️  Not in a Git repository, skipping key material scan"
+        return 0
+    fi
+
+    local -a sets=(tracked pending)
+    local s hits rc all=""
+    [ "$set" = all ] || sets=("$set")
+    for s in "${sets[@]}"; do
+        rc=0
+        hits="$(_manifest_key_material_hits "$top" "$s")" || rc=$?
+        if [ "$rc" -eq 2 ]; then
+            echo "      ❌ Key material scan could not run: $hits"
+            return 2
+        fi
+        [ -z "$hits" ] || all="${all}${hits}"$'\n'
+    done
+    all="$(printf '%s' "$all" | awk 'NF && !seen[$0]++')"
+    [ -n "$all" ] || return 0
+
+    local hit
+    while IFS= read -r hit; do
+        [ -n "$hit" ] || continue
+        echo "      ❌ $hit: private key material (PEM or PuTTY header)"
+    done <<< "$all"
+    return 1
 }
 
 # Check environment file security (CRITICAL)

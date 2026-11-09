@@ -771,12 +771,37 @@ commit_changes() {
     fi
     
     echo "💾 Committing changes..."
-    
+
     # Change to project root directory
     cd "$MANIFEST_CLI_PROJECT_ROOT" || {
         echo "❌ Failed to change to project root: $MANIFEST_CLI_PROJECT_ROOT"
         return 1
     }
+
+    # Refuse to sweep private key material into a commit (§2(a)). Runs FIRST:
+    # before the documentation review can prompt, and before `git add .` can
+    # stage what the §3 precedent says a sweep must never have to unstage.
+    # Content-based (PEM/PuTTY headers) over what `git add .` would newly
+    # land, because the .gitignore KEY MATERIAL block is prevention only. A
+    # key that is already in HEAD is named, not refused: it has been pushed
+    # already, and refusing would break every repo that commits fixture keys
+    # for its own tests — `manifest security` still reports it CRITICAL.
+    # The scanner lives in the security module, which manifest-core always
+    # loads; the guard is for suites that load this module alone.
+    if declare -F check_key_material >/dev/null 2>&1; then
+        if ! check_key_material "$MANIFEST_CLI_PROJECT_ROOT" pending; then
+            echo "❌ Commit refused: private key material would be committed."
+            echo "   Remove the key, or ignore it (and 'git rm --cached <path>' if it is staged), then retry."
+            return 1
+        fi
+        local _km_tracked
+        if ! _km_tracked="$(check_key_material "$MANIFEST_CLI_PROJECT_ROOT" tracked)"; then
+            echo "⚠️  Private key material is already in this repository's history (named, not refused):"
+            printf '%s\n' "$_km_tracked"
+            echo "   If these are test fixtures, nothing to do. If one is a real key, rotate it —"
+            echo "   deleting the file does not remove it from history. 'manifest security' reports them."
+        fi
+    fi
 
     if ! manifest_smart_documentation_review "$message"; then
         echo "❌ Documentation review failed"
