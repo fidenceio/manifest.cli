@@ -182,9 +182,16 @@ manifest_security() {
     echo "🛡️  Privacy Protection Check:"
     echo "=============================="
 
-    # Check for actual PII (not just example patterns)
-    if check_actual_pii "$project_root"; then
+    # Check for actual PII (not just example patterns). 2 means the scan
+    # itself could not run: a control that cannot run fails, it does not
+    # narrow (§6, §2(b)).
+    local _pii_rc=0
+    check_actual_pii "$project_root" || _pii_rc=$?
+    if [ "$_pii_rc" -eq 0 ]; then
         echo "   ✅ No actual PII detected in code"
+    elif [ "$_pii_rc" -eq 2 ]; then
+        echo "   ❌ CRITICAL: PII scan could not run"
+        critical_issues=$((critical_issues + 1))
     else
         echo "   ⚠️  WARNING: Actual PII detected in code"
         warnings=$((warnings + 1))
@@ -274,58 +281,86 @@ check_git_tracking() {
     return 0
 }
 
+# The files the PII scan reads: everything under the project root except
+# VCS/dependency/documentation directories and documentation, data and config
+# file types, which carry contact lines legitimately. The two .sh names are
+# this module and the config module, whose example strings would otherwise
+# match in the canonical checkout.
+#
+# Chosen with find(1), NOT with grep's --exclude-dir/--exclude: those are GNU
+# and BSD extensions that BusyBox grep rejects outright ("unrecognized
+# option", exit 2), and behind a 2>/dev/null that read as "0 matches" — so on
+# Alpine/musl installs the check stayed inert even once -E was passed
+# (measured in the containerized test leg, 2026-11-06, §2(b)). Every
+# primary below is POSIX.
+_manifest_security_pii_candidates() {
+    # -H: a symlinked project root (`cd ~/link-to-repo`) is followed; without
+    # it find yields no candidates and the scan reads as clean (steward, 2026-11-06).
+    find -H "$1" \( -name .git -o -name node_modules -o -name docs \) -prune \
+        -o -type f \
+        ! -name '*.env*' ! -name 'manifest.config' \
+        ! -name '*.md' ! -name '*.txt' ! -name '*.rst' ! -name '*.html' \
+        ! -name '*.css' ! -name '*.js' ! -name '*.json' ! -name '*.xml' \
+        ! -name '*.yaml' ! -name '*.yml' ! -name 'env.example' \
+        ! -name 'manifest-security.sh' ! -name 'manifest-config.sh' \
+        -print 2>/dev/null
+}
+
 # Check for actual PII (WARNING)
 check_actual_pii() {
     local project_root="$1"
     
-    # Look for actual PII patterns, not just example patterns
+    # Look for actual PII patterns, not just example patterns.
+    #
+    # These are EXTENDED regexes (`+`, `{2,}`), so the grep below must run
+    # with -E. Without it, BRE reads `+` and `{` as literals and every pattern
+    # matches nothing — which is how this check printed a green tick on every
+    # repo from the day it was written until §2(b) (measured: the email
+    # pattern matched 0 lines as shipped and 1 with -E on the same fixture).
+    #
+    # There is deliberately no street-address pattern. The one that used to
+    # sit here, `[0-9]+ [A-Za-z ]+ [A-Za-z]+`, matches "12 ok tests ran" —
+    # 15,401 lines of this repo and one line of a three-line clean fixture —
+    # so enabling it would have made the check warn on every repo, the
+    # always-red twin of the always-green defect this fixes.
     local actual_pii_patterns=(
         "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"  # Real email patterns
         "[0-9]{3}-[0-9]{3}-[0-9]{4}"                      # Real phone patterns
-        "[0-9]+ [A-Za-z ]+ [A-Za-z]+"                      # Real address patterns
     )
-    
+
     local pii_found=0
-    
+
+    local candidates
+    candidates="$(_manifest_security_pii_candidates "$project_root")"
+    [ -n "$candidates" ] || return 0
+
+    # -h: plain lines, so the example-string filters see the line not the
+    # path. -s: unreadable files are skipped quietly, so anything grep still
+    # writes to stderr is a usage or pattern error, and that returns 2 ("scan
+    # NOT performed") rather than reading as clean: measured with a grep that
+    # rejects -E, the bare pipeline printed the usage text AND counted 0.
+    local scan_err
+    scan_err="$(mktemp "${TMPDIR:-/tmp}/manifest-pii.XXXXXX")" || return 2
     for pattern in "${actual_pii_patterns[@]}"; do
-        local matches=$(grep -r "$pattern" "$project_root" \
-            --exclude-dir=.git \
-            --exclude-dir=node_modules \
-            --exclude-dir=docs \
-            --exclude="*.env*" \
-            --exclude="manifest.config" \
-            --exclude="*.md" \
-            --exclude="*.txt" \
-            --exclude="*.rst" \
-            --exclude="*.html" \
-            --exclude="*.css" \
-            --exclude="*.js" \
-            --exclude="*.json" \
-            --exclude="*.xml" \
-            --exclude="*.yaml" \
-            --exclude="*.yml" \
-            --exclude="env.example" \
-            --exclude="env.examples.md" \
-            --exclude="SECURITY.md" \
-            --exclude="CONFIG_VS_SECURITY.md" \
-            --exclude="HUMAN_INTUITIVE_VERSIONING.md" \
-            --exclude="TESTING.md" \
-            --exclude="README.md" \
-            --exclude="USER_GUIDE.md" \
-            --exclude="COMMAND_REFERENCE.md" \
-            --exclude="INSTALLATION.md" \
-            --exclude="CONTRIBUTING.md" \
-            --exclude="EXAMPLES.md" \
-            --exclude="manifest-security.sh" \
-            --exclude="manifest-config.sh" \
-            2>/dev/null | grep -v "john.doe@example.com" | grep -v "jane.smith@company.com" | grep -v "555-123-4567" | grep -v "123 Main St" | grep -v "admin@localhost" | wc -l)
-        
-        if [ "$matches" -gt 0 ]; then
+        local matches
+        matches="$(printf '%s\n' "$candidates" | tr '\n' '\0' \
+            | xargs -0 grep -E -h -s -- "$pattern" 2>>"$scan_err" \
+            | grep -v "john.doe@example.com" | grep -v "jane.smith@company.com" | grep -v "555-123-4567" | grep -v "admin@localhost" | wc -l)"
+        matches="${matches//[[:space:]]/}"
+
+        if [ -s "$scan_err" ]; then
+            echo "      ❌ PII scan could not run: $(head -1 "$scan_err")"
+            rm -f "$scan_err"
+            return 2
+        fi
+
+        if [ "${matches:-0}" -gt 0 ]; then
             echo "      ⚠️  Potential actual PII pattern found: $pattern"
             pii_found=$((pii_found + 1))
         fi
     done
-    
+    rm -f "$scan_err"
+
     [ $pii_found -eq 0 ]
 }
 
