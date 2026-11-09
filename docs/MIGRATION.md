@@ -1,6 +1,6 @@
 # Migration Guide
 
-## Upcoming breaking command cleanup
+## Breaking command cleanup — shipped: verbs and scopes in v62.0.0, short switches in the release after it
 
 Use `manifest <verb> <scope> [action]`. Mutating workflow commands preview by
 default; `-y` / `--yes` applies and `--dry-run` explicitly previews. Combining
@@ -28,6 +28,7 @@ preview and apply flags is an error in either order.
 | `init -f`, `init fleet -n` / `-p` | `--force`, `--name` / `--parallel` |
 | `discover fleet -q`, `update fleet -q` | `--quiet` |
 | `status fleet -v` | `--verbose` |
+| `init fleet -t` | `--template` |
 
 Every switch now has exactly one spelling, the full word. The only short
 switch kept is `-y`, because it is the apply switch in every documented command
@@ -53,7 +54,7 @@ map cannot reconstruct fleet versions. Fleet revert requires clean working trees
 and reports partial checkout failures with exit `2`.
 
 These spellings are removed, without compatibility aliases. Existing automation
-must use the replacements before upgrading to this breaking release. Connecting
+must use the replacements before upgrading past v62.0.0. Connecting
 through `init repo --connect` or `init fleet --connect` includes init's local scaffolding phase; it preserves
 existing files unless an explicit overwrite option is given.
 
@@ -342,7 +343,7 @@ only remedy.
 
 The former `manifest prep` behavior lives in the **connect phase** of
 `manifest init`. The redundant command and internal compatibility wrappers are
-removed in the upcoming breaking cleanup.
+removed in v62.0.0.
 
 ```bash
 manifest prep repo             ->  manifest init repo --connect
@@ -378,7 +379,7 @@ GitHub repo inside Phase 2's scaffold, not the connect phase. Repository connect
 ### If you script against Manifest
 
 - Replace `manifest prep <scope>` with `manifest init <scope> --connect` before
-  upgrading to this breaking cleanup.
+  upgrading past v62.0.0.
 - The unused alias-warning toggle `deprecations.quiet` and its environment
   variable are removed with the aliases.
 - New empty remotes skip pulling. Existing remotes use a fast-forward-only
