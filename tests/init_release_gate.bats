@@ -79,8 +79,13 @@ teardown() {
 @test "gate scaffold: inside the container the read-only source is copied and the checks write only to the copy" {
     echo "1.0.0" > "$PROJ/VERSION"
     # A project check that writes into its tree — the thing that used to land
-    # on the host.
+    # on the host. The Makefile is what the scaffold detects; the `make` on
+    # PATH is a shim that does what the target says, because the stub runs
+    # the inner payload on THIS host and the containerized CI leg (Alpine)
+    # has no make — the test is about where the write lands, not about make.
     printf 'test:\n\ttouch created-by-gate\n' > "$PROJ/Makefile"
+    printf '#!/usr/bin/env bash\n[ "${1:-}" = test ] && touch created-by-gate\n' > "$SCRATCH/bin/make"
+    chmod +x "$SCRATCH/bin/make"
     ensure_release_gate_script "$PROJ"
     cd "$PROJ"
     chmod -R a-w "$PROJ"
