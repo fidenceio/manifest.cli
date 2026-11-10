@@ -1,5 +1,21 @@
 # Changelog
 
+## [63.0.1] - 2026-11-10
+
+**Release Type:** Patch
+
+### Changes
+
+- Fix(docs): land every managed-doc write through one stage-beside-the-target helper (§3)
+- Docs(tracker): file §3's write-then-rename slice as fixed and point the resume order at it
+- Fix(init): judge .gitignore upgrades by what the file decides, not by its lines (§1(a))
+- Docs(tracker): file §1(a) as fixed with its two review corrections, and §102 for the inert .yarn/ negations
+- Fix(git): stage only the release write areas in the ship's version commit (§4)
+- Docs(tracker): retire §4 as fixed, file §103 for the writers that ignore docs.folder and files.readme
+- Test(release-gate): supply the make the gate's image would, so the copy-branch test runs on the Alpine leg
+- Test(container): install kustomize in both CI legs, record the three new platform skips, and fix a backwards stat shim
+
+
 ## [63.0.0] - 2026-11-09
 
 **Release Type:** Major
@@ -127,13 +143,3 @@
 - Test(wizard): drop the SIGPIPE race from the review-and-confirm assertions (§90)
 - Fix(test,docs): make the executor's identity precondition its own, not the platform's (§82, §91)
 - Test(container): raise the skip budget 6 -> 7 for §83's SIGINT-disposition skip
-
-
-## [60.1.1] - 2026-09-09
-
-**Release Type:** Patch
-
-### Changes
-
-- Fix(config,fleet): the reset shipped in v60.1.0 wiped the bypass reason on every publishing ship (§81, §77)
-- Docs(gate): correct C-locale residue comment; file two leads (§77, §81)
