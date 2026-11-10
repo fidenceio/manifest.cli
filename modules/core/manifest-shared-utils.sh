@@ -513,6 +513,85 @@ manifest_file_mode() {
 }
 
 # -----------------------------------------------------------------------------
+# Replace a file's contents atomically, keeping its permission bits (TRACKER §3).
+#   manifest_replace_file_atomically <target> <source-file | ->
+#
+# The one rule for landing content on a user-owned file, stated in
+# manifest-install-paths.sh and applied piecemeal before this helper existed:
+#   1. stage in a temp BESIDE the target (`mktemp "${target}.XXXXXX"`), so the
+#      rename stays on one filesystem and is atomic — a scratch-dir temp under
+#      $TMPDIR crosses devices in a container, where mv degrades to copy+unlink;
+#   2. reapply the target's own mode (or the umask default for a new file) —
+#      mktemp creates 0600 and a rename carries the temp's bits onto the target,
+#      which is how eight tracked files in this repo silently became 0600;
+#   3. check the rename, and on any failure leave the target untouched.
+# `-` reads the new contents from stdin. The source file is the caller's to
+# remove. Returns 1 with the target untouched on any failure.
+# -----------------------------------------------------------------------------
+manifest_replace_file_atomically() {
+    local target="$1" source="${2:-}" staged mode
+    [ -n "$target" ] || return 1
+    if [ "$source" != "-" ] && [ ! -f "$source" ]; then
+        log_error "Cannot replace $target: source file is missing: ${source:-<none>}"
+        return 1
+    fi
+    # Write THROUGH a symlink, as the redirects this replaced did: resolve the
+    # link chain so the mode is read from, and the rename lands on, the real
+    # file. Renaming onto the link path itself would turn a symlinked README
+    # into a regular file carrying the link's own bits (measured: 755).
+    local hops=0 link
+    while [ -L "$target" ] && [ "$hops" -lt 32 ]; do
+        link="$(readlink "$target")" || break
+        case "$link" in
+            /*) target="$link" ;;
+            *)  target="$(dirname "$target")/$link" ;;
+        esac
+        hops=$((hops + 1))
+    done
+    if [ -L "$target" ]; then
+        log_error "Cannot replace $1: symlink chain too deep"
+        return 1
+    fi
+    if [ -e "$target" ] && [ ! -f "$target" ]; then
+        # `mv -f file dir` would move INTO a directory and report success.
+        log_error "Cannot replace $1: not a regular file"
+        return 1
+    fi
+    if ! mkdir -p "$(dirname "$target")" 2>/dev/null; then
+        log_error "Cannot replace $target: its directory cannot be created"
+        return 1
+    fi
+    if ! staged="$(mktemp "${target}.XXXXXX" 2>/dev/null)"; then
+        log_error "Cannot replace $target: could not stage a temporary file beside it"
+        return 1
+    fi
+    if [ "$source" = "-" ]; then
+        cat > "$staged"
+    else
+        cat "$source" > "$staged"
+    fi || {
+        log_error "Cannot replace $target: staging its new contents failed; the existing file is untouched"
+        rm -f "$staged"
+        return 1
+    }
+    mode="$(manifest_file_mode "$target" 2>/dev/null || true)"
+    [ -n "$mode" ] || mode="$(printf '%o' "$(( 0666 & ~0$(umask) ))")"
+    if ! chmod "$mode" "$staged" 2>/dev/null; then
+        # Landing the 0600 temp anyway is the exact clobber this helper exists
+        # to prevent, so a failed chmod is a failed replace.
+        log_error "Cannot replace $target: could not set mode $mode on the staged file; the existing file is untouched"
+        rm -f "$staged"
+        return 1
+    fi
+    if ! mv -f "$staged" "$target" 2>/dev/null; then
+        log_error "Cannot replace $target: rename failed; the existing file is untouched"
+        rm -f "$staged"
+        return 1
+    fi
+    return 0
+}
+
+# -----------------------------------------------------------------------------
 # JSON helpers — minimal hand-rolled emitters so --json works without jq.
 # We only support the small subset of JSON the CLI actually emits: strings,
 # numbers/booleans/null (caller-classified), and flat arrays/objects.
@@ -1538,3 +1617,4 @@ export -f show_file_error show_git_error show_config_error
 export -f show_validation_error show_permission_error show_dependency_error
 export -f sanitize_filename sanitize_version sanitize_path validate_version_format
 export -f validate_file_exists validate_directory_exists
+export -f manifest_file_mode manifest_replace_file_atomically

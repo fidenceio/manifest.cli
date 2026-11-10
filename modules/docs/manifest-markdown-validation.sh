@@ -78,7 +78,14 @@ validate_file() {
     if [[ "$clean" == "true" ]]; then
         content=$(clean_markdown "$content")
         if [[ "$content" != "$original_content" ]]; then
-            echo "$content" > "$file"
+            # Staged beside the target and renamed, mode preserved (TRACKER §3):
+            # a bare `echo "$content" > "$file"` truncated a tracked doc at
+            # redirect-open, so an interrupt mid-write left half a file. printf
+            # rather than echo, so a leading `-n`/`-e` line is content, not a flag.
+            if ! printf '%s\n' "$content" | manifest_replace_file_atomically "$file" -; then
+                log_error "Could not clean $file; it is left as it was"
+                return 1
+            fi
             log_success "Cleaned: $file"
         fi
     fi

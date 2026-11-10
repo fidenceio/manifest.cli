@@ -63,7 +63,14 @@ manifest_replace_managed_block() {
     cat "$content_file" >> "$temp_file"
     printf '%s\n' "$end_marker" >> "$temp_file"
     tail -n +$((end_line + 1)) "$file" >> "$temp_file"
-    mv "$temp_file" "$file"
+    # The assembly above is scratch; the landing is staged beside $file and
+    # renamed with its mode reapplied (TRACKER §3). A scratch-to-repo `mv`
+    # crossed filesystems in a container and carried the temp's 0600 onto a
+    # tracked README or docs/INDEX.md.
+    local rc=0
+    manifest_replace_file_atomically "$file" "$temp_file" || rc=1
+    rm -f "$temp_file"
+    return "$rc"
 }
 
 manifest_is_legacy_generated_root_changelog() {
@@ -145,8 +152,10 @@ _manifest_docs_write_managed_file() {
         return 1
     fi
 
-    mkdir -p "$(dirname "$file")"
-    cp "$content_file" "$file"
+    # Staged beside the target, mode preserved (TRACKER §3). `cp` from a 0600
+    # mktemp created every new docs-site file 0600, which git does not record,
+    # so the authoring clone kept owner-only files that a fresh clone got 644.
+    manifest_replace_file_atomically "$file" "$content_file"
 }
 
 _manifest_docs_repo_title() {
