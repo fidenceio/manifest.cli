@@ -335,6 +335,41 @@ assert_no_remote_dispatch() {
     assert_no_remote_dispatch
 }
 
+@test "ship repo --local -y: a file written into the tree mid-ship is not in the release commit, is named, and the ship still completes (TRACKER §4)" {
+    local repo
+    repo="$(mk_repo 1.2.3)"
+    # A release-notes provider runs during documentation generation — after the
+    # auto-commit, before the release commit — exactly the window a bare
+    # `git add .` used to sweep. This one writes a file into the repo root.
+    local provider="$SCRATCH/provider.sh"
+    cat > "$provider" <<'EOF'
+#!/usr/bin/env bash
+echo "TOKEN=leaked" > "$MANIFEST_CLI_PROJECT_ROOT/leaked.env"
+exit 1
+EOF
+    chmod +x "$provider"
+
+    cd "$repo"
+    # The docs folder as the CLI entrypoint configures it. This fixture calls
+    # the workflow directly, with no config load, and an empty `docs.folder`
+    # resolves to the root — where the release scope is the whole tree by
+    # design, and the case under test would not be distinguishable.
+    MANIFEST_CLI_PROJECT_ROOT="$repo" MANIFEST_CLI_RELEASE_NOTES_PROVIDER=command \
+        MANIFEST_CLI_RELEASE_NOTES_COMMAND="$provider" \
+        MANIFEST_CLI_DOCS_FOLDER=docs MANIFEST_CLI_DOCS_ARCHIVE_FOLDER=docs/zArchive \
+        run manifest_ship_repo patch --local -y
+    [ "$status" -eq 0 ]
+    [ -f "$repo/leaked.env" ]                                   # written, as planned
+    [[ "$("$REAL_GIT" -C "$repo" log -1 --pretty=%s)" == *"1.2.4"* ]]
+    [[ "$("$REAL_GIT" -C "$repo" show --name-only --format= HEAD)" != *"leaked.env"* ]]
+    [[ "$("$REAL_GIT" -C "$repo" log --all --name-only --format=)" != *"leaked.env"* ]]
+    [[ "$output" == *"Left out 1 file this release did not write: leaked.env"* ]]
+    [[ "$output" == *"Left in your working tree, as announced by the release commit: leaked.env"* ]]
+    [ "$("$REAL_GIT" -C "$repo" status --porcelain)" = "?? leaked.env" ]
+
+    assert_no_remote_dispatch
+}
+
 @test "ship repo --local -y: output states no remote operations" {
     local repo
     repo="$(mk_repo 1.2.3)"

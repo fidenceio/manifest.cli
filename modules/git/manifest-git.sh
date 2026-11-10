@@ -533,7 +533,7 @@ manifest_notice_new_untracked_files() {
     local _new_files=() _nf
     while IFS= read -r _nf; do
         [[ -n "$_nf" ]] && _new_files+=("$_nf")
-    done < <(git -C "$repo" status --porcelain --untracked-files=all 2>/dev/null | sed -n 's/^?? //p')
+    done < <(_manifest_git_status_paths "$repo" untracked)
     [[ ${#_new_files[@]} -gt 0 ]] || return 0
     local _nf_noun="files"
     [[ ${#_new_files[@]} -eq 1 ]] && _nf_noun="file"
@@ -640,18 +640,51 @@ export -f manifest_unstage_accidental_gitlinks
 # recorded `.claude/` but staged `.claude/agents/<each>.md`, so the guard below
 # "left out" files the operator had in fact staged before invoking the ship.
 #
+# Every path is read from git's NUL-terminated listings and printed as it is on
+# disk. Porcelain v1 quotes a name with a space, a quote, a backslash or a
+# non-ASCII byte (`?? "a b.txt"`), while `git diff --cached --name-only`
+# prints the same name bare, so the comparison below mismatched on exactly
+# those names: a pending `a b.txt` was held out of the auto-commit as "changed
+# after this ship was requested", the count line said one more file would
+# land than did, and the release commit swept it anyway (TRACKER §4 lead,
+# measured). The one shape a newline-separated list cannot carry is a path
+# with a newline in it; such a path is compared by its first line.
+#
 # ARGUMENTS:
 #   $1 - repo path (default ".")
 manifest_record_pending_snapshot() {
     local repo="${1:-.}"
-    MANIFEST_CLI_GIT_PENDING_SNAPSHOT="$(
-        git -C "$repo" status --porcelain --untracked-files=all 2>/dev/null |
-            sed -e 's/^...//' -e 's/^.* -> //' |
-            LC_ALL=C sort -u
-    )"
+    MANIFEST_CLI_GIT_PENDING_SNAPSHOT="$(_manifest_git_status_paths "$repo" | LC_ALL=C sort -u)"
     export MANIFEST_CLI_GIT_PENDING_SNAPSHOT
 }
 export -f manifest_record_pending_snapshot
+
+# The paths `git status` reports, one per line, bare: `--porcelain -z` records,
+# a rename or copy carried under its destination (in -z output the destination
+# record comes first and the source follows as its own record, which is
+# dropped). `-uall` for the reason manifest_record_pending_snapshot gives.
+#
+# ARGUMENTS:
+#   $1 - repo path (default ".")
+#   $2 - "untracked" to print only `??` entries (new files), else everything
+_manifest_git_status_paths() {
+    local repo="${1:-.}" only="${2:-}"
+    local rec xy path skip_next=false
+    while IFS= read -r -d '' rec; do
+        if [[ "$skip_next" == "true" ]]; then
+            skip_next=false
+            continue
+        fi
+        xy="${rec:0:2}"
+        path="${rec:3}"
+        [[ "$xy" == *R* || "$xy" == *C* ]] && skip_next=true
+        if [[ "$only" == "untracked" ]]; then
+            [[ "$xy" == "??" ]] || continue
+        fi
+        [[ -n "$path" ]] && printf '%s\n' "$path"
+    done < <(git -C "$repo" status --porcelain -z --untracked-files=all 2>/dev/null)
+}
+export -f _manifest_git_status_paths
 
 # Guard (runs right after a bulk `git add .`): unstage paths that were NOT in
 # the pending snapshot, i.e. that appeared after the operator asked to ship.
@@ -682,9 +715,9 @@ manifest_unstage_gate_drift() {
     [[ -n "${MANIFEST_CLI_GIT_PENDING_SNAPSHOT+x}" ]] || return 0
 
     local _staged=() _drift=() _p
-    while IFS= read -r _p; do
+    while IFS= read -r -d '' _p; do
         [[ -n "$_p" ]] && _staged+=("$_p")
-    done < <(git -C "$repo" diff --cached --name-only 2>/dev/null)
+    done < <(git -C "$repo" diff --cached --name-only -z 2>/dev/null)
     [[ ${#_staged[@]} -gt 0 ]] || return 0
 
     for _p in "${_staged[@]}"; do
@@ -696,7 +729,7 @@ manifest_unstage_gate_drift() {
     [[ ${#_drift[@]} -gt 0 ]] || return 0
 
     for _p in "${_drift[@]}"; do
-        git -C "$repo" reset -q HEAD -- "$_p" 2>/dev/null || true
+        git -C "$repo" reset -q HEAD -- ":(literal)$_p" 2>/dev/null || true
     done
     MANIFEST_CLI_GIT_DRIFT_SKIPPED_COUNT=${#_drift[@]}
 
@@ -704,15 +737,15 @@ manifest_unstage_gate_drift() {
     [[ ${#_drift[@]} -eq 1 ]] && _noun="file"
     local _joined
     printf -v _joined '%s, ' "${_drift[@]}"
-    # Scope this claim to what it can actually keep. The guard only holds paths
-    # out of the commit it runs for; `ship` unsets the snapshot before its
-    # version commit (by design — VERSION, CHANGELOG and regenerated docs all
-    # legitimately post-date the snapshot), so that later `git add .` stages the
-    # withheld paths after all. Promising "they stay in the working tree" made
-    # the log contradict the tree and sent operators hunting a phantom bug.
+    # The guard only holds paths out of the commit it runs for. The release
+    # commit later in a ship stages only the release's own write areas
+    # (TRACKER §4), so a held-out path outside those areas stays in the
+    # working tree; one inside them — a docs file, say — is swept by that
+    # commit, which is why the line below says where to look rather than
+    # promising more than this function controls.
     echo "${prefix}Left out ${#_drift[@]} $_noun that changed after this ship was requested: ${_joined%, }"
-    echo "${prefix}   Held out of THIS commit. During a ship, a later commit stages the whole tree,"
-    echo "${prefix}   so check 'git show --stat HEAD' before assuming they went unreleased."
+    echo "${prefix}   Held out of THIS commit. The release commit stages only Manifest's own release"
+    echo "${prefix}   files; anything it leaves out is named there, and 'git show --stat HEAD' is the record."
     return 0
 }
 export -f manifest_unstage_gate_drift
@@ -733,8 +766,7 @@ export -f manifest_unstage_gate_drift
 manifest_pending_commit_paths() {
     local repo="${1:-.}"
     local _all
-    _all="$(git -C "$repo" status --porcelain --untracked-files=all 2>/dev/null |
-        sed -e 's/^...//' -e 's/^.* -> //')"
+    _all="$(_manifest_git_status_paths "$repo")"
     # No baseline (or drift explicitly allowed): a bulk `git add .` lands it all.
     if [[ -z "${MANIFEST_CLI_GIT_PENDING_SNAPSHOT+x}" ]] ||
        [[ "${MANIFEST_CLI_GIT_ALLOW_GATE_DRIFT:-false}" == "true" ]]; then
@@ -758,10 +790,169 @@ manifest_pending_commit_paths() {
 }
 export -f manifest_pending_commit_paths
 
+# The paths the release path writes, one per line, relative to the root, each
+# derived from the configuration that steers the writer (TRACKER §4): the
+# version file and its `version.sync` mirrors (bump_version), CHANGELOG.md
+# and the README (manifest_docs_generate), the docs folder (index, cleaned
+# markdown, the archive sweep's sources), the archive folder (its
+# destinations and `.archive-log.md`), the docs-site source directory and
+# its Pages workflow, and the documentation review's report directory when
+# one is configured into the tree. A path is listed only when the worktree
+# or the index knows it, so `git add -A -- <areas>` never fails on a pathspec
+# that matches nothing. The handoff brief and the default review report are
+# under `.git/` and are not worktree writes.
+#
+# This is the repo-ship twin of `_fleet_coordination_files`: the release
+# commit stages these by name and nothing else, so a file written into the
+# tree by anything other than the release — another session, an editor, a
+# hook, a provider command — is never swept into a release commit.
+#
+# The docs and archive folders are resolved by the same functions the writers
+# call (get_docs_folder, get_docs_archive_folder), not re-derived from the
+# variables, so the area is wherever the index and the sweep actually went.
+# When the docs folder resolves to the root itself — `docs.folder` empty, as
+# a bare module load leaves it — the area IS the root and this scope is the
+# whole tree; that is what the writers did, so it is reported as nothing
+# held out rather than as a narrower claim than the truth.
+#
+# ARGUMENTS:
+#   $1 - repo path (default ".")
+manifest_release_write_areas() {
+    local repo="${1:-.}"
+    local -a candidates=() out=()
+    local p
+    # Literal README.md beside the configured name: update_readme_version
+    # writes the literal file while validate_project follows `files.readme`.
+    candidates+=("VERSION" "CHANGELOG.md" "README.md" "${MANIFEST_CLI_README_FILE:-README.md}")
+    # The documentation review runs inside commit_changes and, when
+    # `docs.review.report_dir` opts its report into the tree, writes there.
+    [[ -n "${MANIFEST_CLI_DOC_REVIEW_REPORT_DIR:-}" ]] && candidates+=("$MANIFEST_CLI_DOC_REVIEW_REPORT_DIR")
+    while IFS= read -r p; do
+        [[ -n "$p" ]] && candidates+=("$p")
+    done < <(declare -F _manifest_version_sync_targets >/dev/null 2>&1 && _manifest_version_sync_targets)
+    # The fallbacks are the resolvers' own expressions, defaults included
+    # (none: an unset folder resolves to the root, as it does for the writer).
+    if declare -F get_docs_folder >/dev/null 2>&1; then
+        candidates+=("$(MANIFEST_CLI_PROJECT_ROOT="$repo" get_docs_folder "$repo")")
+    else
+        candidates+=("$repo/${MANIFEST_CLI_DOCS_FOLDER:-}")
+    fi
+    if declare -F get_docs_archive_folder >/dev/null 2>&1; then
+        candidates+=("$(MANIFEST_CLI_PROJECT_ROOT="$repo" get_docs_archive_folder "$repo")")
+    else
+        candidates+=("$repo/${MANIFEST_CLI_DOCS_ARCHIVE_FOLDER:-}")
+    fi
+    # Two writers do not follow `docs.folder`: validate_project cleans the
+    # literal `docs/` tree, and the docs-site generator writes its Pages
+    # workflow under `.github/workflows/`. Both are areas by what they do.
+    # `.manifest-cli/` is NOT an area: the gate writes its ledger there before
+    # the auto-commit, nothing writes there between the two commits, and
+    # naming a tracked-but-ignored directory makes `git add` print its
+    # "paths are ignored" hint and exit 1 on every release (measured).
+    candidates+=("docs" ".github/workflows/manifest-docs-pages.yml" \
+        "${MANIFEST_CLI_DOCS_SITE_SOURCE_DIR:-docs-site}")
+    local seen=$'\n' root_area=false
+    for p in "${candidates[@]}"; do
+        # The resolvers return "$repo/<folder>"; make every entry root-relative.
+        # An absolute folder that is not under the root is outside the tree.
+        [[ "$p" == /* && "$p" != "$repo" && "$p" != "$repo"/* ]] && continue
+        p="${p#"$repo"/}"; p="${p#"$repo"}"
+        p="${p#./}"; p="${p%/}"; p="${p#/}"
+        [[ -z "$p" || "$p" == "." ]] && { root_area=true; continue; }
+        # A configured folder that escapes the root is not an area: the sweep
+        # already refuses it, and a pathspec outside the tree is an error.
+        [[ "$p" == ".." || "$p" == ../* || "$p" == *"/../"* || "$p" == */.. ]] && continue
+        [[ "$seen" == *$'\n'"$p"$'\n'* ]] && continue
+        seen+="$p"$'\n'
+        if [[ -n "$(git -C "$repo" ls-files -z -- "$p" 2>/dev/null | head -c1)" ]]; then
+            out+=("$p")
+        elif [[ -e "$repo/$p" ]] && ! git -C "$repo" check-ignore -q -- "$p" 2>/dev/null; then
+            # Present and not ignored. An ignored, untracked area is left
+            # out, because `git add` refuses an ignored pathspec with a hint
+            # and exit 1.
+            out+=("$p")
+        fi
+    done
+    if [[ "$root_area" == "true" ]]; then
+        printf '.\n'
+        return 0
+    fi
+    [[ ${#out[@]} -gt 0 ]] && printf '%s\n' "${out[@]}"
+    return 0
+}
+export -f manifest_release_write_areas
+
+# After a release-scoped `git add`, name every dirty path the release did not
+# stage and record the set for the completion check (TRACKER §4). Notice,
+# never a prompt, never a block: the paths are someone's work in progress
+# and the release is not it. Sets MANIFEST_CLI_GIT_RELEASE_HELD_OUT to the
+# newline-separated list (empty when nothing was held out) so
+# manifest_ship_assert_completion_clean can accept exactly this set and no
+# other dirty path.
+#
+# ARGUMENTS:
+#   $1 - repo path (default ".")
+#   $2 - line prefix (default "   ")
+manifest_notice_release_held_out() {
+    local repo="${1:-.}"
+    local prefix="${2:-   }"
+    export MANIFEST_CLI_GIT_RELEASE_HELD_OUT=""
+    local -a held=()
+    local p
+    while IFS= read -r p; do
+        [[ -n "$p" ]] || continue
+        # Staged is "in the commit"; a path staged AND dirty again is both.
+        # `:(literal)` because a bare pathspec is a glob: `notes[1].md`
+        # would otherwise read as staged whenever `notes1.md` is.
+        if git -C "$repo" diff --cached --quiet -- ":(literal)$p" 2>/dev/null; then
+            held+=("$p")
+        fi
+    done < <(_manifest_git_status_paths "$repo")
+    [[ ${#held[@]} -gt 0 ]] || return 0
+    # Sorted, so the notice reads the same whether a path is tracked or new.
+    MANIFEST_CLI_GIT_RELEASE_HELD_OUT="$(printf '%s\n' "${held[@]}" | LC_ALL=C sort)"
+    held=()
+    while IFS= read -r p; do held+=("$p"); done <<< "$MANIFEST_CLI_GIT_RELEASE_HELD_OUT"
+    local noun="files"
+    [[ ${#held[@]} -eq 1 ]] && noun="file"
+    local joined
+    printf -v joined '%s, ' "${held[@]}"
+    echo "${prefix}Left out ${#held[@]} $noun this release did not write: ${joined%, }"
+    echo "${prefix}   They stay in your working tree, uncommitted. Commit them yourself if they belong."
+    return 0
+}
+export -f manifest_notice_release_held_out
+
+# commit_changes MESSAGE [TIMESTAMP] [SCOPE]
+#
+# SCOPE is `tree` (default) or `release`. `tree` stages the whole tree with
+# `git add .`, scoped by the pending snapshot when one is recorded — the
+# auto-commit of pre-existing work, where staging unreviewed work is the
+# point, and the plumbing `manifest commit` verb. `release` stages only
+# manifest_release_write_areas (TRACKER §4): the ship's version commit, which
+# used to run the same bare `git add .` with the snapshot deliberately
+# dropped, so everything written between the auto-commit and the release
+# commit — by the sync's merge, by a provider command, by another session —
+# landed in the release unreviewed. Under `release`, anything else dirty is
+# named and left in the working tree, and the completion check accepts
+# exactly that set. `git.allow_gate_drift: true` keeps the old sweep for both
+# scopes; it is the one opt-out and it already means "sweep everything".
 commit_changes() {
     local message="$1"
     local timestamp="$2"
-    
+    local scope="${3:-tree}"
+
+    case "$scope" in
+        tree|release) ;;
+        *)
+            echo "❌ commit_changes: unknown scope '$scope' (expected tree or release)"
+            return 1
+            ;;
+    esac
+    if [[ "$scope" == "release" && "${MANIFEST_CLI_GIT_ALLOW_GATE_DRIFT:-false}" == "true" ]]; then
+        scope="tree"
+    fi
+
     if [ -z "$message" ]; then
         message="Auto-commit changes"
     fi
@@ -814,12 +1005,31 @@ commit_changes() {
 
     echo "   Message: $message"
 
-    # Surface any brand-new untracked files this commit is about to sweep in.
-    manifest_notice_new_untracked_files
+    export MANIFEST_CLI_GIT_RELEASE_HELD_OUT=""
+    if [[ "$scope" == "release" ]]; then
+        local -a _areas=()
+        local _area
+        while IFS= read -r _area; do
+            [[ -n "$_area" ]] && _areas+=("$_area")
+        done < <(manifest_release_write_areas "$MANIFEST_CLI_PROJECT_ROOT")
+        # `-A` within the areas: modifications, new files, and the deletions
+        # the archive sweep leaves behind when it moves a doc into zArchive/.
+        if [[ ${#_areas[@]} -gt 0 ]]; then
+            git add -A -- "${_areas[@]}"
+        fi
+    else
+        # Surface any brand-new untracked files this commit is about to sweep in.
+        manifest_notice_new_untracked_files
 
-    git add .
+        git add .
+    fi
     # Drop accidental bare-gitlink captures before they enter the commit.
     manifest_unstage_accidental_gitlinks
+    # The held-out set is read after the gitlink guard, so a nested repo the
+    # guard just unstaged is announced and accepted rather than refused later.
+    if [[ "$scope" == "release" ]]; then
+        manifest_notice_release_held_out "$MANIFEST_CLI_PROJECT_ROOT"
+    fi
     if [[ "${MANIFEST_CLI_GITLINKS_SKIPPED_COUNT:-0}" -gt 0 ]] && git diff --cached --quiet 2>/dev/null; then
         echo "✅ Nothing to commit (only skipped nested git repos)"
         return 0

@@ -193,15 +193,18 @@ were pending before it runs the test gate. A full gate takes minutes — long en
 another session, an editor autosave, or a background generator to drop new files into
 the tree. Those get unstaged and listed.
 
-Read that list carefully, because its scope is narrower than it looks: those files are
-kept out of **the automatic commit**, not out of the release. Later in the same run, the
-version commit stages the whole tree on purpose — `VERSION`, `CHANGELOG.md`, and
-regenerated docs all legitimately appear after the snapshot — so anything on the
-"Left out …" list still gets committed one commit later. To see what actually shipped,
-run `git show --stat HEAD` rather than assuming. To turn the guard off and sweep
-everything into the first commit, set `git.allow_gate_drift: true`
-(`MANIFEST_CLI_GIT_ALLOW_GATE_DRIFT`). Manifest's own `.manifest-cli/` bookkeeping is
-always exempt, because the gate writes its results there while running.
+Those files are kept out of **the automatic commit**. Later in the same run, the version
+commit stages only what the release itself writes — `VERSION` and its `version.sync`
+mirrors, `CHANGELOG.md`, the README, the docs folder and its archive, the docs-site
+source folder and its Pages workflow, and a `docs.review.report_dir` if you set one — so
+a file outside those places that appeared
+mid-run stays in your working tree, uncommitted, and the ship names it a second time:
+*"Left out N files this release did not write"*. A file inside those places (a new doc,
+say) is swept by the version commit, because Manifest cannot tell it from its own output;
+`git show --stat HEAD` is the record of what shipped. To turn both guards off and sweep
+everything, set `git.allow_gate_drift: true` (`MANIFEST_CLI_GIT_ALLOW_GATE_DRIFT`).
+Manifest's own `.manifest-cli/` bookkeeping is always exempt, because the gate writes
+its results there while running.
 
 ### Letting whoever is driving finish the documentation
 

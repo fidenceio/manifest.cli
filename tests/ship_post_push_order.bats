@@ -189,6 +189,22 @@ teardown() {
     [[ "$output" == *"?? pending.txt"* ]]
 }
 
+@test "completion invariant accepts exactly the paths the release commit held out, and nothing else (TRACKER §4)" {
+    echo "theirs" > 'their notes.txt'
+    export MANIFEST_CLI_GIT_RELEASE_HELD_OUT='their notes.txt'
+    run manifest_ship_assert_completion_clean "false" ""
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Left in your working tree, as announced"*"their notes.txt"* ]]
+
+    # One more dirty path that was NOT announced is still a failure.
+    echo "x" > other.txt
+    run manifest_ship_assert_completion_clean "false" ""
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"working tree is not clean"* ]]
+    [[ "$output" == *"?? other.txt"* ]]
+    unset MANIFEST_CLI_GIT_RELEASE_HELD_OUT
+}
+
 @test "completion invariant rejects post-push source commits" {
     local pushed_head
     pushed_head="$(git rev-parse HEAD)"

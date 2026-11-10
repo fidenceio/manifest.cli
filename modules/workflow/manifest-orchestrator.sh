@@ -1520,15 +1520,34 @@ manifest_ship_assert_completion_clean() {
     local publish_release="${1:-false}"
     local pushed_head_sha="${2:-}"
 
-    local dirty_snapshot=""
-    dirty_snapshot="$(git status --porcelain 2>/dev/null || true)"
-    if [ -n "$dirty_snapshot" ]; then
+    # Dirty paths the release commit announced it held out (TRACKER §4) are
+    # the operator's own work in progress, not release changes: they are
+    # accepted here by exact name, and nothing else dirty is. Read with the
+    # same bare-path listing the release commit used, so a name git would
+    # quote compares equal to the one that was announced.
+    local -a dirty_paths=() unexpected=()
+    local dirty_path
+    while IFS= read -r dirty_path; do
+        [ -n "$dirty_path" ] && dirty_paths+=("$dirty_path")
+    done < <(_manifest_git_status_paths .)
+    for dirty_path in "${dirty_paths[@]}"; do
+        if [ -n "${MANIFEST_CLI_GIT_RELEASE_HELD_OUT:-}" ] && \
+           printf '%s\n' "$MANIFEST_CLI_GIT_RELEASE_HELD_OUT" | grep -qxF -- "$dirty_path"; then
+            continue
+        fi
+        unexpected+=("$dirty_path")
+    done
+    if [ ${#unexpected[@]} -gt 0 ]; then
         log_error "Ship completion invariant failed: working tree is not clean."
         log_error "Manifest refuses to report success while release changes remain uncommitted or unstaged."
+        local dirty_line
         while IFS= read -r dirty_line; do
             [ -n "$dirty_line" ] && log_error "   $dirty_line"
-        done <<< "$dirty_snapshot"
+        done < <(git status --porcelain 2>/dev/null || true)
         return 1
+    fi
+    if [ ${#dirty_paths[@]} -gt 0 ]; then
+        echo "ℹ️  Left in your working tree, as announced by the release commit: ${dirty_paths[*]}"
     fi
 
     if [ "$publish_release" = "true" ] && [ -n "$pushed_head_sha" ]; then
@@ -1726,6 +1745,9 @@ manifest_ship_repo_pretag_state() {
 }
 
 manifest_ship_repo_resume() {
+    # A resume makes no release commit of its own, so no held-out set from an
+    # outer process may be accepted by its completion check.
+    unset MANIFEST_CLI_GIT_RELEASE_HELD_OUT
     if ! ensure_repository_root; then
         log_error "Repository root validation failed"
         return 1
@@ -2175,11 +2197,16 @@ manifest_ship_workflow() {
     # The snapshot's only job was to scope that auto-commit to what the operator
     # had pending. Drop it before any release step runs: everything Manifest
     # generates from here — VERSION, CHANGELOG, regenerated docs — legitimately
-    # post-dates the snapshot, and the release commit must carry all of it.
+    # post-dates the snapshot. What keeps the release commit honest from here
+    # is not a baseline but its scope: it stages only the release's own write
+    # areas (TRACKER §4), so a snapshot is neither needed nor usable for it.
     # Cleared outside the block above so a clean tree (auto-commit skipped)
     # cannot leave a stale baseline behind either.
     unset MANIFEST_CLI_GIT_PENDING_SNAPSHOT
-    
+    # And no held-out set inherited from an outer process can speak for this
+    # ship's completion check; the release commit below records its own.
+    unset MANIFEST_CLI_GIT_RELEASE_HELD_OUT
+
     # Sync with remote. Skipped when resuming an interrupted ship: the
     # pre-interrupt run already synced before bumping, and pulling now would run
     # against the dirty uncommitted VERSION and could conflict on that very
@@ -2292,11 +2319,15 @@ manifest_ship_workflow() {
         return "${MANIFEST_CLI_SHIP_HANDOFF_PAUSED_EXIT_CODE:-4}"
     fi
 
-    # Commit version changes
+    # Commit version changes. `release` scope: only the release's own write
+    # areas are staged (TRACKER §4). Anything else dirty — written by the
+    # sync's merge, a provider command, a hook or another session during the
+    # steps above — is named and left in the working tree, and the completion
+    # check below accepts exactly that set.
     echo "💾 Committing version changes..."
     local pre_version_commit_sha
     pre_version_commit_sha="$(git rev-parse HEAD 2>/dev/null || echo "")"
-    if ! _manifest_ship_step "version_commit" commit_changes "Bump version to $new_version" "$timestamp"; then
+    if ! _manifest_ship_step "version_commit" commit_changes "Bump version to $new_version" "$timestamp" release; then
         log_error "Failed to commit version bump; aborting ship workflow."
         emit_ship_failure_report "version_commit" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
         return 1

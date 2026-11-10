@@ -14,6 +14,10 @@ setup() {
     export GIT_AUTHOR_NAME="bats" GIT_AUTHOR_EMAIL="bats@example"
     export GIT_COMMITTER_NAME="bats" GIT_COMMITTER_EMAIL="bats@example"
     unset MANIFEST_CLI_GIT_ALLOW_GATE_DRIFT MANIFEST_CLI_GIT_PENDING_SNAPSHOT
+    # The docs folders as set_default_configuration sets them: with neither
+    # set, the docs writers resolve to the root and the release scope is the
+    # whole tree — the degenerate case, tested by name below.
+    export MANIFEST_CLI_DOCS_FOLDER=docs MANIFEST_CLI_DOCS_ARCHIVE_FOLDER=docs/zArchive
     REPO="$SCRATCH/repo"
     mk_repo "$REPO"
     # commit_changes cds to the project root before staging.
@@ -26,6 +30,7 @@ teardown() {
     rm -rf "$SCRATCH"
     unset MANIFEST_CLI_GIT_ALLOW_GATE_DRIFT MANIFEST_CLI_GIT_PENDING_SNAPSHOT
     unset MANIFEST_CLI_GIT_DRIFT_SKIPPED_COUNT MANIFEST_CLI_PROJECT_ROOT
+    unset MANIFEST_CLI_DOCS_FOLDER MANIFEST_CLI_DOCS_ARCHIVE_FOLDER MANIFEST_CLI_GIT_RELEASE_HELD_OUT
 }
 
 mk_repo() {
@@ -145,6 +150,189 @@ staged_paths() { git diff --cached --name-only | LC_ALL=C sort | tr '\n' ' '; }
     [[ "$files" == *"VERSION"* ]]
     [[ "$files" == *"CHANGELOG.md"* ]]
     [ -z "$(git status --porcelain)" ]           # tree clean, as ship requires
+}
+
+@test "gate drift: a name git quotes is compared bare — it ships in the auto-commit and is not called drift (TRACKER §4 lead)" {
+    # Positive control: porcelain v1 quotes the name, the staged listing does
+    # not, and that mismatch is what held `a b.txt` out of the auto-commit as
+    # "changed after this ship was requested" and under-counted the commit.
+    echo "mine" > 'a b.txt'
+    [[ "$(git status --porcelain)" == *'"a b.txt"'* ]]
+    git add -- 'a b.txt'
+    [[ "$(git diff --cached --name-only)" == 'a b.txt' ]]
+    git reset -q
+
+    manifest_record_pending_snapshot
+    [ "$MANIFEST_CLI_GIT_PENDING_SNAPSHOT" = "a b.txt" ]
+    [ "$(manifest_pending_commit_paths)" = "a b.txt" ]
+    git add .
+    run manifest_unstage_gate_drift
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"Left out"* ]]
+    [ "$(staged_paths)" = "a b.txt " ]
+}
+
+# --- the release commit: release scope (TRACKER §4) ----------------------------
+
+# A tree with every kind of release write and two foreign writes in the window
+# between the auto-commit and the release commit.
+mk_release_window() {
+    mkdir -p docs src
+    echo "1.2.3" > VERSION
+    echo "old" > docs/old.md
+    echo "app" > src/app.sh
+    echo "# readme" > README.md
+    git add -A . && git commit -qm "pre-release state"
+    # Manifest's own release writes:
+    echo "1.2.4" > VERSION
+    echo "notes" > CHANGELOG.md
+    echo "# readme 1.2.4" > README.md
+    echo "index" > docs/INDEX.md
+    mkdir -p docs/zArchive && mv docs/old.md docs/zArchive/old.md
+    mkdir -p docs-site && echo "title: x" > docs-site/_config.yml
+    # Foreign writes in the same window:
+    echo "edited" >> src/app.sh
+    echo "TOKEN=1" > secret.env
+}
+
+committed_paths() { git show --name-status --format= HEAD | LC_ALL=C sort | tr '\t' ' ' | tr '\n' ';'; }
+
+@test "release scope: stages every release write area, including the archive move, and nothing else" {
+    mk_release_window
+    # Called directly, not through `run`: the held-out set is exported for the
+    # completion check, and a subshell would not hand it back.
+    local rc=0 output
+    commit_changes "Bump version to 1.2.4" "" release > "$SCRATCH/commit.out" 2>&1 || rc=$?
+    output="$(cat "$SCRATCH/commit.out")"
+    [ "$rc" -eq 0 ]
+    local files; files="$(committed_paths)"
+    [[ "$files" == *"M VERSION;"* ]]
+    [[ "$files" == *"A CHANGELOG.md;"* ]]
+    [[ "$files" == *"M README.md;"* ]]
+    [[ "$files" == *"A docs/INDEX.md;"* ]]
+    [[ "$files" == *"docs/old.md"* ]]            # the move: D + A, or R
+    [[ "$files" == *"docs/zArchive/old.md;"* ]]
+    [[ "$files" == *"A docs-site/_config.yml;"* ]]
+    [[ "$files" != *"src/app.sh"* ]]
+    [[ "$files" != *"secret.env"* ]]
+    # Named, recorded, and still in the working tree.
+    [[ "$output" == *"Left out 2 files this release did not write: secret.env, src/app.sh"* ]]
+    [[ "$output" == *"stay in your working tree"* ]]
+    [ "$MANIFEST_CLI_GIT_RELEASE_HELD_OUT" = $'secret.env\nsrc/app.sh' ]
+    [ "$(git status --porcelain | LC_ALL=C sort | tr '\n' ';')" = " M src/app.sh;?? secret.env;" ]
+}
+
+@test "release scope: a held-out name that is also a glob is compared literally" {
+    # `VERSIO[N]` as a bare pathspec matches the staged VERSION, so the first
+    # cut read the dirty file as staged, never announced it, and the completion
+    # check then refused it after the push (review finding, measured).
+    echo "1.2.3" > VERSION && git add VERSION && git commit -qm "v"
+    echo "1.2.4" > VERSION
+    echo "x" > 'VERSIO[N]'
+    local rc=0 output
+    commit_changes "Bump version to 1.2.4" "" release > "$SCRATCH/commit.out" 2>&1 || rc=$?
+    output="$(cat "$SCRATCH/commit.out")"
+    [ "$rc" -eq 0 ]
+    [[ "$output" == *"Left out 1 file this release did not write: VERSIO[N]"* ]]
+    [ "$MANIFEST_CLI_GIT_RELEASE_HELD_OUT" = 'VERSIO[N]' ]
+    [[ "$(committed_paths)" == *"M VERSION;"* ]]
+    [[ "$(committed_paths)" != *"VERSIO[N]"* ]]
+}
+
+@test "release scope: a configured docs folder and version.sync targets are areas" {
+    mkdir -p documentation
+    echo '{"version": "1.2.3"}' > package.json
+    git add -A . && git commit -qm "pre"
+    echo "1.2.4" > VERSION
+    echo '{"version": "1.2.4"}' > package.json
+    echo "idx" > documentation/INDEX.md
+    echo "x" > stray.txt
+    MANIFEST_CLI_DOCS_FOLDER=documentation MANIFEST_CLI_VERSION_SYNC=package.json \
+        run commit_changes "Bump version to 1.2.4" "" release
+    [ "$status" -eq 0 ]
+    local files; files="$(committed_paths)"
+    [[ "$files" == *"M package.json;"* ]]
+    [[ "$files" == *"A documentation/INDEX.md;"* ]]
+    [[ "$files" != *"stray.txt"* ]]
+}
+
+@test "release scope: nothing foreign leaves the tree clean, as the ship's completion invariant requires" {
+    echo "1.2.4" > VERSION
+    echo "notes" > CHANGELOG.md
+    run commit_changes "Bump version to 1.2.4" "" release
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"Left out"* ]]
+    [ -z "$(git status --porcelain)" ]
+    [ -z "${MANIFEST_CLI_GIT_RELEASE_HELD_OUT:-}" ]
+}
+
+@test "release scope: git.allow_gate_drift restores the whole-tree sweep" {
+    mk_release_window
+    MANIFEST_CLI_GIT_ALLOW_GATE_DRIFT=true run commit_changes "Bump version to 1.2.4" "" release
+    [ "$status" -eq 0 ]
+    [[ "$(committed_paths)" == *"secret.env"* ]]
+    [ -z "$(git status --porcelain)" ]
+}
+
+@test "release scope: the default scope is still the whole tree, and an unknown scope is refused" {
+    mk_release_window
+    run commit_changes "Auto-commit" "" bogus
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"unknown scope 'bogus'"* ]]
+    run commit_changes "Auto-commit" ""
+    [ "$status" -eq 0 ]
+    [[ "$(committed_paths)" == *"secret.env"* ]]
+}
+
+@test "release areas: derived from config, present paths only, never outside the root" {
+    run manifest_release_write_areas "$REPO"
+    [ "$status" -eq 0 ]
+    # A fresh repo has only VERSION... which this fixture lacks: nothing is listed.
+    [ -z "$output" ]
+    echo "1" > VERSION; mkdir -p docs
+    run manifest_release_write_areas "$REPO"
+    [ "$output" = $'VERSION\ndocs' ]
+    # The writers' resolvers join root and folder with a slash, so a folder
+    # written as `/etc` lands at `<root>/etc` — and that is the area, because
+    # the area is wherever the sweep went. A folder that escapes the root is
+    # not an area at all.
+    mkdir -p etc
+    MANIFEST_CLI_DOCS_FOLDER=../outside MANIFEST_CLI_DOCS_ARCHIVE_FOLDER=/etc \
+        run manifest_release_write_areas "$REPO"
+    # Literal `docs` stays listed whatever docs.folder says: validate_project
+    # cleans that tree by its literal name.
+    [ "$output" = $'VERSION\netc\ndocs' ]
+    # `.manifest-cli/` is never an area, tracked or not: nothing writes there
+    # between the two commits, and naming it tracked-but-ignored makes `git
+    # add` print its "paths are ignored" hint and exit 1 (measured by review).
+    mkdir -p .manifest-cli && echo "1" > .manifest-cli/release-gate-pass.epoch
+    echo ".manifest-cli/" > .gitignore
+    git add -f .manifest-cli/release-gate-pass.epoch && git commit -qm "tracked bookkeeping"
+    run manifest_release_write_areas "$REPO"
+    [ "$output" = $'VERSION\ndocs' ]
+    # An ignored, untracked folder that IS a writer's target is left out too.
+    mkdir -p docs-site && echo "x" > docs-site/_config.yml
+    echo "docs-site/" >> .gitignore
+    run manifest_release_write_areas "$REPO"
+    [ "$output" = $'VERSION\ndocs' ]
+    rm -rf .gitignore docs-site
+    # A configured review report directory is an area; the literal README.md
+    # is one beside a configured `files.readme`.
+    mkdir -p reviews && echo "r" > reviews/x.md && echo "# r" > README.md && echo "# o" > OTHER.md
+    MANIFEST_CLI_DOC_REVIEW_REPORT_DIR=reviews MANIFEST_CLI_README_FILE=OTHER.md \
+        run manifest_release_write_areas "$REPO"
+    [ "$output" = $'VERSION\nREADME.md\nOTHER.md\nreviews\ndocs' ]
+    rm -rf reviews README.md OTHER.md
+    # An empty docs folder resolves to the root itself: the area is the root,
+    # the scope is the whole tree, and that is said plainly rather than by a
+    # list that would hold out the index the release just wrote there.
+    MANIFEST_CLI_DOCS_FOLDER= run manifest_release_write_areas "$REPO"
+    [ "$output" = "." ]
+    echo "x" > stray.txt
+    MANIFEST_CLI_DOCS_FOLDER= run commit_changes "Bump version to 1" "" release
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"Left out"* ]]
+    [[ "$(committed_paths)" == *"stray.txt"* ]]
 }
 
 @test "gate drift: drift-only tree reports nothing to commit and creates no commit" {

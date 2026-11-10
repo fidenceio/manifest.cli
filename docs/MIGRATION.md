@@ -1,6 +1,31 @@
 # Migration Guide
 
-## The secret store is configuration — the newest change; its release is the first CHANGELOG entry that mentions `env.secrets`
+## The release commit stages only what the release wrote — the newest change; its release is the first CHANGELOG entry that mentions `release write areas`
+
+`manifest ship` makes two commits: the auto-commit of whatever was pending when you
+asked to ship, and the release commit. The release commit used to be a bare `git add .`
+with no baseline, so a file written into the tree between the two — by the remote sync's
+merge, a release-notes provider command, a hook, an editor, another session — shipped
+unreviewed. A pending file whose name git quotes (a space, a quote, a non-ASCII byte)
+was also wrongly reported as *"changed after this ship was requested"* and held out of
+the auto-commit, then swept by the release commit.
+
+Now the release commit stages, by name, only the places the release itself writes:
+`VERSION` and the `version.sync` targets, `CHANGELOG.md`, the README, the docs folder,
+the docs archive folder, the docs-site source folder and its Pages workflow, and
+`docs.review.report_dir` when you have set one. Everything
+else that is dirty is named — *"Left out N files this release did not write"* — and left
+in your working tree; the ship still completes, and reports those paths once more at
+the end.
+
+- If something you rely on wrote a file outside those places during a ship and expected
+  it to be committed, it now stays uncommitted. Commit it yourself, move the writer
+  before the ship, or set `git.allow_gate_drift: true` to restore the whole-tree sweep
+  for both commits.
+- Quoted file names are now compared as git stores them, so a pending `a b.txt` ships in
+  the auto-commit like any other file.
+
+## The secret store is configuration; its release is the first CHANGELOG entry that mentions `env.secrets`
 
 `manifest env generate` used to write every `k8s/env/external-secret.yaml` with one
 vendor's store name (`openbao-customer`) and one fixed path layout
