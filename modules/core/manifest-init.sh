@@ -247,6 +247,72 @@ manifest_gitignore_missing_rules() {
     return 0
 }
 
+# For each advised rule (one per line in $2), the pattern in $1 that already
+# decides the path the rule names — or an empty line when the file says nothing
+# about it. One output line per input rule, in order.
+#
+# The file is evaluated by git itself, alone in a scratch repository, so the
+# verdict is exactly what git would do with it: `check-ignore -v -n` prints the
+# deciding pattern (a negation when the path is re-included) or `::` when no
+# pattern matches. The rule's own path stands in for a concrete file: globs are
+# filled with a sample component (`*.key` → `smp.key`, `.env.*` → `.env.smp`),
+# a trailing slash is kept so directory rules are asked about a directory, and
+# a leading slash is dropped because the sample is relative to the root.
+#
+# Without git the answer is "nothing decided" for every rule, which makes the
+# caller fall back to appending — the pre-§1(a) behaviour, never a wider skip.
+_manifest_gitignore_decisions() {
+    local file="$1"
+    local rules="$2"
+    local -a samples=()
+    local rule sample
+    while IFS= read -r rule; do
+        [[ -n "$rule" ]] || continue
+        sample="${rule#!}"
+        sample="${sample#/}"
+        sample="${sample//\*\*\//smp/}"
+        sample="${sample//\*/smp}"
+        sample="${sample//\?/s}"
+        # A bracket class stands in for its first member (`*.py[cod]` → `smp.pyc`).
+        # Pure bash on purpose: this runs in the git-less fallback path too.
+        while [[ "$sample" =~ ^(.*)\[([^]])[^]]*\](.*)$ ]]; do
+            sample="${BASH_REMATCH[1]}${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
+        done
+        samples+=("$sample")
+    done <<< "$rules"
+    [[ ${#samples[@]} -gt 0 ]] || return 0
+
+    # The scratch repository must answer from the copied file and nothing else.
+    # `--template=` (empty) stops `init` copying the machine's template
+    # directory, whose info/exclude would otherwise be consulted; an explicit
+    # GIT_DIR/GIT_WORK_TREE beats one inherited from a hook or wrapper, which
+    # would otherwise make `init` re-initialise THAT repository and
+    # `check-ignore` answer from its excludes. Measured during review: both
+    # leaks produced a "skipped — already covers" for a pattern the file does
+    # not contain.
+    local scratch
+    if ! command -v git >/dev/null 2>&1 \
+        || ! scratch="$(mktemp -d "${TMPDIR:-/tmp}/manifest-gitignore.XXXXXX" 2>/dev/null)" \
+        || ! GIT_DIR="$scratch/.git" GIT_WORK_TREE="$scratch" git init -q --template= "$scratch" 2>/dev/null \
+        || ! cp "$file" "$scratch/.gitignore" 2>/dev/null; then
+        [[ -n "${scratch:-}" ]] && rm -rf "$scratch"
+        local n
+        for ((n = 0; n < ${#samples[@]}; n++)); do printf '\n'; done
+        return 0
+    fi
+    # `-n` prints a line for every path, matched or not, so the output lines
+    # align with the input rules. Exit status is 0/1 for matched/none and is
+    # not an error either way. Only a verdict sourced from the copied file is
+    # accepted; anything else prints an empty line, so a leak of any future
+    # kind reads as "undecided" and the caller appends — the safe direction.
+    printf '%s\n' "${samples[@]}" \
+        | GIT_DIR="$scratch/.git" GIT_WORK_TREE="$scratch" \
+          git -c core.excludesFile=/dev/null check-ignore -v -n --no-index --stdin 2>/dev/null \
+        | awk -F'\t' '{ if ($1 ~ /^\.gitignore:/) { sub(/^[^:]*:[^:]*:/, "", $1); print $1 } else { print "" } }'
+    rm -rf "$scratch"
+    return 0
+}
+
 # Bring an existing .gitignore up to the current advised set, append-only.
 #
 # Counterpart to manifest_gitignore_missing_rules: that one *reports* the gap,
@@ -271,9 +337,15 @@ manifest_gitignore_missing_rules() {
 # rewritten, reordered, or removed — rules are appended under a marked header,
 # and .gitignore is last-match-wins, so appended negations still re-include.
 #
-# Refuses to reverse a deliberate decision: a rule whose exact negation is
-# already in the file is skipped, and vice versa. Without that, appending `*.key`
-# under a user's considered `!*.key` would silently start ignoring their file.
+# Refuses to reverse a deliberate decision, judged by what the file DOES to the
+# path a rule names rather than by the line's text (TRACKER §1(a)): a path the
+# file already ignores is not re-included, and a path it re-includes is not
+# ignored. Without that, appending `*.key` under a user's considered `!*.key`
+# would silently start ignoring their file, and appending
+# `!.claude/settings.json` under `.claude/*` would re-include the one file
+# they chose to keep out. A consequence worth knowing: an advised re-include
+# (`!.env.example`) only ever lands beside its own positive rule, because a
+# file that already ignores `.env.*` has decided the path and is left alone.
 #
 # Idempotent — a second run finds nothing missing and writes nothing.
 #
@@ -301,18 +373,41 @@ manifest_gitignore_upgrade() {
         return 0
     fi
 
-    # Drop any rule the file has already decided the other way on.
-    local applicable=() rule inverse
+    # Drop any rule the file has already decided on — by DECISION, not by line
+    # (TRACKER §1(a)). The old guard skipped a rule only when its exact textual
+    # inverse was present, so a repo that ignores `.claude/*` and deliberately
+    # re-includes nothing but `agents/` got `!.claude/settings.json` appended:
+    # the decision was written differently, and the guard reversed it. Now each
+    # rule is judged by what the file already does to the path it names: a
+    # path the file ignores is decided, a path the file re-includes is decided,
+    # and only a path the file says nothing about is appended.
+    local applicable=() rule verdict
+    local -a verdicts=()
+    mapfile -t verdicts < <(_manifest_gitignore_decisions "$target" "$missing")
+    local i=0
     while IFS= read -r rule; do
         [[ -n "$rule" ]] || continue
-        if [[ "$rule" == '!'* ]]; then
-            inverse="${rule#!}"
-        else
-            inverse="!$rule"
-        fi
-        if grep -qxF -- "$inverse" "$target" 2>/dev/null; then
-            echo "${prefix}↩︎ skipped '$rule' — '$inverse' is already set here" >&2
-            continue
+        verdict="${verdicts[$i]:-}"
+        i=$((i + 1))
+        if [[ -n "$verdict" ]]; then
+            if [[ "$rule" == '!'* && "$verdict" != '!'* ]]; then
+                echo "${prefix}↩︎ skipped '$rule' — '$verdict' already decides ${rule#!} is ignored here" >&2
+                continue
+            fi
+            if [[ "$rule" != '!'* && "$verdict" == '!'* ]]; then
+                echo "${prefix}↩︎ skipped '$rule' — '$verdict' already decides $rule is kept here" >&2
+                continue
+            fi
+            # A positive rule whose sample the file already ignores is still
+            # appended. One sample proves a reversal (either branch above:
+            # any single point the appended rule would flip is enough), but
+            # it cannot prove coverage: `/.env` ignores the sample for `.env`
+            # and says nothing about `sub/.env`, `*.pyc` covers one member of
+            # `*.py[cod]`. Skipping on that evidence lost depth for security
+            # rules; the cost of appending is one redundant line.
+            # A negation re-included by another negation is consistent and is
+            # appended too — in practice git reports a re-included directory
+            # sample (`!.claude/agents/`) as undecided, which lands here anyway.
         fi
         applicable+=("$rule")
     done <<< "$missing"
@@ -1334,7 +1429,7 @@ ensure_gitignore_smart() {
                 echo ".gitignore:upgraded:${upgrade_result##*:}"
                 ;;
             *)
-                log_success ".gitignore preserved — already carries every advised rule"
+                log_success ".gitignore preserved — already carries or decides every advised rule"
                 echo ".gitignore:preserved"
                 ;;
         esac
@@ -2717,7 +2812,7 @@ export -f manifest_init_dispatch
 # Scaffolding helpers (used by orchestrator, documentation, fleet)
 export -f ensure_required_files create_default_readme create_default_changelog
 export -f create_default_gitignore ensure_gitignore_smart manifest_gitignore_missing_rules
-export -f manifest_detect_project_ecosystems _manifest_gitignore_wants _manifest_scaffold_purpose
+export -f manifest_detect_project_ecosystems _manifest_gitignore_wants _manifest_gitignore_decisions _manifest_scaffold_purpose
 export -f manifest_gitignore_upgrade
 export -f ensure_release_gate_script create_default_run_tests
 export -f ensure_env_files create_default_env_example _manifest_env_prefix_for_repo _manifest_env_spec_file _manifest_env_render_example

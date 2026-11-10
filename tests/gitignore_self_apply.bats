@@ -98,6 +98,29 @@ manifest_section_patterns() {
     [ -z "$missing" ]
 }
 
+@test "gitignore: the upgrade path preserves THIS repo's .claude decision, written as .claude/* (TRACKER §1(a))" {
+    # The incident this guards: `manifest init repo -y` here ran the upgrade
+    # path, whose guard recognised only the literal line `.claude/settings.json`,
+    # so it appended `!.claude/settings.json` under this file's `.claude/*` and
+    # re-armed the v59.1.0 release of absolute home paths. Run the real upgrade
+    # on a copy of the real file and ask git what it now does to that path.
+    mkdir -p "$SCRATCH/copy"
+    cp "$TEST_REPO_ROOT/.gitignore" "$SCRATCH/copy/.gitignore"
+    run manifest_gitignore_upgrade "$SCRATCH/copy/.gitignore"
+    [ "$status" -eq 0 ]
+    refute grep -qx '!.claude/settings.json' "$SCRATCH/copy/.gitignore"
+
+    cd "$SCRATCH/copy"
+    git init -q .
+    git config core.excludesFile /dev/null
+    mkdir -p .claude && : > .claude/settings.json
+    run git check-ignore -q --no-index .claude/settings.json
+    [ "$status" -eq 0 ]
+    # Control: the upgrade did append something (this repo lacks most of the
+    # superset on purpose), so the skip above is a decision, not an empty run.
+    grep -q 'Added by Manifest: advised rules' "$SCRATCH/copy/.gitignore"
+}
+
 @test "gitignore: no Manifest machine-local state is tracked in this repo" {
     # The stronger statement, and the one the incident actually needs: whatever
     # the .gitignore says, nothing under .manifest-cli/ may be in the index.
