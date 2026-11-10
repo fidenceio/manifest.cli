@@ -158,12 +158,15 @@ _no_temp_beside() {
 
 @test "validate_file: a doc the cleaner would not change is not rewritten at all" {
     printf '# Title\n\nbody\n' > doc.md; chmod 600 doc.md
-    local before; before="$(stat -f '%m' doc.md 2>/dev/null || stat -c '%Y' doc.md)"
+    # GNU stat first, BSD second — the other way round, GNU reads `-f` as
+    # --file-system, prints a filesystem block for the file and fails on '%m',
+    # so both arms ran and the "mtime" carried a changing free-block count.
+    local before; before="$(stat -c '%Y' doc.md 2>/dev/null || stat -f '%m' doc.md)"
     sleep 1
     run validate_file "$SCRATCH/doc.md" true
     [ "$status" -eq 0 ]
     [[ "$output" != *"Cleaned:"* ]]
-    [ "$(stat -f '%m' doc.md 2>/dev/null || stat -c '%Y' doc.md)" = "$before" ]
+    [ "$(stat -c '%Y' doc.md 2>/dev/null || stat -f '%m' doc.md)" = "$before" ]
     [ "$(manifest_file_mode doc.md)" = "600" ]
 }
 

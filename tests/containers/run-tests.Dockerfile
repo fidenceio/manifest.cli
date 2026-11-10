@@ -7,7 +7,9 @@ FROM alpine:3.24
 # signed tags at all. (util-linux is deliberately NOT installed: its script(1)
 # takes a different argument form than the BSD one the pty test is written
 # against, so shipping it converts a clean skip into a failure.)
-RUN apk add --no-cache bash git bats parallel yq coreutils jq tzdata openssh-keygen \
+# kustomize runs the generated secret-bridge Component (env_secrets_store.bats)
+# instead of skipping it; without it the test skipped on both CI legs.
+RUN apk add --no-cache bash git bats parallel yq coreutils jq tzdata openssh-keygen kustomize \
     && git config --system --add safe.directory "*"
 
 WORKDIR /work

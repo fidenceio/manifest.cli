@@ -85,7 +85,9 @@ jobs:
         run: |
           set -euxo pipefail
           # 'parallel' last keeps run-tests.sh --jobs (default 'auto') working.
-          brew install bats-core yq bash coreutils gnu-sed parallel
+          # kustomize: the generated secret-bridge Component is built for real
+          # in env_secrets_store.bats rather than skipped.
+          brew install bats-core yq bash coreutils gnu-sed parallel kustomize
           # macos-latest still ships /bin/bash 3.2 (no associative arrays).
           # bats's `#!/usr/bin/env bash` picks whichever bash is first in PATH —
           # ensure that's Homebrew's modern bash for every subsequent step.
