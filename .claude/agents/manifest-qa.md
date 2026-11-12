@@ -136,6 +136,33 @@ A test whose precondition is supplied by the platform asserts different things o
 platforms — that is `§91`, where a test passed on macOS and was red on Linux from the moment
 it was written because it let git auto-detect an identity that only resolves on one of them.
 
+## 6a. Which audience does the evidence actually cover?
+
+This repository is the canonical Manifest CLI source, and the released CLI runs on other
+people's machines against repositories this project never sees. The full account of what
+exists for which audience, and why, is in [`CONTRIBUTING.md`](../../CONTRIBUTING.md) — *Two audiences: this repository and installed copies*. For you it reduces to one question
+asked of every claim: **whose behaviour did this test observe?**
+
+- A test that reads `$TEST_REPO_ROOT` (this checkout's own `.gitignore`, its tracked files,
+  its register) establishes something about **this repository only**. It is the right
+  evidence for a self-application claim and no evidence for a claim about users.
+- A claim about **installed copies** needs a fixture repository built in scratch, with the
+  shapes users really have: no config loaded, a configured `docs.folder`, a file name git
+  quotes, an older scaffold's leftovers. This repository cannot exercise fleet, `env`,
+  secret-store or multi-language paths on itself, so for those the fixtures are the only
+  evidence there is.
+- A function gated on `manifest_is_canonical_repo` runs only where the canonical check
+  passes: this repository, and any checkout carrying its four structural entries — three files and `modules/` — (a fork),
+  whatever its origin. A test of it proves nothing about users, and a user-facing claim
+  that rests on it is unproven.
+- **Both legs, or it is half a verdict.** The host suite is macOS with GNU tools; the
+  container leg is Alpine as root. A test that needs a tool only one of them has, or a
+  permission root bypasses, passes on one and fails or skips on the other — a release was
+  shipped on a green host suite alone and CI went red on a test the container leg would
+  have caught. A skip is lost coverage on that leg; say which leg covers it, or that none does.
+- "It works here" is evidence about one machine at `HEAD`. A user may be many versions
+  behind and still carry what an old version wrote; ask what the change does to **that** tree.
+
 ## 7. Running the suite here
 
 ```bash

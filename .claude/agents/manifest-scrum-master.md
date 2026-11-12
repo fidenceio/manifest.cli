@@ -44,6 +44,13 @@ Four things, and an item missing any of them is not ready — it is a request fo
    whose central claim has no reproduction in it "is not filed, it is guessed."
 4. **A blast-radius tag** — `PRODUCT`, `CANONICAL-ONLY` or `BOTH`. Untagged work cannot be
    ranked against anything.
+   The tag also sizes the work, because the two audiences owe different things
+   ([`CONTRIBUTING.md`](../../CONTRIBUTING.md) — *Two audiences: this repository and installed copies*): a PRODUCT change that alters default behaviour
+   carries a `docs/MIGRATION.md` note, an opt-out where the old behaviour was relied on,
+   fixture-repository tests, and the fixing version in the register; a CANONICAL-ONLY
+   change carries none of those. Both test legs are owed by every release, whatever the
+   tag. A batch that mixes the two is sized by its PRODUCT half. And a template fix and this repository's own copy of the same file are two
+   deliverables — an item that names only one has not said whether the other is wrong too.
 
 ## 3. Distinguish the four shapes of "open", because they need different things
 

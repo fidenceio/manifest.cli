@@ -45,6 +45,18 @@ every machine running the older binary. So when closing a PRODUCT item, **record
 that fixed it** — everything below that version still carries it, and *"we fixed it"* and
 *"our users are safe"* are different claims.
 
+Why the two audiences need different things — which mechanisms exist only for this
+repository, which only for installed copies, and what reaches a user's disk — is written
+down once, in [`CONTRIBUTING.md`](../../CONTRIBUTING.md) — *Two audiences: this repository and installed copies*. Two consequences for tagging that the ranking rule alone does
+not give you: **a file's location is not its radius** (a function gated on
+`manifest_is_canonical_repo` ships in `modules/` and is still CANONICAL-ONLY — it runs only
+where the canonical check passes: this repository, and any checkout carrying its four
+structural files (a fork), whatever its origin — while `docs/`, this register included, is
+installed on every Homebrew user's disk), and **a
+CANONICAL-ONLY finding is a question before it is a tag**: this repository is the product's
+most-used customer, so ask whether the same thing happens in any repository before
+accepting the narrower radius.
+
 ## 2. Tier placement is structural, and it disguises itself as prose
 
 **File a new item under its own tier heading, never after the entry it was discovered from.**

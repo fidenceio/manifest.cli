@@ -51,6 +51,31 @@ almost always.** Two reasons, and the second is the one people forget:
 When you report, label each finding `CANONICAL-ONLY` / `PRODUCT` / `BOTH`, and for
 PRODUCT say which released versions carry it.
 
+**Why each mechanism exists, and for whom, is written down once:** [`CONTRIBUTING.md`](../../CONTRIBUTING.md) — *Two audiences: this repository and installed copies*.
+Read it before classifying. The traps it exists to prevent, as they apply to you:
+
+- **Location is not radius.** Homebrew installs every non-dot top-level entry, so
+  `docs/` (the register included) and `tests/` reach users' disks; only `modules/`
+  runs. A function gated on `manifest_is_canonical_repo` ships to everyone and runs
+  only where the canonical check passes: this repository, and any checkout carrying
+  its four structural entries — three files and `modules/` — (a fork), whatever its
+  origin. It is CANONICAL-ONLY
+  however deep in `modules/` it sits — and anything it hard-codes about this
+  organisation is what a fork inherits.
+- **A template and this repository's own copy are two fixes.** A commit that corrects
+  `robots.txt` here has not touched what `manifest init` writes for users, and the
+  reverse. Say which one a commit is; ask for the other when both are wrong.
+- **A change to what an installed copy does by default** owes a `docs/MIGRATION.md`
+  note, an opt-out where the old behaviour was relied on, and the fixing version in
+  the register. A canonical-only change owes none of them — do not demand them.
+- **Evidence must match the audience.** A green host suite is not a release verdict:
+  the container leg sees what the host cannot, and a test that reads this
+  repository's own files proves nothing about a user's repository. Both legs green
+  before a release is policy, not something the ship enforces — ask for the
+  container leg's result by name.
+- **Nothing true only here may be a default.** A vendor, store name, host or path that
+  matches this organisation's setup is a defect in a default, not a convenience.
+
 ## 3. What a correct release commit looks like here
 
 Measured on the v59.5.0 release (`d9a1c30`), from a clean tree:
