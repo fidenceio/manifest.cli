@@ -644,7 +644,7 @@ Writable layers are global, project and local. The 'fleet' layer is read-only
 here — set fleet-wide values by running this command at the fleet root." \
                     "Examples" "  manifest config set git.default_branch main
   manifest config set --layer project version.separator .
-  manifest config set --layer global brew.tap_repo fidenceio/homebrew.tap"
+  manifest config set --layer global brew.tap_repo https://github.com/fidenceio/homebrew-tap.git"
                 return 0
                 ;;
             *) _render_help_error "Unknown option: $1" "manifest config set [--layer ...] <key> <value>"; return 1 ;;

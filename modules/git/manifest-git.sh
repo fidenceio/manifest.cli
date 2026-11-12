@@ -1661,4 +1661,4 @@ manifest_worktree_report() {
 
 export -f manifest_worktree_stale_count manifest_worktree_prune manifest_worktree_report
 
-# PR workflows moved to modules/pr/manifest-pr.sh
+# PR workflows live in modules/pr/manifest-pr-native.sh

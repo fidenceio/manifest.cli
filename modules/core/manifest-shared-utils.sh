@@ -1286,7 +1286,7 @@ manifest_format_bytes() {
 #      -- a detached HEAD, or no origin remote (TRACKER §46).
 #
 #  (2) _MANIFEST_CLI_DELEGATED_APPLY_CONSENT=1 -- fleet's IN-PROCESS delegation.
-#      `manifest fleet ship -y` is operator consent given at the fleet level;
+#      `manifest ship fleet -y` is operator consent given at the fleet level;
 #      manifest-fleet.sh then calls manifest_ship_repo / manifest_ship_repo_resume
 #      in the SAME process image (a subshell, modules already sourced), so that
 #      consent can never appear in this process's start environment and origin

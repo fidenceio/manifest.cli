@@ -78,7 +78,7 @@ The allowlist is one list — `_fleet_coordination_files` — read by the `.giti
 
 ## Homebrew Tap Transaction
 
-The canonical CLI release may publish an updated `fidenceio.homebrew.tap/Formula/manifest.rb` after the CLI release artifact is available. Manifest generates the tap formula from the CLI repo's tracked `formula/manifest.rb` template, but it does not commit a release-time formula change back into the CLI repo.
+The canonical CLI release may publish an updated `Formula/manifest.rb` in `fidenceio/homebrew-tap` after the CLI release artifact is available. Manifest generates the tap formula from the CLI repo's tracked `formula/manifest.rb` template, but it does not commit a release-time formula change back into the CLI repo.
 
 Boundaries:
 

@@ -7,8 +7,9 @@
 # developer's machine. Correct for that file, but it means the production
 # candidate — $(brew --prefix)/Library/Taps/fidenceio/homebrew-tap, emitted by
 # manifest_homebrew_tap_checkout_candidates — is no longer exercised anywhere.
-# That path runs on every `manifest refresh` and during ship's post-push
-# auto-upgrade, so a regression in the candidate generator or in the refresher's
+# That path runs during the tap publish (update_homebrew_formula), the
+# orchestrator's post-push refresh and the detached auto-upgrade, so a
+# regression in the candidate generator or in the refresher's
 # iteration over the brew-managed dir would go uncaught.
 #
 # Here we do the opposite: stub `brew --prefix` to a scratch prefix (following

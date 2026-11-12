@@ -106,10 +106,8 @@ during release automation:
   single-flight fleet lock, pre-tag re-entrancy, output redaction, shellcheck +
   gitleaks CI, and Apache-2.0 `LICENSE` / `SECURITY.md` / `CONTRIBUTING.md`), each
   landed with bats coverage and adversarial code review.
-- **2026-04-25** — point-in-time analysis of v44.2.0. Its archived copy is no
-  longer present under `docs/zArchive/`; this line is the only surviving record,
-  and the citation that used to point at the file has been removed rather than
-  left dangling.
+- **2026-04-25** — point-in-time analysis of v44.2.0, archived at
+  [`docs/zArchive/v44/`](zArchive/v44/SECURITY_ANALYSIS_REPORT_v44.2.0_20260425T195739Z.md).
 
 A full 13-phase assurance audit ran against v59.2.1 in August 2026. Its artifacts
 are deliberately untracked, so **this file and `docs/TRACKER.md` are the only

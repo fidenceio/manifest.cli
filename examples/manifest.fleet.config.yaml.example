@@ -7,7 +7,7 @@
 # USAGE:
 #   1. Copy this file: cp manifest.fleet.config.yaml.example manifest.fleet.config.yaml
 #   2. Customize for your microservices/polyrepo setup
-#   3. Run: manifest fleet status
+#   3. Run: manifest status fleet
 #
 # The filename matters: manifest.fleet.config.yaml is the sentinel whose presence
 # makes a directory the fleet root (_manifest_config_find_fleet_root).
@@ -85,7 +85,7 @@ fleet:
 #
 # Services can be:
 #   - Local paths (already cloned)
-#   - Remote URLs (will be cloned on `manifest fleet sync`)
+#   - Remote URLs (will be cloned on `manifest init fleet --connect`)
 #   - Git submodules (special handling)
 #
 services:
@@ -107,7 +107,7 @@ services:
     # Optional: Custom version file location (defaults to VERSION)
     version_file: "VERSION"
 
-    # Optional: Exclude from `manifest fleet prep` operations
+    # Optional: Exclude from fleet version bumps (`manifest ship fleet`)
     # Use case: Service is deprecated or managed separately
     exclude_from_fleet_bump: false
 
@@ -115,7 +115,7 @@ services:
   # EXAMPLE: Remote service (will be cloned)
   # ---------------------------------------------------------------------------
   order-service:
-    # Git URL - will be cloned to path on `manifest fleet sync`
+    # Git URL - will be cloned to path on `manifest init fleet --connect`
     url: "git@github.com:acme/order-service.git"
     path: "./services/order-service"
 
@@ -311,7 +311,7 @@ docs:
 # FLEET OPERATIONS
 # =============================================================================
 operations:
-  # Default version bump type for `manifest fleet prep`
+  # Default version bump type for `manifest ship fleet`
   default_bump: "patch"
 
   # ---------------------------------------------------------------------------

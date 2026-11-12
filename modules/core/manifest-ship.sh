@@ -23,7 +23,6 @@
 #   manifest ship fleet <type> --local  Coordinated fleet local-only
 #
 # DEPENDENCIES:
-#   - manifest-pr.sh (manifest_ship — the existing ship function)
 #   - manifest-orchestrator.sh (manifest_ship_workflow)
 #   - manifest-fleet.sh (fleet_ship)
 # =============================================================================

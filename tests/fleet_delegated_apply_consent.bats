@@ -10,7 +10,7 @@
 #       cloned repo's committed manifest.config.yaml assigns
 #       MANIFEST_CLI_AUTO_CONFIRM long after the modules were sourced. Accepted
 #       by NEITHER gate (TRACKER §46).
-#   (C) _MANIFEST_CLI_DELEGATED_APPLY_CONSENT=1 -- `manifest fleet ship -y`
+#   (C) _MANIFEST_CLI_DELEGATED_APPLY_CONSENT=1 -- `manifest ship fleet -y`
 #       delegating a member's apply IN-PROCESS. The operator's consent is real,
 #       but it was given to the fleet command, so it can never appear in this
 #       process's start environment. Accepted by the APPLY-TARGET gate only;

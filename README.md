@@ -253,7 +253,7 @@ queue and policy behaviour, MCP reports, and agent workflows. If a Cloud plugin 
 installed, Manifest tells you how to get it and carries on — a missing plugin never
 blocks an ordinary release.
 
-Cloud repository: [fidenceio.manifest.cloud](https://github.com/fidenceio/manifest.cloud)
+Cloud repository: `fidenceio/fidence.service.manifest` (private)
 
 ## Project
 
