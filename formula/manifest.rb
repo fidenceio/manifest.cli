@@ -1,6 +1,8 @@
 # Source template for the Homebrew tap formula. Release publishing renders a
 # concrete copy of this file with the release tag URL and sha256, then commits
-# that generated copy only to fidenceio.homebrew.tap/Formula/manifest.rb.
+# that generated copy only to Formula/manifest.rb in fidenceio/homebrew-tap.
+# This whole leading comment is template-only: the renderer replaces it with
+# a generated header, so nothing here is ever published.
 #
 # The url and sha256 below are SENTINELS, not a release. They are never updated
 # by a ship and must never be read as this repo's version — the only concrete
