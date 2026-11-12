@@ -18,7 +18,6 @@ product itself does, with the origin slug:
 
 ```bash
 git remote get-url origin      # canonical: fidenceio/manifest.cli
-                               #       or: fidenceio/fidenceio.manifest.cli
 cat VERSION
 ```
 

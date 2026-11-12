@@ -22,10 +22,10 @@ set_origin() {
 }
 
 @test "origin slug: SSH URL parses to org/repo" {
-    set_origin "git@github.com:fidenceio/fidenceio.manifest.cli.git"
+    set_origin "git@github.com:fidenceio/manifest.cli.git"
     run manifest_origin_repo_slug
     [ "$status" -eq 0 ]
-    [ "$output" = "fidenceio/fidenceio.manifest.cli" ]
+    [ "$output" = "fidenceio/manifest.cli" ]
 }
 
 @test "origin slug: HTTPS URL parses to org/repo (with .git)" {
@@ -49,10 +49,20 @@ set_origin() {
 }
 
 @test "canonical repo gate: returns 0 for canonical repo (default allowlist)" {
-    set_origin "git@github.com:fidenceio/fidenceio.manifest.cli.git"
+    set_origin "git@github.com:fidenceio/manifest.cli.git"
     unset MANIFEST_CLI_CANONICAL_REPO_SLUGS
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_is_canonical_repo
     [ "$status" -eq 0 ]
+}
+
+@test "canonical repo gate: the pre-rename slug is no longer an alias" {
+    # The default list names one repository. $SCRATCH carries none of the four
+    # structural files, so the slug list alone decides here; a real checkout
+    # would still pass through the structural fallback.
+    set_origin "git@github.com:fidenceio/fidenceio.manifest.cli.git"
+    unset MANIFEST_CLI_CANONICAL_REPO_SLUGS
+    MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_is_canonical_repo
+    [ "$status" -ne 0 ]
 }
 
 @test "canonical repo gate: returns non-zero for non-canonical repo" {
@@ -70,7 +80,7 @@ set_origin() {
 }
 
 @test "canonical repo gate: should_update_homebrew_for_repo back-compat shim still works" {
-    set_origin "git@github.com:fidenceio/fidenceio.manifest.cli.git"
+    set_origin "git@github.com:fidenceio/manifest.cli.git"
     unset MANIFEST_CLI_CANONICAL_REPO_SLUGS
     # Source the core module's shim definition without sourcing the whole
     # bootstrap (which would pull in unrelated heavy modules).

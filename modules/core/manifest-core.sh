@@ -352,7 +352,7 @@ update_homebrew_formula() {
         local origin_slug=""
         origin_slug="$(manifest_origin_repo_slug || echo "unknown")"
         echo "🍺 Skipping Homebrew tap formula publish for repository: ${origin_slug}"
-        echo "   Homebrew tap publishes run only for: ${MANIFEST_CLI_CANONICAL_REPO_SLUGS:-fidenceio/manifest.cli,fidenceio/fidenceio.manifest.cli}"
+        echo "   Homebrew tap publishes run only for: ${MANIFEST_CLI_CANONICAL_REPO_SLUGS:-fidenceio/manifest.cli}"
         return 0
     fi
 

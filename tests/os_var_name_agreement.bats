@@ -27,7 +27,7 @@
 #      With no default, `set -u` would have aborted. With one, the mismatch is
 #      indistinguishable from an unrecognized platform.
 #   2. **Nothing failed.** `check_network_connectivity` fell through to a
-#      fallback that works, and `get_latest_version` computed a `timeout_cmd`
+#      fallback that works, and `get_latest_version` (since deleted) computed a `timeout_cmd`
 #      it never read. Silent degradation, no error, correct-looking output.
 #   3. **The register's own entry got it wrong.** TRACKER §65 was filed in
 #      answer to "what happened to our OS detection?" and concluded the whole

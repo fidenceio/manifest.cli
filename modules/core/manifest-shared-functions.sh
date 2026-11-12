@@ -290,37 +290,6 @@ manifest_version_segments_into() {
     return 0
 }
 
-# Get latest version from GitHub API with OS-dependent timeout
-get_latest_version() {
-    local repo_url="${MANIFEST_CLI_REPO_URL:-https://api.github.com/repos/fidenceio/fidenceio.manifest.cli/releases/latest}"
-
-    # No timeout wrapper is selected here on purpose. This function used to
-    # compute one from the OS and then never read it — the variable was assigned
-    # in both platform arms and referenced nowhere else in the body, because the
-    # request below goes through `secure_curl_request`, which carries its own
-    # `$timeout_seconds`. The dead block also branched on `MANIFEST_CLI_OS`, a
-    # name nothing assigns, so neither arm could run in the first place.
-    # `check_network_connectivity` has the same shape but genuinely uses the
-    # wrapper, and is fixed rather than deleted.
-
-    # Try to get latest version from GitHub API with timeout
-    if command -v curl >/dev/null 2>&1; then
-        local latest_version=""
-        local timeout_seconds="${MANIFEST_CLI_UPDATE_TIMEOUT:-10}"
-        
-        # Use secure curl request
-        latest_version=$(secure_curl_request "$repo_url" "$timeout_seconds" 2>/dev/null | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
-        
-        if [ -n "$latest_version" ]; then
-            echo "$latest_version"
-            return 0
-        fi
-    fi
-    
-    # Fallback: return current version
-    get_current_version
-}
-
 manifest_origin_repo_slug() {
     local repo_url=""
     repo_url="$(git -C "${1:-$MANIFEST_CLI_PROJECT_ROOT}" remote get-url origin 2>/dev/null || echo "")"
@@ -349,7 +318,14 @@ manifest_is_canonical_repo() {
     if [[ -n "${MANIFEST_CLI_CANONICAL_REPO_SLUGS:-}" ]]; then
         allowed_slugs="$MANIFEST_CLI_CANONICAL_REPO_SLUGS"
     else
-        allowed_slugs="fidenceio/manifest.cli,fidenceio/fidenceio.manifest.cli"
+        # One slug. `fidenceio/fidenceio.manifest.cli` was accepted here as an alias
+        # for the pre-rename repository. It decided nothing: every real checkout
+        # of this source carries the four structural files tested below and is
+        # canonical through that fallback whatever its origin says, a fork
+        # included. `release.canonical_repo_slugs` REPLACES this list when set;
+        # it can widen or narrow the slug match, but it can never make a
+        # structurally canonical checkout non-canonical.
+        allowed_slugs="fidenceio/manifest.cli"
     fi
     IFS=',' read -r -a allowed_array <<< "$allowed_slugs"
     local allowed=""
@@ -1193,7 +1169,7 @@ safe_json_write() {
 # =============================================================================
 
 # Export all shared functions
-export -f get_current_version get_next_version get_latest_version
+export -f get_current_version get_next_version
 export -f manifest_origin_repo_slug manifest_is_canonical_repo manifest_repo_display_name
 export -f _manifest_require_gh _manifest_dir_is_own_git_repository
 export -f _manifest_gh_rate_state_file _manifest_gh_rate_now_epoch

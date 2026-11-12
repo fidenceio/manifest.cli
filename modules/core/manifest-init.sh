@@ -1261,11 +1261,11 @@ cat CHANGELOG.md
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-*This project uses [Manifest CLI](https://github.com/fidenceio/fidenceio.manifest.cli) for automated version management and documentation generation.*
+*This project uses [Manifest CLI](https://github.com/fidenceio/manifest.cli) for automated version management and documentation generation.*
 EOF
         return 0
     fi
