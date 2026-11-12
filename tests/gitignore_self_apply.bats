@@ -336,3 +336,16 @@ gitignore_line_of() {
     [ "$status" -eq 0 ]
     [[ "$output" == *'!.env.example'* ]]
 }
+
+@test "no retired scaffold sidecar is tracked here (TRACKER §1(e))" {
+    # The `*.manifest` merge-reference mechanism was deleted; three of its files
+    # stayed tracked in this repo, read by nothing, one of them a hand-kept
+    # second copy of the .gitignore template. Fleet and config files share the
+    # `manifest.` PREFIX, not this suffix, so the suffix match is exact.
+    local listing
+    listing="$(git -C "$TEST_REPO_ROOT" ls-files)"
+    [ "$(printf '%s\n' "$listing" | grep -c .)" -gt 100 ]   # control: the walk saw the tree
+    [ -z "$(printf '%s\n' "$listing" | grep -E '(^|/)[^/]+\.manifest$' || true)" ]
+    # Control: the pattern does match the retired names.
+    printf '%s\n' ".gitignore.manifest" "scripts/run-tests.sh.manifest" | grep -cE '(^|/)[^/]+\.manifest$' | grep -qx 2
+}

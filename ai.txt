@@ -4,7 +4,6 @@
 # deliberately replaces this file.
 #
 # contact: (set by the repo owner)
-# If ai.txt already existed at init, see ai.txt.manifest for Manifest defaults.
 
 User-Agent: *
 Allow: none

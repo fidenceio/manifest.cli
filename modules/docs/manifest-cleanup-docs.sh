@@ -286,8 +286,9 @@ cleanup_temp_files() {
 #
 # The WRITER was removed. The FILES were not. Every repo scaffolded by a CLI
 # older than v58.0.0 still carries them, and until now nothing detected them.
-# This repo carries three, all git-tracked, with .gitignore.manifest 318 bytes
-# and nine days divergent from the live .gitignore it was supposed to advise.
+# The canonical repo itself carried three, all git-tracked, with
+# .gitignore.manifest 318 bytes and nine days divergent from the live
+# .gitignore it was supposed to advise, until they were deleted (TRACKER §1(e)).
 #
 # Retiring a writer silently repeats the defect it was retired for — the same
 # reasoning as _MANIFEST_CLI_CONFIG_RETIRED_KEYS in manifest-config.sh, which

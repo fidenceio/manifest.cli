@@ -1,7 +1,6 @@
 # Manifest CLI — private/safe by default.
 # Search engines and AI crawlers are disallowed until you deliberately open
-# this surface. Merge from robots.txt.manifest if this file already existed
-# at init time and you want Manifest's defaults.
+# this surface.
 #
 # To go public later: replace Disallow rules with your allowlist, or delete
 # this file and serve framework-native robots.
