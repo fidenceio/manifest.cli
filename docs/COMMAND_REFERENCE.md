@@ -416,6 +416,21 @@ policy, whether generated files have drifted, and that `.env` is properly git-ig
 name rather than guessed: `env generate` exits `1` and writes nothing, `env validate`
 fails, and `manifest init` does not write `.env.example`.
 
+**`env generate` replaces only the files it wrote.** Every file it generates starts with
+a Manifest header line. An existing `.env.example` or `k8s/env` file whose first line
+is anything else is treated as yours: the plan names it as *hand-authored, left
+untouched*, `-y` does not write it, and `--check` does not count it as out of date.
+Delete the file to have it generated. An empty file is replaced. The generated
+`k8s/env/kustomization.yaml` lists exactly what Manifest renders, so a hand-authored
+`k8s/env/external-secret.yaml` that Manifest renders no bridge for (`provider: none`, or
+no secret variables) is not listed there: reference it from your own kustomization, or
+write `k8s/env/kustomization.yaml` yourself.
+
+A file that is written keeps the permissions it had — the Dockerfile included. A path
+that cannot be read as a file (a directory, a file you cannot read, a symlink to
+nothing) is named in the plan, and `--check` and `-y` exit `1`; so does any write that
+fails.
+
 **The secret store is configuration; there is no built-in one.** When the spec declares
 secret variables and `env.secrets` is not set, `env generate` exits `1` and writes
 nothing. Set it once in the fleet root's `manifest.config.yaml`; a repository's own

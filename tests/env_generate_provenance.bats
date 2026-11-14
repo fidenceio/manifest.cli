@@ -1,0 +1,421 @@
+#!/usr/bin/env bats
+# bats file_tags=smoke
+#
+# `manifest env generate -y` replaces only the files Manifest wrote
+# (TRACKER §3(d)).
+#
+# A k8s/ directory used to be the whole test: with it present, -y replaced
+# k8s/env/configmap.yaml, external-secret.yaml and component/kustomization.yaml
+# whatever they held, and .env.example with no test at all. Only
+# k8s/env/kustomization.yaml was marker-guarded. Now every file generate writes
+# whole is guarded by the header on its first line:
+#
+#   ours      first line starts with a header Manifest writes there → create,
+#             update, current as before
+#   foreign   any other existing file → left untouched under -y, named in the
+#             plan, never counted as drift
+#   listed    the generated kustomization lists exactly what Manifest renders,
+#             as before: a hand-authored external-secret.yaml is not added to it
+#   blocked   a directory, or a file this user cannot read, at one of those
+#             paths → named, --check and -y exit 1; an empty file is replaced
+#   landed    what IS written goes through the staged rename: the file's mode
+#             is kept (the Dockerfile's too) and a failed write is reported
+#
+# Tagged smoke: not overwriting a file the adopter wrote is a safety contract.
+
+load 'helpers/setup'
+
+_SECRETS_VARS=(MANIFEST_CLI_ENV_SECRETS_PROVIDER MANIFEST_CLI_ENV_SECRETS_STORE_KIND
+    MANIFEST_CLI_ENV_SECRETS_STORE_NAME MANIFEST_CLI_ENV_SECRETS_API_VERSION
+    MANIFEST_CLI_ENV_SECRETS_PATH MANIFEST_CLI_ENV_SECRETS_PROPERTY
+    MANIFEST_CLI_ENV_SECRETS_REFRESH_INTERVAL MANIFEST_CLI_ENV_SECRETS_ENV_LABEL)
+
+_clear_secrets_config() {
+    local v
+    for v in "${_SECRETS_VARS[@]}"; do unset "$v"; done
+}
+
+_configure_store() {
+    export MANIFEST_CLI_ENV_SECRETS_PROVIDER=external-secrets
+    export MANIFEST_CLI_ENV_SECRETS_STORE_NAME=team-store
+    export MANIFEST_CLI_ENV_SECRETS_PATH='secret/data/{env}/{identity}/{group}'
+    export MANIFEST_CLI_ENV_SECRETS_ENV_LABEL=env
+}
+
+setup() {
+    command -v yq >/dev/null 2>&1 || skip "yq not available"
+    load_modules "system/manifest-env-naming.sh" "system/manifest-security.sh" \
+        "core/manifest-init.sh" "core/manifest-env.sh"
+    SCRATCH="$(mk_scratch)"
+    PROJ="$SCRATCH/acme.svc.billing"
+    mkdir -p "$PROJ/k8s/env/component"
+    export MANIFEST_CLI_PROJECT_ROOT="$PROJ"
+    cd "$PROJ"
+    _clear_secrets_config
+}
+
+teardown() {
+    cd /tmp
+    rm -rf "$SCRATCH"
+    unset MANIFEST_CLI_PROJECT_ROOT
+    _clear_secrets_config
+}
+
+write_spec_with_secrets() {
+    cat > "$PROJ/app.spec.yaml" <<'YAML'
+name: acme.svc.billing
+env:
+  - name: ACME_SVC_BILLING_LOG_LEVEL
+    default: info
+  - name: ACME_SVC_BILLING_SITE_URL
+    default: https://billing.example
+    public: true
+  - name: ACME_SVC_BILLING_API_TOKEN
+    required: true
+    secret: true
+YAML
+}
+
+write_spec_plain() {
+    cat > "$PROJ/app.spec.yaml" <<'YAML'
+name: acme.svc.billing
+env:
+  - name: ACME_SVC_BILLING_LOG_LEVEL
+    default: info
+YAML
+}
+
+# A file the adopter wrote: no Manifest header on its first line.
+_THEIRS_CONFIGMAP='apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: billing-env
+data:
+  HAND: authored'
+
+_THEIRS_SECRET='apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: billing-secrets
+spec:
+  data: []'
+
+_THEIRS_COMPONENT='apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches: []'
+
+# --- the three k8s writers that had no guard --------------------------------------------
+
+@test "a hand-authored configmap.yaml, external-secret.yaml and Component are named in the plan, survive -y byte for byte, and are not drift" {
+    write_spec_with_secrets
+    _configure_store
+    printf '%s\n' "$_THEIRS_CONFIGMAP" > "$PROJ/k8s/env/configmap.yaml"
+    printf '%s\n' "$_THEIRS_SECRET" > "$PROJ/k8s/env/external-secret.yaml"
+    printf '%s\n' "$_THEIRS_COMPONENT" > "$PROJ/k8s/env/component/kustomization.yaml"
+
+    run manifest_env_generate
+    [ "$status" -eq 0 ]
+    local f
+    for f in k8s/env/configmap.yaml k8s/env/external-secret.yaml k8s/env/component/kustomization.yaml; do
+        [[ "$output" == *"hand-authored, left untouched: ${f} (its first line is not Manifest's header; delete the file to have it generated)"* ]] \
+            || { echo "plan does not name $f"; echo "$output"; false; }
+        [[ "$output" != *"would update: ${f}"* ]]
+    done
+
+    run manifest_env_generate -y
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"left:  k8s/env/configmap.yaml (hand-authored)"* ]]
+    [[ "$output" == *"left:  k8s/env/external-secret.yaml (hand-authored)"* ]]
+    [[ "$output" == *"left:  k8s/env/component/kustomization.yaml (hand-authored)"* ]]
+    [ "$(cat "$PROJ/k8s/env/configmap.yaml")" = "$_THEIRS_CONFIGMAP" ]
+    [ "$(cat "$PROJ/k8s/env/external-secret.yaml")" = "$_THEIRS_SECRET" ]
+    [ "$(cat "$PROJ/k8s/env/component/kustomization.yaml")" = "$_THEIRS_COMPONENT" ]
+
+    # What Manifest does own was written, and nothing is stale.
+    grep -q '^# Generated by Manifest CLI' "$PROJ/k8s/env/kustomization.yaml"
+    run manifest_env_generate --check
+    [ "$status" -eq 0 ]
+}
+
+@test "positive control: the same three files carrying Manifest's header ARE replaced by -y, and are drift before it" {
+    write_spec_with_secrets
+    _configure_store
+    local f
+    for f in configmap.yaml external-secret.yaml component/kustomization.yaml; do
+        printf '# Generated by Manifest CLI from app.spec.yaml `env:`.\nstale: true\n' > "$PROJ/k8s/env/$f"
+    done
+
+    run manifest_env_generate --check
+    [ "$status" -eq 1 ]
+    for f in configmap.yaml external-secret.yaml component/kustomization.yaml; do
+        [[ "$output" == *"would update: k8s/env/${f}"* ]]
+    done
+
+    run manifest_env_generate -y
+    [ "$status" -eq 0 ]
+    for f in configmap.yaml external-secret.yaml component/kustomization.yaml; do
+        refute grep -q '^stale: true$' "$PROJ/k8s/env/$f"
+    done
+    [ "$(yq e '.kind' "$PROJ/k8s/env/configmap.yaml")" = "ConfigMap" ]
+}
+
+@test "every header a release has written is recognised as ours, so a file from an older version is still updated" {
+    # A guard that read an older header as hand-authored would strand that
+    # file: never updated, never drift. Both k8s header generations and both
+    # .env.example generations, as `git log -S` over the two modules shows them.
+    write_spec_plain
+    local header
+    for header in \
+        '# Generated by Manifest CLI from app.spec.yaml `env:` (ENV-001, STANDARD.md §2.7).' \
+        '# Generated by Manifest CLI from service.spec.yaml `env:`.'; do
+        printf '%s\nold: true\n' "$header" > "$PROJ/k8s/env/configmap.yaml"
+        run manifest_env_generate
+        [[ "$output" == *"would update: k8s/env/configmap.yaml"* ]] || { echo "$header"; echo "$output"; false; }
+    done
+    for header in \
+        '# .env.example — generated by Manifest CLI from app.spec.yaml `env:` (ENV-001).' \
+        '# .env.example — generated by Manifest CLI from app.spec.yaml `env:`.' \
+        '# .env.example — scaffolded by Manifest CLI (ENV-001; STANDARD.md §2.7).' \
+        '# .env.example — scaffolded by Manifest CLI.'; do
+        printf '%s\nOLD=1\n' "$header" > "$PROJ/.env.example"
+        run manifest_env_generate
+        [[ "$output" == *"would update: .env.example"* ]] || { echo "$header"; echo "$output"; false; }
+    done
+}
+
+# --- the kustomization lists what Manifest renders, no more ------------------------------------
+
+@test "provider none: a hand-authored external-secret.yaml is untouched and is NOT added to the generated kustomization" {
+    # An adopter in this state already references the file from their own
+    # kustomization. Adding it to Manifest's as well turned a green --check red
+    # on upgrade and then failed their build: "may not add resource with an
+    # already registered id". The generated file is what it was before the guard.
+    write_spec_with_secrets
+    export MANIFEST_CLI_ENV_SECRETS_PROVIDER=none
+    printf '%s\n' "$_THEIRS_SECRET" > "$PROJ/k8s/env/external-secret.yaml"
+
+    run manifest_env_generate -y
+    [ "$status" -eq 0 ]
+    [ "$(cat "$PROJ/k8s/env/external-secret.yaml")" = "$_THEIRS_SECRET" ]
+    [ "$(yq e '.resources | join(",")' "$PROJ/k8s/env/kustomization.yaml")" = "configmap.yaml" ]
+    run manifest_env_generate --check
+    [ "$status" -eq 0 ]
+
+    # The same with no secrets declared at all.
+    _clear_secrets_config
+    write_spec_plain
+    run manifest_env_generate -y
+    [ "$status" -eq 0 ]
+    [ "$(yq e '.resources | join(",")' "$PROJ/k8s/env/kustomization.yaml")" = "configmap.yaml" ]
+
+    # Control: when Manifest does render a secret bridge, the file is listed —
+    # hand-authored or not — because that path is part of what it renders.
+    write_spec_with_secrets
+    _configure_store
+    run manifest_env_generate -y
+    [ "$status" -eq 0 ]
+    [ "$(cat "$PROJ/k8s/env/external-secret.yaml")" = "$_THEIRS_SECRET" ]
+    [ "$(yq e '.resources | join(",")' "$PROJ/k8s/env/kustomization.yaml")" = "configmap.yaml,external-secret.yaml" ]
+}
+
+# --- .env.example ------------------------------------------------------------------------------
+
+@test "a hand-authored .env.example is left untouched by -y and is not drift; the scaffold's starter is Manifest's and is replaced" {
+    write_spec_plain
+    local theirs='# Our variables, documented by hand.
+LEGACY_ONE=1
+LEGACY_TWO=2'
+    printf '%s\n' "$theirs" > "$PROJ/.env.example"
+
+    run manifest_env_generate
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"hand-authored, left untouched: .env.example (its first line is not Manifest's header; delete the file to have it generated)"* ]]
+    run manifest_env_generate -y
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"left:  .env.example (hand-authored)"* ]]
+    [ "$(cat "$PROJ/.env.example")" = "$theirs" ]
+    run manifest_env_generate --check
+    [ "$status" -eq 0 ]
+
+    # The starter the init scaffold writes carries Manifest's header: it is
+    # exactly the file `env generate -y` exists to replace.
+    rm -f "$PROJ/.env.example" "$PROJ/app.spec.yaml"
+    run ensure_env_files "$PROJ"
+    [ "$status" -eq 0 ]
+    grep -q '^# .env.example — scaffolded by Manifest CLI' "$PROJ/.env.example"
+    write_spec_plain
+    run manifest_env_generate -y
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"wrote: .env.example"* ]]
+    grep -q '^ACME_SVC_BILLING_LOG_LEVEL=info$' "$PROJ/.env.example"
+}
+
+@test "env validate says which hand-authored files it did not compare, when the rest match and when the rest are stale" {
+    write_spec_plain
+    printf '%s\n' "$_THEIRS_CONFIGMAP" > "$PROJ/k8s/env/configmap.yaml"
+    run manifest_env_generate -y
+    [ "$status" -eq 0 ]
+    run manifest_env_validate
+    [[ "$output" == *"artifacts match the spec env: block and env.secrets"* ]]
+    [[ "$output" == *"not compared (hand-authored): k8s/env/configmap.yaml"* ]]
+
+    # Stale elsewhere: the hand-authored file is still named as not compared.
+    yq e -i '.env[0].default = "debug"' "$PROJ/app.spec.yaml"
+    run manifest_env_validate
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"stale artifacts — run: manifest env generate -y"* ]]
+    [[ "$output" == *"not compared (hand-authored): k8s/env/configmap.yaml"* ]]
+}
+
+# --- states that are neither ours nor theirs ---------------------------------------------------
+
+@test "an empty file at a generated path holds nothing to protect: it is replaced, not called hand-authored" {
+    write_spec_plain
+    : > "$PROJ/.env.example"
+    : > "$PROJ/k8s/env/configmap.yaml"
+    run manifest_env_generate
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"hand-authored"* ]]
+    [[ "$output" == *"would update: .env.example"* ]]
+    [[ "$output" == *"would update: k8s/env/configmap.yaml"* ]]
+    run manifest_env_generate --check
+    [ "$status" -eq 1 ]
+    run manifest_env_generate -y
+    [ "$status" -eq 0 ]
+    grep -q '^ACME_SVC_BILLING_LOG_LEVEL=info$' "$PROJ/.env.example"
+    [ "$(yq e '.kind' "$PROJ/k8s/env/configmap.yaml")" = "ConfigMap" ]
+}
+
+@test "a file this user cannot read is not called hand-authored: it is named, --check and -y exit 1, and no read error leaks" {
+    [ "$(id -u)" -ne 0 ] || skip "root reads a mode-000 file, so the unreadable state cannot be produced"
+    write_spec_plain
+    run manifest_env_generate -y
+    [ "$status" -eq 0 ]
+    # Manifest's own file, header and all — unreadable, so nothing can tell.
+    chmod 000 "$PROJ/k8s/env/configmap.yaml"
+
+    run manifest_env_generate
+    [[ "$output" == *"cannot read:  k8s/env/configmap.yaml (not a readable file; not compared, and -y will not write it)"* ]]
+    [[ "$output" != *"hand-authored"* ]]
+    [[ "$output" != *"Permission denied"* ]]
+    run manifest_env_generate --check
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"env drift: 1 path(s) could not be read"* ]]
+    [[ "$output" != *"env drift: clean"* ]]
+    run manifest_env_generate -y
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"FAILED: k8s/env/configmap.yaml (not written)"* ]]
+    run manifest_env_validate
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"cannot read: k8s/env/configmap.yaml (not a readable file) — not compared"* ]]
+    [[ "$output" != *"stale artifacts"* ]]
+    chmod 644 "$PROJ/k8s/env/configmap.yaml"
+}
+
+# --- how a file lands ---------------------------------------------------------------------------
+
+@test "positive control: a bare mv from a mktemp file onto a 644 file leaves it 600 on this platform" {
+    printf 'FROM scratch\n' > "$PROJ/Dockerfile"; chmod 644 "$PROJ/Dockerfile"
+    local tmp; tmp="$(mktemp "$SCRATCH/scratch.XXXXXX")"
+    printf 'FROM other\n' > "$tmp"
+    mv -f "$tmp" "$PROJ/Dockerfile"
+    [ "$(manifest_file_mode "$PROJ/Dockerfile")" = "600" ]
+}
+
+@test "the Dockerfile keeps its mode when the bridge block is added and when it is updated" {
+    write_spec_with_secrets
+    _configure_store
+    printf 'FROM scratch\n' > "$PROJ/Dockerfile"; chmod 644 "$PROJ/Dockerfile"
+
+    run manifest_env_generate -y
+    [ "$status" -eq 0 ]
+    grep -q '^ARG ACME_SVC_BILLING_SITE_URL$' "$PROJ/Dockerfile"
+    [ "$(manifest_file_mode "$PROJ/Dockerfile")" = "644" ]
+
+    # The update arm (an existing block is rewritten in place), at another mode.
+    chmod 664 "$PROJ/Dockerfile"
+    yq e -i '.env[1].framework_name = "NEXT_PUBLIC_SITE_URL"' "$PROJ/app.spec.yaml"
+    run manifest_env_generate -y
+    [ "$status" -eq 0 ]
+    grep -q '^ENV NEXT_PUBLIC_SITE_URL=' "$PROJ/Dockerfile"
+    # Replaced in place, not appended beside the old block.
+    refute grep -q '^ENV ACME_SVC_BILLING_SITE_URL=' "$PROJ/Dockerfile"
+    [ "$(grep -cF -- "$MANIFEST_CLI_ENV_BRIDGE_BEGIN" "$PROJ/Dockerfile")" -eq 1 ]
+    [ "$(grep -cF -- "$MANIFEST_CLI_ENV_BRIDGE_END" "$PROJ/Dockerfile")" -eq 1 ]
+    [ "$(head -n 1 "$PROJ/Dockerfile")" = "FROM scratch" ]
+    [ "$(manifest_file_mode "$PROJ/Dockerfile")" = "664" ]
+    # Staged beside the target, and nothing left there.
+    [ -z "$(find "$PROJ" -maxdepth 1 -name 'Dockerfile.*')" ]
+}
+
+@test "a generated file keeps the mode it has, and a new one gets the umask default" {
+    write_spec_plain
+    run manifest_env_generate -y
+    [ "$status" -eq 0 ]
+    [ "$(manifest_file_mode "$PROJ/k8s/env/configmap.yaml")" = "$(printf '%o' "$(( 0666 & ~0$(umask) ))")" ]
+
+    chmod 640 "$PROJ/k8s/env/configmap.yaml" "$PROJ/.env.example"
+    yq e -i '.env[0].default = "debug"' "$PROJ/app.spec.yaml"
+    run manifest_env_generate -y
+    [ "$status" -eq 0 ]
+    grep -q 'debug' "$PROJ/k8s/env/configmap.yaml"
+    [ "$(manifest_file_mode "$PROJ/k8s/env/configmap.yaml")" = "640" ]
+    [ "$(manifest_file_mode "$PROJ/.env.example")" = "640" ]
+    [ -z "$(find "$PROJ/k8s/env" -name 'configmap.yaml.*')" ]
+}
+
+@test "a symlink to nothing is not written through: nothing is created where it points, and -y exits 1" {
+    # Landing through a dangling link would create its target, and the
+    # target's missing parent directories, wherever the link points.
+    write_spec_plain
+    local outside="$SCRATCH/outside/not-yet/configmap.yaml"
+    ln -s "$outside" "$PROJ/k8s/env/configmap.yaml"
+
+    run manifest_env_generate
+    [[ "$output" == *"cannot read:  k8s/env/configmap.yaml"* ]]
+    run manifest_env_generate -y
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"FAILED: k8s/env/configmap.yaml (not written)"* ]]
+    [ ! -e "$SCRATCH/outside" ]
+    [ -L "$PROJ/k8s/env/configmap.yaml" ]
+
+    # Control: a link to an existing file that carries Manifest's header is
+    # written through, and stays a link.
+    mkdir -p "$SCRATCH/outside/not-yet"
+    printf '# Generated by Manifest CLI from app.spec.yaml `env:`.\nstale: true\n' > "$outside"
+    run manifest_env_generate -y
+    [ "$status" -eq 0 ]
+    [ -L "$PROJ/k8s/env/configmap.yaml" ]
+    [ "$(yq e '.kind' "$outside")" = "ConfigMap" ]
+}
+
+@test "a directory at any generated path is named in the plan, fails --check, and makes -y exit 1 instead of printing 'wrote'" {
+    # The old redirect failed on a directory, the next line printed "wrote:",
+    # and generate exited 0. One path at a time, so each landing's own failure
+    # is what the exit status reports.
+    write_spec_with_secrets
+    _configure_store
+    local rel
+    for rel in .env.example k8s/env/kustomization.yaml k8s/env/configmap.yaml \
+               k8s/env/external-secret.yaml k8s/env/component/kustomization.yaml; do
+        rm -rf "$PROJ/.env.example" "$PROJ/k8s/env"
+        mkdir -p "$PROJ/$rel"
+
+        run manifest_env_generate
+        [ "$status" -eq 0 ]
+        [[ "$output" == *"cannot read:  ${rel} (not a readable file; not compared, and -y will not write it)"* ]] \
+            || { echo "preview does not name $rel"; echo "$output"; false; }
+        run manifest_env_generate --check
+        [ "$status" -eq 1 ]
+
+        run manifest_env_generate -y
+        [ "$status" -eq 1 ] || { echo "$rel as a directory → status $status"; echo "$output"; false; }
+        [[ "$output" == *"FAILED: ${rel} (not written)"* ]]
+        [[ "$output" != *"wrote: ${rel}"* ]]
+        [[ "$output" == *"Env artifacts NOT fully generated: 1 file(s) could not be written."* ]]
+        [ -d "$PROJ/$rel" ]
+    done
+    # The files that could be written were (the last pass blocked the Component).
+    [ -f "$PROJ/.env.example" ]
+    [ -f "$PROJ/k8s/env/configmap.yaml" ]
+}

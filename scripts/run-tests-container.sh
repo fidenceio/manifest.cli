@@ -51,12 +51,14 @@ done
 #         fleet's unwritable member .git, ship repo's unwritable git
 #         metadata, and the atomic helper's read-only directory (the third
 #         arrived with §3's slice on 2026-11-09)
+#   * 1 — env generate's unreadable generated file (§3(d), 2026-11-12): the
+#         state is a mode-000 file, which root reads
 #   * 1 — configure_path's pty test, written against BSD script(1) + perl
 #   * 2 — the gate scaffold's real-Docker tests (§100, 2026-11-09): inside
 #         this leg no daemon can reach the test's bind mount, and GitHub's
 #         macOS runners have no Docker either, so these run on developer
 #         hosts only — lost coverage in CI, recorded as such
-# The first seven are covered on the macOS CI leg. Plus ONE that is not, and
+# The first eight are covered on the macOS CI leg. Plus ONE that is not, and
 # the distinction matters:
 #   * 1 — fleet_ship_outcome.bats's "the gate runs in the FOREGROUND: it does
 #         not start with SIGINT ignored". It detects that the bats harness
@@ -64,7 +66,7 @@ done
 #         a foreground and a backgrounded child are then indistinguishable.
 #         POSIX requires a shell to keep a signal ignored if it was ignored at
 #         entry, so this is not fixable from inside the harness — and it skips
-#         on BOTH legs, so unlike the six above it is lost coverage everywhere,
+#         on BOTH legs, so unlike the platform skips above it is lost coverage everywhere,
 #         not platform-specific. Raised 6 -> 7 on 2026-09-13 when §83 added it
 #         and the containerized leg went red on the budget with 2074/2074
 #         passing. Recorded rather than silently bumped, per the line below.
@@ -72,9 +74,12 @@ done
 #         real-Docker tests above, when the leg went red on the budget with
 #         2247/2248 passing; the kustomize skip that was the tenth was fixed
 #         by installing kustomize in the image instead of counting it.
+#         Raised 10 -> 11 on 2026-11-12 for the env generate chmod test,
+#         before the leg could go red on it: the nine platform skips above
+#         plus this one are ten, and the SIGINT skip makes eleven.
 # Anything beyond that is lost coverage: fix the cause or move the number
 # deliberately, with the reason recorded here.
-MANIFEST_CLI_TEST_MAX_SKIPS="${MANIFEST_CLI_TEST_MAX_SKIPS:-10}"
+MANIFEST_CLI_TEST_MAX_SKIPS="${MANIFEST_CLI_TEST_MAX_SKIPS:-11}"
 export MANIFEST_CLI_TEST_MAX_SKIPS
 ENV_ARGS="$ENV_ARGS -e MANIFEST_CLI_TEST_MAX_SKIPS"
 
