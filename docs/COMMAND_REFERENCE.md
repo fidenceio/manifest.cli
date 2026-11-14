@@ -410,6 +410,12 @@ release: it exits `1` if any generated file is out of date, and names a secret s
 path that differs from configuration. `env validate` only reads — it checks the prefix
 policy, whether generated files have drifted, and that `.env` is properly git-ignored.
 
+**A flag is a boolean.** An entry's `secret`, `required` and `public` take `true` or
+`false` — spelled `true`, `True` or `TRUE` (and `false` likewise), and the quoted strings
+`"true"` and `"false"` are accepted. A flag left out is `false`. Any other value (`yes`, `on`, `1`) is refused by
+name rather than guessed: `env generate` exits `1` and writes nothing, `env validate`
+fails, and `manifest init` does not write `.env.example`.
+
 **The secret store is configuration; there is no built-in one.** When the spec declares
 secret variables and `env.secrets` is not set, `env generate` exits `1` and writes
 nothing. Set it once in the fleet root's `manifest.config.yaml`; a repository's own

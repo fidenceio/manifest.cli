@@ -971,6 +971,86 @@ _manifest_env_spec_file() {
 }
 
 # ---------------------------------------------------------------------------
+# The three boolean flags of a spec `env:` entry — secret, required, public —
+# and the ONE reader every consumer uses (TRACKER §98).
+#
+#   _manifest_env_spec_flag <spec-file> <entry-index> <secret|required|public>
+#
+# Prints `true` or `false`. Returns 2, printing nothing, for a value that is
+# neither — and a caller that gets 2 stops; it never reads that as false.
+#
+# Every reader used to take `yq '.<flag> // false'` and compare the PRINTED
+# text with the string "true". `secret: True` is a YAML boolean that prints as
+# `True`, and `secret: yes` is a string, so both read as "not a secret" and the
+# entry's default went into the ConfigMap and into .env.example as a live
+# assignment, exit 0. yq's JSON encoding is the probe because it reports the
+# VALUE, not the spelling: true, True and TRUE all encode as `true`. Comparing
+# the flag with the boolean inside yq does not work — the comparison is false
+# for `True`.
+#
+#   true / True / TRUE, or the string "true"     → true
+#   false / False / FALSE, the string "false",
+#   an absent flag, or an explicit null          → false
+#   anything else (yes, on, 1, y, "True", a list) → refused
+#
+# The quoted strings are accepted because specs in the field carry them. A
+# YAML-1.1 spelling is refused rather than guessed: this parser reads `yes` as
+# a string, and guessing which way the author meant a secret flag is the
+# defect.
+#
+# The encoding is read together with the text as written, because a tag can
+# force one onto the other: `secret: !!bool 1` encodes as `false`. A boolean
+# counts only when the two agree.
+#
+# Lives here, not in manifest-env.sh, because .env.example is also rendered at
+# init time, when only this module is loaded.
+# ---------------------------------------------------------------------------
+_manifest_env_spec_flag() {
+    local spec_file="$1" index="$2" flag="$3"
+    local read_as
+    # <JSON encoding>|<text as written>, matched whole: a value with a newline
+    # in it matches nothing below.
+    read_as="$(yq e ".env[$index].$flag | @json + \"|\" + tostring" "$spec_file" 2>/dev/null)" || return 2
+    case "$read_as" in
+        'true|true'|'true|True'|'true|TRUE'|'"true"|true')        printf 'true' ;;
+        'false|false'|'false|False'|'false|FALSE'|'"false"|false') printf 'false' ;;
+        'null|null'|'null|~'|'null|')                               printf 'false' ;;
+        *)                                                          return 2 ;;
+    esac
+}
+
+# Every flag value _manifest_env_spec_flag refuses, one line per entry and
+# flag on stdout, naming both; exit 1 when there is at least one. An entry
+# with no name is skipped, as every renderer skips it.
+_manifest_env_spec_flag_problems() {
+    local spec_file="$1"
+    local count i name flag shown problems=0
+    count="$(yq e '.env | length' "$spec_file" 2>/dev/null)"
+    [[ "$count" =~ ^[0-9]+$ ]] || count=0
+    for ((i = 0; i < count; i++)); do
+        name="$(yq e ".env[$i].name // \"\"" "$spec_file" 2>/dev/null)"
+        [[ -n "$name" ]] || continue
+        for flag in secret required public; do
+            _manifest_env_spec_flag "$spec_file" "$i" "$flag" >/dev/null && continue
+            # One line whatever the value holds: the JSON encoding escapes a
+            # newline, and a long value is cut. A value a tag forced into a
+            # boolean or a null is shown as written, since its encoding is the
+            # misleading part.
+            shown="$(yq e ".env[$i].$flag | @json" "$spec_file" 2>/dev/null | head -n 1)"
+            case "$shown" in
+                true|false|null)
+                    shown="$(yq e ".env[$i].$flag | tostring" "$spec_file" 2>/dev/null | head -n 1) (under an explicit tag)"
+                    ;;
+            esac
+            [[ ${#shown} -gt 60 ]] && shown="${shown:0:60}…"
+            echo "${name}: ${flag} is ${shown:-unreadable} — write true or false"
+            problems=$((problems + 1))
+        done
+    done
+    [[ "$problems" -eq 0 ]]
+}
+
+# ---------------------------------------------------------------------------
 # Secret store settings (env.secrets.*) — the ONE resolver every renderer uses.
 # There is no built-in store. The provider, store and path are configuration,
 # set at the fleet root and overridable per repo (the repo value wins, key by
@@ -1078,22 +1158,24 @@ _manifest_env_render_example() {
     count="$(yq e '.env | length' "$spec_file" 2>/dev/null)"
     [[ "$count" =~ ^[0-9]+$ ]] || count=0
 
-    local i name description required default secret public framework_name group
+    local i name description required default secret_flag public framework_name group
     for ((i = 0; i < count; i++)); do
         name="$(yq e ".env[$i].name // \"\"" "$spec_file" 2>/dev/null)"
         [[ -n "$name" ]] || continue
         description="$(yq e ".env[$i].description // \"\"" "$spec_file" 2>/dev/null)"
-        required="$(yq e ".env[$i].required // false" "$spec_file" 2>/dev/null)"
+        # A flag the reader refuses stops the render: the caller gets a
+        # non-zero status and no file, never a secret emitted as a value.
+        required="$(_manifest_env_spec_flag "$spec_file" "$i" required)" || return 1
         default="$(yq e ".env[$i].default // \"\"" "$spec_file" 2>/dev/null)"
-        secret="$(yq e ".env[$i].secret // false" "$spec_file" 2>/dev/null)"
-        public="$(yq e ".env[$i].public // false" "$spec_file" 2>/dev/null)"
+        secret_flag="$(_manifest_env_spec_flag "$spec_file" "$i" secret)" || return 1
+        public="$(_manifest_env_spec_flag "$spec_file" "$i" public)" || return 1
         framework_name="$(yq e ".env[$i].framework_name // \"\"" "$spec_file" 2>/dev/null)"
         group="$(yq e ".env[$i].group // \"app\"" "$spec_file" 2>/dev/null)"
 
         printf '\n'
         local traits=""
         [[ "$required" == "true" ]] && traits+="required" || traits+="optional"
-        [[ "$secret" == "true" ]] && traits+=", secret"
+        [[ "$secret_flag" == "true" ]] && traits+=", secret"
         [[ "$public" == "true" ]] && traits+=", public (build-time)"
         if [[ -n "$description" ]]; then
             printf '# %s — %s (%s)\n' "$name" "$description" "$traits"
@@ -1101,7 +1183,7 @@ _manifest_env_render_example() {
             printf '# %s (%s)\n' "$name" "$traits"
         fi
         [[ -n "$framework_name" ]] && printf '# bridged framework name: %s (materialized at injection boundaries only)\n' "$framework_name"
-        if [[ "$secret" == "true" ]]; then
+        if [[ "$secret_flag" == "true" ]]; then
             _manifest_env_secret_example_comment "$repo_dir" "$group" "$name"
             printf '# %s=\n' "$name"
         else
@@ -1177,6 +1259,13 @@ create_default_env_example() {
         if [[ "$has_env" == "true" ]]; then
             if ! _manifest_env_render_example "$spec_file" "$project_root" > "$example_file"; then
                 rm -f "$example_file"
+                # Say which entry and flag stopped it (stderr: the caller
+                # captures this writer's stdout as its result).
+                local flag_problems
+                if ! flag_problems="$(_manifest_env_spec_flag_problems "$spec_file")"; then
+                    log_warning "$(basename "$spec_file") env: has a flag that is neither true nor false — .env.example not written:"
+                    printf '%s\n' "$flag_problems" | sed 's/^/    /' >&2
+                fi
                 return 1
             fi
             return 0
@@ -2815,7 +2904,7 @@ export -f create_default_gitignore ensure_gitignore_smart manifest_gitignore_mis
 export -f manifest_detect_project_ecosystems _manifest_gitignore_wants _manifest_gitignore_decisions _manifest_scaffold_purpose
 export -f manifest_gitignore_upgrade
 export -f ensure_release_gate_script create_default_run_tests
-export -f ensure_env_files create_default_env_example _manifest_env_prefix_for_repo _manifest_env_spec_file _manifest_env_render_example
+export -f ensure_env_files create_default_env_example _manifest_env_prefix_for_repo _manifest_env_spec_file _manifest_env_spec_flag _manifest_env_spec_flag_problems _manifest_env_render_example
 export -f _manifest_env_secrets_setting _manifest_env_secrets_expand _manifest_env_secrets_env_index _manifest_env_secret_example_comment
 export -f write_scaffold_no_clobber ensure_crawl_privacy_files create_default_robots_txt create_default_ai_txt
 export -f ensure_repo_scaffold manifest_repo_scaffold_is_complete

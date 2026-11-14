@@ -1,6 +1,30 @@
 # Migration Guide
 
-## The release commit stages only what the release wrote — the newest change; its release is the first CHANGELOG entry that mentions `release write areas`
+## `env generate` refuses a flag that is not a boolean and leaves hand-authored files alone — the newest change; its release is the first CHANGELOG entry that mentions `hand-authored`
+
+Two things `manifest env generate` did silently, it now does not do.
+
+**A `secret`, `required` or `public` flag written as anything but a boolean used to be
+read as false.** `secret: yes`, `secret: on` and `secret: 1` — and the real YAML boolean
+`secret: True` — all meant "not a secret", so that entry's `default` was written into
+`k8s/env/configmap.yaml` and into `.env.example` as a live assignment, with exit `0`.
+Now `true`, `True` and `TRUE` (and `false` likewise, and the quoted strings) are read as
+booleans, and any other value is refused by name.
+
+- **Check what an earlier release generated.** If a spec ever carried a secret flag in
+  one of those spellings together with a `default`, that value is in the generated
+  ConfigMap and `.env.example`, and in your history if they were committed. Rotate it.
+- A spec with such a flag now makes `env generate` exit `1` and write nothing, in
+  preview, `--check` and `-y` alike; `env validate` fails; `manifest init` does not
+  write `.env.example`. Write `true` or `false`.
+- **A spec that spells a flag `True` or `TRUE` turns `--check` red on upgrade, before
+  any `-y`.** Those entries are read as true now. A `secret: True` entry is a secret:
+  with no `env.secrets` configured `--check` exits `1` at the store gate, and with one
+  configured it reports the ConfigMap, `.env.example` and the secret bridge as out of
+  date until `generate -y` moves the entry out of the ConfigMap. `required: True` and
+  `public: True` likewise show as out of date until `generate -y`.
+
+## The release commit stages only what the release wrote; its release is the first CHANGELOG entry that mentions `release write areas`
 
 `manifest ship` makes two commits: the auto-commit of whatever was pending when you
 asked to ship, and the release commit. The release commit used to be a bare `git add .`

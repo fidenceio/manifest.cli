@@ -61,14 +61,16 @@ _manifest_env_render_configmap() {
     printf '  name: %s-env\n' "$repo_dir"
     printf 'data:\n'
 
-    local count i name default secret framework_name injected emitted=0
+    local count i name default secret_flag framework_name injected emitted=0
     count="$(yq e '.env | length' "$spec_file" 2>/dev/null)"
     [[ "$count" =~ ^[0-9]+$ ]] || count=0
     for ((i = 0; i < count; i++)); do
-        secret="$(yq e ".env[$i].secret // false" "$spec_file" 2>/dev/null)"
-        [[ "$secret" == "true" ]] && continue
         name="$(yq e ".env[$i].name // \"\"" "$spec_file" 2>/dev/null)"
         [[ -n "$name" ]] || continue
+        # A flag the reader refuses stops the render (§98): the ConfigMap is
+        # the one file where "not a secret" publishes the default.
+        secret_flag="$(_manifest_env_spec_flag "$spec_file" "$i" secret)" || return 1
+        [[ "$secret_flag" == "true" ]] && continue
         default="$(yq e ".env[$i].default // \"\"" "$spec_file" 2>/dev/null)"
         framework_name="$(yq e ".env[$i].framework_name // \"\"" "$spec_file" 2>/dev/null)"
         injected="${framework_name:-$name}"
@@ -81,12 +83,23 @@ _manifest_env_render_configmap() {
 }
 
 # Names of the spec's secret variables, one per line (empty when none).
-# Same predicate as the renderers (`.secret // false` compared as the string
-# "true"), so a quoted `secret: "true"` is a secret here too; a gate that only
-# accepted the YAML boolean let that spec through unconfigured.
+# Reads the flag through _manifest_env_spec_flag, as every renderer does, so
+# the gate and the renderers cannot disagree about what a secret is: a gate
+# that only accepted the YAML boolean once let a quoted `secret: "true"`
+# through unconfigured. Returns 1 on a flag the reader refuses; generate has
+# already refused that spec by name before this is called.
 _manifest_env_spec_secret_names() {
     local spec_file="$1"
-    yq e '.env[] | select((.secret // false | tostring) == "true") | .name // ""' "$spec_file" 2>/dev/null | grep -v '^$' || true
+    local count i name secret_flag
+    count="$(yq e '.env | length' "$spec_file" 2>/dev/null)"
+    [[ "$count" =~ ^[0-9]+$ ]] || count=0
+    for ((i = 0; i < count; i++)); do
+        name="$(yq e ".env[$i].name // \"\"" "$spec_file" 2>/dev/null)"
+        [[ -n "$name" ]] || continue
+        secret_flag="$(_manifest_env_spec_flag "$spec_file" "$i" secret)" || return 1
+        [[ "$secret_flag" == "true" ]] && printf '%s\n' "$name"
+    done
+    return 0
 }
 
 # Every problem with env.secrets for this spec, one per line on stdout; exit
@@ -248,14 +261,14 @@ _manifest_env_render_external_secret() {
     printf '    creationPolicy: Owner\n'
     printf '  data:\n'
 
-    local count i name secret framework_name group injected emitted=0
+    local count i name secret_flag framework_name group injected emitted=0
     count="$(yq e '.env | length' "$spec_file" 2>/dev/null)"
     [[ "$count" =~ ^[0-9]+$ ]] || count=0
     for ((i = 0; i < count; i++)); do
-        secret="$(yq e ".env[$i].secret // false" "$spec_file" 2>/dev/null)"
-        [[ "$secret" == "true" ]] || continue
         name="$(yq e ".env[$i].name // \"\"" "$spec_file" 2>/dev/null)"
         [[ -n "$name" ]] || continue
+        secret_flag="$(_manifest_env_spec_flag "$spec_file" "$i" secret)" || return 1
+        [[ "$secret_flag" == "true" ]] || continue
         framework_name="$(yq e ".env[$i].framework_name // \"\"" "$spec_file" 2>/dev/null)"
         group="$(yq e ".env[$i].group // \"app\"" "$spec_file" 2>/dev/null)"
         injected="${framework_name:-$name}"
@@ -385,10 +398,10 @@ _manifest_env_render_dockerfile_bridge() {
     count="$(yq e '.env | length' "$spec_file" 2>/dev/null)"
     [[ "$count" =~ ^[0-9]+$ ]] || count=0
     for ((i = 0; i < count; i++)); do
-        public="$(yq e ".env[$i].public // false" "$spec_file" 2>/dev/null)"
-        [[ "$public" == "true" ]] || continue
         name="$(yq e ".env[$i].name // \"\"" "$spec_file" 2>/dev/null)"
         [[ -n "$name" ]] || continue
+        public="$(_manifest_env_spec_flag "$spec_file" "$i" public)" || return 1
+        [[ "$public" == "true" ]] || continue
         framework_name="$(yq e ".env[$i].framework_name // \"\"" "$spec_file" 2>/dev/null)"
         injected="${framework_name:-$name}"
         lines+="ARG ${name}"$'\n'
@@ -484,6 +497,8 @@ names live in one place instead of being retyped per deployment target." \
                                 kustomize Component that fills {env} in each
                                 secret path per environment (if the path has it)
   Dockerfile bridge block       build-time public vars, ARG→ENV (if present)" \
+                    "Spec flags" "  secret, required and public take true or false. Any other value (yes,
+  on, 1) is refused by name: generate exits 1 and writes nothing." \
                     "Secret store" "  There is no built-in store. With secret variables declared and no
   env.secrets configured, generate exits 1 and writes nothing. Set, at the
   fleet root or per repo (the repo wins):
@@ -523,6 +538,22 @@ names live in one place instead of being retyped per deployment target." \
 
     local apply=false
     [[ "$execution_mode" == "apply" && "$check_only" != "true" ]] && apply=true
+
+    # ---- Refuse a flag that is neither true nor false ------------------------
+    # Before the secret-store gate, which counts only the entries it reads as
+    # secret: a `secret: yes` entry read as "not a secret" passed that gate
+    # with no env.secrets at all (§98). Preview, --check and -y all exit 1.
+    local flag_problems
+    if ! flag_problems="$(_manifest_env_spec_flag_problems "$spec_file")"; then
+        echo ""
+        echo "env spec — cannot generate: $project_root"
+        echo ""
+        printf '%s\n' "$flag_problems" | sed 's/^/  /'
+        echo ""
+        echo "A flag is a YAML boolean; spellings such as yes, on or 1 are not guessed."
+        echo "Nothing was written. Fix $(basename "$spec_file"), then: manifest env generate -y"
+        return 1
+    fi
 
     # ---- Fail closed on the secret store ------------------------------------
     # Secret variables with no (or a broken) env.secrets: refuse before anything
@@ -734,6 +765,12 @@ manifest_env_validate() {
         check_out="$(manifest_env_generate --check 2>&1)" || check_rc=$?
         if [[ "$check_rc" -eq 0 ]]; then
             echo "      ✅ artifacts match the spec env: block and env.secrets"
+        elif printf '%s\n' "$check_out" | grep -q '^env spec — cannot generate'; then
+            # Refused before the store gate: a flag value the reader does not
+            # guess. Nothing was compared.
+            echo "      ❌ spec flags — a secret, required or public flag is neither true nor false:"
+            printf '%s\n' "$check_out" | sed -n '/ — write true or false$/p' | sed 's/^ */          /'
+            failures=$((failures + 1))
         elif printf '%s\n' "$check_out" | grep -q '^env.secrets — cannot generate'; then
             # The gate refused before rendering: this is a configuration gap,
             # not stale output, and the fix is different.
