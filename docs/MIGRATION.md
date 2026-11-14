@@ -68,7 +68,7 @@ the end.
 - Quoted file names are now compared as git stores them, so a pending `a b.txt` ships in
   the auto-commit like any other file.
 
-## The secret store is configuration; its release is the first CHANGELOG entry that mentions `env.secrets`
+## The secret store is configuration; its release is the first CHANGELOG entry that mentions `secret store`
 
 `manifest env generate` used to write every `k8s/env/external-secret.yaml` with one
 vendor's store name (`openbao-customer`) and one fixed path layout
