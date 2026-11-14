@@ -1,5 +1,26 @@
 # Changelog
 
+## [63.0.2] - 2026-11-14
+
+**Release Type:** Patch
+
+### Changes
+
+- Fix(homebrew): render the tap formula with its own header instead of the template's sentinel comment
+- Chore(repo): delete the three retired *.manifest sidecars and their mentions in robots.txt and ai.txt
+- Chore(docs): delete the three superseded trackers under docs/zArchive/trackers
+- Chore(canonical): drop the pre-rename fidenceio.manifest.cli slug from every default
+- Docs: correct stale names in comments, help text and examples
+- Docs(contributing): write down the two audiences and point the agent charters at it
+- Docs(tracker): close §1(e) and §36's shipped instance, file §107, refresh §1, §11 and §67
+- Docs(tracker): file §104-§106 from the env fixture run, promote §98 to T2, order the fix release
+- Fix(env): pass the Dockerfile bridge block to awk through the environment, so macOS can update it (§108)
+- Fix(env): read secret, required and public through one predicate and refuse a flag that is not a boolean (§98)
+- Fix(env): env generate replaces only the files it wrote; a hand-authored .env.example or k8s/env file is left untouched (§3(d))
+- Docs(migration): point the §97 section at a phrase its CHANGELOG entry actually carries
+- Docs(tracker): retire §98 and §108, close §3(d), file §109 and §110, re-anchor the env items and the citation table
+
+
 ## [63.0.1] - 2026-11-10
 
 **Release Type:** Patch
@@ -123,23 +144,3 @@
 ## [61.1.0] - 2026-09-13
 
 **Release Type:** Minor — no user-facing changes.
-
-
-## [61.0.0] - 2026-09-13
-
-**Release Type:** Major
-
-### Changes
-
-- Feat(git): one commit executor; hook output shown and cause named (§82)
-- Feat(fleet): one closing block, exit 2 on partial, gate captured (§83)
-- Feat(ship): pause the release so the driver can finish the docs, then verify (§78)
-- Fix(changelog): stop asserting what a release did from the paths it touched (§78)
-- Feat(fleet): coordination files are declared, not hard-coded (§77a)
-- Fix(handoff,fleet): verification that can fail, and an allowlist that refuses directories and secrets (§78, §77a)
-- Docs(tracker,migration): retire §77 and §83, file §87, and say what v61 changes on upgrade (§77, §83, §78, §82, §87)
-- Fix(changelog): read the previous tag from HEAD, not HEAD~1 (§78)
-- Chore(gitignore): ignore the lint containers' scratch file lists (§88)
-- Test(wizard): drop the SIGPIPE race from the review-and-confirm assertions (§90)
-- Fix(test,docs): make the executor's identity precondition its own, not the platform's (§82, §91)
-- Test(container): raise the skip budget 6 -> 7 for §83's SIGINT-disposition skip
