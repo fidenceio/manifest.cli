@@ -119,9 +119,12 @@ YAML
     grep -q "ARG FIDENCE_APP_DEMO_SITE_URL" "$PROJ/Dockerfile"
     grep -q 'ENV NEXT_PUBLIC_SITE_URL=${FIDENCE_APP_DEMO_SITE_URL}' "$PROJ/Dockerfile"
 
-    # Re-apply must not duplicate the block.
+    # Re-apply must not duplicate the block — and must actually have written
+    # it. On macOS this second apply used to fail (TRACKER §108), which
+    # satisfied "not duplicated" without rewriting anything.
     run manifest_env_generate -y
     [ "$status" -eq 0 ]
+    [[ "$output" == *"wrote: Dockerfile bridge block"* ]]
     [ "$(grep -c "ARG FIDENCE_APP_DEMO_SITE_URL" "$PROJ/Dockerfile")" -eq 1 ]
 }
 

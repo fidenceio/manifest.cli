@@ -416,12 +416,16 @@ _manifest_env_dockerfile_bridge_current() {
 _manifest_env_dockerfile_bridge_apply() {
     local dockerfile="$1"
     local block="$2"
-    local tmp
-    tmp="$(mktemp)"
+    local tmp rc=0
+    tmp="$(mktemp)" || return 1
 
     if grep -qF "$MANIFEST_CLI_ENV_BRIDGE_BEGIN" "$dockerfile" 2>/dev/null; then
-        awk -v begin="$MANIFEST_CLI_ENV_BRIDGE_BEGIN" -v end="$MANIFEST_CLI_ENV_BRIDGE_END" -v block="$block" '
-            $0 == begin { inside = 1; print block; next }
+        # The block reaches awk through the environment, not `-v block=…`: it
+        # is several lines, and BWK awk (macOS) refuses a newline inside a -v
+        # value ("newline in string", exit 2) — so on macOS an existing block
+        # could never be updated: a warning, exit 0, and --check red for good.
+        MANIFEST_CLI_ENV_BRIDGE_BLOCK="$block" awk -v begin="$MANIFEST_CLI_ENV_BRIDGE_BEGIN" -v end="$MANIFEST_CLI_ENV_BRIDGE_END" '
+            $0 == begin { inside = 1; print ENVIRON["MANIFEST_CLI_ENV_BRIDGE_BLOCK"]; next }
             $0 == end { inside = 0; next }
             !inside { print }
         ' "$dockerfile" > "$tmp" || { rm -f "$tmp"; return 1; }
