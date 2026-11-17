@@ -1,5 +1,14 @@
 # Changelog
 
+## [63.0.3] - 2026-11-17
+
+**Release Type:** Patch
+
+### Changes
+
+- Docs(tracker): file §111 as open (GitHub Actions off for the organisation; the ship's CI tick describes an older commit), put its question ahead of the order and its fix first in item 2, cross-reference §12, §68 and §91
+
+
 ## [63.0.2] - 2026-11-14
 
 **Release Type:** Patch
@@ -137,10 +146,5 @@
 
 
 ## [61.2.0] - 2026-09-13
-
-**Release Type:** Minor — no user-facing changes.
-
-
-## [61.1.0] - 2026-09-13
 
 **Release Type:** Minor — no user-facing changes.
