@@ -1,5 +1,19 @@
 # Changelog
 
+## [64.0.0] - 2026-11-19
+
+**Release Type:** Major
+
+### Changes
+
+- Fix(ship): write every step and the result to the run log (§112)
+- Feat(ship)!: finish an unfinished release from the ordinary plan; remove ship repo resume and ship fleet resume (§113)
+- Fix(ship): report a release stopped by the post-push gate as pushed, with no tag-delete or reset advice (§16)
+- Fix(fleet): make the topics-off hint a command that does what it says
+- Docs: rewrite the guides for the unfinished-release flow
+- Docs(tracker): retire §112 and §113, record the §104 re-decision, file the review findings through §124
+
+
 ## [63.0.3] - 2026-11-17
 
 **Release Type:** Patch
@@ -143,8 +157,3 @@
 
 - Docs(tracker,agents): trim the register to what is open, and stand up the review panel (§2, §3, §25, §36, §52, §69, §78, §81, §82, §88, §90, §91)
 - Docs(tracker): state the VERSION-ahead-of-code fact as a derivation, not a number (§5)
-
-
-## [61.2.0] - 2026-09-13
-
-**Release Type:** Minor — no user-facing changes.
