@@ -1,128 +1,147 @@
 # Manifest CLI Security Notes
 
-**Reviewed against:** 59.2.1 — **Updated:** 2026-08-19
-**Scope:** Current security posture, and the known gaps in it
+**Last security review:** v59.2.1, 2026-08-19.
+**Control descriptions checked against the code:** 2026-11-18.
+**Scope:** the security controls in the CLI today, and the known gaps in them.
 
-> This file is **hand-maintained**. `manifest security` does not write it — it
-> reports three checks and, with `--write`, archives a timestamped copy under
-> `docs/zArchive/`. Until 2026-08-19 a bare `manifest security` copied a generated
-> template over this file, replacing reviewed text with fixed claims ("No `eval`
-> Usage", "A+ 95/100") that no check produced. See TRACKER §26.
+> This file is **maintained by hand**. `manifest security` does not write it. That
+> command runs five checks and prints the results. With `--write` it also saves a
+> timestamped report in the docs archive folder, and it writes nothing else.
 >
-> The gaps below are stated because a posture summary that lists only controls
-> overstates the posture. Each names the tracker item that owns it.
+> Each control below is listed together with its known gaps. A summary that lists only
+> controls would overstate how well the CLI is protected.
 
 ---
 
 ## Current Status
 
-Manifest CLI includes active controls for the security concerns that matter
-during release automation:
+Manifest CLI has controls for the security concerns that matter during release
+automation.
 
 ### Secrets
 
-- Pre-commit hook (`.git-hooks/pre-commit`) scans staged content for secrets,
-  tokens, private environment files, and large files.
-  **Gap — it is not installed by cloning.** The hook is reached via
-  `core.hooksPath=.git-hooks`, which lives in `.git/config` and is not cloned, so
-  on a fresh clone this control is simply absent and a teammate can commit past
-  it. `CONTRIBUTING.md` documents the manual step. (TRACKER §7)
-- CI runs `gitleaks` over the tree on pushes to `main`, PRs targeting `main`, and
-  manual dispatch (`.github/workflows/lint.yml`). It scans the **working tree
-  only** — history is fetched but not range-scanned. (TRACKER §13)
-- `.gitignore` enforcement keeps local config and private environment files out
-  of version control. **Gap — `.gitignore` does not apply to already-tracked
-  files**, and there is no key-material scan of any kind: `manifest security`
-  checks the `security.private_files` list, a PII regex, and env-var naming, so a
-  private key under an unmatched name (`credentials.json`, `privkey`) is caught by
-  nothing while the release commit is a bare `git add .`. (TRACKER §2)
-- Output redaction: `manifest_redact` strips known credential env-var values
-  (e.g. `GITHUB_TOKEN`, `HOMEBREW_GITHUB_API_TOKEN`, the cloud API key and the
-  var named by `MANIFEST_CLI_CLOUD_API_KEY_ENV`) and token shapes (GitHub
-  classic + fine-grained PATs, AWS, OpenAI, JWT, Bearer) from every `log_*`
-  line and the ship status file.
-  **Gap — value redaction is inert under `gh`-managed auth**, where no
-  `GITHUB_TOKEN` exists in the environment to match; shape-based patterns still
-  apply. It is also wired only into `log_*`, so output printed by a bare `echo`
-  bypasses it. (TRACKER §28)
+- **Pre-commit hook.** `.git-hooks/pre-commit` scans staged content for secrets,
+  tokens, private environment files and large files.
+  **Gap: cloning does not install it.** Git finds the hook through the setting
+  `core.hooksPath=.git-hooks`. That setting lives in `.git/config`, which is not
+  cloned. On a fresh clone the hook does not run until the contributor enables it.
+  `CONTRIBUTING.md` gives the command.
+- **CI secret scan.** CI runs `gitleaks` on pushes to `main`, on pull requests that
+  target `main`, and on manual runs (`.github/workflows/lint.yml`).
+  **Gap: it scans the working tree only.** The job fetches the full history but does
+  not scan the range of commits.
+- **`.gitignore` rules.** They keep local config and private environment files out of
+  version control.
+  **Gap: `.gitignore` does not apply to a file that Git already tracks.**
+- **Private key scan.** `manifest security` scans the tree for private key material by
+  content: PEM and PuTTY key headers. A commit made by Manifest refuses to add new key
+  material. Key material that is already in the repository's history is reported, not
+  refused.
+  **Gap: only those key formats are recognised by content.** Other secrets are found
+  by file name, through the `security.private_files` list. A secret in a file with a
+  name that is not on the list, such as `credentials.json`, is not caught by
+  `manifest security`.
+- **Release commit scope.** The release commit stages only the files that the release
+  writes. The automatic commit before it stages every pending file, so the scans above
+  are what protect it.
+- **Output redaction.** `manifest_redact` removes two kinds of text from every `log_*`
+  line and from the ship status file:
+  - the values of known credential variables, for example `GITHUB_TOKEN`,
+    `HOMEBREW_GITHUB_API_TOKEN`, the cloud API key, and the variable named by
+    `MANIFEST_CLI_CLOUD_API_KEY_ENV`
+  - token shapes: GitHub classic and fine-grained tokens, AWS keys, OpenAI keys, JWTs
+    and Bearer tokens
+
+  **Gap: value redaction does nothing when `gh` manages authentication.** In that case
+  no `GITHUB_TOKEN` exists in the environment to match. The shape patterns still apply.
+  **Gap: only `log_*` output is redacted.** Output printed by a bare `echo` is not.
 
 ### Safe-by-default execution
 
-- Mutating commands preview unless `-y` / `--yes`; `--dry-run` is the explicit
-  preview spelling. `-y` applies with no confirmation prompt; an ambiguous apply
-  target (detached HEAD / no origin) is refused unless `MANIFEST_CLI_AUTO_CONFIRM`
-  authorizes it. `MANIFEST_CLI_AUTO_CONFIRM` does not authorize apply.
-- Global configuration writes require confirmation, with stricter confirmation
-  for destructive global-config changes.
-- Destructive operations (removal, global `brew uninstall`) are gated and
-  protectively skip under a sandbox/test `HOME` so a test run can never mutate
-  the real system.
-- Release commands validate version formats, tag names, repository state, and
-  canonical-repo boundaries before mutating, and refuse to ship off the release
-  branch.
+- Commands that change something preview unless you pass `-y` or `--yes`. `--dry-run`
+  asks for the preview by name. `-y` applies with no confirmation prompt.
+- Manifest refuses to apply to an ambiguous target (a detached HEAD, or no `origin`)
+  unless `MANIFEST_CLI_AUTO_CONFIRM` authorises it. `MANIFEST_CLI_AUTO_CONFIRM` does
+  not authorise an apply by itself.
+- Writes to the global configuration require confirmation. A destructive change to the
+  global configuration requires a stricter confirmation.
+- Destructive operations (removal, a global `brew uninstall`) are guarded. Under a
+  sandbox or test `HOME` they are skipped, so a test run cannot change the real system.
+- Release commands check version formats, tag names, repository state and
+  canonical-repository boundaries before they change anything. They refuse to ship from
+  a branch that is not the release branch.
 
 ### Release integrity
 
-- Release gate (`release_gate`, default `local-tests`) blocks publishing a
-  release until verification passes; `remote-ci` requires the pushed commit's CI
-  to be green before the GitHub Release / Homebrew tap publish; `none` is loud and
-  audited.
-- Single-flight locks serialize concurrent `manifest ship fleet -y` runs in a
-  workspace, and concurrent `ship repo` runs in one repository, so they cannot race
-  on shared version/tag/tap-publish state. Stale locks are reclaimed only from a
-  provably dead local holder; live or cross-host holders are never broken. Since
-  2026-08-19 the fleet, repo and config locks share one implementation
-  (`modules/system/manifest-lock.sh`).
-  **Behaviour to know:** acquisition waits a bounded 50 × 0.1 s and then refuses.
-  Contention therefore resolves as a *queue* when the holder finishes inside 5 s
-  and as a *refusal* when it does not. A ship routinely exceeds 5 s, so refusal is
-  the common case — this is timing-dependent by construction, not a guarantee of
-  either behaviour. (TRACKER §14)
-- Pre-tag re-entrancy: an interrupted ship (VERSION bumped but uncommitted)
-  resumes in place instead of double-bumping.
+- **Release gate.** `release.gate` (default `local-tests`) blocks publishing until
+  verification passes. `remote-ci` requires the pushed commit's CI to pass before the
+  GitHub Release and the Homebrew tap publish. `none` prints a loud warning and is
+  recorded in the audit log.
+- **Single-flight locks.** A lock makes concurrent `manifest ship fleet -y` runs in one
+  workspace take turns. Another lock does the same for concurrent `ship repo` runs in
+  one repository. Two runs therefore cannot race on shared version, tag or tap-publish
+  state. Manifest reclaims a stale lock only when it can prove that the holder was a
+  local process that has died. It never breaks a lock held by a live process or by
+  another host. The fleet, repo and config locks share one implementation,
+  `modules/system/manifest-lock.sh`.
+  **Behaviour to know:** a second run tries for the lock 50 times, 0.1 seconds apart,
+  and then refuses. So the second run waits when the first finishes within 5 seconds
+  and is refused when it does not. A ship usually takes longer than 5 seconds, so a
+  refusal is the common result.
+- **Interrupted ship.** If a ship stops after it bumped `VERSION` and before it
+  committed, the next run continues from that version and does not bump a second time.
 
 ### Static analysis & diagnostics
 
-- CI lints shell sources with `shellcheck` — a hard gate at **error** severity
-  over `modules/` and `scripts/` plus the three top-level installers. A second job
-  runs at `warning` severity but is `continue-on-error`, i.e. advisory.
-  **Gap — "all shell sources" is not accurate.** The glob is
-  `find modules scripts -name "*.sh"`, so `tests/**.bats`, `completions/` and
-  `.git-hooks/pre-commit` are never scanned. This is not academic: bash exempts a
-  `!`-prefixed command from errexit, and 114 bats assertions were consequently
-  inert — shellcheck's **SC2251** detects exactly that shape but is `info`
-  severity, below the only blocking job. (TRACKER §9.27(b))
-- `manifest status`, `manifest doctor`, and `manifest security` provide read-only
-  diagnostics before consequential commands run. `manifest security` is read-only
-  by default; `--write` archives a timestamped report and writes nothing else.
+- **ShellCheck in CI.** Two steps block the build:
+  - Error severity over `modules/`, `scripts/`, every `tests/*.bats` and `tests/*.bash`
+    file, and the three top-level installers.
+  - Codes SC2251 and SC2314 over the test files. They catch a test assertion that
+    starts with `!` and therefore can never fail.
+
+  A third step reports warnings over `modules/`, `scripts/` and the installers. It is
+  advisory and does not block.
+  **Gap: not every shell file is scanned.** `completions/` and `.git-hooks/pre-commit`
+  are in none of the three steps.
+- **Read-only diagnostics.** `manifest status`, `manifest doctor` and
+  `manifest security` report on the repository before you run a command with
+  consequences. `manifest security` checks five things: private files tracked by Git,
+  private key material, likely personal data (PII), environment-file hygiene, and
+  environment-variable naming. It is read-only by default.
 
 ## Audit History
 
-- **2026-08-19** — gaps added beside every control, and the four statements that
-  contradicted `docs/TRACKER.md` corrected (hook distribution, gitleaks scope,
-  redaction under `gh` auth, lock contention behaviour). `manifest security` no
-  longer overwrites this file.
-- **2026-05-30** — refreshed alongside an enterprise-hardening pass (release gate,
-  single-flight fleet lock, pre-tag re-entrancy, output redaction, shellcheck +
-  gitleaks CI, and Apache-2.0 `LICENSE` / `SECURITY.md` / `CONTRIBUTING.md`), each
-  landed with bats coverage and adversarial code review.
-- **2026-04-25** — point-in-time analysis of v44.2.0, archived at
+- **2026-08-19** — Review against v59.2.1. A gap was added beside every control. Four
+  statements were corrected: hook distribution, gitleaks scope, redaction under `gh`
+  authentication, and lock contention.
+- **2026-05-30** — Refreshed together with a hardening pass: release gate,
+  single-flight fleet lock, interrupted-ship handling, output redaction, shellcheck and
+  gitleaks in CI, and the Apache-2.0 `LICENSE`, `SECURITY.md` and `CONTRIBUTING.md`.
+  Each change landed with bats tests.
+- **2026-04-25** — Point-in-time analysis of v44.2.0, archived at
   [`docs/zArchive/v44/`](zArchive/v44/SECURITY_ANALYSIS_REPORT_v44.2.0_20260425T195739Z.md).
 
-A full 13-phase assurance audit ran against v59.2.1 in August 2026. Its artifacts
-are deliberately untracked, so **this file and `docs/TRACKER.md` are the only
-record a clone can see.** Its headline verdict was Fail-or-NotProven across nine
-of ten categories — but read that with TRACKER §5 in hand: of the findings
-adjudicated so far only a minority were real *as filed*, two of three P0s were
-defects in the audit harness rather than the product, and the remainder have not
-been triaged to the same depth. Treat the audit as a lead list, not a defect list.
+**The August 2026 assurance audit.** A full 13-phase audit ran against v59.2.1. Its
+working files are not in the repository, so this file and `docs/TRACKER.md` are the
+only record that a clone contains. Read its result with these facts in mind:
 
-**Not proven, in the audit's own terms** (nobody looked, which is not the same as
-clean): macOS, FreeBSD and WSL2 have no executable evidence and cannot get any
-without provisioned images; the Linux evidence base is Alpine/musl on a mutable
-tag, not the Ubuntu-LTS glibc target; eight mutation routes were offline-
-infeasible. (TRACKER §5's absorbed §9.16 ledger, §21a)
+- Its headline verdict was Fail or Not Proven in nine of ten categories.
+- Only some of its findings have been checked one by one. Of those, a minority were
+  real as filed. Two of its three highest-priority findings were defects in the audit
+  harness, not in the product.
+- The remaining findings have not been checked to the same depth. Treat the audit as a
+  list of leads, not a list of defects.
 
-This document should never claim that an older audit is current, and should never
-list controls without their known gaps. Update it after any dedicated security
-review, and update the version/date line at the same time.
+**Not verified by that audit.** "Not verified" means that nobody looked. It does not
+mean clean.
+
+- macOS, FreeBSD and WSL2 had no executable evidence. Since the audit, CI runs the test
+  suite natively on macOS (see [tests/README.md](../tests/README.md)). FreeBSD and WSL2
+  still have none.
+- The Linux evidence came from Alpine (musl) on a mutable image tag, not from Ubuntu
+  LTS (glibc).
+- Eight mutation routes could not be exercised offline.
+
+**Rules for this file.** Do not present an older audit as current. Do not list a
+control without its known gaps. Update the file after any dedicated security review,
+and update the two date lines at the top at the same time.

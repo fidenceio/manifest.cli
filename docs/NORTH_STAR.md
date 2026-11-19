@@ -21,7 +21,7 @@ Give developers a safe way to ship fast agent-assisted changes without losing co
 
 1. Keep preview/apply policy consistent across every mutating route.
 2. Keep help, docs, examples, completions, and tests in sync.
-3. Make five-repo fleet dogfood acceptance boring.
+3. Make fleet dogfood acceptance boring, for a fleet of any size (two or more repos).
 4. Use Cloud for optional Standard release-note enrichment without weakening local-first release mechanics.
 5. Keep Homebrew publication narrow and automated: tap formula publish only.
 6. Never report a completed ship while source release changes remain dirty or post-push commits have advanced the repo past the pushed release head.
@@ -29,7 +29,7 @@ Give developers a safe way to ship fast agent-assisted changes without losing co
 ## Non-Goals
 
 - No hidden auto-release based on inferred change type.
-- No rollback of a published release (decided 2026-08-21). Recovery is **roll-forward**: ship a new version. `revert` is a viewer — it checks out a tag into detached HEAD and undoes nothing — and no guarded `rollback` verb will be built. A release that reached a remote is history, not state to unwind.
+- No rollback of a published release. Recovery is **roll-forward**: ship a new version. `revert` is a viewer — it checks out a tag into detached HEAD and undoes nothing — and no guarded `rollback` verb will be built. A release that reached a remote is history, not state to unwind.
 - No path selector for repo ship until the repo-identity contract is redesigned.
 - No Cloud dependency for core repo or fleet release.
 - No host dependency installation for contributor validation.

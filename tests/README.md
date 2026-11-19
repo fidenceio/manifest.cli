@@ -1,10 +1,13 @@
 # Manifest CLI Tests
 
-Run tests in containers. Do not install test dependencies on the host.
+Run the tests in containers. Do not install test dependencies on your own machine (the
+host).
 
-`scripts/run-tests-container.sh` builds a reusable local image from
-`tests/containers/run-tests.Dockerfile`, keyed by the Dockerfile hash, then
-bind-mounts the repo into `/work`.
+The tests are written for bats, a test runner for Bash. `scripts/run-tests-container.sh`
+builds a local container image from `tests/containers/run-tests.Dockerfile` and reuses
+it on later runs. The image tag includes a hash of the Dockerfile, so the image is
+rebuilt only when the Dockerfile changes. The script then mounts the repository into
+the container at `/work`.
 
 ## Full Suite
 
@@ -13,6 +16,8 @@ bind-mounts the repo into `/work`.
 ```
 
 ## Focused Suite
+
+To run one test file, name it:
 
 ```bash
 ./scripts/run-tests-container.sh tests/docs_generation.bats
@@ -23,46 +28,59 @@ bind-mounts the repo into `/work`.
 
 - Command dispatch and help behavior
 - Preview/apply safety gates
-- YAML config layering and env mapping
-- Version math and changelog updates
-- Canonical-version ownership and opt-in JSON/TOML/YAML `version.sync`
-- Passive version-surface discovery, YAML policy, status/doctor/fleet reporting
-- Shared iterative discovery used by fleet and version scanners
+- YAML config layering and the mapping from config keys to environment variables
+- Version arithmetic and changelog updates
+- Ownership of the canonical version, and opt-in `version.sync` for JSON, TOML and YAML
+  files
+- Read-only discovery of other files that carry a version, the YAML policy for them,
+  and their reporting in status, doctor and fleet output
+- The shared discovery walker that the fleet scanner and the version scanner use
 - Repo and fleet release paths
-- Fleet ship skips unchanged members that are already tagged at their current version
-- Homebrew tap update behavior
+- Fleet ship skipping an unchanged member that is already tagged at its current version
+- Homebrew tap updates
 - GitHub Actions and GitHub Release integration
-- Docs generation and managed Pages workflow generation
-- Uninstall and destructive-path guards
+- Docs generation, including the managed GitHub Pages workflow
+- Uninstall and the guards on destructive paths
 
 ## Conventions
 
-- Tests use scratch directories and must not mutate the developer's real home directory.
-- Tests that need destructive behavior must keep it inside the test sandbox.
-- New command behavior needs help/docs coverage when user-visible.
-- New mutating routes must advertise `--dry-run`, `-y`, and `--yes`.
-- Internal detection helpers should document their output contracts and add focused Bats coverage even when they do not add a public command.
+- Tests use scratch directories. They must not change the developer's real home
+  directory.
+- A test that needs destructive behavior must keep it inside the test sandbox.
+- New command behavior that a user can see needs help text and docs, and tests for
+  both.
+- A new command path that changes something must advertise `--dry-run`, `-y` and
+  `--yes`.
+- An internal detection helper should document the format of its output and have its
+  own bats tests, even when it adds no public command.
 
 ## Host Runner
 
-`scripts/run-tests.sh` exists for controlled environments that already provide the right tools. It is not the default workflow for this workspace.
+`scripts/run-tests.sh` runs the suite directly on a machine that already has the right
+tools. It is not the default way to work in this repository. Use it only in a
+controlled environment.
 
 ## Safety contracts and line coverage
 
-Full, smoke, and change-aware runs enforce every contract registered in
-`tests/safety-contracts.tsv`. Each contract names two smoke tests: a passing
-control and a challenging case (refusal, preservation, or recovery). The runner
-checks actual TAP results and refuses missing, failed, duplicate, or skipped
-proofs. The registry itself has removal and stale-reference guards. Explicit
-file/filter runs stay focused and do not claim complete contract coverage.
-Use `--no-cache` to demand fresh execution; release checks already require it.
-Changes to verification scripts invalidate cached results.
+A *safety contract* is a critical safety behavior that the suite must prove. The
+contracts are registered in `tests/safety-contracts.tsv`.
 
-This is 100% of the **registered critical safety contracts**, not proof that
-all possible failure modes are tested. Changes to a mutating workflow need a
-review of the register as well as meaningful regression tests.
+- Each contract names two smoke tests: a passing control, and a challenging case
+  (a refusal, a preservation or a recovery).
+- Full, smoke and change-aware runs enforce every registered contract.
+- The runner checks the actual TAP results. (TAP is the plain-text result format that
+  bats prints.) It refuses a proof that is missing, failed, duplicated or skipped.
+- The registry itself has guards against removed entries and stale references.
+- A run that names files or a filter stays focused. It does not claim complete contract
+  coverage.
+- `--no-cache` forces every test to run again. Release checks already use it.
+- A change to a verification script invalidates cached results.
 
-Measure executable-line coverage separately:
+This is 100% of the **registered critical safety contracts**. It is not proof that
+every possible failure mode is tested. A change to a workflow that changes something
+needs a review of the register as well as meaningful regression tests.
+
+Line coverage is measured separately:
 
 ```bash
 ./scripts/coverage.sh
@@ -70,32 +88,45 @@ Measure executable-line coverage separately:
 MANIFEST_CLI_COVERAGE_MIN_PERCENT=100 ./scripts/coverage.sh
 ```
 
-The container parses a zero-hit inventory before merging actual traces, so a
-module that tests never load still counts. The scope is every `modules/**/*.sh`
-file plus `scripts/manifest-cli.sh`, `scripts/manifest-cli-wrapper.sh`, and
-`scripts/migrate-user-config.sh`. Installer scripts, completions, test tooling,
-and tests are outside this runtime metric. Inventory mismatches and malformed
-reports always fail. A rounded `100%` headline cannot hide uncovered lines.
+How the measurement works:
 
-The default line target is zero for measurement; it does **not** assert 100%
-line coverage or act as a release qualification. Test failures still fail the
-coverage command. `coverage/report/index.html` contains the report and
-`coverage/uncovered-lines.tsv` lists gaps. The source mount is read-only;
-fixtures and report output remain writable inside the disposable container.
+- **Scope.** Every `modules/**/*.sh` file, plus `scripts/manifest-cli.sh`,
+  `scripts/manifest-cli-wrapper.sh` and `scripts/migrate-user-config.sh`. Installer
+  scripts, completions, test tooling and the tests themselves are outside this metric.
+- **Unloaded modules count.** The container first lists every line in scope with zero
+  hits and then merges in the real traces. A module that no test loads therefore still
+  counts as uncovered.
+- **Failures.** A mismatch in that list, or a malformed report, always fails the
+  command. A headline that rounds to `100%` cannot hide uncovered lines. A failing test
+  also fails the coverage command.
+- **Default target.** The default line target is zero, which means "measure only". It
+  does **not** assert 100% line coverage, and it is not a release requirement.
+- **Output.** The report is `coverage/report/index.html`. The gaps are listed in
+  `coverage/uncovered-lines.tsv`.
+- **Mounts.** The source is mounted read-only. Fixtures and report output stay
+  writable inside the container, which is thrown away after the run.
 
-To check coverage reporting with a TAP stream larger than a pipe buffer:
+To check coverage reporting with a TAP stream that is larger than a pipe buffer:
 
 ```bash
 ./scripts/coverage.sh tests/fixtures/coverage_stdout_probe.bats
 ```
 
-The traced runner writes TAP directly to `coverage/tests.tap`, which is emitted
-after tracing. This avoids a kcov stdout-pipe deadlock on large suites.
+The traced runner writes TAP straight to `coverage/tests.tap` and prints that file
+after tracing ends. This avoids a deadlock on the stdout pipe of kcov, the coverage
+tool, on large suites.
 
-Local development and Linux CI run in containers; do not install test dependencies
-on a developer host. Full CI also runs the suite natively on disposable GitHub
-macOS runners under the approved CI-only exception. That lane provisions its own
-Homebrew tools and exercises macOS-specific behavior that Linux containers cannot
-establish. Pull requests, main pushes, nightly runs, and manual dispatches run both
-platforms without the test cache. Routine feature pushes retain the Linux smoke
-lane. Keep the native job named `bats (macos-latest)` to satisfy branch protection.
+## Where the suite runs
+
+- **Local development and Linux CI** run in containers. Do not install test
+  dependencies on a developer machine.
+- **Full CI also runs the suite natively on macOS**, on GitHub's disposable macOS
+  runners. This is the one approved exception to the container rule, and it applies
+  only in CI. The macOS job installs its own Homebrew tools. It exercises
+  macOS-specific behavior that a Linux container cannot.
+- **Pull requests, pushes to `main`, nightly runs and manual runs** use both platforms
+  and do not use the test cache.
+- **Other pushes to a feature branch** run only the Linux smoke tests, selected by what
+  changed.
+- **Keep the name of the native job as `bats (macos-latest)`.** Branch protection
+  requires a job with that name.

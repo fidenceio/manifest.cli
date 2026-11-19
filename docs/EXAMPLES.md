@@ -2,19 +2,24 @@
 
 Copy-and-paste recipes for common jobs.
 
-Every example that changes something only *plans* unless it includes `-y` or `--yes`.
-Where a recipe shows the same command twice — once bare, once with `-y` — that is the
-intended rhythm: read the plan, then apply it.
+An example that changes something only shows a *plan* unless it includes `-y` or
+`--yes`. Some recipes show the same command twice: once without `-y` and once with it.
+That is the intended rhythm. Read the plan, then apply it.
 
 ## New Repository
 
 ```bash
 cd my-project
-manifest doctor          # are my dependencies and config sane?
-manifest init repo       # what files would be created?
-manifest init repo -y    # create them
+manifest doctor          # are my tools and config in good order?
+manifest init repo       # what would be set up?
+manifest init repo -y    # set it up and run the release check
 manifest status          # what would Manifest act on now?
 ```
+
+`manifest init repo -y` creates the starter files and connects the `origin` remote. If
+the repository has no `origin`, it creates a **private** GitHub repository for it. To
+avoid that, pass `--remote <url>` to connect an existing remote, or `--no-connect` to
+create local files only.
 
 ## Patch Release
 
@@ -31,8 +36,21 @@ manifest ship repo minor --local -y
 ```
 
 Use `--local` when you want the version raised, the changelog written, the docs
-regenerated, and the commit made — but nothing public yet. It skips the tag, the push,
+regenerated, and the commit made, but nothing public yet. It skips the tag, the push,
 the GitHub Release, and the Homebrew publish.
+
+## Finish A Release That Stopped Partway
+
+Run the same release command again. There is no separate recovery command.
+
+```bash
+manifest ship repo patch      # the plan shows "Unfinished release" and what remains
+manifest ship repo patch -y   # finishes it; the version does not change
+manifest ship repo patch      # now the ordinary plan for the next release
+```
+
+To leave the unfinished release as it is and cut the next one, add `--force-bump`.
+`--local` cannot finish a release, because finishing means pushing.
 
 ## Leave Package Files Alone
 
@@ -46,25 +64,27 @@ manifest ship repo patch
 To have other files follow the version, list them explicitly:
 
 ```bash
-manifest config set version.sync package.json,pyproject.toml,Chart.yaml
+manifest config set version.sync package.json,pyproject.toml,Chart.yaml -y
 manifest ship repo patch
 ```
 
 Manifest updates a `version` field only at the **top level** of a JSON, TOML, or YAML
-file. Lockfiles such as `package-lock.json` stay untouched unless you name them — and
-even then, only a top-level `version` is written.
+file. Lockfiles such as `package-lock.json` stay untouched unless you name them. Even
+then, Manifest writes only a top-level `version`.
 
-To hear more about other version-bearing files Manifest noticed but did not change:
+To hear more about other files that carry a version, which Manifest noticed but did not
+change:
 
 ```bash
-manifest config set version.surfaces.notification_mode list
+manifest config set version.surfaces.notification_mode list -y
 manifest status
 manifest doctor
 ```
 
 ## Inspect A Built-In Recipe
 
-A "recipe" is a named, inspectable description of what a command does.
+A "recipe" is a named description of what a command does. You can read it before you
+run the command.
 
 ```bash
 manifest recipe list
@@ -74,8 +94,8 @@ manifest ship repo patch --explain
 
 ## First Fleet
 
-Note that `manifest init fleet` is run twice on purpose. The first run writes the member
-list for you to review; the second acts on your edits.
+`manifest init fleet` is run twice on purpose. The first run writes the member list for
+you to review. The second run acts on your edits.
 
 ```bash
 manifest init fleet
@@ -107,7 +127,8 @@ Members with nothing to release are skipped and listed, so a short plan is norma
 ## Pull Request
 
 ```bash
-manifest pr create --draft
+manifest pr create --draft       # preview
+manifest pr create --draft -y    # open the draft pull request
 manifest pr checks --watch
 manifest pr ready -y
 manifest pr merge --squash -y
@@ -118,24 +139,34 @@ manifest pr merge --squash -y
 ```bash
 manifest config list
 manifest config describe git.tag_prefix   # value, which layer set it, and its env var
-manifest config set git.tag_prefix release-
-manifest config unset git.tag_prefix
+manifest config set git.tag_prefix release-      # preview
+manifest config set git.tag_prefix release- -y   # write it
+manifest config unset git.tag_prefix -y
 ```
 
-`describe` is the one to reach for when a setting is not doing what you expect — it
-shows every layer, so you can see what is overriding what.
+`describe` is the command to use when a setting is not doing what you expect. It shows
+every layer, so you can see what overrides what.
 
 ## Documentation Website
 
-Off by default; two settings turn it on:
+The website is on by default. Manifest writes its source whenever it generates
+documentation:
 
 ```bash
-manifest config set docs.generate.site true
-manifest config set docs.site.source_dir docs-site
-manifest docs
+manifest docs       # preview
+manifest docs -y    # generate
 ```
 
-To run just the generator's tests, in a container:
+To turn the website off for a repository:
+
+```bash
+manifest config set --layer project docs.generate.site false -y
+```
+
+The site's source files go in the `docs-site` folder. To use a different folder, set
+`docs.site.source_dir`.
+
+To run only the generator's tests, in a container:
 
 ```bash
 ./scripts/run-tests-container.sh tests/docs_generation.bats
@@ -144,15 +175,13 @@ To run just the generator's tests, in a container:
 ## Releasing Without Manifest Cloud
 
 Nothing extra is required. Manifest is local-first: repo and fleet releases work fully
-without Cloud, and if a Cloud plugin is absent, Manifest prints installation guidance
-and carries on rather than failing.
+without Cloud. If a Cloud plugin is absent, Manifest prints installation guidance and
+carries on. It does not fail.
 
 ```bash
 manifest ship repo patch --local -y   # stays entirely on your machine
 manifest ship repo patch -y           # also fine with no Cloud installed
 ```
 
-There is a `cloud.skip` setting listed in the configuration map, but **no code reads it
-today** — setting it changes nothing. Do not rely on it to disable Cloud; simply not
-installing the plugins is what disables Cloud. (Tracked as part of the dead-config-key
-sweep in [TRACKER.md](TRACKER.md), item §9.)
+A `cloud.skip` setting exists, but **no code reads it**. Setting it changes nothing. Do
+not rely on it to turn Cloud off. Cloud is off whenever its plugins are not installed.

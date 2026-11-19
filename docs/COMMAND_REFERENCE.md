@@ -1,10 +1,24 @@
 # Manifest CLI Command Reference
 
-Every supported command, with its flags. For live help, run
+This page lists every supported command and its flags. For live help, run
 `manifest <command> --help`.
 
-If you have not met the preview/apply model, `MANIFEST_CLI_AUTO_CONFIRM`, or the release
-gate yet, read the [Migration Guide](MIGRATION.md) first — this page assumes them.
+This page assumes you know three ideas: preview and apply, `MANIFEST_CLI_AUTO_CONFIRM`,
+and the release gate. If any of them is new to you, first read
+[Preview And Apply](USER_GUIDE.md#preview-and-apply) in the User Guide and the
+[Migration Guide](MIGRATION.md).
+
+Some words used on this page:
+
+- A **plan** (also called a **preview**) is a printed list of what a command would do. It
+  changes nothing.
+- To **apply** is to carry the plan out.
+- A **fleet** is a folder of repositories that Manifest manages together. Each
+  repository in it is a **member**.
+- The **manager** is the repository at the top of a fleet. It is also called the
+  **coordination root**. It holds the fleet's member list and settings.
+- The **release gate** is the check, usually your test command, that must pass before
+  Manifest makes a release.
 
 ## Command Tree
 
@@ -15,10 +29,8 @@ manifest
 ├── init [repo|fleet]                          guided or explicit setup; --connect on explicit scopes
 ├── status repo|fleet                           inspect current state
 ├── ship
-│   ├── repo patch|minor|major|revision         release one repo
-│   ├── repo resume                            finish an interrupted release
+│   ├── repo patch|minor|major|revision         release one repo, or finish its unfinished release
 │   ├── fleet patch|minor|major|revision        release members, then ship the manager
-│   ├── fleet resume                           finish interrupted member releases
 │   └── fleet manager                          ship only the coordination root
 ├── discover|add|update|validate fleet          manage membership
 ├── plan|reconcile fleet                       prepare and apply adoption repairs
@@ -38,42 +50,51 @@ manifest
 └── version|help
 ```
 
-Cloud commands and the remaining specialist options appear below. Removed
-spellings and their replacements are listed in the [Migration Guide](MIGRATION.md).
+The Cloud commands and the less common options are described further down this page.
+Commands that have been removed, and what to use instead, are listed in the
+[Migration Guide](MIGRATION.md).
 
 ## Global Rules
 
 | Rule | Detail |
 | ---- | ------ |
 | Shape of a command | `manifest <verb> <scope>`, for example `manifest ship repo patch` |
-| Plan by default | Anything that changes something only plans, unless `-y` / `--yes` is present |
+| Plan by default | A command that changes something only prints a plan, unless you add `-y` / `--yes` |
 | Explicit plan | `--dry-run` always means plan only |
-| Conflicting modes | `--dry-run` cannot be combined with an apply flag, in either order |
-| Local apply | `--local -y` does the local work and skips everything remote |
+| Conflicting modes | `--dry-run` and `-y` / `--yes` cannot be used together, in either order |
+| Local apply | `ship ... --local -y` does the local work, including the commit. It makes no tag, pushes nothing, and publishes nothing |
 | Which repo? | Repo scope uses the `.git` root of your current directory |
-| Which repos? | Fleet scope uses the fleet config and the selected rows of the fleet TSV |
+| Which repos? | Fleet scope uses the fleet config and the selected rows of the fleet TSV (`manifest.fleet.tsv`) |
 
 ### Exit Codes
 
 | Code | Meaning |
 | ---- | ------- |
-| `0` | Success — either an apply finished, or a plan was printed (the default) |
-| `1` | Error: bad arguments, a failed pre-flight check, a declined confirmation, or a failed apply in which nothing was released |
-| `2` | Partial completion of `ship fleet` or `revert fleet`: one or more member releases or checkouts applied, then a later step failed. Read the closing block and the recovery report; a retry without `--force-bump` skips members already at their tag. |
-| `3` | Protective skip — a safety guard refused something destructive (for example `uninstall` running under a temporary `HOME`) |
-| `4` | Paused for a documentation handoff (`docs.handoff`). Not a failure: no release commit, tag or push was made. A brief naming what the documentation needs is written under `.git/`, and its path is printed. Edit the documentation and re-run the identical command — that run verifies the edits and continues the release |
-| `10` | A plan was printed and no consent was given — only ever returned when `preview.exit_code` is set to `distinct` |
+| `0` | Success. Either an apply finished, or a plan was printed (the default) |
+| `1` | Error: bad arguments, a failed pre-flight check, a declined confirmation, or a failed apply. A release that fails after its tag was pushed also exits `1`, with the tag already public; the failure report says how far it got, and running the same command again plans finishing it |
+| `2` | Partial completion of `ship fleet` or `revert fleet`: one or more member releases or checkouts were applied, and then a later step failed. Read the closing block and the recovery report. If you retry without `--force-bump`, members that are already at their tag are skipped. `init fleet -y` also returns `2` when the member list names a directory that does not exist |
+| `3` | Protective skip. A safety guard refused to do something destructive (for example, `uninstall` running under a temporary `HOME`) |
+| `4` | Paused for a documentation handoff (`docs.handoff`). This is not a failure: no release commit, tag or push was made. Manifest writes a brief that says what the documentation needs, under `.git/manifest-ship/handoff/`, and prints its path. Edit the documentation, then run the same command again. That run checks the edits and continues the release |
+| `10` | A plan was printed and no consent was given. Returned only when `preview.exit_code` is set to `distinct` |
 
-**Why `0` covers both cases.** A plan is a successful run, so by default it exits `0`
-just like an apply. That is fine for a human and awkward for a script that needs to tell
-"I printed a plan, waiting for `-y`" apart from "I released something".
+**Why `0` covers both cases.** A plan is a successful run, so by default it exits `0`,
+the same as an apply. That suits a person. It does not suit a script that must tell
+"a plan was printed and is waiting for `-y`" apart from "a release was made".
 
-If you need that distinction, set `preview.exit_code: distinct` (or
-`MANIFEST_CLI_PREVIEW_EXIT_CODE=distinct`). Every plan surface — `ship`, `ship fleet`,
-and the `pr` plans — then returns `10` instead of `0`. Nothing else changes: `--dry-run`
-is still a plan, apply exit codes are untouched, and Manifest re-checks the plan
-fingerprint at apply time so a plan that drifted since you read it prints a warning
-without blocking.
+If your script needs to tell them apart, set `preview.exit_code: distinct` (or
+`MANIFEST_CLI_PREVIEW_EXIT_CODE=distinct`). These plans then return `10` instead of `0`:
+
+- `ship repo` and `ship fleet`, including `ship fleet manager`
+- `topics fleet`
+- `pr create`, `pr ready`, `pr merge` and `pr update`
+
+Nothing else changes. `--dry-run` is still a plan, and the exit codes of an apply stay the
+same. Plans of other commands still return `0`.
+
+A `ship repo` or `ship fleet` plan also prints a fingerprint, a short code that
+identifies the plan. When you apply, Manifest computes the fingerprint again. If the
+plan has changed since you read it, Manifest prints a warning. The warning does not
+stop the apply.
 
 ## Core Journey
 
@@ -88,14 +109,16 @@ manifest init --name NAME
 manifest init --force
 ```
 
-The guided front door. By default it inspects your current directory without changing
-anything and shows a proposed setup — recognising a single repository, a folder that
-could become a fleet, or something already configured.
+`manifest init` is the guided way to set up. By default it inspects your current
+directory, changes nothing, and shows a proposed setup. It recognises three cases: a
+single repository, a folder that could become a fleet, and a folder that is already
+configured.
 
-With `-y` it applies that setup through the audited apply path. When setup is
-applied, one audit record is written. For a single repository the apply needs no extra environment variable as long as
-the target is unambiguous — meaning you are on a named branch. An `origin` remote is not
-required during onboarding, since you may not have created one yet.
+With `-y` it applies that setup and writes one record to Manifest's audit log.
+
+For a single repository, `-y` is enough when the target is clear. The target is clear
+when you are on a named branch. You do not need an `origin` remote during setup,
+because you may not have created one yet.
 
 ### `manifest config`
 
@@ -103,142 +126,256 @@ required during onboarding, since you may not have created one yet.
 manifest config
 manifest config show
 manifest config setup
+manifest config time
 manifest config list [--layer local|project|fleet|global] [--json]
 manifest config get <key>
-manifest config set [--layer local|project|global] <key> <value>
-manifest config unset [--layer local|project|global] <key>
+manifest config set [--layer local|project|global] <key> <value> [--dry-run] [-y|--yes]
+manifest config unset [--layer local|project|global] <key> [--dry-run] [-y|--yes]
 manifest config describe <key>
 manifest config doctor
-manifest config doctor --fix
+manifest config doctor --fix [--dry-run] [-y|--yes]
 ```
 
-Reads and writes the layered YAML configuration.
+These commands read and write Manifest's settings. The settings are YAML files arranged
+in layers. A higher layer overrides a lower one. From highest to lowest, the layers are
+`env`, `local`, `project`, `fleet` (inherited from the fleet root), `global`, and the
+built-in defaults.
 
-`list`, `get`, and `describe` look at every layer: `env`, `local`, `project`, `fleet`
-(inherited from the fleet root), `global`, and the built-in defaults.
+| Command | What it does |
+| ------- | ------------ |
+| `config` | In a terminal, starts the setup wizard. Otherwise prints the settings |
+| `config show` | Prints the settings in effect |
+| `config setup` | Starts the setup wizard |
+| `config time` | Prints the time servers used for timestamps |
+| `config list` | Lists every key and the layer its value comes from |
+| `config get <key>` | Prints the value in effect for one key |
+| `config set`, `config unset` | Writes or removes one key in one layer |
+| `config describe <key>` | Prints the key's value at every layer, and its environment variable |
+| `config doctor` | Reports out-of-date settings. `--fix` repairs them |
+
+`list`, `get`, and `describe` read every layer.
+
+`set` and `unset` plan by default. Add `-y` to write. They write the `local` layer unless
+you name another one. Put `--layer` before the key: a `--layer` placed after the value is
+ignored.
 
 `set` and `unset` can write only `global`, `project`, or `local`. `--layer fleet` is
-rejected on purpose — those files live in a **different repository**, so writing them
-from inside a member would modify a repo you never named. Change fleet-wide values by
-running the same command at the fleet root. Writing the global config, and destructive
-fixes, both require confirmation.
+refused, because those files live in a **different repository**. Writing them from
+inside a member would change a repository you did not name. To change a fleet-wide
+value, run the same command at the fleet root.
 
-Layer model: [User Guide — Configuration](USER_GUIDE.md#configuration).
+`config doctor --fix` also plans by default. Add `-y` to apply the repairs.
+
+Writing the global config file asks you to confirm first.
+
+For the full layer model, see [User Guide — Configuration](USER_GUIDE.md#configuration).
 
 ### `manifest init repo|fleet`
 
 ```bash
-manifest init repo [--dry-run] [-y|--yes] [--remote URL] [--no-connect] [--create-repo-private|--create-repo-public]
-manifest init fleet [--dry-run] [-y|--yes] [--depth N] [--all-folders] [--name NAME] [--force]
-                    [--connect] [--parallel] [--clone-only] [--pull-only]
+manifest init repo [--dry-run] [-y|--yes] [--force] [--remote URL] [--no-connect] [--create-repo-private|--create-repo-public]
+manifest init fleet [--dry-run] [-y|--yes] [--depth N|auto] [--all-folders] [--name NAME] [--force]
+                    [--connect|--no-connect] [--parallel] [--clone-only] [--pull-only]
                     [--create-repo-private|--create-repo-public]
 ```
 
-Repository setup is **dry-run by default**. `manifest init repo -y` initializes
-Git on the configured release branch when necessary, connects `origin`, scaffolds
-missing files, and runs the same configured local release check as ship. It does
-not bump a version, create a commit or tag, publish a release, or push.
+**What `init repo` does.** Repository setup is a **dry run by default**. With `-y`,
+`manifest init repo` does four things:
 
-When `origin` is missing, the preview proposes a **private GitHub repository**;
-`-y` creates it using `github.owner` or the authenticated GitHub user. Use
-`--remote URL` to connect an existing remote, or `--create-repo-public` to choose
-public visibility explicitly. Existing origins are preserved. Empty origins need
-no pull; populated origins are fast-forwarded before scaffolding. Unreachable
-remotes, conflicts and diverged histories fail setup instead of being hidden.
+1. It initializes Git on the configured release branch, if the folder is not yet a
+   repository.
+2. It connects `origin`.
+3. It creates the project files that are missing.
+4. It runs the same local release check that `ship` runs.
 
-`--no-connect` requests only a local scaffold and explicitly leaves readiness
-unverified. Fleet initialization retains its reviewed, two-phase membership flow
-and opt-in `--connect`; `--create-repo-*` creates selected member remotes in Phase 2.
+It does not bump a version, create a commit or a tag, publish a release, or push.
 
-`init repo` creates the files a Manifest project needs: `VERSION`, `README.md`,
-`CHANGELOG.md`, `.gitignore`, `docs/`, `scripts/run-tests.sh`, `.env.example`,
-`robots.txt`, `ai.txt`, and `manifest.config.local.yaml`. Each is written only if absent.
-`--dry-run` lists them with a one-line purpose for each; the
-[User Guide](USER_GUIDE.md#first-time-setup) has the same table in full, including why the
-two crawl-privacy files are there.
+**How `origin` is handled.**
 
-**Guided or explicit setup.** Bare `manifest init` handles an empty directory
-as a new repository, checks an existing repository for missing files, or offers
-fleet discovery when child repositories exist. An existing `VERSION` alone does
-not mean setup is complete. Both bare and explicit repository setup use the same
-plan and readiness checks. `init -y` on a fleet candidate writes the membership
-list and stops for review; `init fleet -y` applies the reviewed selection.
+- When `origin` is missing, the plan proposes a **private GitHub repository**. With
+  `-y`, Manifest creates it under `github.owner`, or under the GitHub user you are
+  signed in as.
+- Use `--remote URL` to connect a remote that already exists.
+- Use `--create-repo-public` to make the new repository public.
+- An existing `origin` is kept as it is.
+- An empty `origin` needs no pull. An `origin` that has commits is fast-forwarded
+  before any file is created.
+- If the remote cannot be reached, or the histories conflict or have diverged, setup
+  fails and says so.
 
-Readiness checks the release branch, Git author/committer identity, valid version,
-required files, available origin CI, and the configured release check. A failed or missing real check returns nonzero
-with a blocker; init preserves existing checks and does not disable verification.
-New generated checks run in containers; applying may build images and download
-dependencies inside those containers. A new scaffold can pass structural
-verification of its bounded file inventory. Adding application files makes that
-check fail until real project verification is supplied; it is not a passing
-placeholder for untested application code. Remote CI cannot be certified before
-publication; init reports that limitation without publishing to test it. A passing
-init establishes current local readiness, not a guarantee of later remote service
-availability or push permissions.
+`--no-connect` creates the local files only. Readiness is then not verified, and
+Manifest says so. `--force` recreates the local config and keeps your project content.
 
-**How `init` treats an existing `.gitignore`.** It never overwrites it. Instead it *adds*
-missing recommended rules under a marked header and tells you how many it added. This is
-how a `.gitignore` written by an older version of Manifest picks up rules added since —
-notably the `KEY MATERIAL` block that refuses to commit private keys.
+**The files `init repo` creates.** These are the files a Manifest project needs:
+`VERSION`, `README.md`, `CHANGELOG.md`, `.gitignore`, `docs/`, `scripts/run-tests.sh`,
+`.env.example`, `robots.txt`, `ai.txt`, and `manifest.config.local.yaml`. Each one is
+written only if it is absent. `--dry-run` lists them with a one-line purpose for each.
+The [User Guide](USER_GUIDE.md#first-time-setup) has the same table in full, and
+explains why the two crawl-privacy files (`robots.txt` and `ai.txt`) are there.
 
-The upgrade is strictly append-only. Nothing existing is rewritten, reordered, or
-removed. If a rule's exact opposite is already present, it is skipped rather than
-reversing a choice you made deliberately. Running it again adds nothing. Releases never
-do this — `manifest ship` only reports the gap.
+**Guided or explicit setup.** Plain `manifest init` chooses for you:
 
-`init fleet` discovers a fleet in two phases: the first run writes the member list for
-you to review, the second acts on it.
+- In an empty directory, it sets up a new repository.
+- In an existing repository, it checks for missing files.
+- In a folder that contains repositories, it offers fleet discovery.
+
+An existing `VERSION` file alone does not mean setup is complete. Plain `init` and
+`init repo` use the same plan and the same readiness checks. On a folder that could
+become a fleet, `init -y` writes the member list and stops so that you can review it.
+`init fleet -y` then applies the selection you reviewed.
+
+**Readiness checks.** Readiness covers the release branch, the Git author and committer
+identity, a valid version, the required files, the CI on `origin` when it is available,
+and the configured release check.
+
+- A real check that fails or is missing makes the command return a nonzero code and
+  name the blocker.
+- `init` keeps existing checks. It does not turn verification off.
+- Newly generated checks run in containers. Applying may build images and download
+  dependencies inside those containers.
+- A new scaffold passes a structural check of its own short list of files. When you add
+  application files, that check fails until you supply real verification for the
+  project. It is not a passing placeholder for untested code.
+- Remote CI cannot be confirmed before the repository is published. `init` reports
+  that limit and does not publish in order to test it.
+- A passing `init` shows that the repository is ready locally, now. It does not
+  promise that the remote service will be available later, or that you may push.
+
+**How `init` treats an existing `.gitignore`.** It never overwrites the file. It
+*adds* the recommended rules that are missing, under a marked header, and tells you how
+many it added. In this way an older `.gitignore` gains the rules it lacks, including the
+`KEY MATERIAL` block, which keeps private keys out of commits.
+
+The change only appends. Nothing that exists is rewritten, reordered, or removed. If
+the exact opposite of a rule is already present, the rule is skipped, so a choice you
+made on purpose is not reversed. Running `init` again adds nothing. A release never
+does this: `manifest ship` only reports the missing rules.
+
+**What `init fleet` does.** It sets up a fleet in two phases. The first run writes the
+member list (`manifest.fleet.tsv`) for you to review. The second run acts on it. The
+connect phase clones missing members and pulls existing ones. It is off unless you pass
+`--connect`. `--parallel`, `--clone-only` and `--pull-only` shape the connect phase and
+turn it on.
+
+If the member list names a directory that does not exist, `init fleet -y` reports it
+and returns exit code `2`.
 
 **Creating GitHub repositories is always explicit.** Pass exactly one of
-`--create-repo-private` or `--create-repo-public`. Set `github.owner` to a user or
-organisation and both the plan and the apply target `<owner>/<repo>`; leave it unset and
-`gh` uses whichever account you are logged in as. Phase 2 re-checks each selected
-directory's own `.git` state from disk, so a stale `HAS_GIT` value in the TSV cannot
-cause a member to inherit the fleet root's repository or remote.
+`--create-repo-private` or `--create-repo-public`. With these flags, the second phase
+creates a remote for each selected member. If `github.owner` is set to a user or an
+organisation, both the plan and the apply target `<owner>/<repo>`. If it is unset, `gh`
+uses the account you are signed in as.
+
+The second phase reads each selected directory's own `.git` state from disk. An
+out-of-date `HAS_GIT` value in the member list therefore cannot make a member take
+over the fleet root's repository or remote.
 
 ### `manifest ship`
 
 ```bash
 manifest ship repo patch|minor|major|revision [--dry-run] [-y|--yes] [--local] [--explain] [--force-bump] [--interactive]
-manifest ship fleet patch|minor|major|revision [--dry-run] [-y|--yes] [--local] [--force-bump] [--require-clean]
-manifest ship repo resume [--dry-run] [-y|--yes]
-manifest ship fleet resume [--dry-run] [-y|--yes]
-manifest ship fleet manager [--dry-run] [-y|--yes] [--local]
+manifest ship fleet patch|minor|major|revision [--dry-run] [-y|--yes] [--local] [--explain] [--force-bump] [--require-clean]
+manifest ship fleet manager [patch|minor|major|revision] [--dry-run] [-y|--yes] [--local]
 ```
 
-A repo release can raise the version, generate docs, commit, tag, push, publish GitHub
-Release notes, and — where applicable — publish the Homebrew formula. Before reporting
-success it requires a clean source tree, and for a published release it also requires
-that `HEAD` is still the commit it pushed.
+**A repo release** can raise the version, generate docs, commit, tag, push, and publish
+GitHub Release notes. For Manifest's own repository it also publishes the Homebrew
+formula. Before it reports success, it requires a clean source tree. For a published
+release it also requires that `HEAD` is still the commit it pushed.
 
-A fleet release applies the same policy to each release-enabled member that has
-something to release. Members that are already tagged and clean are listed and skipped
+**A fleet release** applies the same rules to each release-enabled member that has
+something to release. A member that is already tagged and clean is listed and skipped
 as `no changes`.
 
-The fleet ship then commits and pushes the **manager**, the fleet coordination
-root. This also runs when every member is skipped, and with `fleet.versioning:
-none`; that setting disables the version stamp, not the manager commit or push.
-Only the coordination allowlist is staged. A pending fleet version is landed
-without another bump when no new member release is being made. `--local` keeps
-the manager commit local. `ship fleet manager` remains available for a root-only
-change or retry.
+The fleet ship then commits and pushes the **manager**. This step also runs when every
+member is skipped, and when `fleet.versioning` is `none`. That setting turns off the
+fleet version stamp. It does not turn off the manager commit or push. Only the files on
+the coordination allowlist are staged. When a fleet version is pending (written to the
+fleet version file but not yet committed) and no new member release is being made, the
+manager commits that version without raising it again. `--local` keeps the manager
+commit local.
 
-`--require-clean` refuses a fleet ship if a member has uncommitted changes.
-The former `--noprep` spelling has been removed.
+**`ship fleet manager`** commits and pushes the manager alone. Use it for a change that
+touches only the manager, or to retry the manager step. No member is touched. Without a
+release type, the fleet version file is stamped only together with a commit. With a
+release type, it is stamped even when nothing else changed. Only
+`fleet.versioning: semver` reads the release type itself; the other versioning schemes
+ignore the word.
 
-`--force-bump` releases even when nothing has changed since the last tag. It is
-forward-only: you get a new commit and a new tag, and no history is ever rewritten.
+Flags:
 
-`resume` picks up a release that stopped partway. It does not repeat the whole release —
-it continues the remaining steps for the version and tag already on disk, such as pushing
-the tag or publishing the formula. `manifest ship fleet resume` does the same for each
-stranded member, and does not accept `--local`.
+- `--local`, with `-y`, does the local work only. It still commits. It makes no tag,
+  pushes nothing, and publishes nothing.
+- `--require-clean` refuses a fleet ship if any member has uncommitted changes.
+- `--force-bump` releases even when nothing has changed since the last tag. It only
+  moves forward: you get a new commit and a new tag, and history is never rewritten.
+- `--explain` prints the built-in recipe for the command and runs nothing.
+- `--interactive` turns on the interactive safety prompts.
+
+### An unfinished release
+
+A release is **unfinished** when its ship stopped after it created the tag. The cause
+may be a failed push, a release gate that failed after the push, a failed formula
+publish, or a run that was killed. A GitHub Release that fails does not stop the ship
+unless `github.release.required` is `true`, so by default it does not leave a release
+unfinished. You finish an unfinished release with the same command you would run next.
+There is no separate command for it.
+
+```bash
+manifest ship repo patch      # the plan: "Unfinished release", what remains, no bump
+manifest ship repo patch -y   # finishes it; changes no version, makes no commit or tag
+manifest ship repo patch      # now the ordinary plan for the next release
+```
+
+- **How Manifest knows.** A publishing ship writes a small record at
+  `.git/manifest-ship/in-flight` just before it creates the tag. It removes the record
+  when the release completes. If a record names the version in `VERSION` and the commit
+  that the version's tag points at, that release is unfinished. Manifest does not use
+  the network to decide this. The record lives inside `.git`, so only the checkout that
+  started the release has it. Finish the release from that checkout.
+- **The release type you name is not applied** by a run that finishes a release.
+  `patch`, `minor`, `major` and `revision` all produce the same finish plan. Run the
+  command again afterwards to make the next release.
+- **Finishing repeats only steps that are safe to repeat.** It pushes the branch and
+  the tag; a ref that is already pushed is left as it is. It runs the release gate's
+  post-push check, when `release.gate` asks for one, and publishes nothing if that
+  check fails. The check is of the commit the tag points at, not of any commit made
+  after it. It publishes the GitHub Release where configured and, for Manifest's own
+  repository, the Homebrew formula. Then it runs the completion check.
+- **Commits made after the tag are pushed too.** A finish pushes the branch, so any
+  commit you made after the tag goes with it. The plan lists those commits. They are
+  not part of the release being finished.
+- **Three states block a finish.** The plan says `BLOCKED`, and `-y` refuses, when the
+  working tree has unrelated uncommitted changes, when `HEAD` is detached, or when the
+  tag is not in the current branch's history. Commit or stash the changes, or check out
+  the branch the release was made from, and run the command again.
+- **`--local` cannot finish a release**, because finishing means pushing. It refuses in
+  both the plan and the apply.
+- **To leave it and move on,** add `--force-bump`. The unfinished release stays as it
+  is, and Manifest makes the next release.
+- **In a fleet,** the plan of `manifest ship fleet <type>` marks such a member
+  `would finish`. With `-y`, Manifest finishes that member and does not bump it. With
+  `--local`, the plan marks the member `BLOCKED`, and `ship fleet <type> --local -y`
+  refuses before it touches any member. A member whose release cannot be finished from
+  its current state, for example one with uncommitted changes, is also marked
+  `BLOCKED`, with the reason, and the apply refuses in the same way. `--force-bump`
+  leaves such members unfinished and bumps them instead. As always, it also releases
+  every other eligible member, changed or not. To leave one member unfinished and
+  release the others normally, run `manifest ship repo <type> --force-bump -y` in that
+  member first.
+
+A run that stopped earlier is a different case. If a run wrote the new version to
+`VERSION` but stopped before the release commit, the next `ship repo` run with the same
+release type keeps that version. It does not bump a second time.
+
+`manifest ship repo resume` and `manifest ship fleet resume` are not commands. Use the
+commands above. See the [Migration Guide](MIGRATION.md).
 
 ### Version increments
 
-A version is an ordered list of numbers of **any length** — nothing here assumes three
-or four. An increment names one position; raising it resets every position to its right
-to zero, or removes it:
+A version is an ordered list of numbers of **any length**. Nothing here assumes three
+numbers, or four. An increment names one position. Raising that position sets every
+position to its right to zero, or removes it:
 
 | From | `major` | `minor` | `patch` | `revision` |
 | ---- | ------- | ------- | ------- | ---------- |
@@ -246,25 +383,21 @@ to zero, or removes it:
 | `20.1.0.3` | `21.0.0` | `20.2.0` | `20.1.1` | `20.1.0.4` |
 | `1.2.3.4.5` | `2.0.0` | `1.3.0` | `1.2.4` | `1.2.3.5` |
 
-**Read a fourth number as belonging to the third, not running alongside it.** `20.1.0.3`
-means "the third re-cut of `20.1.0`". So a `patch` from there gives `20.1.1` — a patch
-that has had no re-cuts — and the fourth number simply goes away.
+**Read a fourth number as belonging to the third, not as running beside it.**
+`20.1.0.3` means "the third re-cut of `20.1.0`". So a `patch` from there gives `20.1.1`,
+a patch that has had no re-cuts, and the fourth number goes away.
 
-Use `revision` when you need to re-cut a version you already released (a bad tag, a
-packaging-only fix) and the code identity of `20.1.0` still stands. **It is not a
-durable counter**: it lasts only until the next `patch`, `minor`, or `major`. That is by
-design.
+Use `revision` when you need to re-cut a version you already released, and the code
+that `20.1.0` names is still the same. A bad tag and a packaging-only fix are examples.
+**`revision` is not a lasting counter.** It lasts only until the next `patch`, `minor`,
+or `major`. This is by design.
 
-> **Locked 2026-08-16.** `revision` meaning a non-durable re-cut is settled, not a
-> placeholder waiting for a better idea. Anything that must survive ordinary releases
-> needs its own field, because it has to be able to hold still while `VERSION` moves and
-> move while `VERSION` holds still. `VERSION` cannot do both: its single job is to answer
-> "is production this tree?", and release verification depends on it having exactly one
-> meaning and one lifecycle. Two meanings sharing one field would break that, and no
-> amount of arithmetic on a single field can give two meanings separate lifecycles.
+If you need a number that survives ordinary releases, such as a build number, keep it
+in a field of its own, outside `VERSION`. `VERSION` has one job: to say which tree a
+release is. Release verification depends on `VERSION` having that one meaning.
 
-**Positions are what matter; names are just aliases.** You can address any position by
-number, named or not:
+**Positions are what matter. Names are only aliases.** You can address any position by
+its number, whether or not it has a name:
 
 ```bash
 manifest ship repo patch      # the 3rd number
@@ -272,78 +405,105 @@ manifest ship repo 3          # exactly the same thing
 manifest ship repo 6          # the 6th number (1.2.3 -> 1.2.3.0.0.1)
 ```
 
-**You can rename the positions** with `version.components`, an ordered list where the
-index *is* the position — so there is no second place to declare a position and no way
-for the two to disagree. It defaults to `major,minor,patch,revision`, and even those four
-can be replaced:
+**You can rename the positions** with `version.components`. It is an ordered list, and
+a name's place in the list *is* its position. There is no second place to state a
+position, so the two cannot disagree. The default is `major,minor,patch,revision`, and
+you can replace even those four:
 
 ```yaml
 version:
   components: "generation,major,minor,patch"   # `major` now means position 2
 ```
 
-Naming positions beyond the fourth is just a longer list
+To name positions beyond the fourth, write a longer list
 (`major,minor,patch,revision,build,hotfix`).
 
-An unusable list is **refused**, not quietly replaced with the defaults. That covers a
-duplicate name, an all-digit name that would collide with addressing positions by
-number, and a blank entry that would silently shift every later name one position left.
-Falling back to the standard four for a project that configured something else would cut
-the release against the wrong position.
+A list that cannot be used is **refused**. Manifest does not quietly use the defaults
+in its place. The following are refused:
 
-Versions containing non-numeric text (`1.2.3-rc1`, `v1.2.3`) are refused rather than
+- a name that appears twice;
+- a name made only of digits, because it could be confused with a position number;
+- a blank entry, because it would shift every later name one position to the left;
+- a name with characters other than letters, digits, `_` and `-`.
+
+Manifest refuses because the alternative is worse. If a project configured its own
+names and Manifest used the standard four in their place, the release would raise the
+wrong position.
+
+A version that contains non-numeric text (`1.2.3-rc1`, `v1.2.3`) is refused, not
 guessed at, and `VERSION` is left alone. `version.separator` (default `.`) applies
-throughout.
+everywhere.
 
-Which files get written:
+Which files a release writes the version to:
 
-- Repo and fleet releases write `VERSION`, and only `VERSION`, today.
-- `version.sync` is opt-in. Unset, no package manifest or lockfile is touched.
-- `version.sync` handles a `version` field at the **top level** of JSON, TOML, and YAML.
-  Missing files, versions nested deeper, and unsupported formats are skipped.
+- By default, a repo or fleet release writes the new version to `VERSION` and to no
+  other version file.
+- `version.sync` is opt-in. It lists more files to keep in step with `VERSION`. When it
+  is unset, no package manifest or lockfile is touched.
+- `version.sync` updates a `version` field at the **top level** of a JSON, TOML, or
+  YAML file. A missing file, a version nested deeper, and an unsupported format are
+  each skipped.
 - A read-only scanner uses `modules/catalog/version-handlers.tsv` to recognise known
   package and version files. `manifest status`, `manifest status --json`,
-  `manifest doctor`, fleet status, and fleet release plans report what they found and
-  change nothing.
-- Tune that reporting with `version.surfaces.enabled`, `version.surfaces.catalog`,
+  `manifest doctor`, fleet status, and fleet release plans report what the scanner
+  found. They change nothing.
+- To adjust that report, use `version.surfaces.enabled`, `version.surfaces.catalog`,
   `version.surfaces.scan_depth`, and `version.surfaces.notification_mode`.
 
 ## Fleet Operations
 
 ```bash
-manifest status fleet [--bootstrap]
-manifest discover fleet [--depth N] [--all-folders]
-manifest add fleet <path> --name <name> [--dry-run] [-y|--yes]
-manifest update fleet [--dry-run] [-y|--yes]
+manifest status fleet [--json] [--bootstrap] [--verify]
+manifest discover fleet [--depth N|auto] [--json] [--quiet]
+manifest add fleet <path-or-url> [--name NAME] [--dry-run] [-y|--yes]
+manifest update fleet [--depth N|auto] [--json] [--quiet] [--dry-run] [-y|--yes]
 manifest validate fleet
 manifest docs fleet [--dry-run] [-y|--yes]
 manifest topics fleet [--dry-run] [-y|--yes]
-manifest plan fleet [-y|--yes] [--dry-run]
-manifest reconcile fleet [-y|--yes] [--dry-run] [--commit] [--push] [--adopt-submodules]
+manifest plan fleet [--depth N|auto] [--plan FILE] [--name NAME] [--dry-run] [-y|--yes]
+manifest reconcile fleet [--plan FILE] [--commit] [--push] [--adopt-submodules] [--dry-run] [-y|--yes]
 ```
 
-Verb-first is the supported spelling (`manifest topics fleet`, not `manifest fleet topics`).
+| Command | What it does |
+| ------- | ------------ |
+| `status fleet` | Shows a read-only table of the fleet's repositories |
+| `discover fleet` | Finds repositories that could become members. It writes nothing |
+| `add fleet` | Adds one local path or remote URL to the member list |
+| `update fleet` | Scans again and adds newly found repositories to the member list |
+| `validate fleet` | Checks the fleet configuration and the member paths |
+| `docs fleet` | Generates fleet documentation |
+| `topics fleet` | Adds GitHub topics taken from repository names |
+| `plan fleet` | Builds an adoption plan. With `-y` it writes the plan file (`manifest.fleet.plan.yaml` by default) |
+| `reconcile fleet` | Checks that plan and, with `-y`, applies it |
 
-`manifest topics fleet` turns the pieces of a repository's dotted name into GitHub
-topics, and only ever **adds** them. It runs only when `topics.from_name` is set to
-`inner`, `all`, or `all-but-first` — either in `manifest.fleet.config.yaml` for the whole
-fleet, or just for your machine with:
+For `reconcile fleet`, `--commit` needs `-y`, and `--push` needs `--commit`.
+`--adopt-submodules` allows the plan entries that adopt a submodule.
+
+Put the verb first: `manifest topics fleet`, not `manifest fleet topics`.
+
+`manifest topics fleet` turns the parts of a repository's dotted name into GitHub
+topics. It only ever **adds** topics. It runs only when `topics.from_name` is set to
+`inner`, `all`, or `all-but-first`. Set it in `manifest.fleet.config.yaml` for the whole
+fleet, or for your machine only with:
 
 ```bash
-manifest config set topics.from_name inner --layer global
+manifest config set --layer global topics.from_name inner -y
 ```
 
-A layered or environment value beats the fleet YAML. Note the distinction:
-`manifest.fleet.config.yaml` is the fleet *definition*, not the `fleet` configuration
-layer — see [User Guide — Configuration](USER_GUIDE.md#configuration).
+A value from a config layer or from the environment overrides the value in
+`manifest.fleet.config.yaml`. Note the difference between the two: that file is the
+fleet *definition*. It is not the `fleet` configuration layer. See
+[User Guide — Configuration](USER_GUIDE.md#configuration).
 
-Once enabled, the same projection also runs as part of `manifest update fleet`, and
-quietly — one summary line at most — at the end of a completed `manifest ship fleet -y`.
+Once the setting is on, the same step also runs in two other places. It runs as part of
+`manifest update fleet`. It also runs at the end of a completed `manifest ship fleet -y`
+that released at least one member and did not use `--local`. There it is quiet and
+prints one summary line at most.
 
 ## Diagnostics
 
 ```bash
-manifest status [repo|fleet] [--json] [--bootstrap]
+manifest status [repo|fleet] [--json] [--bootstrap] [--verify]
 manifest doctor
 manifest security [--write]
 manifest recipe list
@@ -351,41 +511,67 @@ manifest recipe show <recipe-id>
 manifest recipe explain <recipe-id>
 ```
 
-Diagnostics change nothing unless a command explicitly says otherwise.
+| Command | What it does |
+| ------- | ------------ |
+| `status` | Shows the state of the repository or the fleet. `--json` prints JSON |
+| `status --bootstrap` | Lists the fleet members that are declared but absent and would be cloned. It clones nothing |
+| `status --verify` | Checks each member's remote with a read-only `git ls-remote`. It uses the network and saves nothing |
+| `doctor` | Checks your tools, your config, and the health of the repository |
+| `security` | Looks for private files tracked in Git, likely personal data, and unsafe handling of environment files |
+| `recipe list` | Lists the recipes. A recipe is the ordered list of steps behind a command |
+| `recipe show`, `recipe explain` | Prints one recipe's definition, or explains its steps |
+
+A diagnostic command changes nothing, unless its description says otherwise.
 
 ## Pull Requests
 
-These wrap `gh` and need no Cloud:
+These commands wrap the `gh` command-line tool. They do not need Manifest Cloud:
 
 ```bash
 manifest pr
-manifest pr create [--draft] [gh flags...]
+manifest pr create [--draft] [gh flags...] [--dry-run] [-y|--yes]
 manifest pr status [<number|branch>]
 manifest pr checks [<number|branch>] [--watch]
-manifest pr ready [<number|branch>] [-y|--yes]
-manifest pr merge [<number|branch>] [--squash|--merge|--rebase] [-y|--yes]
-manifest pr update [<number|branch>] [-y|--yes]
+manifest pr ready [<number|branch>] [--dry-run] [-y|--yes]
+manifest pr merge [<number|branch>] [--squash|--merge|--rebase] [--dry-run] [-y|--yes]
+manifest pr update [<number|branch>] [--dry-run] [-y|--yes]
 ```
 
-These need Cloud:
+`manifest pr` alone shows the pull request for the current branch, or offers to open
+one. `create`, `ready`, `merge` and `update` plan by default and act with `-y`. `merge`
+squashes unless you choose another method. Flags that Manifest does not handle are
+passed on to `gh`.
+
+These commands need Manifest Cloud:
 
 ```bash
 manifest pr queue
 manifest pr policy show
 manifest pr policy validate
+manifest pr fleet [queue|create|status|checks|ready] [--dry-run] [-y|--yes]
 ```
 
 ## Documentation
 
 ```bash
-manifest docs
-manifest docs metadata
-manifest docs cleanup
+manifest docs [--dry-run] [-y|--yes]
+manifest docs metadata [--dry-run] [-y|--yes]
+manifest docs cleanup [--dry-run] [-y|--yes]
 manifest docs fleet --dry-run
 ```
 
-The documentation website is **off by default**. Turn it on with `docs.generate.site`
-(or `docs.site.enabled`) and see [DOCS_SITE.md](DOCS_SITE.md) for the rest of the keys.
+| Command | What it does |
+| ------- | ------------ |
+| `docs` | Generates the documentation for the current version |
+| `docs metadata` | Updates the repository metadata |
+| `docs cleanup` | Moves older documentation into the archive folder and removes temporary files. The plan names the files it would remove |
+| `docs fleet` | Generates fleet documentation |
+
+Each of these plans by default and writes with `-y`.
+
+The documentation website is **on by default**: `manifest docs -y` and every release
+write its source into the `docs-site` folder. To turn it off, set `docs.generate.site`
+to `false`. See [DOCS_SITE.md](DOCS_SITE.md) for the other keys.
 
 ## Env Schema
 
@@ -394,47 +580,59 @@ manifest env generate [--check] [--dry-run] [-y|--yes]
 manifest env validate
 ```
 
-A component spec's `env:` block is the single source of truth for a repository's
+A component spec is the file `service.spec.yaml` or `app.spec.yaml` at the root of a
+repository. Its `env:` block is the single source of truth for the repository's
 environment variables. `env generate` builds the derived files from it:
 
 - `.env.example` — always
 - `k8s/env/kustomization.yaml` and `k8s/env/configmap.yaml` — when a `k8s/` directory
-  exists; the kustomization lists the bridges so overlays can reference the directory
+  exists. The kustomization lists the generated files, so that overlays can refer to
+  the directory
 - `k8s/env/external-secret.yaml` — when a `k8s/` directory exists, the spec declares
   secret variables, and `env.secrets.provider` is `external-secrets`
-- `k8s/env/component/kustomization.yaml` — with the above, when the secret path has `{env}`
+- `k8s/env/component/kustomization.yaml` — with the above, when the secret path
+  contains `{env}`
 - the Dockerfile `ARG`→`ENV` marker block, for values needed at build time
 
-Planning is the default and `-y` writes. `--check` is the drift gate for use in a
-release: it exits `1` if any generated file is out of date, and names a secret store or
-path that differs from configuration. `env validate` only reads — it checks the prefix
-policy, whether generated files have drifted, and that `.env` is properly git-ignored.
+`env generate` plans by default, and `-y` writes. `--check` is for use in a release or
+in CI. It exits `1` if any generated file is out of date, and it names a secret store
+or a path that differs from the configuration. `env validate` only reads. It checks the
+prefix policy, whether the generated files are out of date, and whether `.env` is
+ignored by Git.
 
 **A flag is a boolean.** An entry's `secret`, `required` and `public` take `true` or
-`false` — spelled `true`, `True` or `TRUE` (and `false` likewise), and the quoted strings
-`"true"` and `"false"` are accepted. A flag left out is `false`. Any other value (`yes`, `on`, `1`) is refused by
-name rather than guessed: `env generate` exits `1` and writes nothing, `env validate`
-fails, and `manifest init` does not write `.env.example`.
+`false`. You may write `true`, `True` or `TRUE`, and `false` in the same three ways.
+The quoted strings `"true"` and `"false"` are accepted too. A flag that is left out is
+`false`. Any other value (`yes`, `on`, `1`) is refused and named; Manifest does not
+guess. In that case `env generate` exits `1` and writes nothing, `env validate` fails,
+and `manifest init` does not write `.env.example`.
 
-**`env generate` replaces only the files it wrote.** Every file it generates starts with
-a Manifest header line. An existing `.env.example` or `k8s/env` file whose first line
-is anything else is treated as yours: the plan names it as *hand-authored, left
-untouched*, `-y` does not write it, and `--check` does not count it as out of date.
-Delete the file to have it generated. An empty file is replaced. The generated
-`k8s/env/kustomization.yaml` lists exactly what Manifest renders, so a hand-authored
-`k8s/env/external-secret.yaml` that Manifest renders no bridge for (`provider: none`, or
-no secret variables) is not listed there: reference it from your own kustomization, or
-write `k8s/env/kustomization.yaml` yourself.
+**`env generate` replaces only the files it wrote.** Every file it generates starts
+with a Manifest header line. If an existing `.env.example` or `k8s/env` file starts
+with any other line, Manifest treats the file as yours:
 
-A file that is written keeps the permissions it had — the Dockerfile included. A path
-that cannot be read as a file (a directory, a file you cannot read, a symlink to
-nothing) is named in the plan, and `--check` and `-y` exit `1`; so does any write that
-fails.
+- the plan names it as *hand-authored, left untouched*;
+- `-y` does not write it;
+- `--check` does not count it as out of date.
 
-**The secret store is configuration; there is no built-in one.** When the spec declares
+Delete the file if you want Manifest to generate it. An empty file is replaced.
+
+The generated `k8s/env/kustomization.yaml` lists exactly what Manifest renders.
+Suppose you wrote `k8s/env/external-secret.yaml` by hand, and Manifest renders no such
+file itself (because `provider` is `none`, or the spec has no secret variables). Your
+file is then not listed there. Refer to it from your own kustomization, or write
+`k8s/env/kustomization.yaml` yourself.
+
+A file that is written keeps the permissions it had. This includes the Dockerfile. If a
+path cannot be read as a file (a directory, a file you cannot read, a symlink that
+points to nothing), the plan names it, and `--check` and `-y` exit `1`. A write that
+fails also exits `1`.
+
+**The secret store is configuration. There is no built-in one.** When the spec declares
 secret variables and `env.secrets` is not set, `env generate` exits `1` and writes
-nothing. Set it once in the fleet root's `manifest.config.yaml`; a repository's own
-`manifest.config.yaml` overrides it key by key, and the repository value wins.
+nothing. Set `env.secrets` once in the fleet root's `manifest.config.yaml`. A
+repository's own `manifest.config.yaml` overrides it key by key, and the repository's
+value wins.
 
 ```yaml
 env:
@@ -448,21 +646,28 @@ env:
     env_label: env                    # label the {env} value is read from
 ```
 
-`{identity}` is the repository directory name, `{group}` the variable's `group`
-(default `app`), and `{name}` its stored name. `{env}` is not filled by `env generate`:
-it stays literal in every `remoteRef.key`, and the generated kustomize Component fills
-it per environment with one replacement that reads the `env_label` label off the
-ExternalSecret and writes it into that path segment. The segment index comes from where
-`{env}` sits in the template, so `kv/{env}/{identity}` gives index `1`. `{env}` must be a
-whole segment, and the label key must be a plain name, because kustomize addresses a
-label by a dotted field path.
+The tokens in `path` and `property` mean:
 
-kustomize runs a Component before the including kustomization's own transformers, so
-a `labels:` entry beside `components:` arrives too late and the build fails with
-*fieldPath metadata.labels.env is missing*. Label the ExternalSecret one layer down,
-in a kustomization that references the `k8s/env` directory (kustomize refuses a file
-outside the referencing directory, which is why the generated `k8s/env/kustomization.yaml`
-exists), then include that layer and the Component together:
+- `{identity}` is the repository's directory name.
+- `{group}` is the variable's `group` (default `app`).
+- `{name}` is the variable's stored name.
+- `{env}` is not filled in by `env generate`. It stays as written in every
+  `remoteRef.key`.
+
+The generated kustomize Component fills in `{env}` for each environment. It does so with
+one replacement. The replacement reads the `env_label` label from the ExternalSecret
+and writes its value into that segment of the path. The segment's index comes from
+where `{env}` sits in the template, so `kv/{env}/{identity}` gives index `1`. `{env}`
+must be a whole segment. The label key must be a plain name, because kustomize
+addresses a label by a dotted field path.
+
+kustomize runs a Component before the transformers of the kustomization that includes
+it. A `labels:` entry placed beside `components:` therefore arrives too late, and the
+build fails with *fieldPath metadata.labels.env is missing*. Instead, label the
+ExternalSecret one layer down, in a kustomization that refers to the `k8s/env`
+directory. (kustomize refuses a file outside the referring directory, which is why the
+generated `k8s/env/kustomization.yaml` exists.) Then include that layer and the
+Component together:
 
 ```yaml
 # k8s/overlays/prod/env/kustomization.yaml — the label for this environment
@@ -475,30 +680,32 @@ components: [ ../../env/component ]
 ```
 
 The secret comments in `.env.example` are rendered from the same path template, so the
-two surfaces cannot disagree. No default names a vendor.
+two outputs cannot disagree. No default names a vendor.
 
-**The prefix policy is on by default**, to keep environment-variable names tidy. Your
-application's own variable names must start with this repository's prefix. Well-known
-framework names (`DATABASE_URL`, `NEXT_PUBLIC_*`, and similar) and the `MANIFEST_CLI_*`
-namespace are always allowed.
+**The prefix policy is on by default.** It keeps the names of environment variables
+tidy. The names of your application's own variables must start with this repository's
+prefix. Well-known framework names (`DATABASE_URL`, `NEXT_PUBLIC_*`, and similar) and
+names that start with `MANIFEST_CLI_` are always allowed.
 
-With no `env.prefix` set, the prefix is **derived from the project name** and stays
-vendor-neutral: `fidence.app.kanizsa` becomes `FIDENCE_APP_KANIZSA_`, and `my-tool`
-becomes `MY_TOOL_`. Set `env.prefix` to something explicit (`ACME_`) to require that
-instead, or `env.prefix: off` to switch the policy off.
+When `env.prefix` is not set, the prefix is **derived from the repository's directory
+name**: `fidence.app.kanizsa` becomes `FIDENCE_APP_KANIZSA_`, and `my-tool` becomes
+`MY_TOOL_`. Set `env.prefix` to a value of your own (`ACME_`) to require that prefix.
+Set `env.prefix: off` to turn the policy off.
 
-How strictly it is enforced is configurable: `env.naming_enforcement` is `strict` by
-default, which blocks; `warn` makes violations advisory. `env.naming_allow` takes extra
-allowed entries, comma-separated, where a trailing `_` means "treat as a prefix".
+You can choose how strictly the policy is enforced. `env.naming_enforcement` is `strict`
+by default, which blocks. `warn` only reports the violations. `env.naming_allow` takes
+more allowed entries, separated by commas. An entry that ends in `_` is treated as a
+prefix.
 
-`manifest init repo` and its connect phase create a missing `.env.example` — never
-overwriting an existing one — using the spec when an `env:` block exists, and honouring
-the configured prefix.
+`manifest init repo` and its connect phase create `.env.example` when it is missing.
+They never overwrite an existing one. They use the spec when it has an `env:` block,
+and they follow the configured prefix.
 
 ## Recovery
 
 ```bash
-manifest ship repo resume     # continue a release that stopped partway
+manifest ship repo patch       # after a failed release: plans finishing it (no bump)
+manifest ship repo patch -y    # finishes it
 manifest revert repo v1.2.3    # preview a tag checkout
 manifest revert repo v1.2.3 -y # apply the checkout
 manifest revert fleet          # list available snapshot commits
@@ -506,55 +713,66 @@ manifest revert fleet <commit> # preview a recorded fleet checkout
 manifest revert fleet <commit> -y # apply member checkouts, then manager
 ```
 
-`revert repo [<tag>]` previews by default. Specify a local tag, or select one of the
-ten highest version tags when running in a terminal. Without a terminal, omitting
-the tag lists available versions; applying requires an explicit tag. `-y` / `--yes`
-applies the checkout, and `--dry-run` explicitly previews.
+**`revert repo [<tag>]`** checks out a local tag. It previews by default. Name a local
+tag, or, in a terminal, pick one of the ten highest version tags. Without a terminal,
+leaving out the tag lists the available versions, and applying needs a tag that you
+name. `-y` / `--yes` applies the checkout. `--dry-run` asks for the preview explicitly.
 
-The target is the tag's resolved commit, even when a branch has the same name.
-Git refuses to overwrite conflicting tracked, untracked, or ignored files; no force,
-stash, reset, commit, tag, or push is performed. Submodule working trees stay as they
-are. No origin remote or current branch is required for this local checkout.
-`revert fleet [<snapshot>]` restores the exact member commits recorded in
-`manifest.fleet.snapshot.json`, then checks out the manager at the selected commit.
-A snapshot is a manager commit containing that file. Fleet ships record the map
-after members finish and include it in the manager coordination commit; it is
-available after cloning the manager's Git history. No extra tag is created.
-Omit the snapshot to list recent manager commits that changed the map. Applying
-requires an explicit manager commit or ref and `-y` / `--yes`.
+The target is the commit the tag points at, even when a branch has the same name. Git
+refuses to overwrite tracked, untracked, or ignored files that conflict. Manifest does
+not force, stash, reset, commit, tag, or push. Submodule working trees stay as they
+are. This local checkout needs no `origin` remote and no current branch.
 
-Fleet revert requires clean manager and member working trees, every recorded
-repository inside the fleet root, and every recorded commit available locally.
-It acquires the fleet and repository locks and checks all targets before checkout.
-Ignored-file conflicts and Git hooks can still stop a later checkout; failures
-report the completed count and return `2` after any checkout completed. Members
-are restored first and the manager last; no automatic rollback or push occurs.
-Submodule working trees are preserved. Non-Git/missing members are recorded with
-an unavailable commit and make that snapshot ineligible for fleet revert.
+**`revert fleet [<snapshot>]`** restores the exact member commits recorded in
+`manifest.fleet.snapshot.json`, and then checks out the manager at the commit you
+chose. A snapshot is a manager commit that contains that file. A fleet ship records the
+member commits after the members finish, and includes the file in the manager's
+coordination commit. The snapshot is therefore available to anyone who clones the
+manager's Git history. No extra tag is created. Leave out the snapshot to list the ten
+most recent manager commits that changed the file. Applying needs a manager commit or
+ref that you name, and `-y` / `--yes`.
 
-Manager history from before snapshot recording cannot reconstruct member
-versions. Fleet snapshots record committed state; uncommitted files are not backups.
+Fleet revert has these requirements:
 
-Afterwards you are in **detached HEAD**: viewing that tag rather than being on a branch.
-`git switch -` returns you to the branch you came from. `revert repo` is therefore a way to
-*look at* an old release, not a way to undo a published one. Undoing a published release
-is a declared Non-Goal ([NORTH_STAR.md](NORTH_STAR.md)): recovery is roll-forward — ship
-a new version.
+- The manager and every member have a clean working tree.
+- Every recorded repository is inside the fleet root.
+- Every recorded commit is available locally.
 
-When a release fails partway, run `manifest ship repo resume` first. The failure report
-may also suggest `git reset --hard <sha>`; read it before running it. A release **begins**
-by committing whatever you had uncommitted (see
-[User Guide](USER_GUIDE.md#what-the-automatic-commit-includes-and-what-it-leaves-out)), so
-that `<sha>` is from before your own work was committed, and a hard reset discards your
-changes together with Manifest's. Check `git log` and `git status` first; `git reflog` can
-still find a commit you have moved away from.
+It takes the fleet lock and the repository locks, and checks every target before any
+checkout. An ignored-file conflict or a Git hook can still stop a later checkout. A
+failure reports how many checkouts completed, and the command returns `2` if any
+checkout completed. Members are restored first and the manager last. There is no
+automatic rollback and no push. Submodule working trees are kept. A member that is
+missing, or is not a Git repository, is recorded with an unavailable commit, and a
+snapshot that holds such a member cannot be used for fleet revert.
+
+A manager commit that has no snapshot file cannot be used, because it does not record
+the member commits. A snapshot records committed state only. Uncommitted files are not
+backed up.
+
+After a revert you are in **detached HEAD**. This means you are viewing that tag and
+are not on a branch. `git switch -` returns you to the branch you came from. So
+`revert repo` is a way to *look at* an old release. It is not a way to undo a published
+one. Manifest does not undo a published release; that is a stated non-goal
+([NORTH_STAR.md](NORTH_STAR.md)). To recover, move forward: ship a new version.
+
+**When a release fails partway,** run `manifest ship repo patch` first. If the release
+reached its tag, the plan shows it as unfinished, and `-y` finishes it.
+
+The failure report may also suggest `git reset --hard <sha>`. Read the report before
+you run that command. A release **begins** by committing whatever you had uncommitted
+(see
+[User Guide](USER_GUIDE.md#what-the-automatic-commit-includes-and-what-it-leaves-out)).
+So `<sha>` is from before your own work was committed, and a hard reset discards your
+changes together with Manifest's. Check `git log` and `git status` first. `git reflog`
+can still find a commit that you have moved away from.
 
 ## Maintenance
 
 ```bash
 manifest cleanup [repo|fleet|state] [--dry-run] [-y|--yes]
 manifest upgrade
-manifest uninstall [--dry-run] [-y|--yes]
+manifest uninstall [--dry-run] [-y|--yes] [--force]
 manifest reinstall [--dry-run] [-y|--yes]
 manifest security [--write]
 manifest test [suite]
@@ -562,52 +780,64 @@ manifest test [suite]
 
 ### `manifest cleanup`
 
-Removes **Manifest's own leftovers** — never your work. Previews by default like every
-other mutating command; `-y` applies with no prompt.
+`cleanup` removes **Manifest's own leftovers**. It never removes your work. Like every
+other command that changes something, it previews by default. `-y` applies without a
+prompt.
 
 | Scope | What it covers |
 | --- | --- |
 | `repo` (default) | This repository |
-| `fleet` | Every member of the fleet roster |
-| `state` | This machine's Manifest caches — not repo-specific, so it is deliberately a third word rather than a repo/fleet scope |
+| `fleet` | Every member of the fleet |
+| `state` | This machine's Manifest caches. They do not belong to any one repository, which is why `state` is a separate word and not a repo or fleet scope |
 
 **What it removes**
 
 - Retired scaffold sidecars: `.gitignore.manifest`, `robots.txt.manifest`,
-  `ai.txt.manifest`, `scripts/run-tests.sh.manifest`, `.env.example.manifest`. Manifest
-  wrote these beside an existing file as a merge reference until v58.0.0, when the
-  mechanism was removed for drifting from the CLI that generated them. The writer went;
-  the files did not, so any repo scaffolded by an older CLI still carries them.
+  `ai.txt.manifest`, `scripts/run-tests.sh.manifest`, `.env.example.manifest`. Versions
+  of Manifest before v58.0.0 wrote these files beside an existing file, as a reference
+  for merging by hand. Manifest does not write them now, but a repository set up by one
+  of those versions may still hold them.
 - Manifest's own temporary files.
-- Stale `git worktree` records, via `git worktree prune`.
+- Stale `git worktree` records, by running `git worktree prune`.
 - `state` only: stale runtime cache files under `TMPDIR`, empty scratch directories, and
-  ship logs past the keep-last-N window.
+  ship logs older than the number of logs Manifest keeps.
 
 **What it never removes**
 
-- **A git-tracked file.** A committed sidecar is named in the summary with the exact
-  `git rm` command instead, so removing it stays a reviewable commit you make.
-- Your build output — `node_modules/`, `target/`, `dist/`, `build/`, `vendor/`, `.venv/`.
+- **A file tracked by Git.** A committed sidecar is named in the summary together with
+  the exact `git rm` command. Removing it then stays a commit that you make and can
+  review.
+- Your build output: `node_modules/`, `target/`, `dist/`, `build/`, `vendor/`, `.venv/`.
   Those belong to your build system.
-- A git worktree directory or anything inside one. `prune` only drops records for
-  directories that are already gone; reclaiming a live worktree's space needs
-  `git worktree remove --force`, which would destroy uncommitted work, so `cleanup`
-  reports those directories and stops.
-- `manifest.config.global.yaml`, the `audit/` compliance log, live locks, and `gh-rate/`
-  — the last is not a cache despite the name: it paces GitHub mutations, and clearing it
-  removes the protection that keeps you under the rate limit.
+- A Git worktree directory, or anything inside one. `prune` only drops the records of
+  directories that are already gone. Freeing the space of a live worktree needs
+  `git worktree remove --force`, which would destroy uncommitted work. So `cleanup`
+  reports those directories and stops there.
+- `manifest.config.global.yaml`, the `audit/` log, live locks, and `gh-rate/`. Despite
+  its name, `gh-rate/` is not a cache. It spaces out the changes Manifest makes on
+  GitHub. Clearing it would remove the protection that keeps you under the rate limit.
 
-Because it publishes nothing, `cleanup -y` applies even on a detached HEAD or in a repo
-with no `origin` remote, where release commands correctly refuse.
+`cleanup` publishes nothing. So `cleanup -y` works even on a detached HEAD, or in a
+repository with no `origin` remote, where the release commands refuse.
 
-`security` is **read-only by default**. It reports private files that are tracked in git,
-anything that looks like personal data, and environment-file hygiene — and writes
-nothing. `--write` additionally saves a timestamped report to the docs archive. Neither
-mode writes `docs/SECURITY_ANALYSIS_REPORT.md`, which is maintained by hand. `--check` is
-still accepted and also means read-only, so existing hooks and recipes keep working.
+### Other maintenance commands
 
-`uninstall` plans by default, and keeps your global config unless you confirm removing it
-separately.
+`upgrade` updates Manifest CLI. It needs a Manifest Cloud plugin. If you installed with
+Homebrew, run `brew update && brew upgrade manifest`.
+
+`uninstall` plans by default. It keeps your global config unless you separately confirm
+its removal. `--force` skips the extra prompts, and only after `-y` has chosen to
+apply.
+
+`reinstall` removes Manifest CLI and installs it again. It plans by default.
+
+`security` is **read-only by default**. It reports private files that are tracked in
+Git, anything that looks like personal data, and unsafe handling of environment files.
+It writes nothing. `--write` also saves a report, with a timestamp, to the docs archive.
+Neither mode writes `docs/SECURITY_ANALYSIS_REPORT.md`, which is kept by hand.
+`--check` is also accepted and means read-only.
+
+`test` runs diagnostic tests. It needs Manifest Cloud.
 
 ## Optional Cloud And Agent
 
@@ -616,19 +846,21 @@ manifest cloud config|status|generate
 manifest agent init|auth|status
 ```
 
-These need Manifest Cloud plugins. Ordinary repo and fleet releases do not.
+These commands need Manifest Cloud plugins. Ordinary repo and fleet releases do not.
 
 ## Machine-Readable Catalog
 
-Every install writes an agent-facing catalog to `~/.manifest-cli/ide/`:
+Every install writes a catalog for coding assistants and scripts to
+`~/.manifest-cli/ide/`:
 
 | File | What it holds |
 | ---- | ------------- |
-| `manifest-cli-commands.json` | `top_level_commands` (the complete command set, kept equal to the dispatcher by the test suite), `commands` (the first-class command strings to prefer), the preview and apply flags, and the exit codes |
-| `manifest-cli-commands.md` | The first-class commands, grouped, each with a one-line purpose |
-| `AGENTS.md`, `CLAUDE.md` | A hint for coding assistants: preview by default, `-y` to apply, where the docs are, and what exit code `4` (the documentation handoff) asks of the agent |
+| `manifest-cli-commands.json` | `top_level_commands` (the complete set of commands; the test suite keeps it equal to the commands Manifest accepts), `commands` (the command strings to prefer), the preview and apply flags, and the exit codes |
+| `manifest-cli-commands.md` | The preferred commands, in groups, each with a one-line purpose |
+| `AGENTS.md`, `CLAUDE.md` | A short guide for coding assistants: commands preview by default, `-y` applies, where the docs are, and what to do on exit code `4` (the documentation handoff) |
 
-An agent or script should read the JSON rather than parse `manifest help`.
+An agent or a script should read the JSON file. It should not parse the output of
+`manifest help`.
 
 ## Environment
 
@@ -636,17 +868,17 @@ Frequently used variables:
 
 | Variable | Purpose |
 | -------- | ------- |
-| `MANIFEST_CLI_AUTO_CONFIRM` | Allow an ambiguous apply target (detached HEAD, or no origin) **after** `-y`. Not needed for an ordinary apply, and cannot start one |
-| `MANIFEST_CLI_PREVIEW_EXIT_CODE` | `zero` (default) or `distinct` — the exit code for a plan with no consent; see Exit Codes |
-| `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH` | Controls the canonical follow-up patch behaviour |
-| `MANIFEST_CLI_DOCS_HANDOFF` | `off` (default), `auto` or `always` — pause before the release commit so whoever is driving can finish the documentation; see Exit Codes `4`. Also settable as `docs.handoff`, including in a committed config: it names no program |
-| `MANIFEST_CLI_DRIVER` | Override who Manifest thinks is driving: `none`, `ci`, `claude-code` or `other-agent`. Environment only, never a config key — a committed file must not assert who is at the keyboard. Affects only the `auto` handoff default, never a safety control |
-| `MANIFEST_CLI_DOCS_GENERATE_SITE` | Turn on documentation-website generation (default off) |
-| `MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES` | Ask GitHub to enable Pages via `gh api` |
-| `MANIFEST_CLI_GITHUB_ACTIONS_WAIT` | Wait for GitHub Actions during release paths |
-| `MANIFEST_CLI_ENV_PREFIX` | Prefix policy: empty means derived from the project name (the default, and on); an explicit value overrides; `off` disables |
-| `MANIFEST_CLI_ENV_NAMING_ENFORCEMENT` | `strict` (default, blocks) or `warn` (advisory) |
-| `MANIFEST_CLI_ENV_NAMING_ALLOW` | Extra allowed names, comma-separated; a trailing `_` means prefix |
+| `MANIFEST_CLI_AUTO_CONFIRM` | Allows an apply whose target is unclear (a detached HEAD, or no `origin`), and only **after** `-y`. An ordinary apply does not need it, and it cannot start an apply |
+| `MANIFEST_CLI_PREVIEW_EXIT_CODE` | `zero` (default) or `distinct`. Sets the exit code of a plan that was given no consent. See Exit Codes |
+| `MANIFEST_CLI_SHIP_FOLLOWUP_PATCH` | Applies only to Manifest's own repository. After a release that is not a `patch`, Manifest may run one more `patch` release with the newly installed CLI. `false` turns that off (default on) |
+| `MANIFEST_CLI_DOCS_HANDOFF` | `off` (default), `auto` or `always`. Pauses a release before the release commit, so that whoever is running it can finish the documentation. See exit code `4` under Exit Codes. You can also set it as `docs.handoff`, including in a committed config file, because it names no program to run |
+| `MANIFEST_CLI_DRIVER` | Overrides Manifest's guess about who is running it: `none`, `ci`, `claude-code` or `other-agent`. It is an environment variable only and never a config key, because a committed file must not state who is at the keyboard. It affects only the `auto` handoff default, and never a safety control |
+| `MANIFEST_CLI_DOCS_GENERATE_SITE` | Generation of the documentation website. On by default; set it to `false` to turn it off |
+| `MANIFEST_CLI_DOCS_SITE_ENABLE_PAGES` | Asks GitHub to enable Pages, through `gh api` |
+| `MANIFEST_CLI_GITHUB_ACTIONS_WAIT` | Waits for GitHub Actions to finish during a release (default off) |
+| `MANIFEST_CLI_ENV_PREFIX` | The prefix policy. Empty means the prefix is derived from the repository's directory name (the default, and on). A value of your own replaces it. `off` turns the policy off |
+| `MANIFEST_CLI_ENV_NAMING_ENFORCEMENT` | `strict` (default, blocks) or `warn` (reports only) |
+| `MANIFEST_CLI_ENV_NAMING_ALLOW` | More allowed names, separated by commas. An entry that ends in `_` is a prefix |
 
-Every setting has a matching variable. For the authoritative mapping of a specific key,
-including which layer currently wins, run `manifest config describe <key>`.
+Every setting has a matching variable. To see the variable for one key, and which layer
+currently supplies its value, run `manifest config describe <key>`.

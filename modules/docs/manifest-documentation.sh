@@ -231,7 +231,8 @@ EOF
 
 _manifest_docs_generate_site() {
     # $1 is accepted but no longer rendered: the generated page must not bake in a
-    # version, because site generation is opt-in and the page then sits unrefreshed
+    # version, because a repo can turn site generation off (docs.generate.site is
+    # on by default) and the page then sits unrefreshed
     # (it advertised v50.1.2 while the project was on 59.3.0). Kept in the signature
     # rather than removed — five other positional args and six call sites follow it,
     # and a site generator being handed the release version is not itself wrong.
@@ -266,9 +267,9 @@ exclude:
   - vendor
 EOF
 
-    # The Changelog card deliberately carries no version number. Site generation is
-    # opt-in (docs.generate.site, default false), so this page is written once and
-    # then sits in the repo unrefreshed — a baked-in version does not age with the
+    # The Changelog card deliberately carries no version number. Site generation can
+    # be turned off (docs.generate.site, default true), and the page then sits in the
+    # repo unrefreshed — a baked-in version does not age with the
     # project. It read "Release history for v50.1.2" while the project was on
     # 59.3.0. The changelog it links to always states its own latest version.
     cat > "$index_file" << EOF

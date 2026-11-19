@@ -1,61 +1,95 @@
 # Manifest Fleet Design Spec
 
-Manifest Fleet coordinates independent Git repositories from one workspace. It does not require submodules and does not collapse child repos into the parent Git history.
+A *fleet* is a set of independent Git repositories that Manifest coordinates from one
+workspace folder, called the *fleet root*. A fleet does not use Git submodules, and it
+does not merge the member repositories into the history of the root repository.
 
 ## Goals
 
-- Make repo and fleet release workflows use the same command model.
-- Keep fleet membership explicit and reviewable.
-- Support release-enabled and release-disabled services in the same workspace.
-- Preview every mutation before apply.
-- Keep parent workspace metadata separate from child repo implementation.
+- Use the same command model for one repository and for a fleet.
+- Keep fleet membership explicit and easy to review.
+- Support services that release and services that do not, in the same workspace.
+- Preview every change before applying it.
+- Keep the root workspace's metadata separate from each member's own content.
 
 ## Core Files
 
 | File | Purpose |
 | ---- | ------- |
-| `manifest.fleet.tsv` | Human-reviewable scan output and selection table |
-| `manifest.fleet.config.yaml` | Canonical fleet config used by commands |
-| `manifest.fleet.plan.yaml` | Adoption/reconciliation plan written by `manifest plan fleet --apply` |
-| `manifest.config.yaml` / `manifest.config.local.yaml` (at the fleet root) | Fleet-wide Manifest settings every member inherits as the read-only `fleet` config layer — see [User Guide — Configuration](USER_GUIDE.md#configuration) |
+| `manifest.fleet.tsv` | The roster. A table of scanned folders that a person reviews, with a column that selects the members. |
+| `manifest.fleet.config.yaml` | The fleet config that commands read |
+| `manifest.fleet.plan.yaml` | The adoption and reconciliation plan that `manifest plan fleet -y` writes |
+| `manifest.config.yaml` / `manifest.config.local.yaml` (at the fleet root) | Manifest settings for the whole fleet. Every member inherits them as the read-only `fleet` config layer. See [User Guide — Configuration](USER_GUIDE.md#configuration). |
 
-`manifest.fleet.config.yaml` defines *what the fleet is* and is the sentinel that
-makes a directory the fleet root. The two `manifest.config*.yaml` files beside it
-configure *how Manifest behaves* for every member, and are a different mechanism.
+`manifest.fleet.config.yaml` defines *what the fleet is*. Its presence is what makes a
+directory the fleet root. The two `manifest.config*.yaml` files beside it configure
+*how Manifest behaves* for every member. They are a different mechanism.
 
 ## Fleet States And Vocabulary
 
-The fleet model has exactly one universe and one selected subset; everything else is a label derived from observation, never a stored state.
+The fleet model has one universe (every repository found) and one selected subset (the
+members). Every other label is worked out from what Manifest observes. No other state
+is stored.
 
 ### Corpus, Members, Benched
 
 ```text
 CORPUS  = git repositories discovered <= depth ceiling   (observed — the universe)
 MEMBER  = a corpus repo explicitly selected              (declared — the fleet)
-BENCHED = every other corpus repo, by default            (persisted — records triage)
+BENCHED = every other corpus repo                        (persisted — records triage)
 ```
 
-Membership is a single binary — `member` or `benched`, default `benched`. Nothing auto-enrolls. Benched is **persisted** (the `SELECT` column), not recomputed, so a rescan does not re-triage the whole corpus on every run.
+Membership has two values: `member` or `benched`. It is **stored** in the `SELECT`
+column of the roster, and you change it by editing that column.
+
+- A scan writes each new row with `SELECT` set to `true` when the folder is a Git
+  repository and to `false` when it is not. Review the roster after a scan, and set
+  `SELECT` to `false` for any repository that should not be a member.
+- A rescan keeps the `SELECT` value of every row that is already in the roster. So you
+  do not have to sort the whole corpus again.
+- A rescan with `manifest update fleet -y` adds a newly found Git repository as a
+  member, because its new row is written with `SELECT` set to `true`.
 
 ### Depth
 
-Discovery is bounded by a global depth **ceiling** (`MANIFEST_CLI_FLEET_MAX_DISCOVERY_DEPTH = 10`) — a deliberately high guardrail, not a target. The ceiling stays high; it is never lowered to fit a particular fleet.
+Discovery walks down from the fleet root. A global **ceiling** limits how deep it goes:
+`MANIFEST_CLI_FLEET_MAX_DISCOVERY_DEPTH = 10`. The ceiling is a high safety limit, not
+a target. It is not lowered to fit a particular fleet.
 
-`--depth auto` is **per-branch adaptive**: each branch of the tree is walked down to *its own* first git repo — discovery prunes at a repo (nested repos are excluded by default) — or to the ceiling if that branch holds none. Because every branch resolves independently, a **mixed-depth** workspace is captured completely in one pass with no global under- or over-scan: shallow direct-child repos and deeper bucketed repos are both found, and a deep branch never drags a shallow one to its level (or vice-versa). An explicit `--depth N` still forces a fixed scan depth when wanted.
+`--depth auto` adapts to each branch of the folder tree. Discovery walks each branch
+down to its first Git repository and stops there, because repositories nested inside a
+repository are excluded by default. If a branch holds no repository, discovery stops at
+the ceiling. `auto` then resolves to the deepest repository it found. A workspace that
+mixes depths is therefore captured in one pass: repositories directly under the root
+and repositories in deeper folders are all found. An explicit `--depth N` forces a
+fixed scan depth.
 
-The TSV's `# Depth:` header records the **observed deepest** repo depth — a derived diagnostic, not the ceiling. Per-branch resolution removes the older hazard where re-running `auto` could shrink a TSV that had been scanned deeper.
+The roster's `# Depth:` header records the **deepest repository depth observed**. It is
+a diagnostic, not the ceiling. A rescan without `--depth` uses the recorded depth, so
+it does not drop rows that a deeper scan recorded.
 
-**Depth profile + health (derived, not stored).** Per-subfolder depth facts — for each top-level bucket, the shallowest and deepest depth at which a repo appears — are **derived from the row `PATH`s on demand**, never persisted: the rows already encode them (see [Storage](#storage-store-declared-cache-the-corpus-derive-labels)). `status` reports this profile and flags any **mixed-depth bucket** — one where a bucket's shallowest and deepest repo depth differ — as a health signal, since that usually means an accidental nested repo or a broken layout convention. A clean fleet keeps every bucket internally uniform.
+**Depth profile and health (derived, not stored).** For each top-level folder
+("bucket"), the depth profile gives the shallowest and the deepest depth at which a
+repository appears. Manifest works these out from the `PATH` of each row when it needs
+them and never stores them (see
+[Storage](#storage-store-declared-cache-the-corpus-derive-labels)). `manifest status`
+reports the profile. It flags any **mixed-depth bucket**, which is a bucket whose
+shallowest and deepest repository depths differ. That usually means a repository was
+nested by accident or a layout convention was broken. A healthy fleet keeps each bucket
+at one depth.
 
 ### Three Orthogonal Axes
 
-| Axis | Values | Kind | TSV column |
-| ---- | ------ | ---- | ---------- |
-| Membership | `member` ↔ `benched` (default) | declared | `SELECT` |
-| Local | `absent` → `present` → `repo` (has `.git`) | observed (cheap) | `HAS_GIT` |
-| Remote | `undeclared` → `declared` → `verified` | declared URL, then observed | `REMOTE_URL` |
+Each repository is described on three independent axes.
 
-`Remote` is a **secure tri-state**: a recorded URL is a *claim* (`declared`), not proof (`verified`). Outward actions gate on `verified` — see [Verification Is Cost-Bounded](#verification-is-cost-bounded).
+| Axis | Values | Kind | Where it comes from |
+| ---- | ------ | ---- | ---------- |
+| Membership | `member` ↔ `benched` | declared | the `SELECT` column of the roster |
+| Local | `absent` → `present` → `repo` (has `.git`) | observed, no network | the disk; the `HAS_GIT` column caches the last scan |
+| Remote | `undeclared` → `declared` → `verified` | declared URL, then observed | the member's own `origin`, or `services.<name>.url` in the fleet config for a member that is not cloned |
+
+`Remote` has three values for safety. A recorded URL is a *claim* (`declared`), not
+proof (`verified`). See [Verification Is Cost-Bounded](#verification-is-cost-bounded).
 
 ### Named States (Derived, Never Stored)
 
@@ -65,61 +99,95 @@ Members, by Local × Remote:
 | ----- | ----- | ------ | -------------- |
 | Backed | repo | verified | ship |
 | Unverified | repo | declared | verify first |
-| Stranded | repo | undeclared | create remote (idempotent), then ship |
-| Uncloned | absent | verified | clone to restore |
-| Lost | absent | undeclared | unrecoverable — flag loudly |
+| Stranded | repo | undeclared | create the remote, then ship |
+| Uncloned | absent | declared or verified | clone to restore |
+| Lost | absent | undeclared | cannot be recovered; reported loudly |
 
-Benched repos are either **Candidate** (Local = repo; promotable to member) or **Scenery** (Local = non-repo: a grouping folder or a deliberate placeholder such as `_holding`).
+A benched repository is either a **Candidate** (Local = `repo`, so it can be promoted
+to member) or **Scenery** (not a repository: a grouping folder or a deliberate
+placeholder such as `_holding`).
 
-`missing` is not a primitive — it is `member` + Local `absent`. `unlisted` is an on-disk repo not yet in the TSV (benched-by-omission until a rescan records it).
+`missing` is not a basic state. It means `member` with Local `absent`. `unlisted` means
+a repository on disk that is not yet in the roster. It counts as benched until a rescan
+records it.
 
 ### Identity Is Path
 
-The operational identity of a fleet repo is its **workspace-relative path**, which is also the key the adoption/reconcile merge dedups on. The remote slug (the `REMOTE_URL` basename) is recorded only to flag two anomalies — *rehomed* (a path's remote changed) and *collision* (two paths claim one remote) — and is **not** identity. A remoteless/stranded repo is therefore still a first-class member. A move or rename reads as remove + add; a rescan reconciles it. See also [Repo Identity](#repo-identity) for command-target resolution.
+A fleet repository is identified by its **path relative to the workspace**. The
+adoption and reconciliation merge uses the same path as its key for removing
+duplicates. The remote is **not** identity, so a repository with no remote is still a
+full member. A move or a rename reads as a removal plus an addition, and a rescan
+reconciles it. See also [Repo Identity](#repo-identity) for how commands resolve their
+target.
 
 ### Storage: Store Declared, Cache The Corpus, Derive Labels
 
-| In the TSV | Kind | Authority |
+| Item | Kind | Authority |
 | ---------- | ---- | --------- |
-| `SELECT` (membership) | **declared** | truth — never auto-changed |
-| corpus rows + `HAS_GIT` + `# Last scanned:` | **cached observation** | baseline, reconciled on rescan |
-| `REMOTE_URL` | **declared** (a claim) | the remote declaration |
-| remote-verified | **never persisted** | observed live, TTL-cached in `~/.manifest-cli/cache/` only |
-| any derived label | **never stored** | recomputed `f(declared ⋈ observed)` |
+| `SELECT` (membership) in the roster | **declared** | the truth; a scan sets it only for a new row and never changes an existing one |
+| corpus rows, `HAS_GIT`, `BRANCH` and `# Last scanned:` in the roster | **cached observation** | a baseline that a rescan reconciles |
+| remote URL | **never stored in the roster** | read on demand from the member's own `origin`; for a member that is not cloned, from `services.<name>.url` in the fleet config |
+| remote verified | **never stored** | observed live by `manifest status fleet --verify` |
+| any derived label | **never stored** | worked out again from the declared and observed facts |
 
-The TSV is a freshness-stamped **hybrid** (declared membership + cached corpus). Drift is bounded to "what changed since `# Last scanned:`". `HAS_GIT`/`BRANCH` are deliberately cached observations, refreshed on rescan — not leaks of live state.
+The roster columns are `SELECT`, `NAME`, `PATH`, `HAS_GIT` and `BRANCH`. The roster is
+committed and pushed, so it carries no remote URL: a URL can contain a credential.
+Manifest refuses to write a roster row that contains one.
+
+The roster is a **hybrid** with a freshness stamp: declared membership plus a cached
+corpus. It can be out of date only by what changed since `# Last scanned:`. `HAS_GIT`
+and `BRANCH` are cached observations on purpose. A rescan refreshes them.
 
 ### Verification Is Cost-Bounded
 
-Outward actions — push, GitHub Release, create-remote — gate on `verified`, never `declared`. The guarantee is kept cheap so it scales to a large fleet without exhausting GitHub rate limits:
+Verification is the step that turns a `declared` remote into a `verified` one.
 
-- **Scoped, not fleet-wide.** A fleet operation verifies only the members it is about to act on (the release/push set — usually a handful), never the whole corpus. A full-corpus sweep is its own explicit, opt-in command.
-- **Implicit in the action.** `git push` is atomic and locally safe: a push to a missing or unreachable remote fails with no side effects and downgrades the cached state, so the steady-state path does not probe-then-push. A mandatory *pre-flight* `verified` gate is reserved for the one **irreversible** action — `create-remote` (`gh repo create`), where acting on a wrong assumption is destructive.
-- **Git-protocol probe.** Existence/reachability uses `git ls-remote` (already used internally), which does **not** consume the REST/GraphQL rate-limit quota. `gh` is the fallback only when richer metadata is needed; batched sweeps alias ~100 repos per GraphQL query.
-- **TTL-cached.** `verify` is a pure, idempotent read, cached in `~/.manifest-cli/cache/` and never written to the TSV. Repeat operations inside the TTL window do **zero** network.
+- **It is opt-in.** `manifest status fleet --verify` probes each member's remote.
+  Without `--verify`, a member with a recorded URL reads as `declared`.
+- **It uses the Git protocol.** The probe is `git ls-remote`, which does not use the
+  GitHub REST or GraphQL rate limit. Each probe is limited to 15 seconds and never
+  prompts for a password.
+- **It stores nothing.** The result is shown and then discarded. It is not cached, so
+  every `--verify` run probes again. A remote that does not answer reads as
+  `undeclared` for that run.
+- **A push checks the remote by itself.** `git push` to a missing or unreachable remote
+  fails with no side effects, so a ship does not probe before it pushes.
+- **A fleet ship refuses a member that has nowhere to push.** Before a non-local
+  `manifest ship fleet -y` changes anything, it checks every member it is about to
+  release. If a member has no usable `origin`, Manifest adds one from
+  `services.<name>.url` in the fleet config when that holds a valid Git URL. If a
+  member still has no remote, Manifest refuses the whole run.
+- **Creating a remote never overwrites.** `--create-repo-private` and
+  `--create-repo-public` run `gh repo create` only when the repository has no `origin`.
+  Preview first: creating a GitHub repository cannot be undone by Manifest.
 
 ### Verbs
 
-| Verb | Moves | Idempotent | Safety | Available as |
+| Verb | Moves | Repeatable | Safety | Available as |
 | ---- | ----- | ---------- | ------ | ------------ |
-| select / unselect | membership flag (`SELECT`) | yes | default benched; reversible | `SELECT` toggle in `manifest.fleet.tsv` |
-| clone | Local `absent` → `repo` | yes (skip if present) | read-only on remote | no user-facing verb; cloning a missing member belongs to the connect route — see [TRACKER §95](TRACKER.md) |
-| verify | Remote `declared` → `verified` | yes (pure read) | grants outward trust | internal `git ls-remote` primitive only; no user-facing sweep — see [TRACKER §34](TRACKER.md) |
-| create-remote | Remote → `verified` | yes (create-if-absent, never clobber) | irreversible — dry-run first | `manifest init repo\|fleet --create-repo-private\|public` |
+| select / unselect | membership flag (`SELECT`) | yes | reversible | edit the `SELECT` column in `manifest.fleet.tsv` |
+| clone | Local `absent` → `repo` | yes (skips a repository that is present) | read-only on the remote | No working command. `manifest init fleet --connect` pulls the members that exist on disk. It stops with exit `2` before the connect phase when a selected member's folder is missing, so it does not clone that member. Clone it with `git clone` first. `manifest status fleet --bootstrap` lists the absent members and changes nothing. |
+| verify | Remote `declared` → `verified` | yes (read-only) | uses the network; stores nothing | `manifest status fleet --verify` |
+| create-remote | Remote → `verified` | yes (creates only if absent, never overwrites) | cannot be undone; preview first | `manifest init repo\|fleet --create-repo-private\|public` |
 
-The last column states what a caller can invoke **today**, not what is planned. Gaps
-are tracked in [TRACKER.md](TRACKER.md), never as a status word here.
+The last column states what you can run today. Planned work is tracked in
+[TRACKER.md](TRACKER.md), not here.
 
-Release disposition (eligible / current / release-disabled / PR-gated) is an orthogonal axis — see [Release Model](#release-model).
+Whether a member is released (eligible, current, release-disabled or PR-gated) is a
+separate axis. See [Release Model](#release-model).
 
 ## Initialization
 
-`manifest init fleet` is intentionally two-phase:
+`manifest init fleet` has two phases on purpose:
 
 1. Scan directories and write `manifest.fleet.tsv`.
-2. After review, consume the TSV and write fleet config/scaffolding.
+2. After you review the roster, read it and write the fleet config and the scaffolding
+   for each selected member.
 
-Fleet scanning uses the shared discovery walker in `modules/core/manifest-discovery.sh` with the fleet profile. That profile preserves fleet-specific pruning, including dependency/build directories and package workspace directories that should not become fleet members by default.
+Fleet scanning uses the shared discovery walker in
+`modules/core/manifest-discovery.sh` with the fleet profile. That profile skips
+dependency folders, build folders and package workspace folders, which should not
+become fleet members by default.
 
 Useful flags:
 
@@ -134,19 +202,22 @@ manifest init fleet --force
 
 ```bash
 manifest plan fleet
-manifest plan fleet --apply
+manifest plan fleet -y
 manifest reconcile fleet
-manifest reconcile fleet --do
+manifest reconcile fleet -y
 ```
 
-The plan/reconcile path exists for existing workspaces. It protects against target collisions and requires explicit opt-in for submodule adoption.
+Use plan and reconcile for a workspace that already exists. `plan fleet` previews an
+adoption plan, and `plan fleet -y` writes it. `reconcile fleet` previews what the plan
+would change, and `reconcile fleet -y` applies it. This path protects against two plan
+entries that target the same place, and it adopts a submodule only when you opt in.
 
-Mutation ladder:
+Each stronger action needs the one before it:
 
-- `--commit` requires `--apply` or `--do`.
+- `--commit` requires `-y` (or `--yes`).
 - `--push` requires `--commit`.
 - `--force` does not bypass target-collision checks.
-- `adopt_submodule` requires `--adopt-submodules`.
+- An `adopt_submodule` plan entry requires `--adopt-submodules`.
 
 ## Release Model
 
@@ -162,31 +233,51 @@ services:
       strategy: "direct"
 ```
 
-`strategy` is a single self-describing field. Its values read in plain English:
+`strategy` is one field with three values:
 
 - `direct` — `manifest ship fleet` tags and pushes the release directly.
-- `none` — the member is never released by fleet ship (skipped).
-- `pr` — the member is **PR-gated**: its release must land through a reviewed pull request. `manifest ship fleet` lists PR-gated members in the preview and **refuses to apply** them (fail-closed), printing a `manifest pr fleet ... -y` replay command. Release them with `manifest pr fleet -y`.
+- `none` — fleet ship never releases the member. It is skipped.
+- `pr` — the member is **PR-gated**: its release must land through a reviewed pull
+  request. `manifest ship fleet` lists PR-gated members in the preview and **refuses to
+  apply** them. It prints the command to run instead: `manifest pr fleet -y`.
 
-Release-disabled services appear in status and planning output but are skipped by `manifest ship fleet`. Ship preview classifies them from config before release probes, so a release-disabled member is not scanned for `VERSION` or non-canonical version surfaces during ship planning.
+A release-disabled service appears in status and planning output, and
+`manifest ship fleet` skips it. The ship preview reads the release policy from the
+config before it probes anything. So it does not scan a release-disabled member for
+`VERSION` or for other files that carry a version.
 
-Release-enabled services are eligible, not unconditional. Fleet ship skips an eligible member when its worktree is clean and its HEAD is already the commit tagged for the current `VERSION`. Dirty files or non-formula commits after that tag make the member releaseable; formula-only drift is skipped by planning and prevented at repo ship completion.
+A release-enabled service is eligible, but it is not always released. Fleet ship skips
+an eligible member when its working tree is clean and its `HEAD` is already the commit
+tagged for the current `VERSION`. Uncommitted files, or commits after that tag that
+touch more than the Homebrew formula, make the member releasable. A difference in the
+formula alone does not: planning skips it, and the completion check of a repository
+ship prevents it.
 
-Fleet release still operates each member through the repo release flow, whose version writer updates that member's `VERSION` file and explicit `version.sync` targets only. Fleet status and ship preview can report non-canonical package/version surfaces read-only; detection never adds a release target by itself.
+A fleet release runs each member through the single-repository release flow. That flow
+updates the member's `VERSION` file and the `version.sync` targets you listed, and
+nothing else. Fleet status and the ship preview can report other files that carry a
+version. They only report them. Finding such a file never makes it a release target.
 
 ## Repo Identity
 
-Repo-scoped commands use the current `.git` root. Fleet-scoped commands use the fleet root and config. The CLI prints the resolved target before apply so a nested checkout cannot be released by accident.
+Repo-scoped commands use the `.git` root of the current directory. Fleet-scoped
+commands use the fleet root and its config. The CLI prints the resolved target before
+it applies, so a nested checkout cannot be released by accident.
 
 ## Docs Generation
 
-Fleet docs generation can refresh per-service docs and generate a managed Jekyll docs site. Docs-site generation is **opt-in** (`docs.generate.site`, default `false`) and covered in [DOCS_SITE.md](DOCS_SITE.md).
+Fleet docs generation can refresh each service's docs and generate a managed Jekyll
+docs site. The site is controlled by `docs.generate.site`, which defaults to `true`.
+See [DOCS_SITE.md](DOCS_SITE.md).
 
 ## Current Limitations
 
-These are deliberate scope boundaries, not pending work. Anything that *is* pending
-lives in [TRACKER.md](TRACKER.md).
+These are deliberate limits of scope, not pending work. Pending work is listed in
+[TRACKER.md](TRACKER.md).
 
-- Repo-scoped release commands do not accept a path selector. Locked as a Non-Goal in [NORTH_STAR.md](NORTH_STAR.md) until the repo-identity contract is redesigned.
-- Fleet release strategies are `direct`, `none`, or `pr` (PR-gated, routed to `manifest pr fleet`). Richer orchestration is out of scope; it would require explicit config that does not exist and is not planned.
+- Repo-scoped release commands do not accept a path selector. This is a Non-Goal in
+  [NORTH_STAR.md](NORTH_STAR.md) until the repo-identity contract is redesigned.
+- Fleet release strategies are `direct`, `none` and `pr` (PR-gated, routed to
+  `manifest pr fleet`). Richer orchestration is out of scope. It would need explicit
+  config that does not exist and is not planned.
 - MCP fleet operations are read-only.

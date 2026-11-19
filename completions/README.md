@@ -1,24 +1,44 @@
 # Shell Completions
 
-Manifest ships Bash, zsh, and fish completions.
+A shell completion lets you press Tab to fill in a command, a scope, or a flag.
+Manifest ships completions for Bash, zsh, and fish.
 
 ## Installed By Homebrew
 
-The Homebrew formula installs:
+The Homebrew formula installs all three files for you:
 
-- `completions/manifest.bash` as Bash completion
-- `completions/_manifest` as zsh completion
-- `completions/manifest.fish` as fish completion
+- `completions/manifest.bash` as the Bash completion
+- `completions/_manifest` as the zsh completion
+- `completions/manifest.fish` as the fish completion
+
+If you installed Manifest with Homebrew, you do not need the manual steps below.
+
+## Installed By The Manual Installer
+
+`install-cli.sh` links two of the files into your own completion directories:
+
+- Bash: `${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion/completions/manifest`.
+  Bash loads it by itself when `bash-completion` is turned on.
+- zsh: `~/.zsh/completions/_manifest`. Your `~/.zshrc` must add that directory to
+  `fpath` and run `compinit`. The installer prints the two lines to add.
+
+It does not install the fish completion. Use the manual fish setup below.
 
 ## Manual Bash Setup
+
+Run this from the root of a Manifest CLI checkout:
 
 ```bash
 source completions/manifest.bash
 ```
 
-Persistent setup depends on your shell profile and completion directory. Prefer the Homebrew formula when possible.
+This lasts for the current shell session only. To keep it, load the file from your
+shell profile, or place it in your completion directory. Use the Homebrew formula when
+you can.
 
 ## Manual Zsh Setup
+
+Run this from the root of a Manifest CLI checkout:
 
 ```bash
 fpath=("$PWD/completions" $fpath)
@@ -28,16 +48,18 @@ compinit
 
 ## Manual Fish Setup
 
+Run this from the root of a Manifest CLI checkout:
+
 ```fish
 mkdir -p ~/.config/fish/completions
 ln -sf "$PWD/completions/manifest.fish" ~/.config/fish/completions/manifest.fish
 ```
 
-Fish loads completions from this directory automatically; no further configuration is required.
+Fish loads completions from this directory by itself. You need no other configuration.
 
 ## Coverage
 
-Completions cover:
+The completions cover:
 
 - Top-level commands
 - Repo and fleet scopes
@@ -45,6 +67,12 @@ Completions cover:
 - Config keys
 - Common flags
 
-When adding or removing public commands, update completions with help text and command-reference docs in the same change.
+To complete config keys, the shell runs `manifest config list` and reads the key names
+from its output.
 
-Internal scanners, catalogs, and detection helpers do not add completion entries until they become public command or flag surfaces.
+When you add or remove a public command, update three things in the same change: the
+completions, the help text, and the command reference
+([docs/COMMAND_REFERENCE.md](../docs/COMMAND_REFERENCE.md)).
+
+Internal scanners, catalogs, and detection helpers get no completion entry. Add an
+entry only when one of them becomes a public command or a public flag.
