@@ -2417,6 +2417,38 @@ _fleet_service_static_release_reason() {
     return 1
 }
 
+# Does this member hold an unfinished release of its current VERSION? Reads the
+# member's own in-flight record through the repo-side probe. The probe takes
+# the version from the member's HEAD and the tag from the record itself, so the
+# answer does not depend on which configuration this process has loaded (the
+# fleet plan runs under the root's, and a member may set its own tag prefix).
+# Echoes "<version>|<tag>|<stopped_at>|<log>"; returns 0 when unfinished. A
+# pure read.
+_fleet_service_unfinished() {
+    local path="$1" probe
+    [[ -n "$path" && -d "$path/.git" ]] || return 1
+    declare -F manifest_ship_repo_unfinished >/dev/null 2>&1 || return 1
+    probe="$(MANIFEST_CLI_PROJECT_ROOT="$path" manifest_ship_repo_unfinished || true)"
+    [[ "$probe" == unfinished\|* ]] || return 1
+    printf '%s' "${probe#unfinished|}"
+}
+
+# Can this member's unfinished release be finished from where it stands? The
+# same preconditions the member's own finish checks, read with the record's
+# version and tag. $2 is _fleet_service_unfinished's output. Returns 0 when it
+# can; otherwise 1 with a short reason on stdout.
+_fleet_service_finish_block_reason() {
+    local path="$1" info="$2"
+    local version tag rest probe code detail
+    version="${info%%|*}"; rest="${info#*|}"; tag="${rest%%|*}"
+    declare -F manifest_ship_repo_finish_eligible >/dev/null 2>&1 || return 0
+    probe="$(MANIFEST_CLI_PROJECT_ROOT="$path" manifest_ship_repo_finish_eligible "$version" "$tag" || true)"
+    code="${probe%%|*}"; detail="${probe##*|}"
+    [[ "$code" == "eligible" ]] && return 0
+    echo "unfinished v${version}: ${code}${detail:+ — $detail}"
+    return 1
+}
+
 _fleet_service_release_reason() {
     local service="$1"
     local path="$2"
@@ -2426,6 +2458,13 @@ _fleet_service_release_reason() {
     if ! reason=$(_fleet_service_static_release_reason "$service" "$path"); then
         echo "$reason"
         return 1
+    fi
+    # A member stranded after its tag is a clean tree AT its tag, which the
+    # "no changes" gate below would skip as done. It is releaseable: its ship
+    # finishes that release (it replaces `ship fleet resume`).
+    if [[ "$force_bump" != "true" ]] && _fleet_service_unfinished "$path" >/dev/null; then
+        echo "$reason"
+        return 0
     fi
     # --force-bump bypasses ONLY the dynamic "no changes since tag" gate. The
     # static/policy gates above (excluded, pr-gated, release-disabled, no VERSION,
@@ -2939,6 +2978,7 @@ _fleet_ship_plan() {
     printf '%-30s %-12s %-15s %-7s %-9s %-13s %s\n' "-------" "------" "-------" "-----" "------" "--------" "-------------"
 
     local service path reason effect decision branch display_name dirty version current next config_skip
+    local unfinished="" unfinished_count=0 unfinished_block="" unfinished_blocked_count=0
     local offbranch_count=0
     local pr_gated_count=0
     local emptyremote_count=0
@@ -2972,8 +3012,28 @@ _fleet_ship_plan() {
         if reason=$(_fleet_service_release_reason "$service" "$path" "$force_bump"); then
             releaseable_count=$((releaseable_count + 1))
             effect="release"
+            unfinished=""
             if [[ "$force_bump" == "true" ]]; then
                 decision="would force"
+            elif unfinished="$(_fleet_service_unfinished "$path")"; then
+                # An unfinished release takes this member's run: it is finished,
+                # not bumped. --local cannot finish (finishing is a push), and
+                # the apply refuses before touching any member.
+                unfinished_count=$((unfinished_count + 1))
+                effect="finish"
+                unfinished_block=""
+                if [[ "$local_only" == "true" ]]; then
+                    decision="BLOCKED"
+                    unfinished_block="--local cannot finish it"
+                elif ! unfinished_block="$(_fleet_service_finish_block_reason "$path" "$unfinished")"; then
+                    # Same preconditions the member's own finish checks, read
+                    # here so the plan and the apply cannot disagree.
+                    decision="BLOCKED"
+                    unfinished_blocked_count=$((unfinished_blocked_count + 1))
+                else
+                    unfinished_block=""
+                    decision="would finish"
+                fi
             elif [[ "$local_only" == "true" ]]; then
                 decision="would local"
             else
@@ -2992,14 +3052,21 @@ _fleet_ship_plan() {
             fi
             # Per-member next version, computed against the member's own VERSION.
             next="$( (cd "$path" 2>/dev/null && get_next_version "$increment_type" 2>/dev/null) || echo "")"
-            if [[ -n "$current" && -n "$next" ]]; then
+            if [[ -n "$unfinished" ]]; then
+                # No transition: the member stays at this version.
+                version="${current} (finish)"
+            elif [[ -n "$current" && -n "$next" ]]; then
                 version="${current}->${next}"
             elif [[ -n "$current" ]]; then
                 version="${current}->?"
             else
                 version="—"
             fi
-            printf '%-30s %-12s %-15s %-7s %-9s %-13s %s\n' "$display_name" "$branch" "$version" "$dirty" "$effect" "$decision" "$path"
+            if [[ -n "$unfinished" && -n "$unfinished_block" ]]; then
+                printf '%-30s %-12s %-15s %-7s %-9s %-13s %s\n' "$display_name" "$branch" "$version" "$dirty" "$effect" "$decision" "$path ($unfinished_block)"
+            else
+                printf '%-30s %-12s %-15s %-7s %-9s %-13s %s\n' "$display_name" "$branch" "$version" "$dirty" "$effect" "$decision" "$path"
+            fi
             fp_parts+=("${display_name}:${version}")
             surface_labels+=("$display_name")
             surface_paths+=("$path")
@@ -3026,6 +3093,26 @@ _fleet_ship_plan() {
     # plan (honest dry-run) instead of assuming a release will happen.
     MANIFEST_CLI_FLEET_PLAN_RELEASEABLE_COUNT="$releaseable_count"
     manifest_plan_render_fingerprint_line "$MANIFEST_CLI_FLEET_PLAN_FINGERPRINT"
+    if [[ $unfinished_count -gt 0 && "$local_only" == "true" ]]; then
+        echo ""
+        echo "⚠️  ${unfinished_count} member(s) marked 'BLOCKED' hold an unfinished release, and --local cannot finish one (finishing pushes)."
+        echo "    Apply refuses before touching any member. Finish them first:"
+        echo "        manifest ship fleet $increment_type -y"
+        echo "    or add --force-bump to leave them as they are."
+    elif [[ $unfinished_count -gt 0 ]]; then
+        echo ""
+        echo "ℹ️  ${unfinished_count} member(s) shown 'would finish' were tagged by a ship that did not complete."
+        echo "    Apply finishes each (push, post-push gate, GitHub Release, tap formula where configured)"
+        echo "    WITHOUT bumping it; run the fleet ship again afterwards to release anything new in those members."
+        echo "    --force-bump leaves them unfinished and bumps them — and, as always, it also releases every"
+        echo "    other eligible member whether or not it has changes. To leave ONE member unfinished and ship"
+        echo "    the rest normally, run 'manifest ship repo $increment_type --force-bump -y' inside that member first."
+        if [[ $unfinished_blocked_count -gt 0 ]]; then
+            echo ""
+            echo "⚠️  ${unfinished_blocked_count} of them are marked 'BLOCKED': the release cannot be finished from that member's"
+            echo "    current state (the reason is beside its path). Apply refuses before touching any member."
+        fi
+    fi
     if [[ $pr_gated_count -gt 0 ]]; then
         echo ""
         echo "⚠️  ${pr_gated_count} member(s) shown 'needs PR' are PR-gated (release.strategy: pr)."
@@ -3105,15 +3192,25 @@ _fleet_emit_recovery_report() {
     recovery_mode="$(manifest_ship_recovery_mode "$push_status" "$failure_step" "$commits_created")"
 
     local category recovery_line resume_cmd retry_cmd
+    # The member's own ship plans the finish; -y applies it without bumping.
+    local finish_cmd="cd $failed_path && manifest ship repo $increment_type -y   (finishes v${version:-?}; bumps nothing)"
     if [[ "$recovery_mode" == "post-push" ]]; then
         category="pushed-then-stranded"
         recovery_line="Release v${version:-?} is live (tag ${tag:-?} on origin). Formula/release stranded. DO NOT rollback."
-        resume_cmd="cd $failed_path && manifest ship repo resume"
+        resume_cmd="$finish_cmd"
         retry_cmd=""
     elif [[ "$recovery_mode" == "partial-push" ]]; then
         category="partial-push"
         recovery_line="Push reached some remotes but not all for v${version:-?} (tag ${tag:-?}); the release is public where it landed. DO NOT rollback — see the member's report above for per-remote retries."
-        resume_cmd="cd $failed_path && manifest ship repo resume"
+        resume_cmd="$finish_cmd"
+        retry_cmd=""
+    elif manifest_ship_step_is_finish "$failure_step"; then
+        # The member was FINISHING a release: its release commit and tag already
+        # existed and an earlier attempt may have published them, so "no remote
+        # state" and any local rollback would both be wrong here.
+        category="unfinished"
+        recovery_line="Finishing v${version:-?} stopped at ${failure_step}. The release commit and tag ${tag:-?} already existed, and an earlier attempt may have published them. DO NOT rollback."
+        resume_cmd="$finish_cmd"
         retry_cmd=""
     elif [[ "$push_status" == "failed" || "$result" == "failed" ]]; then
         category="local-only"
@@ -3131,7 +3228,10 @@ _fleet_emit_recovery_report() {
                 recovery_line="Failure before public push; no remote state for this member. Safe to retry. (Commits-created count unverified; not advising a local rollback.)"
                 ;;
         esac
-        resume_cmd="cd $failed_path && manifest ship repo resume"
+        # A member that failed before its push has a release to FINISH only if
+        # its tag was made; the same command plans whichever applies, so one
+        # line serves both.
+        resume_cmd=""
         retry_cmd="cd $failed_path && manifest ship repo $increment_type -y"
     else
         category="unknown"
@@ -3172,10 +3272,10 @@ _fleet_emit_recovery_report() {
     echo "       category: $category"
     echo "       $recovery_line"
     if [[ -n "$resume_cmd" ]]; then
-        echo "       Resume:   $resume_cmd"
+        echo "       Finish:   $resume_cmd"
     fi
     if [[ -n "$retry_cmd" ]]; then
-        echo "       Or retry: $retry_cmd"
+        echo "       Retry:    $retry_cmd"
     fi
     echo ""
 
@@ -4239,6 +4339,36 @@ EOF
         return 1
     fi
 
+    # An unfinished member release that cannot be finished would stop the fleet
+    # at that member, with earlier members already released. Refuse here, before
+    # the first member is touched: --local cannot finish anything (finishing is
+    # a push), and a member's own preconditions (clean tree, on a branch, tag in
+    # its history) are read with the same probe its finish uses.
+    # --force-bump leaves unfinished releases and bumps, so it skips this.
+    if [[ "$force_bump" != "true" ]]; then
+        local uf_service uf_path uf_info uf_reason uf_blocked=0
+        for uf_service in $MANIFEST_CLI_FLEET_SERVICES; do
+            uf_path=$(get_fleet_service_property "$uf_service" "path")
+            _fleet_service_static_release_reason "$uf_service" "$uf_path" >/dev/null || continue
+            uf_info="$(_fleet_service_unfinished "$uf_path")" || continue
+            if [[ "$local_only" == "true" ]]; then
+                log_error "  - $uf_service: v${uf_info%%|*} is an unfinished release; --local cannot finish it."
+                uf_blocked=1
+            elif ! uf_reason="$(_fleet_service_finish_block_reason "$uf_path" "$uf_info")"; then
+                log_error "  - $uf_service: v${uf_info%%|*} is an unfinished release and cannot be finished from its current state ($uf_reason)."
+                uf_blocked=1
+            fi
+        done
+        if [[ "$uf_blocked" -eq 1 ]]; then
+            if [[ "$local_only" == "true" ]]; then
+                log_error "No member was touched. Finish them first (manifest ship fleet $increment_type -y), or add --force-bump to leave them."
+            else
+                log_error "No member was touched. Fix each member named above (commit or stash its changes, or check out its release branch), or add --force-bump to leave them."
+            fi
+            return 1
+        fi
+    fi
+
     # Single-flight: only one fleet ship may apply in this workspace at a time.
     # Acquired only on the apply path (preview returned above) and only after
     # the read-only pre-flights pass.
@@ -4303,8 +4433,11 @@ EOF
             skipped+=("$service|$path|$reason")
             continue
         fi
+        local member_unfinished=""
         if [[ "$force_bump" == "true" ]]; then
             echo "  - $service: force-bumping $increment_type"
+        elif member_unfinished="$(_fleet_service_unfinished "$path")"; then
+            echo "  - $service: finishing v${member_unfinished%%|*} (no bump)"
         else
             echo "  - $service: shipping $increment_type"
         fi
@@ -4524,233 +4657,6 @@ _fleet_ship_topics_pass() {
     [[ -n "$topics_config" ]] || return 0
 
     manifest_fleet_topics_run "$topics_root" "$topics_config" "false" "true" || true
-    return 0
-}
-
-# =============================================================================
-# COMMAND: ship fleet resume
-# =============================================================================
-
-# Probes each releaseable fleet member, classifies it as eligible / nothing /
-# release-disabled, and (when applied) delegates to per-repo resume for each
-# eligible member. Pure read in preview mode; sequential fail-fast on apply.
-#
-# Fills caller-scope arrays `eligible`, `nothing`, `disabled` via dynamic
-# scope. Each entry is pipe-delimited:
-#   eligible: svc|path|version|tag
-#   nothing:  svc|path|code|detail
-#   disabled: svc|path|reason
-_fleet_resume_classify() {
-    eligible=()
-    nothing=()
-    disabled=()
-
-    local service path reason probe code version tag_name detail
-    for service in $MANIFEST_CLI_FLEET_SERVICES; do
-        path=$(get_fleet_service_property "$service" "path")
-        if ! reason=$(_fleet_service_static_release_reason "$service" "$path"); then
-            # Includes static target exclusions such as "not a git repo",
-            # "missing path", "release disabled", and "excluded". Resume then
-            # runs its own per-repo probe, because stranded release state can be
-            # clean except for formula-only files that ship intentionally skips.
-            disabled+=("$service|$path|$reason")
-            continue
-        fi
-        # `|| true` neutralizes set -eo pipefail propagation from the subshell
-        # when the probe returns 1 (non-eligible); the probe's stdout is the
-        # source of truth — rc just mirrors eligible-vs-not.
-        probe=$(
-            cd "$path" 2>/dev/null || exit 1
-            MANIFEST_CLI_PROJECT_ROOT="$PWD"
-            export MANIFEST_CLI_PROJECT_ROOT
-            manifest_ship_repo_resume_eligible
-        ) || true
-        IFS='|' read -r code version tag_name detail <<<"$probe"
-        case "$code" in
-            eligible)
-                eligible+=("$service|$path|$version|$tag_name")
-                ;;
-            *)
-                nothing+=("$service|$path|${code:-unknown}|${detail:-no detail}")
-                ;;
-        esac
-    done
-}
-
-# Prints the per-category recap used by both preview and apply summary.
-# Reads caller-scope arrays `eligible`, `nothing`, `disabled`.
-_fleet_resume_print_classification() {
-    local header_label="${1:-Fleet resume preview}"
-    echo ""
-    echo "$header_label"
-    echo "  Fleet:     ${MANIFEST_CLI_FLEET_NAME:-unknown}"
-    echo ""
-
-    echo "  Eligible (${#eligible[@]}):"
-    if [[ ${#eligible[@]} -eq 0 ]]; then
-        echo "    (none)"
-    else
-        local entry svc spath sver stag
-        for entry in "${eligible[@]}"; do
-            IFS='|' read -r svc spath sver stag <<<"$entry"
-            echo "    🔧 $svc → resume v${sver} (tag ${stag})"
-        done
-    fi
-    echo ""
-
-    echo "  Nothing to resume (${#nothing[@]}):"
-    if [[ ${#nothing[@]} -eq 0 ]]; then
-        echo "    (none)"
-    else
-        local entry nsvc npath ncode ndetail
-        for entry in "${nothing[@]}"; do
-            IFS='|' read -r nsvc npath ncode ndetail <<<"$entry"
-            echo "    ✓  $nsvc ($ncode)"
-        done
-    fi
-    echo ""
-
-    echo "  Release disabled (${#disabled[@]}):"
-    if [[ ${#disabled[@]} -eq 0 ]]; then
-        echo "    (none)"
-    else
-        local entry dsvc dpath dreason
-        for entry in "${disabled[@]}"; do
-            IFS='|' read -r dsvc dpath dreason <<<"$entry"
-            echo "    ⏭  $dsvc ($dreason)"
-        done
-    fi
-    echo ""
-}
-
-# -----------------------------------------------------------------------------
-# Function: fleet_resume
-# -----------------------------------------------------------------------------
-# Fleet-level counterpart to `manifest ship repo resume`. Walks each
-# releaseable member, applies the per-repo resume eligibility probe, and
-# delegates to per-repo resume for any member found in the stranded state.
-# Preview by default; -y to apply. Refuses --local (resume's job is to push
-# stranded artifacts).
-# -----------------------------------------------------------------------------
-fleet_resume() {
-    local execution_mode="preview"
-    local local_only=false
-    local remaining_args=()
-    if ! manifest_execution_parse execution_mode local_only remaining_args "$@"; then
-        return 1
-    fi
-    set -- "${remaining_args[@]}"
-
-    if [[ "$local_only" == "true" ]]; then
-        log_error "fleet resume does not support --local."
-        return 1
-    fi
-
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --help)
-                cat << 'EOF'
-Usage: manifest ship fleet resume [-y|--yes] [--dry-run]
-
-Walks each releaseable fleet member, probes per-repo resume eligibility
-(VERSION present, local tag matches, ancestor of HEAD, clean tree modulo
-formula/manifest.rb), and (with -y) delegates to `manifest ship repo resume`
-for each eligible member.
-
-Options:
-  --dry-run    Explicit preview; classify members but do not resume
-  -y, --yes    Apply: resume each eligible member in sequence
-
-Resume is sequential and fail-fast. A failure aborts remaining members so
-the user can inspect state before re-running.
-EOF
-                return 0
-                ;;
-            *)
-                log_error "Unknown option for 'manifest ship fleet resume': $1"
-                return 1
-                ;;
-        esac
-    done
-
-    if ! _fleet_require_initialized "ship resume"; then
-        return 1
-    fi
-
-    local -a eligible=() nothing=() disabled=()
-    _fleet_resume_classify
-
-    _fleet_scope_block
-    _fleet_resume_print_classification "Fleet resume plan"
-
-    if [[ "$execution_mode" == "preview" ]]; then
-        manifest_execution_footer "manifest ship fleet resume -y"
-        return 0
-    fi
-
-    if [[ ${#eligible[@]} -eq 0 ]]; then
-        echo "Nothing to resume across fleet."
-        return 0
-    fi
-
-    if ! _fleet_preflight_git_writability; then
-        return 1
-    fi
-
-    if ! _fleet_preflight_on_default_branch; then
-        return 1
-    fi
-
-    echo "Resuming ${#eligible[@]} member(s)..."
-    local entry svc spath sver stag rc
-    local -a resumed=() failed=()
-    for entry in "${eligible[@]}"; do
-        IFS='|' read -r svc spath sver stag <<<"$entry"
-        echo "  - $svc: resuming v${sver}"
-        (
-            cd "$spath" || exit 1
-            export MANIFEST_CLI_PROJECT_ROOT="$PWD"
-            if ! load_configuration "$MANIFEST_CLI_PROJECT_ROOT"; then
-                log_error "Could not load configuration for fleet member: $svc ($spath)"
-                exit 1
-            fi
-            # Same pair as the delegated ship above: fleet -y is the consent
-            # authority, and the apply-target gate accepts it only through the
-            # delegation flag, because the export below lands long after
-            # manifest-config.sh took its process-start snapshot (TRACKER §46).
-            export MANIFEST_CLI_AUTO_CONFIRM=1
-            export _MANIFEST_CLI_DELEGATED_APPLY_CONSENT=1
-            manifest_ship_repo_resume
-        )
-        rc=$?
-        if [[ $rc -ne 0 ]]; then
-            failed+=("$svc|$spath|$sver")
-            break
-        fi
-        resumed+=("$svc|$spath|$sver")
-    done
-
-    echo ""
-    echo "Fleet resume summary"
-    echo "  Resumed (${#resumed[@]}):"
-    if [[ ${#resumed[@]} -eq 0 ]]; then
-        echo "    (none)"
-    else
-        for entry in "${resumed[@]}"; do
-            IFS='|' read -r svc spath sver <<<"$entry"
-            echo "    ✅ $svc → v${sver}"
-        done
-    fi
-    if [[ ${#failed[@]} -gt 0 ]]; then
-        echo "  Failed (${#failed[@]}):"
-        for entry in "${failed[@]}"; do
-            IFS='|' read -r svc spath sver <<<"$entry"
-            echo "    ❌ $svc → v${sver}"
-        done
-        log_error "Fleet resume aborted at ${failed[0]%%|*}. See per-member output above."
-        return 1
-    fi
-    echo "✅ Fleet resume complete."
     return 0
 }
 

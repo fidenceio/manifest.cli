@@ -97,8 +97,9 @@ _add_two_remotes() {
     [[ "$output" == *"Remote alpha: success"* ]]
     [[ "$output" == *"Remote beta: failed"* ]]
     [[ "$output" == *"Retry:    git push beta main v1.2.3"* ]]
-    [[ "$output" == *"status probe checks origin only"* ]]
-    [[ "$output" == *"Resume:      manifest ship repo resume"* ]]
+    [[ "$output" == *"remote status lines check origin only"* ]]
+    [[ "$output" == *"Finish:      manifest ship repo patch   (plans finishing v1.2.3; add -y to apply"* ]]
+    [[ "$output" != *"ship repo resume"* ]]
 }
 
 @test "push_changes: single remote failure stays 'failed' — no partial vocabulary" {

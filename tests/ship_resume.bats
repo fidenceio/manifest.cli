@@ -27,11 +27,13 @@ teardown() {
     rm -rf "$SCRATCH"
 }
 
-@test "ship failure report prints exact tag push and resume command" {
+@test "ship failure report prints exact tag push and the finish command" {
+    git tag v1.2.3      # the report offers a finish only for a tag that exists
     run emit_ship_failure_report "push_changes" "$(git rev-parse HEAD)" "1.2.3" "v1.2.3" "failed" "skipped"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Retry push:  git push origin main v1.2.3"* ]]
-    [[ "$output" == *"Resume:      manifest ship repo resume"* ]]
+    [[ "$output" == *"Finish:      manifest ship repo patch   (plans finishing v1.2.3; add -y to apply"* ]]
+    [[ "$output" != *"ship repo resume"* ]]
     [[ "$output" != *"--follow-tags"* ]]
 }
 
@@ -39,7 +41,8 @@ teardown() {
     run emit_ship_failure_report "homebrew_update" "$(git rev-parse HEAD)" "1.2.3" "v1.2.3" "success" "failed"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Release artifacts are already pushed"* ]]
-    [[ "$output" == *"Resume:      manifest ship repo resume"* ]]
+    [[ "$output" == *"Finish:      manifest ship repo patch   (plans finishing v1.2.3; add -y to apply"* ]]
+    [[ "$output" != *"ship repo resume"* ]]
     [[ "$output" == *"Verify tag:  git ls-remote --tags origin v1.2.3"* ]]
     [[ "$output" != *"Remove tag:"* ]]
     [[ "$output" != *"Roll back:"* ]]
@@ -81,24 +84,114 @@ teardown() {
     [[ "$output" != *"git checkout HEAD --"* ]]
 }
 
-@test "ship repo resume pushes existing local release tag" {
+@test "ship failure report offers no Finish line when the tag was never created" {
+    # A ship that fails AT create_tag has made its release commit and no tag.
+    # "Finish: manifest ship repo patch" there would send the operator to a
+    # command that plans the next version, not this one.
+    local start_sha
+    start_sha="$(git rev-parse HEAD)"
+    git commit --allow-empty -qm "Bump version to 1.2.4"
+    run emit_ship_failure_report "create_tag" "$start_sha" "1.2.4" "v1.2.4" "not_attempted" "skipped"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"The tag v1.2.4 was not created, so nothing was pushed and there is nothing to finish."* ]]
+    [[ "$output" != *"Finish:"* ]]
+    [[ "$output" != *"Retry push:"* ]]
+    [[ "$output" != *"Remove tag:"* ]]
+    # The count rules still apply: one verified commit, nothing public.
+    [[ "$output" == *"Roll back:   git reset --hard ${start_sha}"* ]]
+
+    # CONTROL: the same call once the tag exists prints all three.
+    git tag v1.2.4
+    run emit_ship_failure_report "create_tag" "$start_sha" "1.2.4" "v1.2.4" "not_attempted" "skipped"
+    [[ "$output" == *"Finish:      manifest ship repo patch"* ]]
+    [[ "$output" == *"Remove tag:  git tag -d v1.2.4"* ]]
+}
+
+@test "ship failure report for a failed finish advises nothing destructive" {
+    git tag v1.2.3
+    # A finish that cannot reach the remote reads the tag as "missing or
+    # unreachable". The report for the removed `resume` then offered
+    # `git tag -d` and a checkout of VERSION for a release that was public.
+    run emit_ship_failure_report "finish_push" "$(git rev-parse HEAD)" "1.2.3" "v1.2.3" "failed" "skipped"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"This run created nothing: the release commit and v1.2.3 already existed."* ]]
+    [[ "$output" == *"Do NOT delete the tag or reset"* ]]
+    [[ "$output" == *"Retry push:  git push origin main v1.2.3"* ]]
+    [[ "$output" == *"Finish:      manifest ship repo patch"* ]]
+    [[ "$output" != *"Remove tag:"* ]]
+    [[ "$output" != *"git tag -d"* ]]
+    [[ "$output" != *"git checkout HEAD --"* ]]
+    [[ "$output" != *"reset --hard"* ]]
+
+    # CONTROL: an ordinary push failure with a tag still offers the tag removal,
+    # so the assertions above are not passing on a report that never prints it.
+    run emit_ship_failure_report "push_changes" "$(git rev-parse HEAD)" "1.2.3" "v1.2.3" "failed" "skipped"
+    [[ "$output" == *"Remove tag:  git tag -d v1.2.3"* ]]
+}
+
+# The finish routine, unit level. Its consent and its lock belong to the caller
+# (manifest_ship_repo's apply path) — tests/ship_unfinished_release.bats drives
+# that route through the real entrypoint, and tests/ship_repo_lock.bats pins
+# that it is the only one.
+
+@test "finish pushes the tag of a recorded unfinished release and clears the record" {
+    local remote="$SCRATCH/remote.git"
+    git init --bare -q "$remote"
+    git remote add origin "$remote"
+    run create_tag "1.2.3"
+    [ "$status" -eq 0 ]
+    manifest_ship_inflight_begin "1.2.3" "v1.2.3" "$(git rev-parse 'v1.2.3^{commit}')"
+    [ -f .git/manifest-ship/in-flight ]
+
+    run manifest_ship_repo_finish
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Finishing release"* ]]
+    [[ "$output" == *"remote tag:"* ]]
+    [[ "$output" == *"Release v1.2.3 finished. Nothing was bumped."* ]]
+    git --git-dir="$remote" rev-parse "v1.2.3^{commit}" >/dev/null
+    [ ! -e .git/manifest-ship/in-flight ]
+}
+
+@test "finish refuses when no unfinished release is recorded, even with a tag to push" {
+    # The shape `ship repo resume` used to act on: a local tag, nothing else.
+    # Without a record there is nothing this routine may finish.
     local remote="$SCRATCH/remote.git"
     git init --bare -q "$remote"
     git remote add origin "$remote"
     run create_tag "1.2.3"
     [ "$status" -eq 0 ]
 
-    run manifest_ship_repo_resume
-    [ "$status" -eq 0 ]
-    [[ "$output" == *"Ship resume"* ]]
-    [[ "$output" == *"remote tag:"* ]]
-    git --git-dir="$remote" rev-parse "v1.2.3^{commit}" >/dev/null
+    run manifest_ship_repo_finish
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Nothing to finish"* ]]
+    refute git --git-dir="$remote" rev-parse -q --verify "refs/tags/v1.2.3^{commit}"
 }
 
-@test "ship repo resume refuses when VERSION tag is missing" {
-    run manifest_ship_repo_resume
+@test "unfinished probe: none without a record, unfinished with one, none once the tag moves" {
+    run create_tag "1.2.3"
+    [ "$status" -eq 0 ]
+
+    run manifest_ship_repo_unfinished
     [ "$status" -ne 0 ]
-    [[ "$output" == *"local tag v1.2.3 does not exist"* ]]
+    [[ "$output" == none\|* ]]
+
+    manifest_ship_inflight_begin "1.2.3" "v1.2.3" "$(git rev-parse 'v1.2.3^{commit}')"
+    manifest_ship_inflight_note_stop "1.2.3" "homebrew_update"
+    run manifest_ship_repo_unfinished
+    [ "$status" -eq 0 ]
+    [[ "$output" == unfinished\|1.2.3\|v1.2.3\|homebrew_update\|* ]]
+
+    # A stop noted for another version is not this record's.
+    manifest_ship_inflight_note_stop "9.9.9" "push_changes"
+    run manifest_ship_repo_unfinished
+    [[ "$output" == unfinished\|1.2.3\|v1.2.3\|homebrew_update\|* ]]
+
+    # The tag now points somewhere else: the record no longer describes it.
+    git commit --allow-empty -qm "later"
+    git tag -f v1.2.3 >/dev/null
+    run manifest_ship_repo_unfinished
+    [ "$status" -ne 0 ]
+    [[ "$output" == none\|* ]]
 }
 
 @test "follow-up patch gate allows canonical non-patch full release" {

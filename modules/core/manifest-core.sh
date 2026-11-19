@@ -404,7 +404,7 @@ update_homebrew_formula() {
         sha256=""
         if [ "$attempt" -ge "$sha_retries" ]; then
             log_error "Failed to fetch tarball SHA256 for ${tag} after ${sha_retries} attempt(s) (${tarball_url})."
-            log_error "GitHub's tag tarball may still be generating; re-run 'manifest ship repo resume' shortly."
+            log_error "GitHub's tag tarball may still be generating; re-run 'manifest ship repo patch -y' shortly: it finishes this release without bumping."
             return 1
         fi
         echo "   ⚠️  SHA256 fetch failed for ${tag} (attempt ${attempt}/${sha_retries}); retrying in ${sha_delay}s..."

@@ -18,7 +18,8 @@
 # COMMANDS:
 #   manifest ship repo <type>           Full release (tag + push + tap formula)
 #   manifest ship repo <type> --local   Local-only (no tag, no push)
-#   manifest ship repo resume           Resume post-release steps after failure
+#                                       (an unfinished release is finished by this
+#                                       same command: it plans the finish first)
 #   manifest ship fleet <type>          Coordinated fleet release
 #   manifest ship fleet <type> --local  Coordinated fleet local-only
 #
@@ -471,6 +472,29 @@ manifest_ship_repo_preview_preflight_notice() {
     echo "  Depending upon your IDE or agent, you may see a brief failure before an elevated script completes the job."
 }
 
+# `ship repo resume` and `ship fleet resume` were removed. An unfinished release
+# is now finished by the ordinary ship, which plans it first and applies only
+# with -y — the removed verb at repo scope applied with no -y at all. The word
+# is refused by name, with its replacement, rather than as an unknown option.
+#   $1 scope: repo | fleet
+_manifest_ship_resume_removed() {
+    local scope="$1"
+    log_error "'manifest ship $scope resume' was removed: an unfinished release is finished by the ordinary ship."
+    log_error "Run the release command you would run next. When a release is unfinished its plan says so, and -y finishes it without bumping:"
+    echo "  manifest ship $scope patch        (the plan)" >&2
+    echo "  manifest ship $scope patch -y     (finish it)" >&2
+    # The case the people most likely to type this word are in: no in-flight
+    # record, so no plan shows the release. A release started by an older
+    # Manifest is one way to have none; a fresh clone and a removed record are
+    # others, so the message states the fact and not a cause.
+    local where=""
+    [[ "$scope" == "fleet" ]] && where=", in each member it applies to"
+    echo "If the plan does not show it, Manifest holds no record of an unfinished release there (one started by an older Manifest leaves none). Push it by hand${where}:" >&2
+    echo "  git push origin <branch> <tag>" >&2
+    echo "More: the Migration Guide, docs/MIGRATION.md in the Manifest CLI repository." >&2
+    return 1
+}
+
 # -----------------------------------------------------------------------------
 # Function: manifest_ship_repo
 # -----------------------------------------------------------------------------
@@ -507,21 +531,18 @@ manifest_ship_repo() {
         fi
         case "$1" in
             resume)
-                local resume_arg
-                for resume_arg in "$@"; do
-                    case "$resume_arg" in
-                        --help) manifest_ship_repo --help; return $? ;;
-                    esac
-                done
-                manifest_ship_repo_resume "$@"
-                return $?
+                # Removed (TRACKER, MIGRATION.md): it was the one mutating route
+                # that applied without -y. Refused by name rather than as an
+                # unknown option, so the replacement is on the screen.
+                _manifest_ship_resume_removed "repo"
+                return 1
                 ;;
             --interactive) interactive=true; shift ;;
             --force-bump) force_bump=true; shift ;;
             --explain) explain=true; shift ;;
             --help)
                 _render_help \
-                    "manifest ship repo <patch|minor|major|revision>|resume [-y|--yes] [--dry-run] [--local] [--force-bump] [--interactive]" \
+                    "manifest ship repo <patch|minor|major|revision> [-y|--yes] [--dry-run] [--local] [--force-bump] [--interactive]" \
                     "Preview or publish a release: version bump, docs, commit, tag, push." \
                     "Options" "  patch               Increment patch version (e.g. 1.2.3 -> 1.2.4)
   minor               Increment minor version (e.g. 1.2.3 -> 1.3.0)
@@ -532,15 +553,18 @@ manifest_ship_repo() {
   --local             With -y, local only — no tag, push, or Homebrew update
   --interactive       Enable interactive safety prompts
   --force-bump        Bump, commit, and push even with no changes since the last
-                      tag (forward-only — new commit + tag; never rewrites history)
-  --explain           Show the built-in recipe definition without running it
-  resume              Continue safe post-release steps for current VERSION/tag" \
+                      tag (forward-only — new commit + tag; never rewrites history).
+                      Also the way to leave an unfinished release as it is
+  --explain           Show the built-in recipe definition without running it" \
+                    "Unfinished releases" "  A release whose ship stopped after it created the tag (a failed push, a
+  failed post-push gate or formula publish, a killed run) is finished by this
+  same command: the plan says so, and -y finishes it without bumping. Run it
+  again for the next release." \
                     "Examples" "  manifest ship repo patch
   manifest ship repo patch -y
   manifest ship repo minor --local -y
   manifest ship repo patch --force-bump -y
-  manifest ship repo major --interactive -y
-  manifest ship repo resume"
+  manifest ship repo major --interactive -y"
                 return 0
                 ;;
             *)
@@ -575,12 +599,38 @@ manifest_ship_repo() {
         return 1
     fi
 
+    # An unfinished release of the current VERSION takes the run. It is decided
+    # here, ahead of the "nothing to release" gate, because a release stranded
+    # after its tag IS a clean tree at its tag: that gate would call it done.
+    # --force-bump is the explicit way to leave it and cut the next release;
+    # --local cannot finish anything (finishing is a push), so it refuses.
+    local run_kind="release"
+    local uf_code="" uf_version="" uf_tag="" uf_stopped="" uf_log=""
+    if declare -F manifest_ship_repo_unfinished >/dev/null 2>&1; then
+        IFS='|' read -r uf_code uf_version uf_tag uf_stopped uf_log \
+            <<<"$(manifest_ship_repo_unfinished || true)"
+    fi
+    if [[ "$uf_code" == "unfinished" ]]; then
+        if [[ "$force_bump" == "true" ]]; then
+            echo "force-bump: leaving v${uf_version} unfinished (${uf_tag} stays as it is; its remaining publish steps are not run) and cutting the next release."
+        elif [[ "$local_only" == "true" ]]; then
+            log_error "v${uf_version} is an unfinished release (${uf_tag}, stopped at: ${uf_stopped}), and --local cannot finish it: finishing pushes."
+            log_error "Finish it first:        manifest ship repo $increment_type        (shows the plan; add -y)"
+            log_error "Or leave it and go on:  $replay_command --force-bump -y"
+            return 1
+        else
+            run_kind="finish"
+        fi
+    fi
+
     # Symmetric "nothing to release" gate (parity with ship fleet's per-member
     # skip): a clean working tree already at the current release tag has nothing
     # to ship. Reuses the repo-side predicate so repo and fleet decide
     # identically. --force-bump bypasses it to cut a deliberate forward-only
     # release (new commit + tag; the bump itself becomes the change).
-    if [[ "$force_bump" == "true" ]]; then
+    if [[ "$run_kind" == "finish" ]]; then
+        :
+    elif [[ "$force_bump" == "true" ]]; then
         echo "force-bump: cutting a release regardless of changes since the last tag (forward-only — new commit + tag, no history rewrite)."
     else
         local _repo_root="${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
@@ -594,6 +644,34 @@ manifest_ship_repo() {
         if declare -F manifest_ship_followup_has_releasable_changes >/dev/null 2>&1 \
             && ! ( cd "$_repo_root" 2>/dev/null && manifest_ship_followup_has_releasable_changes "$_cur_tag" ); then
             echo "Nothing to release: HEAD is at ${_cur_tag} and the working tree is clean."
+            # A hint, never a decision: with no in-flight record this tree is
+            # "done" as far as Manifest can know. But if the tag's commit is not
+            # on the upstream ref as last fetched, the release may never have
+            # been pushed (one stranded by an older Manifest has no record).
+            # Read locally; nothing is fetched.
+            local _up_ref
+            _up_ref="$(git -C "$_repo_root" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
+            if [[ -n "$_up_ref" ]] \
+                && git -C "$_repo_root" rev-parse -q --verify "refs/tags/${_cur_tag}^{commit}" >/dev/null 2>&1 \
+                && ! git -C "$_repo_root" merge-base --is-ancestor "${_cur_tag}^{commit}" "$_up_ref" 2>/dev/null; then
+                echo "  Note: ${_cur_tag} is not on ${_up_ref} as last fetched. If that release was never pushed, push it:"
+                # The remote and the branch come from the branch's own config,
+                # not from splitting "${_up_ref}" at a slash: a remote may be
+                # named "team/hub", and a local branch may track one of another
+                # name, which needs the HEAD:<branch> form.
+                local _nb_branch _nb_remote _nb_merge
+                _nb_branch="$(git -C "$_repo_root" branch --show-current 2>/dev/null || true)"
+                _nb_remote="$(git -C "$_repo_root" config --get "branch.${_nb_branch}.remote" 2>/dev/null || true)"
+                _nb_merge="$(git -C "$_repo_root" config --get "branch.${_nb_branch}.merge" 2>/dev/null || true)"
+                _nb_merge="${_nb_merge#refs/heads/}"
+                if [[ -z "$_nb_remote" || "$_nb_remote" == "." || -z "$_nb_merge" ]]; then
+                    echo "    git push <remote> <branch> ${_cur_tag}"
+                elif [[ "$_nb_merge" == "$_nb_branch" ]]; then
+                    echo "    git push ${_nb_remote} ${_nb_branch} ${_cur_tag}"
+                else
+                    echo "    git push ${_nb_remote} HEAD:${_nb_merge} ${_cur_tag}"
+                fi
+            fi
             echo "  Re-run to cut a release anyway:"
             echo "    ${replay_command} --force-bump -y"
             return 0
@@ -609,7 +687,23 @@ manifest_ship_repo() {
 
     if [[ "$execution_mode" == "preview" ]]; then
         manifest_ship_repo_identity_notice "${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
-        manifest_ship_preview_plan "$increment_type" "$local_only"
+        if [[ "$run_kind" == "finish" ]]; then
+            manifest_ship_finish_plan "$uf_version" "$uf_tag" "$uf_stopped" "$uf_log" "$replay_command"
+            local _finish_fp
+            _finish_fp="$(manifest_plan_fingerprint "ship-repo-finish" "$uf_version" "$uf_tag")"
+            manifest_plan_render_fingerprint_line "$_finish_fp"
+            # Persisted under the same key as an ordinary plan's, so the apply's
+            # drift warning compares whichever plan was read last.
+            manifest_plan_fingerprint_persist "ship-repo" "$_finish_fp" "${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
+        else
+            manifest_ship_preview_plan "$increment_type" "$local_only"
+        fi
+        if [[ "$run_kind" == "finish" ]] && ! manifest_ship_repo_finish_eligible "$uf_version" "$uf_tag" >/dev/null 2>&1; then
+            # A blocked plan is not one -y would apply; do not invite it.
+            echo ""
+            echo "No changes written. This plan is BLOCKED: fix the cause above, then run the plan again."
+            return "$(manifest_preview_exit_code)"
+        fi
         manifest_execution_footer "$(manifest_execution_replay_hint "$replay_command")"
         manifest_ship_repo_preview_preflight_notice
         # Preview-without-consent exit code: 0 by default (the historical
@@ -628,8 +722,15 @@ manifest_ship_repo() {
         return 1
     fi
 
+    # A finish has its own fingerprint — version and tag, not a version
+    # transition — so a plan that showed "finish v1.2.3" and an apply that
+    # would cut v1.2.4 are told apart by the same drift warning as any other.
     local plan_fingerprint
-    plan_fingerprint="$(manifest_ship_repo_plan_fingerprint "$increment_type" "$local_only")"
+    if [[ "$run_kind" == "finish" ]]; then
+        plan_fingerprint="$(manifest_plan_fingerprint "ship-repo-finish" "$uf_version" "$uf_tag")"
+    else
+        plan_fingerprint="$(manifest_ship_repo_plan_fingerprint "$increment_type" "$local_only")"
+    fi
 
     # Warn (never block) if the plan drifted since the preview the user read.
     manifest_plan_fingerprint_warn_on_drift "ship-repo" "$plan_fingerprint" "${MANIFEST_CLI_PROJECT_ROOT:-$PWD}"
@@ -641,15 +742,18 @@ manifest_ship_repo() {
     manifest_execution_apply_header
 
     # Same renderer as the preview's, so an apply cannot silently pause on a
-    # run whose preview said nothing about it.
-    if declare -F manifest_handoff_disclose >/dev/null 2>&1; then
+    # run whose preview said nothing about it. A finish writes no documentation
+    # and cannot pause, so it discloses nothing.
+    if [[ "$run_kind" != "finish" ]] && declare -F manifest_handoff_disclose >/dev/null 2>&1; then
         local _ho_apply_replay="manifest ship repo $increment_type"
         [[ "$local_only" == "true" ]] && _ho_apply_replay="$_ho_apply_replay --local"
         manifest_handoff_disclose "$_ho_apply_replay -y"
     fi
 
     manifest_plan_render_fingerprint_line "$plan_fingerprint"
-    if [[ "$local_only" == "true" ]]; then
+    if [[ "$run_kind" == "finish" ]]; then
+        echo "Ship: finishing v${uf_version} (${uf_tag}) — no bump; the requested '$increment_type' is not applied by this run"
+    elif [[ "$local_only" == "true" ]]; then
         echo "Ship (local): $increment_type — no remote operations"
     else
         echo "Ship: $increment_type"
@@ -677,7 +781,11 @@ manifest_ship_repo() {
     fi
 
     local workflow_rc=0
-    manifest_ship_workflow "$increment_type" "$interactive" "$publish_release" || workflow_rc=$?
+    if [[ "$run_kind" == "finish" ]]; then
+        manifest_ship_repo_finish || workflow_rc=$?
+    else
+        manifest_ship_workflow "$increment_type" "$interactive" "$publish_release" || workflow_rc=$?
+    fi
 
     # Completion audit event (§8.3a): the authorization event emitted at the
     # apply guard recorded only whether the *confirmation* succeeded — a ship
@@ -746,29 +854,26 @@ manifest_ship_fleet() {
         fi
         case "$1" in
             resume)
-                subcommand="resume"; shift ;;
+                _manifest_ship_resume_removed "fleet"
+                return 1
+                ;;
             manager)
                 subcommand="manager"; shift ;;
             --explain) explain=true; shift ;;
             --help)
-                if [[ "$subcommand" == "resume" ]]; then
-                    fleet_resume "--help"
-                    return $?
-                fi
                 if [[ "$subcommand" == "manager" ]]; then
                     fleet_ship_manager "--help"
                     return $?
                 fi
                 _render_help \
-                    "manifest ship fleet <patch|minor|major|revision>|resume|manager [-y|--yes] [--dry-run] [--local] [fleet options]" \
+                    "manifest ship fleet <patch|minor|major|revision>|manager [-y|--yes] [--dry-run] [--local] [fleet options]" \
                     "Preview or publish a coordinated fleet release across eligible services." \
                     "Options" "  patch | minor | major | revision   Release type
-  resume                   Resume stranded fleet members (push tag + tap formula for each eligible repo)
   manager                  Commit + push the fleet coordination root ONLY — no members, no release
                            treatment (manifest ship fleet manager --help)
   --dry-run                Explicit preview; no writes, commits, tags, pushes, or PRs
   -y, --yes                Apply the fleet release plan
-  --local                  With -y, local only — no push, no tags (ship and manager; not valid for resume)
+  --local                  With -y, local only — no push, no tags
   --explain                Show the built-in recipe definition without running it
   --require-clean          Require every member tree to be clean before shipping
   --force-bump             Ship every release-eligible member even with no changes since its tag
@@ -778,14 +883,13 @@ manifest_ship_fleet() {
             MANIFEST_CLI_FLEET_PREVIEW_POLICY_GATE=run executes it and shows the verdict)
   apply:    load fleet -> pre-flights (policy gate among them) -> ship release-enabled services
             -> commit and push the fleet manager root
-  resume:   load fleet -> per-member eligibility probe -> delegate to repo resume
+  unfinished member releases are finished by the same apply: the plan marks them
+            'would finish', and -y finishes each without bumping it
   manager:  load fleet -> commit the coordination files at the root (allowlist only) -> push
   PR work:  use manifest pr fleet ... explicitly" \
                     "Examples" "  manifest ship fleet patch
   manifest ship fleet patch -y
   manifest ship fleet minor --local -y
-  manifest ship fleet resume
-  manifest ship fleet resume -y
   manifest ship fleet manager
   manifest ship fleet manager -y"
                 return 0
@@ -822,32 +926,10 @@ manifest_ship_fleet() {
         return $?
     fi
 
-    if [[ "$subcommand" == "resume" ]]; then
-        if [[ "$local_only" == "true" ]]; then
-            _render_help_error \
-                "manifest ship fleet resume does not support --local" \
-                "manifest ship fleet resume [-y|--yes] [--dry-run]"
-            return 1
-        fi
-        if [[ "$explain" == "true" ]]; then
-            log_error "manifest ship fleet resume has no recipe to explain."
-            return 1
-        fi
-        if [[ "$execution_mode" == "preview" ]]; then
-            echo "Ship fleet resume preview — no changes written"
-            fleet_resume "--dry-run" "${fleet_args[@]}"
-        else
-            manifest_execution_apply_header
-            echo "Ship fleet resume"
-            fleet_resume "-y" "${fleet_args[@]}"
-        fi
-        return $?
-    fi
-
     if [[ -z "$increment_type" ]]; then
         _render_help_error \
             "ship fleet requires a release type" \
-            "manifest ship fleet <patch|minor|major|revision>|resume [--local]"
+            "manifest ship fleet <patch|minor|major|revision> [--local]"
         return 1
     fi
 

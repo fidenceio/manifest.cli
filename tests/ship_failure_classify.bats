@@ -46,7 +46,13 @@ setup() {
     [ "$(manifest_ship_recovery_mode success github_release unknown)" = "post-push" ]
     # Divergent multi-remote outcomes: rollback forbidden regardless of step.
     [ "$(manifest_ship_recovery_mode partial push_changes 1)" = "partial-push" ]
-    [ "$(manifest_ship_recovery_mode partial resume_push 0)" = "partial-push" ]
+    [ "$(manifest_ship_recovery_mode partial finish_push 0)" = "partial-push" ]
+    # A failed finish made nothing: zero commits must NOT read as
+    # "checkout-files" (revert VERSION and CHANGELOG.md of a release that may
+    # be public). CONTROL: the same inputs with an ordinary step still do.
+    [ "$(manifest_ship_recovery_mode failed finish_push 0)" = "no-destructive" ]
+    [ "$(manifest_ship_recovery_mode success finish_release_gate 0)" = "no-destructive" ]
+    [ "$(manifest_ship_recovery_mode failed push_changes 0)" = "checkout-files" ]
     # Nothing public: the verified commit count decides.
     [ "$(manifest_ship_recovery_mode failed push_changes 2)" = "rollback" ]
     [ "$(manifest_ship_recovery_mode not_attempted version_commit 0)" = "checkout-files" ]

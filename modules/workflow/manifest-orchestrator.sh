@@ -192,6 +192,11 @@ emit_ship_failure_report() {
     git status --short --branch 2>/dev/null || echo "   (unavailable)"
     echo ""
     echo "🛠️  Recovery commands:"
+    # One spelling for "finish this release", used by every branch below that
+    # has a tag to finish. The release type is irrelevant to a finish — any
+    # ship of this repo plans it first — so the hint names the plain patch
+    # form, and the plan form at that: nothing applies without -y.
+    local finish_hint="   Finish:      manifest ship repo patch   (plans finishing ${tag_name:-this release}; add -y to apply — it bumps nothing)"
     # Advice is decided by the shared classifier (core/manifest-ship-classify.sh)
     # so this report and the fleet recovery report can never diverge (RED-001).
     local recovery_mode
@@ -205,7 +210,7 @@ emit_ship_failure_report() {
         fi
     elif [[ "$recovery_mode" == "post-push" ]]; then
         echo "   Release artifacts are already pushed. Do not delete the tag or hard-reset unless you are intentionally rolling back a public release."
-        echo "   Resume:      manifest ship repo resume"
+        echo "$finish_hint"
         echo "   Retry branch push if needed: git push origin ${branch}"
         if [ -n "$tag_name" ] && [ "$tag_name" != "none" ]; then
             echo "   Verify tag:  git ls-remote --tags origin ${tag_name}"
@@ -229,16 +234,32 @@ emit_ship_failure_report() {
                 echo "      Retry:    git push ${_pr_remote} ${_pr_refspec}"
             fi
         done
-        echo "   Resume:      manifest ship repo resume"
-        echo "   Note: resume re-pushes every configured remote, but its pre-push status probe checks origin only."
+        echo "$finish_hint"
+        echo "   Note: finishing re-pushes every configured remote, but its remote status lines check origin only."
     elif [[ "$failure_step" == "auto_commit" ]]; then
         # §82: the pre-bump sweep failed, so this run wrote nothing — there is
         # no push to retry and nothing of Manifest's to revert.
         echo "   Nothing was written by this run; your pending files are untouched."
         echo "   Fix the cause above (a hook's output, or git's), then re-run the ship."
+    elif manifest_ship_step_is_finish "$failure_step"; then
+        # A finish made nothing, and an unreachable remote reads exactly like
+        # a missing tag — so "Remove tag" here would be advice to delete a tag
+        # that may already be public.
+        echo "   This run created nothing: the release commit and ${tag_name:-the tag} already existed."
+        echo "   Do NOT delete the tag or reset — an earlier attempt may already have published them."
+        if [[ "$push_status" != "success" ]]; then
+            echo "   Retry push:  git push origin ${branch} ${tag_name}"
+        fi
+        echo "$finish_hint"
+    elif [ -n "$tag_name" ] && [ "$tag_name" != "none" ] \
+        && ! git rev-parse -q --verify "refs/tags/${tag_name}^{commit}" >/dev/null 2>&1; then
+        # The ship stopped before the tag existed (a failed create_tag). There
+        # is no tag to push, remove or finish, and "Finish:" here would send
+        # the operator to a command that plans the NEXT version instead.
+        echo "   The tag ${tag_name} was not created, so nothing was pushed and there is nothing to finish."
     elif [ -n "$tag_name" ] && [ "$tag_name" != "none" ]; then
         echo "   Retry push:  git push origin ${branch} ${tag_name}"
-        echo "   Resume:      manifest ship repo resume"
+        echo "$finish_hint"
         echo "   Remove tag:  git tag -d ${tag_name}"
     else
         echo "   Retry push:  git push origin ${branch}"
@@ -265,7 +286,7 @@ emit_ship_failure_report() {
             # destructive command (§6: absence is not a value). The auto-commit
             # step lands here by design (§82) — its count IS verifiable, but the
             # only files in play are the operator's own — so say that instead.
-            if [[ "$failure_step" != "auto_commit" ]]; then
+            if [[ "$failure_step" != "auto_commit" ]] && ! manifest_ship_step_is_finish "$failure_step"; then
                 echo "   (rollback advice suppressed: the commits-created count is unverifiable, so no destructive command is advised)"
             fi
             ;;
@@ -281,9 +302,11 @@ emit_ship_failure_report() {
         homebrew_status "$homebrew_status" \
         commits_created "$commits_created"
 
-    # Close the per-run diagnostic log (§5.6) on the failure path, recording
-    # the step the ship stopped at so resume can report "picking up from step X".
+    # Close the per-run diagnostic log (§5.6) on the failure path, and note the
+    # step in the in-flight record when this failure belongs to the release it
+    # describes, so the next ship's plan can say where the release stopped.
     manifest_ship_log_end "failed" "$failure_step"
+    manifest_ship_inflight_note_stop "${version:-}" "$failure_step"
 }
 
 manifest_should_wait_for_github_actions() {
@@ -762,8 +785,15 @@ _manifest_gate_pass_is_fresh() {
     [ "$elapsed" -le $((days * 86400)) ]
 }
 
+# Usage: manifest_release_gate_run PHASE [RELEASED_SHA]
+#   RELEASED_SHA  post-push only: the commit whose CI decides. Defaults to HEAD,
+#                 which is the released commit in the ordinary workflow. A finish
+#                 passes the TAG's commit, because HEAD may have moved on: a fix
+#                 committed on top of a release that red CI stopped has a green
+#                 run of its own, and that run says nothing about the release.
 manifest_release_gate_run() {
     local phase="$1"
+    local released_sha="${2:-}"
     local policy
     policy="$(manifest_release_gate_policy)" || return 1
     _MANIFEST_CLI_SHIP_LAST_GATE_POLICY="$policy"
@@ -1015,8 +1045,13 @@ manifest_release_gate_run() {
         post-push)
             case "$policy" in
                 remote-ci|all)
-                    local head_sha rc
-                    head_sha="$(git rev-parse HEAD 2>/dev/null || echo "")"
+                    local head_sha rc gate_subject="HEAD"
+                    if [[ -n "$released_sha" ]]; then
+                        head_sha="$released_sha"
+                        gate_subject="the released commit ${released_sha:0:7}"
+                    else
+                        head_sha="$(git rev-parse HEAD 2>/dev/null || echo "")"
+                    fi
                     # The gate's whole purpose is to wait for CI, so enable the
                     # waiter for this call regardless of the global default.
                     MANIFEST_CLI_GITHUB_ACTIONS_WAIT=true \
@@ -1026,12 +1061,12 @@ manifest_release_gate_run() {
                         echo "✅ Release gate: remote CI is green."
                         _MANIFEST_CLI_SHIP_LAST_GATE_STATUS="verified-remote"
                     elif [[ "$rc" -eq 1 ]]; then
-                        log_error "Release gate failed: remote CI did not pass for HEAD. Publish withheld."
+                        log_error "Release gate failed: remote CI did not pass for ${gate_subject}. Publish withheld."
                         return 1
                     else
                         # rc=2: no run found / gh unavailable. Under a strict gate
                         # this is a hard stop, not a silent pass.
-                        log_error "Release gate (remote-ci) could not confirm a green CI run for HEAD."
+                        log_error "Release gate (remote-ci) could not confirm a green CI run for ${gate_subject}."
                         log_error "Ensure CI is configured and gh is authenticated, or set release_gate=none to bypass."
                         return 1
                     fi
@@ -1639,7 +1674,10 @@ manifest_ship_run_followup_patch() {
         manifest_exec_manifest ship repo patch -y
 }
 
-# Probes whether the current repo is in a resume-eligible state. Pure function:
+# Probes whether the current VERSION's release could be FINISHED from here — the
+# git preconditions only. Whether there is an unfinished release at all is a
+# separate question, answered by manifest_ship_repo_unfinished below from the
+# in-flight record; this probe is true of every cleanly released repo. Pure function:
 # no log_error, no side effects, no MANIFEST_CLI_PROJECT_ROOT mutation. Caller is responsible
 # for cd'ing into the repo first; uses MANIFEST_CLI_PROJECT_ROOT if set, else pwd.
 #
@@ -1653,18 +1691,25 @@ manifest_ship_run_followup_patch() {
 #   dirty-tree        - working tree has changes outside formula/manifest.rb
 #
 # Returns 0 for "eligible", 1 for any non-eligible code.
-manifest_ship_repo_resume_eligible() {
+#
+# Usage: manifest_ship_repo_finish_eligible [VERSION TAG]
+# A caller holding an in-flight record passes the record's own version and tag.
+# The tag is then the one the stranded ship actually created, whatever tag
+# prefix the CURRENT process has loaded — a fleet plan runs under the root's
+# configuration, not the member's. With no arguments both are derived from the
+# working VERSION, as before.
+manifest_ship_repo_finish_eligible() {
     local project_root="${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}"
-    local version="" tag_name tag_commit branch dirty_files non_formula_count
+    local version="${1:-}" tag_name="${2:-}" tag_commit branch dirty_files non_formula_count
 
-    if [[ -r "$project_root/VERSION" ]]; then
+    if [[ -z "$version" && -r "$project_root/VERSION" ]]; then
         version="$(tr -d '[:space:]' < "$project_root/VERSION" 2>/dev/null || echo "")"
     fi
     if [[ -z "$version" ]]; then
         echo "no-version|||VERSION file missing or empty"
         return 1
     fi
-    tag_name="$(manifest_release_tag_name "$version")"
+    [[ -n "$tag_name" ]] || tag_name="$(manifest_release_tag_name "$version")"
 
     branch="$(git -C "$project_root" branch --show-current 2>/dev/null || echo "")"
     if [[ -z "$branch" ]]; then
@@ -1695,15 +1740,16 @@ manifest_ship_repo_resume_eligible() {
     return 0
 }
 
-# Pre-tag re-entrancy probe (sibling to the post-tag resume probe above).
+# Pre-tag re-entrancy probe (sibling to the post-tag finish probes: the
+# eligibility probe above and manifest_ship_repo_unfinished below).
 # Detects an interrupted ship — VERSION bumped but not yet committed — so a
 # re-run resumes in place instead of bumping a second time. Output:
 #   "<state>|<version>|<detail>"
 #     fresh            normal run; proceed with the bump
 #     resume-in-place  VERSION was bumped to <version>, is uncommitted, and no
 #                      tag exists yet -> skip the re-bump, commit/tag <version>
-#     tagged           <version> already has a release tag -> post-tag resume
-#                      domain; caller should defer to 'manifest ship repo resume'
+#     tagged           <version> is uncommitted in VERSION yet already has a
+#                      release tag -> not a bump-in-progress; the caller refuses
 # Only the exact, unambiguous signal triggers resume-in-place: VERSION dirty vs
 # HEAD AND equal to what THIS increment would produce from the committed
 # version. A manual or divergent VERSION edit stays "fresh" so existing
@@ -1744,8 +1790,200 @@ manifest_ship_repo_pretag_state() {
     return 0
 }
 
-manifest_ship_repo_resume() {
-    # A resume makes no release commit of its own, so no held-out set from an
+# -----------------------------------------------------------------------------
+# The in-flight release record (TRACKER §15c, in its minimal form)
+# -----------------------------------------------------------------------------
+# A publishing ship writes one small file under .git/manifest-ship/ just before
+# it creates the release tag, and removes it when the release is complete. A
+# record that is still there — for the VERSION the tree holds and the commit its
+# tag points at — is the one durable local fact that says "this release was
+# started and not finished", whether the run failed and said so or was killed
+# and said nothing.
+#
+# It replaces `manifest ship repo resume`. That verb re-ran the post-tag steps
+# for whatever VERSION the tree held, on the operator's say-so, and it applied
+# without -y. The ordinary ship now reads this record, puts the unfinished
+# release in its plan, and finishes it under the same -y as everything else.
+#
+# Deliberately NOT inferred from git or the network. A tag whose commit the
+# upstream ref lacks says only that the BRANCH was not pushed, and a release
+# stranded after its push (GitHub Release, tap formula) is invisible to both.
+# Deliberately not the per-run ship log either: that directory is per-user, not
+# per-repo, and it rotates.
+#
+# Format: key=value lines — version, tag, commit, started, log, and one
+# stopped_at line per reported failure (the reader takes the last).
+manifest_ship_inflight_file() {
+    local project_root="${1:-${MANIFEST_CLI_PROJECT_ROOT:-$PWD}}"
+    local git_dir
+    git_dir="$(git -C "$project_root" rev-parse --git-dir 2>/dev/null)" || return 1
+    [[ "$git_dir" != /* ]] && git_dir="$project_root/$git_dir"
+    printf '%s' "$git_dir/manifest-ship/in-flight"
+}
+
+# Last value recorded for KEY, or nothing. Keys are fixed words, never input.
+_manifest_ship_inflight_get() {
+    local file="$1" key="$2" line="" last=""
+    [[ -f "$file" ]] || return 0
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ "$line" == "${key}="* ]] && last="${line#*=}"
+    done < "$file"
+    printf '%s' "$last"
+}
+
+# Usage: manifest_ship_inflight_begin VERSION TAG COMMIT
+# Best-effort, like the run log: a ship never aborts because the record could
+# not be written. A failed write costs the finish-on-re-run and nothing else.
+manifest_ship_inflight_begin() {
+    local version="$1" tag_name="$2" commit="$3"
+    local file
+    file="$(manifest_ship_inflight_file)" || return 0
+    mkdir -p "${file%/*}" 2>/dev/null || return 0
+    {
+        printf 'version=%s\n' "$version"
+        printf 'tag=%s\n' "$tag_name"
+        printf 'commit=%s\n' "$commit"
+        printf 'started=%s\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+        printf 'log=%s\n' "${MANIFEST_CLI_SHIP_LOG_FILE:-}"
+    } > "$file" 2>/dev/null || true
+    return 0
+}
+
+# Record where a REPORTED failure stopped, when the record is for that version.
+# Usage: manifest_ship_inflight_note_stop VERSION STEP
+manifest_ship_inflight_note_stop() {
+    local version="$1" step="$2"
+    local file
+    file="$(manifest_ship_inflight_file)" || return 0
+    [[ -f "$file" ]] || return 0
+    [[ -n "$version" && "$(_manifest_ship_inflight_get "$file" version)" == "$version" ]] || return 0
+    printf 'stopped_at=%s\n' "$step" >> "$file" 2>/dev/null || true
+    return 0
+}
+
+manifest_ship_inflight_clear() {
+    local file
+    file="$(manifest_ship_inflight_file "${1:-}")" || return 0
+    rm -f "$file" 2>/dev/null || true
+    return 0
+}
+
+# Is the release of the committed VERSION (HEAD:VERSION) unfinished? A pure read: no network, no
+# writes, no MANIFEST_CLI_PROJECT_ROOT mutation.
+#
+# Echoes one pipe-separated line: <code>|<version>|<tag>|<stopped_at>|<log>
+#   unfinished  an in-flight record names this VERSION and the commit its local
+#               tag points at
+#   none        anything else: no record; a record for another version (a later
+#               release superseded it); or its tag is gone or was moved
+# Returns 0 for "unfinished", 1 otherwise.
+manifest_ship_repo_unfinished() {
+    local project_root="${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}"
+    local file version="" tag_name tag_commit rec_commit stopped log
+
+    file="$(manifest_ship_inflight_file "$project_root")" || { echo "none||||"; return 1; }
+    [[ -f "$file" ]] || { echo "none||||"; return 1; }
+
+    # The version this tree is AT is the committed one. A VERSION edited in the
+    # working tree does not make a stranded release disappear: it is still
+    # unfinished, and the dirty file is then what blocks finishing it.
+    version="$(git -C "$project_root" show HEAD:VERSION 2>/dev/null | tr -d '[:space:]' || true)"
+    if [[ -z "$version" && -r "$project_root/VERSION" ]]; then
+        version="$(tr -d '[:space:]' < "$project_root/VERSION" 2>/dev/null || echo "")"
+    fi
+    if [[ -z "$version" || "$(_manifest_ship_inflight_get "$file" version)" != "$version" ]]; then
+        echo "none||||"
+        return 1
+    fi
+
+    # The tag the stranded ship created, as it recorded it — not a name derived
+    # again from whatever tag prefix this process has loaded.
+    tag_name="$(_manifest_ship_inflight_get "$file" tag)"
+    [[ -n "$tag_name" ]] || tag_name="$(manifest_release_tag_name "$version")"
+    if ! tag_commit="$(git -C "$project_root" rev-parse "${tag_name}^{commit}" 2>/dev/null)"; then
+        echo "none|$version|$tag_name||"
+        return 1
+    fi
+    rec_commit="$(_manifest_ship_inflight_get "$file" commit)"
+    if [[ -z "$rec_commit" || "$rec_commit" != "$tag_commit" ]]; then
+        echo "none|$version|$tag_name||"
+        return 1
+    fi
+
+    stopped="$(_manifest_ship_inflight_get "$file" stopped_at)"
+    log="$(_manifest_ship_inflight_get "$file" log)"
+    echo "unfinished|$version|$tag_name|${stopped:-unknown}|$log"
+    return 0
+}
+
+# The plan for finishing an unfinished release, shown by the ordinary preview
+# and again at the head of the apply. Reads only.
+# Usage: manifest_ship_finish_plan VERSION TAG STOPPED_AT LOG REPLAY_COMMAND
+manifest_ship_finish_plan() {
+    local version="$1" tag_name="$2" stopped="$3" log="$4" replay="$5"
+    local probe code detail
+    probe="$(manifest_ship_repo_finish_eligible "$version" "$tag_name" || true)"
+    code="${probe%%|*}"
+    detail="${probe##*|}"
+
+    echo "Unfinished release"
+    echo "------------------"
+    echo "  v${version} was tagged here (${tag_name}) by a ship that did not complete."
+    if [[ "$stopped" == "unknown" ]]; then
+        echo "  Stopped at:  not recorded (the run ended without a failure report)"
+    else
+        echo "  Stopped at:  ${stopped}"
+    fi
+    [[ -n "$log" && -f "$log" ]] && echo "  Run log:     ${log}"
+    echo ""
+    echo "Finish plan"
+    echo "-----------"
+    echo "  This run finishes v${version}. It does NOT bump the version, commit, or create a tag."
+    echo "  - Push the branch and ${tag_name} to every configured remote (already-pushed refs are a no-op)"
+    echo "  - Run the release gate's post-push check on the commit ${tag_name} points at, where release.gate asks for one; nothing is published if it fails"
+    echo "  - Publish the GitHub Release and, for Manifest's own repo, the Homebrew tap formula, where configured"
+    echo "  - Check that the working tree is clean and that HEAD is still the commit that was pushed"
+    # The push is of the BRANCH, so anything committed after the tag goes with
+    # it. Said here, with the commits named, because the plan is the consent.
+    local on_top=0
+    on_top="$(git rev-list --count "${tag_name}..HEAD" 2>/dev/null || echo 0)"
+    [[ "$on_top" =~ ^[0-9]+$ ]] || on_top=0
+    if [[ "$on_top" -gt 0 ]]; then
+        echo ""
+        echo "  NOTE: ${on_top} commit(s) made after ${tag_name} are on this branch. Pushing the branch"
+        echo "  publishes them too. They are not part of v${version} and are not released by this run:"
+        git log --oneline -n 10 "${tag_name}..HEAD" 2>/dev/null | while IFS= read -r _on_top_line; do
+            echo "    ${_on_top_line}"
+        done
+        [[ "$on_top" -gt 10 ]] && echo "    … and $((on_top - 10)) more"
+    fi
+    echo "  Afterwards, run the same command again to plan the next release."
+    if [[ "$code" != "eligible" ]]; then
+        echo ""
+        echo "  BLOCKED: this release cannot be finished from the current state (${code}: ${detail:-no detail})."
+        case "$code" in
+            dirty-tree) echo "  Commit or stash the unrelated changes first; finishing publishes commits, not a working tree." ;;
+            no-branch)  echo "  Check out the release branch first; a detached HEAD has no branch to push." ;;
+            tag-not-ancestor) echo "  ${tag_name} is not in this branch's history; check out the branch the release was cut from." ;;
+        esac
+    fi
+    echo ""
+    echo "  To leave v${version} as it is and cut the next release instead:"
+    echo "    ${replay} --force-bump -y"
+}
+
+# Finish the unfinished release of the committed VERSION (HEAD:VERSION): push the branch and
+# tag, run the post-push steps (GitHub Release, tap formula), then the
+# completion check. Every step is safe to repeat. It bumps nothing, commits
+# nothing and tags nothing.
+#
+# The CALLER holds both the consent and the per-repo lock: this runs only from
+# manifest_ship_repo's apply path, after manifest_execution_require_apply and
+# _manifest_ship_repo_lock_acquire. It must stay unreachable from any route
+# that has not passed both — applying without -y was `ship repo resume`'s
+# defect, and the reason that verb is gone.
+manifest_ship_repo_finish() {
+    # A finish makes no release commit of its own, so no held-out set from an
     # outer process may be accepted by its completion check.
     unset MANIFEST_CLI_GIT_RELEASE_HELD_OUT
     if ! ensure_repository_root; then
@@ -1755,64 +1993,44 @@ manifest_ship_repo_resume() {
     MANIFEST_CLI_PROJECT_ROOT="$(pwd)"
     export MANIFEST_CLI_PROJECT_ROOT
 
-    # Resume is a mutating apply (push, post-push steps, metadata) and reaches
-    # the same shared per-repo state as a normal ship, so it must hold the
-    # per-repo single-flight lock too. Reuses the ship module's lock helpers,
-    # which honor the fleet-child / follow-up-patch exemptions and the
-    # MANIFEST_CLI_REPO_LOCK_HELD marker. Released on any exit (mirrors the
-    # main ship path's trap). The helper lives in manifest-ship.sh and the
-    # release primitive in manifest-fleet.sh; the real loader sources both
-    # before any of these run, but this module is also loaded in isolation
-    # (unit tests, a sourced subset), so guard on the helper's presence —
-    # matching the declare-F guards used elsewhere in this module — rather
-    # than hard-failing under set -e when the lock stack isn't loaded.
-    local repo_lock=""
-    if declare -F _manifest_ship_repo_lock_acquire >/dev/null 2>&1; then
-        if ! _manifest_ship_repo_lock_acquire; then
-            return 1
-        fi
-        repo_lock="${_MANIFEST_CLI_SHIP_REPO_LOCK_DIR:-}"
-    fi
-    if [ -n "$repo_lock" ]; then
-        trap '_fleet_lock_release "${repo_lock:-}"' RETURN
-        trap '_fleet_lock_release "${repo_lock:-}"; trap - INT; kill -INT $$' INT
-        trap '_fleet_lock_release "${repo_lock:-}"; trap - TERM; kill -TERM $$' TERM
+    local unfinished u_code u_version u_tag u_stopped u_log
+    unfinished="$(manifest_ship_repo_unfinished || true)"
+    IFS='|' read -r u_code u_version u_tag u_stopped u_log <<<"$unfinished"
+    if [[ "$u_code" != "unfinished" ]]; then
+        log_error "Nothing to finish: no unfinished release is recorded for the committed VERSION."
+        return 1
     fi
 
     local probe code version tag_name detail
-    probe="$(manifest_ship_repo_resume_eligible)"
+    probe="$(manifest_ship_repo_finish_eligible "$u_version" "$u_tag" || true)"
     IFS='|' read -r code version tag_name detail <<<"$probe"
     case "$code" in
-        no-version)
-            log_error "Cannot resume ship: VERSION file is missing or empty."
-            return 1
-            ;;
+        eligible) ;;
         no-branch)
-            log_error "Cannot resume ship: detached HEAD is not supported."
-            return 1
-            ;;
-        no-local-tag)
-            log_error "Cannot resume ship: local tag ${tag_name} does not exist."
-            log_error "Run a normal ship workflow or create the release tag first."
+            log_error "Cannot finish v${u_version}: detached HEAD is not supported."
             return 1
             ;;
         tag-not-ancestor)
-            log_error "Cannot resume ship: ${tag_name} does not point at an ancestor of HEAD."
+            log_error "Cannot finish v${u_version}: ${tag_name} does not point at an ancestor of HEAD."
             return 1
             ;;
         dirty-tree)
-            log_error "Cannot resume ship with unrelated working-tree changes:"
+            log_error "Cannot finish v${u_version} with unrelated working-tree changes:"
             git status --porcelain | awk '$2 != "formula/manifest.rb" && $0 != ""'
             return 1
             ;;
-        eligible) ;;
         *)
-            log_error "Cannot resume ship: unknown probe state ($code)."
+            log_error "Cannot finish v${u_version}: ${code:-unknown} (${detail:-no detail})."
             return 1
             ;;
     esac
 
-    local tag_commit branch dirty_files remote_branch_status remote_tag_status
+    # Open this run's own log (called directly — see manifest_ship_workflow).
+    MANIFEST_CLI_SHIP_LOG_FILE=""
+    manifest_ship_log_begin "manifest ship repo (finish v${version})" >/dev/null 2>&1 || true
+
+    local start_sha tag_commit branch dirty_files remote_branch_status remote_tag_status
+    start_sha="$(git rev-parse HEAD 2>/dev/null || echo "")"
     tag_commit="$(git rev-parse "${tag_name}^{commit}" 2>/dev/null)"
     branch="$(git branch --show-current 2>/dev/null || echo "")"
     dirty_files="$(git status --porcelain 2>/dev/null || true)"
@@ -1831,8 +2049,8 @@ manifest_ship_repo_resume() {
     fi
 
     echo ""
-    echo "Ship resume"
-    echo "==========="
+    echo "Finishing release"
+    echo "================="
     echo "   version:       $version"
     echo "   tag:           $tag_name ($tag_commit)"
     echo "   branch:        $branch"
@@ -1843,39 +2061,60 @@ manifest_ship_repo_resume() {
     else
         echo "   working tree:  clean"
     fi
-
-    # Read the prior run's diagnostic log (§5.6) to report where it stopped, so
-    # resume tells the operator which step it is picking up from rather than
-    # leaving them to guess. Best-effort: silent if no prior log exists.
-    local prior_log prior_step
-    prior_log="$(manifest_ship_log_latest)"
-    if [ -n "$prior_log" ]; then
-        prior_step="$(manifest_ship_log_last_step "$prior_log")"
-        echo "   prior run log: $prior_log"
-        [ -n "$prior_step" ] && echo "   picking up from step: $prior_step"
-    fi
+    # Where the earlier run stopped, from THIS repo's in-flight record — not
+    # from the newest file in the per-user log directory, which may belong to
+    # another repository's ship.
+    [[ "$u_stopped" != "unknown" ]] && echo "   stopped at:    $u_stopped"
+    [[ -n "$u_log" && -f "$u_log" ]] && echo "   prior run log: $u_log"
+    [[ -n "${MANIFEST_CLI_SHIP_LOG_FILE:-}" ]] && echo "   run log:       $MANIFEST_CLI_SHIP_LOG_FILE"
     echo ""
 
-    if ! push_changes "$version"; then
-        log_error "Resume failed while pushing branch/tag."
-        emit_ship_failure_report "resume_push" "$(git rev-parse HEAD 2>/dev/null || echo "")" "$version" "$tag_name" "${_MANIFEST_CLI_GIT_PUSH_STATUS:-failed}" "skipped"
+    if ! _manifest_ship_step "finish_push" push_changes "$version"; then
+        log_error "Finishing v${version} failed while pushing the branch and tag."
+        emit_ship_failure_report "finish_push" "$start_sha" "$version" "$tag_name" "${_MANIFEST_CLI_GIT_PUSH_STATUS:-failed}" "skipped"
         return 1
     fi
     local pushed_head_sha
     pushed_head_sha="$(git rev-parse HEAD 2>/dev/null || echo "")"
     echo ""
 
-    if ! manifest_ship_post_push_steps "$version" "$(git rev-parse HEAD 2>/dev/null || echo "")" "$tag_name" "success"; then
+    # The release gate's post-push check, in the same place the ordinary
+    # workflow runs it: after the push, before anything is published. Without
+    # it a release that stopped BECAUSE this gate failed would be published by
+    # the next run of the same command — the gate bypassed by repetition.
+    # It is asked about the TAG's commit, not HEAD: commits made after the tag
+    # ride the branch push but are not the release.
+    if ! _manifest_ship_step "finish_release_gate" manifest_release_gate_run "post-push" "$tag_commit"; then
+        emit_ship_failure_report "finish_release_gate" "$start_sha" "$version" "$tag_name" "success" "skipped"
+        return 1
+    fi
+
+    if ! manifest_ship_post_push_steps "$version" "$start_sha" "$tag_name" "success"; then
         return 1
     fi
 
     update_repository_metadata
     if ! manifest_ship_assert_completion_clean "true" "$pushed_head_sha"; then
-        emit_ship_failure_report "completion_clean" "$(git rev-parse HEAD 2>/dev/null || echo "")" "$version" "$tag_name" "success" "${_MANIFEST_SHIP_LAST_HOMEBREW_STATUS:-skipped}"
+        emit_ship_failure_report "completion_clean" "$start_sha" "$version" "$tag_name" "success" "${_MANIFEST_SHIP_LAST_HOMEBREW_STATUS:-skipped}"
         return 1
     fi
+
+    # Complete: the record's job is done.
+    manifest_ship_inflight_clear
+
+    _emit_ship_status_file \
+        result success \
+        version "$version" \
+        tag "$tag_name" \
+        push_status success \
+        homebrew_status "${_MANIFEST_SHIP_LAST_HOMEBREW_STATUS:-skipped}" \
+        finished_unfinished_release true
+
+    manifest_ship_log_end "success" "${_MANIFEST_CLI_SHIP_LAST_STEP:-}"
+
     echo ""
-    echo "✅ Ship resume completed for v${version}"
+    echo "✅ Release v${version} finished. Nothing was bumped."
+    echo "   Run the same command again to plan the next release."
 }
 
 # Main ship workflow: version bump, docs, commit, tag, push, Homebrew.
@@ -2076,8 +2315,8 @@ manifest_ship_workflow() {
             ;;
         tagged\|*)
             local _pt_ver="${pretag_state#tagged|}"; _pt_ver="${_pt_ver%%|*}"
-            log_error "VERSION ${_pt_ver} already has a release tag; nothing to re-bump."
-            log_error "Use 'manifest ship repo resume' to continue post-tag steps."
+            log_error "VERSION holds ${_pt_ver}, uncommitted, and that version already has a release tag; nothing to re-bump."
+            log_error "Restore the committed VERSION (git checkout HEAD -- VERSION) and run the plan again."
             return 1
             ;;
     esac
@@ -2376,8 +2615,19 @@ manifest_ship_workflow() {
         local tag_target_sha
         tag_target_sha="$(resolve_tag_target_sha "$workflow_version_commit_sha")"
 
+        # From the tag onward this release is "in flight": it exists locally
+        # and is not complete until the summary below. Record that BEFORE the
+        # tag is made, so a run killed between any two later steps still leaves
+        # the fact behind for the next ship's plan (manifest_ship_repo_unfinished).
+        manifest_ship_inflight_begin "$new_version" "$workflow_tag_name" "$tag_target_sha"
+
         # Create git tag
         if ! _manifest_ship_step "create_tag" create_tag "$new_version" "$tag_target_sha"; then
+            # No tag, nothing to finish: the record would describe a release
+            # that does not exist. Kept only if the tag was in fact created.
+            if ! git rev-parse "${workflow_tag_name}^{commit}" >/dev/null 2>&1; then
+                manifest_ship_inflight_clear
+            fi
             log_error "Tag creation failed; aborting ship workflow."
             emit_ship_failure_report "create_tag" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
             return 1
@@ -2467,6 +2717,11 @@ manifest_ship_workflow() {
     echo "   - Offset: $MANIFEST_CLI_TIME_OFFSET seconds"
     echo "   - Uncertainty: ±$MANIFEST_CLI_TIME_UNCERTAINTY seconds"
     echo "   - Method: $MANIFEST_CLI_TIME_METHOD"
+
+    # The release is complete: it is no longer in flight.
+    if [ "$publish_release" = "true" ]; then
+        manifest_ship_inflight_clear
+    fi
 
     _emit_ship_status_file \
         result success \

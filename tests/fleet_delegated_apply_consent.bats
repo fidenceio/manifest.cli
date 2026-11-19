@@ -386,10 +386,11 @@ YAML
 # -----------------------------------------------------------------------------
 
 @test "fleet: every delegated-apply consent export is paired with the delegation flag" {
-    # The predicate is only half the fix. manifest-fleet.sh has exactly two
-    # sites that hand a member's apply operator consent; each must set the
-    # delegation flag before the delegated call, or the gate refuses the member
-    # again. Comment lines are skipped so prose naming either variable cannot
+    # The predicate is only half the fix. manifest-fleet.sh has exactly one
+    # site that hands a member's apply operator consent — the member loop in
+    # fleet_ship; the second was `ship fleet resume`, removed when finishing an
+    # unfinished release was folded into that loop. It must set the delegation
+    # flag before the delegated call, or the gate refuses the member again. Comment lines are skipped so prose naming either variable cannot
     # satisfy the check.
     local verdict
     verdict="$(awk '
@@ -400,7 +401,7 @@ YAML
         END { printf "sites=%d paired=%d", sites, paired }
     ' "$TEST_REPO_ROOT/modules/fleet/manifest-fleet.sh")"
 
-    [ "$verdict" = "sites=2 paired=2" ]
+    [ "$verdict" = "sites=1 paired=1" ]
 }
 
 @test "e2e: a real 'ship fleet --local -y' carries consent to an ambiguous member" {

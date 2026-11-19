@@ -114,9 +114,9 @@ complete -c manifest -n '__manifest_path init repo' \
 complete -c manifest -n '__manifest_path init fleet' \
     -a '-y --yes --depth --all-folders --force --dry-run --name --connect --no-connect --parallel --clone-only --pull-only --create-repo-private --create-repo-public --help'
 complete -c manifest -n '__manifest_path ship repo' \
-    -a 'patch minor major revision resume -y --yes --local --dry-run --explain --force-bump --interactive'
+    -a 'patch minor major revision -y --yes --local --dry-run --explain --force-bump --interactive'
 complete -c manifest -n '__manifest_path ship fleet' \
-    -a 'patch minor major revision resume manager -y --yes --local --dry-run --explain --force-bump --require-clean'
+    -a 'patch minor major revision manager -y --yes --local --dry-run --explain --force-bump --require-clean'
 complete -c manifest -n '__manifest_path topics fleet' \
     -a '-y --yes --dry-run --help'
 complete -c manifest -n '__manifest_path plan fleet' \

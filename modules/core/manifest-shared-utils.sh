@@ -896,7 +896,9 @@ manifest_ship_log_rotate() {
 }
 
 # Echo the path of the most recent prior ship log (newest by name), or nothing.
-# Used by resume to report "picking up from step X" from the last run's record.
+# The newest log in the per-USER directory: it may belong to another repo's ship, so
+# nothing decides from it. A repo's own unfinished release is read from its in-flight
+# record (manifest_ship_repo_unfinished), which names the log that release wrote.
 manifest_ship_log_latest() {
     local dir
     dir="$(_manifest_ship_log_dir)"
@@ -905,8 +907,8 @@ manifest_ship_log_latest() {
     return 0
 }
 
-# Echo the last recorded step label from a ship log, for resume's "picking up
-# from step X" report. Reads the trailing `last_step:` footer if present, else
+# Echo the last recorded step label from a ship log, for a "stopped at step X"
+# report. Reads the trailing `last_step:` footer if present, else
 # the final `step=` boundary line.
 # Usage: manifest_ship_log_last_step LOGFILE
 manifest_ship_log_last_step() {
@@ -1287,7 +1289,7 @@ manifest_format_bytes() {
 #
 #  (2) _MANIFEST_CLI_DELEGATED_APPLY_CONSENT=1 -- fleet's IN-PROCESS delegation.
 #      `manifest ship fleet -y` is operator consent given at the fleet level;
-#      manifest-fleet.sh then calls manifest_ship_repo / manifest_ship_repo_resume
+#      manifest-fleet.sh then calls manifest_ship_repo
 #      in the SAME process image (a subshell, modules already sourced), so that
 #      consent can never appear in this process's start environment and origin
 #      (1) cannot see it. §46 routed this gate through the process-start snapshot

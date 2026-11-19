@@ -46,6 +46,15 @@ manifest_ship_step_is_post_push() {
     [[ "${1:-}" =~ ^(homebrew_|github_release$|completion_clean$) ]]
 }
 
+# 0 if the step belongs to FINISHING an unfinished release rather than making
+# one. THE finish step set — the only definition site. A finish creates
+# nothing: the release commit and the tag already existed, and an earlier
+# attempt may already have published them, so nothing in the tree or the tag
+# namespace is this run's to remove — whatever the commit count says.
+manifest_ship_step_is_finish() {
+    [[ "${1:-}" =~ ^(finish_push$|finish_release_gate$) ]]
+}
+
 # 0 if the step is a deliberate PAUSE rather than a failure (§78). THE pause
 # step set — the only definition site, for the same reason the post-push set is.
 # A pause has no wreckage: nothing is committed, tagged or pushed, and the files
@@ -104,6 +113,13 @@ manifest_ship_recovery_mode() {
     # exactly what "checkout-files" would tell them to discard. Nothing of
     # Manifest's exists to revert, so advise nothing destructive.
     if [[ "$failure_step" == "auto_commit" ]]; then
+        echo "no-destructive"
+        return 0
+    fi
+    # A failed finish created zero commits, which the count rules below would
+    # read as "checkout-files" — telling the operator to revert VERSION and
+    # CHANGELOG.md of a release that may already be public. It made nothing.
+    if manifest_ship_step_is_finish "$failure_step"; then
         echo "no-destructive"
         return 0
     fi

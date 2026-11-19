@@ -77,7 +77,7 @@ state_of() { manifest_ship_repo_pretag_state "$1"; }
     [[ "$output" == fresh\|* ]]
 }
 
-@test "pretag: bumped value that already has a tag is the post-tag resume domain" {
+@test "pretag: bumped value that already has a tag is not a bump-in-progress (tagged)" {
     echo "1.2.4" > "$REPO/VERSION"
     git -C "$REPO" tag "v1.2.4"
     run state_of patch

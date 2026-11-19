@@ -34,6 +34,39 @@ write_status_file() {
     done
 }
 
+@test "recovery report: a member that failed while FINISHING a release is never called local-only" {
+    # A finish's release commit and tag already existed, and an earlier attempt
+    # may have published them. "No remote state for this member … safe to
+    # rollback locally" would be false for it, whatever its push status.
+    local sf="$SCRATCH/svcb.status"
+    write_status_file "$sf" \
+        result failed \
+        failure_step finish_push \
+        push_status failed \
+        homebrew_status skipped \
+        version 1.2.3 \
+        tag v1.2.3 \
+        commits_created 0
+
+    local -a completed=() not_started=() skipped=()
+    run _fleet_emit_recovery_report svcb ./svc-b "$sf" patch false
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"category: unfinished"* ]]
+    [[ "$output" == *"Finishing v1.2.3 stopped at finish_push."* ]]
+    [[ "$output" == *"DO NOT rollback"* ]]
+    [[ "$output" == *"Finish:   cd ./svc-b && manifest ship repo patch -y"* ]]
+    [[ "$output" != *"no remote state for this member"* ]]
+    [[ "$output" != *"category: local-only"* ]]
+
+    # CONTROL: the same status with an ordinary step IS local-only.
+    write_status_file "$sf" \
+        result failed failure_step push_changes push_status failed \
+        homebrew_status skipped version 1.2.3 tag v1.2.3 commits_created 1
+    run _fleet_emit_recovery_report svcb ./svc-b "$sf" patch false
+    [[ "$output" == *"category: local-only"* ]]
+}
+
 @test "recovery report: pushed-then-stranded — release live, formula stranded, no rollback" {
     local sf="$SCRATCH/svcb.status"
     write_status_file "$sf" \
@@ -60,10 +93,12 @@ write_status_file() {
     [[ "$output" == *"category: pushed-then-stranded"* ]]
     [[ "$output" == *"Release v1.2.3 is live"* ]]
     [[ "$output" == *"DO NOT rollback"* ]]
-    [[ "$output" == *"manifest ship repo resume"* ]]
+    # The member's own ship finishes it; the removed verb is never advised.
+    [[ "$output" == *"Finish:   cd ./svc-b && manifest ship repo patch -y   (finishes v1.2.3; bumps nothing)"* ]]
+    [[ "$output" != *"ship repo resume"* ]]
     [[ "$output" == *"⏸  svcc"* ]]
-    # No "retry" advice for stranded state — resume only.
-    [[ "$output" != *"Or retry:"* ]]
+    # No "retry" advice for stranded state — finish only.
+    [[ "$output" != *"Retry:    "* ]]
 }
 
 @test "recovery report: local-only — failure before push, safe to retry or rollback locally" {
@@ -89,9 +124,11 @@ write_status_file() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"category: local-only"* ]]
     [[ "$output" == *"no remote state for this member"* ]]
-    [[ "$output" == *"manifest ship repo resume"* ]]
-    [[ "$output" == *"Or retry:"* ]]
-    [[ "$output" == *"manifest ship repo patch -y"* ]]
+    # One line: the same command plans a finish if the tag was made, and an
+    # ordinary retry if it was not.
+    [[ "$output" != *"ship repo resume"* ]]
+    [[ "$output" != *"Finish:   "* ]]
+    [[ "$output" == *"Retry:    cd ./svc-b && manifest ship repo patch -y"* ]]
     [[ "$output" != *"DO NOT rollback"* ]]
     [[ "$output" == *"⏭  svcd (release disabled)"* ]]
 }
@@ -141,8 +178,9 @@ write_status_file() {
     [[ "$output" == *"public where it landed"* ]]
     [[ "$output" == *"DO NOT rollback"* ]]
     [[ "$output" != *"Safe to retry or rollback locally"* ]]
-    [[ "$output" == *"manifest ship repo resume"* ]]
-    [[ "$output" != *"Or retry:"* ]]
+    [[ "$output" == *"Finish:   cd ./svc-b && manifest ship repo patch -y"* ]]
+    [[ "$output" != *"ship repo resume"* ]]
+    [[ "$output" != *"Retry:    "* ]]
 }
 
 @test "recovery report: local-only with zero commits never claims rollback is safe (§9.10)" {
@@ -164,7 +202,7 @@ write_status_file() {
     [[ "$output" == *"category: local-only"* ]]
     [[ "$output" == *"do NOT hard-reset"* ]]
     [[ "$output" != *"Safe to retry or rollback locally"* ]]
-    [[ "$output" == *"Or retry:"* ]]
+    [[ "$output" == *"Retry:    cd ./svc-b && manifest ship repo patch -y"* ]]
 }
 
 @test "recovery report: local-only with unverifiable commit count suppresses the rollback claim (§9.10)" {

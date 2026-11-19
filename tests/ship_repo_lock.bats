@@ -305,10 +305,24 @@ teardown() {
     grep -q "kill -HUP \$\$' HUP" "$f"
 }
 
-@test "repo lock: wired into ship repo resume apply with acquire + traps" {
-    local f="$TEST_REPO_ROOT/modules/workflow/manifest-orchestrator.sh"
-    grep -q '_manifest_ship_repo_lock_acquire' "$f"
-    grep -q "_fleet_lock_release .* RETURN" "$f"
-    grep -q "kill -INT \$\$' INT" "$f"
-    grep -q "kill -TERM \$\$' TERM" "$f"
+@test "repo lock: finishing an unfinished release runs under ship repo's own lock, from one call site" {
+    # `ship repo resume` took the lock itself, in the orchestrator, because it
+    # had its own entrance. A finish has none: it is reachable only from
+    # manifest_ship_repo's apply path, which already holds consent and the lock.
+    local ship="$TEST_REPO_ROOT/modules/core/manifest-ship.sh"
+    local acquire_line finish_line
+    acquire_line="$(grep -n '^    if ! _manifest_ship_repo_lock_acquire; then$' "$ship" | cut -d: -f1)"
+    finish_line="$(grep -n '^        manifest_ship_repo_finish || workflow_rc=\$?$' "$ship" | cut -d: -f1)"
+    # Controls: each anchor matched exactly once, so the comparison is real.
+    [[ "$acquire_line" =~ ^[0-9]+$ ]]
+    [[ "$finish_line" =~ ^[0-9]+$ ]]
+    [ "$acquire_line" -lt "$finish_line" ]
+
+    # ...and nothing else in the product calls it.
+    local callers
+    callers="$(grep -rn 'manifest_ship_repo_finish\b' "$TEST_REPO_ROOT/modules" \
+        | grep -v -E 'manifest_ship_repo_finish(_eligible|\(\))' \
+        | grep -v -E ':[0-9]+:[[:space:]]*#' || true)"
+    [ "$(printf '%s\n' "$callers" | grep -c .)" -eq 1 ]
+    [[ "$callers" == *"modules/core/manifest-ship.sh:${finish_line}:"* ]]
 }

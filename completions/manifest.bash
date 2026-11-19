@@ -118,11 +118,11 @@ _manifest_complete() {
                     return 0
                     ;;
                 "ship repo")
-                    COMPREPLY=( $(compgen -W "$bumps resume -y --yes --local --dry-run --explain --force-bump --interactive" -- "$cur") )
+                    COMPREPLY=( $(compgen -W "$bumps -y --yes --local --dry-run --explain --force-bump --interactive" -- "$cur") )
                     return 0
                     ;;
                 "ship fleet")
-                    COMPREPLY=( $(compgen -W "$bumps resume manager -y --yes --local --dry-run --explain --force-bump --require-clean" -- "$cur") )
+                    COMPREPLY=( $(compgen -W "$bumps manager -y --yes --local --dry-run --explain --force-bump --require-clean" -- "$cur") )
                     return 0
                     ;;
                 "topics fleet")

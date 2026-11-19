@@ -1081,8 +1081,6 @@ EOF
     "manifest ship fleet minor",
     "manifest ship fleet major",
     "manifest ship fleet revision",
-    "manifest ship repo resume",
-    "manifest ship fleet resume",
     "manifest ship fleet manager",
     "manifest revert repo",
     "manifest revert fleet",

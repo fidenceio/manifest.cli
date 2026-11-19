@@ -201,7 +201,7 @@ _perm_mode() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null; 
     [ "$(find "$LOG_DIR" -maxdepth 1 -name 'ship-*.log' | wc -l | tr -d ' ')" -eq 4 ]
 }
 
-# --- resume reads the prior log ----------------------------------------------
+# --- reading a prior log -------------------------------------------------------
 
 @test "diag log: latest returns the newest prior log, last_step reads its footer" {
     mkdir -p "$LOG_DIR"
