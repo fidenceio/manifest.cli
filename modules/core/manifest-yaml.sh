@@ -278,7 +278,7 @@ declare -gA _MANIFEST_YAML_TO_ENV=(
     ["fleet.root"]="MANIFEST_CLI_FLEET_ROOT"
     ["fleet.config_filename"]="MANIFEST_CLI_FLEET_CONFIG_FILENAME"
     # GitHub topics projection (§9.1). Registered so the key also works in the
-    # layered configs — `config set topics.from_name inner --layer global`
+    # layered configs — `config set --layer global topics.from_name inner -y`
     # enables topics for one machine without touching the shared fleet yaml.
     # A layered/env value takes precedence over manifest.fleet.config.yaml.
     ["topics.from_name"]="MANIFEST_CLI_FLEET_TOPICS_FROM_NAME"

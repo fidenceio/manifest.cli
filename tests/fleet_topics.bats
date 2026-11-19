@@ -489,6 +489,12 @@ acme/Fidence.Tools.cli" ]
     [ "$status" -eq 0 ]
     [[ "$output" == *"Topics are off"* ]]
     [[ "$output" == *"topics.from_name"* ]]
+    # The hinted command must be one that does what the hint says. `config set`
+    # reads --layer only BEFORE the key, and writes nothing without -y; the hint
+    # once put --layer last and left -y off, which planned a write to the local
+    # layer.
+    [[ "$output" == *"manifest config set --layer global topics.from_name inner -y"* ]]
+    [[ "$output" != *"topics.from_name inner --layer"* ]]
     [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
 }
 

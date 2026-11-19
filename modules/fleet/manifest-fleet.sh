@@ -2201,7 +2201,9 @@ fleet_topics() {
     if [[ -z "$mode" ]]; then
         echo "Topics are off. Enable with topics.from_name in manifest.fleet.config.yaml"
         echo "(inner | all | all-but-first), or for this machine only:"
-        echo "  manifest config set topics.from_name inner --layer global"
+        # --layer goes BEFORE the key: after it, config set reads it as a stray
+        # argument and plans a write to the local layer. And -y, or nothing is written.
+        echo "  manifest config set --layer global topics.from_name inner -y"
         return 0
     fi
 
