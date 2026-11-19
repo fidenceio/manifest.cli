@@ -43,7 +43,7 @@
 # the release is already public when this step fails). THE post-push step set —
 # the only definition site; call sites must not re-derive it.
 manifest_ship_step_is_post_push() {
-    [[ "${1:-}" =~ ^(homebrew_|github_release$|completion_clean$) ]]
+    [[ "${1:-}" =~ ^(homebrew_|github_release$|completion_clean$|release_gate_post_push$) ]]
 }
 
 # 0 if the step belongs to FINISHING an unfinished release rather than making

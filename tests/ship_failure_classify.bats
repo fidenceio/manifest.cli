@@ -11,11 +11,21 @@ setup() {
     load_modules "core/manifest-ship-classify.sh"
 }
 
-@test "classifier: post-push step set covers homebrew_*, github_release, completion_clean" {
+@test "classifier: post-push step set covers homebrew_*, github_release, completion_clean, release_gate_post_push" {
     manifest_ship_step_is_post_push "homebrew_update"
     manifest_ship_step_is_post_push "homebrew_commit"
     manifest_ship_step_is_post_push "github_release"
     manifest_ship_step_is_post_push "completion_clean"
+    manifest_ship_step_is_post_push "release_gate_post_push"
+}
+
+@test "classifier: a post-push gate failure after a successful push is post-push, whatever the commit count" {
+    # The gate runs after the tag is public. Under the pre-bump gate's name it
+    # classified as "rollback" and the report advised deleting the tag.
+    [ "$(manifest_ship_recovery_mode success release_gate_post_push 2)" = "post-push" ]
+    [ "$(manifest_ship_recovery_mode success release_gate_post_push 0)" = "post-push" ]
+    # CONTROL: the pre-bump gate, where nothing is public, still is not.
+    [ "$(manifest_ship_recovery_mode not_attempted release_gate 0)" = "checkout-files" ]
 }
 
 @test "classifier: pre-push steps are not post-push" {
@@ -26,6 +36,7 @@ setup() {
     # Anchored matches: only the exact step names qualify, not extensions.
     refute manifest_ship_step_is_post_push "github_release_notes"
     refute manifest_ship_step_is_post_push "completion_cleanup"
+    refute manifest_ship_step_is_post_push "release_gate_post_push_x"
     refute manifest_ship_step_is_post_push ""
 }
 

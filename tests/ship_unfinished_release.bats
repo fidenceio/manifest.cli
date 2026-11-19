@@ -388,9 +388,13 @@ STUB
     [ "$status" -ne 0 ]
     # Controls: the push landed, the gate is what stopped it, nothing was published.
     origin_has_tag v1.2.4
-    [[ "$output" == *"failed step:        release_gate"* ]]
+    [[ "$output" == *"failed step:        release_gate_post_push"* ]]
     [ "$(grep -c '^gh release create' "$GH_LOG")" -eq 0 ]
     [ -f "$RECORD" ]
+    # The tag is public, so the first report must not advise undoing it either.
+    [[ "$output" == *"Release artifacts are already pushed."* ]]
+    [[ "$output" != *"git tag -d"* ]]
+    [[ "$output" != *"reset --hard"* ]]
 
     : > "$GH_LOG"
     run_manifest ship repo patch -y

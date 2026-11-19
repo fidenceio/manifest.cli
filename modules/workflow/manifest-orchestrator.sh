@@ -2652,7 +2652,10 @@ manifest_ship_workflow() {
         # commit's CI to be green before publishing the GitHub Release and tap
         # formula. The tag is already pushed; only the publish is gated.
         if ! _manifest_ship_step "release_gate_post_push" manifest_release_gate_run "post-push"; then
-            emit_ship_failure_report "release_gate" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
+            # Reported under the post-push step's own name: the pre-bump gate
+            # shares "release_gate", and that name classifies as "nothing is
+            # public", which printed tag-delete and hard-reset advice here.
+            emit_ship_failure_report "release_gate_post_push" "$workflow_start_sha" "$new_version" "$workflow_tag_name" "$workflow_push_status" "$workflow_homebrew_status"
             return 1
         fi
 
