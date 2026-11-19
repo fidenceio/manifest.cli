@@ -1926,7 +1926,20 @@ manifest_ship_workflow() {
     # Open the per-run diagnostic log (§5.6). Best-effort: never aborts a ship.
     local _ship_log_path _ship_log_mode
     [ "$publish_release" = "true" ] && _ship_log_mode="publish" || _ship_log_mode="local"
-    _ship_log_path="$(manifest_ship_log_begin "manifest ship repo ${increment_type} (${_ship_log_mode})")"
+    # Called DIRECTLY, never as `x="$(manifest_ship_log_begin …)"`: the function
+    # exports MANIFEST_CLI_SHIP_LOG_FILE, and a command substitution keeps that
+    # export in its own subshell — every step and footer writer then saw no log
+    # and returned at its first line, so each `ship repo` log held its five
+    # header lines and nothing else, from v52.0.0 until this was fixed. The fleet
+    # path already
+    # calls it this way and says why (manifest-fleet.sh, "One run log for the
+    # fleet process"). Guarded through the tree's entrypoint by
+    # tests/ship_diag_log_real_ship.bats.
+    # A fleet member inherits the fleet's exported log path; begin replaces it
+    # for this member's own process, so a member's steps land in its own log.
+    MANIFEST_CLI_SHIP_LOG_FILE=""
+    manifest_ship_log_begin "manifest ship repo ${increment_type} (${_ship_log_mode})" >/dev/null 2>&1 || true
+    _ship_log_path="${MANIFEST_CLI_SHIP_LOG_FILE:-}"
 
     echo "🚀 Starting automated Manifest process..."
     echo ""
