@@ -99,7 +99,7 @@ complete -c manifest -n '__manifest_token_count 2; and __manifest_path cleanup' 
 
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path config' -a 'show list get set unset describe doctor setup time'
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path recipe' -a 'list show explain help'
-complete -c manifest -n '__manifest_token_count 2; and __manifest_path env'    -a 'generate validate help'
+complete -c manifest -n '__manifest_token_count 2; and __manifest_path env'    -a 'generate validate export help'
 # 'cloud' subcommands are declared in manifest-core.sh; 'agent' has only an
 # argument-ignoring stub in this repo, so it gets no subcommand list.
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path cloud'  -a 'config status generate'

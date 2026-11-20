@@ -957,7 +957,7 @@ _manifest_env_prefix_for_repo() {
 }
 
 # Locate the component spec file whose `env:` block is the single source of
-# truth for this repo's environment schema (D-ENV-2). Empty output = no spec.
+# truth for this repo's environment schema. Empty output = no spec.
 _manifest_env_spec_file() {
     local project_root="${1:-$MANIFEST_CLI_PROJECT_ROOT}"
     local candidate
@@ -1050,105 +1050,20 @@ _manifest_env_spec_flag_problems() {
     [[ "$problems" -eq 0 ]]
 }
 
-# ---------------------------------------------------------------------------
-# Secret store settings (env.secrets.*) — the ONE resolver every renderer uses.
-# There is no built-in store. The provider, store and path are configuration,
-# set at the fleet root and overridable per repo (the repo value wins, key by
-# key, through the ordinary config layers). An empty env var means "the
-# built-in fallback", and no fallback names a vendor. Lives here rather than in
-# manifest-env.sh because .env.example is also rendered at init time, when only
-# this module is loaded.
-# ---------------------------------------------------------------------------
-_manifest_env_secrets_setting() {
-    case "$1" in
-        provider)         printf '%s' "${MANIFEST_CLI_ENV_SECRETS_PROVIDER:-}" | tr '[:upper:]' '[:lower:]' ;;
-        store_kind)       printf '%s' "${MANIFEST_CLI_ENV_SECRETS_STORE_KIND:-ClusterSecretStore}" ;;
-        store_name)       printf '%s' "${MANIFEST_CLI_ENV_SECRETS_STORE_NAME:-}" ;;
-        api_version)      printf '%s' "${MANIFEST_CLI_ENV_SECRETS_API_VERSION:-external-secrets.io/v1}" ;;
-        path)             printf '%s' "${MANIFEST_CLI_ENV_SECRETS_PATH:-}" ;;
-        property)
-            # Not `${VAR:-{name}}`: bash closes that expansion at the wrong
-            # brace once the variable is set, and the value grows a stray `}`.
-            if [[ -n "${MANIFEST_CLI_ENV_SECRETS_PROPERTY:-}" ]]; then
-                printf '%s' "$MANIFEST_CLI_ENV_SECRETS_PROPERTY"
-            else
-                printf '%s' '{name}'
-            fi
-            ;;
-        refresh_interval) printf '%s' "${MANIFEST_CLI_ENV_SECRETS_REFRESH_INTERVAL:-1h}" ;;
-        env_label)        printf '%s' "${MANIFEST_CLI_ENV_SECRETS_ENV_LABEL:-}" ;;
-        *)                return 1 ;;
-    esac
-}
-
-# Expand the per-variable tokens of a path or property template. `{env}` is
-# left in place on purpose: it is filled per environment by the generated
-# kustomize Component, never here.
-_manifest_env_secrets_expand() {
-    local template="$1" identity="$2" group="$3" name="$4"
-    local out="$template"
-    out="${out//\{identity\}/$identity}"
-    out="${out//\{group\}/$group}"
-    out="${out//\{name\}/$name}"
-    printf '%s' "$out"
-}
-
-# Index of the `{env}` segment in a '/'-delimited path template:
-#   -1  the template has no {env} (nothing to fill per environment)
-#   -2  {env} is only part of a segment (`kv/prod-{env}/x`), which a
-#       segment-index replacement cannot address
-#   N   the 0-based segment index — `secret/data/{env}/{identity}` gives 2,
-#       `kv/{env}/{identity}` gives 1
-_manifest_env_secrets_env_index() {
-    local template="$1"
-    if [[ "$template" != *'{env}'* ]]; then
-        printf '%s' -1
-        return 0
-    fi
-    local -a parts=()
-    IFS='/' read -r -a parts <<< "$template"
-    local i
-    for i in "${!parts[@]}"; do
-        if [[ "${parts[$i]}" == '{env}' ]]; then
-            printf '%s' "$i"
-            return 0
-        fi
-    done
-    printf '%s' -2
-}
-
-# The .env.example comment for one secret, derived from the same template the
-# ExternalSecret is rendered from, so the two surfaces cannot disagree.
+# The .env.example comment for a secret. It names no store, path or provider:
+# where a secret is kept is the platform's business, and Manifest reads no
+# setting that describes it.
 _manifest_env_secret_example_comment() {
-    local identity="$1" group="$2" name="$3"
-    local provider
-    provider="$(_manifest_env_secrets_setting provider)"
-    case "$provider" in
-        external-secrets)
-            local path property
-            path="$(_manifest_env_secrets_expand "$(_manifest_env_secrets_setting path)" "$identity" "$group" "$name")"
-            property="$(_manifest_env_secrets_expand "$(_manifest_env_secrets_setting property)" "$identity" "$group" "$name")"
-            printf '# secret → %s/%s at %s (property %s) — never a literal value in any .env\n' \
-                "$(_manifest_env_secrets_setting store_kind)" "$(_manifest_env_secrets_setting store_name)" \
-                "$path" "$property"
-            ;;
-        none)
-            printf '# secret — delivered outside Manifest (env.secrets.provider: none); never a literal value in any .env\n'
-            ;;
-        *)
-            printf '# secret — no secret store configured (set env.secrets); never a literal value in any .env\n'
-            ;;
-    esac
+    printf '%s\n' "# secret — set from the platform's secret store; never a literal value in any .env"
 }
 
 # Render .env.example content from a spec `env:` block onto stdout.
-# Secret entries are emitted commented-out with the store path env.secrets
-# gives them — a secret value never belongs in any .env file (D-ENV-3).
+# Secret entries are emitted commented-out and valueless — a secret value
+# never belongs in any .env file.
+#   $2 (the project root) is accepted and unused: callers pass it, and nothing
+#   rendered here depends on where the checkout sits.
 _manifest_env_render_example() {
     local spec_file="$1"
-    local project_root="$2"
-    local repo_dir
-    repo_dir="$(basename "$project_root")"
 
     printf '# .env.example — generated by Manifest CLI from %s `env:`.\n' "$(basename "$spec_file")"
     printf '# Framework names (DATABASE_URL, NEXT_PUBLIC_*, …) are bridged at injection\n'
@@ -1158,7 +1073,7 @@ _manifest_env_render_example() {
     count="$(yq e '.env | length' "$spec_file" 2>/dev/null)"
     [[ "$count" =~ ^[0-9]+$ ]] || count=0
 
-    local i name description required default secret_flag public framework_name group
+    local i name description required default secret_flag public framework_name
     for ((i = 0; i < count; i++)); do
         name="$(yq e ".env[$i].name // \"\"" "$spec_file" 2>/dev/null)"
         [[ -n "$name" ]] || continue
@@ -1166,11 +1081,12 @@ _manifest_env_render_example() {
         # A flag the reader refuses stops the render: the caller gets a
         # non-zero status and no file, never a secret emitted as a value.
         required="$(_manifest_env_spec_flag "$spec_file" "$i" required)" || return 1
-        default="$(yq e ".env[$i].default // \"\"" "$spec_file" 2>/dev/null)"
+        # Not `.default // ""`: the alternative operator also replaces a
+        # boolean false, so `default: false` was written as an empty value.
+        default="$(yq e "(.env[$i].default | select(tag != \"!!null\") | tostring) // \"\"" "$spec_file" 2>/dev/null)"
         secret_flag="$(_manifest_env_spec_flag "$spec_file" "$i" secret)" || return 1
         public="$(_manifest_env_spec_flag "$spec_file" "$i" public)" || return 1
         framework_name="$(yq e ".env[$i].framework_name // \"\"" "$spec_file" 2>/dev/null)"
-        group="$(yq e ".env[$i].group // \"app\"" "$spec_file" 2>/dev/null)"
 
         printf '\n'
         local traits=""
@@ -1184,7 +1100,7 @@ _manifest_env_render_example() {
         fi
         [[ -n "$framework_name" ]] && printf '# bridged framework name: %s (materialized at injection boundaries only)\n' "$framework_name"
         if [[ "$secret_flag" == "true" ]]; then
-            _manifest_env_secret_example_comment "$repo_dir" "$group" "$name"
+            _manifest_env_secret_example_comment
             printf '# %s=\n' "$name"
         else
             printf '%s=%s\n' "$name" "$default"
@@ -2905,6 +2821,6 @@ export -f manifest_detect_project_ecosystems _manifest_gitignore_wants _manifest
 export -f manifest_gitignore_upgrade
 export -f ensure_release_gate_script create_default_run_tests
 export -f ensure_env_files create_default_env_example _manifest_env_prefix_for_repo _manifest_env_spec_file _manifest_env_spec_flag _manifest_env_spec_flag_problems _manifest_env_render_example
-export -f _manifest_env_secrets_setting _manifest_env_secrets_expand _manifest_env_secrets_env_index _manifest_env_secret_example_comment
+export -f _manifest_env_secret_example_comment
 export -f write_scaffold_no_clobber ensure_crawl_privacy_files create_default_robots_txt create_default_ai_txt
 export -f ensure_repo_scaffold manifest_repo_scaffold_is_complete

@@ -1,11 +1,9 @@
 #!/usr/bin/env bats
 
-# Coverage for `manifest env generate|validate` (manifest-env.sh — ENV-001,
-# STANDARD.md §2.7). Pins: preview-by-default (no writes), -y writes the
-# artifact set (.env.example, k8s/env bridges, Dockerfile publics block),
-# --check as the drift gate, ESO bridge orientation (secretKey = framework
-# name, remoteRef.property = FIDENCE stored name), Dockerfile block
-# idempotency, and env validate's aggregate verdict.
+# Coverage for `manifest env generate|validate` (manifest-env.sh). Pins:
+# preview-by-default (no writes), -y writes the artifact set (.env.example and
+# the Dockerfile publics block) and no deployment file, --check as the drift
+# gate, Dockerfile block idempotency, and env validate's aggregate verdict.
 
 load 'helpers/setup'
 
@@ -18,21 +16,12 @@ setup() {
     mkdir -p "$PROJ"
     export MANIFEST_CLI_PROJECT_ROOT="$PROJ"
     cd "$PROJ"
-    # The fixture spec declares a secret, and the generator fails closed with
-    # no secret store configured (env_secrets_store.bats pins that). These
-    # tests are about everything else, so they run with a store configured.
-    export MANIFEST_CLI_ENV_SECRETS_PROVIDER=external-secrets
-    export MANIFEST_CLI_ENV_SECRETS_STORE_NAME=team-store
-    export MANIFEST_CLI_ENV_SECRETS_PATH='secret/data/{env}/{identity}/{group}'
-    export MANIFEST_CLI_ENV_SECRETS_ENV_LABEL=env
 }
 
 teardown() {
     cd /tmp
     rm -rf "$SCRATCH"
     unset MANIFEST_CLI_PROJECT_ROOT
-    unset MANIFEST_CLI_ENV_SECRETS_PROVIDER MANIFEST_CLI_ENV_SECRETS_STORE_NAME \
-          MANIFEST_CLI_ENV_SECRETS_PATH MANIFEST_CLI_ENV_SECRETS_ENV_LABEL
 }
 
 write_spec() {
@@ -85,29 +74,21 @@ YAML
 
 # --- apply -------------------------------------------------------------------------
 
-@test "env generate -y: writes .env.example and k8s env bridges" {
+@test "env generate -y: writes .env.example and no deployment file, with k8s/ present and a secret declared" {
     write_spec
     mkdir -p "$PROJ/k8s"
 
     run manifest_env_generate -y
     [ "$status" -eq 0 ]
     [ -f "$PROJ/.env.example" ]
-    [ -f "$PROJ/k8s/env/configmap.yaml" ]
-    [ -f "$PROJ/k8s/env/external-secret.yaml" ]
+    # The secret needs no store configured: it is named, commented out, and
+    # described without a store, path or provider.
+    grep -qx "# secret — set from the platform's secret store; never a literal value in any .env" "$PROJ/.env.example"
+    grep -qx '# FIDENCE_APP_DEMO_DB_PASSWORD=' "$PROJ/.env.example"
 
-    # Non-secret bridge: injected name = framework name (or FIDENCE name).
-    grep -q 'NEXT_PUBLIC_SITE_URL: "https://demo.fidence.io"' "$PROJ/k8s/env/configmap.yaml"
-    grep -q 'FIDENCE_APP_DEMO_LOG_LEVEL: "info"' "$PROJ/k8s/env/configmap.yaml"
-    # Secrets never appear in the ConfigMap.
-    refute grep -q "DB_PASSWORD" "$PROJ/k8s/env/configmap.yaml"
-
-    # Secret bridge orientation (D-ENV-3/§2.7.2): secretKey = framework name,
-    # property = FIDENCE stored name, path = the configured template with
-    # {identity} and {group} expanded and {env} left for the Component.
-    grep -q "secretKey: DATABASE_URL" "$PROJ/k8s/env/external-secret.yaml"
-    grep -q 'property: "FIDENCE_APP_DEMO_DB_PASSWORD"' "$PROJ/k8s/env/external-secret.yaml"
-    grep -q 'key: "secret/data/{env}/fidence.app.demo/db"' "$PROJ/k8s/env/external-secret.yaml"
-    [ -f "$PROJ/k8s/env/component/kustomization.yaml" ]
+    # Nothing is written under k8s/: the directory is as empty as it was.
+    [ -z "$(find "$PROJ/k8s" -mindepth 1 2>/dev/null)" ]
+    [[ "$output" != *"k8s"* ]]
 }
 
 @test "env generate -y: Dockerfile publics bridge block, applied idempotently" {

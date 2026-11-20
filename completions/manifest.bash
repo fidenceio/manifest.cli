@@ -74,7 +74,7 @@ _manifest_complete() {
                     return 0
                     ;;
                 env)
-                    COMPREPLY=( $(compgen -W "generate validate help" -- "$cur") )
+                    COMPREPLY=( $(compgen -W "generate validate export help" -- "$cur") )
                     return 0
                     ;;
                 # 'cloud' subcommands are declared in manifest-core.sh's own
@@ -131,6 +131,10 @@ _manifest_complete() {
                     ;;
                 "env generate")
                     COMPREPLY=( $(compgen -W "-y --yes --dry-run --check --help" -- "$cur") )
+                    return 0
+                    ;;
+                "env export")
+                    COMPREPLY=( $(compgen -W "--format --help" -- "$cur") )
                     return 0
                     ;;
                 "plan fleet")

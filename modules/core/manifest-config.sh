@@ -470,7 +470,7 @@ warn_deprecated_configuration() {
     fi
 }
 
-# Config paths that were removed from the schema on 2026-08-16.
+# Config paths that were removed from the schema.
 # Listed at the FAMILY level, not per leaf: deleting the four
 # `version.component_position.*` children individually would leave an empty
 # `component_position: {}` map behind, which reads as configuration that is
@@ -479,8 +479,8 @@ warn_deprecated_configuration() {
 # Retiring a key silently would repeat the defect these were retired for. The
 # loader skips unmapped paths without a word, so a config that still sets them
 # would look accepted forever; `config doctor` names them instead, and --fix
-# deletes them. Removal is safe by construction — no code path has ever read
-# them, so deleting one cannot change any release outcome.
+# deletes them. Removal is safe by construction — no code path reads them, so
+# deleting one cannot change any release outcome.
 declare -ga _MANIFEST_CLI_CONFIG_RETIRED_KEYS=(
     "version.format"
     "version.max_values"
@@ -493,6 +493,12 @@ declare -ga _MANIFEST_CLI_CONFIG_RETIRED_KEYS=(
     # validate_version_format() runs regardless. Its neighbour version.regex is
     # genuinely live (it supplies that function's pattern) and stays.
     "version.validation"
+    # Read until the release that removed it (TRACKER §104): the eight
+    # env.secrets.* keys told `env generate` which secret store to render
+    # deployment files for. Manifest renders none now, so the whole family is
+    # dead. Unlike the keys above, these DID change output once, which is why
+    # `env generate` and `env validate` also say so at the point of use.
+    "env.secrets"
 )
 
 # True when a dot-path exists in the file with any non-null value. Kept separate
@@ -906,7 +912,7 @@ config_doctor() {
                 echo " - DEPRECATED: $key is set ('$from'); use '$to'"
                 ;;
             "obsolete")
-                echo " - OBSOLETE: $key is set but no longer exists; nothing reads it (removed 2026-08-16). Safe to delete."
+                echo " - OBSOLETE: $key is set but no longer exists; nothing reads it. Safe to delete."
                 ;;
         esac
     done
@@ -1186,22 +1192,6 @@ set_default_configuration() {
     # allowlist entries, comma-separated (trailing `_` = prefix, else exact).
     export MANIFEST_CLI_ENV_NAMING_ENFORCEMENT="${MANIFEST_CLI_ENV_NAMING_ENFORCEMENT:-strict}"
     export MANIFEST_CLI_ENV_NAMING_ALLOW="${MANIFEST_CLI_ENV_NAMING_ALLOW:-}"
-    # env.secrets — the secret store is configuration, never a built-in. The
-    # provider is unset by default on purpose: a spec that declares secret
-    # variables with no env.secrets configured makes `env generate` refuse and
-    # write nothing, rather than emit a store it guessed. Set provider
-    # `external-secrets` with store.name and path, or `none` when secrets reach
-    # the workload some other way. An empty value below means "the built-in
-    # fallback", resolved in one place (_manifest_env_secrets_setting), and no
-    # fallback names a vendor.
-    export MANIFEST_CLI_ENV_SECRETS_PROVIDER="${MANIFEST_CLI_ENV_SECRETS_PROVIDER:-}"
-    export MANIFEST_CLI_ENV_SECRETS_STORE_KIND="${MANIFEST_CLI_ENV_SECRETS_STORE_KIND:-}"
-    export MANIFEST_CLI_ENV_SECRETS_STORE_NAME="${MANIFEST_CLI_ENV_SECRETS_STORE_NAME:-}"
-    export MANIFEST_CLI_ENV_SECRETS_API_VERSION="${MANIFEST_CLI_ENV_SECRETS_API_VERSION:-}"
-    export MANIFEST_CLI_ENV_SECRETS_PATH="${MANIFEST_CLI_ENV_SECRETS_PATH:-}"
-    export MANIFEST_CLI_ENV_SECRETS_PROPERTY="${MANIFEST_CLI_ENV_SECRETS_PROPERTY:-}"
-    export MANIFEST_CLI_ENV_SECRETS_REFRESH_INTERVAL="${MANIFEST_CLI_ENV_SECRETS_REFRESH_INTERVAL:-}"
-    export MANIFEST_CLI_ENV_SECRETS_ENV_LABEL="${MANIFEST_CLI_ENV_SECRETS_ENV_LABEL:-}"
     export MANIFEST_CLI_GITHUB_RELEASE_ENABLED="${MANIFEST_CLI_GITHUB_RELEASE_ENABLED:-true}"
     export MANIFEST_CLI_GITHUB_RELEASE_REQUIRED="${MANIFEST_CLI_GITHUB_RELEASE_REQUIRED:-false}"
     export MANIFEST_CLI_GITHUB_RELEASE_DRAFT="${MANIFEST_CLI_GITHUB_RELEASE_DRAFT:-false}"

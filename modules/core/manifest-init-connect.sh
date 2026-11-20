@@ -127,7 +127,7 @@ Empty remotes need no pull; connection failures stop setup." \
         fi
     fi
 
-    # Env schema template (.env.example) — ENV-001, STANDARD.md §2.7. The connect
+    # Env schema template (.env.example). The connect
     # phase is the retrofit surface: repos that predate the scaffold gain it here
     # (no-clobber). Since the fold this is the same verb as the scaffold phase,
     # so it duplicates nothing — see the header note.

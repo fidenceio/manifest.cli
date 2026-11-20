@@ -1742,8 +1742,9 @@ changes. --dry-run explicitly previews and cannot be combined with -y.
                                         (never your config, audit log, or
                                         GitHub rate-limit ledger)
     security                            Audit for tracked secrets and PII
-    env generate|validate               Build .env.example from your spec, or
-                                        check env names, drift, and gitignore
+    env generate|validate|export        Build .env.example from your spec, check
+                                        env names, drift and gitignore, or print
+                                        the variables as JSON
     upgrade                             Update the CLI [Cloud]. On Homebrew:
                                         brew update && brew upgrade manifest
     reinstall                           Remove and install it again

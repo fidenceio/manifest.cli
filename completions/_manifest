@@ -111,7 +111,7 @@ _manifest() {
                     _values 'recipe subcommand' "${recipe_subs[@]}"
                     ;;
                 env)
-                    _values 'env subcommand' generate validate help
+                    _values 'env subcommand' generate validate export help
                     ;;
                 # See completions/manifest.bash: 'cloud' subcommands are
                 # declared in-repo; 'agent' has only an argument-ignoring stub,

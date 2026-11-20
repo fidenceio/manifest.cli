@@ -121,7 +121,7 @@ _manifest_env_names_from_compose() {
     grep -oE '\$\{[A-Za-z_][A-Za-z0-9_]*' "$file" 2>/dev/null | sed 's/^\${//' | sort -u
 }
 
-# ENV-001 naming audit over one repo. Reports each violating name with its
+# The env naming audit over one repo. Reports each violating name with its
 # source surface. Untracked .env* value files are ADVISORY only (local dev,
 # never fail the audit). Returns 0 = clean, 1 = violations found.
 check_env_naming() {
@@ -162,7 +162,7 @@ check_env_naming() {
         done < <(_manifest_env_names_from_dotenv "$project_root/$file")
     done
 
-    # --- Spec env: block (the source of truth, D-ENV-2) ----------------------
+    # --- Spec env: block (the source of truth) -------------------------------
     local spec
     for spec in service.spec.yaml app.spec.yaml; do
         [[ -f "$project_root/$spec" ]] || continue

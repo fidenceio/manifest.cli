@@ -8,9 +8,7 @@
 # Every reader used to compare yq's PRINTED text with the string "true". So
 # `secret: yes` (a string to this parser) and `secret: True` (a real YAML
 # boolean that prints as `True`) both read as "not a secret": the entry's
-# default went into k8s/env/configmap.yaml and into .env.example as a live
-# assignment, exit 0 — and with no env.secrets configured at all, because the
-# fail-closed store gate counts only the entries it reads as secret.
+# default was published — into .env.example as a live assignment, exit 0.
 #
 #   accepted    true / True / TRUE and the string "true"; false / False / FALSE,
 #               the string "false", an absent flag, an explicit null
@@ -22,23 +20,6 @@
 
 load 'helpers/setup'
 
-_SECRETS_VARS=(MANIFEST_CLI_ENV_SECRETS_PROVIDER MANIFEST_CLI_ENV_SECRETS_STORE_KIND
-    MANIFEST_CLI_ENV_SECRETS_STORE_NAME MANIFEST_CLI_ENV_SECRETS_API_VERSION
-    MANIFEST_CLI_ENV_SECRETS_PATH MANIFEST_CLI_ENV_SECRETS_PROPERTY
-    MANIFEST_CLI_ENV_SECRETS_REFRESH_INTERVAL MANIFEST_CLI_ENV_SECRETS_ENV_LABEL)
-
-_clear_secrets_config() {
-    local v
-    for v in "${_SECRETS_VARS[@]}"; do unset "$v"; done
-}
-
-_configure_store() {
-    export MANIFEST_CLI_ENV_SECRETS_PROVIDER=external-secrets
-    export MANIFEST_CLI_ENV_SECRETS_STORE_NAME=team-store
-    export MANIFEST_CLI_ENV_SECRETS_PATH='secret/data/{env}/{identity}/{group}'
-    export MANIFEST_CLI_ENV_SECRETS_ENV_LABEL=env
-}
-
 setup() {
     command -v yq >/dev/null 2>&1 || skip "yq not available"
     load_modules "system/manifest-env-naming.sh" "system/manifest-security.sh" \
@@ -48,14 +29,12 @@ setup() {
     mkdir -p "$PROJ/k8s"
     export MANIFEST_CLI_PROJECT_ROOT="$PROJ"
     cd "$PROJ"
-    _clear_secrets_config
 }
 
 teardown() {
     cd /tmp
     rm -rf "$SCRATCH"
     unset MANIFEST_CLI_PROJECT_ROOT
-    _clear_secrets_config
 }
 
 # The value no file may ever carry.
@@ -83,8 +62,17 @@ _no_artifacts_written() {
     [ ! -d "$PROJ/k8s/env" ]
 }
 
+# Anywhere under the project but the spec that declares it. Walked with find:
+# BusyBox grep, in the test image, has no --exclude.
 _sentinel_nowhere() {
-    refute grep -rq -- "$_SENTINEL" "$PROJ/.env.example" "$PROJ/k8s/env"
+    local f
+    while IFS= read -r f; do
+        if grep -q -- "$_SENTINEL" "$f"; then
+            echo "the sentinel is in $f"
+            return 1
+        fi
+    done < <(find "$PROJ" -type f ! -name app.spec.yaml ! -path '*/.git/*')
+    return 0
 }
 
 # --- the predicate ------------------------------------------------------------------
@@ -138,7 +126,6 @@ _sentinel_nowhere() {
 # --- generate refuses, in every mode ---------------------------------------------------
 
 @test "generate: yes, on and 1 are refused for each flag — preview, --check and -y exit 1, name the entry and flag, write nothing" {
-    _configure_store
     local flag spelling mode
     for flag in secret required public; do
         for spelling in yes on 1; do
@@ -172,23 +159,22 @@ _sentinel_nowhere() {
     [[ "$output" != *"ACME_SVC_BILLING_LOG_LEVEL:"* ]]
 }
 
-@test "no env.secrets configured: secret: yes is refused, and its default reaches no file (the path that had no gate)" {
-    # The store gate counts only entries it reads as secret, so this spec used
-    # to pass it with nothing configured: exit 0, the default in the ConfigMap
-    # and live in .env.example.
+@test "secret: yes is refused, and its default reaches no file" {
+    # Read as "not a secret", this entry's default used to land live in
+    # .env.example, exit 0.
     _write_spec yes
     run manifest_env_generate -y
     [ "$status" -eq 1 ]
     [[ "$output" == *'ACME_SVC_BILLING_API_TOKEN: secret is "yes"'* ]]
     _no_artifacts_written
 
-    # Control: the same spec with the flag spelled true is a secret, and with
-    # nothing configured the store gate is what refuses it.
+    # Control: the same spec with the flag spelled true is a secret. Generate
+    # succeeds, and the default is in no file it wrote.
     _write_spec true
     run manifest_env_generate -y
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"env.secrets.provider is not set, but 1 secret variable(s) are declared: ACME_SVC_BILLING_API_TOKEN"* ]]
-    _no_artifacts_written
+    [ "$status" -eq 0 ]
+    grep -q '^# ACME_SVC_BILLING_API_TOKEN=$' "$PROJ/.env.example"
+    _sentinel_nowhere
 }
 
 @test "a tag that forces a non-boolean into one is refused as written: secret: !!bool 1 leaks nothing" {
@@ -203,34 +189,27 @@ _sentinel_nowhere() {
 
 # --- accepted spellings mean what they say ------------------------------------------------
 
-@test "secret: True and \"true\" are secrets: gated with no store, bridged with one, and the default is in no file" {
+@test "secret: True and \"true\" are secrets: commented out, valueless, and the default is in no file" {
     local spelling
     for spelling in True TRUE '"true"'; do
-        rm -rf "$PROJ/k8s/env" "$PROJ/.env.example"
-        _clear_secrets_config
+        rm -rf "$PROJ/.env.example"
         _write_spec "$spelling"
         run manifest_env_generate -y
-        [ "$status" -eq 1 ] || { echo "secret: $spelling ungated → status $status"; echo "$output"; false; }
-        [[ "$output" == *"1 secret variable(s) are declared: ACME_SVC_BILLING_API_TOKEN"* ]]
-        _no_artifacts_written
-
-        _configure_store
-        run manifest_env_generate -y
         [ "$status" -eq 0 ] || { echo "secret: $spelling → status $status"; echo "$output"; false; }
-        [ "$(yq e '.spec.data[0].secretKey' "$PROJ/k8s/env/external-secret.yaml")" = "ACME_SVC_BILLING_API_TOKEN" ]
-        refute grep -q "API_TOKEN" "$PROJ/k8s/env/configmap.yaml"
         grep -q '^# ACME_SVC_BILLING_API_TOKEN=$' "$PROJ/.env.example"
+        refute grep -q '^ACME_SVC_BILLING_API_TOKEN=' "$PROJ/.env.example"
         _sentinel_nowhere
     done
 }
 
-@test "positive control: with secret: false the same default DOES land in the ConfigMap and .env.example" {
+@test "positive control: with secret: false the same default DOES land in .env.example" {
     # Proves the sentinel assertions above can fail.
     _write_spec false
     run manifest_env_generate -y
     [ "$status" -eq 0 ]
-    grep -q -- "$_SENTINEL" "$PROJ/k8s/env/configmap.yaml"
     grep -q "^ACME_SVC_BILLING_API_TOKEN=${_SENTINEL}\$" "$PROJ/.env.example"
+    run _sentinel_nowhere
+    [ "$status" -ne 0 ]
 }
 
 @test "required: True and public: True are read as true by the example and the Dockerfile bridge" {
@@ -258,9 +237,8 @@ _sentinel_nowhere() {
     [ "$status" -eq 1 ]
     [[ "$output" == *"spec flags — a secret, required or public flag is neither true nor false"* ]]
     [[ "$output" == *'ACME_SVC_BILLING_API_TOKEN: secret is "yes" — write true or false'* ]]
-    # Not misreported as stale output or as a store gap.
+    # Not misreported as stale output.
     [[ "$output" != *"stale artifacts"* ]]
-    [[ "$output" != *"secret store not configured"* ]]
 }
 
 @test "init scaffold: a spec with secret: yes gets NO .env.example, and the entry and flag are named" {
@@ -286,17 +264,9 @@ _sentinel_nowhere() {
     # The renderers are callable on their own (the scaffold does), so the
     # refusal lives in them and not only in generate's gate.
     _write_spec yes
-    run _manifest_env_render_configmap "$PROJ/app.spec.yaml" "$PROJ"
-    [ "$status" -ne 0 ]
-    [[ "$output" != *"$_SENTINEL"* ]]
     run _manifest_env_render_example "$PROJ/app.spec.yaml" "$PROJ"
     [ "$status" -ne 0 ]
     [[ "$output" != *"$_SENTINEL"* ]]
-    run _manifest_env_spec_secret_names "$PROJ/app.spec.yaml"
-    [ "$status" -ne 0 ]
-    _configure_store
-    run _manifest_env_render_external_secret "$PROJ/app.spec.yaml" "$PROJ"
-    [ "$status" -ne 0 ]
 
     # The other two flags stop the renderers that read them.
     _write_spec false yes
@@ -308,21 +278,18 @@ _sentinel_nowhere() {
     run _manifest_env_render_dockerfile_bridge "$PROJ/app.spec.yaml"
     [ "$status" -ne 0 ]
 
-    # Control: the same four calls succeed on a spec whose flags are booleans.
+    # Control: the same calls succeed on a spec whose flags are booleans.
     _write_spec true true true
-    run _manifest_env_render_configmap "$PROJ/app.spec.yaml" "$PROJ"
-    [ "$status" -eq 0 ]
     run _manifest_env_render_example "$PROJ/app.spec.yaml" "$PROJ"
     [ "$status" -eq 0 ]
-    run _manifest_env_render_external_secret "$PROJ/app.spec.yaml" "$PROJ"
-    [ "$status" -eq 0 ]
+    [[ "$output" != *"$_SENTINEL"* ]]
     run _manifest_env_render_dockerfile_bridge "$PROJ/app.spec.yaml"
     [ "$status" -eq 0 ]
 }
 
 # --- through the real entrypoint -----------------------------------------------------------
 
-@test "through scripts/manifest-cli.sh: secret: yes with no env.secrets exits 1 and writes nothing" {
+@test "through scripts/manifest-cli.sh: secret: yes exits 1 and writes nothing, from generate and from export" {
     # The wrapper refuses a folder that is not a git repository, loads config
     # from the repo, and is what an adopter actually runs.
     git -C "$PROJ" init -q -b main
@@ -333,6 +300,15 @@ _sentinel_nowhere() {
     [ "$status" -eq 1 ]
     [[ "$output" == *'ACME_SVC_BILLING_API_TOKEN: secret is "yes" — write true or false'* ]]
     _no_artifacts_written
+
+    # The export reads the flags through the same predicate: it refuses the
+    # same spec, and prints no document a consumer could publish a secret from.
+    local out="$SCRATCH/export.out"
+    local rc=0
+    env HOME="$home" "$TEST_REPO_ROOT/scripts/manifest-cli.sh" env export > "$out" 2> "$SCRATCH/export.err" || rc=$?
+    [ "$rc" -eq 1 ]
+    [ ! -s "$out" ]
+    grep -q 'ACME_SVC_BILLING_API_TOKEN: secret is "yes" — write true or false' "$SCRATCH/export.err"
 }
 
 # --- one reader ---------------------------------------------------------------------------------

@@ -119,23 +119,21 @@ env:
     framework_name: DATABASE_URL
 YAML
 
-    # Scaffolding is NOT gated on env.secrets (init must still succeed on a
-    # repo that has not chosen a store yet); the comment says so instead.
-    unset MANIFEST_CLI_ENV_SECRETS_PROVIDER
     run ensure_env_files "$PROJ"
     [ "$status" -eq 0 ]
     grep -q "^FIDENCE_APP_DEMO_LOG_LEVEL=info$" "$PROJ/.env.example"
-    # The secret is documented but never a live assignment (D-ENV-3).
+    # The secret is documented but never a live assignment.
     grep -q "^# FIDENCE_APP_DEMO_DB_PASSWORD=$" "$PROJ/.env.example"
-    grep -q "no secret store configured (set env.secrets)" "$PROJ/.env.example"
+    grep -qx "# secret — set from the platform's secret store; never a literal value in any .env" "$PROJ/.env.example"
     grep -q "DATABASE_URL" "$PROJ/.env.example"
     refute grep -q "^FIDENCE_APP_DEMO_DB_PASSWORD=" "$PROJ/.env.example"
     # No vendor is ever named for the reader to copy.
     refute grep -qi "openbao\|vault" "$PROJ/.env.example"
 
-    # With a store configured, the same renderer documents the configured path —
-    # the one source the ExternalSecret is rendered from (env_secrets_store.bats
-    # pins the agreement between the two surfaces).
+    # A leftover store setting changes nothing: no setting is read, so the
+    # same spec renders the same file, and no store, path or kind reaches it.
+    local first second
+    first="$(cat "$PROJ/.env.example")"
     rm -f "$PROJ/.env.example"
     export MANIFEST_CLI_ENV_SECRETS_PROVIDER=external-secrets
     export MANIFEST_CLI_ENV_SECRETS_STORE_NAME=team-store
@@ -143,9 +141,11 @@ YAML
     export MANIFEST_CLI_ENV_SECRETS_ENV_LABEL=env
     run ensure_env_files "$PROJ"
     [ "$status" -eq 0 ]
-    grep -q "ClusterSecretStore/team-store at kv/{env}/fidence.app.demo/db (property FIDENCE_APP_DEMO_DB_PASSWORD)" "$PROJ/.env.example"
+    second="$(cat "$PROJ/.env.example")"
     unset MANIFEST_CLI_ENV_SECRETS_PROVIDER MANIFEST_CLI_ENV_SECRETS_STORE_NAME \
           MANIFEST_CLI_ENV_SECRETS_PATH MANIFEST_CLI_ENV_SECRETS_ENV_LABEL
+    [ "$first" = "$second" ]
+    refute grep -q "team-store\|kv/" "$PROJ/.env.example"
 }
 
 # --- scaffold: spec without env: --------------------------------------------------

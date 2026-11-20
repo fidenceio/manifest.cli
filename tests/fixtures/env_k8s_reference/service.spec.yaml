@@ -1,0 +1,26 @@
+name: acme.widget
+env:
+  - name: ACME_WIDGET_LOG_LEVEL
+    description: How much the service logs
+    default: info
+  - name: ACME_WIDGET_PORT
+    description: Port the service listens on
+    required: true
+    default: 8080
+  - name: ACME_WIDGET_REGION
+    required: true
+  - name: ACME_WIDGET_PUBLIC_API_URL
+    description: Base URL the browser calls
+    default: https://api.example.test
+    public: true
+    framework_name: NEXT_PUBLIC_API_URL
+  - name: ACME_WIDGET_DATABASE_URL
+    description: Connection string for the primary database
+    required: true
+    secret: true
+    framework_name: DATABASE_URL
+    group: database
+  - name: ACME_WIDGET_SIGNING_KEY
+    description: Key that signs session tokens
+    required: true
+    secret: true

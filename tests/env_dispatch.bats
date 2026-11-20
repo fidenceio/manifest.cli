@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # Coverage for `manifest env` dispatch routing (manifest-env.sh —
-# manifest_env_dispatch): generate/validate routes with flag passthrough, the
+# manifest_env_dispatch): generate/validate/export routes with flag passthrough, the
 # help/-h/empty branches, the unknown-subcommand error, and env validate's
 # behavior when no spec env: block exists. Generate/validate content semantics
 # themselves are pinned in env_generate.bats.
@@ -71,22 +71,35 @@ YAML
 @test "env dispatch: --help renders subcommand help and exits 0" {
     run manifest_env_dispatch --help
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "manifest env <generate|validate>"
+    echo "$output" | grep -q "manifest env <generate|validate|export>"
     # Anchored on the subcommand name plus the opening words of its line, so a
     # reworded description is caught while a reflowed continuation line is not.
     echo "$output" | grep -q "generate   Write .env.example"
     echo "$output" | grep -q "validate   Check variable-name prefixes"
+    echo "$output" | grep -q "export     Print the variables as JSON"
+}
+
+@test "env dispatch: routes export, and passes its flags through" {
+    write_spec
+    run manifest_env_dispatch export --format json
+    [ "$status" -eq 0 ]
+    [ "$(printf '%s\n' "$output" | yq e -p=json '.env[0].name' -)" = "FIDENCE_APP_DEMO_LOG_LEVEL" ]
+
+    # A flag only export knows reaches export: the refusal is export's own.
+    run manifest_env_dispatch export --format xml
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"unknown format 'xml'"* ]]
 }
 
 @test "env dispatch: empty subcommand shows help but exits 1" {
     run manifest_env_dispatch
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "manifest env <generate|validate>"
+    echo "$output" | grep -q "manifest env <generate|validate|export>"
 }
 
 @test "env dispatch: unknown subcommand is an error naming it" {
     run manifest_env_dispatch frobnicate
     [ "$status" -ne 0 ]
     echo "$output" | grep -q "Unknown env subcommand: frobnicate"
-    echo "$output" | grep -q "manifest env <generate|validate>"
+    echo "$output" | grep -q "manifest env <generate|validate|export>"
 }

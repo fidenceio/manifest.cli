@@ -376,25 +376,15 @@ security:
   private_files: ".env,.env.development,.env.test,.env.production,.env.staging,manifest.config.local.yaml"
 
 # -----------------------------------------------------------------------------
-# Env schema — where `manifest env generate` sends secret variables
+# Env schema — the prefix policy for your own variable names
 # -----------------------------------------------------------------------------
-# There is no built-in secret store. When the spec declares secret variables
-# and env.secrets is not set, `env generate` exits 1 and writes nothing. Set
-# this once in the fleet root's manifest.config.yaml; a repo's own file
-# overrides it key by key (the repo value wins). Every line is commented out
-# here so copying this file does not choose a store for you.
+# Manifest reads the spec's env: block; it names no secret store and writes no
+# deployment file. Every line is commented out here so copying this file does
+# not choose a policy for you.
 env:
   # prefix: ""                        # env-var prefix policy: derived (default) | ACME_ | off
-  secrets:
-    # provider: external-secrets      # external-secrets | none (secrets reach the workload another way)
-    # store:
-    #   kind: ClusterSecretStore      # default ClusterSecretStore
-    #   name: <store-name>            # required with external-secrets
-    # api_version: external-secrets.io/v1
-    # path: "secret/data/{env}/{identity}/{group}"   # required; tokens {env} {identity} {group} {name}
-    # property: "{name}"              # remoteRef.property template; tokens {identity} {group} {name}
-    # refresh_interval: 1h
-    # env_label: env                  # label the {env} value is read from (required when path has {env})
+  # naming_enforcement: strict        # strict (default) | warn
+  # naming_allow: ""                  # extra allowed names, comma-separated (a trailing _ means a prefix)
 
 # -----------------------------------------------------------------------------
 # Debugging
