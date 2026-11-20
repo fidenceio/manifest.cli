@@ -39,7 +39,7 @@ manifest
 ├── pr create|status|checks|ready|merge|update   manage a pull request
 ├── pr fleet                                   manage fleet pull requests
 ├── config show|setup|list|get|set|unset|describe|doctor|time
-├── env generate|validate
+├── env generate|validate|export
 ├── revert
 │   ├── repo [<tag>]                           preview or apply a local tag checkout
 │   └── fleet [<snapshot>]                     restore manager and recorded member commits
@@ -578,38 +578,40 @@ to `false`. See [DOCS_SITE.md](DOCS_SITE.md) for the other keys.
 ```bash
 manifest env generate [--check] [--dry-run] [-y|--yes]
 manifest env validate
+manifest env export [--format json]
 ```
 
 A component spec is the file `service.spec.yaml` or `app.spec.yaml` at the root of a
 repository. Its `env:` block is the single source of truth for the repository's
-environment variables. `env generate` builds the derived files from it:
+environment variables: their names, descriptions and defaults, and whether each is
+required, secret or needed at build time.
 
-- `.env.example` — always
-- `k8s/env/kustomization.yaml` and `k8s/env/configmap.yaml` — when a `k8s/` directory
-  exists. The kustomization lists the generated files, so that overlays can refer to
-  the directory
-- `k8s/env/external-secret.yaml` — when a `k8s/` directory exists, the spec declares
-  secret variables, and `env.secrets.provider` is `external-secrets`
-- `k8s/env/component/kustomization.yaml` — with the above, when the secret path
-  contains `{env}`
-- the Dockerfile `ARG`→`ENV` marker block, for values needed at build time
+Manifest keeps that list in one place and checks it. It does not decide how the
+variables reach a running workload. It writes no deployment file, and it names no
+secret store.
+
+### `env generate`
+
+`env generate` builds two things from the `env:` block:
+
+- `.env.example` — always. A variable that is not a secret carries its default. A
+  secret is commented out and has no value.
+- the Dockerfile `ARG`→`ENV` marker block, for variables marked `public: true`. It is
+  written only when a `Dockerfile` exists.
 
 `env generate` plans by default, and `-y` writes. `--check` is for use in a release or
-in CI. It exits `1` if any generated file is out of date, and it names a secret store
-or a path that differs from the configuration. `env validate` only reads. It checks the
-prefix policy, whether the generated files are out of date, and whether `.env` is
-ignored by Git.
+in CI. It exits `1` if either output is out of date.
 
 **A flag is a boolean.** An entry's `secret`, `required` and `public` take `true` or
 `false`. You may write `true`, `True` or `TRUE`, and `false` in the same three ways.
 The quoted strings `"true"` and `"false"` are accepted too. A flag that is left out is
 `false`. Any other value (`yes`, `on`, `1`) is refused and named; Manifest does not
 guess. In that case `env generate` exits `1` and writes nothing, `env validate` fails,
-and `manifest init` does not write `.env.example`.
+`env export` prints nothing, and `manifest init` does not write `.env.example`.
 
-**`env generate` replaces only the files it wrote.** Every file it generates starts
-with a Manifest header line. If an existing `.env.example` or `k8s/env` file starts
-with any other line, Manifest treats the file as yours:
+**`env generate` replaces only the file it wrote.** The `.env.example` it generates
+starts with a Manifest header line. If an existing `.env.example` starts with any other
+line, Manifest treats the file as yours:
 
 - the plan names it as *hand-authored, left untouched*;
 - `-y` does not write it;
@@ -617,70 +619,90 @@ with any other line, Manifest treats the file as yours:
 
 Delete the file if you want Manifest to generate it. An empty file is replaced.
 
-The generated `k8s/env/kustomization.yaml` lists exactly what Manifest renders.
-Suppose you wrote `k8s/env/external-secret.yaml` by hand, and Manifest renders no such
-file itself (because `provider` is `none`, or the spec has no secret variables). Your
-file is then not listed there. Refer to it from your own kustomization, or write
-`k8s/env/kustomization.yaml` yourself.
+A file that is written keeps the permissions it had. This includes the Dockerfile. If
+`.env.example` cannot be read as a file (a directory, a file you cannot read, a symlink
+that points to nothing), the plan names it, and `--check` and `-y` exit `1`. A write
+that fails also exits `1`.
 
-A file that is written keeps the permissions it had. This includes the Dockerfile. If a
-path cannot be read as a file (a directory, a file you cannot read, a symlink that
-points to nothing), the plan names it, and `--check` and `-y` exit `1`. A write that
-fails also exits `1`.
+### `env validate`
 
-**The secret store is configuration. There is no built-in one.** When the spec declares
-secret variables and `env.secrets` is not set, `env generate` exits `1` and writes
-nothing. Set `env.secrets` once in the fleet root's `manifest.config.yaml`. A
-repository's own `manifest.config.yaml` overrides it key by key, and the repository's
-value wins.
+`env validate` only reads. It checks the prefix policy, whether the two generated
+outputs are out of date, and whether `.env` value files are ignored by Git.
 
-```yaml
-env:
-  secrets:
-    provider: external-secrets        # or: none — secrets reach the workload another way
-    store: { kind: ClusterSecretStore, name: <store-name> }
-    api_version: external-secrets.io/v1
-    path: "secret/data/{env}/{identity}/{group}"   # tokens: {env} {identity} {group} {name}
-    property: "{name}"
-    refresh_interval: 1h
-    env_label: env                    # label the {env} value is read from
+### `env export`
+
+`env export` prints the `env:` block as JSON on standard output. It writes no file. It
+is for a tool of your own that renders deployment files from the same list.
+
+```json
+{
+  "schema": 1,
+  "identity": "billing-service",
+  "env": [
+    {
+      "name": "ACME_BILLING_LOG_LEVEL",
+      "description": "How much the service logs",
+      "required": false,
+      "default": "info",
+      "secret": false,
+      "group": "app",
+      "public": false,
+      "framework_name": null
+    }
+  ]
+}
 ```
 
-The tokens in `path` and `property` mean:
+| Field | Meaning |
+| --- | --- |
+| `schema` | `1`. It changes only if the shape of this document changes |
+| `identity` | The name of the origin repository. When the repository has no `origin` remote, or its URL does not end in a plain name, the name of its folder |
+| `env` | One object for each variable, in the order the spec lists them |
+| `name`, `description` | Strings. `description` is `""` when the spec sets none |
+| `required`, `secret`, `public` | `true` or `false`, read the same way `env generate` reads them |
+| `default` | A string, or `null` when the spec sets none. A default of `false` or `0` is the string `"false"` or `"0"`. **For a secret it is always `null`:** a secret's default is never printed |
+| `group` | A string. `"app"` when the spec sets none |
+| `framework_name` | A string, or `null` when the spec sets none |
 
-- `{identity}` is the repository's directory name.
-- `{group}` is the variable's `group` (default `app`).
-- `{name}` is the variable's stored name.
-- `{env}` is not filled in by `env generate`. It stays as written in every
-  `remoteRef.key`.
+Every entry has all eight fields. Strings are JSON-encoded, so quotes, backslashes and
+line breaks in a description or default arrive intact. A YAML alias or merge key in the
+spec is exported as the value it stands for.
 
-The generated kustomize Component fills in `{env}` for each environment. It does so with
-one replacement. The replacement reads the `env_label` label from the ExternalSecret
-and writes its value into that segment of the path. The segment's index comes from
-where `{env}` sits in the template, so `kv/{env}/{identity}` gives index `1`. `{env}`
-must be a whole segment. The label key must be a plain name, because kustomize
-addresses a label by a dotted field path.
+`env export` either prints the whole document and exits `0`, or prints nothing on
+standard output and exits `1` with the reason on standard error. It refuses, and names
+the entry, when:
 
-kustomize runs a Component before the transformers of the kustomization that includes
-it. A `labels:` entry placed beside `components:` therefore arrives too late, and the
-build fails with *fieldPath metadata.labels.env is missing*. Instead, label the
-ExternalSecret one layer down, in a kustomization that refers to the `k8s/env`
-directory. (kustomize refuses a file outside the referring directory, which is why the
-generated `k8s/env/kustomization.yaml` exists.) Then include that layer and the
-Component together:
+- the spec file is missing, cannot be parsed as YAML, or holds more than one document;
+- `env:` is not a list;
+- an entry has no `name`, or a name is used twice;
+- a flag is neither `true` nor `false`;
+- a `description`, `default`, `group` or `framework_name` is a list or a map.
 
-```yaml
-# k8s/overlays/prod/env/kustomization.yaml — the label for this environment
-resources: [ ../../../env ]
-labels: [ { pairs: { env: prod } } ]
+A spec with no `env:` block exports an empty list and exits `0`.
 
-# k8s/overlays/prod/kustomization.yaml — the labelled layer, then the Component fills {env}
-resources: [ env ]
-components: [ ../../env/component ]
+### Deployment files
+
+Manifest does not write files under `k8s/env`, and it does not read `env.secrets`.
+Earlier releases did both. See the [Migration Guide](MIGRATION.md) if you are upgrading.
+
+If your repository still holds a file that an earlier Manifest generated under
+`k8s/env`, or a config that still sets `env.secrets`, then `env generate` and
+`env validate` print a note on standard error that says so. The note does not change
+the exit code. Manifest does not update, compare or delete those files; they are yours.
+
+To keep generating them, copy `examples/env-k8s-render.sh` from the Manifest CLI into
+your own repository and change it to suit your platform. It reads `manifest env export`
+and writes the four files that Manifest wrote. The [Migration Guide](MIGRATION.md) lists
+the two values it writes differently:
+
+```bash
+manifest env export | ./env-k8s-render.sh \
+    --provider external-secrets --store-name <store-name> \
+    --path 'secret/data/{env}/{identity}/{group}' --env-label env
 ```
 
-The secret comments in `.env.example` are rendered from the same path template, so the
-two outputs cannot disagree. No default names a vendor.
+The script is an example and not a supported command. Nothing in Manifest runs it or
+checks what it writes. Run it with `--help` for its options.
 
 **The prefix policy is on by default.** It keeps the names of environment variables
 tidy. The names of your application's own variables must start with this repository's

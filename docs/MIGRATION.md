@@ -12,7 +12,99 @@ This guide is for two kinds of reader.
 
 **Manifest shows you the plan and changes nothing until you explicitly say go.**
 
-## `ship repo resume` and `ship fleet resume` are removed — the newest change; its release is the first CHANGELOG entry that mentions `unfinished release`
+## Manifest no longer writes `k8s/env` files, and `env.secrets` is removed — the newest change; its release is the first CHANGELOG entry that mentions `env export`
+
+**What changed.** `manifest env generate` no longer writes anything under `k8s/env`.
+It used to write a ConfigMap, an ExternalSecret, a kustomization and a kustomize
+Component there, using the eight `env.secrets` settings. Those settings are no longer
+read. How variables reach a cluster is your platform's design, and a release tool
+should not own it. This is a breaking change.
+
+What Manifest still does with the spec's `env:` block:
+
+- `env generate` writes `.env.example` and the Dockerfile `ARG`→`ENV` block.
+- `env validate` checks the prefix policy, those two outputs, and `.gitignore`.
+- `env export` is new. It prints the variables as JSON, so a tool of your own can
+  render deployment files from them.
+
+| Removed | What happens now |
+| --- | --- |
+| `k8s/env/configmap.yaml`, `k8s/env/external-secret.yaml`, `k8s/env/kustomization.yaml`, `k8s/env/component/kustomization.yaml` | Never written, updated, compared or deleted. Files already in your repository stay exactly as they are |
+| `env.secrets.provider`, `.store.kind`, `.store.name`, `.api_version`, `.path`, `.property`, `.refresh_interval`, `.env_label` | Not read. `manifest config doctor` reports `env.secrets` as obsolete |
+| The refusal when secrets are declared and no store is configured | Gone. `env generate` runs without any store setting |
+| Store and path details in the `.env.example` comment for a secret | Replaced by one fixed line that names no store |
+
+**Who is affected.**
+
+- Anyone whose repository has a `k8s/` folder and a spec with an `env:` block. Manifest
+  wrote `k8s/env` files there whether or not you set `env.secrets`.
+- Anyone who sets `env.secrets`, in a repository or at a fleet root.
+- Anyone whose CI runs `manifest env generate --check` or `manifest env validate` and
+  relies on it to catch an out-of-date `k8s/env` file.
+- Anyone whose spec declares a secret. The `.env.example` comment for it changes.
+- Anyone whose spec sets `default: false` on a variable. `.env.example` now carries that
+  value.
+
+**What to do.**
+
+- **Decide who renders your `k8s/env` files now.** The files in your repository are
+  yours. Manifest will not change them, so they keep working as they are. They will
+  also not follow the spec any more: when you add a variable, nothing updates them.
+- **To keep generating them, take the reference script.** Copy
+  `examples/env-k8s-render.sh` from the Manifest CLI into your repository. It reads
+  `manifest env export` and writes those four files. Pass it the values your
+  `env.secrets` settings held:
+
+  ```bash
+  manifest env export | ./env-k8s-render.sh \
+      --provider external-secrets --store-name <store-name> \
+      --path 'secret/data/{env}/{identity}/{group}' --env-label env
+  ```
+
+  For the same spec and settings it writes what Manifest wrote, apart from the comment
+  lines and two values that Manifest wrote wrongly:
+
+  - A `default: false` is written as `"false"`. Manifest wrote an empty string. **This
+    changes the value your workload receives.** Check any variable with that default
+    before you apply the new file.
+  - A default that contains a `"` or a `\` is escaped. Manifest wrote it unescaped, which
+    made the file invalid YAML.
+
+  The script replaces a file that Manifest generated, and it leaves a file you wrote by
+  hand alone. It is an example for you to own. Manifest does not run it or check its
+  output.
+- **Check the names and the secret paths if your folder and repository names differ.**
+  Manifest named the objects after the checkout's folder, such as `<folder>-env`, and
+  put the same name wherever the secret path uses `{identity}`. The export's `identity`
+  is the repository's name. If the two differ, the script renders new object names and
+  new secret paths, so it would read your secrets from a different place in the store.
+  Pass `--identity <folder name>` to keep the old ones.
+- **Add your own drift check.** `env generate --check` and `env validate` no longer look
+  at `k8s/env`. If you relied on that, run the script with `--check` in CI. It writes
+  nothing and exits `1` when a file is out of date. Run the script once without
+  `--check` first: until it has rewritten the files that Manifest generated, `--check`
+  reports all of them, because their comment lines differ.
+- **Remove `env.secrets` from your configs.** Run `manifest config doctor --file <path>`
+  on each config that sets it. Add `--fix -y` to delete the setting. `--fix` also applies
+  the doctor's other safe repairs to that file; add `--dry-run` to see them first. Do
+  this for the fleet root's `manifest.config.yaml` as well as each repository's. Unset
+  any `MANIFEST_CLI_ENV_SECRETS_*` environment variables in CI.
+- **Run `manifest env generate -y` once, if your spec declares a secret or sets
+  `default: false`.** The comment above each secret in `.env.example` is now
+  `# secret — set from the platform's secret store; never a literal value in any .env`.
+  A variable whose default is `false` is now written as `NAME=false`; it used to be
+  written with no value. Until you regenerate the file, `env generate --check` and
+  `env validate` both exit `1`, so a CI job that runs either one fails.
+- **Expect a note until you have done the above.** While a repository holds a file that
+  Manifest generated under `k8s/env`, or a config that sets `env.secrets`,
+  `env generate` and `env validate` print a note on standard error. It lists the files
+  and the settings it found. It does not change the exit code. It stops when the files
+  carry another header (the script writes its own) and the settings are gone.
+- **If a script parsed the old output, update it.** `env generate` no longer prints
+  `store drift:` or `path drift:` lines, and `env validate` no longer prints
+  *secret store not configured*.
+
+## `ship repo resume` and `ship fleet resume` are removed — its release is the first CHANGELOG entry that mentions `unfinished release`
 
 **What changed.** The two `resume` commands are gone. The ordinary ship command now
 finishes an unfinished release. An *unfinished release* is one that Manifest tagged in
@@ -98,6 +190,10 @@ see that step's error output when the step finishes, not while it runs. Normal o
 still appears as it happens.
 
 ## `env generate` refuses a flag that is not a boolean and leaves hand-authored files alone (v63.0.2)
+
+> **Later change.** The parts of this section about `k8s/env` files and `env.secrets` no
+> longer apply. A later release removed that rendering. See the section
+> *Manifest no longer writes `k8s/env` files, and `env.secrets` is removed*, above.
 
 This release changes two things that `manifest env generate` did without telling you.
 
@@ -202,6 +298,10 @@ places during a ship and expects the release to commit it.
 - Set `git.allow_gate_drift: true`. This restores whole-tree staging for both commits.
 
 ## The secret store is configuration (v63.0.0)
+
+> **Later change.** Nothing in this section applies any more; do not follow its steps. A
+> later release removed `env.secrets` and the files it configured. See the section
+> *Manifest no longer writes `k8s/env` files, and `env.secrets` is removed*, above.
 
 **What changed.** The secret store and secret path in `k8s/env/external-secret.yaml`
 now come only from `env.secrets` in `manifest.config.yaml`. Set `env.secrets` at the

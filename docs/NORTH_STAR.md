@@ -32,4 +32,5 @@ Give developers a safe way to ship fast agent-assisted changes without losing co
 - No rollback of a published release. Recovery is **roll-forward**: ship a new version. `revert` is a viewer — it checks out a tag into detached HEAD and undoes nothing — and no guarded `rollback` verb will be built. A release that reached a remote is history, not state to unwind.
 - No path selector for repo ship until the repo-identity contract is redesigned.
 - No Cloud dependency for core repo or fleet release.
+- No rendering of Kubernetes or other platform manifests, and no setting that names a secret store. Manifest keeps a repo's list of environment variables, writes `.env.example` and the Dockerfile `ARG`→`ENV` block from it, and exports it as JSON; how those variables reach a running workload is the platform's design.
 - No host dependency installation for contributor validation.
