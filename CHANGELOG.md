@@ -1,5 +1,16 @@
 # Changelog
 
+## [65.0.0] - 2026-11-20
+
+**Release Type:** Major
+
+### Changes
+
+- Feat(env)!: remove k8s/env rendering and env.secrets; add env export and a reference renderer (§104)
+- Docs: describe env export and the end of k8s/env rendering
+- Docs(tracker): retire §104, extend §105 and §106, file §125 and §126
+
+
 ## [64.0.0] - 2026-11-19
 
 **Release Type:** Major
@@ -146,14 +157,3 @@
 ### Documentation
 
 - Update command reference, migration instructions, workflow examples, shell completions, installer command catalogs, and transaction documentation to match the final command surface. Preserve historical tracker evidence while pointing live onboarding links at the retained modules.
-
-
-
-## [61.2.1] - 2026-09-14
-
-**Release Type:** Patch
-
-### Changes
-
-- Docs(tracker,agents): trim the register to what is open, and stand up the review panel (§2, §3, §25, §36, §52, §69, §78, §81, §82, §88, §90, §91)
-- Docs(tracker): state the VERSION-ahead-of-code fact as a derivation, not a number (§5)
