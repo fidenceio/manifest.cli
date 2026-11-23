@@ -1,9 +1,10 @@
 #!/usr/bin/env bats
 
-# Coverage for `manifest env generate|validate` (manifest-env.sh). Pins:
-# preview-by-default (no writes), -y writes the artifact set (.env.example and
-# the Dockerfile publics block) and no deployment file, --check as the drift
-# gate, Dockerfile block idempotency, and env validate's aggregate verdict.
+# Coverage for the env engine behind `manifest init repo` and `init repo
+# --check` (manifest_env_generate / manifest_env_validate in manifest-env.sh).
+# Pins: preview-by-default (no writes), -y writes .env.example and nothing
+# else — no deployment file and no Dockerfile (TRACKER §104, §127) — --check
+# as the drift gate, and the env check's aggregate verdict.
 
 load 'helpers/setup'
 
@@ -91,22 +92,26 @@ YAML
     [[ "$output" != *"k8s"* ]]
 }
 
-@test "env generate -y: Dockerfile publics bridge block, applied idempotently" {
+@test "env generate -y: a Dockerfile is never written, with a public variable declared and with the block an earlier release wrote (§127)" {
     write_spec
+    # The spec has a public variable: before §127 this wrote an ARG→ENV block.
     printf 'FROM scratch\n' > "$PROJ/Dockerfile"
-
     run manifest_env_generate -y
     [ "$status" -eq 0 ]
-    grep -q "ARG FIDENCE_APP_DEMO_SITE_URL" "$PROJ/Dockerfile"
-    grep -q 'ENV NEXT_PUBLIC_SITE_URL=${FIDENCE_APP_DEMO_SITE_URL}' "$PROJ/Dockerfile"
+    [ -f "$PROJ/.env.example" ]                     # control: the writer ran
+    [ "$(cat "$PROJ/Dockerfile")" = "FROM scratch" ]
+    [[ "$output" != *"Dockerfile"* ]]
 
-    # Re-apply must not duplicate the block — and must actually have written
-    # it. On macOS this second apply used to fail (TRACKER §108), which
-    # satisfied "not duplicated" without rewriting anything.
+    # A block an earlier release wrote, now stale against the spec, is the
+    # adopter's: left byte-identical, and not drift.
+    printf 'FROM scratch\n# --- manifest env bridge (generated — edit the spec, not this block) ---\nARG OLD\n# --- end manifest env bridge ---\n' > "$PROJ/Dockerfile"
+    local before
+    before="$(cat "$PROJ/Dockerfile")"
     run manifest_env_generate -y
     [ "$status" -eq 0 ]
-    [[ "$output" == *"wrote: Dockerfile bridge block"* ]]
-    [ "$(grep -c "ARG FIDENCE_APP_DEMO_SITE_URL" "$PROJ/Dockerfile")" -eq 1 ]
+    [ "$(cat "$PROJ/Dockerfile")" = "$before" ]
+    run manifest_env_generate --check
+    [ "$status" -eq 0 ]
 }
 
 # --- the drift gate ----------------------------------------------------------------
@@ -140,7 +145,7 @@ YAML
 
     run manifest_env_validate
     [ "$status" -eq 0 ]
-    [[ "$output" == *"env validate: PASS"* ]]
+    [[ "$output" == *"env check: PASS"* ]]
 }
 
 @test "env validate: FAIL when generated artifacts are stale" {
@@ -159,7 +164,8 @@ YAML
 
 # --- help text vs. what the renderer actually emits ---------------------------------
 #
-# `env generate --help` shipped ".env.example  the variable names, with no values"
+# The help that describes .env.example is `init repo --help` since §127. The
+# original case: `env generate --help` shipped ".env.example  the variable names, with no values"
 # while _manifest_env_render_example emitted `NAME=<default>` for every non-secret
 # entry — only secrets are valueless. The claim was self-consistent and simply
 # false, so a test that pinned the help string alone would have passed against the
@@ -168,7 +174,7 @@ YAML
 # This test therefore measures the rendered artifact first and makes the help
 # answer to it. Both halves have to stay true: if the renderer stops emitting
 # defaults, (a)/(c) fail; if the help regains a "no values" claim, (d) fails.
-@test "env generate: .env.example carries non-secret defaults, and the help says so" {
+@test "init: .env.example carries non-secret defaults, and the help says so" {
     write_spec
     run manifest_env_generate -y
     [ "$status" -eq 0 ]
@@ -193,9 +199,10 @@ YAML
     # (d) TEXT — given (c), the help must not tell the reader the file has no
     #     values. Matched as a family of phrasings, not the one string that was
     #     wrong, so a reworded version of the same false claim is still caught.
-    run manifest_env_generate --help
+    run manifest_init_repo --help
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Files written"* ]]   # positive control: the block rendered
+    [[ "$output" == *"Environment variables"* ]]   # positive control: the block rendered
+    [[ "$output" == *"non-secret"*"carry their default"* ]]
     local claim
     claim="$(printf '%s\n' "$output" \
         | grep -icE 'no values|without values|with no value|names only|names, not values' || true)"

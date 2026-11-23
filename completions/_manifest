@@ -32,7 +32,6 @@ _manifest() {
         'doctor:Health check'
         'cleanup:Remove Manifest'"'"'s own leftovers (repo, fleet, or this machine)'
         'security:Security audit'
-        'env:Generate or check environment-variable files'
         'upgrade:Update Manifest CLI'
         'reinstall:Remove and install Manifest CLI again'
         'uninstall:Remove Manifest CLI'
@@ -110,9 +109,6 @@ _manifest() {
                 recipe)
                     _values 'recipe subcommand' "${recipe_subs[@]}"
                     ;;
-                env)
-                    _values 'env subcommand' generate validate export help
-                    ;;
                 # See completions/manifest.bash: 'cloud' subcommands are
                 # declared in-repo; 'agent' has only an argument-ignoring stub,
                 # so it deliberately gets no subcommand list.
@@ -133,10 +129,13 @@ _manifest() {
         arg3)
             case "$words[2] $words[3]" in
                 "init repo")
-                    _values 'option' -y --yes --force --dry-run --connect --no-connect --remote --create-repo-private --create-repo-public --help
+                    _values 'option' -y --yes --force --dry-run --check --connect --no-connect --remote --create-repo-private --create-repo-public --help
                     ;;
                 "init fleet")
                     _values 'option' -y --yes --depth --all-folders --force --dry-run --name --connect --no-connect --parallel --clone-only --pull-only --create-repo-private --create-repo-public --help
+                    ;;
+                "status repo")
+                    _values 'option' --json --env --help
                     ;;
                 "ship repo")
                     _values 'release type / option' "${bumps[@]}" -y --yes --local --dry-run --explain --force-bump --interactive

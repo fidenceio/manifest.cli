@@ -497,7 +497,7 @@ declare -ga _MANIFEST_CLI_CONFIG_RETIRED_KEYS=(
     # env.secrets.* keys told `env generate` which secret store to render
     # deployment files for. Manifest renders none now, so the whole family is
     # dead. Unlike the keys above, these DID change output once, which is why
-    # `env generate` and `env validate` also say so at the point of use.
+    # `init repo` (plan, -y and --check) also says so at the point of use.
     "env.secrets"
 )
 

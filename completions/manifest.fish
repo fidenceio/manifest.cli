@@ -57,7 +57,6 @@ complete -c manifest -n '__manifest_token_count 1' -a pr          -d 'Pull-reque
 complete -c manifest -n '__manifest_token_count 1' -a doctor      -d 'Health check'
 complete -c manifest -n '__manifest_token_count 1' -a cleanup     -d "Remove Manifest's own leftovers"
 complete -c manifest -n '__manifest_token_count 1' -a security    -d 'Security audit'
-complete -c manifest -n '__manifest_token_count 1' -a env         -d 'Generate or check environment-variable files'
 complete -c manifest -n '__manifest_token_count 1' -a upgrade     -d 'Update Manifest CLI'
 complete -c manifest -n '__manifest_token_count 1' -a reinstall   -d 'Remove and install Manifest CLI again'
 complete -c manifest -n '__manifest_token_count 1' -a uninstall   -d 'Remove Manifest CLI'
@@ -99,7 +98,6 @@ complete -c manifest -n '__manifest_token_count 2; and __manifest_path cleanup' 
 
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path config' -a 'show list get set unset describe doctor setup time'
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path recipe' -a 'list show explain help'
-complete -c manifest -n '__manifest_token_count 2; and __manifest_path env'    -a 'generate validate export help'
 # 'cloud' subcommands are declared in manifest-core.sh; 'agent' has only an
 # argument-ignoring stub in this repo, so it gets no subcommand list.
 complete -c manifest -n '__manifest_token_count 2; and __manifest_path cloud'  -a 'config status generate'
@@ -110,7 +108,9 @@ complete -c manifest -n '__manifest_token_count 2; and __manifest_path reinstall
 # --- third-token arguments (token 3) -----------------------------------------
 
 complete -c manifest -n '__manifest_path init repo' \
-    -a '-y --yes --force --dry-run --connect --no-connect --remote --create-repo-private --create-repo-public --help'
+    -a '-y --yes --force --dry-run --check --connect --no-connect --remote --create-repo-private --create-repo-public --help'
+complete -c manifest -n '__manifest_path status repo' \
+    -a '--json --env --help'
 complete -c manifest -n '__manifest_path init fleet' \
     -a '-y --yes --depth --all-folders --force --dry-run --name --connect --no-connect --parallel --clone-only --pull-only --create-repo-private --create-repo-public --help'
 complete -c manifest -n '__manifest_path ship repo' \

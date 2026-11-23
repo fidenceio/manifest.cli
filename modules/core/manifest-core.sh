@@ -704,7 +704,7 @@ _manifest_pr_fleet_dispatch() {
 # compares this allowlist with the actual dispatch arms below.
 _manifest_cli_is_supported_command() {
     case "${1:-}" in
-        ""|config|init|plan|reconcile|recipe|discover|add|update|topics|validate|ship|status|doctor|pr|revert|security|env|test|upgrade|uninstall|reinstall|cloud|agent|commit|bump-version|docs|cleanup|help|--help|version|--version)
+        ""|config|init|plan|reconcile|recipe|discover|add|update|topics|validate|ship|status|doctor|pr|revert|security|test|upgrade|uninstall|reinstall|cloud|agent|commit|bump-version|docs|cleanup|help|--help|version|--version)
             return 0 ;;
         *) return 1 ;;
     esac
@@ -729,6 +729,14 @@ main() {
 
     local command="${1:-}"
     [[ $# -gt 0 ]] && shift
+
+    # A removed command that names its replacements (TRACKER §127). Not a
+    # command — it is in neither the allowlist nor the dispatch — so it is
+    # caught here, before both, and before any configuration is loaded.
+    if [[ "$command" == "env" ]]; then
+        manifest_env_removed "$@"
+        return $?
+    fi
 
     if ! _manifest_cli_is_supported_command "$command"; then
         log_error "Unknown command: $command"
@@ -1258,9 +1266,6 @@ EOF
             manifest_security "$@"
             ;;
 
-        "env")
-            manifest_env_dispatch "$@"
-            ;;
 
         "test")
             if _manifest_cli_has_help_token "$@"; then
@@ -1687,10 +1692,15 @@ changes. --dry-run explicitly previews and cannot be combined with -y.
          --create-repo-private          Default when origin is missing.
          --create-repo-public           Create a PUBLIC GitHub repository.
          --no-connect                   Scaffold only; readiness not verified.
+         --check                        Read-only, for CI: .env.example matches
+                                        the spec, env names follow the prefix
+                                        policy, .env value files are ignored.
     init fleet                          Review membership, scaffold members;
                                         --connect clones/pulls members.
     doctor                              Check tools, config, repo health
     status                              Show what would happen next (read-only)
+    status repo --env [--json]          The repository's environment variables,
+                                        from the spec's env: block (read-only)
 
   Releasing:
     ship repo|fleet <patch|minor|major|revision>
@@ -1742,9 +1752,6 @@ changes. --dry-run explicitly previews and cannot be combined with -y.
                                         (never your config, audit log, or
                                         GitHub rate-limit ledger)
     security                            Audit for tracked secrets and PII
-    env generate|validate|export        Build .env.example from your spec, check
-                                        env names, drift and gitignore, or print
-                                        the variables as JSON
     upgrade                             Update the CLI [Cloud]. On Homebrew:
                                         brew update && brew upgrade manifest
     reinstall                           Remove and install it again

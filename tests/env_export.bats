@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
 # bats file_tags=smoke
 #
-# `manifest env export` — the variable contract as JSON, read-only
-# (TRACKER §104).
+# `manifest status repo --env --json` — the variable contract as JSON,
+# read-only (TRACKER §104; the command was `manifest env export` until §127).
 #
 # A platform's own generator reads this to render deployment files, so the
 # document is a contract with a consumer that cannot ask what was meant:
@@ -45,7 +45,7 @@ teardown() {
 # export_run [args...] → RC, $SCRATCH/out (stdout), $SCRATCH/err (stderr)
 export_run() {
     RC=0
-    ( cd "$PROJ" && "$TEST_REPO_ROOT/scripts/manifest-cli.sh" env export "$@" ) \
+    ( cd "$PROJ" && "$TEST_REPO_ROOT/scripts/manifest-cli.sh" status repo --env --json "$@" ) \
         > "$SCRATCH/out" 2> "$SCRATCH/err" || RC=$?
 }
 
@@ -153,24 +153,22 @@ YAML
     done
 }
 
-@test "--format json and --format=json are the bare command; any other format, or option, is refused with nothing on stdout" {
+@test "the option order does not matter, and an unknown option is refused with nothing on stdout" {
     write_spec
     export_run
-    local bare
-    bare="$(cat "$SCRATCH/out")"
-    export_run --format json
+    local first
+    first="$(cat "$SCRATCH/out")"
+    RC=0
+    ( cd "$PROJ" && "$TEST_REPO_ROOT/scripts/manifest-cli.sh" status --json --env repo ) \
+        > "$SCRATCH/out" 2> "$SCRATCH/err" || RC=$?
     [ "$RC" -eq 0 ]
-    [ "$(cat "$SCRATCH/out")" = "$bare" ]
-    export_run --format=json
-    [ "$RC" -eq 0 ]
-    [ "$(cat "$SCRATCH/out")" = "$bare" ]
+    [ "$(cat "$SCRATCH/out")" = "$first" ]
 
-    export_run --format yaml
-    refused_naming "unknown format 'yaml'"
-    export_run --format
-    refused_naming "--format needs a value"
     export_run --frobnicate
-    refused_naming "Unknown option: --frobnicate"
+    [ "$RC" -eq 1 ]
+    [ ! -s "$SCRATCH/out" ] || grep -qF "Unknown option: --frobnicate" "$SCRATCH/out"
+    grep -qF "Unknown option: --frobnicate" "$SCRATCH/out" "$SCRATCH/err"
+    refute grep -q '"schema"' "$SCRATCH/out"
 }
 
 # --- exact -----------------------------------------------------------------------------------
@@ -249,7 +247,7 @@ YAML
     refute grep -q '\*site\|\*entry' "$SCRATCH/out"
 }
 
-@test "generate and export agree on a default of false: .env.example carries it too" {
+@test "init and the export agree on a default of false: .env.example carries it too" {
     cat > "$PROJ/service.spec.yaml" <<'YAML'
 env:
   - name: A_FLAG
@@ -261,7 +259,7 @@ YAML
     export_run
     [ "$RC" -eq 0 ]
     [ "$(j '.env[0].default')" = "false" ]
-    ( cd "$PROJ" && "$TEST_REPO_ROOT/scripts/manifest-cli.sh" env generate -y ) >/dev/null 2>&1
+    ( cd "$PROJ" && "$TEST_REPO_ROOT/scripts/manifest-cli.sh" init repo --no-connect -y ) >/dev/null 2>&1
     grep -qx 'A_FLAG=false' "$PROJ/.env.example"
     grep -qx 'A_ZERO=0' "$PROJ/.env.example"
     grep -qx 'A_UNSET=' "$PROJ/.env.example"       # control: unset is still empty
@@ -351,6 +349,30 @@ env:
 YAML
     export_run
     refused_naming 'entry 1: not a mapping'
+
+    # A framework name is written into a Dockerfile or manifest line by a
+    # consumer; a newline in it would start a line of its own.
+    cat > "$PROJ/service.spec.yaml" <<'YAML'
+env:
+  - name: A_ONE
+    public: true
+    framework_name: "FOO\nBAR"
+YAML
+    export_run
+    refused_naming 'A_ONE: framework_name spans more than one line'
+
+    # A top-level list: yq cannot index it, and the refusal still says why.
+    printf -- '- name: A_ONE\n' > "$PROJ/service.spec.yaml"
+    export_run
+    refused_naming 'is not a map of keys'
+
+    # A top-level single value: yq answers .env on it without failing, so it
+    # was reported as an env: key that is not a list — a key it does not have.
+    # Init calls this file the same thing (_manifest_env_spec_plan_state).
+    printf 'just a value\n' > "$PROJ/service.spec.yaml"
+    export_run
+    refused_naming 'service.spec.yaml is not a map of keys: its top level is a list or a single value'
+    refute grep -qF 'must be a list of variables' "$SCRATCH/err"
 }
 
 @test "a spec that cannot be read is not a spec with no variables: unparseable, env: as a map, and no spec at all exit 1" {

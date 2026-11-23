@@ -1,34 +1,39 @@
 #!/bin/bash
 
-# Manifest CLI Env Module — `manifest env`
+# Manifest CLI Env Engine — no command of its own.
 #
 # The spec `env:` block (service.spec.yaml / app.spec.yaml) is the one place a
-# repo declares its environment variables. This module reads it and does three
-# things with it:
+# repo declares its environment variables. This module reads it; the commands
+# that use it live elsewhere (TRACKER §127):
 #
-#   env generate   writes .env.example (always) and the Dockerfile marker
-#                  block for build-time publics (ARG→ENV)
-#   env validate   prefix policy + drift of those two outputs + gitignore
-#                  hygiene, read-only
-#   env export     prints the variable contract as JSON, read-only, for a tool
-#                  that renders deployment files from it
+#   manifest init repo        creates the spec when there is none, then writes
+#                             .env.example from it   (ensure_env_files →
+#                             manifest_env_generate --quiet -y)
+#   manifest init repo --check
+#                             prefix policy + .env.example drift + gitignore
+#                             hygiene, read-only   (manifest_env_validate)
+#   manifest status repo --env [--json]
+#                             the variable contract, read-only, for a tool
+#                             that renders deployment files from it
+#                             (manifest_env_export)
+#
+# `manifest env generate|validate|export` were removed in the same release;
+# `manifest env` now only names their replacements (manifest_env_removed).
 #
 # The CONTRACT is Manifest's: names, descriptions, required, default, secret,
 # group, public, framework_name, and the prefix rule. How variables REACH a
-# running workload is not: Manifest writes no deployment manifest, names no
-# secret store, and reads no setting that describes one. It did until the
-# release that removed `env.secrets` (TRACKER §104); a repo that still holds
-# files or settings from then is told so once per run
-# (_manifest_env_rendering_moved_notice) and nothing of theirs is touched.
+# build or a running workload is not: Manifest writes no deployment manifest,
+# edits no Dockerfile, names no secret store, and reads no setting that
+# describes one. It did until TRACKER §104 (k8s/env, env.secrets) and §127 (the
+# Dockerfile ARG→ENV block); a repo that still holds files or settings from
+# then is told so once per run (_manifest_env_rendering_moved_notice) and
+# nothing of theirs is touched.
 #
 # Two refusals sit in front of every write (TRACKER §98, §3(d)):
 #   - a secret / required / public flag that is neither true nor false is
 #     refused by name, never read as false (_manifest_env_spec_flag);
 #   - an existing file whose first line is not the header Manifest writes there
 #     is hand-authored: left untouched, never drift (_manifest_env_guarded_state).
-#
-# `env generate` previews by default, applies with -y, and gates drift with
-# --check (the run-tests.sh stanza).
 
 # Guard against multiple sourcing
 if [[ -n "${_MANIFEST_CLI_ENV_LOADED:-}" ]]; then
@@ -36,8 +41,10 @@ if [[ -n "${_MANIFEST_CLI_ENV_LOADED:-}" ]]; then
 fi
 _MANIFEST_CLI_ENV_LOADED=1
 
+# The first line of the Dockerfile ARG→ENV block earlier releases wrote.
+# Read only to recognise that block for the notice below; Manifest no longer
+# writes, compares or removes it (TRACKER §127).
 MANIFEST_CLI_ENV_BRIDGE_BEGIN="# --- manifest env bridge (generated — edit the spec, not this block) ---"
-MANIFEST_CLI_ENV_BRIDGE_END="# --- end manifest env bridge ---"
 
 # What the first line of a .env.example Manifest generated starts with: `env
 # generate` writes the first, the init scaffold's starter the second. A file
@@ -124,49 +131,70 @@ _manifest_env_former_settings_present() {
     return 0
 }
 
-# Said on stderr by `env generate` (preview, --check and -y) and by `env
-# validate`, and only to a repo that holds something from before: a file
-# Manifest generated under k8s/env, or an env.secrets setting. A repo with
-# neither never sees it, and nothing here names a platform to one that never
-# used the rendering. The notice changes no exit status. Each command says it
-# once: validate's own drift check runs generate with its output captured, so
-# that copy never reaches the terminal.
+# Does the project's Dockerfile still carry the ARG→ENV block an earlier
+# Manifest wrote? Exit 0 when it does. Read-only; the block is the adopter's.
+_manifest_env_former_dockerfile_block_present() {
+    local dockerfile="$1/Dockerfile"
+    [[ -f "$dockerfile" && -r "$dockerfile" ]] || return 1
+    grep -qxF "$MANIFEST_CLI_ENV_BRIDGE_BEGIN" "$dockerfile" 2>/dev/null
+}
+
+# Said on stderr by `init repo` (plan, apply and --check), and only to a repo
+# that holds something from before: a file Manifest generated under k8s/env,
+# an env.secrets setting, or the Dockerfile ARG→ENV block. A repo with none of
+# them never sees it, and nothing here names a platform to one that never used
+# the rendering. The notice changes no exit status. Each command says it once:
+# callers that run generate inside validate capture that copy, so it never
+# reaches the terminal.
 _manifest_env_rendering_moved_notice() {
     local project_root="$1"
-    local files settings
+    local files settings dockerfile=false
     files="$(_manifest_env_former_files_present "$project_root")"
     settings="$(_manifest_env_former_settings_present "$project_root")"
-    [[ -n "$files" || -n "$settings" ]] || return 0
+    _manifest_env_former_dockerfile_block_present "$project_root" && dockerfile=true
+    [[ -n "$files" || -n "$settings" || "$dockerfile" == "true" ]] || return 0
+
+    # The CLI's own root is the parent of its modules directory, in a
+    # checkout and in an installed copy alike.
+    local cli_root=""
+    [[ -n "${MANIFEST_CLI_CORE_MODULES_DIR:-}" ]] && cli_root="$(dirname "$MANIFEST_CLI_CORE_MODULES_DIR")"
 
     {
         echo ""
-        echo "Note: Manifest no longer writes or checks deployment files under k8s/env."
-        if [[ -n "$files" ]]; then
-            echo "  These files were generated by an earlier Manifest and are now yours to maintain."
-            echo "  Manifest will not update, compare or delete them:"
-            printf '%s\n' "$files" | sed 's/^/    /'
+        if [[ -n "$files" || -n "$settings" ]]; then
+            echo "Note: Manifest no longer writes or checks deployment files under k8s/env."
+            if [[ -n "$files" ]]; then
+                echo "  These files were generated by an earlier Manifest and are now yours to maintain."
+                echo "  Manifest will not update, compare or delete them:"
+                printf '%s\n' "$files" | sed 's/^/    /'
+            fi
+            if [[ -n "$settings" ]]; then
+                echo "  These settings are no longer read. Remove them:"
+                printf '%s\n' "$settings" | sed 's/^/    /'
+            fi
+            echo "  To keep generating those files from the spec, copy the reference script"
+            echo "  examples/env-k8s-render.sh from the Manifest CLI and make it yours."
+            if [[ -n "$cli_root" && -f "$cli_root/examples/env-k8s-render.sh" ]]; then
+                echo "  Installed copy: $cli_root/examples/env-k8s-render.sh"
+            fi
         fi
-        if [[ -n "$settings" ]]; then
-            echo "  These settings are no longer read. Remove them:"
-            printf '%s\n' "$settings" | sed 's/^/    /'
+        if [[ "$dockerfile" == "true" ]]; then
+            echo "Note: Manifest no longer writes or checks the ARG→ENV block in your Dockerfile."
+            echo "  The block an earlier Manifest wrote there is now yours to maintain. Manifest"
+            echo "  will not update, compare or delete it. To keep generating it from the spec,"
+            echo "  copy the reference script examples/env-dockerfile-render.sh and make it yours."
+            if [[ -n "$cli_root" && -f "$cli_root/examples/env-dockerfile-render.sh" ]]; then
+                echo "  Installed copy: $cli_root/examples/env-dockerfile-render.sh"
+            fi
         fi
-        echo "  To keep generating those files from the spec, copy the reference script"
-        echo "  examples/env-k8s-render.sh from the Manifest CLI and make it yours. It reads"
-        echo "  the output of: manifest env export"
-        # The CLI's own root is the parent of its modules directory, in a
-        # checkout and in an installed copy alike.
-        local cli_root=""
-        [[ -n "${MANIFEST_CLI_CORE_MODULES_DIR:-}" ]] && cli_root="$(dirname "$MANIFEST_CLI_CORE_MODULES_DIR")"
-        if [[ -n "$cli_root" && -f "$cli_root/examples/env-k8s-render.sh" ]]; then
-            echo "  Installed copy: $cli_root/examples/env-k8s-render.sh"
-        fi
+        echo "  The reference scripts read the output of: manifest status repo --env --json"
         echo "  More: docs/MIGRATION.md in the Manifest CLI repository."
         echo ""
     } >&2
     return 0
 }
 
-# Disposition of a file `env generate` writes whole: the ordinary
+# Disposition of a file the writer (manifest_env_generate) writes whole: the ordinary
 # create|update|current, plus two that stop a write (TRACKER §3(d)).
 #
 #   foreign   an existing, non-empty file whose first line starts with none of
@@ -181,6 +209,53 @@ _manifest_env_rendering_moved_notice() {
 # is followed, as the redirects this replaced followed it; a symlink to
 # nothing is `blocked`, because landing through it would create its target —
 # and that target's missing directories — wherever it points.
+#
+# A file under the starter's header (the scaffolded one) is Manifest's only
+# while it is still the starter: every line one a starter init has written,
+# with any prefix. There have been two starters (`git log -G
+# MANIFEST_CLI_ENV_STARTER -- modules/core/manifest-init.sh`); their lines are
+# listed below, and the command line takes each name it has carried. Any other
+# line — an assignment, a commented `# export KEY=…`, a note — is the user's,
+# and the file is `foreign`. Trailing spaces and a CR are ignored.
+#   _manifest_env_starter_untouched <file>   (0 = still the starter)
+_manifest_env_starter_untouched() {
+    awk -v apos="'" '
+        BEGIN {
+            known["# .env.example — scaffolded by Manifest CLI."] = 1
+            known["# .env.example — scaffolded by Manifest CLI (ENV-001; STANDARD.md §2.7)."] = 1
+            known["# Env prefix policy is off (default). Set env.prefix to require an owned-var prefix."] = 1
+            known["# Framework names (DATABASE_URL, NEXT_PUBLIC_*, …) are bridged at injection"] = 1
+            known["# boundaries, not stored here."] = 1
+            known["# Only FIDENCE names are stored; framework names (DATABASE_URL, NEXT_PUBLIC_*, …)"] = 1
+            known["# are bridged at injection boundaries, never stored."] = 1
+            known["# Declare vars in service.spec.yaml/app.spec.yaml `env:`, then:"] = 1
+            known["#   manifest init repo -y"] = 1
+            known["#   manifest env generate -y"] = 1
+            known["#"] = 1
+            naming = "# Naming law: FIDENCE_{REPO_BODY}_{SUFFIX} — this repo" apos "s prefix:"
+        }
+        {
+            line = $0
+            sub(/\r$/, "", line)
+            sub(/[ \t]+$/, "", line)
+            if (line == "" || (line in known)) next
+            # The prefix is whatever env.prefix held when the starter was
+            # written, and that value is not checked anywhere: `ACME-` and
+            # `ACME.` are printed as given. So a prefix here is any run of
+            # characters with no space, tab or `=` in it — not only the ones a
+            # variable name may hold — or Manifest stops recognising its own
+            # file. A commented `# export KEY=…` or `# KEY = value` still
+            # fails: both have a space where the prefix would be.
+            if (line ~ /^# [^ \t=]*LOG_LEVEL=info$/) next
+            if (line ~ /^# Env prefix policy is on: owned vars start with [^ \t=]* \(framework names are exempt\)\.$/) next
+            if (index(line, naming) == 1 && substr(line, length(naming) + 1) ~ /^( [^ \t=]*)?$/) next
+            touched = 1
+            exit
+        }
+        END { exit touched ? 1 : 0 }
+    ' "$1" 2>/dev/null
+}
+
 #   _manifest_env_guarded_state <target> <rendered> <header> [<header> ...]
 _manifest_env_guarded_state() {
     local target="$1" rendered="$2"
@@ -200,6 +275,12 @@ _manifest_env_guarded_state() {
             for header in "$@"; do
                 [[ "$first" == "$header"* ]] && ours=true
             done
+            # The starter's header stays when someone fills the file in below
+            # it, so for the starter the header alone does not decide.
+            if [[ "$ours" == "true" && "$first" == "$MANIFEST_CLI_ENV_EXAMPLE_HEADER_SCAFFOLDED"* ]] \
+                && ! _manifest_env_starter_untouched "$target"; then
+                ours=false
+            fi
             if [[ "$ours" != "true" ]]; then
                 printf 'foreign'
                 return 0
@@ -216,7 +297,7 @@ _manifest_env_guarded_state() {
 _manifest_env_land() {
     local project_root="$1" rel="$2" state="$3" rendered="$4"
     if [[ "$state" == "foreign" ]]; then
-        echo "  left:  $rel (hand-authored)"
+        echo "  left:  $rel (hand-authored, or a starter with your own lines in it)"
         return 0
     fi
     if [[ "$state" == "blocked" ]]; then
@@ -229,70 +310,6 @@ _manifest_env_land() {
     fi
     echo "  FAILED: $rel (not written)"
     return 1
-}
-
-# Render the Dockerfile ARG→ENV bridge block for build-time publics
-# (public: true). Empty output = no public vars, no block.
-_manifest_env_render_dockerfile_bridge() {
-    local spec_file="$1"
-
-    local count i name public framework_name injected lines=""
-    count="$(yq e '.env | length' "$spec_file" 2>/dev/null)"
-    [[ "$count" =~ ^[0-9]+$ ]] || count=0
-    for ((i = 0; i < count; i++)); do
-        name="$(yq e ".env[$i].name // \"\"" "$spec_file" 2>/dev/null)"
-        [[ -n "$name" ]] || continue
-        public="$(_manifest_env_spec_flag "$spec_file" "$i" public)" || return 1
-        [[ "$public" == "true" ]] || continue
-        framework_name="$(yq e ".env[$i].framework_name // \"\"" "$spec_file" 2>/dev/null)"
-        injected="${framework_name:-$name}"
-        lines+="ARG ${name}"$'\n'
-        lines+="ENV ${injected}=\${${name}}"$'\n'
-    done
-    [[ -n "$lines" ]] || return 0
-
-    printf '%s\n' "$MANIFEST_CLI_ENV_BRIDGE_BEGIN"
-    printf '%s' "$lines"
-    printf '%s\n' "$MANIFEST_CLI_ENV_BRIDGE_END"
-}
-
-# Extract the current bridge block from a Dockerfile (empty if none).
-_manifest_env_dockerfile_bridge_current() {
-    local dockerfile="$1"
-    [[ -f "$dockerfile" ]] || return 0
-    awk -v begin="$MANIFEST_CLI_ENV_BRIDGE_BEGIN" -v end="$MANIFEST_CLI_ENV_BRIDGE_END" '
-        $0 == begin { inside = 1 }
-        inside { print }
-        $0 == end { inside = 0 }
-    ' "$dockerfile"
-}
-
-# Replace (or append) the bridge block in a Dockerfile.
-_manifest_env_dockerfile_bridge_apply() {
-    local dockerfile="$1"
-    local block="$2"
-    local tmp rc=0
-    tmp="$(mktemp)" || return 1
-
-    if grep -qF "$MANIFEST_CLI_ENV_BRIDGE_BEGIN" "$dockerfile" 2>/dev/null; then
-        # The block reaches awk through the environment, not `-v block=…`: it
-        # is several lines, and BWK awk (macOS) refuses a newline inside a -v
-        # value ("newline in string", exit 2) — so on macOS an existing block
-        # could never be updated: a warning, exit 0, and --check red for good.
-        MANIFEST_CLI_ENV_BRIDGE_BLOCK="$block" awk -v begin="$MANIFEST_CLI_ENV_BRIDGE_BEGIN" -v end="$MANIFEST_CLI_ENV_BRIDGE_END" '
-            $0 == begin { inside = 1; print ENVIRON["MANIFEST_CLI_ENV_BRIDGE_BLOCK"]; next }
-            $0 == end { inside = 0; next }
-            !inside { print }
-        ' "$dockerfile" > "$tmp" || { rm -f "$tmp"; return 1; }
-    else
-        cat "$dockerfile" > "$tmp" || { rm -f "$tmp"; return 1; }
-        printf '\n%s\n' "$block" >> "$tmp"
-    fi
-    # Not `mv "$tmp" "$dockerfile"`: mktemp creates 0600 and a rename carries
-    # those bits onto the target — measured, a 644 Dockerfile came back 600.
-    manifest_replace_file_atomically "$dockerfile" "$tmp" || rc=1
-    rm -f "$tmp"
-    return "$rc"
 }
 
 # One artifact's disposition for generate/preview/check.
@@ -309,10 +326,25 @@ _manifest_env_artifact_state() {
     fi
 }
 
-# manifest env generate [--check] [--dry-run] [-y|--yes]
+# manifest_env_generate [--check] [--dry-run] [-y|--yes] [--quiet]
+#
+# The one writer of .env.example from the spec. No user command reaches it by
+# this name any more: `manifest init repo` plans and applies through it
+# (ensure_env_files, _manifest_init_env_plan), and `init repo --check` gates
+# drift through it (manifest_env_validate).
+#
+#   (default)  plan: say what -y would do; write nothing
+#   --check    exit 1 if .env.example is out of date or cannot be read
+#   -y         write .env.example (a hand-authored one is left alone)
+#   --quiet    print only the per-file line(s) — no heading or footer — for a
+#              caller that prints its own (init's plan and apply)
+#
+# It prints no rendering-moved notice: each command that uses it says that
+# once itself.
 manifest_env_generate() {
     local execution_mode="preview"
     local check_only=false
+    local quiet=false
     local _local_only=false
     local remaining_args=()
     if ! manifest_execution_parse execution_mode _local_only remaining_args "$@"; then
@@ -322,29 +354,9 @@ manifest_env_generate() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --check) check_only=true ;;
-            --help)
-                _render_help \
-                    "manifest env generate [--check] [--dry-run] [-y|--yes]" \
-                    "Write the env files your spec's env: block describes, so the variable
-names live in one place and are not retyped in each file." \
-                    "Options" "  --dry-run    Explicit preview; no writes (default)
-  --check      Exit 1 if any generated file is out of date (for CI)
-  -y, --yes    Write the files" \
-                    "Files written" "  .env.example              every variable name; non-secrets carry their
-                            spec default (blank when the spec sets none),
-                            secrets are commented out and left valueless
-  Dockerfile bridge block   build-time public vars, ARG→ENV (if a Dockerfile
-                            exists and the spec has public variables)
-  A .env.example you wrote by hand (its first line is not the Manifest
-  header) is left untouched and is not counted as out of date." \
-                    "Spec flags" "  secret, required and public take true or false. Any other value (yes,
-  on, 1) is refused by name: generate exits 1 and writes nothing." \
-                    "Deployment files" "  Manifest writes none. To render them with your own tool, read the same
-  variables as JSON: manifest env export"
-                return 0
-                ;;
+            --quiet) quiet=true ;;
             *)
-                _render_help_error "Unknown option: $1" "manifest env generate [--check] [--dry-run] [-y|--yes]"
+                echo "manifest_env_generate: unknown option: $1" >&2
                 return 1
                 ;;
         esac
@@ -355,13 +367,13 @@ names live in one place and are not retyped in each file." \
     local spec_file
     spec_file="$(_manifest_env_spec_file "$project_root")"
 
-    _manifest_env_rendering_moved_notice "$project_root"
-
     if ! _manifest_env_spec_ready "$project_root"; then
-        echo "No spec env: block found (service.spec.yaml / app.spec.yaml)."
-        echo "List your environment variables under 'env:' in that file first — it is"
-        echo "the one place they are declared, and everything else is generated from"
-        echo "it. To create a starter spec: manifest init repo -y"
+        if [[ "$quiet" != "true" ]]; then
+            echo "No spec env: block found (service.spec.yaml / app.spec.yaml)."
+            echo "List your environment variables under 'env:' in that file — it is the one"
+            echo "place they are declared, and .env.example is generated from it."
+            echo "manifest init repo -y creates service.spec.yaml with a starter env: block."
+        fi
         # Nothing to generate is not drift.
         return 0
     fi
@@ -381,66 +393,58 @@ names live in one place and are not retyped in each file." \
         printf '%s\n' "$flag_problems" | sed 's/^/  /'
         echo ""
         echo "A flag is a YAML boolean; spellings such as yes, on or 1 are not guessed."
-        echo "Nothing was written. Fix $(basename "$spec_file"), then: manifest env generate -y"
+        echo "Nothing was written. Fix $(basename "$spec_file"), then: manifest init repo -y"
         return 1
     fi
 
-    # ---- Render everything first (read-only) --------------------------------
-    local example_rendered bridge_rendered
+    # ---- Render first (read-only) --------------------------------------------
+    local example_rendered example_state
     example_rendered="$(_manifest_env_render_example "$spec_file" "$project_root")"
-    bridge_rendered="$(_manifest_env_render_dockerfile_bridge "$spec_file")"
-
-    local -a plan_names=() plan_states=()
-    local example_state
     example_state="$(_manifest_env_guarded_state "$project_root/.env.example" "$example_rendered" \
         "$MANIFEST_CLI_ENV_EXAMPLE_HEADER_GENERATED" "$MANIFEST_CLI_ENV_EXAMPLE_HEADER_SCAFFOLDED")"
-    plan_names+=(".env.example")
-    plan_states+=("$example_state")
 
-    local emit_bridge=false
-    if [[ -n "$bridge_rendered" && -f "$project_root/Dockerfile" ]]; then
-        emit_bridge=true
-        plan_names+=("Dockerfile (bridge block)")
-        if [[ "$(_manifest_env_dockerfile_bridge_current "$project_root/Dockerfile")" == "$bridge_rendered" ]]; then
-            plan_states+=("current")
-        elif grep -qF "$MANIFEST_CLI_ENV_BRIDGE_BEGIN" "$project_root/Dockerfile" 2>/dev/null; then
-            plan_states+=("update")
-        else
-            plan_states+=("create")
+    # ---- Apply ---------------------------------------------------------------
+    if [[ "$apply" == "true" ]]; then
+        [[ "$quiet" == "true" ]] || { echo ""; echo "Generating env artifacts: $project_root"; echo ""; }
+        if [[ "$example_state" == "current" ]]; then
+            echo "  up-to-date:   .env.example"
+        elif ! _manifest_env_land "$project_root" ".env.example" "$example_state" "$example_rendered"; then
+            [[ "$quiet" == "true" ]] || { echo ""; echo "Env artifacts NOT fully generated: 1 file(s) could not be written."; }
+            return 1
         fi
+        [[ "$quiet" == "true" ]] || { echo ""; echo "Env artifacts generated."; }
+        return 0
     fi
 
-    # ---- Report the plan -----------------------------------------------------
-    echo ""
-    if [[ "$check_only" == "true" ]]; then
-        echo "Env drift check — $project_root"
-    elif [[ "$apply" == "true" ]]; then
-        echo "Generating env artifacts: $project_root"
-    else
-        echo "Dry run — manifest env generate: $project_root"
+    # ---- Report the plan (preview and --check) -------------------------------
+    if [[ "$quiet" != "true" ]]; then
+        echo ""
+        if [[ "$check_only" == "true" ]]; then
+            echo "Env drift check — $project_root"
+        else
+            echo "Dry run — .env.example from $(basename "$spec_file"): $project_root"
+        fi
+        echo ""
     fi
-    echo ""
 
-    local i drift=0 blocked=0
-    for i in "${!plan_names[@]}"; do
-        case "${plan_states[$i]}" in
-            current) echo "  up-to-date:   ${plan_names[$i]}" ;;
-            blocked)
-                echo "  cannot read:  ${plan_names[$i]} (not a readable file; not compared, and -y will not write it)"
-                blocked=$((blocked + 1))
-                ;;
-            foreign)
-                echo "  hand-authored, left untouched: ${plan_names[$i]} (its first line is not Manifest's header; delete the file to have it generated)"
-                ;;
-            create)  echo "  would create: ${plan_names[$i]}"; drift=$((drift + 1)) ;;
-            update)  echo "  would update: ${plan_names[$i]}"; drift=$((drift + 1)) ;;
-        esac
-    done
-    echo ""
+    local drift=0 blocked=0
+    case "$example_state" in
+        current) echo "  up-to-date:   .env.example" ;;
+        blocked)
+            echo "  cannot read:  .env.example (not a readable file; not compared, and -y will not write it)"
+            blocked=1
+            ;;
+        foreign)
+            echo "  hand-authored, left untouched: .env.example (its first line is not Manifest's header, or it is the starter with your own lines in it; delete the file to have it generated)"
+            ;;
+        create)  echo "  would create: .env.example"; drift=1 ;;
+        update)  echo "  would update: .env.example"; drift=1 ;;
+    esac
+    [[ "$quiet" == "true" ]] || echo ""
 
     if [[ "$check_only" == "true" ]]; then
         if [[ "$drift" -gt 0 ]]; then
-            echo "env drift: $drift artifact(s) stale — run: manifest env generate -y"
+            echo "env drift: $drift artifact(s) stale — run: manifest init repo -y"
         fi
         if [[ "$blocked" -gt 0 ]]; then
             echo "env drift: $blocked path(s) could not be read, so nothing is known about them"
@@ -450,53 +454,26 @@ names live in one place and are not retyped in each file." \
         return 0
     fi
 
-    if [[ "$apply" != "true" ]]; then
-        manifest_execution_footer "manifest env generate -y"
+    if [[ "$quiet" != "true" ]]; then
+        manifest_execution_footer "manifest init repo -y"
         echo ""
-        return 0
     fi
-
-    # ---- Apply ---------------------------------------------------------------
-    local failed=0
-    _manifest_env_land "$project_root" ".env.example" "$example_state" "$example_rendered" || failed=$((failed + 1))
-    if [[ "$emit_bridge" == "true" ]]; then
-        if _manifest_env_dockerfile_bridge_apply "$project_root/Dockerfile" "$bridge_rendered"; then
-            echo "  wrote: Dockerfile bridge block"
-        else
-            echo "  FAILED: Dockerfile bridge block (not written)"
-            failed=$((failed + 1))
-        fi
-    fi
-    echo ""
-    if [[ "$failed" -gt 0 ]]; then
-        echo "Env artifacts NOT fully generated: $failed file(s) could not be written."
-        return 1
-    fi
-    echo "Env artifacts generated."
     return 0
 }
 
-# manifest env validate — read-only: env prefix policy + drift + gitignore hygiene.
+# manifest_env_validate — read-only: env prefix policy + .env.example drift +
+# gitignore hygiene. The engine of `manifest init repo --check`; it prints its
+# own verdict line, and the caller's exit status is its own.
 manifest_env_validate() {
-    if [[ "${1:-}" == "--help" || "${1:-}" == "help" ]]; then
-        _render_help \
-            "manifest env validate" \
-            "Validate env hygiene: prefix policy, generated-artifact drift, gitignore." \
-            "Checks" "  prefix     stored names carry the repo prefix (derived unless env.prefix set; off to disable)
-  drift      .env.example and the Dockerfile bridge block match the spec env: block
-  gitignore  .env value files are ignored; only example/template tracked"
-        return 0
-    fi
-
     local project_root="${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}"
     local failures=0
 
-    # Said here, by validate itself: the drift check below captures all of
-    # generate's output, its copy of the notice included.
+    # Said here, once: the drift check below runs generate with its output
+    # captured.
     _manifest_env_rendering_moved_notice "$project_root"
 
     echo ""
-    echo "Env validation — $project_root"
+    echo "Env check — $project_root"
     echo ""
 
     local _policy_prefix
@@ -519,7 +496,19 @@ manifest_env_validate() {
     fi
 
     echo "  generated-artifact drift:"
-    if _manifest_env_spec_ready "$project_root"; then
+    # A spec init -y refuses fails here too: --check never passes what -y
+    # stops on. The states and their reasons are init's (one list of them).
+    local spec_state="" spec_refused=""
+    if declare -F _manifest_env_spec_plan_state >/dev/null 2>&1; then
+        spec_state="$(_manifest_env_spec_plan_state "$project_root")"
+    fi
+    case "$spec_state" in
+        blocked|unreadable|multidoc|notamap|notalist) spec_refused="$spec_state" ;;
+    esac
+    if [[ -n "$spec_refused" ]]; then
+        echo "      ❌ the spec cannot be used: $(_manifest_env_spec_state_reason "$spec_refused" "$project_root")"
+        failures=$((failures + 1))
+    elif _manifest_env_spec_ready "$project_root"; then
         local check_out check_rc=0
         check_out="$(manifest_env_generate --check 2>&1)" || check_rc=$?
         if [[ "$check_rc" -eq 0 ]]; then
@@ -534,14 +523,17 @@ manifest_env_validate() {
             failures=$((failures + 1))
         else
             if printf '%s\n' "$check_out" | grep -q '^env drift: .* stale'; then
-                echo "      ❌ stale artifacts — run: manifest env generate -y"
+                echo "      ❌ stale artifacts — run: manifest init repo -y"
             fi
             printf '%s\n' "$check_out" | sed -n 's/^  cannot read:  \([^ ]*\).*/      ❌ cannot read: \1 (not a readable file) — not compared/p'
             printf '%s\n' "$check_out" | sed -n 's/^  hand-authored, left untouched: \([^ ]*\).*/      ℹ️  not compared (hand-authored): \1/p'
             failures=$((failures + 1))
         fi
+    elif [[ "$spec_state" == "linked" || "$spec_state" == "readonly" ]]; then
+        # init -y does not seed these, so "init creates one" would be false.
+        echo "      ℹ️  no spec env: block — $(_manifest_env_spec_state_reason "$spec_state" "$project_root"). Add an env: list to it yourself."
     else
-        echo "      ℹ️  no spec env: block — nothing generated yet"
+        echo "      ℹ️  no spec env: block — nothing generated yet (manifest init repo -y creates one)"
     fi
 
     echo "  gitignore hygiene:"
@@ -558,15 +550,15 @@ manifest_env_validate() {
 
     echo ""
     if [[ "$failures" -gt 0 ]]; then
-        echo "env validate: FAIL ($failures check(s))"
+        echo "env check: FAIL ($failures check(s))"
         return 1
     fi
-    echo "env validate: PASS"
+    echo "env check: PASS"
     return 0
 }
 
 # ---------------------------------------------------------------------------
-# manifest env export — the variable contract as JSON, read-only.
+# The variable contract as JSON, read-only (`manifest status repo --env --json`).
 # ---------------------------------------------------------------------------
 
 # The identity a consumer may use to name what it renders: the origin
@@ -634,6 +626,14 @@ _manifest_env_export_problems() {
                 problems=$((problems + 1))
             fi
         done
+        # A framework name is a variable name too: a consumer writes it into
+        # a Dockerfile or a manifest line, where a newline starts a new line.
+        local framework
+        framework="$(yq e "explode(.) | .env[$i].framework_name // \"\"" "$spec_file" 2>/dev/null)"
+        if [[ "$framework" == *$'\n'* ]]; then
+            echo "${name}: framework_name spans more than one line"
+            problems=$((problems + 1))
+        fi
     done
     # The flags go through the one predicate every reader uses, and through
     # nothing else: a second reader here is how a consumer would be handed a
@@ -646,56 +646,16 @@ _manifest_env_export_problems() {
     [[ "$problems" -eq 0 ]]
 }
 
-# manifest env export [--format json]
+# manifest_env_export — the engine of `manifest status repo --env [--json]`.
+# Takes no options: the status command parses its own.
 #
 # stdout carries the JSON document and nothing else, or nothing at all: every
 # refusal is on stderr with a non-zero exit, so a consumer piping this into a
 # generator is never handed half a contract.
 manifest_env_export() {
-    local format="json"
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --format)
-                if [[ $# -lt 2 ]]; then
-                    _render_help_error "--format needs a value (json)" "manifest env export [--format json]" >&2
-                    return 1
-                fi
-                format="$2"
-                shift
-                ;;
-            --format=*) format="${1#--format=}" ;;
-            --help|help)
-                _render_help \
-                    "manifest env export [--format json]" \
-                    "Print the variables your spec's env: block declares, as JSON. Reads only;
-writes no file. Meant for a tool that renders deployment files from them." \
-                    "Options" "  --format json   The output format (the default, and the only one)" \
-                    "Output" "  schema          1
-  identity        the origin repository's name, or the folder name when the
-                  repo has no origin
-  env[]           one object per variable, in spec order:
-    name, description   strings (description is \"\" when unset)
-    required, secret, public
-                        booleans, read as env generate reads them
-    default         a string, or null when the spec sets none. Always null
-                    for a secret: a secret's default is never printed
-    group           a string; \"app\" when the spec sets none
-    framework_name  a string, or null when the spec sets none" \
-                    "Exit status" "  0   the JSON document is on stdout
-  1   nothing is on stdout; the reason is on stderr. A spec that cannot be
-      parsed, an env: block that is not a list, an entry with no name, a
-      name used twice, or a flag that is neither true nor false"
-                return 0
-                ;;
-            *)
-                _render_help_error "Unknown option: $1" "manifest env export [--format json]" >&2
-                return 1
-                ;;
-        esac
-        shift
-    done
-    if [[ "$format" != "json" ]]; then
-        echo "env export: unknown format '${format}' (json is the only one)" >&2
+    local who="status repo --env"
+    if [[ $# -gt 0 ]]; then
+        echo "manifest_env_export: takes no options (got $1)" >&2
         return 1
     fi
 
@@ -703,28 +663,42 @@ writes no file. Meant for a tool that renders deployment files from them." \
     local spec_file
     spec_file="$(_manifest_env_spec_file "$project_root")"
     if [[ -z "$spec_file" ]]; then
-        echo "env export: no spec file (service.spec.yaml / app.spec.yaml) in $project_root" >&2
+        echo "${who}: no spec file (service.spec.yaml / app.spec.yaml) in $project_root — manifest init repo -y creates one" >&2
         return 1
     fi
     if ! command -v yq >/dev/null 2>&1; then
-        echo "env export: yq is required to read $(basename "$spec_file")" >&2
+        echo "${who}: yq is required to read $(basename "$spec_file")" >&2
         return 1
     fi
     # A spec that cannot be parsed is not "a spec with no variables".
     if ! yq e '.' "$spec_file" >/dev/null 2>&1; then
-        echo "env export: $(basename "$spec_file") cannot be parsed as YAML" >&2
+        echo "${who}: $(basename "$spec_file") cannot be parsed as YAML" >&2
         return 1
     fi
     if [[ "$(yq e 'document_index' "$spec_file" 2>/dev/null | tail -n 1)" != "0" ]]; then
-        echo "env export: $(basename "$spec_file") holds more than one YAML document; the spec is one" >&2
+        echo "${who}: $(basename "$spec_file") holds more than one YAML document; the spec is one" >&2
         return 1
     fi
     local env_tag
-    env_tag="$(yq e '.env | tag' "$spec_file" 2>/dev/null)"
+    # The top level is read first, as init reads it (_manifest_env_spec_plan_state):
+    # yq fails on .env for a top-level list but answers !!null for a single
+    # value, which would then be reported as an env: key that is not a list —
+    # a key the file does not have.
+    case "$(yq e 'tag' "$spec_file" 2>/dev/null)" in
+        '!!map'|'!!null') ;;
+        *)
+            echo "${who}: $(basename "$spec_file") is not a map of keys: its top level is a list or a single value" >&2
+            return 1
+            ;;
+    esac
+    if ! env_tag="$(yq e '.env | tag' "$spec_file" 2>/dev/null)"; then
+        echo "${who}: $(basename "$spec_file") cannot be parsed as YAML" >&2
+        return 1
+    fi
     case "$env_tag" in
         '!!seq'|'!!null') ;;
         *)
-            echo "env export: env: in $(basename "$spec_file") must be a list of variables" >&2
+            echo "${who}: env: in $(basename "$spec_file") must be a list of variables" >&2
             return 1
             ;;
     esac
@@ -732,7 +706,7 @@ writes no file. Meant for a tool that renders deployment files from them." \
     local problems
     if ! problems="$(_manifest_env_export_problems "$spec_file")"; then
         {
-            echo "env export: cannot export $(basename "$spec_file"):"
+            echo "${who}: cannot export $(basename "$spec_file"):"
             printf '%s\n' "$problems" | sed 's/^/  /'
         } >&2
         return 1
@@ -796,44 +770,84 @@ writes no file. Meant for a tool that renders deployment files from them." \
               ]
             }
         ' "$spec_file" 2>/dev/null)" || [[ -z "$document" ]]; then
-        echo "env export: could not build the document from $(basename "$spec_file")" >&2
+        echo "${who}: could not build the document from $(basename "$spec_file")" >&2
         return 1
     fi
     printf '%s\n' "$document"
 }
 
-# Dispatch for `manifest env <generate|validate|export>`
-manifest_env_dispatch() {
-    case "${1:-}" in
-        generate)
-            shift || true
-            manifest_env_generate "$@"
-            ;;
-        validate)
-            shift || true
-            manifest_env_validate "$@"
-            ;;
-        export)
-            shift || true
-            manifest_env_export "$@"
-            ;;
-        help|--help|"")
-            _render_help \
-                "manifest env <generate|validate|export>" \
-                "Keep your environment-variable names in one place — the spec's env: block —
-and work from it." \
-                "Subcommands" "  generate   Write .env.example, and the Dockerfile bridge block, from the
-             spec's env: block
-  validate   Check variable-name prefixes, whether the generated files are
-             out of date, and that real .env files are gitignored (read-only)
-  export     Print the variables as JSON, for a tool that renders deployment
-             files from them (read-only)"
-            [[ -z "${1:-}" ]] && return 1
-            return 0
-            ;;
-        *)
-            _render_help_error "Unknown env subcommand: $1" "manifest env <generate|validate|export>"
-            return 1
-            ;;
-    esac
+
+# The variable contract for a reader: `manifest status repo --env` without
+# --json. One line per variable from the same document the JSON view prints,
+# so the two cannot disagree; a spec the export refuses is refused here too,
+# with the export's own reason on stderr. A secret's default is never part of
+# that document, so it cannot be shown here either.
+manifest_env_contract_view() {
+    local project_root="${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}"
+    local document
+    document="$(manifest_env_export)" || return 1
+
+    local count
+    count="$(printf '%s\n' "$document" | yq e -p=json '.env | length' - 2>/dev/null)"
+    [[ "$count" =~ ^[0-9]+$ ]] || count=0
+
+    echo ""
+    echo "Env contract — $(basename "$(_manifest_env_spec_file "$project_root")") ($(printf '%s\n' "$document" | yq e -p=json '.identity' -))"
+    echo ""
+    if [[ "$count" -eq 0 ]]; then
+        echo "  No variables declared. List them under env: in the spec, then: manifest init repo -y"
+        echo ""
+        return 0
+    fi
+    # The flags come from the one predicate (_manifest_env_spec_flag), as in
+    # every other reader; the document supplies only name, default and
+    # framework_name. It lists the entries in spec order, so index i is the
+    # same entry in both. The export has already refused any spec this could
+    # read differently.
+    local spec_file i name required secret_flag public value framework traits
+    spec_file="$(_manifest_env_spec_file "$project_root")"
+    for ((i = 0; i < count; i++)); do
+        name="$(printf '%s\n' "$document" | yq e -p=json ".env[$i].name" -)"
+        required="$(_manifest_env_spec_flag "$spec_file" "$i" required)" || return 1
+        secret_flag="$(_manifest_env_spec_flag "$spec_file" "$i" secret)" || return 1
+        public="$(_manifest_env_spec_flag "$spec_file" "$i" public)" || return 1
+        framework="$(printf '%s\n' "$document" | yq e -p=json ".env[$i].framework_name // \"\"" -)"
+        traits="optional"
+        [[ "$required" == "true" ]] && traits="required"
+        [[ "$secret_flag" == "true" ]] && traits+=", secret"
+        [[ "$public" == "true" ]] && traits+=", build-time"
+        if [[ "$secret_flag" == "true" ]]; then
+            value="(from the secret store)"
+        elif [[ "$(printf '%s\n' "$document" | yq e -p=json ".env[$i].default | tag" -)" == "!!null" ]]; then
+            value="(no default)"
+        else
+            value="= $(printf '%s\n' "$document" | yq e -p=json ".env[$i].default" -)"
+        fi
+        # One line per variable, whatever a default holds.
+        value="${value//$'\n'/\\n}"
+        printf '  %-40s %-30s %s%s\n' "$name" "$traits" "$value" "${framework:+  (as $framework)}"
+    done
+    echo ""
+    echo "  Machine-readable: manifest status repo --env --json"
+    echo ""
+}
+
+# `manifest env` is gone (TRACKER §127): its three subcommands are options of
+# the commands they belong to. Said before any configuration is loaded, and
+# always exit 1, so a CI job that still runs one fails loudly instead of
+# passing on a command that did nothing.
+manifest_env_removed() {
+    {
+        echo "manifest env was removed. Use:"
+        echo "  manifest env generate -y      →  manifest init repo --no-connect -y"
+        echo "  manifest env generate         →  manifest init repo --no-connect"
+        echo "  manifest env validate         →  manifest init repo --check"
+        echo "  manifest env generate --check →  manifest init repo --check"
+        echo "  manifest env export           →  manifest status repo --env --json"
+        echo "init repo -y also creates any init file the repository is missing."
+        echo "init repo --check is what env validate checked: the prefix and .gitignore"
+        echo "rules as well as .env.example, so it can fail where env generate --check passed."
+        echo "More: docs/MIGRATION.md in the Manifest CLI repository."
+    } >&2
+    return 1
 }

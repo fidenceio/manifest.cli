@@ -1249,6 +1249,8 @@ manifest_status() {
     local explicit_repo_scope=false
     local bootstrap_mode="off"
     local verify=false
+    local env_view=false
+    local fleet_asked=false
     while [[ $# -gt 0 ]]; do
         case "$1" in
             repo)
@@ -1256,8 +1258,14 @@ manifest_status() {
                 explicit_repo_scope=true
                 shift
                 ;;
-            fleet) scope="$1"; shift ;;
+            fleet) scope="$1"; fleet_asked=true; shift ;;
             --json) emit_json=true; shift ;;
+            --env)
+                # The repository's variable contract (TRACKER §127). A
+                # repository view only: a fleet has no single env: block.
+                env_view=true
+                shift
+                ;;
             --bootstrap)
                 scope="fleet"
                 bootstrap_mode="preview"
@@ -1276,11 +1284,18 @@ manifest_status() {
                 ;;
             --help)
                 _render_help \
-                    "manifest status [repo|fleet] [--json] [--bootstrap] [--verify]" \
+                    "manifest status [repo|fleet] [--json] [--env] [--bootstrap] [--verify]" \
                     "Read-only snapshot of repo or fleet state." \
                     "Scopes" "  repo     Force current-repo status
   fleet    Force fleet repository table" \
                     "Options" "  --json        Emit machine-readable JSON instead of the human view
+  --env         The repository's environment variables, from the spec's
+                env: block (service.spec.yaml or app.spec.yaml). With --json,
+                the document a tool of your own renders deployment files
+                from: schema 1, identity, and one object per variable. A
+                secret's default is never printed. Nothing on stdout and
+                exit 1 when the spec cannot be represented, with the reason
+                on stderr.
   --bootstrap   Preview which declared-but-absent fleet members would be
                 cloned (read-only; clones nothing)
   --verify      Probe each member's remote (read-only 'git ls-remote') to
@@ -1288,17 +1303,37 @@ manifest_status() {
                 nothing is persisted." \
                     "Examples" "  manifest status
   manifest status repo
+  manifest status repo --env
+  manifest status repo --env --json
   manifest status fleet
   manifest status fleet --bootstrap
   manifest status fleet --verify"
                 return 0
                 ;;
             *)
-                _render_help_error "Unknown option: $1" "manifest status [repo|fleet] [--json] [--bootstrap] [--verify]"
+                _render_help_error "Unknown option: $1" "manifest status [repo|fleet] [--json] [--env] [--bootstrap] [--verify]"
                 return 1
                 ;;
         esac
     done
+
+    if [[ "$env_view" == "true" ]]; then
+        if [[ "$fleet_asked" == "true" || "$bootstrap_mode" != "off" || "$verify" == "true" ]]; then
+            echo "status: --env is a repository view; it cannot be combined with fleet, --bootstrap or --verify" >&2
+            return 1
+        fi
+        local env_proj="${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}"
+        if [[ "$explicit_repo_scope" == "true" ]] \
+            && ! manifest_repo_scope_require_git "manifest status repo --env" "$env_proj" >&2; then
+            return 1
+        fi
+        if [[ "$emit_json" == "true" ]]; then
+            MANIFEST_CLI_PROJECT_ROOT="$env_proj" manifest_env_export
+        else
+            MANIFEST_CLI_PROJECT_ROOT="$env_proj" manifest_env_contract_view
+        fi
+        return $?
+    fi
 
     local proj="${MANIFEST_CLI_PROJECT_ROOT:-$(pwd)}"
     cd "$proj" 2>/dev/null || { echo "❌ Cannot enter $proj"; return 1; }

@@ -10,7 +10,7 @@ _manifest_complete() {
     words=("${COMP_WORDS[@]}")
 
     # Top-level commands shown in `manifest --help`
-    local top_cmds="config init plan reconcile status recipe discover update add validate docs topics ship pr doctor cleanup security env upgrade reinstall uninstall revert test cloud agent version help"
+    local top_cmds="config init plan reconcile status recipe discover update add validate docs topics ship pr doctor cleanup security upgrade reinstall uninstall revert test cloud agent version help"
     local scopes="repo fleet"
     local bumps="patch minor major revision"
     local config_subs="show list get set unset describe doctor setup time"
@@ -73,10 +73,6 @@ _manifest_complete() {
                     COMPREPLY=( $(compgen -W "list show explain help" -- "$cur") )
                     return 0
                     ;;
-                env)
-                    COMPREPLY=( $(compgen -W "generate validate export help" -- "$cur") )
-                    return 0
-                    ;;
                 # 'cloud' subcommands are declared in manifest-core.sh's own
                 # usage block, so they are verifiable here. 'agent' is not:
                 # its only in-repo implementation is a stub that ignores its
@@ -110,7 +106,7 @@ _manifest_complete() {
                 # that accepts it. --connect is the connect phase (what
                 # `prep repo` used to be); --create-repo-* implies it.
                 "init repo")
-                    COMPREPLY=( $(compgen -W "-y --yes --force --dry-run --connect --no-connect --remote --create-repo-private --create-repo-public --help" -- "$cur") )
+                    COMPREPLY=( $(compgen -W "-y --yes --force --dry-run --check --connect --no-connect --remote --create-repo-private --create-repo-public --help" -- "$cur") )
                     return 0
                     ;;
                 "init fleet")
@@ -129,12 +125,8 @@ _manifest_complete() {
                     COMPREPLY=( $(compgen -W "-y --yes --dry-run --help" -- "$cur") )
                     return 0
                     ;;
-                "env generate")
-                    COMPREPLY=( $(compgen -W "-y --yes --dry-run --check --help" -- "$cur") )
-                    return 0
-                    ;;
-                "env export")
-                    COMPREPLY=( $(compgen -W "--format --help" -- "$cur") )
+                "status repo")
+                    COMPREPLY=( $(compgen -W "--json --env --help" -- "$cur") )
                     return 0
                     ;;
                 "plan fleet")

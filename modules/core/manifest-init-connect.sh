@@ -220,6 +220,10 @@ Empty remotes need no pull; connection failures stop setup." \
     # remote has nothing to pull; failures and diverged history must never be
     # swallowed as a successful initialization.
     _manifest_init_sync_origin "$project_root" || return 1
+    # Under init repo the scaffold phase that follows writes the env files and
+    # reports its own failure; done here too, a spec problem would be reported
+    # as "origin connection failed".
+    [[ "$nested" == "1" ]] && return 0
     ensure_env_files "$project_root"
 }
 

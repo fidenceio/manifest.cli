@@ -1,31 +1,48 @@
 #!/usr/bin/env bats
-
-# Coverage for `manifest env` dispatch routing (manifest-env.sh —
-# manifest_env_dispatch): generate/validate/export routes with flag passthrough, the
-# help/-h/empty branches, the unknown-subcommand error, and env validate's
-# behavior when no spec env: block exists. Generate/validate content semantics
-# themselves are pinned in env_generate.bats.
+# bats file_tags=smoke
+#
+# Where env work is reached now (TRACKER §127). `manifest env` is gone; its
+# three subcommands are options of the commands they belong to:
+#
+#   env generate [-y]      →  init repo [-y]
+#   env generate --check   →  init repo --check
+#   env validate           →  init repo --check
+#   env export             →  status repo --env --json
+#
+# Every test runs the tree's own entrypoint, because the routing under test is
+# the entrypoint's: the early refusal of `env` happens before any
+# configuration is loaded, and `--check` must be taken before init's connect
+# defaults, which would otherwise plan a GitHub repository for a repo with no
+# origin. Engine semantics (what drift is, what the export holds) are pinned
+# in env_generate.bats and env_export.bats.
+#
+# Tagged smoke: a CI job that still runs `manifest env …` must fail, not pass
+# on a command that did nothing.
 
 load 'helpers/setup'
 
 setup() {
     command -v yq >/dev/null 2>&1 || skip "yq not available"
-    load_modules "system/manifest-env-naming.sh" "system/manifest-security.sh" \
-        "core/manifest-init.sh" "core/manifest-env.sh"
     SCRATCH="$(mk_scratch)"
     HOME="$SCRATCH/home"
     mkdir -p "$HOME"
     export HOME
     PROJ="$SCRATCH/fidence.app.demo"
     mkdir -p "$PROJ"
-    export MANIFEST_CLI_PROJECT_ROOT="$PROJ"
-    cd "$PROJ"
+    git -C "$PROJ" init -q -b main
+    unset MANIFEST_CLI_PROJECT_ROOT
 }
 
 teardown() {
     cd /tmp
     rm -rf "$SCRATCH"
-    unset MANIFEST_CLI_PROJECT_ROOT
+}
+
+# cli args... → RC, $SCRATCH/out (stdout), $SCRATCH/err (stderr)
+cli() {
+    RC=0
+    ( cd "$PROJ" && "$TEST_REPO_ROOT/scripts/manifest-cli.sh" "$@" ) \
+        > "$SCRATCH/out" 2> "$SCRATCH/err" || RC=$?
 }
 
 write_spec() {
@@ -40,66 +57,132 @@ env:
 YAML
 }
 
-@test "env dispatch: routes generate (no spec -> informative, exit 0)" {
-    run manifest_env_dispatch generate
-    [ "$status" -eq 0 ]
-    echo "$output" | grep -q "No spec env: block found"
-    [ ! -f "$PROJ/.env.example" ]
+tree_listing() {
+    ( cd "$PROJ" && find . -path ./.git -prune -o -print | sort )
 }
 
-@test "env dispatch: passes flags through to generate (--check drift gate)" {
+# --- the removed command ------------------------------------------------------------
+
+@test "manifest env: every former subcommand exits 1, names its replacement on stderr, and touches nothing" {
     write_spec
-    run manifest_env_dispatch generate --check
-    [ "$status" -eq 1 ]
-    echo "$output" | grep -q "Env drift check — $PROJ"
-    echo "$output" | grep -q "would create: .env.example"
-    echo "$output" | grep -q "env drift: 1 artifact(s) stale"
-    # The drift gate is read-only.
-    [ ! -f "$PROJ/.env.example" ]
+    local before sub
+    before="$(tree_listing)"
+    for sub in "generate -y" "generate" "generate --check" "validate" "export" "" "frobnicate"; do
+        # shellcheck disable=SC2086  # the subcommand is split on purpose
+        cli env $sub
+        [ "$RC" -eq 1 ] || { echo "env $sub exited $RC"; return 1; }
+        [ ! -s "$SCRATCH/out" ]
+        grep -qF "manifest env was removed" "$SCRATCH/err"
+        # Local-only, as env generate was: the table never sends a CI job to a
+        # command that connects origin or creates a repository.
+        grep -qF "manifest env generate -y      →  manifest init repo --no-connect -y" "$SCRATCH/err"
+        grep -qF "manifest env validate         →  manifest init repo --check" "$SCRATCH/err"
+        grep -qF "it can fail where env generate --check passed" "$SCRATCH/err"
+        grep -qF "manifest env export           →  manifest status repo --env --json" "$SCRATCH/err"
+        # Refused before configuration is loaded: no loading line at all.
+        refute grep -q "Loading" "$SCRATCH/err"
+    done
+    [ "$(tree_listing)" = "$before" ]
+    [ ! -e "$PROJ/.env.example" ]
 }
 
-@test "env dispatch: routes validate; no spec env: block is informative" {
-    run manifest_env_dispatch validate
-    [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Env validation — $PROJ"
-    echo "$output" | grep -q "env prefix policy (prefix: FIDENCE_APP_DEMO_"
-    echo "$output" | grep -q "no spec env: block — nothing generated yet"
-    echo "$output" | grep -q "not a git repository — skipped"
-    echo "$output" | grep -q "env validate: PASS"
+@test "manifest help no longer lists env, and lists its replacements" {
+    cli help
+    [ "$RC" -eq 0 ]
+    refute grep -qE '^ +env generate' "$SCRATCH/out"
+    grep -qF -- "--check" "$SCRATCH/out"
+    grep -qF "status repo --env [--json]" "$SCRATCH/out"
 }
 
-@test "env dispatch: --help renders subcommand help and exits 0" {
-    run manifest_env_dispatch --help
-    [ "$status" -eq 0 ]
-    echo "$output" | grep -q "manifest env <generate|validate|export>"
-    # Anchored on the subcommand name plus the opening words of its line, so a
-    # reworded description is caught while a reflowed continuation line is not.
-    echo "$output" | grep -q "generate   Write .env.example"
-    echo "$output" | grep -q "validate   Check variable-name prefixes"
-    echo "$output" | grep -q "export     Print the variables as JSON"
-}
+# --- init repo --check --------------------------------------------------------------
 
-@test "env dispatch: routes export, and passes its flags through" {
+@test "init repo --check: read-only — reports drift, exits 1, writes nothing, and plans no GitHub repository" {
     write_spec
-    run manifest_env_dispatch export --format json
-    [ "$status" -eq 0 ]
-    [ "$(printf '%s\n' "$output" | yq e -p=json '.env[0].name' -)" = "FIDENCE_APP_DEMO_LOG_LEVEL" ]
-
-    # A flag only export knows reaches export: the refusal is export's own.
-    run manifest_env_dispatch export --format xml
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"unknown format 'xml'"* ]]
+    local before
+    before="$(tree_listing)"
+    cli init repo --check
+    [ "$RC" -eq 1 ]
+    grep -qF "Env check — $PROJ" "$SCRATCH/out"
+    grep -qF "stale artifacts — run: manifest init repo -y" "$SCRATCH/out"
+    grep -qF "env check: FAIL" "$SCRATCH/out"
+    # No origin, and still no connect phase: --check is taken first.
+    refute grep -qi "gh repo create" "$SCRATCH/out" "$SCRATCH/err"
+    [ "$(tree_listing)" = "$before" ]
 }
 
-@test "env dispatch: empty subcommand shows help but exits 1" {
-    run manifest_env_dispatch
-    [ "$status" -eq 1 ]
-    echo "$output" | grep -q "manifest env <generate|validate|export>"
+@test "init repo --check: PASS once init -y has written .env.example; FAIL again after a spec edit" {
+    write_spec
+    cli init repo --no-connect -y
+    [ "$RC" -eq 0 ] || { cat "$SCRATCH/out" "$SCRATCH/err"; return 1; }
+    cli init repo --check
+    [ "$RC" -eq 0 ] || { cat "$SCRATCH/out" "$SCRATCH/err"; return 1; }
+    grep -qF "env check: PASS" "$SCRATCH/out"
+
+    yq e -i '.env[0].default = "debug"' "$PROJ/app.spec.yaml"
+    cli init repo --check
+    [ "$RC" -eq 1 ]
 }
 
-@test "env dispatch: unknown subcommand is an error naming it" {
-    run manifest_env_dispatch frobnicate
-    [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Unknown env subcommand: frobnicate"
-    echo "$output" | grep -q "manifest env <generate|validate|export>"
+@test "init repo --check: no spec is informative, not a failure" {
+    cli init repo --check
+    [ "$RC" -eq 0 ]
+    grep -qF "no spec env: block — nothing generated yet (manifest init repo -y creates one)" "$SCRATCH/out"
+    [ ! -e "$PROJ/service.spec.yaml" ]
+}
+
+@test "init repo --check refuses to be combined with anything that writes or connects" {
+    local extra
+    for extra in "-y" "--force" "--connect" "--remote $SCRATCH/x.git" "--create-repo-private"; do
+        # shellcheck disable=SC2086
+        cli init repo --check $extra
+        [ "$RC" -ne 0 ] || { echo "--check $extra was accepted"; return 1; }
+        grep -qF -- "--check is read-only" "$SCRATCH/out" "$SCRATCH/err"
+    done
+    [ ! -e "$PROJ/.env.example" ]
+}
+
+# --- the end of the §127 loop --------------------------------------------------------
+
+@test "§127: init repo -y on a repo with no spec creates one, and the env check then reads it — no loop" {
+    cli init repo --no-connect -y
+    [ "$RC" -eq 0 ] || { cat "$SCRATCH/out" "$SCRATCH/err"; return 1; }
+    [ -f "$PROJ/service.spec.yaml" ]
+    cli init repo --check
+    [ "$RC" -eq 0 ]
+    refute grep -qF "no spec env: block" "$SCRATCH/out"
+    grep -qF "artifacts match the spec env: block" "$SCRATCH/out"
+}
+
+# --- status repo --env --------------------------------------------------------------
+
+@test "status repo --env: a line per variable; --json: the export document" {
+    write_spec
+    cli status repo --env
+    [ "$RC" -eq 0 ]
+    grep -qE '^  FIDENCE_APP_DEMO_LOG_LEVEL +optional += info$' "$SCRATCH/out"
+
+    cli status repo --env --json
+    [ "$RC" -eq 0 ]
+    [ "$(yq e -p=json '.env[0].name' "$SCRATCH/out")" = "FIDENCE_APP_DEMO_LOG_LEVEL" ]
+}
+
+@test "status --env is a repository view: fleet, --bootstrap and --verify are refused" {
+    write_spec
+    local combo
+    for combo in "fleet --env" "--env --bootstrap" "--env --verify"; do
+        # shellcheck disable=SC2086
+        cli status $combo
+        [ "$RC" -eq 1 ] || { echo "status $combo exited $RC"; return 1; }
+        grep -qF -- "--env is a repository view" "$SCRATCH/err"
+    done
+}
+
+@test "help for init repo and status names the env options" {
+    cli init repo --help
+    [ "$RC" -eq 0 ]
+    grep -qF -- "--check" "$SCRATCH/out"
+    grep -qF "status repo --env --json" "$SCRATCH/out"
+    cli status --help
+    [ "$RC" -eq 0 ]
+    grep -qF -- "--env" "$SCRATCH/out"
 }

@@ -15,10 +15,14 @@
 #   no reader      a leftover env.secrets setting changes no output
 #   retired keys   the family is out of the schema and `config doctor` names it
 #   said once      a repo holding a file Manifest generated there, or a leftover
-#                  setting, is told so on stderr — once per command, exit
-#                  status unchanged — and a repo holding neither never is
+#                  setting, is told so on stderr by `init repo` (plan, -y,
+#                  --check) — once per command, exit status unchanged — and a
+#                  repo holding neither never is
 #   no platform    to a repo that never used the rendering, nothing the env
 #                  commands print names a platform, a store or a vendor
+#
+# The commands were `manifest env generate|validate|export` until TRACKER
+# §127 moved them to `init repo [--check]` and `status repo --env [--json]`.
 #
 # Tagged smoke: "Manifest does not touch the platform's files" is a safety
 # contract, and so is not handing a consumer a secret.
@@ -204,7 +208,7 @@ YAML
     mkdir -p "$PROJ/k8s/env"
     printf 'apiVersion: v1\nkind: Secret\n' > "$PROJ/k8s/env/external-secret.yaml"
 
-    cli env generate
+    cli init repo --no-connect
     [ "$CLI_RC" -eq 0 ]
     [ "$(notice_count)" -eq 1 ]
     grep -qx '    k8s/env/configmap.yaml' "$SCRATCH/err"
@@ -212,34 +216,30 @@ YAML
     refute grep -q 'external-secret.yaml' "$SCRATCH/err"
     grep -q 'Manifest will not update, compare or delete them' "$SCRATCH/err"
     grep -q 'examples/env-k8s-render.sh' "$SCRATCH/err"
-    grep -q 'manifest env export' "$SCRATCH/err"
+    grep -q 'manifest status repo --env --json' "$SCRATCH/err"
     # The copy that ships with this tree is named by its real path.
     grep -qF "Installed copy: $TEST_REPO_ROOT/examples/env-k8s-render.sh" "$SCRATCH/err"
     [ -f "$TEST_REPO_ROOT/examples/env-k8s-render.sh" ]
     # stdout is the plan and nothing of the notice.
     refute grep -qF -- "$_NOTICE" "$SCRATCH/out"
-    grep -q 'would create: .env.example' "$SCRATCH/out"
+    grep -q 'would create:    .env.example' "$SCRATCH/out"
 
-    cli env generate --check
+    cli init repo --check
     [ "$CLI_RC" -eq 1 ]                        # .env.example is missing: the ordinary verdict
     [ "$(notice_count)" -eq 1 ]
 
-    cli env generate -y
-    [ "$CLI_RC" -eq 0 ]
+    cli init repo --no-connect -y
+    [ "$CLI_RC" -eq 0 ] || { cat "$SCRATCH/out" "$SCRATCH/err"; false; }
     [ "$(notice_count)" -eq 1 ]
 
-    cli env generate --check
-    [ "$CLI_RC" -eq 0 ]                        # clean, notice or no notice
-    [ "$(notice_count)" -eq 1 ]
-
-    # validate runs generate inside itself with its output captured: validate's
+    # --check runs the drift check inside itself with its output captured: its
     # own notice reaches stderr, exactly once, and none lands on stdout.
     git -C "$PROJ" add -A
-    cli env validate
-    [ "$CLI_RC" -eq 0 ]
+    cli init repo --check
+    [ "$CLI_RC" -eq 0 ] || { cat "$SCRATCH/out" "$SCRATCH/err"; false; }   # clean, notice or no notice
     [ "$(notice_count)" -eq 1 ]
     refute grep -qF -- "$_NOTICE" "$SCRATCH/out"
-    grep -q 'env validate: PASS' "$SCRATCH/out"
+    grep -q 'env check: PASS' "$SCRATCH/out"
 
     # The files are as they were.
     [ "$(sed -n 2p "$PROJ/k8s/env/configmap.yaml")" = "kind: Whatever" ]
@@ -253,7 +253,7 @@ env:
   secrets:
     provider: none
 YAML
-    cli env generate
+    cli init repo --no-connect
     [ "$CLI_RC" -eq 0 ]
     [ "$(notice_count)" -eq 1 ]
     grep -qF "env.secrets in $PROJ/manifest.config.yaml" "$SCRATCH/err"
@@ -276,7 +276,7 @@ env:
       name: fleet-store
 YAML
     write_spec "$member"
-    cli_in "$member" env generate
+    cli_in "$member" init repo --no-connect
     [ "$CLI_RC" -eq 0 ]
     [ "$(notice_count)" -eq 1 ]
     grep -qF "env.secrets in $fleet/manifest.config.yaml" "$SCRATCH/err"
@@ -284,10 +284,36 @@ YAML
     # In the process environment.
     rm -f "$PROJ/manifest.config.yaml"
     export MANIFEST_CLI_ENV_SECRETS_STORE_NAME=team-store
-    cli env generate
+    cli init repo --no-connect
     [ "$CLI_RC" -eq 0 ]
     [ "$(notice_count)" -eq 1 ]
     grep -qx '    MANIFEST_CLI_ENV_SECRETS_STORE_NAME (environment variable)' "$SCRATCH/err"
+}
+
+@test "a Dockerfile holding the ARG→ENV block an earlier Manifest wrote: told once, the block untouched, and a plain Dockerfile is told nothing (§127)" {
+    write_spec
+    printf 'FROM node:22 AS build\n# --- manifest env bridge (generated — edit the spec, not this block) ---\nARG OLD\nENV OLD=${OLD}\n# --- end manifest env bridge ---\nRUN npm run build\n' > "$PROJ/Dockerfile"
+    chmod 644 "$PROJ/Dockerfile"
+    local before
+    before="$(cksum < "$PROJ/Dockerfile")"
+
+    cli init repo --no-connect -y
+    [ "$CLI_RC" -eq 0 ] || { cat "$SCRATCH/out" "$SCRATCH/err"; false; }
+    [ "$(grep -cF 'Note: Manifest no longer writes or checks the ARG→ENV block in your Dockerfile.' "$SCRATCH/err" || true)" -eq 1 ]
+    grep -q 'examples/env-dockerfile-render.sh' "$SCRATCH/err"
+    grep -qF "Installed copy: $TEST_REPO_ROOT/examples/env-dockerfile-render.sh" "$SCRATCH/err"
+    # Only the Dockerfile half: nothing of k8s/env is claimed.
+    [ "$(notice_count)" -eq 0 ]
+    [ "$(cksum < "$PROJ/Dockerfile")" = "$before" ]
+    [ "$(manifest_file_mode "$PROJ/Dockerfile")" = "644" ]
+
+    cli init repo --check
+    [ "$(grep -cF 'ARG→ENV block in your Dockerfile' "$SCRATCH/err" || true)" -eq 1 ]
+
+    # Control: the same Dockerfile without the block is told nothing.
+    printf 'FROM node:22 AS build\nRUN npm run build\n' > "$PROJ/Dockerfile"
+    cli init repo --check
+    refute grep -qF 'ARG→ENV block' "$SCRATCH/err"
 }
 
 # --- and to no one else ------------------------------------------------------------------------
@@ -295,7 +321,7 @@ YAML
 # Words that name a platform, a deployment tool, a secret store or a vendor.
 _platform_pattern='k8s|kubernetes|kustomiz|configmap|externalsecret|external-secret|secretstore|helm|openbao|vault|hashicorp|aws|gcp|azure|doppler|1password|infisical|akeyless|bitwarden'
 
-@test "a repo that never used the rendering: no notice, and nothing the env commands or their help print names a platform or a vendor" {
+@test "a repo that never used the rendering: no notice, and nothing init, status --env or their help print names a platform or a vendor" {
     write_spec
     printf 'FROM scratch\n' > "$PROJ/Dockerfile"
     mkdir -p "$PROJ/k8s/base"
@@ -303,15 +329,15 @@ _platform_pattern='k8s|kubernetes|kustomiz|configmap|externalsecret|external-sec
 
     : > "$SCRATCH/all"
     local -a cmd
-    for cmd in "env --help" "env generate --help" "env validate --help" "env export --help" \
-               "env generate" "env generate --check" "env generate -y" "env validate" "env export"; do
+    for cmd in "init repo --help" "status --help" "init repo --no-connect" "init repo --check" \
+               "init repo --no-connect -y" "init repo --check" "status repo --env" "status repo --env --json"; do
         # shellcheck disable=SC2086
         cli $cmd
         [ "$(notice_count)" -eq 0 ] || { echo "notice printed by: $cmd"; cat "$SCRATCH/err"; false; }
         cat "$SCRATCH/out" "$SCRATCH/err" >> "$SCRATCH/all"
     done
     # Positive control: the commands ran and printed what they print.
-    grep -q 'Env artifacts generated.' "$SCRATCH/all"
+    grep -q 'Wrote .env.example' "$SCRATCH/all"
     grep -q '"schema": 1' "$SCRATCH/all"
 
     # The project path is the test's own; everything else is the product's.
@@ -323,7 +349,7 @@ _platform_pattern='k8s|kubernetes|kustomiz|configmap|externalsecret|external-sec
 @test "positive control: the platform scan fires on the notice, and on a planted vendor string" {
     write_spec
     former_file k8s/env/configmap.yaml
-    cli env generate
+    cli init repo --no-connect
     [ "$(grep -ciE -- "$_platform_pattern" "$SCRATCH/err" || true)" -ge 1 ]
     [ "$(printf 'name: openbao-customer\n' | grep -ciE -- "$_platform_pattern" || true)" -eq 1 ]
 }

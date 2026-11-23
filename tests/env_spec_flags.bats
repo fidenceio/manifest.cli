@@ -212,21 +212,24 @@ _sentinel_nowhere() {
     [ "$status" -ne 0 ]
 }
 
-@test "required: True and public: True are read as true by the example and the Dockerfile bridge" {
-    printf 'FROM scratch\n' > "$PROJ/Dockerfile"
+@test "required: True and public: True are read as true by the example and by the status --env view" {
     _write_spec false True True
     run manifest_env_generate -y
     [ "$status" -eq 0 ]
     grep -q '^# ACME_SVC_BILLING_API_TOKEN (required, public (build-time))$' "$PROJ/.env.example"
-    grep -q '^ARG ACME_SVC_BILLING_API_TOKEN$' "$PROJ/Dockerfile"
+    run manifest_env_contract_view
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"ACME_SVC_BILLING_API_TOKEN"*"required, build-time"* ]]
 
-    # Control: false renders optional, and no block.
-    rm -f "$PROJ/.env.example"; printf 'FROM scratch\n' > "$PROJ/Dockerfile"
+    # Control: false renders optional, in both.
+    rm -f "$PROJ/.env.example"
     _write_spec false False False
     run manifest_env_generate -y
     [ "$status" -eq 0 ]
     grep -q '^# ACME_SVC_BILLING_API_TOKEN (optional)$' "$PROJ/.env.example"
-    refute grep -q '^ARG ' "$PROJ/Dockerfile"
+    run manifest_env_contract_view
+    [[ "$output" == *"ACME_SVC_BILLING_API_TOKEN"*"optional "* ]]
+    [[ "$output" != *"build-time"* ]]
 }
 
 # --- the other two paths ---------------------------------------------------------------------
@@ -275,28 +278,32 @@ _sentinel_nowhere() {
     _write_spec false false yes
     run _manifest_env_render_example "$PROJ/app.spec.yaml" "$PROJ"
     [ "$status" -ne 0 ]
-    run _manifest_env_render_dockerfile_bridge "$PROJ/app.spec.yaml"
+    # The status --env view reads the flags too: it stops as well.
+    _write_spec yes
+    run manifest_env_contract_view
     [ "$status" -ne 0 ]
+    [[ "$output" != *"$_SENTINEL"* ]]
 
     # Control: the same calls succeed on a spec whose flags are booleans.
     _write_spec true true true
     run _manifest_env_render_example "$PROJ/app.spec.yaml" "$PROJ"
     [ "$status" -eq 0 ]
     [[ "$output" != *"$_SENTINEL"* ]]
-    run _manifest_env_render_dockerfile_bridge "$PROJ/app.spec.yaml"
+    run manifest_env_contract_view
     [ "$status" -eq 0 ]
+    [[ "$output" != *"$_SENTINEL"* ]]
 }
 
 # --- through the real entrypoint -----------------------------------------------------------
 
-@test "through scripts/manifest-cli.sh: secret: yes exits 1 and writes nothing, from generate and from export" {
+@test "through scripts/manifest-cli.sh: secret: yes exits 1 and writes no .env.example, from init -y and from status --env --json" {
     # The wrapper refuses a folder that is not a git repository, loads config
     # from the repo, and is what an adopter actually runs.
     git -C "$PROJ" init -q -b main
     _write_spec yes
     local home="$SCRATCH/home"
     mkdir -p "$home"
-    run env HOME="$home" "$TEST_REPO_ROOT/scripts/manifest-cli.sh" env generate -y
+    run env HOME="$home" "$TEST_REPO_ROOT/scripts/manifest-cli.sh" init repo --no-connect -y
     [ "$status" -eq 1 ]
     [[ "$output" == *'ACME_SVC_BILLING_API_TOKEN: secret is "yes" — write true or false'* ]]
     _no_artifacts_written
@@ -305,7 +312,7 @@ _sentinel_nowhere() {
     # same spec, and prints no document a consumer could publish a secret from.
     local out="$SCRATCH/export.out"
     local rc=0
-    env HOME="$home" "$TEST_REPO_ROOT/scripts/manifest-cli.sh" env export > "$out" 2> "$SCRATCH/export.err" || rc=$?
+    env HOME="$home" "$TEST_REPO_ROOT/scripts/manifest-cli.sh" status repo --env --json > "$out" 2> "$SCRATCH/export.err" || rc=$?
     [ "$rc" -eq 1 ]
     [ ! -s "$out" ]
     grep -q 'ACME_SVC_BILLING_API_TOKEN: secret is "yes" — write true or false' "$SCRATCH/export.err"

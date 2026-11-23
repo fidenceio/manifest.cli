@@ -1108,7 +1108,6 @@ EOF
     "discover",
     "docs",
     "doctor",
-    "env",
     "help",
     "init",
     "plan",
