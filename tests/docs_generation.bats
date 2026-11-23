@@ -170,3 +170,25 @@ prepare_docs_site_repo() {
     [[ "$output" == *"GitHub Pages was not enabled"* ]]
     [[ "$output" == *"does not include Pages for private repositories"* ]]
 }
+
+@test "changelog bullets: a long file list keeps its documentation bullet — a match is not lost to SIGPIPE (§133)" {
+    # The CLI runs with pipefail. `printf … | grep -q` then reports 141 when
+    # grep exits at its first match while printf is still writing: a match
+    # read as no match, and the bullet silently replaced by the count
+    # fallback. With a list longer than the pipe buffer that is every time;
+    # with a short one it is a race, seen once in the container leg.
+    local files="docs/COMMAND_REFERENCE.md"
+    files+=$'\n'"$(awk 'BEGIN { for (i = 1; i <= 20000; i++) printf "modules/core/file-%05d.sh\n", i }')"
+    [ "${#files}" -gt 131072 ]
+
+    run _manifest_git_changes_files_match "$files" '(^|/)docs/'
+    [ "$status" -eq 0 ]
+    run manifest_git_changes_bullets_for_files "$files"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"- Update documentation and examples"* ]]
+    [[ "$output" != *"files before release"* ]]
+
+    # Control: no match is still no match, and still a plain 1.
+    run _manifest_git_changes_files_match "$files" '(^|/)nothere/'
+    [ "$status" -eq 1 ]
+}

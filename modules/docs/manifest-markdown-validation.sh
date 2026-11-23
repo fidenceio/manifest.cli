@@ -33,7 +33,7 @@ validate_markdown_syntax() {
     fi
     
     # Check for trailing whitespace
-    if echo "$content" | grep -q "[[:space:]]$"; then
+    if grep -q "[[:space:]]$" <<<"$content"; then
         log_error "Trailing whitespace found"
         errors=$((errors + 1))
     fi

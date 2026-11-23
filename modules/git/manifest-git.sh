@@ -722,7 +722,7 @@ manifest_unstage_gate_drift() {
 
     for _p in "${_staged[@]}"; do
         [[ "$_p" == .manifest-cli/* ]] && continue
-        if ! printf '%s\n' "$MANIFEST_CLI_GIT_PENDING_SNAPSHOT" | grep -qxF -- "$_p"; then
+        if ! grep -qxF -- "$_p" <<<"$MANIFEST_CLI_GIT_PENDING_SNAPSHOT"; then
             _drift+=("$_p")
         fi
     done
@@ -1307,7 +1307,7 @@ manifest_set_upstream_if_absent() {
 
     local remotes remote=""
     remotes="$(git -C "$repo" remote 2>/dev/null)"
-    if printf '%s\n' "$remotes" | grep -qx 'origin'; then
+    if grep -qx 'origin' <<<"$remotes"; then
         remote="origin"
     elif [ "$(printf '%s\n' "$remotes" | grep -c .)" -eq 1 ]; then
         remote="$(printf '%s\n' "$remotes" | grep .)"

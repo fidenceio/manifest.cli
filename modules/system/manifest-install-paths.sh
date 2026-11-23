@@ -103,7 +103,7 @@ manifest_install_paths_ensure_brew_trust() {
 
     formula_err="$(cat "$err_file" 2>/dev/null || true)"
     _MANIFEST_CLI_LAST_BREW_TRUST_ERROR="$formula_err"
-    if printf '%s\n' "$formula_err" | grep -qiE 'Cannot trust individual items|custom remote'; then
+    if grep -qiE 'Cannot trust individual items|custom remote' <<<"$formula_err"; then
         _MANIFEST_CLI_LAST_BREW_TRUST_COMMAND="brew trust $tap"
         if brew trust "$tap" >/dev/null 2>"$err_file"; then
             rm -f "$err_file" 2>/dev/null || true

@@ -524,14 +524,14 @@ manifest_env_validate() {
             echo "      ✅ artifacts match the spec env: block"
             # A hand-authored file is not compared, so say which ones were not.
             printf '%s\n' "$check_out" | sed -n 's/^  hand-authored, left untouched: \([^ ]*\).*/      ℹ️  not compared (hand-authored): \1/p'
-        elif printf '%s\n' "$check_out" | grep -q '^env spec — cannot generate'; then
+        elif grep -q '^env spec — cannot generate' <<<"$check_out"; then
             # Refused before anything was rendered: a flag value the reader
             # does not guess. Nothing was compared.
             echo "      ❌ spec flags — a secret, required or public flag is neither true nor false:"
             printf '%s\n' "$check_out" | sed -n '/ — write true or false$/p' | sed 's/^ */          /'
             failures=$((failures + 1))
         else
-            if printf '%s\n' "$check_out" | grep -q '^env drift: .* stale'; then
+            if grep -q '^env drift: .* stale' <<<"$check_out"; then
                 echo "      ❌ stale artifacts — run: manifest init repo -y"
             fi
             printf '%s\n' "$check_out" | sed -n 's/^  cannot read:  \([^ ]*\).*/      ❌ cannot read: \1 (not a readable file) — not compared/p'

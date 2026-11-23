@@ -178,7 +178,7 @@ manifest_detect_project_ecosystems() {
 _manifest_gitignore_wants() {
     [[ "$3" == "true" ]] && return 0
     [[ -n "$2" ]] || return 1
-    printf '%s\n' "$2" | grep -qxF -- "$1"
+    grep -qxF -- "$1" <<<"$2"
 }
 
 # One line saying what a scaffolded file is FOR, for the init preview.
@@ -874,7 +874,7 @@ list_files() {
 
 if [ -f VERSION ]; then
     v="$(tr -d '[:space:]' < VERSION)"
-    if printf '%s' "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.+-]*)?$'; then
+    if grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.+-]*)?$' <<<"$v"; then
         ok "VERSION ($v)"
     else
         bad "VERSION is not semver-shaped: '$v'"
@@ -1385,7 +1385,7 @@ ensure_env_files() {
     local out rc=0
     out="$(MANIFEST_CLI_PROJECT_ROOT="$project_root" manifest_env_generate -y --quiet 2>&1)" || rc=$?
     if [[ "$rc" -ne 0 ]]; then
-        if printf '%s\n' "$out" | grep -q '^env spec — cannot generate'; then
+        if grep -q '^env spec — cannot generate' <<<"$out"; then
             log_warning "$(basename "$spec_file") env: has a flag that is neither true nor false — .env.example not written:"
             printf '%s\n' "$out" | sed -n '/ — write true or false$/p' | sed 's/^ */    /' >&2
         else
@@ -1426,7 +1426,7 @@ _manifest_init_env_plan() {
         # The writer's own plan line, so the plan and -y cannot disagree.
         local line
         line="$(MANIFEST_CLI_PROJECT_ROOT="$project_root" manifest_env_generate --quiet 2>&1)" || true
-        if printf '%s\n' "$line" | grep -q '^env spec — cannot generate'; then
+        if grep -q '^env spec — cannot generate' <<<"$line"; then
             echo "  cannot generate: .env.example   (a spec flag is neither true nor false — -y stops here)"
         else
             case "$line" in

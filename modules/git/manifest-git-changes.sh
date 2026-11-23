@@ -21,7 +21,10 @@ _manifest_git_changes_file_list_for_commit() {
 _manifest_git_changes_files_match() {
     local files="$1"
     local pattern="$2"
-    printf '%s\n' "$files" | grep -Eq "$pattern"
+    # A herestring, not `printf … | grep -q`: under the CLI's pipefail, grep -q
+    # exiting at its first match kills the still-writing printf with SIGPIPE
+    # and the pipeline reports 141 — a match read as no match (TRACKER §133).
+    grep -Eq "$pattern" <<<"$files"
 }
 
 _manifest_git_changes_emit_once() {

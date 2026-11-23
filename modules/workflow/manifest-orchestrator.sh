@@ -1567,7 +1567,7 @@ manifest_ship_assert_completion_clean() {
     done < <(_manifest_git_status_paths .)
     for dirty_path in "${dirty_paths[@]}"; do
         if [ -n "${MANIFEST_CLI_GIT_RELEASE_HELD_OUT:-}" ] && \
-           printf '%s\n' "$MANIFEST_CLI_GIT_RELEASE_HELD_OUT" | grep -qxF -- "$dirty_path"; then
+           grep -qxF -- "$dirty_path" <<<"$MANIFEST_CLI_GIT_RELEASE_HELD_OUT"; then
             continue
         fi
         unexpected+=("$dirty_path")

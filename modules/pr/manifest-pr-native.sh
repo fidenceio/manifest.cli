@@ -90,7 +90,7 @@ Any flag not handled here is forwarded to 'gh pr create'." \
     local cmd=(gh pr create)
     [[ "$draft" == "true" ]] && cmd+=(--draft)
     # Default to filling title/body from commits if user didn't pass them.
-    if ! printf '%s\n' "${args[@]}" | grep -q -- '--title\|--body\|--fill'; then
+    if ! grep -q -- '--title\|--body\|--fill' <<<"$(printf '%s\n' "${args[@]}")"; then
         cmd+=(--fill)
     fi
     cmd+=("${args[@]}")
@@ -206,7 +206,7 @@ For richer queue/policy control, see Cloud's 'manifest pr queue'." \
         return 0
     fi
     local args=("$@")
-    if ! printf '%s\n' "${args[@]}" | grep -q -- '--squash\|--merge\|--rebase'; then
+    if ! grep -q -- '--squash\|--merge\|--rebase' <<<"$(printf '%s\n' "${args[@]}")"; then
         args+=(--squash)
     fi
     if [[ "$execution_mode" == "preview" ]]; then

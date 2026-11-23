@@ -164,10 +164,10 @@ _fleet_topics_org_candidates() {
     local name first
     while IFS= read -r name; do
         [[ -z "$name" ]] && continue
-        printf '%s\n' "$known" | grep -qxF "$owner/$name" && continue
+        grep -qxF "$owner/$name" <<<"$known" && continue
         first=$(printf '%s' "${name%%.*}" | tr '[:upper:]' '[:lower:]')
         [[ -z "$first" ]] && continue
-        printf '%s\n' "$prefixes" | grep -qxF "$first" || continue
+        grep -qxF "$first" <<<"$prefixes" || continue
         echo "$owner/$name"
     done <<< "$org_names"
     return 0
@@ -351,7 +351,7 @@ manifest_fleet_topics_run() {
         while IFS= read -r topic; do
             [[ -z "$topic" ]] && continue
             if [[ "$current_known" == "true" ]] \
-                && printf '%s\n' "$current" | grep -qxF "$topic"; then
+                && grep -qxF "$topic" <<<"$current"; then
                 continue
             fi
             delta+=("$topic")

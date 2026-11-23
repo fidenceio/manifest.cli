@@ -44,7 +44,7 @@ manifest_requirement_yq_text_is_supported() {
     local version_text="${1:-}"
     local major
 
-    printf '%s\n' "$version_text" | grep -qi "$MANIFEST_CLI_REQUIRED_YQ_VENDOR" || return 1
+    grep -qi "$MANIFEST_CLI_REQUIRED_YQ_VENDOR" <<<"$version_text" || return 1
     major="$(manifest_requirement_semver_major "$version_text")"
     [ -n "$major" ] && [ "$major" -ge "$MANIFEST_CLI_REQUIRED_YQ_MAJOR" ]
 }
@@ -143,8 +143,8 @@ manifest_requirement_prepend_gnu_userland_path() {
 manifest_requirement_sed_command_is_gnu() {
     local version_text
     version_text="$("${1:-sed}" --version 2>/dev/null | head -n1)" || return 1
-    printf '%s\n' "$version_text" | grep -qiE '(^|[[:space:](])GNU sed([[:space:])]|$)' || return 1
-    ! printf '%s\n' "$version_text" | grep -qiE 'not[[:space:]]+GNU sed'
+    grep -qiE '(^|[[:space:](])GNU sed([[:space:])]|$)' <<<"$version_text" || return 1
+    ! grep -qiE 'not[[:space:]]+GNU sed' <<<"$version_text"
 }
 
 # Will the Manifest runtime resolve GNU sed? The runtime forces gnu-sed's gnubin

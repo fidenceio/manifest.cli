@@ -223,3 +223,35 @@ setup() {
         return 1
     fi
 }
+
+@test "product code: no echo or printf is piped into a grep that exits early — the CLI runs with pipefail" {
+    # The same race as in the suite, where it costs more: scripts/manifest-cli.sh
+    # sets pipefail, so a `printf '%s\n' "$list" | grep -q x` that matches can
+    # report 141 and the caller takes the "not found" branch — a path read as
+    # not held out of a release commit, a stale file read as current, a
+    # changelog bullet dropped. 21 sites in 11 modules did this (TRACKER §133).
+    local pat='(^|[^[:alnum:]_./-])(echo|printf)[[:space:]][^|]*\|[[:space:]]*grep[[:space:]]+((-[[:alnum:]]+[[:space:]]+)*-[[:alnum:]]*[qm]|--quiet)'
+
+    local pipe='|'
+    grep -qE "$pat" <<<"    if printf '%s\\n' \"\$held\" ${pipe} grep -qxF -- \"\$p\"; then"
+    grep -qE "$pat" <<<"    echo \"\$content\" ${pipe} grep -q x"
+    refute grep -qE "$pat" <<<"    grep -qxF -- \"\$p\" <<<\"\$held\""
+    refute grep -qE "$pat" <<<"    n=\$(printf '%s\\n' \"\$x\" ${pipe} grep -c .)"
+
+    local files=()
+    while IFS= read -r f; do files+=("$f"); done < <(
+        find "$TEST_REPO_ROOT/modules" "$TEST_REPO_ROOT/scripts" -type f -name '*.sh' | sort
+        printf '%s\n' "$TEST_REPO_ROOT/install-cli.sh"
+    )
+    [ "${#files[@]}" -gt 40 ]
+
+    local offenders
+    offenders="$(grep -nE "$pat" "${files[@]}" \
+        | grep -vE '^[^:]*:[0-9]+:[[:space:]]*#' || true)"
+    if [ -n "$offenders" ]; then
+        echo "echo/printf piped into an early-exit grep in product code:" >&2
+        echo "$offenders" >&2
+        echo "Use a herestring: grep -q needle <<<\"\$var\"" >&2
+        return 1
+    fi
+}

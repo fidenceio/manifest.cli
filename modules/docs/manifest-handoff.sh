@@ -470,7 +470,7 @@ manifest_handoff_verify() {
             fenced { next }
             { print }
         ')"
-        if ! printf '%s\n' "$section_prose" | grep -q '^- '; then
+        if ! grep -q '^- ' <<<"$section_prose"; then
             failures+=("R2 CHANGELOG.md: the [$version] section has no bullets.")
         fi
 
