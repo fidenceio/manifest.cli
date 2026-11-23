@@ -1,5 +1,21 @@
 # Changelog
 
+## [66.0.0] - 2026-11-23
+
+**Release Type:** Major
+
+### Changes
+
+- Feat(init)!: generate env files from init repo and status repo --env; remove the manifest env command and the Dockerfile block (§127)
+- Fix(init): refuse a .env.example that is not a readable file instead of writing through it (§131)
+- Test(harness): name the tests allowed to skip in the container leg, replacing the count (§115)
+- Docs: describe env generation under init repo and the removed env command
+- Test: replace echo-into-grep assertions with herestrings and guard the idiom (§90)
+- Docs(tracker): retire §90, §115, §127 and §131; file §128, §129, §130 and §132; extend §106, §109, §110 and §12a
+- Fix: test lists with a herestring so a match is not read as no match under pipefail (§133)
+- Docs(tracker): retire §133; extend §132 with the product guard and the two sites it cannot see; repair the §90 commit pointer
+
+
 ## [65.0.0] - 2026-11-20
 
 **Release Type:** Major
@@ -122,38 +138,3 @@
 - Chore(agents): add Codex mirrors of the four .claude/agents charters
 - Docs(site): add Fleet mechanics and decision-tree pages (v63 design preview)
 - Docs(tracker): file the v63 Fleet design as §93–§96; prune §34's clone half into §95a
-
-
-## [62.0.0] - 2026-09-18
-
-**Release Type:** Major
-
-### Behaviour changes on upgrade
-
-- **Command cleanup is intentionally breaking.** Use bare `manifest init` for guided onboarding. `first`, `prep`, `refresh`, `sync`, `time`, the noun-first `fleet` route, bare `ship <bump>`, and `recipe run` are removed rather than retained as hidden aliases. Use `init repo` / `init fleet`, `ship repo <bump>` / `ship fleet <bump>`, and the documented recipe commands. Removed routes and flags refuse before configuration or upgrade side effects. See docs/MIGRATION.md.
-- **Init prepares the repository for shipping and previews by default.** Apply with `-y` to initialize Git, establish or create the origin (private by default), connect existing history before scaffolding, preserve existing files, and run the configured readiness checks. Init does not commit, bump, tag, release, or push. Existing project checks retain their execution behavior; generated checks install their dependencies inside Docker.
-- **Fleet ships include the manager repository**, including manager-only coordination changes and fleets with versioning disabled. Manager commits stage only coordination files and report partial failures accurately.
-- **Revert requires an explicit scope.** `revert repo` restores an exact release tag; `revert fleet` restores the member commits recorded in a manager snapshot. Both preview by default. Apply validates targets and write guards; fleet restore preflights all repositories and restores the manager last. Earlier manager history without a snapshot map cannot reconstruct a fleet.
-- **A `MANIFEST_CLI_*` environment override containing spaces or newlines now takes effect correctly.** GNU `env` quoting previously corrupted that highest-precedence layer from v47.11.0 through v61.2.1. After upgrading, settings that were silently ignored may become active.
-
-### Fixes
-
-- Redact credentials in init remote previews and replay hints while retaining the actual URL for execution.
-- Preserve local and remote content during init; refuse unreadable origins, divergence, conflicting targets, incorrect release branches, missing identity, invalid versions, and failed or missing verification. Project configuration and configuration fetched from origin select the same checks and release branch as the next ship.
-- Preserve conflicting tracked, untracked, and ignored files during revert; resolve annotated tags to exact commits; reject fleet traversal, symlink escapes, duplicate paths, malformed snapshots, and locked targets. Partial restore failures identify the unfinished work.
-- Preserve readonly module constants during uninstall's exported-variable sweep, and enumerate exported names without parsing `env` output.
-- Honor `MANIFEST_CLI_HOMEBREW_TAP_CHECKOUT` for formula publication from containers and CI without a local Homebrew installation; an invalid explicit checkout fails rather than choosing another tap.
-- Continue HTTPS timestamp verification, caching, and labelled system-time fallback through the retained timestamp functions and `manifest config time`.
-
-### Tests and verification
-
-- Run CI validation inside containers without installing dependencies on runner hosts. Native macOS-only cases remain an explicit coverage gap.
-- Add init-to-first-local-ship, manager shipping, and repo/fleet restore regressions using disposable local Git repositories.
-- Enforce both passing controls and challenging cases for all 24 registered safety contracts in full, smoke, and change-aware runs. Missing, failed, duplicated, or skipped proofs fail the contract gate.
-- Include all runtime shell files in the executable-line coverage denominator, including never-loaded files. Report line coverage separately from the safety-contract gate; this release does not claim 100% executable-line coverage.
-- Validate parser failure with malformed syntax supported by both older and current yq; current yq intentionally accepts conditional expressions that an obsolete negative control rejected.
-- Keep coverage source mounts read-only, preserve the checkout's version in malformed-input fixtures, and prevent large TAP streams from blocking the coverage tracer. Verification-script changes invalidate cached green results.
-
-### Documentation
-
-- Update command reference, migration instructions, workflow examples, shell completions, installer command catalogs, and transaction documentation to match the final command surface. Preserve historical tracker evidence while pointing live onboarding links at the retained modules.
