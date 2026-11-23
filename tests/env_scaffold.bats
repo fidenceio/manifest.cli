@@ -198,6 +198,61 @@ mk_proj() {
     [[ "$output" == *"cannot use:      service.spec.yaml is not a readable file"* ]]
 }
 
+@test "env scaffold: a .env.example that is not a readable file is never written through — the plan, -y and --check all stop on it, whatever the spec (§131)" {
+    command -v yq >/dev/null 2>&1 || skip "yq not available"
+    source "$TEST_REPO_ROOT/modules/core/manifest-env.sh"
+    mk_proj "fidence.app.demo"
+    git -C "$PROJ" init -q -b main
+    mkdir -p "$SCRATCH/outside" "$SCRATCH/shared"
+    local spec example
+    # Four specs with nothing to generate from — three take the starter path,
+    # one has no spec yet — against three things that are not a readable file.
+    for spec in empty-list shared no-env-key none; do
+        for example in dangling directory unreadable; do
+            # Root reads a mode-000 file, so there that state cannot be made.
+            [ "$example" != "unreadable" ] || [ "$(id -u)" -ne 0 ] || continue
+            rm -rf "$PROJ/.env.example" "$PROJ/service.spec.yaml" "$SCRATCH/outside/outside.env" "$SCRATCH/shared/spec.yaml"
+            case "$spec" in
+                empty-list) printf 'env: []\n' > "$PROJ/service.spec.yaml" ;;
+                shared)     printf 'name: shared\n' > "$SCRATCH/shared/spec.yaml"
+                            ln "$SCRATCH/shared/spec.yaml" "$PROJ/service.spec.yaml" ;;
+                no-env-key) printf 'name: demo\n' > "$PROJ/service.spec.yaml" ;;
+                none)       ;;
+            esac
+            case "$example" in
+                dangling)   ln -s ../outside/outside.env "$PROJ/.env.example" ;;
+                directory)  mkdir "$PROJ/.env.example" ;;
+                unreadable) printf '# mine\n' > "$PROJ/.env.example"; chmod 000 "$PROJ/.env.example" ;;
+            esac
+
+            run _manifest_init_env_plan "$PROJ"
+            [[ "$output" == *"cannot read:     .env.example   (not a readable file — -y stops here)"* ]] \
+                || { echo "$spec/$example plan: $output"; return 1; }
+            MANIFEST_CLI_PROJECT_ROOT="$PROJ" run manifest_env_validate
+            [ "$status" -eq 1 ] || { echo "$spec/$example --check exit $status: $output"; return 1; }
+            [[ "$output" == *"cannot read: .env.example (not a readable file)"* ]] \
+                || { echo "$spec/$example --check: $output"; return 1; }
+            run ensure_env_files "$PROJ"
+            [ "$status" -eq 1 ] || { echo "$spec/$example -y exit $status: $output"; return 1; }
+            # Nothing appeared at the far end of the link.
+            [ ! -e "$SCRATCH/outside/outside.env" ] || { echo "$spec/$example: written through the link"; return 1; }
+            [ "$example" != "unreadable" ] || chmod 644 "$PROJ/.env.example"
+        done
+    done
+
+    # Control: the same spec with nothing in the way gets its starter.
+    rm -rf "$PROJ/.env.example" "$PROJ/service.spec.yaml"
+    printf 'env: []\n' > "$PROJ/service.spec.yaml"
+    run ensure_env_files "$PROJ"
+    [ "$status" -eq 0 ]
+    [ -f "$PROJ/.env.example" ]
+    MANIFEST_CLI_PROJECT_ROOT="$PROJ" run manifest_env_validate
+    # env: [] is left as written, so --check must not say init will create one.
+    [[ "$output" == *"the spec declares no variables (env: [])"* ]]
+    [[ "$output" != *"creates one"* ]]
+    [[ "$output" != *"cannot read: .env.example"* ]]
+}
+
 @test "env scaffold: a shared spec with no env: — symlink or hard link — is not seeded; init warns, writes the starter .env.example and goes on" {
     command -v yq >/dev/null 2>&1 || skip "yq not available"
     source "$TEST_REPO_ROOT/modules/core/manifest-env.sh"

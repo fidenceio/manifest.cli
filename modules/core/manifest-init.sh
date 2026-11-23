@@ -1355,6 +1355,17 @@ ensure_env_files() {
     # variables: the starter, no-clobber.
     if [[ "$spec_state" == "noyq" || "$spec_state" == "linked" || "$spec_state" == "readonly" ]] \
         || [[ "$(yq e '.env | length > 0' "$spec_file" 2>/dev/null)" != "true" ]]; then
+        # "Does not exist" is not enough to write: a symlink to nothing does
+        # not exist either, and `>` through it creates its target wherever it
+        # points. The writer of a spec's variables refuses that; so does this.
+        if ! _manifest_init_load_env_module; then
+            log_warning "The env module is not available — .env.example was not written."
+            return 1
+        fi
+        if _manifest_env_target_blocked "$example_file"; then
+            log_warning ".env.example is not a readable file (a dangling symlink, a directory, or unreadable) — nothing was written through it."
+            return 1
+        fi
         local result
         result="$(write_scaffold_no_clobber "$example_file" create_default_env_example)" || {
             log_warning "Could not write .env.example — env scaffold skipped."
@@ -1426,6 +1437,8 @@ _manifest_init_env_plan() {
                 *)                 echo "  exists:          .env.example   (hand-authored — preserved)" ;;
             esac
         fi
+    elif _manifest_init_load_env_module && _manifest_env_target_blocked "$project_root/.env.example"; then
+        echo "  cannot read:     .env.example   (not a readable file — -y stops here)"
     elif [[ -f "$project_root/.env.example" ]]; then
         if [[ "$spec_state" == "create" || "$spec_state" == "seed" ]]; then
             echo "  would update:    .env.example   (rewritten from the new env: block, unless hand-authored)"

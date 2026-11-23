@@ -256,19 +256,28 @@ _manifest_env_starter_untouched() {
     ' "$1" 2>/dev/null
 }
 
+# Is <target> something no writer may land through or over: a symlink to
+# nothing, or a thing that exists and is not a readable file (a directory, a
+# file this user cannot read)? The one definition of `blocked`: the writer of
+# a spec's variables asks it below, and so does the starter path, which used
+# to test only "does it exist" and so wrote through a dangling link (§131).
+#   _manifest_env_target_blocked <target>   (0 = blocked)
+_manifest_env_target_blocked() {
+    local target="$1"
+    [[ -L "$target" && ! -e "$target" ]] && return 0
+    [[ -e "$target" ]] && [[ ! -f "$target" || ! -r "$target" ]] && return 0
+    return 1
+}
+
 #   _manifest_env_guarded_state <target> <rendered> <header> [<header> ...]
 _manifest_env_guarded_state() {
     local target="$1" rendered="$2"
     shift 2
-    if [[ -L "$target" && ! -e "$target" ]]; then
+    if _manifest_env_target_blocked "$target"; then
         printf 'blocked'
         return 0
     fi
     if [[ -e "$target" ]]; then
-        if [[ ! -f "$target" || ! -r "$target" ]]; then
-            printf 'blocked'
-            return 0
-        fi
         if [[ -s "$target" ]]; then
             local first="" header ours=false
             { IFS= read -r first < "$target"; } 2>/dev/null || true
@@ -529,11 +538,23 @@ manifest_env_validate() {
             printf '%s\n' "$check_out" | sed -n 's/^  hand-authored, left untouched: \([^ ]*\).*/      ℹ️  not compared (hand-authored): \1/p'
             failures=$((failures + 1))
         fi
-    elif [[ "$spec_state" == "linked" || "$spec_state" == "readonly" ]]; then
-        # init -y does not seed these, so "init creates one" would be false.
-        echo "      ℹ️  no spec env: block — $(_manifest_env_spec_state_reason "$spec_state" "$project_root"). Add an env: list to it yourself."
     else
-        echo "      ℹ️  no spec env: block — nothing generated yet (manifest init repo -y creates one)"
+        # No variables to generate from: -y takes the starter path, or creates
+        # or seeds the spec first. Whichever it is, it stops on a .env.example
+        # it cannot land through, so --check fails on the same thing.
+        if _manifest_env_target_blocked "$project_root/.env.example"; then
+            echo "      ❌ cannot read: .env.example (not a readable file) — not compared"
+            failures=$((failures + 1))
+        fi
+        if [[ "$spec_state" == "linked" || "$spec_state" == "readonly" ]]; then
+            # init -y does not seed these, so "init creates one" would be false.
+            echo "      ℹ️  no spec env: block — $(_manifest_env_spec_state_reason "$spec_state" "$project_root"). Add an env: list to it yourself."
+        elif [[ "$spec_state" == "ready" ]]; then
+            # env: [] is a decision init leaves as written: nothing is created.
+            echo "      ℹ️  the spec declares no variables (env: []) — nothing to generate"
+        else
+            echo "      ℹ️  no spec env: block — nothing generated yet (manifest init repo -y creates one)"
+        fi
     fi
 
     echo "  gitignore hygiene:"
