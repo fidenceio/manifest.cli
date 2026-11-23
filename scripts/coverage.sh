@@ -27,9 +27,16 @@ rm -rf "$REPO_ROOT/coverage"
 mkdir -p "$REPO_ROOT/coverage"
 # Tests may write only their disposable fixtures and reports. In particular, a
 # fixture bug must never bump the checkout's VERSION or change its Git index.
+# Skips are held to the same named list as the container test leg
+# (tests/containers/expected-skips.tsv; see run-tests-container.sh): this run
+# is root in a Linux container too, and its skips are that leg's. It runs at
+# --jobs 1, where the SIGINT test on the list runs instead of skipping; the
+# runner reports that and does not fail on it. This was a count of 7. The
+# last coverage run on file (2026-10-15) had 6 skips; five skipping tests
+# arrived after it, so the next full run would have failed on the count.
 docker run --rm -i \
     -e MANIFEST_CLI_COVERAGE_MIN_PERCENT="${MANIFEST_CLI_COVERAGE_MIN_PERCENT:-0}" \
-    -e MANIFEST_CLI_TEST_MAX_SKIPS=7 \
+    -e MANIFEST_CLI_TEST_EXPECTED_SKIPS="${MANIFEST_CLI_TEST_EXPECTED_SKIPS:-tests/containers/expected-skips.tsv}" \
     -v "$REPO_ROOT:/work:ro" -v "$REPO_ROOT/coverage:/work/coverage" -w /work \
     "$IMAGE_TAG" bash -s -- "$@" <<'CONTAINER'
 set -euo pipefail

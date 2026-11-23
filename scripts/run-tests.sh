@@ -376,6 +376,14 @@ _cache_fingerprint() {
           | sort -z | xargs -0 $_HASH_CMD 2>/dev/null )
         bats --version 2>/dev/null
         printf 'scope=%s\n' "$1"
+        # The skip controls decide whether a run passes, so they are part of
+        # what a green run was green FOR: without them in the key, a run
+        # that passed with no control would satisfy a later run that sets
+        # one. The list's own bytes count too, wherever it lives.
+        printf 'skips=%s|%s\n' "${MANIFEST_CLI_TEST_MAX_SKIPS:-}" "${MANIFEST_CLI_TEST_EXPECTED_SKIPS:-}"
+        if [ -n "${MANIFEST_CLI_TEST_EXPECTED_SKIPS:-}" ]; then
+            ( cd "$REPO_ROOT" 2>/dev/null && $_HASH_CMD < "$MANIFEST_CLI_TEST_EXPECTED_SKIPS" 2>/dev/null ) || true
+        fi
     } | $_HASH_CMD | awk '{print $1}'
 }
 
@@ -465,11 +473,17 @@ _tap_filter() {
 
 # Skip accounting. A skip is invisible in a TAP pass count, so a run that lost
 # `yq`, `jq`, `parallel` or coreutils reports the same green as a run that
-# tested everything. MANIFEST_CLI_TEST_MAX_SKIPS caps how many are tolerated.
-# run-tests-container.sh sets it, because the image is the one environment whose
-# tooling we control; its budget covers only what that platform cannot execute.
-# Unset means "report but do not enforce" — a developer host, and the macOS CI
-# leg that runs host-native, legitimately lack some of these.
+# tested everything. Two controls, either or both:
+#   MANIFEST_CLI_TEST_EXPECTED_SKIPS  a file naming each test that may skip
+#       and the reason it gives (tests/containers/expected-skips.tsv). A skip
+#       that is not listed, or is listed for another reason, fails the run.
+#       run-tests-container.sh sets it, because the image is the one
+#       environment whose tooling we control.
+#   MANIFEST_CLI_TEST_MAX_SKIPS       a count. The older control, and the
+#       weaker one: when one expected skip stops and a different test starts
+#       skipping, the count is unchanged and it says nothing.
+# Neither set means "report but do not enforce" — a developer host, and the
+# macOS CI leg that runs host-native, legitimately lack some tools.
 SKIPS_FILE="$(mktemp "${TMPDIR:-/tmp}/manifest-tap-skips.XXXXXX")"
 CONTRACTS_TAP="$(mktemp "${TMPDIR:-/tmp}/manifest-contract-tap.XXXXXX")"
 trap 'rm -f "$SKIPS_FILE" "$CONTRACTS_TAP"' EXIT
@@ -489,6 +503,7 @@ fi
 NEED_TAP_FILTER=0
 [ "$PROGRESS" -eq 1 ] && NEED_TAP_FILTER=1
 [ -n "${MANIFEST_CLI_TEST_MAX_SKIPS:-}" ] && NEED_TAP_FILTER=1
+[ -n "${MANIFEST_CLI_TEST_EXPECTED_SKIPS:-}" ] && NEED_TAP_FILTER=1
 [ -t 1 ] || NEED_TAP_FILTER=1
 [ "$ENFORCE_CONTRACTS" -eq 1 ] && NEED_TAP_FILTER=1
 
@@ -514,6 +529,68 @@ if [ -n "${MANIFEST_CLI_TEST_MAX_SKIPS:-}" ]; then
         echo "[skips] budget exceeded: $SKIPPED skipped, at most $MANIFEST_CLI_TEST_MAX_SKIPS allowed here." >&2
         echo "[skips] A skipped test is lost coverage, not a pass. Install the missing tool or raise the budget deliberately." >&2
         status=1
+    fi
+fi
+# The named list. Every skip is looked up by the test's name and must carry
+# the reason listed for it. A missing or unreadable list fails closed: the
+# caller asked for the check, and a check that cannot look must not pass.
+if [ -n "${MANIFEST_CLI_TEST_EXPECTED_SKIPS:-}" ]; then
+    EXPECTED_SKIPS_FILE="$MANIFEST_CLI_TEST_EXPECTED_SKIPS"
+    [[ "$EXPECTED_SKIPS_FILE" = /* ]] || EXPECTED_SKIPS_FILE="$REPO_ROOT/$EXPECTED_SKIPS_FILE"
+    if [ ! -f "$EXPECTED_SKIPS_FILE" ] || [ ! -r "$EXPECTED_SKIPS_FILE" ]; then
+        echo "[skips] the expected-skips list '$MANIFEST_CLI_TEST_EXPECTED_SKIPS' cannot be read; failing closed." >&2
+        status=1
+    else
+        # The skips file holds "N name # skip reason" per line after its count.
+        UNEXPECTED_SKIPS="$(tail -n +2 "$SKIPS_FILE" 2>/dev/null | awk -v list="$EXPECTED_SKIPS_FILE" '
+            BEGIN {
+                while ((getline row < list) > 0) {
+                    if (row ~ /^#/ || row == "") continue
+                    split(row, field, "\t")
+                    reason[field[1]] = field[2]
+                    listed[field[1]] = 1
+                }
+            }
+            {
+                line = $0
+                sub(/^[0-9]+ /, "", line)
+                at = index(line, " # skip")
+                name = substr(line, 1, at - 1)
+                why = substr(line, at + 7)
+                sub(/^ /, "", why)
+                if (!(name in listed))
+                    printf "  - not on the list: %s   (skipped: %s)\n", name, why
+                else if (reason[name] != why)
+                    printf "  - listed for another reason: %s   (skipped: %s; listed: %s)\n", name, why, reason[name]
+            }')"
+        if [ -n "$UNEXPECTED_SKIPS" ]; then
+            echo "[skips] skipped here and not expected to:" >&2
+            printf '%s\n' "$UNEXPECTED_SKIPS" >&2
+            echo "[skips] A skipped test is lost coverage, not a pass. Fix the cause, or add the test and its reason to ${MANIFEST_CLI_TEST_EXPECTED_SKIPS} with where it is covered instead." >&2
+            status=1
+        fi
+        # A listed test that ran: not a failure (one of them runs at --jobs 1
+        # and skips otherwise), but worth a line — an allowance nothing uses
+        # is a row to take out.
+        if [ -s "$CONTRACTS_TAP" ]; then
+            RAN_AFTER_ALL="$(awk -v list="$EXPECTED_SKIPS_FILE" '
+                BEGIN {
+                    while ((getline row < list) > 0) {
+                        if (row ~ /^#/ || row == "") continue
+                        split(row, field, "\t")
+                        listed[field[1]] = 1
+                    }
+                }
+                /^ok [0-9]+ / && !/ # skip/ {
+                    name = $0
+                    sub(/^ok [0-9]+ /, "", name)
+                    if (name in listed) print "  - " name
+                }' "$CONTRACTS_TAP")"
+            if [ -n "$RAN_AFTER_ALL" ]; then
+                echo "[skips] on the expected-skips list, but ran here (not a failure):" >&2
+                printf '%s\n' "$RAN_AFTER_ALL" >&2
+            fi
+        fi
     fi
 fi
 if [[ "$ENFORCE_CONTRACTS" -eq 1 ]]; then

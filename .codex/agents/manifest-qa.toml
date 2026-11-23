@@ -86,8 +86,9 @@ Four ways this repo has manufactured a false green. Check for each:
   turned red the instant it was committed. For any check built on `git grep`, run it once
   against a staged copy of itself.
 - **A skipped test reports as a TAP pass.** Coverage can shrink without the gate noticing.
-  `scripts/run-tests-container.sh` caps this with `MANIFEST_CLI_TEST_MAX_SKIPS`; treat any
-  increase as lost coverage that must be justified in writing, not as a number to bump.
+  `scripts/run-tests-container.sh` allows only the tests named in
+  `tests/containers/expected-skips.tsv`, each with its reason; treat any new row as lost
+  coverage that must say where the test runs instead, not as a line to add.
 - **One green run is a sample, not a verdict**, whenever a test is timing-dependent.
   `§90`'s SIGPIPE race passed on the same unchanged commit four scheduled runs in a row and
   failed on the fifth. **A red run on an unchanged tree is the signature of a race**, and a

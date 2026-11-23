@@ -59,6 +59,29 @@ _seed_marker() {
     [ "$output" != "$smoke" ]
 }
 
+@test "cache: the skip controls are part of the key — a green run without the list cannot satisfy a run with it" {
+    unset MANIFEST_CLI_TEST_EXPECTED_SKIPS MANIFEST_CLI_TEST_MAX_SKIPS
+    run RUN --print-cache-key "$(PROBE)"
+    local bare="$output"
+    [ -n "$bare" ]
+
+    MANIFEST_CLI_TEST_EXPECTED_SKIPS="tests/containers/expected-skips.tsv" run RUN --print-cache-key "$(PROBE)"
+    local listed="$output"
+    [ "$listed" != "$bare" ]
+
+    MANIFEST_CLI_TEST_MAX_SKIPS=3 run RUN --print-cache-key "$(PROBE)"
+    [ "$output" != "$bare" ]
+    [ "$output" != "$listed" ]
+
+    # A list outside tests/ counts by its contents, not only its path.
+    printf 'a test\ta reason\tfixture\n' > "$BATS_TEST_TMPDIR/list.tsv"
+    MANIFEST_CLI_TEST_EXPECTED_SKIPS="$BATS_TEST_TMPDIR/list.tsv" run RUN --print-cache-key "$(PROBE)"
+    local one="$output"
+    printf 'another test\ta reason\tfixture\n' >> "$BATS_TEST_TMPDIR/list.tsv"
+    MANIFEST_CLI_TEST_EXPECTED_SKIPS="$BATS_TEST_TMPDIR/list.tsv" run RUN --print-cache-key "$(PROBE)"
+    [ "$output" != "$one" ]
+}
+
 @test "cache: --jobs does NOT change the key (parallelism is not part of scope)" {
     run RUN --print-cache-key --jobs 1 "$(PROBE)"
     local serial="$output"

@@ -39,49 +39,31 @@ for var in \
     fi
 done
 
-# Skip budget. A skipped test reports as a TAP pass, so coverage can shrink
+# Expected skips. A skipped test reports as a TAP pass, so coverage can shrink
 # without the gate noticing — a lost `yq` or a probe that stops matching reads
 # exactly like a green run. This image is the one environment whose tooling we
-# control, so cap the skips it is allowed to produce. The budget covers only
-# what THIS platform cannot execute:
-#   * 3 — ensure_docker_installed cask-offer branches, OSTYPE=darwin*-gated in
-#         source and therefore unreachable on Linux
-#   * 3 — chmod-based write-restriction tests, which root bypasses (the
-#         container runs as root against a host-owned bind mount): ship
-#         fleet's unwritable member .git, ship repo's unwritable git
-#         metadata, and the atomic helper's read-only directory (the third
-#         arrived with §3's slice on 2026-11-09)
-#   * 1 — env generate's unreadable generated file (§3(d), 2026-11-12): the
-#         state is a mode-000 file, which root reads
-#   * 1 — configure_path's pty test, written against BSD script(1) + perl
-#   * 2 — the gate scaffold's real-Docker tests (§100, 2026-11-09): inside
-#         this leg no daemon can reach the test's bind mount, and GitHub's
-#         macOS runners have no Docker either, so these run on developer
-#         hosts only — lost coverage in CI, recorded as such
-# The first eight are covered on the macOS CI leg. Plus ONE that is not, and
-# the distinction matters:
-#   * 1 — fleet_ship_outcome.bats's "the gate runs in the FOREGROUND: it does
-#         not start with SIGINT ignored". It detects that the bats harness
-#         already ignores SIGINT and skips rather than passing vacuously, since
-#         a foreground and a backgrounded child are then indistinguishable.
-#         POSIX requires a shell to keep a signal ignored if it was ignored at
-#         entry, so this is not fixable from inside the harness — and it skips
-#         on BOTH legs, so unlike the platform skips above it is lost coverage everywhere,
-#         not platform-specific. Raised 6 -> 7 on 2026-09-13 when §83 added it
-#         and the containerized leg went red on the budget with 2074/2074
-#         passing. Recorded rather than silently bumped, per the line below.
-#         Raised 7 -> 10 on 2026-11-10 for the third chmod test and the two
-#         real-Docker tests above, when the leg went red on the budget with
-#         2247/2248 passing; the kustomize skip that was the tenth was fixed
-#         by installing kustomize in the image instead of counting it.
-#         Raised 10 -> 11 on 2026-11-12 for the env generate chmod test,
-#         before the leg could go red on it: the nine platform skips above
-#         plus this one are ten, and the SIGINT skip makes eleven.
-# Anything beyond that is lost coverage: fix the cause or move the number
-# deliberately, with the reason recorded here.
-MANIFEST_CLI_TEST_MAX_SKIPS="${MANIFEST_CLI_TEST_MAX_SKIPS:-11}"
-export MANIFEST_CLI_TEST_MAX_SKIPS
-ENV_ARGS="$ENV_ARGS -e MANIFEST_CLI_TEST_MAX_SKIPS"
+# control, so every test that may skip here is named, with its reason and
+# where it runs instead, in tests/containers/expected-skips.tsv. A skip that
+# is not on that list, or carries another reason, fails the leg.
+#
+# This replaced a count on 2026-11-22 (MANIFEST_CLI_TEST_MAX_SKIPS, raised
+# 6 -> 7 -> 10 -> 11 as tests arrived; a twelfth skip was what prompted the
+# change, and 12 was never committed). A count could
+# not tell which tests it was counting: one expected skip stopping while a
+# different test started skipping left the number unchanged, and at --jobs 1,
+# where the SIGINT test runs instead of skipping, it had one skip of slack a
+# real loss could hide in (TRACKER §115). Its last overage sat unread for a
+# day behind a failing test. The reasons that lived in this comment are now
+# the third column of the list, one per test.
+#
+# The path is relative to the repository, which is /work in the container. A
+# caller may still set MANIFEST_CLI_TEST_MAX_SKIPS as well; it is passed on.
+MANIFEST_CLI_TEST_EXPECTED_SKIPS="${MANIFEST_CLI_TEST_EXPECTED_SKIPS:-tests/containers/expected-skips.tsv}"
+export MANIFEST_CLI_TEST_EXPECTED_SKIPS
+ENV_ARGS="$ENV_ARGS -e MANIFEST_CLI_TEST_EXPECTED_SKIPS"
+if [[ "${MANIFEST_CLI_TEST_MAX_SKIPS+x}" = "x" ]]; then
+    ENV_ARGS="$ENV_ARGS -e MANIFEST_CLI_TEST_MAX_SKIPS"
+fi
 
 # The repo is bind-mounted at /work but owned by the host user, while the
 # container runs as root. git 2.35.2+ rejects that mismatch as "dubious

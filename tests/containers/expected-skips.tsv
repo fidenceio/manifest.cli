@@ -1,0 +1,29 @@
+# expected-skips.tsv — the tests that may skip in the container leg, by name.
+#
+# A skipped test is reported as a pass, so a run that lost a tool reads as
+# green. scripts/run-tests-container.sh hands this file to run-tests.sh
+# (MANIFEST_CLI_TEST_EXPECTED_SKIPS), which fails the run when a test skips
+# that is not listed here, or skips for a reason other than the one listed.
+#
+# One row per test, three tab-separated fields:
+#   1. the test's name, exactly as its @test line has it
+#   2. its skip reason, exactly as its skip line has it
+#   3. why it cannot run in this leg, and where it runs instead
+#
+# To add a row: say in field 3 where the coverage went. A row is an allowance
+# for that one test and that one reason; it gives no room to any other.
+# tests/container_expected_skips.bats fails on a row whose test or reason no
+# longer exists, so a renamed or deleted test cannot leave an allowance behind.
+# A listed test that runs after all is reported by the runner, not failed.
+helper: a missing source, or a directory it cannot stage in, leaves the target byte-identical and returns 1	root can stage in a read-only directory	root: the container runs as root, which writes into a read-only directory; runs on the macOS leg
+a Dockerfile that cannot be read is refused, not reported as having no block	root reads any file	root: the state is a mode-000 file, which root reads; runs on the macOS leg (TRACKER §127, 2026-11-21)
+a file this user cannot read is not called hand-authored: it is named, --check and -y exit 1, and no read error leaks	root reads a mode-000 file, so the unreadable state cannot be produced	root: the state is a mode-000 file, which root reads; runs on the macOS leg (TRACKER §3(d), 2026-11-12)
+ship fleet -y refuses pre-flight when a member's .git is not writable	running as root bypasses chmod-based write restriction (covered by the non-root macOS CI leg)	root: chmod does not stop root writing; runs on the macOS leg
+ship repo apply fails before version bump when git metadata is unwritable	running as root bypasses chmod-based write restriction	root: chmod does not stop root writing; runs on the macOS leg
+ensure_docker_installed: missing docker on macOS offers the cask; accepting installs it	cask-offer branch is OSTYPE=darwin*-gated in source	platform: the branch is gated on OSTYPE=darwin* in the source, unreachable on Linux; runs on the macOS leg
+ensure_docker_installed: declining the cask offer skips installation and never calls brew	cask-offer branch is OSTYPE=darwin*-gated in source	platform: the branch is gated on OSTYPE=darwin* in the source, unreachable on Linux; runs on the macOS leg
+ensure_docker_installed: failed cask install reports the failure and returns 1	cask-offer branch is OSTYPE=darwin*-gated in source	platform: the branch is gated on OSTYPE=darwin* in the source, unreachable on Linux; runs on the macOS leg
+configure_path: interactive accept appends the PATH export to the sandbox profile	BSD script(1) + perl needed for pty allocation (covered by the macOS CI leg)	platform: the pty test is written against BSD script(1) and perl; runs on the macOS leg
+gate scaffold: with real Docker, a writing project check leaves nothing on the host; the opt-out lets it write	already inside a container; the host wrapper is not reached	nested: no daemon inside this leg can reach the test's bind mount, and GitHub's macOS runners have no Docker; developer hosts only, lost coverage in CI (TRACKER §100, 2026-11-09)
+gate scaffold: with real Docker, a source owned by a Linux host user is copied as root so git works in the copy (A/B on tar -o)	already inside a container; the host wrapper is not reached	nested: no daemon inside this leg can reach the test's bind mount, and GitHub's macOS runners have no Docker; developer hosts only, lost coverage in CI (TRACKER §100, 2026-11-09)
+the gate runs in the FOREGROUND: it does not start with SIGINT ignored, so Ctrl-C reaches it	SIGINT is already ignored by the harness; the disposition is not observable	harness: bats ignores SIGINT at the default job count, so the test cannot tell a foreground child from a background one; it runs at --jobs 1, and skips on the macOS leg too (TRACKER §83, 2026-09-13)
