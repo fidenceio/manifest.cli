@@ -57,9 +57,9 @@ teardown() {
 @test "install_via_homebrew: fresh machine taps, trusts, and installs the formula" {
     run install_via_homebrew
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Tapped fidenceio/tap"
-    echo "$output" | grep -q "Trusted formula fidenceio/tap/manifest"
-    echo "$output" | grep -q "Manifest CLI installed via Homebrew"
+    grep -q "Tapped fidenceio/tap" <<<"$output"
+    grep -q "Trusted formula fidenceio/tap/manifest" <<<"$output"
+    grep -q "Manifest CLI installed via Homebrew" <<<"$output"
     # Exact brew subcommands, in the recording log.
     grep -qx "tap fidenceio/tap" "$BREW_LOG"
     grep -qx "trust --formula fidenceio/tap/manifest" "$BREW_LOG"
@@ -73,8 +73,8 @@ teardown() {
     mkdir -p "$CELLAR/manifest/1.0.0"
     run install_via_homebrew
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "already installed via Homebrew, upgrading"
-    echo "$output" | grep -q "Manifest CLI installed via Homebrew"
+    grep -q "already installed via Homebrew, upgrading" <<<"$output"
+    grep -q "Manifest CLI installed via Homebrew" <<<"$output"
     grep -qx "upgrade fidenceio/tap/manifest" "$BREW_LOG"
     refute grep -qx "install fidenceio/tap/manifest" "$BREW_LOG"
 }
@@ -91,7 +91,7 @@ esac
 EOF
     run install_via_homebrew
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "Failed to tap fidenceio/tap"
+    grep -q "Failed to tap fidenceio/tap" <<<"$output"
     # Nothing beyond the failed tap was attempted.
     refute grep -q "install" "$BREW_LOG"
     refute grep -q "upgrade" "$BREW_LOG"
@@ -109,8 +109,8 @@ EOF
     mkdir -p "$CELLAR/manifest/1.0.0"
     run remove_brew_managed_install
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Removing Homebrew-managed Manifest"
-    echo "$output" | grep -q "brew uninstall skipped by sandbox tripwire"
+    grep -q "Removing Homebrew-managed Manifest" <<<"$output"
+    grep -q "brew uninstall skipped by sandbox tripwire" <<<"$output"
     # The stub was never asked to uninstall anything.
     refute grep -q "uninstall" "$BREW_LOG"
 }
@@ -119,7 +119,7 @@ EOF
     mkdir -p "$CELLAR/manifest/1.0.0"
     MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1 run remove_brew_managed_install
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Removed Homebrew-managed Manifest"
+    grep -q "Removed Homebrew-managed Manifest" <<<"$output"
     grep -qx "uninstall fidenceio/tap/manifest" "$BREW_LOG"
     # The tap-qualified uninstall succeeded → no bare-name fallback call.
     refute grep -qx "uninstall manifest" "$BREW_LOG"

@@ -53,9 +53,9 @@ _stub_brew_managed_plan() {
     _stub_brew_managed_plan
     MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1 run apply_plan
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Uninstalling Homebrew package"
-    echo "$output" | grep -q "Removed Homebrew package"
-    echo "$output" | grep -q "Untapped fidenceio/tap"
+    grep -q "Uninstalling Homebrew package" <<<"$output"
+    grep -q "Removed Homebrew package" <<<"$output"
+    grep -q "Untapped fidenceio/tap" <<<"$output"
     # Exact brew invocations, from the recording log.
     grep -qx "uninstall fidenceio/tap/manifest" "$BREW_LOG"
     grep -qx "untap fidenceio/tap" "$BREW_LOG"
@@ -72,8 +72,8 @@ _stub_brew_managed_plan() {
     # Exactly one error is counted: the tripwire-skipped brew uninstall
     # (the untap skip warns without incrementing — see apply_plan).
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "brew uninstall skipped by sandbox tripwire"
-    echo "$output" | grep -q "brew untap skipped by sandbox tripwire"
+    grep -q "brew uninstall skipped by sandbox tripwire" <<<"$output"
+    grep -q "brew untap skipped by sandbox tripwire" <<<"$output"
     # The recording stub was never invoked.
     [ ! -s "$BREW_LOG" ]
 }

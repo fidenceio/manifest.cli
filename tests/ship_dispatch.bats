@@ -35,21 +35,21 @@ _mk_ship_fixture() {
 @test "ship dispatch: empty scope errors with usage" {
     run manifest_ship_dispatch
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "ship requires a scope"
-    echo "$output" | grep -q "manifest ship <repo|fleet>"
+    grep -q "ship requires a scope" <<<"$output"
+    grep -q "manifest ship <repo|fleet>" <<<"$output"
 }
 
 @test "ship dispatch: unknown scope errors and names the scope" {
     run manifest_ship_dispatch bogus patch
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "Unknown scope: bogus"
+    grep -q "Unknown scope: bogus" <<<"$output"
 }
 
 @test "ship dispatch: --help renders help and exits 0" {
     run manifest_ship_dispatch --help
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "manifest ship <repo|fleet> <patch|minor|major|revision>"
-    echo "$output" | grep -q "Highest consequence command"
+    grep -q "manifest ship <repo|fleet> <patch|minor|major|revision>" <<<"$output"
+    grep -q "Highest consequence command" <<<"$output"
 }
 
 @test "ship dispatch: bare bump word is refused before reaching ship repo" {
@@ -66,8 +66,8 @@ _mk_ship_fixture() {
     _mk_ship_fixture
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_ship_repo major
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Release type:     major"
-    echo "$output" | grep -q "Next version:     2.0.0"
+    grep -q "Release type:     major" <<<"$output"
+    grep -q "Next version:     2.0.0" <<<"$output"
     [ "$(cat "$SCRATCH/VERSION")" = "1.2.3" ]
 }
 
@@ -75,8 +75,8 @@ _mk_ship_fixture() {
     _mk_ship_fixture
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_ship_repo revision
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Release type:     revision"
-    echo "$output" | grep -q "Next version:     1.2.3.1"
+    grep -q "Release type:     revision" <<<"$output"
+    grep -q "Next version:     1.2.3.1" <<<"$output"
     [ "$(cat "$SCRATCH/VERSION")" = "1.2.3" ]
 }
 
@@ -90,26 +90,26 @@ _mk_ship_fixture() {
     for short in -p -m -M -r -i -h; do
         MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_ship_repo "$short"
         [ "$status" -eq 1 ]
-        echo "$output" | grep -q -- "Unknown option: $short"
-        ! echo "$output" | grep -q "Release type:"
+        grep -q -- "Unknown option: $short" <<<"$output"
+        ! grep -q "Release type:" <<<"$output"
     done
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_ship_repo major
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Release type:     major"
+    grep -q "Release type:     major" <<<"$output"
 }
 
 @test "ship repo: unknown release type errors with usage" {
     _mk_ship_fixture
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_ship_repo enormous
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "Unknown option: enormous"
-    echo "$output" | grep -q "manifest ship repo <patch|minor|major|revision>"
+    grep -q "Unknown option: enormous" <<<"$output"
+    grep -q "manifest ship repo <patch|minor|major|revision>" <<<"$output"
 }
 
 @test "ship repo: missing release type errors with usage" {
     _mk_ship_fixture
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_ship_repo
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "ship repo requires a release type"
+    grep -q "ship repo requires a release type" <<<"$output"
 }

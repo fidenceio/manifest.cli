@@ -37,8 +37,8 @@ teardown() {
 @test "config set -y: writes the default (local) layer file" {
     run manifest_config_set git.default_branch trunk -y
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "✓ set local:git.default_branch = trunk"
-    echo "$output" | grep -q "$PROJ/manifest.config.local.yaml"
+    grep -q "✓ set local:git.default_branch = trunk" <<<"$output"
+    grep -q "$PROJ/manifest.config.local.yaml" <<<"$output"
     [ -f "$PROJ/manifest.config.local.yaml" ]
     [ "$(yq e '.git.default_branch' "$PROJ/manifest.config.local.yaml")" = "trunk" ]
     # Only the targeted layer was written.
@@ -48,7 +48,7 @@ teardown() {
 @test "config set -y --layer project: writes manifest.config.yaml" {
     run manifest_config_set --layer project version.separator _ -y
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "✓ set project:version.separator = _"
+    grep -q "✓ set project:version.separator = _" <<<"$output"
     [ "$(yq e '.version.separator' "$PROJ/manifest.config.yaml")" = "_" ]
     [ ! -f "$PROJ/manifest.config.local.yaml" ]
 }
@@ -56,14 +56,14 @@ teardown() {
 @test "config set -y: accepts the env-var spelling and normalizes to the dot-path" {
     run manifest_config_set MANIFEST_CLI_GIT_TAG_PREFIX rel- -y
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "✓ set local:git.tag_prefix = rel-"
+    grep -q "✓ set local:git.tag_prefix = rel-" <<<"$output"
     [ "$(yq e '.git.tag_prefix' "$PROJ/manifest.config.local.yaml")" = "rel-" ]
 }
 
 @test "config set -y: unknown key is rejected before any write" {
     run manifest_config_set bogus.key x -y
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Unknown key: bogus.key"
+    grep -q "Unknown key: bogus.key" <<<"$output"
     [ ! -f "$PROJ/manifest.config.local.yaml" ]
 }
 
@@ -83,7 +83,7 @@ teardown() {
 
     run manifest_config_unset git.default_branch -y
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "✓ unset local:git.default_branch"
+    grep -q "✓ unset local:git.default_branch" <<<"$output"
     [ "$(yq e '.git.default_branch' "$PROJ/manifest.config.local.yaml")" = "null" ]
 
     run manifest_config_get git.default_branch
@@ -108,7 +108,7 @@ teardown() {
 @test "config unset -y: missing layer file is a friendly no-op" {
     run manifest_config_unset git.default_branch -y
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "(local file does not exist; nothing to unset)"
+    grep -q "(local file does not exist; nothing to unset)" <<<"$output"
     [ ! -f "$PROJ/manifest.config.local.yaml" ]
 }
 
@@ -122,21 +122,21 @@ teardown() {
 
     run manifest_config_describe git.default_branch
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Key:       git.default_branch"
-    echo "$output" | grep -q "Env var:   MANIFEST_CLI_GIT_DEFAULT_BRANCH"
-    echo "$output" | grep -q "Effective: trunk"
-    echo "$output" | grep -q "(from local)"
-    echo "$output" | grep -q "Layers (highest precedence first):"
+    grep -q "Key:       git.default_branch" <<<"$output"
+    grep -q "Env var:   MANIFEST_CLI_GIT_DEFAULT_BRANCH" <<<"$output"
+    grep -q "Effective: trunk" <<<"$output"
+    grep -q "(from local)" <<<"$output"
+    grep -q "Layers (highest precedence first):" <<<"$output"
     # The local layer carries the value; project/global are absent.
-    echo "$output" | grep -q "local    trunk"
-    echo "$output" | grep -q "project  ·"
-    echo "$output" | grep -q "global   ·"
+    grep -q "local    trunk" <<<"$output"
+    grep -q "project  ·" <<<"$output"
+    grep -q "global   ·" <<<"$output"
 }
 
 @test "config describe: unknown key is rejected" {
     run manifest_config_describe not.a.key
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Unknown key: not.a.key"
+    grep -q "Unknown key: not.a.key" <<<"$output"
 }
 
 # -----------------------------------------------------------------------------
@@ -173,12 +173,12 @@ teardown() {
         bash -c 'source "$1/tests/helpers/setup.bash"; load_modules "core/manifest-config.sh" "core/manifest-config-crud.sh"; manifest_config_describe git.default_branch' _ "$TEST_REPO_ROOT"
 
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Effective: envwins"
-    echo "$output" | grep -q "(from env)"
-    echo "$output" | grep -q "env      envwins"
+    grep -q "Effective: envwins" <<<"$output"
+    grep -q "(from env)" <<<"$output"
+    grep -q "env      envwins" <<<"$output"
     # The shadowed file value stays visible, so the operator can see what the
     # export is overriding.
-    echo "$output" | grep -q "local    filewins"
+    grep -q "local    filewins" <<<"$output"
 }
 
 @test "config describe: an exported-but-empty override is shown as suppressing the file layers" {
@@ -194,7 +194,7 @@ teardown() {
     # An empty export is re-applied over every YAML layer and then refilled by
     # set_default_configuration, so the built-in default wins and the file is
     # ignored — surprising enough that describe must say so out loud.
-    echo "$output" | grep -q "suppresses all file layers"
+    grep -q "suppresses all file layers" <<<"$output"
     refute grep -q "Effective: filewins" <<<"$output"
 }
 
@@ -205,7 +205,7 @@ teardown() {
 @test "config set -y --layer global: refused non-interactively without AUTO_CONFIRM" {
     run manifest_config_set --layer global git.default_branch trunk -y < /dev/null
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Refusing to modify global config without confirmation."
+    grep -q "Refusing to modify global config without confirmation." <<<"$output"
     [ ! -f "$HOME/.manifest-cli/manifest.config.global.yaml" ]
 }
 
@@ -223,8 +223,8 @@ teardown() {
     _manifest_config_capture_auto_confirm_env
     run manifest_config_set --layer global brew.tap_repo example/homebrew-tap -y < /dev/null
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Auto-confirming modify"
-    echo "$output" | grep -q "✓ set global:brew.tap_repo = example/homebrew-tap"
+    grep -q "Auto-confirming modify" <<<"$output"
+    grep -q "✓ set global:brew.tap_repo = example/homebrew-tap" <<<"$output"
     [ "$(yq e '.brew.tap_repo' "$HOME/.manifest-cli/manifest.config.global.yaml")" = "example/homebrew-tap" ]
 }
 
@@ -247,11 +247,11 @@ security:
 YAML
     run manifest_config_get security.private_files
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q ".env.local"
+    grep -q ".env.local" <<<"$output"
 
     run manifest_config_list
     [ "$status" -eq 0 ]
-    echo "$output" | grep -qE '^ +security\.private_files +local '
+    grep -qE '^ +security\.private_files +local ' <<<"$output"
 }
 
 @test "config: a key written in this process is visible to a later read" {

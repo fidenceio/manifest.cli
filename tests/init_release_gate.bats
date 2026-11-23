@@ -195,7 +195,7 @@ teardown() {
     # is declared here, so the full tier reaches its fail-closed verdict — the
     # point is that --tier/--jobs/--no-cache all parse and the full path runs.
     run ./scripts/run-tests.sh --tier full --jobs 1 --no-cache
-    echo "$output" | grep -q "run-tests: FAIL (tier: full)"
+    grep -q "run-tests: FAIL (tier: full)" <<<"$output"
 }
 
 @test "gate scaffold: --tier smoke runs baseline only and passes" {
@@ -205,7 +205,7 @@ teardown() {
 
     run ./scripts/run-tests.sh --tier smoke --jobs 1 --no-cache
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "run-tests: PASS (tier: smoke)"
+    grep -q "run-tests: PASS (tier: smoke)" <<<"$output"
 }
 
 # --- the floor is real verification -------------------------------------------
@@ -216,7 +216,7 @@ teardown() {
 
     run ./scripts/run-tests.sh --tier smoke
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "VERSION file missing"
+    grep -q "VERSION file missing" <<<"$output"
 }
 
 @test "gate scaffold: fails on a shell script with a syntax error" {
@@ -227,7 +227,7 @@ teardown() {
 
     run ./scripts/run-tests.sh --tier smoke
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "shell syntax: broken.sh"
+    grep -q "shell syntax: broken.sh" <<<"$output"
 }
 
 @test "gate scaffold: fails on a non-semver VERSION" {
@@ -237,7 +237,7 @@ teardown() {
 
     run ./scripts/run-tests.sh --tier smoke
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "not semver-shaped"
+    grep -q "not semver-shaped" <<<"$output"
 }
 
 # --- scaffold-time toolchain detection ----------------------------------------
@@ -379,8 +379,8 @@ EOF
 
     run ./scripts/run-tests.sh --tier full
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "cannot certify"
-    echo "$output" | grep -q "release_gate=none"
+    grep -q "cannot certify" <<<"$output"
+    grep -q "release_gate=none" <<<"$output"
     refute grep -q "run-tests: PASS" <<<"$output"
 }
 
@@ -391,7 +391,7 @@ EOF
 
     run ./scripts/run-tests.sh --tier smoke
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "run-tests: PASS (tier: smoke)"
+    grep -q "run-tests: PASS (tier: smoke)" <<<"$output"
 }
 
 # --- wiring: init repo + gate auto-detect --------------------------------------
@@ -410,7 +410,7 @@ EOF
 
     MANIFEST_CLI_PROJECT_ROOT="$PROJ" run manifest_init_repo --dry-run
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "would create:.*scripts/run-tests.sh"
+    grep -q "would create:.*scripts/run-tests.sh" <<<"$output"
 }
 
 @test "scaffolded gate satisfies the orchestrator's auto-detect" {

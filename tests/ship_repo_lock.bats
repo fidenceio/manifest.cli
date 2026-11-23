@@ -97,8 +97,8 @@ teardown() {
     run _manifest_ship_repo_lock_acquire
     [ "$status" -ne 0 ]
     # The repo-scoped banner + holder + lock path are surfaced.
-    echo "$output" | grep -q "Another 'manifest ship repo' is already applying"
-    echo "$output" | grep -q "Lock: $dir"
+    grep -q "Another 'manifest ship repo' is already applying" <<<"$output"
+    grep -q "Lock: $dir" <<<"$output"
     rm -rf "$dir"
 }
 
@@ -114,7 +114,7 @@ teardown() {
     } > "$dir/holder"
     run _manifest_ship_repo_lock_acquire
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Reclaimed a stale"
+    grep -q "Reclaimed a stale" <<<"$output"
     grep -q "^pid=$$\$" "$dir/holder"
     _fleet_lock_release "$dir"
 }
@@ -130,7 +130,7 @@ teardown() {
     } > "$dir/holder"
     run _manifest_ship_repo_lock_acquire
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Reclaimed a stale"
+    grep -q "Reclaimed a stale" <<<"$output"
     _fleet_lock_release "$dir"
 }
 

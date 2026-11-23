@@ -105,6 +105,6 @@ STUB
 @test "pr preview mode emits no audit event" {
     run manifest_pr_merge 123 --auto
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Would run: gh pr merge 123 --auto --squash"
+    grep -q "Would run: gh pr merge 123 --auto --squash" <<<"$output"
     [ ! -f "$AUDIT_FILE" ]
 }

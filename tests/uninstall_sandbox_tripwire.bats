@@ -29,21 +29,21 @@ teardown() {
 @test "predicate refuses empty path" {
     run manifest_install_paths_assert_destructive_target_safe "" "rm"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "empty target path"
+    grep -q "empty target path" <<<"$output"
 }
 
 @test "predicate refuses '/' and other system roots" {
     for sys in / /Users /home /usr /var /etc /opt /private; do
         run manifest_install_paths_assert_destructive_target_safe "$sys" "rm"
         [ "$status" -ne 0 ]
-        echo "$output" | grep -q "system path"
+        grep -q "system path" <<<"$output"
     done
 }
 
 @test "predicate refuses bare \$HOME" {
     run manifest_install_paths_assert_destructive_target_safe "$HOME" "rm"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "is \$HOME"
+    grep -q "is \$HOME" <<<"$output"
 }
 
 @test "predicate accepts paths under \$BATS_TEST_TMPDIR" {
@@ -58,28 +58,28 @@ teardown() {
     local real_target="/Users/somebody-who-does-not-exist/.manifest-cli"
     run manifest_install_paths_assert_destructive_target_safe "$real_target" "rm"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "running under bats"
-    echo "$output" | grep -q "sandbox tripwire"
-    echo "$output" | grep -q "MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE"
+    grep -q "running under bats" <<<"$output"
+    grep -q "sandbox tripwire" <<<"$output"
+    grep -q "MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE" <<<"$output"
 }
 
 @test "escape hatch MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1 is honored with warning" {
     local real_target="/Users/somebody-who-does-not-exist/.manifest-cli"
     MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1 run manifest_install_paths_assert_destructive_target_safe "$real_target" "rm"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "permitted by MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1"
+    grep -q "permitted by MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1" <<<"$output"
 }
 
 @test "brew predicate refuses brew operations under bats" {
     run manifest_install_paths_assert_destructive_brew_safe "brew uninstall manifest"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "refusing brew uninstall manifest"
+    grep -q "refusing brew uninstall manifest" <<<"$output"
 }
 
 @test "brew predicate honors escape hatch" {
     MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1 run manifest_install_paths_assert_destructive_brew_safe "brew uninstall manifest"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "permitted by MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1"
+    grep -q "permitted by MANIFEST_CLI_ALLOW_DESTRUCTIVE_TEST_ESCAPE=1" <<<"$output"
 }
 
 # Durable control: the brew guard must also fire for a plain (non-bats)
@@ -91,7 +91,7 @@ teardown() {
     run env -u BATS_TEST_TMPDIR "HOME=${TMPDIR:-/tmp}/manifest-sandbox-home" \
         bash -c 'source "'"$TEST_REPO_ROOT"'/modules/system/manifest-install-paths.sh"; manifest_install_paths_assert_destructive_brew_safe "brew uninstall manifest"'
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "refusing brew uninstall manifest"
+    grep -q "refusing brew uninstall manifest" <<<"$output"
 }
 
 @test "brew predicate allows a real (non-temp) HOME outside bats" {

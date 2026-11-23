@@ -55,18 +55,18 @@ YAML
 @test "config doctor: missing config file is a hard, guided failure" {
     run config_doctor
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Config file not found: $HOME/.manifest-cli/manifest.config.global.yaml"
-    echo "$output" | grep -q "manifest config setup"
+    grep -q "Config file not found: $HOME/.manifest-cli/manifest.config.global.yaml" <<<"$output"
+    grep -q "manifest config setup" <<<"$output"
 }
 
 @test "config doctor --file: reports legacy drift without mutating the file" {
     write_legacy_config
     run config_doctor --file "$CFG"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Manifest Config Doctor"
-    echo "$output" | grep -q "Config file: $CFG"
-    echo "$output" | grep -q "LEGACY: time.server1 uses 'time.apple.com' (recommended: 'https://www.cloudflare.com/cdn-cgi/trace')"
-    echo "$output" | grep -q "Run 'manifest config doctor --fix' to apply safe migrations."
+    grep -q "Manifest Config Doctor" <<<"$output"
+    grep -q "Config file: $CFG" <<<"$output"
+    grep -q "LEGACY: time.server1 uses 'time.apple.com' (recommended: 'https://www.cloudflare.com/cdn-cgi/trace')" <<<"$output"
+    grep -q "Run 'manifest config doctor --fix' to apply safe migrations." <<<"$output"
     # Read-only: the legacy value is still on disk.
     [ "$(yq e '.time.server1' "$CFG")" = "time.apple.com" ]
 }
@@ -75,9 +75,9 @@ YAML
     write_legacy_config
     run config_doctor --fix --file "$CFG"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Migration plan:"
-    echo "$output" | grep -q "would-update|time.server1|time.apple.com|https://www.cloudflare.com/cdn-cgi/trace"
-    echo "$output" | grep -q "Preview complete. Re-run with --fix -y to apply."
+    grep -q "Migration plan:" <<<"$output"
+    grep -q "would-update|time.server1|time.apple.com|https://www.cloudflare.com/cdn-cgi/trace" <<<"$output"
+    grep -q "Preview complete. Re-run with --fix -y to apply." <<<"$output"
     [ "$(yq e '.time.server1' "$CFG")" = "time.apple.com" ]
     # No backup is taken for a preview.
     [ -z "$(find "$SCRATCH" -maxdepth 1 -name 'cfg.yaml.bak.*' -print -quit)" ]
@@ -87,9 +87,9 @@ YAML
     write_legacy_config
     run config_doctor --fix --file "$CFG" -y
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Applying because -y/--yes was provided."
-    echo "$output" | grep -q "updated|time.server1|time.apple.com|https://www.cloudflare.com/cdn-cgi/trace"
-    echo "$output" | grep -q "✅ Safe migrations applied."
+    grep -q "Applying because -y/--yes was provided." <<<"$output"
+    grep -q "updated|time.server1|time.apple.com|https://www.cloudflare.com/cdn-cgi/trace" <<<"$output"
+    grep -q "✅ Safe migrations applied." <<<"$output"
     [ "$(yq e '.time.server1' "$CFG")" = "https://www.cloudflare.com/cdn-cgi/trace" ]
     # §8.4b: the pre-migration snapshot exists and preserves the old value.
     local backup
@@ -102,7 +102,7 @@ YAML
     write_clean_config
     run config_doctor --file "$CFG"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "✅ No configuration drift detected."
+    grep -q "✅ No configuration drift detected." <<<"$output"
     refute grep -q "Findings:" <<<"$output"
 }
 
@@ -115,22 +115,22 @@ YAML
     set_default_configuration
     run show_configuration
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Manifest CLI Configuration"
+    grep -q "Manifest CLI Configuration" <<<"$output"
     # Override is reflected...
-    echo "$output" | grep -q "Default Branch: trunk"
+    grep -q "Default Branch: trunk" <<<"$output"
     # ...alongside untouched defaults. Uses a default that is actually READ by
     # the CLI: this line previously asserted "Format: XX.XX.XX", a key nothing
     # consumes, so it proved only that a string reached the screen.
-    echo "$output" | grep -q "Separator: \."
-    echo "$output" | grep -q "Tag Prefix: v"
-    echo "$output" | grep -q "Server 1: https://www.cloudflare.com/cdn-cgi/trace"
-    echo "$output" | grep -q "Auto-Upgrade: true"
+    grep -q "Separator: \." <<<"$output"
+    grep -q "Tag Prefix: v" <<<"$output"
+    grep -q "Server 1: https://www.cloudflare.com/cdn-cgi/trace" <<<"$output"
+    grep -q "Auto-Upgrade: true" <<<"$output"
 
     # The fifteen keys nothing read are GONE, not merely relabelled.
     # `config show` used to state "Major Target: 1 (which component increments)"
     # for a value the arithmetic has never consulted; an interim build listed
     # them under "Declared but NOT in force". Neither should survive.
-    echo "$output" | grep -q "Segment Mapping"
+    grep -q "Segment Mapping" <<<"$output"
     refute grep -q "which component increments" <<<"$output"
     refute grep -q "components reset to 0" <<<"$output"
     refute grep -q "Declared but NOT in force" <<<"$output"
@@ -142,7 +142,7 @@ YAML
     # pattern and must survive: retiring the wrong one of the pair would drop a
     # real setting.
     refute grep -q "Version Validation" <<<"$output"
-    echo "$output" | grep -q "Version Regex:"
+    grep -q "Version Regex:" <<<"$output"
 }
 
 @test "show_configuration: segment mapping is derived, so renaming components moves it" {
@@ -152,8 +152,8 @@ YAML
     [ "$status" -eq 0 ]
     # The whole point of the removal: position comes from the list, with no second key
     # able to contradict it.
-    echo "$output" | grep -q "generation: segment 1"
-    echo "$output" | grep -q "major: segment 2"
+    grep -q "generation: segment 1" <<<"$output"
+    grep -q "major: segment 2" <<<"$output"
 }
 
 # -----------------------------------------------------------------------------
@@ -191,12 +191,12 @@ YAML
     [ "$status" -eq 0 ]
     # The loader skips unmapped paths silently; without this the user would
     # never learn the keys stopped meaning anything.
-    echo "$output" | grep -q "OBSOLETE: version.format is set but no longer exists"
-    echo "$output" | grep -q "OBSOLETE: version.max_values"
-    echo "$output" | grep -q "OBSOLETE: version.component_position"
-    echo "$output" | grep -q "OBSOLETE: version.increment_target"
-    echo "$output" | grep -q "OBSOLETE: version.reset_components"
-    echo "$output" | grep -q "OBSOLETE: version.validation"
+    grep -q "OBSOLETE: version.format is set but no longer exists" <<<"$output"
+    grep -q "OBSOLETE: version.max_values" <<<"$output"
+    grep -q "OBSOLETE: version.component_position" <<<"$output"
+    grep -q "OBSOLETE: version.increment_target" <<<"$output"
+    grep -q "OBSOLETE: version.reset_components" <<<"$output"
+    grep -q "OBSOLETE: version.validation" <<<"$output"
     # Read-only: still on disk.
     [ "$(yq e '.version.format' "$CFG")" = "XX.XX.XX" ]
 }
@@ -217,8 +217,8 @@ YAML
     write_retired_key_config
     run config_doctor --fix --file "$CFG"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "would-remove|version.format||"
-    echo "$output" | grep -q "would-remove|version.component_position||"
+    grep -q "would-remove|version.format||" <<<"$output"
+    grep -q "would-remove|version.component_position||" <<<"$output"
     [ "$(yq e '.version.format' "$CFG")" = "XX.XX.XX" ]
     [ -z "$(find "$SCRATCH" -maxdepth 1 -name 'cfg.yaml.bak.*' -print -quit)" ]
 }
@@ -227,7 +227,7 @@ YAML
     write_retired_key_config
     run config_doctor --fix --file "$CFG" -y
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "removed|version.format||"
+    grep -q "removed|version.format||" <<<"$output"
 
     [ "$(yq e '.version.format' "$CFG")" = "null" ]
     [ "$(yq e '.version.max_values' "$CFG")" = "null" ]
@@ -256,7 +256,7 @@ YAML
     write_clean_config
     run config_doctor --file "$CFG"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "✅ No configuration drift detected."
+    grep -q "✅ No configuration drift detected." <<<"$output"
     refute grep -q "OBSOLETE" <<<"$output"
 }
 
@@ -333,6 +333,6 @@ YAML
     export MANIFEST_CLI_PROJECT_ROOT="$SCRATCH"
     run configure_interactive < /dev/null
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Interactive config requires a TTY. Use: manifest config show"
+    grep -q "Interactive config requires a TTY. Use: manifest config show" <<<"$output"
     [ ! -f "$SCRATCH/manifest.config.local.yaml" ]
 }

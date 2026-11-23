@@ -9,8 +9,8 @@ setup() {
 @test "_render_help prints Usage line and description" {
     run _render_help "manifest foo bar [--baz]" "Do the foo thing."
     [ "$status" -eq 0 ]
-    echo "$output" | grep -qFx "Usage: manifest foo bar [--baz]"
-    echo "$output" | grep -qFx "Do the foo thing."
+    grep -qFx "Usage: manifest foo bar [--baz]" <<<"$output"
+    grep -qFx "Do the foo thing." <<<"$output"
 }
 
 @test "_render_help renders named sections in order" {
@@ -22,11 +22,11 @@ setup() {
 
     [ "$status" -eq 0 ]
     # Section headings present with trailing colon.
-    echo "$output" | grep -qFx "Options:"
-    echo "$output" | grep -qFx "Examples:"
+    grep -qFx "Options:" <<<"$output"
+    grep -qFx "Examples:" <<<"$output"
     # Bodies present verbatim.
-    echo "$output" | grep -q -- "--y    Toggle y"
-    echo "$output" | grep -q -- "manifest x --y"
+    grep -q -- "--y    Toggle y" <<<"$output"
+    grep -q -- "manifest x --y" <<<"$output"
 }
 
 @test "_render_help description supports multi-line input" {
@@ -37,16 +37,16 @@ Line two." \
         "Notes" "  hi"
 
     [ "$status" -eq 0 ]
-    echo "$output" | grep -qFx "Line one."
-    echo "$output" | grep -qFx "Line two."
+    grep -qFx "Line one." <<<"$output"
+    grep -qFx "Line two." <<<"$output"
 }
 
 @test "_render_help_error returns 1 with usage line" {
     run _render_help_error "Unknown option: --banana" "manifest foo [--baz]"
     [ "$status" -eq 1 ]
     # Error message goes through log_error to stderr; usage line goes to stderr too.
-    echo "$output" | grep -qE "Unknown option.*--banana"
-    echo "$output" | grep -qFx "Usage: manifest foo [--baz]"
+    grep -qE "Unknown option.*--banana" <<<"$output"
+    grep -qFx "Usage: manifest foo [--baz]" <<<"$output"
 }
 
 @test "ship repo --help uses the new template (renders Examples section)" {
@@ -56,9 +56,9 @@ Line two." \
 
     run manifest_ship_repo --help
     [ "$status" -eq 0 ]
-    echo "$output" | grep -qFx "Usage: manifest ship repo <patch|minor|major|revision> [-y|--yes] [--dry-run] [--local] [--force-bump] [--interactive]"
-    echo "$output" | grep -qFx "Options:"
-    echo "$output" | grep -qFx "Examples:"
+    grep -qFx "Usage: manifest ship repo <patch|minor|major|revision> [-y|--yes] [--dry-run] [--local] [--force-bump] [--interactive]" <<<"$output"
+    grep -qFx "Options:" <<<"$output"
+    grep -qFx "Examples:" <<<"$output"
 }
 
 @test "ship fleet --help surfaces previously-hidden flags" {
@@ -67,11 +67,11 @@ Line two." \
     run manifest_ship_fleet --help
     [ "$status" -eq 0 ]
     # Fleet ship is release-only. PR flags live under manifest pr fleet.
-    echo "$output" | grep -q -- "--require-clean"
-    echo "$output" | grep -q -- "--dry-run"
-    echo "$output" | grep -q -- "-y, --yes"
+    grep -q -- "--require-clean" <<<"$output"
+    grep -q -- "--dry-run" <<<"$output"
+    grep -q -- "-y, --yes" <<<"$output"
     refute grep -q -- "--method" <<<"$output"
     refute grep -q -- "--draft" <<<"$output"
     # Flow section should be present so users see the pipeline.
-    echo "$output" | grep -qFx "Flow:"
+    grep -qFx "Flow:" <<<"$output"
 }

@@ -24,8 +24,8 @@ teardown() {
     source "$TEST_REPO_ROOT/modules/system/manifest-install-paths.sh"
     run manifest_install_paths_cache_dirs
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "$SCRATCH/custom-tmp/manifest-cli"
-    echo "$output" | grep -q "^/tmp/manifest-cli$"
+    grep -q "$SCRATCH/custom-tmp/manifest-cli" <<<"$output"
+    grep -q "^/tmp/manifest-cli$" <<<"$output"
 }
 
 @test "cache_dirs: collapses to single line when TMPDIR is /tmp" {

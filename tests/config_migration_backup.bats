@@ -71,7 +71,7 @@ teardown() {
 
     run _manifest_config_apply_migrations "$CFG" "true"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "would-update"
+    grep -q "would-update" <<<"$output"
 
     refute ls "$CFG".bak.* >/dev/null 2>&1
     [ "$(cat "$CFG")" = "$pre" ]

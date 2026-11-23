@@ -33,11 +33,11 @@ create_fake_install_artifacts() {
     run_manifest_from_plain_dir uninstall
 
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Preview - no changes written: manifest uninstall"
-    echo "$output" | grep -q "Would remove installation directory: $HOME/.manifest-cli"
-    echo "$output" | grep -q "Would remove CLI binary: $HOME/.local/bin/manifest"
-    echo "$output" | grep -q "Would remove Manifest entries from shell profile: $HOME/.zshrc"
-    echo "$output" | grep -q "manifest uninstall -y"
+    grep -q "Preview - no changes written: manifest uninstall" <<<"$output"
+    grep -q "Would remove installation directory: $HOME/.manifest-cli" <<<"$output"
+    grep -q "Would remove CLI binary: $HOME/.local/bin/manifest" <<<"$output"
+    grep -q "Would remove Manifest entries from shell profile: $HOME/.zshrc" <<<"$output"
+    grep -q "manifest uninstall -y" <<<"$output"
     [ -d "$HOME/.manifest-cli" ]
     [ -f "$HOME/.local/bin/manifest" ]
     grep -q "MANIFEST_CLI_TEST" "$HOME/.zshrc"
@@ -49,8 +49,8 @@ create_fake_install_artifacts() {
     run_manifest_from_plain_dir uninstall --force
 
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Preview - no changes written: manifest uninstall"
-    echo "$output" | grep -q "manifest uninstall --force -y"
+    grep -q "Preview - no changes written: manifest uninstall" <<<"$output"
+    grep -q "manifest uninstall --force -y" <<<"$output"
     [ -d "$HOME/.manifest-cli" ]
     [ -f "$HOME/.local/bin/manifest" ]
 }
@@ -61,11 +61,11 @@ create_fake_install_artifacts() {
     run_manifest_from_plain_dir reinstall
 
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Preview - no changes written: manifest reinstall"
-    echo "$output" | grep -q "Would run uninstall cleanup phase"
-    echo "$output" | grep -q "Would remove installation directory: $HOME/.manifest-cli"
-    echo "$output" | grep -q "Would reinstall"
-    echo "$output" | grep -q "manifest reinstall -y"
+    grep -q "Preview - no changes written: manifest reinstall" <<<"$output"
+    grep -q "Would run uninstall cleanup phase" <<<"$output"
+    grep -q "Would remove installation directory: $HOME/.manifest-cli" <<<"$output"
+    grep -q "Would reinstall" <<<"$output"
+    grep -q "manifest reinstall -y" <<<"$output"
     [ -d "$HOME/.manifest-cli" ]
     [ -f "$HOME/.local/bin/manifest" ]
 }
@@ -76,8 +76,8 @@ create_fake_install_artifacts() {
     run_manifest_from_plain_dir uninstall --force -y
 
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Applying because -y/--yes was provided."
-    echo "$output" | grep -q "Manifest CLI uninstalled successfully"
+    grep -q "Applying because -y/--yes was provided." <<<"$output"
+    grep -q "Manifest CLI uninstalled successfully" <<<"$output"
     [ ! -d "$HOME/.manifest-cli" ]
     [ ! -f "$HOME/.local/bin/manifest" ]
     [ -f "$HOME/.zshrc" ]
@@ -97,7 +97,7 @@ create_fake_install_artifacts() {
     run_manifest_from_plain_dir uninstall --force -y
 
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Manifest CLI uninstalled successfully"
+    grep -q "Manifest CLI uninstalled successfully" <<<"$output"
     [ ! -e "$bash_comp" ]
     [ ! -e "$zsh_comp" ]
 }
@@ -114,22 +114,22 @@ create_fake_install_artifacts() {
 
     [ "$status" -eq 0 ]
     [ -f "$SCRATCH/other-bin/manifest" ]
-    echo "$output" | grep -q "Manifest CLI uninstalled successfully"
-    echo "$output" | grep -q "CLI binary removed: $HOME/.local/bin/manifest"
+    grep -q "Manifest CLI uninstalled successfully" <<<"$output"
+    grep -q "CLI binary removed: $HOME/.local/bin/manifest" <<<"$output"
     refute grep -q "$SCRATCH/other-bin/manifest" <<<"$output"
 }
 
 @test "uninstall and reinstall help advertise preview and apply flags" {
     run_manifest_from_plain_dir uninstall --help
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q -- "--dry-run"
-    echo "$output" | grep -q -- "-y"
-    echo "$output" | grep -q -- "--yes"
-    echo "$output" | grep -q -- "--force"
+    grep -q -- "--dry-run" <<<"$output"
+    grep -q -- "-y" <<<"$output"
+    grep -q -- "--yes" <<<"$output"
+    grep -q -- "--force" <<<"$output"
 
     run_manifest_from_plain_dir reinstall --help
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q -- "--dry-run"
-    echo "$output" | grep -q -- "-y"
-    echo "$output" | grep -q -- "--yes"
+    grep -q -- "--dry-run" <<<"$output"
+    grep -q -- "-y" <<<"$output"
+    grep -q -- "--yes" <<<"$output"
 }

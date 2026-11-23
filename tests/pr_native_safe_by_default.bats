@@ -23,9 +23,9 @@ teardown() {
     run manifest_pr_create --draft --base main
 
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Preview - no changes written: manifest pr create"
-    echo "$output" | grep -q "Would run: gh pr create --draft --fill --base main"
-    echo "$output" | grep -q "manifest pr create --draft --base main -y"
+    grep -q "Preview - no changes written: manifest pr create" <<<"$output"
+    grep -q "Would run: gh pr create --draft --fill --base main" <<<"$output"
+    grep -q "manifest pr create --draft --base main -y" <<<"$output"
     [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
 }
 
@@ -37,7 +37,7 @@ teardown() {
     run manifest_pr_create -y --draft --base main
 
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Applying because -y/--yes was provided."
+    grep -q "Applying because -y/--yes was provided." <<<"$output"
     grep -q $'\tauth\tstatus' "$MANIFEST_CLI_GH_STUB_LOG"
     grep -q $'\trepo\tview\t--json\tname' "$MANIFEST_CLI_GH_STUB_LOG"
     grep -q $'\tpr\tcreate\t--draft\t--fill\t--base\tmain' "$MANIFEST_CLI_GH_STUB_LOG"
@@ -49,17 +49,17 @@ teardown() {
 
     run manifest_pr_ready 123
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Would run: gh pr ready 123"
+    grep -q "Would run: gh pr ready 123" <<<"$output"
     [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
 
     run manifest_pr_merge 123 --auto
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Would run: gh pr merge 123 --auto --squash"
+    grep -q "Would run: gh pr merge 123 --auto --squash" <<<"$output"
     [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
 
     run manifest_pr_update 123 --rebase
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Would run: gh pr update-branch 123 --rebase"
+    grep -q "Would run: gh pr update-branch 123 --rebase" <<<"$output"
     [ ! -s "$MANIFEST_CLI_GH_STUB_LOG" ]
 }
 
@@ -73,8 +73,8 @@ teardown() {
     run _manifest_pr_fleet_dispatch create --method squash
 
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Would run fleet PR operation: create --method squash"
-    echo "$output" | grep -q "manifest pr fleet create --method squash -y"
+    grep -q "Would run fleet PR operation: create --method squash" <<<"$output"
+    grep -q "manifest pr fleet create --method squash -y" <<<"$output"
     [ ! -f "$SCRATCH/fleet_calls.log" ]
 }
 
@@ -122,8 +122,8 @@ teardown() {
     run manifest_pr_help
 
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "manifest pr create \\[-y|--yes\\] \\[--dry-run\\]"
-    echo "$output" | grep -q "manifest pr ready \\[-y|--yes\\] \\[--dry-run\\]"
-    echo "$output" | grep -q "manifest pr merge \\[-y|--yes\\] \\[--dry-run\\]"
-    echo "$output" | grep -q "manifest pr update \\[-y|--yes\\] \\[--dry-run\\]"
+    grep -q "manifest pr create \\[-y|--yes\\] \\[--dry-run\\]" <<<"$output"
+    grep -q "manifest pr ready \\[-y|--yes\\] \\[--dry-run\\]" <<<"$output"
+    grep -q "manifest pr merge \\[-y|--yes\\] \\[--dry-run\\]" <<<"$output"
+    grep -q "manifest pr update \\[-y|--yes\\] \\[--dry-run\\]" <<<"$output"
 }

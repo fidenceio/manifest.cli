@@ -80,7 +80,7 @@ EOF
 
     run _run_migration
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Migrating User Configuration"
+    grep -q "Migrating User Configuration" <<<"$output"
 }
 
 @test "migrate: actually rewrites a legacy default end-to-end (leading-dot write path)" {
@@ -129,7 +129,7 @@ time:
 EOF
     run _run_migration
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "No user config migrations needed"
+    grep -q "No user config migrations needed" <<<"$output"
 
     # Missing config file: returns 0 without touching anything.
     rm -f "$CFG"
@@ -172,7 +172,7 @@ EOF
 
     run _run_migration
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "No user config migrations needed"
+    grep -q "No user config migrations needed" <<<"$output"
     refute ls "$CFG".bak.* >/dev/null 2>&1
 }
 

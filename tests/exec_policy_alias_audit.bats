@@ -104,7 +104,7 @@ assert_preview_clean() {
     setup_repo_with_archivable_docs
     run_manifest cleanup
     [ "$status" -eq 0 ]
-    ! echo "$output" | grep -qi "deprecated"
+    ! grep -qi "deprecated" <<<"$output"
 }
 
 @test "cleanup: a preview names the leftovers and still writes nothing" {
@@ -113,8 +113,8 @@ assert_preview_clean() {
 
     run_manifest cleanup
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q ".gitignore.manifest"
-    echo "$output" | grep -q "No changes written"
+    grep -q ".gitignore.manifest" <<<"$output"
+    grep -q "No changes written" <<<"$output"
     # Named, not removed.
     [ -f "$SCRATCH/work/.gitignore.manifest" ]
 }
@@ -125,7 +125,7 @@ assert_preview_clean() {
 
     run_manifest cleanup -y
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Applying because -y/--yes was provided."
+    grep -q "Applying because -y/--yes was provided." <<<"$output"
     [ ! -f "$SCRATCH/work/.gitignore.manifest" ]
 }
 

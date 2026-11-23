@@ -174,16 +174,16 @@ _help_sub_tokens() {
     # nothing and every parity assertion below would vacuously pass. Assert the
     # scan found something, and that it found specific known-current commands.
     [ "${#lines[@]}" -gt 15 ]
-    echo "$output" | grep -qx "ship"
-    echo "$output" | grep -qx "reconcile"
-    echo "$output" | grep -qx "revert"
+    grep -qx "ship" <<<"$output"
+    grep -qx "reconcile" <<<"$output"
+    grep -qx "revert" <<<"$output"
 
     # `cleanup` is deliberately in the VISIBLE set as of the change that gave it
     # its own job (removing Manifest's own leftovers) instead of being a
     # deprecated alias for the doc archiving that `refresh repo` absorbed. It is
     # asserted here alongside the other known-current commands so that un-hiding
     # it stays a decision this control records, rather than drift.
-    echo "$output" | grep -qx "cleanup"
+    grep -qx "cleanup" <<<"$output"
 
     # The hidden aliases must NOT show up in the visible set — if they did, the
     # "every dispatched command is listed in help" test would demand help lines
@@ -198,7 +198,7 @@ _help_sub_tokens() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
     for alias_name in commit bump-version; do
-        echo "$output" | grep -qx "$alias_name"
+        grep -qx "$alias_name" <<<"$output"
     done
 }
 

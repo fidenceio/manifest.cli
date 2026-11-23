@@ -77,7 +77,7 @@ teardown() {
     [ ! -e "$MARKER" ]
     refute grep -q '\[' <<<"$output"
     # The fixed names must survive the filter — fail-closed, not fail-empty.
-    echo "$output" | grep -qx 'GITHUB_TOKEN'
+    grep -qx 'GITHUB_TOKEN' <<<"$output"
 }
 
 @test "SEC-017: a VALID indirected name is still redacted (no over-correction)" {
@@ -86,7 +86,7 @@ teardown() {
     run manifest_redact "token is supersecretvalue123 here"
     [ "$status" -eq 0 ]
     refute grep -q 'supersecretvalue123' <<<"$output"
-    echo "$output" | grep -q 'REDACTED'
+    grep -q 'REDACTED' <<<"$output"
 }
 
 # --- the config validator: reject must mean remove ---------------------------

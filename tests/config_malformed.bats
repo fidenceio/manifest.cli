@@ -38,8 +38,8 @@ teardown() {
 
     run load_yaml_to_env "$cfg"
     [ "$status" -eq 2 ]
-    echo "$output" | grep -q "not valid YAML"
-    echo "$output" | grep -q "$cfg"
+    grep -q "not valid YAML" <<<"$output"
+    grep -q "$cfg" <<<"$output"
 }
 
 @test "malformed: tab-indented invalid file makes load_yaml_to_env fail loud (rc 2)" {
@@ -48,7 +48,7 @@ teardown() {
 
     run load_yaml_to_env "$cfg"
     [ "$status" -eq 2 ]
-    echo "$output" | grep -q "not valid YAML"
+    grep -q "not valid YAML" <<<"$output"
 }
 
 @test "malformed: a malformed file does NOT silently apply built-in defaults" {
@@ -104,7 +104,7 @@ YAML
         bash -c 'source "$1/tests/helpers/setup.bash"; load_modules "core/manifest-config.sh"; load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "false"' _ "$TEST_REPO_ROOT"
 
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "could not be parsed"
+    grep -q "could not be parsed" <<<"$output"
 }
 
 @test "malformed: load_configuration aborts on a present-but-broken project config" {
@@ -117,7 +117,7 @@ YAML
         bash -c 'source "$1/tests/helpers/setup.bash"; load_modules "core/manifest-config.sh"; load_configuration "$MANIFEST_CLI_PROJECT_ROOT" "false"' _ "$TEST_REPO_ROOT"
 
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "could not be parsed"
+    grep -q "could not be parsed" <<<"$output"
 }
 
 @test "absent: load_configuration succeeds with NO config files (defaults, no regression)" {

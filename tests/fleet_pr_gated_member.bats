@@ -76,19 +76,19 @@ TSV
     run_manifest ship fleet patch --dry-run
     [ "$status" -eq 0 ]
     # Direct member is releaseable.
-    echo "$output" | grep -E "direct-svc[[:space:]].*would ship" >/dev/null
+    grep -E "direct-svc[[:space:]].*would ship" >/dev/null <<<"$output"
     # PR-gated member renders the dedicated effect/decision and reason.
-    echo "$output" | grep -E "gated-svc[[:space:]].*pr-gate[[:space:]].*needs PR" >/dev/null
-    echo "$output" | grep -F "release.strategy: pr" >/dev/null
+    grep -E "gated-svc[[:space:]].*pr-gate[[:space:]].*needs PR" >/dev/null <<<"$output"
+    grep -F "release.strategy: pr" >/dev/null <<<"$output"
 }
 
 @test "fleet ship preview: summary counts pr-gated and prints the replay command" {
     write_fleet_with_pr_gated_member
     run_manifest ship fleet patch --dry-run
     [ "$status" -eq 0 ]
-    echo "$output" | grep -E "Plan summary: 1 releaseable, 1 pr-gated, 0 skipped" >/dev/null
-    echo "$output" | grep -F "are PR-gated (release.strategy: pr)" >/dev/null
-    echo "$output" | grep -F "manifest pr fleet -y" >/dev/null
+    grep -E "Plan summary: 1 releaseable, 1 pr-gated, 0 skipped" >/dev/null <<<"$output"
+    grep -F "are PR-gated (release.strategy: pr)" >/dev/null <<<"$output"
+    grep -F "manifest pr fleet -y" >/dev/null <<<"$output"
 }
 
 # --- Apply: fail-closed refusal + replay hint -------------------------------
@@ -98,11 +98,11 @@ TSV
     run_manifest ship fleet patch -y
     [ "$status" -ne 0 ]
     # Structured refusal naming the gated member.
-    echo "$output" | grep -F "are PR-gated (release.strategy: pr) and cannot be shipped directly" >/dev/null
-    echo "$output" | grep -E "gated-svc" >/dev/null
+    grep -F "are PR-gated (release.strategy: pr) and cannot be shipped directly" >/dev/null <<<"$output"
+    grep -E "gated-svc" >/dev/null <<<"$output"
     # Replay command routes the release through review.
-    echo "$output" | grep -F "manifest pr fleet -y" >/dev/null
-    echo "$output" | grep -F "no fleet member was shipped" >/dev/null
+    grep -F "manifest pr fleet -y" >/dev/null <<<"$output"
+    grep -F "no fleet member was shipped" >/dev/null <<<"$output"
 
     # Fail-closed: the direct member must NOT have been shipped (no new tag,
     # VERSION pinned) — refusal happens before any mutation.

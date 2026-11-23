@@ -363,7 +363,7 @@ EOF
     _run_installer_with_fail_at "stage_version_dir"
     [ "$status" -ne 0 ]
     # Fault marker visible on stderr.
-    echo "$output" | grep -q "simulated failure at stage_version_dir"
+    grep -q "simulated failure at stage_version_dir" <<<"$output"
 
     # current still points at the prior version.
     [ -L "$HOME/.manifest-cli/current" ]
@@ -401,7 +401,7 @@ EOF
 
     _run_installer_with_fail_at "swap_current_symlink"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "simulated failure at swap_current_symlink"
+    grep -q "simulated failure at swap_current_symlink" <<<"$output"
 
     # Stage completed: new version dir exists and has shipped modules.
     [ -d "$HOME/.manifest-cli/runtime/v${INSTALLER_VERSION}" ]
@@ -445,7 +445,7 @@ EOF
 
     _run_installer_with_fail_at "prune_old_versions"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "simulated failure at prune_old_versions"
+    grep -q "simulated failure at prune_old_versions" <<<"$output"
 
     # The atomic moment (symlink swap) already passed, so current points
     # at the new version even though prune blew up.
@@ -479,7 +479,7 @@ EOF
 
     _run_installer
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "already in progress"
+    grep -q "already in progress" <<<"$output"
 
     # Zero user-visible state changes.
     [ ! -d "$HOME/.manifest-cli/runtime" ]
@@ -505,7 +505,7 @@ EOF
     [ "$status" -eq 0 ] || { echo "$output" >&2; false; }
 
     # Stale-lock warning surfaced on stderr (informs the operator).
-    echo "$output" | grep -q "stale install lock"
+    grep -q "stale install lock" <<<"$output"
 
     # Install completed: current symlink is in place and points at the
     # installer's version.

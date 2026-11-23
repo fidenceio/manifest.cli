@@ -108,7 +108,7 @@ setup_repo_with_remote() {
     manifest_plan_fingerprint_persist "ship-repo" "deadbeef0001" "$SCRATCH/work"
     run manifest_plan_fingerprint_warn_on_drift "ship-repo" "ffff99990002" "$SCRATCH/work"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Plan changed since preview: previewed deadbeef0001, applying ffff99990002"
+    grep -q "Plan changed since preview: previewed deadbeef0001, applying ffff99990002" <<<"$output"
 }
 
 @test "no persisted preview means the apply drift check is silent" {
@@ -124,7 +124,7 @@ setup_repo_with_remote() {
     setup_repo_with_remote
     run_manifest ship repo patch
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "No changes written. Re-run with -y to apply this plan"
+    grep -q "No changes written. Re-run with -y to apply this plan" <<<"$output"
 }
 
 @test "ship repo preview exits the distinct code when preview.exit_code=distinct" {
@@ -133,7 +133,7 @@ setup_repo_with_remote() {
     run_manifest ship repo patch
     [ "$status" -eq 10 ]
     # Still a plain preview: no writes happened.
-    echo "$output" | grep -q "No changes written. Re-run with -y to apply this plan"
+    grep -q "No changes written. Re-run with -y to apply this plan" <<<"$output"
 }
 
 @test "ship repo --dry-run still exits the distinct code under distinct (it is a preview)" {
@@ -151,7 +151,7 @@ setup_repo_with_remote() {
     run_manifest ship repo patch
     [ "$status" -eq 0 ]
     local shown stash_dir
-    shown="$(echo "$output" | grep -m1 'Plan fingerprint:' | awk '{print $NF}')"
+    shown="$(grep -m1 'Plan fingerprint:' <<<"$output" | awk '{print $NF}')"
     [ -n "$shown" ]
     # The run dir is keyed by the git toplevel (resolved), so derive it the same
     # way the code does rather than hashing the literal sandbox path.
@@ -181,7 +181,7 @@ true	svc	./svc	false
 TSV
     run_manifest ship fleet patch
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Plan fingerprint:"
+    grep -q "Plan fingerprint:" <<<"$output"
 
     export MANIFEST_CLI_PREVIEW_EXIT_CODE=distinct
     run_manifest ship fleet patch

@@ -34,7 +34,7 @@ teardown() {
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_repo --create-repo-private --create-repo-public --dry-run
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "mutually exclusive"
+    grep -q "mutually exclusive" <<<"$output"
 }
 
 @test "init repo --connect: --create-repo-private and --create-repo-public are mutually exclusive" {
@@ -44,7 +44,7 @@ teardown() {
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_connect_repo --create-repo-private --create-repo-public --dry-run
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "mutually exclusive"
+    grep -q "mutually exclusive" <<<"$output"
 }
 
 # -----------------------------------------------------------------------------
@@ -57,8 +57,8 @@ teardown() {
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run --create-repo-private
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "would gh repo create:.*private"
-    echo "$output" | grep -q "No changes written"
+    grep -q "would gh repo create:.*private" <<<"$output"
+    grep -q "No changes written" <<<"$output"
     # Hard guarantee: nothing actually changed.
     [ ! -d "$SCRATCH/.git" ]
 }
@@ -69,7 +69,7 @@ teardown() {
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run --create-repo-public
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "would gh repo create:.*public"
+    grep -q "would gh repo create:.*public" <<<"$output"
 }
 
 @test "init repo --dry-run --create-repo-private: marks origin as exists when already set" {
@@ -80,7 +80,7 @@ teardown() {
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run --create-repo-private
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "exists:.*origin remote"
+    grep -q "exists:.*origin remote" <<<"$output"
     refute grep -q "would gh repo create" <<<"$output"
 }
 
@@ -95,7 +95,7 @@ teardown() {
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_connect_repo --dry-run --create-repo-private < /dev/null
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "would gh repo create:.*private"
+    grep -q "would gh repo create:.*private" <<<"$output"
     refute grep -q "would prompt for an origin URL" <<<"$output"
 }
 
@@ -106,7 +106,7 @@ teardown() {
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_connect_repo --dry-run --create-repo-public < /dev/null
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "would gh repo create:.*public"
+    grep -q "would gh repo create:.*public" <<<"$output"
 }
 
 # -----------------------------------------------------------------------------
@@ -117,16 +117,16 @@ teardown() {
     source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
     run manifest_init_repo --help
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q -- "--create-repo-private"
-    echo "$output" | grep -q -- "--create-repo-public"
+    grep -q -- "--create-repo-private" <<<"$output"
+    grep -q -- "--create-repo-public" <<<"$output"
 }
 
 @test "init repo --connect --help: lists --create-repo-private and --create-repo-public" {
     source "$TEST_REPO_ROOT/modules/core/manifest-init-connect.sh"
     run manifest_init_connect_repo --help
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q -- "--create-repo-private"
-    echo "$output" | grep -q -- "--create-repo-public"
+    grep -q -- "--create-repo-private" <<<"$output"
+    grep -q -- "--create-repo-public" <<<"$output"
 }
 
 # -----------------------------------------------------------------------------
@@ -138,15 +138,15 @@ teardown() {
 
     run manifest_init_fleet --create-repo-private --create-repo-public
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "mutually exclusive"
+    grep -q "mutually exclusive" <<<"$output"
 }
 
 @test "init fleet --help: lists --create-repo-private and --create-repo-public" {
     source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
     run manifest_init_fleet --help
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q -- "--create-repo-private"
-    echo "$output" | grep -q -- "--create-repo-public"
+    grep -q -- "--create-repo-private" <<<"$output"
+    grep -q -- "--create-repo-public" <<<"$output"
 }
 
 @test "_fleet_init_directory: invokes _manifest_gh_repo_create when visibility is set" {
@@ -193,7 +193,7 @@ teardown() {
 
     run _fleet_init_directory "$SCRATCH/does-not-exist" "false"
     [ "$status" -eq 3 ]
-    echo "$output" | grep -q "Directory not found"
+    grep -q "Directory not found" <<<"$output"
 }
 
 @test "_manifest_dir_is_own_git_repository: rejects an ordinary directory nested in a parent repo" {
@@ -240,11 +240,11 @@ teardown() {
     } > manifest.fleet.tsv
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_fleet --name test-fleet -y
-    echo "$output" | grep -q "Missing: 1"
-    echo "$output" | grep -q "Issues to resolve:"
-    echo "$output" | grep -q "Missing paths"
-    echo "$output" | grep -q -- "- ./ghost"
-    echo "$output" | grep -q "edit manifest.fleet.tsv"
+    grep -q "Missing: 1" <<<"$output"
+    grep -q "Issues to resolve:" <<<"$output"
+    grep -q "Missing paths" <<<"$output"
+    grep -q -- "- ./ghost" <<<"$output"
+    grep -q "edit manifest.fleet.tsv" <<<"$output"
 }
 
 @test "manifest_init_fleet --create-repo-private (Phase 1): prints 'applies in Phase 2' notice" {
@@ -258,8 +258,8 @@ teardown() {
     cd "$SCRATCH"
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_fleet --create-repo-private -y
-    echo "$output" | grep -q "applies in Phase 2"
-    echo "$output" | grep -q "after editing manifest.fleet.tsv"
+    grep -q "applies in Phase 2" <<<"$output"
+    grep -q "after editing manifest.fleet.tsv" <<<"$output"
 }
 
 @test "manifest_init_fleet --create-repo-private: end-to-end forwards visibility to _fleet_init_directory" {
@@ -315,7 +315,7 @@ teardown() {
 
     run _manifest_gh_repo_create "$SCRATCH/repo" "private"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "origin already configured"
+    grep -q "origin already configured" <<<"$output"
     [ ! -f "$SCRATCH/gh-sentinel" ]
 }
 
@@ -346,7 +346,7 @@ teardown() {
 
     run _manifest_require_gh
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "not authenticated"
+    grep -q "not authenticated" <<<"$output"
     grep -q $'\tauth\tstatus' "$MANIFEST_CLI_GH_STUB_LOG"
 }
 
@@ -563,8 +563,8 @@ teardown() {
     source "$TEST_REPO_ROOT/modules/core/manifest-init.sh"
     run manifest_init_fleet --help
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Exit codes"
-    echo "$output" | grep -q "TSV references"
+    grep -q "Exit codes" <<<"$output"
+    grep -q "TSV references" <<<"$output"
 }
 
 # -----------------------------------------------------------------------------
@@ -691,7 +691,7 @@ teardown() {
 
     run _manifest_gh_repo_create "$SCRATCH/badrepo" "public"
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "gh repo create failed"
+    grep -q "gh repo create failed" <<<"$output"
     # Stub WAS invoked — proves we tried the live call rather than
     # short-circuiting on a guard.
     grep -q $'repo\tcreate\tbadrepo\t--public' "$MANIFEST_CLI_GH_STUB_LOG"
@@ -707,5 +707,5 @@ teardown() {
 
     run _manifest_require_gh
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "not authenticated"
+    grep -q "not authenticated" <<<"$output"
 }

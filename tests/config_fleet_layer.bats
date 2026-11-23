@@ -60,15 +60,15 @@ setup_fleet() {
     setup_fleet
     run manifest_config_describe github.owner
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Effective: fidenceio"
-    echo "$output" | grep -q "(from fleet)"
+    grep -q "Effective: fidenceio" <<<"$output"
+    grep -q "(from fleet)" <<<"$output"
     # The regression this whole change exists to remove.
     refute grep -q "(from defaults)" <<<"$output"
-    echo "$output" | grep -q "Layers (highest precedence first):"
-    echo "$output" | grep -q "fleet    fidenceio"
+    grep -q "Layers (highest precedence first):" <<<"$output"
+    grep -q "fleet    fidenceio" <<<"$output"
     # The member's own layers are still reported, and still empty.
-    echo "$output" | grep -q "local    ·"
-    echo "$output" | grep -q "project  ·"
+    grep -q "local    ·" <<<"$output"
+    grep -q "project  ·" <<<"$output"
 }
 
 @test "config describe: names the fleet file that supplied the value" {
@@ -78,33 +78,33 @@ setup_fleet() {
     [ "$status" -eq 0 ]
     # The fleet root's local file shadows its shared file, matching the order
     # load_configuration loads them in.
-    echo "$output" | grep -q "Effective: fidenceio"
-    echo "$output" | grep -qE "fleet +fidenceio +\(.*manifest\.config\.local\.yaml\)"
-    echo "$output" | grep -qE "fleet +shared-org +\(.*/manifest\.config\.yaml\)"
+    grep -q "Effective: fidenceio" <<<"$output"
+    grep -qE "fleet +fidenceio +\(.*manifest\.config\.local\.yaml\)" <<<"$output"
+    grep -qE "fleet +shared-org +\(.*/manifest\.config\.yaml\)" <<<"$output"
 }
 
 @test "config describe: reports the fleet root it is inheriting from" {
     setup_fleet
     run manifest_config_describe github.owner
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "^Fleet:     "
+    grep -q "^Fleet:     " <<<"$output"
 }
 
 @test "config list: an inherited-only key is listed, not silently omitted" {
     setup_fleet
     run manifest_config_list
     [ "$status" -eq 0 ]
-    echo "$output" | grep -qE '^ +github\.owner +fleet +fidenceio'
+    grep -qE '^ +github\.owner +fleet +fidenceio' <<<"$output"
 }
 
 @test "config list --json: an inherited-only key carries layer=fleet and its file" {
     setup_fleet
     run manifest_config_list --json
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q '"key":"github.owner"'
-    echo "$output" | grep -q '"layer":"fleet"'
-    echo "$output" | grep -q '"value":"fidenceio"'
-    echo "$output" | grep -q '"file":"'
+    grep -q '"key":"github.owner"' <<<"$output"
+    grep -q '"layer":"fleet"' <<<"$output"
+    grep -q '"value":"fidenceio"' <<<"$output"
+    grep -q '"file":"' <<<"$output"
     [ "$(echo "$output" | wc -l | tr -d ' ')" = "1" ]
     echo "$output" | yq e '.' - >/dev/null
 }
@@ -113,8 +113,8 @@ setup_fleet() {
     setup_fleet
     run manifest_config_list --layer fleet
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "github.owner"
-    echo "$output" | grep -q "fidenceio"
+    grep -q "github.owner" <<<"$output"
+    grep -q "fidenceio" <<<"$output"
 }
 
 @test "config list --layer fleet --json: empty array when not inside a fleet" {
@@ -130,14 +130,14 @@ setup_fleet() {
     export MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/standalone"
     run manifest_config_list --layer fleet
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "not inside a fleet"
+    grep -q "not inside a fleet" <<<"$output"
 }
 
 @test "config list --layer bogus: unknown layers are still rejected" {
     setup_fleet
     run manifest_config_list --layer bogus
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Unknown layer: bogus"
+    grep -q "Unknown layer: bogus" <<<"$output"
 }
 
 # -----------------------------------------------------------------------------
@@ -154,10 +154,10 @@ setup_fleet() {
 
     run manifest_config_describe github.owner
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "(from project)"
-    echo "$output" | grep -q "project  member-org"
+    grep -q "(from project)" <<<"$output"
+    grep -q "project  member-org" <<<"$output"
     # The shadowed fleet value is still inspectable — that is the point of describe.
-    echo "$output" | grep -q "fleet    fidenceio"
+    grep -q "fleet    fidenceio" <<<"$output"
 }
 
 @test "the fleet root itself does not double-count its own config as an inherited layer" {
@@ -167,13 +167,13 @@ setup_fleet() {
     run manifest_config_describe github.owner
     [ "$status" -eq 0 ]
     # At the fleet root those files ARE the project/local layers.
-    echo "$output" | grep -q "(from local)"
+    grep -q "(from local)" <<<"$output"
     refute grep -qE '^  fleet ' <<<"$output"
     refute grep -q "^Fleet:     " <<<"$output"
 
     run manifest_config_list
     [ "$status" -eq 0 ]
-    echo "$output" | grep -qE '^ +github\.owner +local +fidenceio'
+    grep -qE '^ +github\.owner +local +fidenceio' <<<"$output"
 }
 
 @test "a repo not inside any fleet behaves exactly as before" {
@@ -183,10 +183,10 @@ setup_fleet() {
 
     run manifest_config_describe git.default_branch
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "(from local)"
-    echo "$output" | grep -q "local    trunk"
-    echo "$output" | grep -q "project  ·"
-    echo "$output" | grep -q "global   ·"
+    grep -q "(from local)" <<<"$output"
+    grep -q "local    trunk" <<<"$output"
+    grep -q "project  ·" <<<"$output"
+    grep -q "global   ·" <<<"$output"
     refute grep -qE '^  fleet ' <<<"$output"
 }
 
@@ -212,8 +212,8 @@ setup_fleet() {
     setup_fleet
     run manifest_config_set --layer fleet github.owner other -y
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "read-only"
-    echo "$output" | grep -q "different repository"
+    grep -q "read-only" <<<"$output"
+    grep -q "different repository" <<<"$output"
     # The fleet root is untouched and no member file was created.
     [ "$(yq e '.github.owner' "$SCRATCH/manifest.config.local.yaml")" = "fidenceio" ]
     [ ! -f "$SCRATCH/manifest.config.yaml" ]
@@ -225,7 +225,7 @@ setup_fleet() {
     setup_fleet
     run manifest_config_set --layer fleet github.owner other
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "read-only"
+    grep -q "read-only" <<<"$output"
     # The guard must sit above the preview branch, or the operator is told the
     # write is merely pending rather than impossible.
     refute grep -q "Would set" <<<"$output"
@@ -235,7 +235,7 @@ setup_fleet() {
     setup_fleet
     run manifest_config_unset --layer fleet github.owner -y
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "read-only"
+    grep -q "read-only" <<<"$output"
     refute grep -q "nothing to unset" <<<"$output"
     [ "$(yq e '.github.owner' "$SCRATCH/manifest.config.local.yaml")" = "fidenceio" ]
 }
@@ -245,7 +245,7 @@ setup_fleet() {
     export MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/standalone"
     run manifest_config_set --layer fleet git.default_branch trunk -y
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "read-only"
+    grep -q "read-only" <<<"$output"
     refute grep -q "Unknown layer" <<<"$output"
 }
 
@@ -253,5 +253,5 @@ setup_fleet() {
     setup_fleet
     run manifest_config_set --layer bogus git.default_branch trunk -y
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Unknown layer: bogus"
+    grep -q "Unknown layer: bogus" <<<"$output"
 }

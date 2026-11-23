@@ -19,7 +19,7 @@ teardown() {
 
     run manifest_discovery_find_files "$SCRATCH" 3 0 version package.json
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "packages/app/package.json"
+    grep -q "packages/app/package.json" <<<"$output"
     refute grep -q "node_modules/pkg/package.json" <<<"$output"
 }
 
@@ -39,8 +39,8 @@ teardown() {
     run manifest_discovery_find_git_repos "$SCRATCH" 2 true 1 fleet
     [ "$status" -eq 0 ]
     [ "${lines[0]%%$'\t'*}" = "svc" ]
-    echo "$output" | grep -q "$SCRATCH/svc"
-    echo "$output" | grep -q $'\t1\tfalse'
+    grep -q "$SCRATCH/svc" <<<"$output"
+    grep -q $'\t1\tfalse' <<<"$output"
 }
 
 @test "discovery: git repo finder prunes at the first repo on a branch when asked" {
@@ -52,12 +52,12 @@ teardown() {
     # Default (no prune): the nested repo is discovered too.
     run manifest_discovery_find_git_repos "$SCRATCH" 5 true 1 fleet
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q $'^outer\t'
-    echo "$output" | grep -q "outer/inner"
+    grep -q $'^outer\t' <<<"$output"
+    grep -q "outer/inner" <<<"$output"
 
     # Pruned: discovery stops at the outer repo; the nested repo is not emitted.
     run manifest_discovery_find_git_repos "$SCRATCH" 5 true 1 fleet true
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q $'^outer\t'
+    grep -q $'^outer\t' <<<"$output"
     refute grep -q "outer/inner" <<<"$output"
 }

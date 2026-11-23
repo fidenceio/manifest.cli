@@ -30,8 +30,8 @@ teardown() {
 
     run manifest_execution_apply_header
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Applying because -y/--yes was provided."
-    echo "$output" | grep -q "hook-fired"
+    grep -q "Applying because -y/--yes was provided." <<<"$output"
+    grep -q "hook-fired" <<<"$output"
     [ -f "$SCRATCH/hook.marker" ]
 }
 
@@ -56,7 +56,7 @@ teardown() {
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/work" run manifest_init_connect_repo --dry-run
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Dry run"
+    grep -q "Dry run" <<<"$output"
     refute grep -q "hook-fired" <<<"$output"
     [ ! -f "$SCRATCH/hook.marker" ]
 }
@@ -71,7 +71,7 @@ teardown() {
 
     run manifest_execution_apply_header
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Applying because -y/--yes was provided."
+    grep -q "Applying because -y/--yes was provided." <<<"$output"
     [ -f "$HOME/.manifest-cli/config-warning.last" ]
     grep -qE '^[0-9]+$' "$HOME/.manifest-cli/config-warning.last"
 }

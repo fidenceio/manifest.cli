@@ -26,9 +26,9 @@ init_repo() {
     cd "$SCRATCH"
     run manifest_doctor
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Version surfaces"
-    echo "$output" | grep -q "noncanonical detected"
-    echo "$output" | grep -q "version.sync"
+    grep -q "Version surfaces" <<<"$output"
+    grep -q "noncanonical detected" <<<"$output"
+    grep -q "version.sync" <<<"$output"
 }
 
 @test "doctor: reports disabled version surface policy" {
@@ -39,7 +39,7 @@ init_repo() {
     cd "$SCRATCH"
     run manifest_doctor
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Version surfaces.*disabled by policy"
+    grep -q "Version surfaces.*disabled by policy" <<<"$output"
     refute grep -q "noncanonical detected" <<<"$output"
 }
 
@@ -52,8 +52,8 @@ init_repo() {
     cd "$SCRATCH"
     run manifest_doctor
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "catalog not found"
-    echo "$output" | grep -q "scan_depth 'invalid-depth' is invalid"
-    echo "$output" | grep -q "notification_mode 'chatty' is invalid"
+    grep -q "catalog not found" <<<"$output"
+    grep -q "scan_depth 'invalid-depth' is invalid" <<<"$output"
+    grep -q "notification_mode 'chatty' is invalid" <<<"$output"
     [ "$(cat "$SCRATCH/VERSION")" = "1.2.3" ]
 }

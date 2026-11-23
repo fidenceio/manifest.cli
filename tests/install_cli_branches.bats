@@ -87,9 +87,9 @@ EOF
     cd "$TEST_REPO_ROOT"
     run bash "$TEST_REPO_ROOT/install-cli.sh" --help
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Usage: ./install-cli.sh"
-    echo "$output" | grep -q -- "--manual, --no-brew"
-    echo "$output" | grep -q -- "--brew, --homebrew"
+    grep -q "Usage: ./install-cli.sh" <<<"$output"
+    grep -q -- "--manual, --no-brew" <<<"$output"
+    grep -q -- "--brew, --homebrew" <<<"$output"
     # --help exits inside arg parsing — zero filesystem footprint in the sandbox.
     [ ! -e "$HOME/.manifest-cli" ]
     [ ! -e "$HOME/.local/bin/manifest" ]
@@ -99,8 +99,8 @@ EOF
     cd "$TEST_REPO_ROOT"
     run bash "$TEST_REPO_ROOT/install-cli.sh" --frobnicate
     [ "$status" -eq 2 ]
-    echo "$output" | grep -q "Unknown option: --frobnicate"
-    echo "$output" | grep -q "Run './install-cli.sh --help' for usage."
+    grep -q "Unknown option: --frobnicate" <<<"$output"
+    grep -q "Run './install-cli.sh --help' for usage." <<<"$output"
     [ ! -e "$HOME/.manifest-cli" ]
 }
 
@@ -130,9 +130,9 @@ EOF
     _docker_missing_env
     run ensure_docker_installed <<< "y"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Docker is required and is not installed"
-    echo "$output" | grep -q "Docker Desktop installed"
-    echo "$output" | grep -q "open -a Docker"
+    grep -q "Docker is required and is not installed" <<<"$output"
+    grep -q "Docker Desktop installed" <<<"$output"
+    grep -q "open -a Docker" <<<"$output"
     # The recording stub proves the exact brew invocation.
     grep -qx "install --cask docker" "$BREW_LOG"
 }
@@ -145,7 +145,7 @@ EOF
     _docker_missing_env
     run ensure_docker_installed <<< "n"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Skipping Docker installation"
+    grep -q "Skipping Docker installation" <<<"$output"
     refute grep -q "Docker Desktop installed" <<<"$output"
     [ ! -s "$BREW_LOG" ]
 }
@@ -159,7 +159,7 @@ EOF
     export MANIFEST_CLI_STUB_BREW_EXIT=1
     run ensure_docker_installed <<< "y"
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "Docker Desktop installation failed"
+    grep -q "Docker Desktop installation failed" <<<"$output"
     grep -qx "install --cask docker" "$BREW_LOG"
 }
 
@@ -211,8 +211,8 @@ EOS
         bash "$TEST_REPO_ROOT/install-cli.sh" < /dev/null
 
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "Docker is installed, but the Docker engine is not running"
-    echo "$output" | grep -q "System validation failed with 1 error(s)"
+    grep -q "Docker is installed, but the Docker engine is not running" <<<"$output"
+    grep -q "System validation failed with 1 error(s)" <<<"$output"
     # Validation fails before any staging: zero install footprint.
     [ ! -e "$HOME/.manifest-cli" ]
     [ ! -e "$HOME/.local/bin/manifest" ]
@@ -245,8 +245,8 @@ EOS
         printf '%s\n' "$output" >&2
         return 1
     fi
-    echo "$output" | grep -q "required for YAML config"
-    echo "$output" | grep -q "System validation failed with 1 error(s)"
+    grep -q "required for YAML config" <<<"$output"
+    grep -q "System validation failed with 1 error(s)" <<<"$output"
     [ ! -e "$HOME/.manifest-cli" ]
 }
 
@@ -295,9 +295,9 @@ EOS
     [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]
     run configure_path < /dev/null
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "is not in your PATH"
-    echo "$output" | grep -q "To make this permanent"
-    echo "$output" | grep -q "Non-interactive shell detected; skipping automatic profile edit"
+    grep -q "is not in your PATH" <<<"$output"
+    grep -q "To make this permanent" <<<"$output"
+    grep -q "Non-interactive shell detected; skipping automatic profile edit" <<<"$output"
     # No profile file gained the PATH line.
     [ ! -f "$HOME/.bashrc" ]
     [ ! -f "$HOME/.bash_profile" ]

@@ -38,7 +38,7 @@ _files_with() {
     echo "Matches:" >&2
     echo "$matches" >&2
     [ -n "$matches" ]
-    echo "$matches" | grep -q "modules/system/manifest-install-paths.sh$"
+    grep -q "modules/system/manifest-install-paths.sh$" <<<"$matches"
     # install-cli.sh and uninstall-cli.sh may still reference the literal
     # inside their fallback blocks / comments — capped at 3 total files.
     [ "$(echo "$matches" | wc -l | tr -d ' ')" -le 3 ]
@@ -50,7 +50,7 @@ _files_with() {
     echo "Matches:" >&2
     echo "$matches" >&2
     [ -n "$matches" ]
-    echo "$matches" | grep -q "modules/system/manifest-install-paths.sh$"
+    grep -q "modules/system/manifest-install-paths.sh$" <<<"$matches"
     # paths module + uninstall-cli.sh fallback
     [ "$(echo "$matches" | wc -l | tr -d ' ')" -le 2 ]
 }
@@ -61,7 +61,7 @@ _files_with() {
     echo "Matches:" >&2
     echo "$matches" >&2
     [ -n "$matches" ]
-    echo "$matches" | grep -q "modules/system/manifest-install-paths.sh$"
+    grep -q "modules/system/manifest-install-paths.sh$" <<<"$matches"
     [ "$(echo "$matches" | wc -l | tr -d ' ')" -le 2 ]
 }
 
@@ -71,7 +71,7 @@ _files_with() {
     echo "Matches:" >&2
     echo "$matches" >&2
     [ -n "$matches" ]
-    echo "$matches" | grep -q "modules/system/manifest-install-paths.sh$"
+    grep -q "modules/system/manifest-install-paths.sh$" <<<"$matches"
     # Allowed: paths module, install-cli.sh docstring, uninstall-cli.sh fallback +
     # usage banner.
     [ "$(echo "$matches" | wc -l | tr -d ' ')" -le 3 ]
@@ -83,7 +83,7 @@ _files_with() {
     echo "Matches:" >&2
     echo "$matches" >&2
     [ -n "$matches" ]
-    echo "$matches" | grep -q "modules/system/manifest-install-paths.sh$"
+    grep -q "modules/system/manifest-install-paths.sh$" <<<"$matches"
     [ "$(echo "$matches" | wc -l | tr -d ' ')" -le 3 ]
 }
 
@@ -94,7 +94,7 @@ _files_with() {
     echo "Matches:" >&2
     echo "$matches" >&2
     [ -n "$matches" ]
-    echo "$matches" | grep -q "modules/system/manifest-install-paths.sh$"
+    grep -q "modules/system/manifest-install-paths.sh$" <<<"$matches"
     # paths module + uninstall-cli.sh fallback
     [ "$(echo "$matches" | wc -l | tr -d ' ')" -le 2 ]
 }
@@ -186,10 +186,10 @@ _files_with() {
     local out
     out="$(manifest_install_paths_preserved_subdirs)"
     [ "$(echo "$out" | wc -l | tr -d ' ')" = "4" ]
-    echo "$out" | grep -qx 'logs'
-    echo "$out" | grep -qx 'audit'
-    echo "$out" | grep -qx 'ide'
-    echo "$out" | grep -qx 'locks'
+    grep -qx 'logs' <<<"$out"
+    grep -qx 'audit' <<<"$out"
+    grep -qx 'ide' <<<"$out"
+    grep -qx 'locks' <<<"$out"
 }
 
 # ----- Canonical cleanup_profile_entries (Phase 1 of §5.7) ----------------

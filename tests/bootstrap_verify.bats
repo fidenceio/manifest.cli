@@ -68,7 +68,7 @@ EOF
 # fail-closed path is named in CI logs (not just a silent grep miss).
 _assert_output_contains() {
     local needle="$1"
-    if ! printf '%s\n' "$output" | grep -q -- "$needle"; then
+    if ! grep -q -- "$needle" <<<"$output"; then
         echo "expected output to contain: ${needle}" >&2
         echo "----- bootstrap output -----" >&2
         printf '%s\n' "$output" >&2

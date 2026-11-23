@@ -62,8 +62,8 @@ EOF
     [ "$status" -eq 0 ]
     # Every sample line is caught; -y alone is not.
     [ "$(printf '%s\n' "$output" | grep -c -- '-h')" -ge 4 ]
-    echo "$output" | grep -q -- '--force|-f'
-    echo "$output" | grep -q -- '    -p)'
+    grep -q -- '--force|-f' <<<"$output"
+    grep -q -- '    -p)' <<<"$output"
     printf '    -y|--yes) ;;\n' > "$sample"
     run _scan_short_switches "$sample"
     [ -z "$output" ]
@@ -112,14 +112,14 @@ _fish_completion_words() {
     for short in -h -help -v -V -version; do
         run bash "$cli" "$short"
         [ "$status" -ne 0 ]
-        echo "$output" | grep -q "Unknown command: $short"
+        grep -q "Unknown command: $short" <<<"$output"
     done
     run bash "$cli" --help
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Usage: manifest <command>"
+    grep -q "Usage: manifest <command>" <<<"$output"
     run bash "$cli" --version
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Manifest CLI v"
+    grep -q "Manifest CLI v" <<<"$output"
 }
 
 # The commands whose parsers used to DROP an unknown switch rather than refuse
@@ -137,7 +137,7 @@ _fish_completion_words() {
         set -- $probe
         run bash "$cli" "$@"
         [ "$status" -ne 0 ]
-        echo "$output" | grep -q -- "Unknown option: ${!#}"
+        grep -q -- "Unknown option: ${!#}" <<<"$output"
     done <<'EOF'
 update fleet -q
 discover fleet -q

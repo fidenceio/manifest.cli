@@ -128,7 +128,7 @@ teardown() {
     # Written as an explicit if/fail, NOT as `! echo ... | grep`: bash exempts a
     # `!`-negated command from errexit mid-test, which is how 114 assertions in
     # this suite were once unable to fail at all (TRACKER §6, instance 3).
-    if echo "$output" | grep -q 'checkout --force'; then
+    if grep -q 'checkout --force' <<<"$output"; then
         fail "refusal offered 'git checkout --force' as remediation: $output"
     fi
 }
@@ -139,7 +139,7 @@ teardown() {
     for bad in "--upload-pack=/tmp/x" "--exec=/tmp/x" "main --delete" "-x" ""; do
         run manifest_git_assert_safe_ref_name "$bad" "git.default_branch"
         [ "$status" -ne 0 ]
-        echo "$output" | grep -q 'git.default_branch' \
+        grep -q 'git.default_branch' <<<"$output" \
             || fail "refusal for [$bad] does not name the key: $output"
     done
 }
@@ -169,7 +169,7 @@ teardown() {
     [ "$status" -eq 0 ]
     # argv:  one argument  -> 'one two'
     # split: two arguments -> 'one' 'two'
-    echo "$output" | grep -q "'one two'" \
+    grep -q "'one two'" <<<"$output" \
         || fail "argument was re-split; git received: $output"
 }
 
@@ -177,18 +177,18 @@ teardown() {
     cd "$REPO"
     run git_retry "probe" git rev-parse --sq-quote "v1.0.1 --delete"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "'v1.0.1 --delete'" \
+    grep -q "'v1.0.1 --delete'" <<<"$output" \
         || fail "a multi-word tag name was split into separate arguments: $output"
 }
 
 @test "git_retry still refuses a non-git command" {
     run git_retry "probe" rm -rf /
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q 'Only git commands are allowed'
+    grep -q 'Only git commands are allowed' <<<"$output"
 }
 
 @test "git_retry still refuses an empty command" {
     run git_retry "probe"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q 'No command provided'
+    grep -q 'No command provided' <<<"$output"
 }

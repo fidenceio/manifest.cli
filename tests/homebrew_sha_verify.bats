@@ -97,7 +97,7 @@ STUB
     run manifest_formula_verify_sha256_against_tarball "$wrong" \
         "https://example.invalid/t.tar.gz" "$SHA_CMD"
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "sha256 mismatch"
+    grep -q "sha256 mismatch" <<<"$output"
 }
 
 @test "verify: explicit opt-out skips verification loudly" {
@@ -105,7 +105,7 @@ STUB
     run manifest_formula_verify_sha256_against_tarball "anything" \
         "https://example.invalid/t.tar.gz" "$SHA_CMD"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "independent verification skipped"
+    grep -q "independent verification skipped" <<<"$output"
 }
 
 # --- the extractor reads the file, not a variable ---------------------------
@@ -132,7 +132,7 @@ RUBY
     _install_split_curl 1 "good-bytes" "tampered-bytes"
     run update_homebrew_formula
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "does not independently verify"
+    grep -q "does not independently verify" <<<"$output"
     [ ! -f "$PUSHED_FORMULA" ]
 }
 
@@ -141,7 +141,7 @@ RUBY
     _install_split_curl 0 "stable-bytes" "stable-bytes"
     run update_homebrew_formula
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "independently verified"
+    grep -q "independently verified" <<<"$output"
     [ -f "$PUSHED_FORMULA" ]
     local expected; expected="$(_sha_of "stable-bytes")"
     grep -q "sha256 \"${expected}\"" "$PUSHED_FORMULA"

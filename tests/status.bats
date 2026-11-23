@@ -38,7 +38,7 @@ teardown() {
     cd "$SCRATCH"
     run manifest_status
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "not a git repository"
+    grep -q "not a git repository" <<<"$output"
 }
 
 @test "status: shows VERSION + bump previews when VERSION is present" {
@@ -49,10 +49,10 @@ teardown() {
     echo "3.7.1" > VERSION
     run manifest_status
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Version:.*3.7.1"
-    echo "$output" | grep -q "patch → 3.7.2"
-    echo "$output" | grep -q "minor → 3.8.0"
-    echo "$output" | grep -q "major → 4.0.0"
+    grep -q "Version:.*3.7.1" <<<"$output"
+    grep -q "patch → 3.7.2" <<<"$output"
+    grep -q "minor → 3.8.0" <<<"$output"
+    grep -q "major → 4.0.0" <<<"$output"
 }
 
 # Fidelity guard for the `set -e` abort class. The tests above call
@@ -70,7 +70,7 @@ teardown() {
     git add -A && git commit -qm init
     run bash "$TEST_REPO_ROOT/scripts/manifest-cli.sh" status
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Version:.*1.2.3"
+    grep -q "Version:.*1.2.3" <<<"$output"
 }
 
 @test "status: reports noncanonical version surfaces without mutating them" {
@@ -88,9 +88,9 @@ JSON
 
     run manifest_status repo
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Version files:.*1 noncanonical detected"
-    echo "$output" | grep -q "read-only"
-    echo "$output" | grep -q "version.sync unset"
+    grep -q "Version files:.*1 noncanonical detected" <<<"$output"
+    grep -q "read-only" <<<"$output"
+    grep -q "version.sync unset" <<<"$output"
     [ "$(yq e -r '.version' package.json)" = "0.0.0" ]
 }
 
@@ -105,7 +105,7 @@ JSON
 
     run manifest_status repo
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "package.json.*package-manifest.*json.*0.1.0"
+    grep -q "package.json.*package-manifest.*json.*0.1.0" <<<"$output"
 }
 
 @test "status: version surface reporting can be disabled by policy" {
@@ -133,7 +133,7 @@ JSON
 
     run manifest_status
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Working:.*clean"
+    grep -q "Working:.*clean" <<<"$output"
     refute grep -qx "0 modified, 0" <<<"$output"
     refute grep -qx "0 untracked" <<<"$output"
 }
@@ -151,7 +151,7 @@ JSON
 
     run manifest_status
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Working:.*1 modified, 1 untracked"
+    grep -q "Working:.*1 modified, 1 untracked" <<<"$output"
 }
 
 @test "status repo: identity block detects enclosing fleet member" {
@@ -181,11 +181,11 @@ YAML
     cd "$SCRATCH/fleet/svc-a"
     run manifest_status repo
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Repo identity"
-    echo "$output" | grep -q "Current repo:.*svc-a"
-    echo "$output" | grep -q "Fleet context:.*test-fleet"
-    echo "$output" | grep -q "Fleet member:.*svc-a"
-    echo "$output" | grep -q "Mutation scope:.*this Git repository only"
+    grep -q "Repo identity" <<<"$output"
+    grep -q "Current repo:.*svc-a" <<<"$output"
+    grep -q "Fleet context:.*test-fleet" <<<"$output"
+    grep -q "Fleet member:.*svc-a" <<<"$output"
+    grep -q "Mutation scope:.*this Git repository only" <<<"$output"
 }
 
 @test "status: fleet root prints repo table with version, timestamp, and latest commit" {
@@ -231,16 +231,16 @@ YAML
     cd "$SCRATCH"
     run manifest_status
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Fleet:.*test-fleet"
-    echo "$output" | grep -q "Config:.*manifest.fleet.yaml"
-    echo "$output" | grep -q "Scope:.*fleet"
-    echo "$output" | grep -q "Repos:.*2 total"
-    echo "$output" | grep -q "Included repositories"
-    echo "$output" | grep -q "Repo.*Branch.*State.*Version.*Timestamp.*Path.*Latest commit"
-    echo "$output" | grep -q "svc-a.*${branch_a}.*clean.*1.2.3.*2026-05-01.*$SCRATCH/svc-a.*Initial A"
-    echo "$output" | grep -q "svc-b.*${branch_b}.*dirty.*2.0.0.*2026-05-02.*$SCRATCH/svc-b.*Initial B"
-    echo "$output" | grep -q "Version surfaces"
-    echo "$output" | grep -q "1 noncanonical detected across 1 repo"
+    grep -q "Fleet:.*test-fleet" <<<"$output"
+    grep -q "Config:.*manifest.fleet.yaml" <<<"$output"
+    grep -q "Scope:.*fleet" <<<"$output"
+    grep -q "Repos:.*2 total" <<<"$output"
+    grep -q "Included repositories" <<<"$output"
+    grep -q "Repo.*Branch.*State.*Version.*Timestamp.*Path.*Latest commit" <<<"$output"
+    grep -q "svc-a.*${branch_a}.*clean.*1.2.3.*2026-05-01.*$SCRATCH/svc-a.*Initial A" <<<"$output"
+    grep -q "svc-b.*${branch_b}.*dirty.*2.0.0.*2026-05-02.*$SCRATCH/svc-b.*Initial B" <<<"$output"
+    grep -q "Version surfaces" <<<"$output"
+    grep -q "1 noncanonical detected across 1 repo" <<<"$output"
 }
 
 @test "runtime bash detection reports current interpreter, not PATH bash" {
@@ -358,11 +358,11 @@ YAML
     cd "$SCRATCH"
     run _manifest_status_fleet "$SCRATCH" "false" "off"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Fleet:.*tsv-fleet"
-    echo "$output" | grep -q "Roster:.*manifest.fleet.tsv"
-    echo "$output" | grep -q "Repos:.*3 total"
-    echo "$output" | grep -q "m1"
-    echo "$output" | grep -q "m3"
+    grep -q "Fleet:.*tsv-fleet" <<<"$output"
+    grep -q "Roster:.*manifest.fleet.tsv" <<<"$output"
+    grep -q "Repos:.*3 total" <<<"$output"
+    grep -q "m1" <<<"$output"
+    grep -q "m3" <<<"$output"
     # Proof of the bug fix: the count must not be 0 just because .services is {}.
     refute grep -q "Repos:.*0 total" <<<"$output"
 }
@@ -409,10 +409,10 @@ YAML
     cd "$SCRATCH/svc/m2"
     run manifest_status repo
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Repo identity"
-    echo "$output" | grep -q "Fleet context:.*tsv-fleet"
+    grep -q "Repo identity" <<<"$output"
+    grep -q "Fleet context:.*tsv-fleet" <<<"$output"
     # The member name comes from the TSV row even though config .services is {}.
-    echo "$output" | grep -q "Fleet member:.*m2"
+    grep -q "Fleet member:.*m2" <<<"$output"
 }
 
 # Declare an absent member's remote in the fleet config.
@@ -458,11 +458,11 @@ _declare_member_remote() {
 
     run _manifest_status_fleet "$SCRATCH" "false" "preview"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Bootstrap preview"
-    echo "$output" | grep -q "ghost.*would clone from git@github.com:acme/ghost.git"
-    echo "$output" | grep -q "Plan: 1 clone, 1 unrecoverable"
-    echo "$output" | grep -q "lostone.*LOST"
-    echo "$output" | grep -q "No changes written"
+    grep -q "Bootstrap preview" <<<"$output"
+    grep -q "ghost.*would clone from git@github.com:acme/ghost.git" <<<"$output"
+    grep -q "Plan: 1 clone, 1 unrecoverable" <<<"$output"
+    grep -q "lostone.*LOST" <<<"$output"
+    grep -q "No changes written" <<<"$output"
 
     # Hard proof nothing was cloned: the target path must still be absent.
     [ ! -d "$SCRATCH/svc/ghost" ]
@@ -479,8 +479,8 @@ _declare_member_remote() {
 
     run _manifest_status_fleet "$SCRATCH" "false" "off"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Bootstrap:.*1 member(s) declared but absent"
-    echo "$output" | grep -q "manifest status fleet --bootstrap"
+    grep -q "Bootstrap:.*1 member(s) declared but absent" <<<"$output"
+    grep -q "manifest status fleet --bootstrap" <<<"$output"
     refute grep -q "Bootstrap preview" <<<"$output"
     [ ! -d "$SCRATCH/svc/ghost" ]
 }
@@ -493,8 +493,8 @@ _declare_member_remote() {
 
     run _manifest_status_fleet "$SCRATCH" "false" "preview"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Bootstrap preview"
-    echo "$output" | grep -q "nothing to clone"
+    grep -q "Bootstrap preview" <<<"$output"
+    grep -q "nothing to clone" <<<"$output"
 }
 
 @test "status: --bootstrap flag routes to fleet scope and preview mode" {
@@ -507,8 +507,8 @@ _declare_member_remote() {
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_status --bootstrap
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Bootstrap preview"
-    echo "$output" | grep -q "ghost.*would clone"
+    grep -q "Bootstrap preview" <<<"$output"
+    grep -q "ghost.*would clone" <<<"$output"
     [ ! -d "$SCRATCH/svc/ghost" ]
 }
 
@@ -577,14 +577,14 @@ YAML
     run _manifest_status_fleet "$SCRATCH" "false" "off" "false"
     [ "$status" -eq 0 ]
     # Local axis is fully derivable with no network:
-    echo "$output" | grep -q "stranded .* stranded "        # repo + no remote
-    echo "$output" | grep -q "declared .* unverified "      # repo + declared remote
-    echo "$output" | grep -q "presentnorepo .* unverified " # present (non-repo) + remote
-    echo "$output" | grep -q "uncloned .* uncloned "        # absent + remote
-    echo "$output" | grep -q "lost .* lost "                # absent + no remote
+    grep -q "stranded .* stranded " <<<"$output"        # repo + no remote
+    grep -q "declared .* unverified " <<<"$output"      # repo + declared remote
+    grep -q "presentnorepo .* unverified " <<<"$output" # present (non-repo) + remote
+    grep -q "uncloned .* uncloned " <<<"$output"        # absent + remote
+    grep -q "lost .* lost " <<<"$output"                # absent + no remote
     # Offline disclaimer is shown; backed is never reached without a probe.
-    echo "$output" | grep -q "offline — Remote shown as declared/undeclared"
-    echo "$output" | grep -q "Fleet" # vocabulary column header present
+    grep -q "offline — Remote shown as declared/undeclared" <<<"$output"
+    grep -q "Fleet" <<<"$output" # vocabulary column header present
 }
 
 @test "status fleet: prints a by-state tally and benched candidate/scenery split" {
@@ -595,8 +595,8 @@ YAML
 
     run _manifest_status_fleet "$SCRATCH" "false" "off" "false"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "States:.*backed 0, unverified 2, stranded 1, uncloned 1, lost 1"
-    echo "$output" | grep -q "Benched:.*1 candidate, 1 scenery"
+    grep -q "States:.*backed 0, unverified 2, stranded 1, uncloned 1, lost 1" <<<"$output"
+    grep -q "Benched:.*1 candidate, 1 scenery" <<<"$output"
 }
 
 @test "status fleet --json: carries fleet_state, axes, tally, and benched split" {
@@ -714,5 +714,5 @@ YAML
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_status fleet --verify
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Remote probed (declared → verified)"
+    grep -q "Remote probed (declared → verified)" <<<"$output"
 }

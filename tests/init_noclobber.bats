@@ -83,7 +83,7 @@ _writer_marker() {
     printf 'node_modules/\n' > "$PROJ/.gitignore"
     run ensure_gitignore_smart "$PROJ"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -qx '.gitignore:preserved'
+    grep -qx '.gitignore:preserved' <<<"$output"
     grep -qx 'node_modules/' "$PROJ/.gitignore"
     refute grep -q 'Manifest CLI' "$PROJ/.gitignore"
     [ ! -e "$PROJ/.gitignore.manifest" ]
@@ -94,7 +94,7 @@ _writer_marker() {
     run manifest_gitignore_missing_rules "$PROJ/.gitignore"
     [ "$status" -eq 0 ]
     # A minimal .gitignore lacks most advice — the agent rules among them.
-    echo "$output" | grep -qx '.claude/\*'
+    grep -qx '.claude/\*' <<<"$output"
     # A rule it DOES carry is not reported as missing.
     refute grep -qx 'node_modules/' <<<"$output"
     [ ! -e "$PROJ/.gitignore.manifest" ]
@@ -111,7 +111,7 @@ _writer_marker() {
     printf '# comment only\n\n' > "$PROJ/.gitignore"
     run ensure_gitignore_smart "$PROJ"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -qx '.gitignore:empty-overwrite'
+    grep -qx '.gitignore:empty-overwrite' <<<"$output"
     grep -q 'Manifest CLI' "$PROJ/.gitignore"
     [ ! -e "$PROJ/.gitignore.manifest" ]
 }
@@ -137,5 +137,5 @@ _writer_marker() {
     refute grep -q 'would overwrite: CHANGELOG.md' <<<"$output"
     refute grep -q 'would overwrite: .gitignore' <<<"$output"
     refute grep -q 'would overwrite: robots.txt' <<<"$output"
-    echo "$output" | grep -q 'would recreate:  manifest.config.local.yaml'
+    grep -q 'would recreate:  manifest.config.local.yaml' <<<"$output"
 }

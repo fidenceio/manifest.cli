@@ -145,6 +145,6 @@ EOF
     # The banner phrase must appear exactly once even though detect_os
     # was invoked three times total (once via source, twice explicitly).
     local count
-    count=$(echo "$output" | grep -c "Detecting operating system" || true)
+    count=$(grep -c "Detecting operating system" <<<"$output" || true)
     [ "$count" = "1" ]
 }

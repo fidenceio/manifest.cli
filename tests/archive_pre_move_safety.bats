@@ -65,9 +65,9 @@ seed_audit_file() {
 
     run main_cleanup "46.12.2" "2026-05-05 22:00:00 UTC"
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "Refusing to archive SECURITY_ANALYSIS_REPORT_v46.0.0.md"
-    echo "$output" | grep -q "uncommitted changes"
-    echo "$output" | grep -q "MANIFEST_CLI_DOCS_ARCHIVE_FORCE=1"
+    grep -q "Refusing to archive SECURITY_ANALYSIS_REPORT_v46.0.0.md" <<<"$output"
+    grep -q "uncommitted changes" <<<"$output"
+    grep -q "MANIFEST_CLI_DOCS_ARCHIVE_FORCE=1" <<<"$output"
     [ -f "docs/SECURITY_ANALYSIS_REPORT_v46.0.0.md" ]
     [ ! -f "docs/zArchive/SECURITY_ANALYSIS_REPORT_v46.0.0.md" ]
 }
@@ -77,7 +77,7 @@ seed_audit_file() {
 
     run main_cleanup "46.12.2" "2026-05-05 22:00:00 UTC"
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "Refusing to archive SECURITY_ANALYSIS_REPORT_v46.0.0.md"
+    grep -q "Refusing to archive SECURITY_ANALYSIS_REPORT_v46.0.0.md" <<<"$output"
     [ -f "docs/SECURITY_ANALYSIS_REPORT_v46.0.0.md" ]
 }
 

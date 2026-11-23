@@ -161,8 +161,8 @@ setup() {
     local pat='(^|[^[:alnum:]_./-])(head|git|gh|yq|jq|find|cat|sed|awk|curl|ls|tail|tr|cut|parallel)[[:space:]][^|]*\|[[:space:]]*grep[[:space:]]+(-[[:alnum:]]+[[:space:]]+)*-[[:alnum:]]*q'
 
     # Positive controls: the regex flags an external producer anywhere in the
-    # pipeline, and does NOT flag the builtin-producer form the suite uses
-    # hundreds of times.
+    # pipeline, and does NOT flag the builtin-producer form — the next test
+    # forbids that one, for a reason of its own.
     local pipe='|'
     grep -qE "$pat" <<<"yq e '.k' cfg.yaml ${pipe} grep -q v"
     grep -qE "$pat" <<<"echo x ${pipe} sed s/x/y/ ${pipe} grep -q y"
@@ -180,6 +180,46 @@ setup() {
         echo "Capture first, then match on a second line:" >&2
         echo "    v=\"\$(producer ...)\"" >&2
         echo "    grep -q needle <<<\"\$v\"" >&2
+        return 1
+    fi
+}
+
+@test "suite portability: no echo or printf is piped into a grep that exits early — use a herestring" {
+    # An `echo "$output"` piped into `grep -q needle` is a race under pipefail:
+    # grep -q (and grep -m) exits at its first match, echo is still writing, the write gets
+    # SIGPIPE, and the pipeline reports 141 — a PASSING assertion reported as
+    # a failure. It fired in CI and in the container leg, on output large
+    # enough to outlast the pipe buffer (TRACKER §90). A herestring has no
+    # writer to kill: `grep -q needle <<<"$output"`.
+    local pat='(^|[^[:alnum:]_./-])(echo|printf)[[:space:]][^|]*\|[[:space:]]*grep[[:space:]]+((-[[:alnum:]]+[[:space:]]+)*-[[:alnum:]]*[qm]|--quiet)'
+
+    # Positive controls: the early-exit forms are flagged whatever the
+    # variable is called; grep -c reads to the end and is not.
+    local pipe='|'
+    grep -qE "$pat" <<<"    echo \"\$output\" ${pipe} grep -q needle"
+    grep -qE "$pat" <<<"    ! echo \"\$out\" ${pipe} grep -Fxq needle"
+    grep -qE "$pat" <<<"    printf '%s\\n' \"\$v\" ${pipe} grep -m1 needle"
+    grep -qE "$pat" <<<"    if echo \"\$output\" ${pipe} grep -i -q needle; then"
+    refute grep -qE "$pat" <<<"    n=\$(echo \"\$output\" ${pipe} grep -c needle)"
+    refute grep -qE "$pat" <<<"    grep -q needle <<<\"\$output\""
+    local files=("$TEST_REPO_ROOT"/tests/*.bats)
+    [ "${#files[@]}" -gt 50 ]
+
+    local offenders
+    offenders="$(grep -nE "$pat" "${files[@]}" \
+        | grep -vE '^[^:]*:[0-9]+:[[:space:]]*#' || true)"
+    # The exact idiom is gone altogether, grep -c included, so the next one
+    # written stands out in review as well as here.
+    local idiom="echo \"\$output\" ${pipe} grep"
+    local exact
+    exact="$(grep -nF -- "$idiom" "${files[@]}" \
+        | grep -vE '^[^:]*:[0-9]+:[[:space:]]*#' || true)"
+
+    if [ -n "$offenders" ] || [ -n "$exact" ]; then
+        echo "echo/printf piped into grep in the suite:" >&2
+        [ -z "$offenders" ] || echo "$offenders" >&2
+        [ -z "$exact" ] || echo "$exact" >&2
+        echo "Use a herestring: grep -q needle <<<\"\$output\"" >&2
         return 1
     fi
 }

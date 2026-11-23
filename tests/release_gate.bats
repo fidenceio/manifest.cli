@@ -58,7 +58,7 @@ teardown() {
 @test "release_gate: unknown policy is rejected, never silently disabled" {
     MANIFEST_CLI_RELEASE_GATE="garbage" run manifest_release_gate_policy
     [ "$status" -eq 2 ]
-    echo "$output" | grep -q "Invalid release_gate"
+    grep -q "Invalid release_gate" <<<"$output"
 }
 
 @test "release_gate: injection-shaped value is rejected and not executed" {
@@ -75,7 +75,7 @@ teardown() {
     export MANIFEST_CLI_RELEASE_GATE_COMMAND="true"
     run manifest_release_gate_run "pre-bump"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "tests passed"
+    grep -q "tests passed" <<<"$output"
 }
 
 @test "release_gate: local-tests fails fast when the test command fails" {
@@ -83,8 +83,8 @@ teardown() {
     export MANIFEST_CLI_RELEASE_GATE_COMMAND="false"
     run manifest_release_gate_run "pre-bump"
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "Release gate failed"
-    echo "$output" | grep -q "No version changes were made"
+    grep -q "Release gate failed" <<<"$output"
+    grep -q "No version changes were made" <<<"$output"
 }
 
 @test "release_gate: local-tests runs the command in MANIFEST_CLI_PROJECT_ROOT" {
@@ -166,15 +166,15 @@ EOF
     # silently proceeds on "no tests" is a bypass; the gate must block instead.
     run manifest_release_gate_run "pre-bump"
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "no test command found"
-    echo "$output" | grep -q "refusing to release unverified"
+    grep -q "no test command found" <<<"$output"
+    grep -q "refusing to release unverified" <<<"$output"
 }
 
 @test "release_gate: 'all' with no resolvable command also fails closed" {
     export MANIFEST_CLI_RELEASE_GATE="all"
     run manifest_release_gate_run "pre-bump"
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "refusing to release unverified"
+    grep -q "refusing to release unverified" <<<"$output"
 }
 
 # --- pre-bump: gate tier (release.gate_tier) --------------------------------
@@ -194,7 +194,7 @@ EOF
 @test "release_gate: unknown tier is rejected, never silently shrunk" {
     MANIFEST_CLI_RELEASE_GATE_TIER="quick" run manifest_release_gate_tier
     [ "$status" -eq 2 ]
-    echo "$output" | grep -q "Invalid release_gate_tier"
+    grep -q "Invalid release_gate_tier" <<<"$output"
 }
 
 @test "release_gate: an invalid tier hard-stops the gate (no run, no release)" {
@@ -705,7 +705,7 @@ _gate_pass_ledger_file() { echo "$MANIFEST_CLI_PROJECT_ROOT/.manifest-cli/releas
     run manifest_release_gate_run "pre-bump"
     [ "$status" -eq 0 ]
     [ ! -e "$MANIFEST_CLI_PROJECT_ROOT/should-not-run.marker" ]
-    echo "$output" | grep -q "no code delta to verify"
+    grep -q "no code delta to verify" <<<"$output"
 }
 
 @test "release_gate: force-bump with a DIRTY tree STILL fails closed regardless of freshness (a real delta is not a stamp)" {
@@ -716,8 +716,8 @@ _gate_pass_ledger_file() { echo "$MANIFEST_CLI_PROJECT_ROOT/.manifest-cli/releas
     _MANIFEST_CLI_SHIP_FORCE_BUMP=true
     run manifest_release_gate_run "pre-bump"
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "no test command found"
-    echo "$output" | grep -q "refusing to release unverified"
+    grep -q "no test command found" <<<"$output"
+    grep -q "refusing to release unverified" <<<"$output"
 }
 
 @test "release_gate: force-bump AHEAD of the last tag STILL fails closed (commits since the tag are a real delta)" {
@@ -728,7 +728,7 @@ _gate_pass_ledger_file() { echo "$MANIFEST_CLI_PROJECT_ROOT/.manifest-cli/releas
     _MANIFEST_CLI_SHIP_FORCE_BUMP=true
     run manifest_release_gate_run "pre-bump"
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "refusing to release unverified"
+    grep -q "refusing to release unverified" <<<"$output"
 }
 
 @test "release_gate: an ORDINARY ship (no force-bump) of a clean, at-tag tree STILL fails closed regardless of freshness (C3 intact)" {
@@ -739,8 +739,8 @@ _gate_pass_ledger_file() { echo "$MANIFEST_CLI_PROJECT_ROOT/.manifest-cli/releas
     # is gated on force-bump, so an ordinary ship still demands verification.
     run manifest_release_gate_run "pre-bump"
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "no test command found"
-    echo "$output" | grep -q "refusing to release unverified"
+    grep -q "no test command found" <<<"$output"
+    grep -q "refusing to release unverified" <<<"$output"
 }
 
 # --- pre-bump: force-bump freshness window (release_gate_freshness_days) ------
@@ -761,7 +761,7 @@ _gate_pass_ledger_file() { echo "$MANIFEST_CLI_PROJECT_ROOT/.manifest-cli/releas
     _MANIFEST_CLI_SHIP_FORCE_BUMP=true
     run manifest_release_gate_run "pre-bump"
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "refusing to release unverified"
+    grep -q "refusing to release unverified" <<<"$output"
 }
 
 @test "release_gate: a no-delta force-bump with a STALE gate pass RUNS the gate (window lapsed)" {
@@ -788,7 +788,7 @@ _gate_pass_ledger_file() { echo "$MANIFEST_CLI_PROJECT_ROOT/.manifest-cli/releas
     _MANIFEST_CLI_SHIP_FORCE_BUMP=true
     run manifest_release_gate_run "pre-bump"
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "refusing to release unverified"
+    grep -q "refusing to release unverified" <<<"$output"
 }
 
 @test "release_gate: a STALE stamp-only ship that re-runs the gate ADVANCES the freshness clock" {
@@ -884,7 +884,7 @@ _gate_pass_ledger_file() { echo "$MANIFEST_CLI_PROJECT_ROOT/.manifest-cli/releas
     export MANIFEST_CLI_RELEASE_GATE="remote-ci"
     run manifest_release_gate_run "post-push"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "remote CI is green"
+    grep -q "remote CI is green" <<<"$output"
 }
 
 @test "release_gate: post-push 'all' waits on remote CI like remote-ci (green passes)" {
@@ -901,7 +901,7 @@ _gate_pass_ledger_file() { echo "$MANIFEST_CLI_PROJECT_ROOT/.manifest-cli/releas
     export MANIFEST_CLI_RELEASE_GATE="all"
     run manifest_release_gate_run "post-push"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "remote CI is green"
+    grep -q "remote CI is green" <<<"$output"
     [ "$_MANIFEST_CLI_SHIP_LAST_GATE_POLICY" = "all" ] || {
         # run() subshells the var away; re-derive the policy directly instead.
         [ "$(manifest_release_gate_policy)" = "all" ]
@@ -920,7 +920,7 @@ _gate_pass_ledger_file() { echo "$MANIFEST_CLI_PROJECT_ROOT/.manifest-cli/releas
     export MANIFEST_CLI_RELEASE_GATE="remote-ci"
     run manifest_release_gate_run "post-push"
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "remote CI did not pass"
+    grep -q "remote CI did not pass" <<<"$output"
 }
 
 @test "release_gate: post-push remote-ci hard-stops when CI cannot be confirmed" {
@@ -933,7 +933,7 @@ _gate_pass_ledger_file() { echo "$MANIFEST_CLI_PROJECT_ROOT/.manifest-cli/releas
     export MANIFEST_CLI_RELEASE_GATE="remote-ci"
     run manifest_release_gate_run "post-push"
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "could not confirm a green CI run"
+    grep -q "could not confirm a green CI run" <<<"$output"
 }
 
 # --- per-repo independence (fleet version independence) ---------------------

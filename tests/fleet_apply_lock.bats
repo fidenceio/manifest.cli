@@ -70,7 +70,7 @@ teardown() {
     _fleet_lock_acquire "$dir"        # holder pid = this test process (alive)
     run _fleet_lock_acquire "$dir"    # same live holder -> must not break
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Another fleet ship is already running"
+    grep -q "Another fleet ship is already running" <<<"$output"
     _fleet_lock_release "$dir"
 }
 
@@ -86,7 +86,7 @@ teardown() {
     } > "$dir/holder"
     run _fleet_lock_acquire "$dir"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Reclaimed a stale fleet lock"
+    grep -q "Reclaimed a stale fleet lock" <<<"$output"
     grep -q "^pid=$$\$" "$dir/holder"
     _fleet_lock_release "$dir"
 }
@@ -120,7 +120,7 @@ teardown() {
     } > "$dir/holder"
     run _fleet_lock_acquire "$dir"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Reclaimed a stale fleet lock"
+    grep -q "Reclaimed a stale fleet lock" <<<"$output"
     _fleet_lock_release "$dir"
 }
 

@@ -24,10 +24,10 @@ teardown() {
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Dry run"
-    echo "$output" | grep -q "would create:.*VERSION"
-    echo "$output" | grep -q "No changes written. Re-run with -y to apply this plan:"
-    echo "$output" | grep -q "manifest init repo -y"
+    grep -q "Dry run" <<<"$output"
+    grep -q "would create:.*VERSION" <<<"$output"
+    grep -q "No changes written. Re-run with -y to apply this plan:" <<<"$output"
+    grep -q "manifest init repo -y" <<<"$output"
 
     # Hard guarantee: nothing should have been written.
     [ ! -f "$SCRATCH/VERSION" ]
@@ -42,9 +42,9 @@ teardown() {
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_repo
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Dry run"
-    echo "$output" | grep -q "No changes written. Re-run with -y to apply this plan:"
-    echo "$output" | grep -q "manifest init repo -y"
+    grep -q "Dry run" <<<"$output"
+    grep -q "No changes written. Re-run with -y to apply this plan:" <<<"$output"
+    grep -q "manifest init repo -y" <<<"$output"
     [ ! -f "$SCRATCH/VERSION" ]
     [ ! -d "$SCRATCH/.git" ]
 }
@@ -55,7 +55,7 @@ teardown() {
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run -y
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Cannot combine --dry-run with -y"
+    grep -q "Cannot combine --dry-run with -y" <<<"$output"
     [ ! -f "$SCRATCH/VERSION" ]
 }
 
@@ -67,7 +67,7 @@ teardown() {
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "exists:.*VERSION"
+    grep -q "exists:.*VERSION" <<<"$output"
     # And the .git dir is not marked for creation.
     refute grep -q "would create: .git" <<<"$output"
 }
@@ -81,9 +81,9 @@ teardown() {
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_repo --dry-run --force
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "exists:.*VERSION"
+    grep -q "exists:.*VERSION" <<<"$output"
     refute grep -q "would overwrite:.*VERSION" <<<"$output"
-    echo "$output" | grep -q "would recreate:.*manifest.config.local.yaml"
+    grep -q "would recreate:.*manifest.config.local.yaml" <<<"$output"
     # Nothing actually mutated.
     [ "$(cat "$SCRATCH/VERSION")" = "1.0.0" ]
 }
@@ -100,12 +100,12 @@ teardown() {
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_connect_repo --dry-run
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Dry run"
-    echo "$output" | grep -q "Remotes that would be pulled"
-    echo "$output" | grep -q "origin"
-    echo "$output" | grep -q "https://example.invalid/example.git"
-    echo "$output" | grep -q "No changes written. Re-run with -y to apply this plan:"
-    echo "$output" | grep -q "manifest init repo --connect -y"
+    grep -q "Dry run" <<<"$output"
+    grep -q "Remotes that would be pulled" <<<"$output"
+    grep -q "origin" <<<"$output"
+    grep -q "https://example.invalid/example.git" <<<"$output"
+    grep -q "No changes written. Re-run with -y to apply this plan:" <<<"$output"
+    grep -q "manifest init repo --connect -y" <<<"$output"
 }
 
 @test "init repo --connect defaults to preview and makes no remote calls" {
@@ -116,8 +116,8 @@ teardown() {
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_connect_repo
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Dry run"
-    echo "$output" | grep -q "Remotes that would be pulled"
+    grep -q "Dry run" <<<"$output"
+    grep -q "Remotes that would be pulled" <<<"$output"
 }
 
 @test "init repo --connect --dry-run: no remote configured -> reports plan, no prompt" {
@@ -129,7 +129,7 @@ teardown() {
     # short-circuit before that point.
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_init_connect_repo --dry-run < /dev/null
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "no remotes configured"
+    grep -q "no remotes configured" <<<"$output"
 }
 
 # -----------------------------------------------------------------------------
@@ -154,31 +154,31 @@ teardown() {
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_ship_repo minor
 
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Ship repo preview"
-    echo "$output" | grep -q "Release type:     minor"
-    echo "$output" | grep -q "Current version:  1.2.3"
-    echo "$output" | grep -q "Next version:     1.3.0"
-    echo "$output" | grep -q "What's new"
+    grep -q "Ship repo preview" <<<"$output"
+    grep -q "Release type:     minor" <<<"$output"
+    grep -q "Current version:  1.2.3" <<<"$output"
+    grep -q "Next version:     1.3.0" <<<"$output"
+    grep -q "What's new" <<<"$output"
     # §78: the preview summarises what a path can EVIDENCE, never a product
     # claim inferred from a filename. Touching modules/core/manifest-ship.sh
     # used to print "Added smart ship preview summaries" here whatever the
     # change actually was, and the preview shares one bullet source with the
     # changelog, so the same sentence shipped in both.
     refute grep -q "Added smart ship preview summaries" <<<"$output"
-    echo "$output" | grep -q "Updated documentation and examples"
-    echo "$output" | grep -q "Working tree: 5 pending file(s) would be auto-committed"
-    echo "$output" | grep -q "VERSION: update 1.2.3 -> 1.3.0"
-    echo "$output" | grep -q "CHANGELOG.md: prepend the 1.3.0 release entry"
-    echo "$output" | grep -q "docs/: regenerate release documentation"
-    echo "$output" | grep -q "Repo identity"
-    echo "$output" | grep -q "Current repo:.*example/project"
-    echo "$output" | grep -q "Origin:.*example/project"
-    echo "$output" | grep -q "Mutation scope:.*this Git repository only"
+    grep -q "Updated documentation and examples" <<<"$output"
+    grep -q "Working tree: 5 pending file(s) would be auto-committed" <<<"$output"
+    grep -q "VERSION: update 1.2.3 -> 1.3.0" <<<"$output"
+    grep -q "CHANGELOG.md: prepend the 1.3.0 release entry" <<<"$output"
+    grep -q "docs/: regenerate release documentation" <<<"$output"
+    grep -q "Repo identity" <<<"$output"
+    grep -q "Current repo:.*example/project" <<<"$output"
+    grep -q "Origin:.*example/project" <<<"$output"
+    grep -q "Mutation scope:.*this Git repository only" <<<"$output"
     refute grep -q "Git and publish plan" <<<"$output"
-    echo "$output" | grep -q "No changes written. Re-run with -y to apply this plan:"
-    echo "$output" | grep -q "manifest ship repo minor -y"
-    echo "$output" | grep -q "DRY RUN COMPLETE: APPLY PREFLIGHT WAS NOT RUN"
-    echo "$output" | grep -q "Preview mode did not touch .git or test Git metadata writes."
-    echo "$output" | grep -q "When you rerun with -y, Manifest checks Git metadata write access before changing files."
-    echo "$output" | grep -q "Depending upon your IDE or agent, you may see a brief failure before an elevated script completes the job."
+    grep -q "No changes written. Re-run with -y to apply this plan:" <<<"$output"
+    grep -q "manifest ship repo minor -y" <<<"$output"
+    grep -q "DRY RUN COMPLETE: APPLY PREFLIGHT WAS NOT RUN" <<<"$output"
+    grep -q "Preview mode did not touch .git or test Git metadata writes." <<<"$output"
+    grep -q "When you rerun with -y, Manifest checks Git metadata write access before changing files." <<<"$output"
+    grep -q "Depending upon your IDE or agent, you may see a brief failure before an elevated script completes the job." <<<"$output"
 }

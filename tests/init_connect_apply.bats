@@ -60,15 +60,15 @@ make_behind_clone() {
 
     # Apply-boundary contract: unambiguous target (named branch + origin)
     # applies on -y alone, no AUTO_CONFIRM needed.
-    echo "$output" | grep -q "Auto-confirmed unambiguous target (apply via -y)"
-    echo "$output" | grep -q "Applying because -y/--yes was provided."
+    grep -q "Auto-confirmed unambiguous target (apply via -y)" <<<"$output"
+    grep -q "Applying because -y/--yes was provided." <<<"$output"
     # Banner wording changed with the fold: prep is now init's connect phase.
-    echo "$output" | grep -q "Connecting repository: $SCRATCH/work"
+    grep -q "Connecting repository: $SCRATCH/work" <<<"$output"
 
     # The pull really ran against the local origin.
-    echo "$output" | grep -q "Syncing with origin"
-    echo "$output" | grep -q "Successfully synced with origin"
-    echo "$output" | grep -q "Repository synced successfully"
+    grep -q "Syncing with origin" <<<"$output"
+    grep -q "Successfully synced with origin" <<<"$output"
+    grep -q "Repository synced successfully" <<<"$output"
     [ -f "$SCRATCH/work/second.txt" ]
     [ "$(cat "$SCRATCH/work/second.txt")" = "two" ]
 
@@ -90,8 +90,8 @@ make_behind_clone() {
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/work" run manifest_init_connect_repo -y < /dev/null
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Ambiguous apply target"
-    echo "$output" | grep -q "MANIFEST_CLI_AUTO_CONFIRM=1"
+    grep -q "Ambiguous apply target" <<<"$output"
+    grep -q "MANIFEST_CLI_AUTO_CONFIRM=1" <<<"$output"
     # Refusal happens at the apply gate — before the env scaffold write.
     [ ! -f "$SCRATCH/work/.env.example" ]
 }
@@ -103,7 +103,7 @@ make_behind_clone() {
     export MANIFEST_CLI_AUTO_CONFIRM=1
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/work" run manifest_init_connect_repo -y < /dev/null
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Setup incomplete: no origin"
+    grep -q "Setup incomplete: no origin" <<<"$output"
     [ ! -f "$SCRATCH/work/.env.example" ]
 }
 

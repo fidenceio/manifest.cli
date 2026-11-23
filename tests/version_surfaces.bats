@@ -30,9 +30,9 @@ JSON
 
     run manifest_version_surface_scan "$SCRATCH" 2
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q $'manifest-version-file\tcanonical\ttext\tcanonical\tVERSION\t1.2.3'
-    echo "$output" | grep -q $'npm-package\tpackage-manifest\tjson\tnoncanonical\tpackage.json\t0.1.0'
-    echo "$output" | grep -q $'npm-lock\tlockfile\tjson\tnoncanonical\tpackage-lock.json\t0.1.0'
+    grep -q $'manifest-version-file\tcanonical\ttext\tcanonical\tVERSION\t1.2.3' <<<"$output"
+    grep -q $'npm-package\tpackage-manifest\tjson\tnoncanonical\tpackage.json\t0.1.0' <<<"$output"
+    grep -q $'npm-lock\tlockfile\tjson\tnoncanonical\tpackage-lock.json\t0.1.0' <<<"$output"
 }
 
 @test "version surfaces: scan uses non-fleet exploration so package workspaces are visible" {
@@ -43,7 +43,7 @@ JSON
 
     run manifest_version_surface_scan "$SCRATCH" 3
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q $'npm-package\tpackage-manifest\tjson\tnoncanonical\tpackages/app/package.json\t2.0.0'
+    grep -q $'npm-package\tpackage-manifest\tjson\tnoncanonical\tpackages/app/package.json\t2.0.0' <<<"$output"
     refute grep -q "node_modules/pkg/package.json" <<<"$output"
 }
 
@@ -54,8 +54,8 @@ JSON
 
     run manifest_version_surface_scan "$SCRATCH" 1
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q $'custom-version-file\tcanonical\ttext\tcanonical\tAPP_VERSION\t3.4.5'
-    echo "$output" | grep -q $'manifest-version-file\tcanonical\ttext\tnoncanonical\tVERSION\t0.0.1'
+    grep -q $'custom-version-file\tcanonical\ttext\tcanonical\tAPP_VERSION\t3.4.5' <<<"$output"
+    grep -q $'manifest-version-file\tcanonical\ttext\tnoncanonical\tVERSION\t0.0.1' <<<"$output"
 }
 
 @test "version surfaces: policy helpers normalize enabled, depth, and notification mode" {
@@ -89,7 +89,7 @@ YAML
 
     run manifest_version_surface_scan "$SCRATCH" 1
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q $'custom-yaml\tpackage-manifest\tyaml\tnoncanonical\tapp.yaml\t7.8.9'
+    grep -q $'custom-yaml\tpackage-manifest\tyaml\tnoncanonical\tapp.yaml\t7.8.9' <<<"$output"
 }
 
 @test "version surfaces: policy warnings report bad catalog, bad depth, and bad notification mode" {
@@ -99,9 +99,9 @@ YAML
 
     run manifest_version_surface_policy_warnings
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "catalog not found"
-    echo "$output" | grep -q "scan_depth 'too-deep' is invalid"
-    echo "$output" | grep -q "notification_mode 'chatty' is invalid"
+    grep -q "catalog not found" <<<"$output"
+    grep -q "scan_depth 'too-deep' is invalid" <<<"$output"
+    grep -q "notification_mode 'chatty' is invalid" <<<"$output"
 }
 
 @test "version surfaces: policy JSON reflects the built-in defaults" {
@@ -135,8 +135,8 @@ YAML
     unset MANIFEST_CLI_VERSION_HANDLER_CATALOG
     run manifest_version_catalog_entries
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q $'^manifest-version-file\tVERSION\tcanonical\ttext'
-    echo "$output" | grep -q $'^npm-package\tpackage.json\tpackage-manifest\tjson'
+    grep -q $'^manifest-version-file\tVERSION\tcanonical\ttext' <<<"$output"
+    grep -q $'^npm-package\tpackage.json\tpackage-manifest\tjson' <<<"$output"
     # Every emitted row has >= 4 tab-separated columns and no comment rows.
     local bad
     bad=$(manifest_version_catalog_entries | awk -F'\t' 'NF < 4 || $1 ~ /^#/ { c++ } END { print c+0 }')
@@ -170,8 +170,8 @@ TSV
     run manifest_version_surface_scan "$SCRATCH" 1
     [ "$status" -eq 0 ]
     # Well-formed row is detected; canonical VERSION is still reported.
-    echo "$output" | grep -q $'good-yaml\tpackage-manifest\tyaml\tnoncanonical\tapp.yaml\t4.5.6'
-    echo "$output" | grep -q $'custom-version-file\tcanonical\ttext\tcanonical\tVERSION\t1.0.0'
+    grep -q $'good-yaml\tpackage-manifest\tyaml\tnoncanonical\tapp.yaml\t4.5.6' <<<"$output"
+    grep -q $'custom-version-file\tcanonical\ttext\tcanonical\tVERSION\t1.0.0' <<<"$output"
     # The malformed (3-column) row is dropped without warning or error, so its
     # file never becomes a scanned surface.
     refute grep -q "orphan.txt" <<<"$output"

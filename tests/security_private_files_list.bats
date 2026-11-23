@@ -132,7 +132,7 @@ private_files_after_load() {
 
     run check_git_tracking "$PROJ"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "is tracked by Git"
+    grep -q "is tracked by Git" <<<"$output"
 }
 
 @test "positive control: the CONFIGURED list, not the built-in default, is what gets scanned" {
@@ -144,7 +144,7 @@ private_files_after_load() {
 
     run check_git_tracking "$PROJ"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "mysecret.txt is tracked by Git"
+    grep -q "mysecret.txt is tracked by Git" <<<"$output"
 }
 
 @test "positive control: a clean repo passes the same scan" {
@@ -172,7 +172,7 @@ private_files_after_load() {
 
     run check_git_tracking "$PROJ"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "mysecret.txt is tracked by Git"
+    grep -q "mysecret.txt is tracked by Git" <<<"$output"
 }
 
 @test "flow-list config: a tracked private file is still caught" {
@@ -184,7 +184,7 @@ private_files_after_load() {
 
     run check_git_tracking "$PROJ"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "mysecret.txt is tracked by Git"
+    grep -q "mysecret.txt is tracked by Git" <<<"$output"
 }
 
 # ---------------------------------------------------------------------------
@@ -252,9 +252,9 @@ security:
 '
     run load_yaml_to_env "$PROJ/manifest.config.yaml"
     [ "$status" -eq 2 ]
-    echo "$output" | grep -q "security.private_files"
-    echo "$output" | grep -q "$PROJ/manifest.config.yaml"
-    echo "$output" | grep -q "list containing maps or nested lists"
+    grep -q "security.private_files" <<<"$output"
+    grep -q "$PROJ/manifest.config.yaml" <<<"$output"
+    grep -q "list containing maps or nested lists" <<<"$output"
 }
 
 @test "loader: a nested list is refused too, and nothing is exported" {
@@ -282,7 +282,7 @@ security:
 
     run load_yaml_to_env "$PROJ/manifest.config.yaml"
     [ "$status" -eq 2 ]
-    echo "$output" | grep -q "security.private_files"
+    grep -q "security.private_files" <<<"$output"
 }
 
 @test "loader: load_configuration propagates the refusal instead of loading defaults" {
@@ -292,7 +292,7 @@ security:
 '
     run load_configuration "$PROJ" "true"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "security.private_files"
+    grep -q "security.private_files" <<<"$output"
 }
 
 @test "loader: an UNMAPPED list of maps is not refused" {
@@ -322,7 +322,7 @@ git:
 
     run check_git_tracking "$PROJ"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "scan NOT performed"
+    grep -q "scan NOT performed" <<<"$output"
     # The exact failure mode this exists to prevent: a refusal that reads as a
     # clean repository. Nothing may claim the tracked file was checked and fine.
     refute grep -q "No private files" <<<"$output"
@@ -334,7 +334,7 @@ git:
 
     run check_git_tracking "$PROJ"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "scan NOT performed"
+    grep -q "scan NOT performed" <<<"$output"
 }
 
 @test "exported env: a single-line block-marker value makes the scan REFUSE" {
@@ -343,7 +343,7 @@ git:
 
     run check_git_tracking "$PROJ"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "scan NOT performed"
+    grep -q "scan NOT performed" <<<"$output"
 }
 
 @test "exported env: a legitimate comma value with whitespace is still accepted" {
@@ -359,7 +359,7 @@ git:
 
     run check_git_tracking "$PROJ"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "mysecret.txt is tracked by Git"
+    grep -q "mysecret.txt is tracked by Git" <<<"$output"
 }
 
 @test "exported env: the real process-env route reaches the refusal, outranking good YAML" {
@@ -385,8 +385,8 @@ git:
                  check_git_tracking "$MANIFEST_CLI_PROJECT_ROOT"
                  echo "rc=$?"' _ "$TEST_REPO_ROOT"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "rc=1"
-    echo "$output" | grep -q "scan NOT performed"
+    grep -q "rc=1" <<<"$output"
+    grep -q "scan NOT performed" <<<"$output"
 }
 
 # ---------------------------------------------------------------------------
@@ -399,7 +399,7 @@ git:
 
     run check_environment_file_security "$PROJ"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "scan NOT performed"
+    grep -q "scan NOT performed" <<<"$output"
 }
 
 @test "check_environment_file_security: a block-list config still flags an unignored private file" {
@@ -412,7 +412,7 @@ git:
 
     run check_environment_file_security "$PROJ"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "mysecret.txt exists but is NOT ignored by Git"
+    grep -q "mysecret.txt exists but is NOT ignored by Git" <<<"$output"
 }
 
 @test "positive control: check_environment_file_security passes when the file IS ignored" {
@@ -499,11 +499,11 @@ staged_default_list() {
 
     run staged_default_list "$dir" array
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q '^\.env\.staging$'
+    grep -q '^\.env\.staging$' <<<"$output"
 
     run staged_default_list "$dir" default
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q '^\.env\.staging$'
+    grep -q '^\.env\.staging$' <<<"$output"
 }
 
 @test "§6: adding a filename to the declared default list changes BOTH routes" {
@@ -527,14 +527,14 @@ staged_default_list() {
     # The array route must see it: proves the edit is live, not just present.
     run staged_default_list "$dir" array
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q '^\.env\.drift$'
+    grep -q '^\.env\.drift$' <<<"$output"
 
     # The empty-scalar route must see it too. THIS is the assertion that fails
     # on a duplicated list: the second copy is untouched by the edit above, so
     # the file the maintainer just declared private is not scanned here.
     run staged_default_list "$dir" default
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q '^\.env\.drift$'
+    grep -q '^\.env\.drift$' <<<"$output"
 }
 
 @test "§6: emptying the declared default list makes the empty-scalar route REFUSE, not report clean" {
@@ -561,7 +561,7 @@ staged_default_list() {
     run staged_default_list "$dir" default
     [ "$status" -eq 1 ]
     # Nothing may be emitted that a caller would read as a filename to scan.
-    [ -z "${output// /}" ] || echo "$output" | grep -qv '^\.'
+    [ -z "${output// /}" ] || grep -qv '^\.' <<<"$output"
 }
 
 # ===========================================================================
@@ -635,12 +635,12 @@ staged_default_list() {
 '
     run load_yaml_to_env "$PROJ/manifest.config.yaml"
     [ "$status" -eq 2 ]
-    echo "$output" | grep -q "list containing maps or nested lists"
+    grep -q "list containing maps or nested lists" <<<"$output"
 
     _load_yaml_to_env_batch() { return 1; }
     run load_yaml_to_env "$PROJ/manifest.config.yaml"
     [ "$status" -eq 2 ]
-    echo "$output" | grep -q "list containing maps or nested lists"
+    grep -q "list containing maps or nested lists" <<<"$output"
 }
 
 @test "sentinel: an exported nonce cannot reach the yq expression" {
@@ -665,6 +665,6 @@ staged_default_list() {
                  echo "rc=$?"
                  echo "value=[${MANIFEST_CLI_SECURITY_PRIVATE_ENV_FILES}]"' _ "$TEST_REPO_ROOT" "$PROJ/manifest.config.yaml"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q '^rc=0$'
-    echo "$output" | grep -qF 'value=[.env,mysecret.txt]'
+    grep -q '^rc=0$' <<<"$output"
+    grep -qF 'value=[.env,mysecret.txt]' <<<"$output"
 }

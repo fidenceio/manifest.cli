@@ -149,7 +149,7 @@ teardown() {
 @test "tag signing: unknown policy is rejected, never silently weakened" {
     MANIFEST_CLI_RELEASE_TAG_SIGNING="maybe" run manifest_release_tag_signing_policy
     [ "$status" -eq 2 ]
-    echo "$output" | grep -q "Invalid release_tag_signing"
+    grep -q "Invalid release_tag_signing" <<<"$output"
 }
 
 @test "tag signing: required FAILS CLOSED when no signing key is configured" {
@@ -157,7 +157,7 @@ teardown() {
     export MANIFEST_CLI_RELEASE_TAG_SIGNING="required"
     run create_tag "1.0.0"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "signing is required"
+    grep -q "signing is required" <<<"$output"
     # No tag was created.
     run git rev-parse v1.0.0
     [ "$status" -ne 0 ]
@@ -191,7 +191,7 @@ teardown() {
     export MANIFEST_CLI_RELEASE_TAG_SIGNING="required"   # required is satisfied: a key exists
     run create_tag "1.0.0"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Signing: SSH"
+    grep -q "Signing: SSH" <<<"$output"
     # Annotated tag object now exists.
     [ "$(git cat-file -t v1.0.0)" = "tag" ]
     # The tag object carries an SSH signature block.

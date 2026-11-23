@@ -89,7 +89,7 @@ EOF
 # download failed) instead of a silent grep miss.
 _assert_output_contains() {
     local needle="$1"
-    if ! printf '%s\n' "$output" | grep -q -- "$needle"; then
+    if ! grep -q -- "$needle" <<<"$output"; then
         echo "expected output to contain: ${needle}" >&2
         echo "----- bootstrap output -----" >&2
         printf '%s\n' "$output" >&2
@@ -137,7 +137,7 @@ EOF
     [ "$status" -ne 0 ]
     _assert_output_contains "No published checksum found for 1.0.0"
     # Fail-closed happens before the payload download and before execution.
-    if printf '%s\n' "$output" | grep -q "Downloading"; then
+    if grep -q "Downloading" <<<"$output"; then
         echo "tag-mismatch path must not download the payload; output was:" >&2
         printf '%s\n' "$output" >&2
         return 1

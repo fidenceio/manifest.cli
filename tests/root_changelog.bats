@@ -46,10 +46,10 @@ EOF
     run _manifest_build_changelog_entry "46.13.6" "2026-05-05 12:00:00 UTC" "patch" "$changes"
     [ "$status" -eq 0 ]
     grep -qE '^## \[46\.13\.6\] - 2026-05-05$' <<<"${output%%$'\n'*}"
-    echo "$output" | grep -q '^\*\*Release Type:\*\* Patch$'
-    echo "$output" | grep -q '^### Summary$'
-    echo "$output" | grep -q '^- Notable changes: 1$'
-    echo "$output" | grep -q '^### Documentation$'
+    grep -q '^\*\*Release Type:\*\* Patch$' <<<"$output"
+    grep -q '^### Summary$' <<<"$output"
+    grep -q '^- Notable changes: 1$' <<<"$output"
+    grep -q '^### Documentation$' <<<"$output"
     # No leftover scaffolding from analyze_changes header.
     refute grep -q '^## Highlights for v' <<<"$output"
 }
@@ -60,8 +60,8 @@ EOF
 
     run _manifest_build_changelog_entry "1.0.0" "2026-05-05 12:00:00 UTC" "minor" "$empty"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -qE '^## \[1\.0\.0\] - 2026-05-05$'
-    echo "$output" | grep -qx '^\*\*Release Type:\*\* Minor — no user-facing changes\.$'
+    grep -qE '^## \[1\.0\.0\] - 2026-05-05$' <<<"$output"
+    grep -qx '^\*\*Release Type:\*\* Minor — no user-facing changes\.$' <<<"$output"
     # No filler Summary section, no leftover narrative paragraph.
     refute grep -q '^### ' <<<"$output"
     refute grep -q "No notable user-facing changes were detected" <<<"$output"

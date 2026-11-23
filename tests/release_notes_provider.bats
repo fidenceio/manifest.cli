@@ -207,8 +207,8 @@ EOF
     run _manifest_release_notes_validate_output "$raw"
 
     [ "$status" -eq 0 ]
-    [ "$(echo "$output" | grep -c '^- ')" -eq 15 ]
-    echo "$output" | grep -q '^- Bullet number 15$'
+    [ "$(grep -c '^- ' <<<"$output")" -eq 15 ]
+    grep -q '^- Bullet number 15$' <<<"$output"
     refute grep -q '^- Bullet number 16$' <<<"$output"
 }
 
@@ -236,7 +236,7 @@ EOF
     run _manifest_release_notes_validate_output "$raw"
 
     [ "$status" -eq 0 ]
-    [ "$(echo "$output" | grep -c '^- ')" -eq 2 ]
+    [ "$(grep -c '^- ' <<<"$output")" -eq 2 ]
     refute grep -q "Hope that helps" <<<"$output"
     refute grep -q "Let me know" <<<"$output"
 }

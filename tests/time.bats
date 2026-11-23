@@ -230,7 +230,7 @@ EOF
     [ "$status" -eq 0 ]
     # All three default servers are tried once and reported as failed.
     local fails
-    fails=$(echo "$output" | grep -c "⚠️  Failed to query")
+    fails=$(grep -c "⚠️  Failed to query" <<<"$output")
     [ "$fails" -eq 3 ]
     [[ "$output" == *"🔄 No time servers responded, using system time"* ]]
     [[ "$output" == *"Method: system"* ]]

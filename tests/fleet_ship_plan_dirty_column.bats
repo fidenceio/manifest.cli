@@ -157,7 +157,7 @@ TSV
     run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
     [ "$status" -eq 0 ]
     # Header row must list "Dirty" between "Branch" and "Effect".
-    echo "$output" | grep -E "Service.*Branch.*Dirty.*Effect.*Decision.*Path" >/dev/null
+    grep -E "Service.*Branch.*Dirty.*Effect.*Decision.*Path" >/dev/null <<<"$output"
 }
 
 @test "fleet ship preview: clean member shows no dirty marker, dirty member shows 1m+1u" {
@@ -166,7 +166,7 @@ TSV
     run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
     [ "$status" -eq 0 ]
     # dirty-svc row must contain the 1m+1u marker.
-    echo "$output" | grep -E "dirty-svc[[:space:]].*1m\+1u" >/dev/null
+    grep -E "dirty-svc[[:space:]].*1m\+1u" >/dev/null <<<"$output"
     # clean-svc row must NOT contain any Nm+Nu marker.
     refute grep -E "clean-svc[[:space:]].*[0-9]+m\+[0-9]+u" >/dev/null <<<"$output"
 }
@@ -176,10 +176,10 @@ TSV
     cd "$SCRATCH/work"
     run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
     [ "$status" -eq 0 ]
-    echo "$output" | grep -E "clean-svc[[:space:]].*read[[:space:]]+skip[[:space:]].*no changes" >/dev/null
+    grep -E "clean-svc[[:space:]].*read[[:space:]]+skip[[:space:]].*no changes" >/dev/null <<<"$output"
     refute grep -E "clean-svc[[:space:]].*1\.2\.3->" >/dev/null <<<"$output"
-    echo "$output" | grep -E "dirty-svc[[:space:]].*4\.5\.6->4\.5\.7" >/dev/null
-    echo "$output" | grep -E "Plan summary: 1 releaseable, 0 pr-gated, 1 skipped" >/dev/null
+    grep -E "dirty-svc[[:space:]].*4\.5\.6->4\.5\.7" >/dev/null <<<"$output"
+    grep -E "Plan summary: 1 releaseable, 0 pr-gated, 1 skipped" >/dev/null <<<"$output"
 }
 
 @test "fleet ship preview: clean member with commits after current tag is releaseable" {
@@ -193,8 +193,8 @@ TSV
     cd "$SCRATCH/work"
     run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
     [ "$status" -eq 0 ]
-    echo "$output" | grep -E "clean-svc[[:space:]].*1\.2\.3->1\.2\.4" >/dev/null
-    echo "$output" | grep -E "Plan summary: 2 releaseable, 0 pr-gated, 0 skipped" >/dev/null
+    grep -E "clean-svc[[:space:]].*1\.2\.3->1\.2\.4" >/dev/null <<<"$output"
+    grep -E "Plan summary: 2 releaseable, 0 pr-gated, 0 skipped" >/dev/null <<<"$output"
 }
 
 @test "fleet ship preview: formula-only commit after current tag is skipped" {
@@ -207,9 +207,9 @@ TSV
     cd "$SCRATCH/work"
     run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
     [ "$status" -eq 0 ]
-    echo "$output" | grep -E "clean-svc[[:space:]].*read[[:space:]]+skip[[:space:]].*no changes" >/dev/null
+    grep -E "clean-svc[[:space:]].*read[[:space:]]+skip[[:space:]].*no changes" >/dev/null <<<"$output"
     refute grep -E "clean-svc[[:space:]].*1\.2\.3->" >/dev/null <<<"$output"
-    echo "$output" | grep -E "dirty-svc[[:space:]].*4\.5\.6->4\.5\.7" >/dev/null
+    grep -E "dirty-svc[[:space:]].*4\.5\.6->4\.5\.7" >/dev/null <<<"$output"
 }
 
 # --- Version column (current → next) ----------------------------------------
@@ -220,11 +220,11 @@ TSV
     run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
     [ "$status" -eq 0 ]
     # Header must list a Version column between Branch and Dirty.
-    echo "$output" | grep -E "Service.*Branch.*Version.*Dirty.*Effect" >/dev/null
+    grep -E "Service.*Branch.*Version.*Dirty.*Effect" >/dev/null <<<"$output"
     # Releaseable member with a VERSION renders current→next (e.g. 4.5.6→4.5.7).
-    echo "$output" | grep -E "dirty-svc[[:space:]].*4\.5\.6->" >/dev/null
+    grep -E "dirty-svc[[:space:]].*4\.5\.6->" >/dev/null <<<"$output"
     # Unchanged tagged members show the current version without a bump arrow.
-    echo "$output" | grep -E "clean-svc[[:space:]].*1\.2\.3[[:space:]].*no changes" >/dev/null
+    grep -E "clean-svc[[:space:]].*1\.2\.3[[:space:]].*no changes" >/dev/null <<<"$output"
 }
 
 @test "fleet ship preview: reports noncanonical surfaces for releaseable members" {
@@ -234,8 +234,8 @@ TSV
     cd "$SCRATCH/work"
     run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Version surfaces: 1 noncanonical detected across 1 releaseable repo"
-    echo "$output" | grep -q "version.sync"
+    grep -q "Version surfaces: 1 noncanonical detected across 1 releaseable repo" <<<"$output"
+    grep -q "version.sync" <<<"$output"
 }
 
 @test "fleet ship preview: release-disabled member without VERSION is not release-probed" {
@@ -268,7 +268,7 @@ TSV
     [ "$status" -eq 0 ]
     [[ "$output" != *"No such file or directory"* ]]
     [[ "$output" != *"1m+1u"* ]]
-    echo "$output" | grep -E "formula-only[[:space:]].*read[[:space:]]+skip[[:space:]].*release disabled" >/dev/null
+    grep -E "formula-only[[:space:]].*read[[:space:]]+skip[[:space:]].*release disabled" >/dev/null <<<"$output"
 }
 
 @test "fleet ship preview: release-disabled member package surfaces are not scanned" {
@@ -300,7 +300,7 @@ TSV
     [ "$status" -eq 0 ]
     [[ "$output" != *"Version surfaces:"* ]]
     [[ "$output" != *"package.json"* ]]
-    echo "$output" | grep -E "formula-only[[:space:]].*read[[:space:]]+skip[[:space:]].*release disabled" >/dev/null
+    grep -E "formula-only[[:space:]].*read[[:space:]]+skip[[:space:]].*release disabled" >/dev/null <<<"$output"
 }
 
 @test "fleet ship preview: release-disabled member is classified before missing path checks" {
@@ -328,7 +328,7 @@ TSV
 
     [ "$status" -eq 0 ]
     [[ "$output" != *"missing path"* ]]
-    echo "$output" | grep -E "formula-only[[:space:]].*read[[:space:]]+skip[[:space:]].*release disabled" >/dev/null
+    grep -E "formula-only[[:space:]].*read[[:space:]]+skip[[:space:]].*release disabled" >/dev/null <<<"$output"
 }
 
 # --- Branch column (actual current branch, not configured target) -----------
@@ -376,10 +376,10 @@ TSV
     run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
     [ "$status" -eq 0 ]
     # Member on main shows 'main' with no off-branch marker.
-    echo "$output" | grep -E "on-main[[:space:]].*[[:space:]]main[[:space:]]" >/dev/null
+    grep -E "on-main[[:space:]].*[[:space:]]main[[:space:]]" >/dev/null <<<"$output"
     # Member on feature/wip-123 shows the ACTUAL branch (truncated) with a '!'
     # marker — proving the column reflects the checkout, not the configured 'main'.
-    echo "$output" | grep -E "off-main[[:space:]].*feature/wi!" >/dev/null
+    grep -E "off-main[[:space:]].*feature/wi!" >/dev/null <<<"$output"
 }
 
 @test "fleet ship preview: off-release-branch member triggers the apply-refusal warning" {
@@ -387,8 +387,8 @@ TSV
     cd "$SCRATCH/work"
     run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship fleet patch --dry-run
     [ "$status" -eq 0 ]
-    echo "$output" | grep -F "have HEAD off their release branch" >/dev/null
-    echo "$output" | grep -F "Apply refuses these" >/dev/null
+    grep -F "have HEAD off their release branch" >/dev/null <<<"$output"
+    grep -F "Apply refuses these" >/dev/null <<<"$output"
 }
 
 # --- Apply-side regression guardrail ----------------------------------------

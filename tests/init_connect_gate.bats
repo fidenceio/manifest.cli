@@ -137,8 +137,8 @@ _gh_create_calls() {
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/work" run manifest_init_repo
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "connect phase:   ON"
-    echo "$output" | grep -q "private"
+    grep -q "connect phase:   ON" <<<"$output"
+    grep -q "private" <<<"$output"
 }
 
 @test "init repo --connect preview names the connect phase as ON and replays the default" {
@@ -146,9 +146,9 @@ _gh_create_calls() {
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/work" run manifest_init_repo --connect
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "connect phase:   ON"
+    grep -q "connect phase:   ON" <<<"$output"
     # The replay hint must round-trip the flag, or following it drops the phase.
-    echo "$output" | grep -q "manifest init repo -y"
+    grep -q "manifest init repo -y" <<<"$output"
 }
 
 @test "init repo --create-repo-private preview replays the flag, not a bare --connect" {
@@ -157,8 +157,8 @@ _gh_create_calls() {
 
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/work" run manifest_init_repo --create-repo-private
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "connect phase:   ON"
-    echo "$output" | grep -q "manifest init repo --create-repo-private -y"
+    grep -q "connect phase:   ON" <<<"$output"
+    grep -q "manifest init repo --create-repo-private -y" <<<"$output"
 }
 
 # -----------------------------------------------------------------------------

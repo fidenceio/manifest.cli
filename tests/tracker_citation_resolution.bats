@@ -91,7 +91,7 @@ resolvable_ids() { { _live_ids; _sub_ids; _retired_ids; } | sort -u; }
 # output of `refute foo` into grep — the negation applies to the wrong command
 # and the assertion silently always passes. Wrapping it makes `refute _has …`
 # mean what it reads as.
-_has() { printf '%s\n' "$1" | grep -Fxq "$2"; }
+_has() { grep -Fxq "$2" <<<"$1"; }
 
 # Foreign qualifiers, parsed from the declared table. The Citation cell is a
 # description (`workspace cross-cut §1.2`) while the code says `cross-cut
@@ -166,12 +166,12 @@ cited_lines() {
             # prefix — the miscount the tracker's own note warns about.
             [[ "$id" =~ ^§[0-9]+\.[0-9]+\.[0-9]+ ]] && continue
 
-            printf '%s\n' "$resolvable" | grep -Fxq "$id" && continue
+            grep -Fxq "$id" <<<"$resolvable" && continue
 
             # `§2(c)` resolves through its parent `§2`; likewise `§9.27(a)`.
             local base="${id%%(*}"
             if [ "$base" != "$id" ]; then
-                printf '%s\n' "$resolvable" | grep -Fxq "$base" && continue
+                grep -Fxq "$base" <<<"$resolvable" && continue
             fi
 
             unresolved+="  ${line%%:*}:${id}"$'\n'
@@ -273,5 +273,5 @@ _three_level_present() { resolvable_ids | grep -qE '^§[0-9]+\.[0-9]+\.[0-9]+'; 
     refute _three_level_present
 
     # Control: the pattern does match a three-level ID when given one.
-    printf '§2.7.2\n' | grep -qE '^§[0-9]+\.[0-9]+\.[0-9]+'
+    grep -qE '^§[0-9]+\.[0-9]+\.[0-9]+' <<<'§2.7.2'
 }

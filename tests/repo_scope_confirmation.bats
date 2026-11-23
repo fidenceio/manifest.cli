@@ -38,9 +38,9 @@ init_repo_fixture() {
     run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" status repo
 
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "repo scope requires running inside a Git repository"
-    echo "$output" | grep -q "Current directory: $SCRATCH"
-    echo "$output" | grep -q "manifest status repo"
+    grep -q "repo scope requires running inside a Git repository" <<<"$output"
+    grep -q "Current directory: $SCRATCH" <<<"$output"
+    grep -q "manifest status repo" <<<"$output"
 }
 
 @test "ship repo preview fails outside a git repository" {
@@ -49,9 +49,9 @@ init_repo_fixture() {
     run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" ship repo patch
 
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "repo scope requires running inside a Git repository"
-    echo "$output" | grep -q "Current directory: $SCRATCH"
-    echo "$output" | grep -q "manifest ship repo patch"
+    grep -q "repo scope requires running inside a Git repository" <<<"$output"
+    grep -q "Current directory: $SCRATCH" <<<"$output"
+    grep -q "manifest ship repo patch" <<<"$output"
 }
 
 @test "ship repo preview shows identity and does not prompt" {
@@ -60,10 +60,10 @@ init_repo_fixture() {
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_ship_repo patch < /dev/null
 
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Repo identity"
-    echo "$output" | grep -q "Current repo:.*example/repo"
-    echo "$output" | grep -q "Git root:.*$SCRATCH"
-    echo "$output" | grep -q "Mutation scope:.*this Git repository only"
+    grep -q "Repo identity" <<<"$output"
+    grep -q "Current repo:.*example/repo" <<<"$output"
+    grep -q "Git root:.*$SCRATCH" <<<"$output"
+    grep -q "Mutation scope:.*this Git repository only" <<<"$output"
     refute grep -q "Apply to this repository" <<<"$output"
     refute grep -q "Apply target repository" <<<"$output"
 }
@@ -84,8 +84,8 @@ init_repo_fixture() {
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_repo_scope_confirm_apply "$SCRATCH" "manifest ship repo patch -y" < /dev/null
 
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Apply target repository"
-    echo "$output" | grep -q "Auto-confirmed unambiguous target (apply via -y)"
+    grep -q "Apply target repository" <<<"$output"
+    grep -q "Auto-confirmed unambiguous target (apply via -y)" <<<"$output"
     refute grep -q "Repo confirmation requires an interactive terminal" <<<"$output"
 }
 
@@ -96,9 +96,9 @@ init_repo_fixture() {
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_repo_scope_confirm_apply "$SCRATCH" "manifest ship repo patch -y" < /dev/null
 
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Apply target repository"
-    echo "$output" | grep -q "Ambiguous apply target"
-    echo "$output" | grep -Fq "$SCRATCH"
+    grep -q "Apply target repository" <<<"$output"
+    grep -q "Ambiguous apply target" <<<"$output"
+    grep -Fq "$SCRATCH" <<<"$output"
 }
 
 @test "gate: detached HEAD refuses as ambiguous" {
@@ -110,7 +110,7 @@ init_repo_fixture() {
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_repo_scope_confirm_apply "$SCRATCH" "manifest ship repo patch -y" < /dev/null
 
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Ambiguous apply target"
+    grep -q "Ambiguous apply target" <<<"$output"
 }
 
 @test "gate: AUTO_CONFIRM=1 still proceeds even when target is ambiguous" {
@@ -121,7 +121,7 @@ init_repo_fixture() {
         run manifest_repo_scope_confirm_apply "$SCRATCH" "manifest ship repo patch -y" < /dev/null
 
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Auto-confirmed repository target (MANIFEST_CLI_AUTO_CONFIRM=1)"
+    grep -q "Auto-confirmed repository target (MANIFEST_CLI_AUTO_CONFIRM=1)" <<<"$output"
 }
 
 @test "gate: no origin + origin_required=false proceeds (onboarding case)" {
@@ -131,7 +131,7 @@ init_repo_fixture() {
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_repo_scope_confirm_apply "$SCRATCH" "manifest init -y" "false" < /dev/null
 
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Auto-confirmed unambiguous target (apply via -y)"
+    grep -q "Auto-confirmed unambiguous target (apply via -y)" <<<"$output"
 }
 
 # --- the gate judges its target, not the directory it is standing in ---------
@@ -150,8 +150,8 @@ init_repo_fixture() {
 
     rm -rf "$outsider"
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "repo scope requires a Git repository at the requested target"
-    echo "$output" | grep -Fq "Target directory: $outsider"
+    grep -q "repo scope requires a Git repository at the requested target" <<<"$output"
+    grep -Fq "Target directory: $outsider" <<<"$output"
     # The ambient repo must not have stood in for the target.
     refute grep -q "Auto-confirmed" <<<"$output"
 }
@@ -168,7 +168,7 @@ init_repo_fixture() {
     cd "$SCRATCH"
     rm -rf "$elsewhere"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Auto-confirmed unambiguous target (apply via -y)"
+    grep -q "Auto-confirmed unambiguous target (apply via -y)" <<<"$output"
 }
 
 @test "target_unambiguous: named branch + origin is unambiguous (origin required)" {
@@ -202,8 +202,8 @@ init_repo_fixture() {
     MANIFEST_CLI_AUTO_CONFIRM=1 MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_ship_repo patch -y
 
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Git index lock already exists"
-    echo "$output" | grep -q "refusing to mutate files before Git can commit"
+    grep -q "Git index lock already exists" <<<"$output"
+    grep -q "refusing to mutate files before Git can commit" <<<"$output"
     [ "$(cat "$SCRATCH/VERSION")" = "1.2.3" ]
 }
 
@@ -223,7 +223,7 @@ init_repo_fixture() {
     chmod u+w "$SCRATCH/.git"
 
     [ "$rc" -ne 0 ]
-    echo "$out" | grep -q "Git metadata is not writable"
-    echo "$out" | grep -q "refusing to mutate files before Git can commit"
+    grep -q "Git metadata is not writable" <<<"$out"
+    grep -q "refusing to mutate files before Git can commit" <<<"$out"
     [ "$(cat "$SCRATCH/VERSION")" = "1.2.3" ]
 }

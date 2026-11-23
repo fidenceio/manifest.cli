@@ -138,7 +138,7 @@ TOML
     export MANIFEST_CLI_VERSION_SYNC="package.toml"
     run bump_version "patch"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "no top-level"
+    grep -q "no top-level" <<<"$output"
     [ "$(cat package.toml)" = $'[project]\nversion = "1.0.0"' ]
 }
 
@@ -168,7 +168,7 @@ YAML
     export MANIFEST_CLI_VERSION_SYNC="package.yml"
     run bump_version "patch"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "no top-level"
+    grep -q "no top-level" <<<"$output"
     [ "$(cat package.yml)" = $'package:\n  version: 1.0.0' ]
 }
 
@@ -189,7 +189,7 @@ YAML
     export MANIFEST_CLI_VERSION_SYNC="package.txt"
     run bump_version "patch"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "type not supported"
+    grep -q "type not supported" <<<"$output"
     [ "$(cat package.txt)" = 'version = "1.0.0"' ]
 }
 
@@ -264,7 +264,7 @@ JSON
     export MANIFEST_CLI_VERSION_SYNC="package.json"
     run bump_version "patch"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "no top-level"
+    grep -q "no top-level" <<<"$output"
     [ "$(jq -r '.bundledDep.version' package.json)" = "9.9.9" ]
 }
 
@@ -304,7 +304,7 @@ JSON
     export MANIFEST_CLI_VERSION_SYNC="package.json"
     run manifest_version_sync_apply '20.1'
     [ "$status" -ne 0 ]
-    echo "$output" | grep -qi "unsafe"
+    grep -qi "unsafe" <<<"$output"
     [ "$(jq -r '.version' package.json)" = "1.0.0" ]
 }
 
@@ -318,6 +318,6 @@ JSON
     # A "/" in the value would corrupt the sed substitution; the guard refuses it.
     run manifest_version_sync_apply 'a/b&c'
     [ "$status" -ne 0 ]
-    echo "$output" | grep -qi "unsafe"
+    grep -qi "unsafe" <<<"$output"
     [ "$(jq -r '.version' package.json)" = "1.0.0" ]
 }

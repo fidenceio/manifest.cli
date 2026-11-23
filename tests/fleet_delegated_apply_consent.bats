@@ -173,7 +173,7 @@ YAML
         run manifest_repo_scope_confirm_apply "$repo" "manifest ship -y" "false" < /dev/null
 
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Auto-confirmed repository target (delegated by fleet -y)"
+    grep -q "Auto-confirmed repository target (delegated by fleet -y)" <<<"$output"
     refute grep -q "Ambiguous apply target" <<<"$output"
 }
 
@@ -190,7 +190,7 @@ YAML
         run manifest_repo_scope_confirm_apply "$repo" "manifest ship -y" "false" < /dev/null
 
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Ambiguous apply target"
+    grep -q "Ambiguous apply target" <<<"$output"
 }
 
 # -----------------------------------------------------------------------------
@@ -223,7 +223,7 @@ YAML
     run manifest_repo_scope_confirm_apply "$repo" "manifest ship -y" "false" < /dev/null
 
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Ambiguous apply target"
+    grep -q "Ambiguous apply target" <<<"$output"
     refute grep -q "Auto-confirmed repository target" <<<"$output"
 }
 
@@ -242,7 +242,7 @@ YAML
     [ "$status" -eq 0 ]
     # The two origins are reported distinctly: a fleet member's log must not
     # name an environment variable the operator never set in their shell.
-    echo "$output" | grep -q "Auto-confirmed repository target (MANIFEST_CLI_AUTO_CONFIRM=1)"
+    grep -q "Auto-confirmed repository target (MANIFEST_CLI_AUTO_CONFIRM=1)" <<<"$output"
     refute grep -q "delegated by fleet" <<<"$output"
 }
 
@@ -254,7 +254,7 @@ YAML
         run manifest_repo_scope_confirm_apply "$repo" "manifest ship -y" "false" < /dev/null
 
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Ambiguous apply target"
+    grep -q "Ambiguous apply target" <<<"$output"
 }
 
 # -----------------------------------------------------------------------------

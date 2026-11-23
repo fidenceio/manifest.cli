@@ -99,14 +99,14 @@ _write_manifest() {
     run manifest_install_paths_plugin_data_dirs
     [ "${#lines[@]}" -eq 2 ]
     # find | sort orders by path, so workflow comes after cloud alphabetically
-    echo "$output" | grep -qx "$HOME/.a"
-    echo "$output" | grep -qx "$HOME/.b"
+    grep -qx "$HOME/.a" <<<"$output"
+    grep -qx "$HOME/.b" <<<"$output"
 }
 
 @test "data_dirs() includes plugin-declared dirs" {
     _write_manifest "cloud/agent.data-dirs" '$HOME/.manifest-agent'
     run manifest_install_paths_data_dirs
-    echo "$output" | grep -qx "$HOME/.manifest-agent"
+    grep -qx "$HOME/.manifest-agent" <<<"$output"
 }
 
 @test "data_dirs() no longer hardcodes ~/.manifest-agent when no plugin declares it" {

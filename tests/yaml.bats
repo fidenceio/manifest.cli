@@ -27,7 +27,7 @@ EOF
 
     PATH="$SCRATCH/bin:$PATH" run detect_yaml_parser
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "$MANIFEST_CLI_REQUIRED_YQ_LABEL"
+    grep -q "$MANIFEST_CLI_REQUIRED_YQ_LABEL" <<<"$output"
 }
 
 @test "requirements: yq version text requires Mike Farah vendor and minimum major" {
@@ -423,10 +423,10 @@ YAML
 @test "yaml: write_full_yaml requires an output path and an existing parent dir" {
     run write_full_yaml ""
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "output file path is required"
+    grep -q "output file path is required" <<<"$output"
 
     run write_full_yaml "$SCRATCH/missing-dir/out.yaml"
     [ "$status" -eq 1 ]
-    echo "$output" | grep -q "parent directory does not exist"
+    grep -q "parent directory does not exist" <<<"$output"
     [ ! -e "$SCRATCH/missing-dir" ]
 }

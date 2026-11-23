@@ -44,9 +44,9 @@ ready_repo() {
     mkdir -p "$SCRATCH/plain"
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/plain" run _manifest_init_guided
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "no git repo or child repos found"
-    echo "$output" | grep -q "would create: .git/"
-    echo "$output" | grep -q "Re-run with -y"
+    grep -q "no git repo or child repos found" <<<"$output"
+    grep -q "would create: .git/" <<<"$output"
+    grep -q "Re-run with -y" <<<"$output"
     [ -z "$(ls -A "$SCRATCH/plain")" ]
 }
 
@@ -54,11 +54,11 @@ ready_repo() {
     mkrepo "$SCRATCH/repo"
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run _manifest_init_guided
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "single repo (not yet initialized)"
-    echo "$output" | grep -q "Dry run — manifest init repo:"
-    echo "$output" | grep -q "would create:.*VERSION"
-    echo "$output" | grep -q "No changes written. Re-run with -y to apply this plan:"
-    echo "$output" | grep -q "manifest init repo -y"
+    grep -q "single repo (not yet initialized)" <<<"$output"
+    grep -q "Dry run — manifest init repo:" <<<"$output"
+    grep -q "would create:.*VERSION" <<<"$output"
+    grep -q "No changes written. Re-run with -y to apply this plan:" <<<"$output"
+    grep -q "manifest init repo -y" <<<"$output"
     [ ! -f "$SCRATCH/repo/VERSION" ]
     [ ! -f "$SCRATCH/repo/manifest.config.local.yaml" ]
 }
@@ -68,10 +68,10 @@ ready_repo() {
     echo "1.2.3" > "$SCRATCH/repo/VERSION"
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run _manifest_init_guided
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "single repo (not yet initialized)"
-    echo "$output" | grep -q "Version:"
-    echo "$output" | grep -q "1.2.3"
-    echo "$output" | grep -q "would create:.*README.md"
+    grep -q "single repo (not yet initialized)" <<<"$output"
+    grep -q "Version:" <<<"$output"
+    grep -q "1.2.3" <<<"$output"
+    grep -q "would create:.*README.md" <<<"$output"
 }
 
 @test "init guided: fleet candidate previews the two-step plan and writes nothing" {
@@ -80,16 +80,16 @@ ready_repo() {
     mkrepo "$SCRATCH/ws/beta"
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/ws" run _manifest_init_guided
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "fleet candidate"
-    echo "$output" | grep -q "Set up a fleet across 2 discovered repo"
+    grep -q "fleet candidate" <<<"$output"
+    grep -q "Set up a fleet across 2 discovered repo" <<<"$output"
     # The two-step loop must be self-explanatory in the preview.
-    echo "$output" | grep -q "Step 1"
-    echo "$output" | grep -q "manifest.fleet.tsv"
-    echo "$output" | grep -q "Step 2"
-    echo "$output" | grep -q "manifest init fleet -y"
-    echo "$output" | grep -q "Fleet name:"
-    echo "$output" | grep -q "Scan depth:"
-    echo "$output" | grep -q "Re-run with -y"
+    grep -q "Step 1" <<<"$output"
+    grep -q "manifest.fleet.tsv" <<<"$output"
+    grep -q "Step 2" <<<"$output"
+    grep -q "manifest init fleet -y" <<<"$output"
+    grep -q "Fleet name:" <<<"$output"
+    grep -q "Scan depth:" <<<"$output"
+    grep -q "Re-run with -y" <<<"$output"
     [ ! -f "$SCRATCH/ws/manifest.fleet.config.yaml" ]
     [ ! -f "$SCRATCH/ws/manifest.fleet.tsv" ]
 }
@@ -107,13 +107,13 @@ ready_repo() {
     # Preview names the next command.
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/ws" run _manifest_init_guided
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "manifest init fleet -y"
+    grep -q "manifest init fleet -y" <<<"$output"
 
     # Apply does NOT proceed to Phase 2 — no config, no member scaffolding.
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/ws" run _manifest_init_guided -y
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "ready for review"
-    echo "$output" | grep -q "manifest init fleet -y"
+    grep -q "ready for review" <<<"$output"
+    grep -q "manifest init fleet -y" <<<"$output"
     [ ! -f "$SCRATCH/ws/manifest.fleet.config.yaml" ]
     [ ! -f "$SCRATCH/ws/alpha/VERSION" ]
 }
@@ -124,8 +124,8 @@ ready_repo() {
     mkdir -p "$SCRATCH/plain"
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/plain" run _manifest_init_guided --help
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "manifest init"
-    echo "$output" | grep -q "Guided onboarding"
+    grep -q "manifest init" <<<"$output"
+    grep -q "Guided onboarding" <<<"$output"
     [ -z "$(ls -A "$SCRATCH/plain")" ]
 }
 
@@ -133,7 +133,7 @@ ready_repo() {
     mkrepo "$SCRATCH/repo"
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run _manifest_init_guided --dry-run -y
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Cannot combine --dry-run with -y"
+    grep -q "Cannot combine --dry-run with -y" <<<"$output"
     [ ! -f "$SCRATCH/repo/VERSION" ]
 }
 
@@ -146,7 +146,7 @@ ready_repo() {
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run _manifest_init_guided -y
     echo "$output"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Repository prepared for ship"
+    grep -q "Repository prepared for ship" <<<"$output"
     [ -f "$SCRATCH/repo/manifest.config.local.yaml" ]
     [ -f "$SCRATCH/repo/README.md" ]
 }
@@ -162,7 +162,7 @@ ready_repo() {
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run _manifest_init_guided -y
     echo "$output"
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "Auto-confirmed unambiguous target (apply via -y)"
+    grep -q "Auto-confirmed unambiguous target (apply via -y)" <<<"$output"
     [ -f "$SCRATCH/repo/VERSION" ]
     [ -f "$SCRATCH/repo/manifest.config.local.yaml" ]
 }
@@ -196,7 +196,7 @@ ready_repo() {
     git -C "$SCRATCH/repo" checkout -q --detach HEAD
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run _manifest_init_guided -y
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "detached HEAD"
+    grep -q "detached HEAD" <<<"$output"
     [ ! -f "$SCRATCH/repo/VERSION" ]
     [ ! -f "$SCRATCH/repo/manifest.config.local.yaml" ]
 }
@@ -207,37 +207,37 @@ ready_repo() {
     mkrepo "$SCRATCH/repo"
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run _manifest_init_guided --bogus
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q "Unknown option: --bogus"
-    echo "$output" | grep -q "Usage: manifest init"
+    grep -q "Unknown option: --bogus" <<<"$output"
+    grep -q "Usage: manifest init" <<<"$output"
 }
 
 @test "init guided: --name with a missing value errors" {
     mkrepo "$SCRATCH/repo"
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run _manifest_init_guided --name
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q -- "--name requires a value"
+    grep -q -- "--name requires a value" <<<"$output"
 }
 
 @test "init guided: --name followed by a flag errors (consumes no flag)" {
     mkrepo "$SCRATCH/repo"
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run _manifest_init_guided --name --force
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q -- "--name requires a value"
+    grep -q -- "--name requires a value" <<<"$output"
 }
 
 @test "init guided: --depth with a missing value errors" {
     mkrepo "$SCRATCH/repo"
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/repo" run _manifest_init_guided --depth
     [ "$status" -ne 0 ]
-    echo "$output" | grep -q -- "--depth requires a value"
+    grep -q -- "--depth requires a value" <<<"$output"
 }
 
 @test "init guided: --help usage line lists --force and no short spelling" {
     mkdir -p "$SCRATCH/plain"
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH/plain" run _manifest_init_guided --help
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q -- "\[--force\]"
-    ! echo "$output" | grep -q -- "-f|--force"
+    grep -q -- "\[--force\]" <<<"$output"
+    ! grep -q -- "-f|--force" <<<"$output"
 }
 
 # --- read-only config guard (the mechanism `manifest init` relies on) --------
@@ -273,10 +273,10 @@ ready_repo() {
     cd "$SCRATCH/ws"
     run "$TEST_REPO_ROOT/scripts/manifest-cli.sh" init
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q "fleet candidate"
-    echo "$output" | grep -q "Set up a fleet across 2 discovered repo"
-    echo "$output" | grep -q "manifest init -y"
-    echo "$output" | grep -q "manifest init fleet -y"
+    grep -q "fleet candidate" <<<"$output"
+    grep -q "Set up a fleet across 2 discovered repo" <<<"$output"
+    grep -q "manifest init -y" <<<"$output"
+    grep -q "manifest init fleet -y" <<<"$output"
     # Read-only: nothing written, no state dir created during inspection.
     [ ! -f "$SCRATCH/ws/manifest.fleet.tsv" ]
     [ ! -d "$HOME/.manifest-cli" ]
@@ -334,7 +334,7 @@ ready_repo() {
 
     # No commit: scaffolded files land untracked (parity with init repo).
     run git -C "$SCRATCH/ws/alpha" status --porcelain
-    echo "$output" | grep -q "VERSION"
+    grep -q "VERSION" <<<"$output"
 
     # beta (deselected) was not touched.
     [ ! -f "$SCRATCH/ws/beta/VERSION" ]
@@ -417,5 +417,5 @@ ready_repo() {
 
     # Backfill writes but never commits.
     run git -C "$SCRATCH/ws/beta" status --porcelain
-    echo "$output" | grep -q "VERSION"
+    grep -q "VERSION" <<<"$output"
 }

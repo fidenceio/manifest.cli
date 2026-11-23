@@ -71,15 +71,15 @@ teardown() {
     # Single line of JSON.
     [ "$(echo "$output" | wc -l | tr -d ' ')" = "1" ]
     # Top-level keys present.
-    echo "$output" | grep -q '"repository":{'
-    echo "$output" | grep -q '"branch":{'
-    echo "$output" | grep -q '"version":'
-    echo "$output" | grep -q '"fleet":{'
-    echo "$output" | grep -q '"config":{'
-    echo "$output" | grep -q '"version_surfaces":{'
+    grep -q '"repository":{' <<<"$output"
+    grep -q '"branch":{' <<<"$output"
+    grep -q '"version":' <<<"$output"
+    grep -q '"fleet":{' <<<"$output"
+    grep -q '"config":{' <<<"$output"
+    grep -q '"version_surfaces":{' <<<"$output"
     # Non-git directory -> in_git false, no version.
-    echo "$output" | grep -q '"in_git":false'
-    echo "$output" | grep -q '"version":null'
+    grep -q '"in_git":false' <<<"$output"
+    grep -q '"version":null' <<<"$output"
 }
 
 @test "status --json: config object always carries the inherited fleet layers" {
@@ -90,8 +90,8 @@ teardown() {
     [ "$status" -eq 0 ]
     # Emitted unconditionally so consumers see a stable shape; outside a fleet
     # the paths are empty and present is false.
-    echo "$output" | grep -q '"fleet":{"path":"","present":false}'
-    echo "$output" | grep -q '"fleet_local":{"path":"","present":false}'
+    grep -q '"fleet":{"path":"","present":false}' <<<"$output"
+    grep -q '"fleet_local":{"path":"","present":false}' <<<"$output"
     echo "$output" | yq e '.' - >/dev/null
 }
 
@@ -105,8 +105,8 @@ teardown() {
 
     run manifest_status --json
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q '"fleet_local":{"path":"[^"]*manifest.config.local.yaml","present":true}'
-    echo "$output" | grep -q '"fleet":{"path":"[^"]*manifest.config.yaml","present":false}'
+    grep -q '"fleet_local":{"path":"[^"]*manifest.config.local.yaml","present":true}' <<<"$output"
+    grep -q '"fleet":{"path":"[^"]*manifest.config.yaml","present":false}' <<<"$output"
     [ "$(echo "$output" | wc -l | tr -d ' ')" = "1" ]
     echo "$output" | yq e '.' - >/dev/null
 }
@@ -161,14 +161,14 @@ YAML
     echo "3.7.1" > VERSION
     run manifest_status --json
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q '"current":"3.7.1"'
+    grep -q '"current":"3.7.1"' <<<"$output"
     # Bump previews are still strings (semver pieces — not numbers), so quoted.
-    echo "$output" | grep -q '"next_patch":"3.7.2"'
-    echo "$output" | grep -q '"next_minor":"3.8.0"'
-    echo "$output" | grep -q '"next_major":"4.0.0"'
+    grep -q '"next_patch":"3.7.2"' <<<"$output"
+    grep -q '"next_minor":"3.8.0"' <<<"$output"
+    grep -q '"next_major":"4.0.0"' <<<"$output"
     # Numeric counters are bare numbers.
-    echo "$output" | grep -qE '"ahead":[0-9]+'
-    echo "$output" | grep -qE '"modified":[0-9]+'
+    grep -qE '"ahead":[0-9]+' <<<"$output"
+    grep -qE '"modified":[0-9]+' <<<"$output"
 }
 
 @test "status --json: validates as JSON via yq" {
@@ -213,10 +213,10 @@ project:
 EOF
     MANIFEST_CLI_PROJECT_ROOT="$SCRATCH" run manifest_config_list --layer project --json
     [ "$status" -eq 0 ]
-    echo "$output" | grep -q '"key":"git.default_branch"'
-    echo "$output" | grep -q '"key":"project.name"'
-    echo "$output" | grep -q '"value":"main"'
-    echo "$output" | grep -q '"value":"demo"'
+    grep -q '"key":"git.default_branch"' <<<"$output"
+    grep -q '"key":"project.name"' <<<"$output"
+    grep -q '"value":"main"' <<<"$output"
+    grep -q '"value":"demo"' <<<"$output"
     # Single-line JSON array.
     [ "$(echo "$output" | wc -l | tr -d ' ')" = "1" ]
     echo "$output" | yq e '.' - >/dev/null
