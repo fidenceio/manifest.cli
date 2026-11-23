@@ -27,7 +27,9 @@ The main workflow uses a verb, a scope, and an optional action:
 ```text
 manifest
 ├── init [repo|fleet]                          guided or explicit setup; --connect on explicit scopes
+│   └── repo --check                           read-only env check, for CI
 ├── status repo|fleet                           inspect current state
+│   └── repo --env [--json]                    the repository's environment variables
 ├── ship
 │   ├── repo patch|minor|major|revision         release one repo, or finish its unfinished release
 │   ├── fleet patch|minor|major|revision        release members, then ship the manager
@@ -39,7 +41,6 @@ manifest
 ├── pr create|status|checks|ready|merge|update   manage a pull request
 ├── pr fleet                                   manage fleet pull requests
 ├── config show|setup|list|get|set|unset|describe|doctor|time
-├── env generate|validate|export
 ├── revert
 │   ├── repo [<tag>]                           preview or apply a local tag checkout
 │   └── fleet [<snapshot>]                     restore manager and recorded member commits
@@ -173,7 +174,7 @@ For the full layer model, see [User Guide — Configuration](USER_GUIDE.md#confi
 ### `manifest init repo|fleet`
 
 ```bash
-manifest init repo [--dry-run] [-y|--yes] [--force] [--remote URL] [--no-connect] [--create-repo-private|--create-repo-public]
+manifest init repo [--dry-run] [-y|--yes] [--check] [--force] [--remote URL] [--no-connect] [--create-repo-private|--create-repo-public]
 manifest init fleet [--dry-run] [-y|--yes] [--depth N|auto] [--all-folders] [--name NAME] [--force]
                     [--connect|--no-connect] [--parallel] [--clone-only] [--pull-only]
                     [--create-repo-private|--create-repo-public]
@@ -208,8 +209,15 @@ Manifest says so. `--force` recreates the local config and keeps your project co
 
 **The files `init repo` creates.** These are the files a Manifest project needs:
 `VERSION`, `README.md`, `CHANGELOG.md`, `.gitignore`, `docs/`, `scripts/run-tests.sh`,
-`.env.example`, `robots.txt`, `ai.txt`, and `manifest.config.local.yaml`. Each one is
-written only if it is absent. `--dry-run` lists them with a one-line purpose for each.
+`.env.example`, `robots.txt`, `ai.txt`, and `manifest.config.local.yaml`, plus
+`service.spec.yaml` when the repository has no spec. Each one is written only if it is
+absent, with one exception: `.env.example` is generated from the spec, so `init repo -y`
+brings a `.env.example` that Manifest wrote up to date with it. See
+[Environment variables](#environment-variables). `--dry-run` lists every file with a
+one-line purpose.
+
+`init repo --check` changes nothing and makes no network call. It is the env check for
+CI, described below.
 The [User Guide](USER_GUIDE.md#first-time-setup) has the same table in full, and
 explains why the two crawl-privacy files (`robots.txt` and `ai.txt`) are there.
 
@@ -573,12 +581,12 @@ The documentation website is **on by default**: `manifest docs -y` and every rel
 write its source into the `docs-site` folder. To turn it off, set `docs.generate.site`
 to `false`. See [DOCS_SITE.md](DOCS_SITE.md) for the other keys.
 
-## Env Schema
+## Environment variables
 
 ```bash
-manifest env generate [--check] [--dry-run] [-y|--yes]
-manifest env validate
-manifest env export [--format json]
+manifest init repo [-y]              # create the spec if needed, write .env.example
+manifest init repo --check           # read-only, for CI
+manifest status repo --env [--json]  # the variables, for a reader or for a tool
 ```
 
 A component spec is the file `service.spec.yaml` or `app.spec.yaml` at the root of a
@@ -587,52 +595,92 @@ environment variables: their names, descriptions and defaults, and whether each 
 required, secret or needed at build time.
 
 Manifest keeps that list in one place and checks it. It does not decide how the
-variables reach a running workload. It writes no deployment file, and it names no
-secret store.
+variables reach a build or a running workload. It writes no deployment file, edits no
+`Dockerfile`, and names no secret store.
 
-### `env generate`
+### What `init repo` does with the spec
 
-`env generate` builds two things from the `env:` block:
+- **No spec:** it creates `service.spec.yaml`. The file holds a comment that lists the
+  fields of an entry, and an `env:` block with two starter variables: a log level, and
+  the service's identity (the origin repository's name). Manifest reads no other key of
+  a spec.
+- **A spec with no `env:` key:** it adds the same two starter variables.
+- **`env: []`:** it leaves the spec alone. An empty list says the repository has no
+  variables, and `.env.example` gets a starter file.
+- **A spec that is not valid YAML:** it stops, and changes neither file.
 
-- `.env.example` — always. A variable that is not a secret carries its default. A
-  secret is commented out and has no value.
-- the Dockerfile `ARG`→`ENV` marker block, for variables marked `public: true`. It is
-  written only when a `Dockerfile` exists.
-
-`env generate` plans by default, and `-y` writes. `--check` is for use in a release or
-in CI. It exits `1` if either output is out of date.
+Then it writes `.env.example` from the list. A variable that is not a secret carries its
+default. A secret is commented out and has no value.
 
 **A flag is a boolean.** An entry's `secret`, `required` and `public` take `true` or
 `false`. You may write `true`, `True` or `TRUE`, and `false` in the same three ways.
 The quoted strings `"true"` and `"false"` are accepted too. A flag that is left out is
 `false`. Any other value (`yes`, `on`, `1`) is refused and named; Manifest does not
-guess. In that case `env generate` exits `1` and writes nothing, `env validate` fails,
-`env export` prints nothing, and `manifest init` does not write `.env.example`.
+guess. In that case `init repo` does not write `.env.example`, `init repo --check`
+fails, and `status repo --env` prints nothing.
 
-**`env generate` replaces only the file it wrote.** The `.env.example` it generates
+**`init repo -y` replaces only the `.env.example` it wrote.** The file it generates
 starts with a Manifest header line. If an existing `.env.example` starts with any other
-line, Manifest treats the file as yours:
+line, Manifest treats the file as yours. So does the starter an earlier `init` wrote
+(comments only) once you have added a line of your own below its comments. For a file
+that is yours:
 
-- the plan names it as *hand-authored, left untouched*;
+- the plan names it as *hand-authored — preserved*;
 - `-y` does not write it;
 - `--check` does not count it as out of date.
 
 Delete the file if you want Manifest to generate it. An empty file is replaced.
 
-A file that is written keeps the permissions it had. This includes the Dockerfile. If
-`.env.example` cannot be read as a file (a directory, a file you cannot read, a symlink
-that points to nothing), the plan names it, and `--check` and `-y` exit `1`. A write
-that fails also exits `1`.
+**`init` writes the spec only where it is safe to.** It creates `service.spec.yaml`
+only when no spec exists, and adds the starter `env:` block only to a spec with no
+`env:` key. The block is normally appended as text, so the rest of the file keeps its
+formatting. When the file's shape needs it (an `env:` key with no value, a flow-style
+map), `yq` rewrites the whole file instead, which can change spacing and comments.
 
-### `env validate`
+`init` leaves the spec alone and warns when the spec has no `env:` key and is shared
+(a symlink or a hard link) or is a file you cannot write. (Root can write a read-only
+file, so as root such a spec is given the starter block.) It then writes the starter `.env.example`
+(comments only; one that already exists is kept) and goes on. Add the list to the spec
+yourself. `init repo --check` passes such a repository and tells you the same.
 
-`env validate` only reads. It checks the prefix policy, whether the two generated
-outputs are out of date, and whether `.env` value files are ignored by Git.
+`init repo -y` stops and `init repo --check` fails when any of the following is true.
+Neither writes the spec or `.env.example`. By the time `-y` stops it has already
+written the other files the repository was missing, such as `VERSION`, `README.md`
+and `.gitignore`.
 
-### `env export`
+- the spec cannot be parsed, holds more than one YAML document, or has a list or a
+  single value at its top level;
+- its `env:` is not a list;
+- `service.spec.yaml` is a dangling symlink, a directory or unreadable.
 
-`env export` prints the `env:` block as JSON on standard output. It writes no file. It
-is for a tool of your own that renders deployment files from the same list.
+`init repo` and `init repo --check` work on the folder they run in. So does
+`status repo --env`. None of them moves to the repository root.
+
+A file that is written keeps the permissions it had. If `.env.example` cannot be read as
+a file (a directory, a file you cannot read, a symlink that points to nothing), the plan
+names it, and `--check` and `-y` exit `1`. A write that fails also exits `1`.
+
+### `init repo --check`
+
+`init repo --check` only reads, and it makes no network call even when the repository
+has no `origin`. It cannot be combined with `-y`, `--force`, `--connect`, `--remote` or
+`--create-repo-*`. It checks three things and exits `1` if any fails:
+
+- the prefix policy, described below;
+- whether `.env.example` is up to date with the spec;
+- whether `.env` files that hold values are ignored by Git.
+
+A repository with no spec passes, and the output says that `init repo -y` creates one.
+
+### `status repo --env`
+
+`status repo --env` lists the variables, one line each: its name, whether it is
+required, secret or needed at build time, and its default. A secret's default is never
+shown.
+
+With `--json` it prints the `env:` block as a JSON document on standard output. It
+writes no file. It is for a tool of your own that renders deployment files from the
+same list.
 
 ```json
 {
@@ -659,7 +707,7 @@ is for a tool of your own that renders deployment files from the same list.
 | `identity` | The name of the origin repository. When the repository has no `origin` remote, or its URL does not end in a plain name, the name of its folder |
 | `env` | One object for each variable, in the order the spec lists them |
 | `name`, `description` | Strings. `description` is `""` when the spec sets none |
-| `required`, `secret`, `public` | `true` or `false`, read the same way `env generate` reads them |
+| `required`, `secret`, `public` | `true` or `false`, read the same way `init repo` reads them |
 | `default` | A string, or `null` when the spec sets none. A default of `false` or `0` is the string `"false"` or `"0"`. **For a secret it is always `null`:** a secret's default is never printed |
 | `group` | A string. `"app"` when the spec sets none |
 | `framework_name` | A string, or `null` when the spec sets none |
@@ -668,9 +716,9 @@ Every entry has all eight fields. Strings are JSON-encoded, so quotes, backslash
 line breaks in a description or default arrive intact. A YAML alias or merge key in the
 spec is exported as the value it stands for.
 
-`env export` either prints the whole document and exits `0`, or prints nothing on
-standard output and exits `1` with the reason on standard error. It refuses, and names
-the entry, when:
+`status repo --env` either prints the whole document and exits `0`, or prints nothing
+on standard output and exits `1` with the reason on standard error. It refuses, and
+names the entry, when:
 
 - the spec file is missing, cannot be parsed as YAML, or holds more than one document;
 - `env:` is not a list;
@@ -678,31 +726,45 @@ the entry, when:
 - a flag is neither `true` nor `false`;
 - a `description`, `default`, `group` or `framework_name` is a list or a map.
 
-A spec with no `env:` block exports an empty list and exits `0`.
+A spec with no `env:` block exports an empty list and exits `0`. `--env` is a repository
+view: it cannot be combined with `fleet`, `--bootstrap` or `--verify`.
 
-### Deployment files
+### Deployment files and the Dockerfile
 
-Manifest does not write files under `k8s/env`, and it does not read `env.secrets`.
-Earlier releases did both. See the [Migration Guide](MIGRATION.md) if you are upgrading.
+Manifest does not write files under `k8s/env`, does not read `env.secrets`, and does
+not write the `ARG`→`ENV` block in a `Dockerfile`. Earlier releases did all three. See
+the [Migration Guide](MIGRATION.md) if you are upgrading.
 
 If your repository still holds a file that an earlier Manifest generated under
-`k8s/env`, or a config that still sets `env.secrets`, then `env generate` and
-`env validate` print a note on standard error that says so. The note does not change
-the exit code. Manifest does not update, compare or delete those files; they are yours.
+`k8s/env`, a config that still sets `env.secrets`, or a `Dockerfile` with the block an
+earlier Manifest wrote, then `init repo` (its plan, `-y` and `--check`) prints a note on
+standard error that says so. The note does not change the exit code. Manifest does not
+update, compare or delete any of them; they are yours.
 
-To keep generating them, copy `examples/env-k8s-render.sh` from the Manifest CLI into
-your own repository and change it to suit your platform. It reads `manifest env export`
-and writes the four files that Manifest wrote. The [Migration Guide](MIGRATION.md) lists
-the two values it writes differently:
+To keep generating them, copy a reference script from the Manifest CLI's `examples/`
+into your own repository and change it to suit your platform. Both read
+`manifest status repo --env --json`:
 
-```bash
-manifest env export | ./env-k8s-render.sh \
-    --provider external-secrets --store-name <store-name> \
-    --path 'secret/data/{env}/{identity}/{group}' --env-label env
-```
+- `examples/env-k8s-render.sh` writes the four `k8s/env` files Manifest wrote. The
+  [Migration Guide](MIGRATION.md) lists the two values it writes differently:
 
-The script is an example and not a supported command. Nothing in Manifest runs it or
-checks what it writes. Run it with `--help` for its options.
+  ```bash
+  manifest status repo --env --json | ./env-k8s-render.sh \
+      --provider external-secrets --store-name <store-name> \
+      --path 'secret/data/{env}/{identity}/{group}' --env-label env
+  ```
+
+- `examples/env-dockerfile-render.sh` keeps the `Dockerfile` block in step with the
+  variables marked `public: true`. It replaces a block where it stands, including the
+  one Manifest wrote, and it never adds one: when there is none, it prints the block for
+  you to put in the stage that runs your build, before the build step.
+
+  ```bash
+  manifest status repo --env --json | ./env-dockerfile-render.sh
+  ```
+
+The scripts are examples and not supported commands. Nothing in Manifest runs them or
+checks what they write. Run each with `--help` for its options.
 
 **The prefix policy is on by default.** It keeps the names of environment variables
 tidy. The names of your application's own variables must start with this repository's
@@ -719,9 +781,7 @@ by default, which blocks. `warn` only reports the violations. `env.naming_allow`
 more allowed entries, separated by commas. An entry that ends in `_` is treated as a
 prefix.
 
-`manifest init repo` and its connect phase create `.env.example` when it is missing.
-They never overwrite an existing one. They use the spec when it has an `env:` block,
-and they follow the configured prefix.
+The starter variables `init repo` writes into a new spec follow the configured prefix.
 
 ## Recovery
 

@@ -12,7 +12,107 @@ This guide is for two kinds of reader.
 
 **Manifest shows you the plan and changes nothing until you explicitly say go.**
 
-## Manifest no longer writes `k8s/env` files, and `env.secrets` is removed — the newest change; its release is the first CHANGELOG entry that mentions `env export`
+## `manifest env` is removed: `init` sets up environment variables, and Manifest no longer edits your Dockerfile — the newest change; its release is the first CHANGELOG entry that mentions `status repo --env`
+
+**What changed.** The `manifest env` command group is gone. Its work now belongs to the
+commands it was part of. This is a breaking change.
+
+```text
+manifest env generate -y        ->  manifest init repo --no-connect -y
+manifest env generate           ->  manifest init repo --no-connect
+manifest env validate           ->  manifest init repo --check
+manifest env generate --check   ->  manifest init repo --check
+manifest env export             ->  manifest status repo --env --json
+```
+
+Running `manifest env …` now prints that table on standard error and exits `1`.
+
+The replacements are not exact equivalents:
+
+- **`init repo -y` does more than `env generate -y` did.** It also creates every `init`
+  file the repository is missing (README, VERSION, CHANGELOG, docs, `.gitignore` rules,
+  `scripts/run-tests.sh` and the others) and then runs the readiness check. Without
+  `--no-connect` it also connects `origin`, and with no `origin` it plans to create a
+  GitHub repository. Keep `--no-connect` where you only want the env files.
+- **`init repo --check` checks what `env validate` checked, which is more than
+  `env generate --check` did.** Besides `.env.example` matching the spec, it fails on a
+  variable that does not carry the repository's prefix (when the prefix policy is on)
+  and on an env value file (such as `.env`) that is not git-ignored. A CI job that ran `env generate --check`
+  can therefore fail where it passed. Fix the names it lists, or turn the prefix policy
+  off with `env.prefix: off`. No option runs the `.env.example` comparison alone.
+- **They read the folder you run them in.** `env validate` and `env generate` moved to
+  the repository root first. `init repo` and `status repo --env` read the current
+  folder, as `init repo -y` writes there. In a subfolder that has no spec of its own,
+  run them from the root.
+
+Four things behave differently as well:
+
+- **`init repo` creates the spec when there is none.** It writes `service.spec.yaml`
+  with two starter variables and generates `.env.example` from it. Before, `init` wrote
+  a `.env.example` of comments only and no spec, and `env generate` then told you to run
+  `init` to get one. If a spec has no `env:` key, `init` adds the starter variables,
+  even when `.env.example` already exists. A spec with `env: []` is left alone.
+- **`init repo -y` keeps `.env.example` up to date.** Before, `init` wrote it only when it
+  was missing, and refreshing it was `env generate -y`. `init` now rewrites a
+  `.env.example` that Manifest generated whenever the spec has moved on. It never touches
+  one you wrote yourself: one whose first line is not Manifest's header, or the starter an
+  earlier `init` wrote once you have added a line of your own below its comments.
+  A comment or note you added counts as your own line too. `init` also never creates a
+  spec through a dangling symlink (it stops), and never adds `env:` to a spec that is a
+  symlink, a hard link or a file you cannot write (it warns, writes the comments-only
+  starter `.env.example`, and goes on). It stops with a warning if `env:` is not a list.
+- **`init repo --check` fails on a spec it cannot use.** That covers a spec that is not
+  valid YAML, holds more than one document, or whose `env:` is not a list. Before, the
+  first two passed as having no `env:` block. An `env:` that is not a list failed before
+  too, but was reported as stale artifacts.
+- **Manifest no longer writes the `ARG`→`ENV` block in your `Dockerfile`.** It added
+  that block for variables marked `public: true`. How a variable reaches a build is your
+  build's design. Also, the block was appended to the end of the file. In a multi-stage
+  `Dockerfile` that is the last stage, after the build step has run, so the values never
+  reached the build unless you had moved the block yourself.
+
+**Who is affected.**
+
+- Anyone whose CI or scripts run `manifest env generate --check`, `manifest env
+  validate` or `manifest env export`. Those commands now exit `1`.
+- Anyone whose spec marks a variable `public: true` and whose `Dockerfile` holds the
+  block. Nothing updates the block any more.
+- Every repository with a `.env.example` that Manifest generated. Its third line named
+  `manifest env generate -y` and now names `manifest init repo -y`, so
+  `init repo --check` reports the file as out of date until you run `init repo -y` once.
+- A repository that has no application code yet, if its `scripts/run-tests.sh` was
+  scaffolded by an earlier release. Its scaffold check does not know `service.spec.yaml`,
+  so once `init` has created that file the release check reports that no build or test
+  verification is declared.
+
+**What to do.**
+
+- **Replace the commands** in CI and scripts, using the table above.
+- **Run `manifest init repo -y` once** in each repository. Add `--no-connect` if you only
+  want the local files. This regenerates `.env.example`, and creates `service.spec.yaml`
+  where there was no spec. Review and commit both.
+- **Decide who maintains the `Dockerfile` block.** The block in your `Dockerfile` is
+  yours now, and it keeps working as it is. Manifest will not update, compare or delete
+  it. While it is there, `init repo` prints a note on standard error. To keep generating
+  it from the spec, copy `examples/env-dockerfile-render.sh` from the Manifest CLI:
+
+  ```bash
+  manifest status repo --env --json | ./env-dockerfile-render.sh
+  ```
+
+  It rewrites the block where it stands, under its own marker lines, and then the note
+  stops. It never adds a block: if your `Dockerfile` has none, it prints one for you to
+  put in the stage that runs your build, before the build step. Run it with `--check` in
+  CI to catch a block that is out of date.
+- **If you use `examples/env-k8s-render.sh`**, pipe it `manifest status repo --env
+  --json` instead of `manifest env export`. The document is the same. The script's new
+  copy writes a header that names the new command, and it still recognises files that
+  carry the old header.
+- **For a repository with no code yet whose gate predates this release**, either add
+  checks of its own to `scripts/run-tests.sh`, or delete that file and run
+  `manifest init repo -y` to scaffold a gate that knows `service.spec.yaml`.
+
+## Manifest no longer writes `k8s/env` files, and `env.secrets` is removed — its release is the first CHANGELOG entry that mentions `env export`
 
 **What changed.** `manifest env generate` no longer writes anything under `k8s/env`.
 It used to write a ConfigMap, an ExternalSecret, a kustomization and a kustomize
